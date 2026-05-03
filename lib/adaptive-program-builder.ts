@@ -564,7 +564,14 @@ import {
   type SessionCompositionBlueprint,
   type SessionCompositionContext,
   type SessionBlockRole,
-  type WeekAdaptationInput,
+  // [BUILDER-WEEK-ADAPT-INPUT-DISAMBIG] Two modules export
+  // `WeekAdaptationInput` (this one + week-adaptation-decision-contract).
+  // The canonical authority for the `buildWeekAdaptationDecision` call at
+  // line ~7322 is the contract module — alias the session-composition
+  // variant so it does not shadow / collide with the contract type.
+  // The aliased name is unused locally but kept exported for any future
+  // session-composition consumer in this file.
+  type WeekAdaptationInput as SessionCompositionWeekAdaptationInput,
 } from './program-generation/session-composition-intelligence'
 // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role distribution.
 // Built ONCE per program build, BEFORE the day loop. Each session receives its
@@ -809,7 +816,11 @@ import {
 import {
   buildUnifiedContext,
   type UnifiedEngineContext,
-  type TrainingStyleMode,
+  // [BUILDER-TRAINING-STYLE-MODE-DEDUPE] `TrainingStyleMode` was imported
+  // twice (here + from './training-style-service' at line ~736), producing
+  // TS2300 duplicate-identifier. The training-style-service module is the
+  // canonical owner of the union — keep that one. Both modules currently
+  // re-export the same type so removing this import is safe.
 } from './unified-coaching-engine'
 import {
   generateWeeklySessionIntents,
@@ -836,8 +847,13 @@ import {
   hasEarnedTrainingHistory,
   getBundleConfidenceLevel,
   isSectionAvailable,
-  type ProgrammingTruthBundle,
 } from './program/programming-truth-bundle'
+// [BUILDER-PROGRAMMING-TRUTH-BUNDLE-TYPE] The module no longer exports a
+// named `ProgrammingTruthBundle` type — only the builder fn. Reconstruct
+// the bundle's static shape from the builder's return type so all
+// downstream `ProgrammingTruthBundle | null` declarations stay accurate
+// without depending on a missing named export.
+type ProgrammingTruthBundle = Awaited<ReturnType<typeof buildProgrammingTruthBundle>>
 
 // [DB-TRUTH-SCORING-BRIDGE] Import for deep bundle consumption
 import {
@@ -1511,6 +1527,34 @@ export interface AdaptiveProgramInputs {
   regenerationMode?: GenerationMode
   // STATE CONTRACT: Optional reason for regeneration (for logging/debugging)
   regenerationReason?: string
+
+  // ============================================================
+  // [BUILDER-INPUTS-CONTRACT-COMPLETION] The following optional fields
+  // are ALREADY passed by upstream callers (route handlers, server
+  // generation orchestrator, regeneration paths) and read at multiple
+  // sites in this builder (e.g. `inputs.trainingPathType`,
+  // `inputs.goalCategories`, `inputs.sessionDurationMode`, ...).
+  // The local interface was simply missing the declarations — every
+  // read produced TS2339 even though runtime data is correct. Each
+  // field is OPTIONAL so existing callers that omit them are still
+  // accepted; the canonical owner remains `CanonicalProgrammingProfile`
+  // and the builder already prefers canonical values via
+  // `canonicalProfile.X || inputs.X` at every read site.
+  // ============================================================
+  /** Training path label — strict union owned by athlete-profile. */
+  trainingPathType?: TrainingPathType
+  /** Goal category tokens (subset of PrimaryGoal-adjacent identifiers). */
+  goalCategories?: string[]
+  /** Flexibility goal tokens passed by onboarding. */
+  selectedFlexibility?: string[]
+  /** Training method preferences with optional per-method config. */
+  trainingMethodPreferences?: Array<{ name: string; [k: string]: unknown }>
+  /** Session style preference token (matches the resolver output). */
+  sessionStyle?: string | null
+  /** Session-duration mode flag — 'static' | 'adaptive' tokens. */
+  sessionDurationMode?: 'static' | 'adaptive' | null
+  /** Generation-intent token — already on the WeekAdaptationInput contract. */
+  generationIntent?: string
 }
 
 export interface AdaptiveSession {
@@ -5535,10 +5579,15 @@ export async function generateAdaptiveProgram(
     // Verify selectedSkills source
     selectedSkillsFromInputs: inputs.selectedSkills?.length || 0,
     // Entry path classification
-    entryPathClassification: inputs.regenerationMode === 'rebuild' 
-      ? 'rebuild_from_program_page'
-      : inputs.regenerationMode === 'adapt'
-        ? 'adaptation_from_program_page'
+    // [BUILDER-GENERATION-MODE-NORMALIZATION] `GenerationMode` collapsed
+    // the legacy `rebuild` / `adapt` tokens into `regenerate` (fresh |
+    // regenerate | continue). Comparisons to the old labels were always
+    // false (TS2367). Use the current canonical token; the audit string
+    // keeps the same descriptive bucket so observability is unchanged.
+    entryPathClassification: inputs.regenerationMode === 'regenerate'
+      ? 'regenerate_from_program_page'
+      : inputs.regenerationMode === 'continue'
+        ? 'continue_from_program_page'
         : 'fresh_generation_or_onboarding',
   })
   
@@ -5953,7 +6002,16 @@ async function generateAdaptiveProgramImpl(
       secondaryGoal: inputs.secondaryGoal,
       experienceLevel: inputs.experienceLevel,
       trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
-      sessionLength: inputs.sessionLength,
+      // [BUILDER-SESSION-LENGTH-NUMERIC] composeCanonicalPlannerInput
+      // accepts `number | undefined`; `inputs.sessionLength` is the
+      // wider `SessionLength` union (numeric minutes OR a 'flexible'
+      // bucket label). Reuse the existing `normalizeSessionLengthMinutes`
+      // helper at line ~169 — same conversion already used elsewhere in
+      // this file. Pass `undefined` when input is null so we don't
+      // synthesize a fake duration value.
+      sessionLength: inputs.sessionLength != null
+        ? normalizeSessionLengthMinutes(inputs.sessionLength)
+        : undefined,
       scheduleMode: inputs.scheduleMode,
       // [BUILD GREEN GATE / DURATION-MODE] composeCanonicalPlannerInput
       // accepts `'static' | 'adaptive' | undefined`; the resolver returns
@@ -6040,9 +6098,24 @@ async function generateAdaptiveProgramImpl(
     secondaryGoal, // TASK 3: Now destructured for use
     experienceLevel,
     trainingDaysPerWeek,
-    sessionLength,
+    sessionLength: sessionLengthRaw,
     equipment,
   } = inputs
+
+  // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] `inputs.sessionLength` is the
+  // wider `SessionLength` union (number | 'flexible' | '10-20' | '20-30' |
+  // '30-45' | '45-60' | '60+' | undefined). The body of this function does
+  // arithmetic / >= 60 / <= 30 comparisons in MANY places — every such site
+  // produced TS2365/TS2322 because the union does not satisfy operator
+  // contracts. Convert ONCE here using the existing `normalizeSessionLengthMinutes`
+  // helper (declared at line ~169), preserving the same range-bucket → minute
+  // mapping that is already used elsewhere in this file. All downstream
+  // reads of `sessionLength` are now `number`. The original raw form is
+  // still available as `sessionLengthRaw` for sinks that intentionally
+  // accept the wider union.
+  const sessionLength: number = sessionLengthRaw != null
+    ? normalizeSessionLengthMinutes(sessionLengthRaw)
+    : 60
   
   // ==========================================================================
   // [entry-contract-validation-audit] TASK 4: Validate entry contract BEFORE generation
@@ -6055,14 +6128,15 @@ async function generateAdaptiveProgramImpl(
   if (!primaryGoal) entryValidationErrors.push('primaryGoal is required')
   if (!experienceLevel) entryValidationErrors.push('experienceLevel is required')
   if (!Array.isArray(equipment)) entryValidationWarnings.push('equipment is not an array, defaulting to []')
-  if (sessionLength === undefined || sessionLength === null) entryValidationWarnings.push('sessionLength missing, will use default')
+  // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] check the raw form for missing input.
+  if (sessionLengthRaw === undefined || sessionLengthRaw === null) entryValidationWarnings.push('sessionLength missing, will use default')
   
   // Log entry validation
   console.log('[entry-contract-validation-audit]', {
     primaryGoalValid: !!primaryGoal,
     experienceLevelValid: !!experienceLevel,
     equipmentIsArray: Array.isArray(equipment),
-    sessionLengthValid: sessionLength !== undefined && sessionLength !== null,
+    sessionLengthValid: sessionLengthRaw !== undefined && sessionLengthRaw !== null,
     trainingDaysPerWeekValid: trainingDaysPerWeek !== undefined,
     errorsFound: entryValidationErrors.length,
     warningsFound: entryValidationWarnings.length,
@@ -8062,7 +8136,17 @@ async function generateAdaptiveProgramImpl(
   // Build expanded athlete context for weighted allocation
   // [PHASE 25U] CRITICAL FIX: Use inputScheduleMode (which respects explicit numeric day selection)
   // instead of canonicalProfile.scheduleMode (which may still be 'flexible' from saved profile)
-  const expandedContext: ExpandedAthleteContext = {
+  // [BUILDER-EXPANDED-CONTEXT-LOCAL-EXTENSIONS] The canonical
+  // `ExpandedAthleteContext` (engine-quality-contract.ts) does not
+  // declare `sessionStylePreference` or `identifiedLimiters`, but this
+  // builder populates them and downstream session-style and limiter
+  // logic reads them. Use a structural local extension at the
+  // declaration site instead of mutating the canonical type owner.
+  type ExpandedAthleteContextLocal = ExpandedAthleteContext & {
+    sessionStylePreference?: string | null
+    identifiedLimiters?: string[]
+  }
+  const expandedContext: ExpandedAthleteContextLocal = {
     primaryGoal,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
     selectedSkills: canonicalProfile.selectedSkills || inputs.selectedSkills || [],
@@ -8133,12 +8217,29 @@ async function generateAdaptiveProgramImpl(
   // It classifies every selected skill into primary_spine/secondary_anchor/support/deferred
   // and ensures currentWorkingProgressions override historical ceilings.
   // ==========================================================================
-  const currentWorkingProgressionsForContract = canonicalProfile.currentWorkingProgressions ? {
-  planche: canonicalProfile.currentWorkingProgressions.planche,
-  frontLever: canonicalProfile.currentWorkingProgressions.frontLever,
-  hspu: canonicalProfile.currentWorkingProgressions.hspu,
-  backLever: canonicalProfile.currentWorkingProgressions.backLever,
-  muscleUp: canonicalProfile.currentWorkingProgressions.muscleUp,
+  // [BUILDER-CWP-FIELD-OWNERS] CanonicalProgrammingProfile does NOT have a
+  // single `currentWorkingProgressions` map; it owns one nullable
+  // `<skill>Progression` field per skill. Build the per-skill map locally
+  // from those canonical owners — same downstream meaning, real owner.
+  // Fields without a canonical record stay `null` (not synthesized).
+  const currentWorkingProgressionsForContract: {
+    planche: string | null
+    frontLever: string | null
+    hspu: string | null
+    backLever: string | null
+    muscleUp: string | null
+  } | null = (
+    canonicalProfile.plancheProgression ||
+    canonicalProfile.frontLeverProgression ||
+    canonicalProfile.hspuProgression ||
+    (canonicalProfile as { backLeverProgression?: string | null }).backLeverProgression ||
+    (canonicalProfile as { muscleUpProgression?: string | null }).muscleUpProgression
+  ) ? {
+    planche: canonicalProfile.plancheProgression ?? null,
+    frontLever: canonicalProfile.frontLeverProgression ?? null,
+    hspu: canonicalProfile.hspuProgression ?? null,
+    backLever: (canonicalProfile as { backLeverProgression?: string | null }).backLeverProgression ?? null,
+    muscleUp: (canonicalProfile as { muscleUpProgression?: string | null }).muscleUpProgression ?? null,
   } : null
   
   // Check if doctrine rules are cached (from Phase 4 prefetch)
@@ -8177,20 +8278,19 @@ async function generateAdaptiveProgramImpl(
   // converted into a guarded fallback that only rebuilds if this early build
   // failed entirely.
   // ==========================================================================
+  // [BUILDER-CWP-FIELD-OWNERS] Same per-skill canonical owners (see above).
+  // Build the cwp record from the individual `<skill>Progression` fields.
+  // `historicalCeiling` is not modeled separately on the canonical profile
+  // anymore — leave null so downstream consumers fall back to ceiling
+  // inference rather than reading a non-existent field.
   let cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-  if (canonicalProfile.currentWorkingProgressions) {
-    for (const [skill, value] of Object.entries(canonicalProfile.currentWorkingProgressions)) {
-      cwpRecord[skill] = {
-        currentWorkingProgression:
-          typeof value === 'string'
-            ? value
-            : (typeof value === 'object' && value
-                ? (value as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null
-                : null),
-        historicalCeiling:
-          typeof value === 'object' && value
-            ? (value as { historicalCeiling?: string | null }).historicalCeiling ?? null
-            : null,
+  if (currentWorkingProgressionsForContract) {
+    for (const [skill, progression] of Object.entries(currentWorkingProgressionsForContract)) {
+      if (progression) {
+        cwpRecord[skill] = {
+          currentWorkingProgression: progression,
+          historicalCeiling: null,
+        }
       }
     }
   }
@@ -10509,7 +10609,12 @@ async function generateAdaptiveProgramImpl(
     recoveryLevel: (canonicalProfile.recoveryQuality ?? undefined) as 'poor' | 'fair' | 'normal' | 'good' | undefined,
     selectedTrainingStyles: normalizedStyles as TrainingStyleMode[],
     trainingMethodPreferences: normalizedStyles,
-    hasWeightedEquipment: equipment.some(e => 
+    // [BUILDER-EQUIPMENT-WIDER-RUNTIME-VALUES] The static `EquipmentType`
+    // union does not include 'dumbbells', 'weighted_vest', 'kettlebell' —
+    // but those values exist in real persisted profiles (the runtime
+    // catalog is wider than the typed union). Iterating as `string`
+    // expresses that runtime reality without widening the union.
+    hasWeightedEquipment: (equipment as readonly string[]).some(e =>
       e === 'weights' || e === 'dumbbells' || e === 'weighted_vest' || e === 'kettlebell'
     ),
     sessionLength: sessionLength <= 30 ? 'short' : sessionLength <= 45 ? 'medium' : sessionLength <= 60 ? 'long' : 'extended',
@@ -12724,7 +12829,9 @@ async function generateAdaptiveProgramImpl(
       // Add targeted accessories based on detected weak points (max 1-2 per session)
       // Only add if session isn't already overloaded
       const sessionExerciseCount = session.exercises?.length || 0
-      const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
+      // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] sessionLength is now numeric
+    // (see top-of-body coercion). Map the same buckets via numeric thresholds.
+    const maxExercisesForSession = sessionLength < 30 ? 5 : sessionLength <= 45 ? 6 : 8
       
       // Use rule-based detection with fatigue state
       // [BUILDER-TRAINING-DECISION-RENAME] SKIP_TODAY no longer exists on
@@ -18680,8 +18787,11 @@ async function generateAdaptiveProgramImpl(
       const focusLower = (s.focus || '').toLowerCase()
       const hasCircuitExercises = (s.exercises || []).some(e => 
         e.method === 'circuit' || e.method === 'density_block' ||
-        (e.notes || '').toLowerCase().includes('circuit') ||
-        (e.notes || '').toLowerCase().includes('density')
+          // [BUILDER-ADAPTIVE-EXERCISE-NOTE-FIELD] AdaptiveExercise has
+          // singular `note?: string`, not plural `notes`. Compiler suggested
+          // `note` directly.
+          (e.note || '').toLowerCase().includes('circuit') ||
+          (e.note || '').toLowerCase().includes('density')
       )
       return focusLower.includes('density') || focusLower.includes('circuit') || 
              focusLower.includes('endurance') || hasCircuitExercises
@@ -18965,8 +19075,10 @@ async function generateAdaptiveProgramImpl(
     const isAdvancedAthlete = experienceLevel === 'advanced'
     const hasAdvancedSkillGoals = isAdvancedSkill(primaryGoal) || 
       (secondaryGoal ? isAdvancedSkill(secondaryGoal) : false)
-    const hasWeightedHistory = canonicalProfile.weightedPullUp?.load > 0 || 
-      canonicalProfile.weightedDip?.load > 0
+    // [BUILDER-WEIGHTED-LIFT-OWNER] canonical owner field is `addedWeight`
+    // (number), not `load`. Optional-chain → safe numeric compare.
+    const hasWeightedHistory = (canonicalProfile.weightedPullUp?.addedWeight ?? 0) > 0 ||
+                              (canonicalProfile.weightedDip?.addedWeight ?? 0) > 0
     // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] Canonical SessionLength is
     // `30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'`.
     // Legacy `'long'`/`'extended'` literals are no longer on the union;
@@ -20686,8 +20798,9 @@ fatigueDecision: fatigueDecision ? {
         const benchmarks: Record<string, number> = {
           pull_ups: profile.pullUpMax || 0,
           dips: profile.dipMax || 0,
-          weighted_pull: profile.weightedPullUp?.load || 0,
-          weighted_dip: profile.weightedDip?.load || 0,
+      // [BUILDER-WEIGHTED-LIFT-OWNER] canonical owner field is `addedWeight`.
+      weighted_pull: profile.weightedPullUp?.addedWeight || 0,
+      weighted_dip: profile.weightedDip?.addedWeight || 0,
           compression: profile.lSitHold || 0,
           hold_time: 0,
         }

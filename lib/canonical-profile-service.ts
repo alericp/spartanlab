@@ -80,6 +80,35 @@ import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './da
 import { getOnboardingProfile, saveOnboardingProfile, type OnboardingProfile, type RecoveryProfile } from './athlete-profile'
 
 // =============================================================================
+// [CANONICAL-PROFILE-LEGACY-FIELD-EXTENSIONS]
+// Some canonical-profile sites read fields that are PRESENT on persisted
+// onboarding/athlete documents but were never declared on the strict
+// `OnboardingProfile` / `AthleteProfile` types — e.g. `trainingStyle`,
+// `userId`, `selectedStrength`, `bodyweight`, `height`, `primaryOutcome`.
+// Those fields exist for backward-compat reconciliation (see "ALLOWED
+// COMPATIBILITY PATHS" in the file header). The two structural extensions
+// below let the reconciler read them without mutating the canonical
+// owner types and without spreading `as any` casts across the file.
+// All fields are OPTIONAL — consumers that don't supply them remain valid.
+// =============================================================================
+type LegacyOnboardingFields = {
+  userId?: string
+  trainingStyle?: string | null
+  selectedStrength?: string[]
+  bodyweight?: number | null
+  height?: number | null
+  primaryOutcome?: string | null
+  trainingStyles?: string[]
+}
+type LegacyAthleteFields = {
+  userId?: string
+  trainingStyle?: string | null
+  sessionDurationMode?: 'static' | 'adaptive'
+}
+type OnboardingProfileWithLegacy = OnboardingProfile & LegacyOnboardingFields
+type AthleteProfileWithLegacy = AthleteProfile & LegacyAthleteFields
+
+// =============================================================================
 // [PHASE 5] RECOVERY QUALITY DERIVATION HELPER
 // =============================================================================
 
@@ -371,8 +400,12 @@ export interface CanonicalProgrammingProfile {
  * - DO NOT fabricate fields
  */
 export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
-  const onboardingProfile = getOnboardingProfile()
-  const athleteProfile = getAthleteProfile()
+  // [CANONICAL-PROFILE-LEGACY-FIELD-EXTENSIONS] Cast both raw documents
+  // to their legacy-extended structural types so this reconciler can read
+  // backward-compat fields (`trainingStyle`, `userId`, `selectedStrength`,
+  // `bodyweight`, `height`, etc.) without TS2339. Same runtime objects.
+  const onboardingProfile = getOnboardingProfile() as OnboardingProfileWithLegacy | null
+  const athleteProfile = getAthleteProfile() as AthleteProfileWithLegacy | null
   
   // Log reconciliation sources for debugging
   console.log('[CanonicalProfile] Reconciling from sources:', {

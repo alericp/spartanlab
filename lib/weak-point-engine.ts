@@ -839,16 +839,30 @@ export function detectWeakPoints(
 // =============================================================================
 
 function generateEmphasisLabel(factor: WeakPointType): string {
+  // [WEAK-POINT-TYPE-CONTRACT] This map is typed `Record<WeakPointType, string>`
+  // — exhaustive, NOT Partial. The five entries below (bent_arm_pull,
+  // bent_arm_push, core_compression, core_anti_extension, general_fatigue)
+  // were missing from the prior version and produced TS2741 missing-key
+  // errors. Each label is derived directly from the canonical
+  // WEAK_POINT_LABELS table (line 79-107) and the WEAK_POINT_ACCESSORIES
+  // doctrine (line 1524-1677): the emphasis text describes the same
+  // accessory protocol that the accessory map prescribes, so coaching
+  // language stays consistent across both surfaces. No new doctrine is
+  // invented; existing per-key accessory intent is summarized.
   const emphasisMap: Record<WeakPointType, string> = {
     pull_strength: 'Weighted pull-up progressions',
     push_strength: 'Weighted dip and push-up work',
     straight_arm_pull_strength: 'Front lever and straight-arm pulling',
     straight_arm_push_strength: 'Planche lean and straight-arm pushing',
+    bent_arm_pull: 'Chin-up and inverted row progressions',
+    bent_arm_push: 'Push-up and dip progressions',
     compression_strength: 'L-sit and compression drills',
     explosive_power: 'High pulls and explosive pulling',
     transition_strength: 'Muscle-up transition drills',
     vertical_push_strength: 'Pike push-ups and overhead pressing',
     dip_strength: 'Dip progressions and weighted dips',
+    core_compression: 'L-sit and dragon flag tuck progressions',
+    core_anti_extension: 'Hollow body and dragon flag negatives',
     scapular_control: 'Scapular pulls and holds',
     shoulder_stability: 'Shoulder stability protocols',
     core_control: 'Hollow body and plank progressions',
@@ -860,6 +874,7 @@ function generateEmphasisLabel(factor: WeakPointType): string {
     shoulder_extension_mobility: 'Shoulder extension stretches',
     recovery_capacity: 'Recovery optimization',
     work_capacity: 'Volume building',
+    general_fatigue: 'Reduced volume and recovery focus',
     equipment_limitation: 'Equipment alternatives',
     none: 'Balanced progression',
   }

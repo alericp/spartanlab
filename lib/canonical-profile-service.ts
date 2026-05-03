@@ -1967,9 +1967,10 @@ export function evaluateUnifiedProgramStaleness(program: {
   }
   
   // [TASK 6] FLEXIBLE SCHEDULE FIX: Only compare trainingDaysPerWeek for STATIC schedules
-  // For flexible/adaptive schedules, the generated day count is runtime-resolved and should NOT trigger drift
-  const isFlexibleProfile = profile.scheduleMode === 'flexible' || profile.scheduleMode === 'adaptive'
-  const isFlexibleProgram = program.scheduleMode === 'flexible' || program.scheduleMode === 'adaptive'
+  // [SCHEDULE-MODE-LITERAL-DRIFT] ScheduleMode is 'static' | 'flexible' —
+  // 'adaptive' is no longer in the union. Drop the impossible compare.
+  const isFlexibleProfile = profile.scheduleMode === 'flexible'
+  const isFlexibleProgram = program.scheduleMode === 'flexible'
   const shouldCompareTrainingDays = !isFlexibleProfile || !isFlexibleProgram
   
   if (shouldCompareTrainingDays && profile.trainingDaysPerWeek !== program.trainingDaysPerWeek) {
@@ -3100,7 +3101,12 @@ export function computeScheduleIntelligence(
   if (profile.sessionDurationMode === 'adaptive') score += 1
   
   // Factor 5: Multiple training styles (0-1 point)
-  const trainingStyles = profile.trainingStyles || []
+  // [TRAINING-STYLE-SINGULAR-OWNER] CanonicalProgrammingProfile.trainingStyle
+  // is the singular owner field; the plural `trainingStyles` lived only
+  // on legacy onboarding documents. Cast through the legacy slice so
+  // persisted profiles that still carry the array form continue to
+  // contribute to the multi-style score.
+  const trainingStyles = (profile as { trainingStyles?: string[] }).trainingStyles || []
   if (trainingStyles.length >= 2) score += 1
   
   // Cap score at 10
@@ -4071,14 +4077,22 @@ export function mergeProfileUpdates(
         continue
       }
       
+      // [CANONICAL-PROFILE-RECORD-BRIDGE] CanonicalProgrammingProfile is a
+      // strictly-typed shape; converting it directly to
+      // `Record<string, unknown>` raises TS2352 ("conversion may be a
+      // mistake"). The runtime behaviour here is intentional: walk the
+      // strict object as a plain bag of fields. Bridge through `unknown`
+      // first.
+      const currentAsRecord = currentProfile as unknown as Record<string, unknown>
+      const filteredAsRecord = filteredUpdates as unknown as Record<string, unknown>
       // For arrays, optionally merge instead of replace
-      if (preserveArrays && Array.isArray(value) && Array.isArray((currentProfile as Record<string, unknown>)[key])) {
-        const existingArray = (currentProfile as Record<string, unknown>)[key] as unknown[]
+      if (preserveArrays && Array.isArray(value) && Array.isArray(currentAsRecord[key])) {
+        const existingArray = currentAsRecord[key] as unknown[]
         const mergedArray = [...new Set([...existingArray, ...value])]
-        ;(filteredUpdates as Record<string, unknown>)[key] = mergedArray
+        filteredAsRecord[key] = mergedArray
         mergedFields.push(key)
       } else {
-        ;(filteredUpdates as Record<string, unknown>)[key] = value
+        filteredAsRecord[key] = value
         mergedFields.push(key)
       }
     }
@@ -4607,8 +4621,9 @@ export function checkProfileProgramDrift(program: {
   // For static users:
   // - profile and program should match exactly
   // ==========================================================================
-  const isFlexibleProfile = profile.scheduleMode === 'flexible' || profile.scheduleMode === 'adaptive'
-  const isFlexibleProgram = program.scheduleMode === 'flexible' || program.scheduleMode === 'adaptive'
+  // [SCHEDULE-MODE-LITERAL-DRIFT] same as above — drop impossible 'adaptive'.
+  const isFlexibleProfile = profile.scheduleMode === 'flexible'
+  const isFlexibleProgram = program.scheduleMode === 'flexible'
   
   // Only compare trainingDaysPerWeek if:
   // 1. Both are static mode (must match)

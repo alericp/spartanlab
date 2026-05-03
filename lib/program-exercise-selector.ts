@@ -1617,9 +1617,20 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     methodProfile: selectedMethods?.primary?.id,
     fatigueLevel: fatigueLevel || 'moderate',
     sessionMinutes,
-    sessionFocus: day.focus === 'skill' ? 'skill' : 
-                  day.focus === 'strength' ? 'strength' : 
-                  day.focus === 'flexibility' ? 'flexibility' : undefined,
+    // [DAY-FOCUS-LITERAL-DRIFT] DayFocus is the granular union
+    // (push_skill | pull_skill | push_strength | pull_strength |
+    //  mixed_upper | skill_density | transition_work | flexibility_focus |
+    //  vertical_push_skill | mixed_skill | support_recovery). The old
+    // generic labels 'skill' | 'strength' | 'flexibility' no longer exist.
+    // Map by suffix to the same coarse classification the old code emitted.
+    sessionFocus: (() => {
+      const f = day.focus
+      if (f === 'flexibility_focus') return 'flexibility'
+      if (f === 'push_skill' || f === 'pull_skill' || f === 'skill_density'
+          || f === 'vertical_push_skill' || f === 'mixed_skill') return 'skill'
+      if (f === 'push_strength' || f === 'pull_strength' || f === 'mixed_upper') return 'strength'
+      return undefined
+    })(),
     preferLowerFatigue: fatigueLevel === 'high',
     preferHighCarryover: true,
   }
@@ -1754,7 +1765,10 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // =========================================================================
   
   // Determine session style based on context
-  const primaryFocus = day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill' 
+    // [DAY-FOCUS-LITERAL-DRIFT] generic 'skill' label removed; use the
+    // current granular skill-focus values plus skill_density.
+    const primaryFocus = day.focus === 'push_skill' || day.focus === 'pull_skill'
+      || day.focus === 'vertical_push_skill' || day.focus === 'mixed_skill' || day.focus === 'skill_density'
     ? 'skill' as const
     : day.focus === 'push_strength' || day.focus === 'pull_strength'
       ? 'strength' as const
@@ -1834,7 +1848,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   }
 
   var sessionRole: 'primary_focus' | 'recovery' | 'mixed' | 'support_heavy' = 'support_heavy';
-  if (day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill') {
+    // [DAY-FOCUS-LITERAL-DRIFT] same as above.
+    if (day.focus === 'push_skill' || day.focus === 'pull_skill'
+        || day.focus === 'vertical_push_skill' || day.focus === 'mixed_skill' || day.focus === 'skill_density') {
     sessionRole = 'primary_focus';
   } else if (day.focus === 'support_recovery') {
     sessionRole = 'recovery';
@@ -1869,22 +1885,26 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   var technicalExpressionNames = [];
   var supportExpressionNames = [];
   var weightedExpressionNames = [];
+  // [SELECTED-EXERCISE-EXERCISE-OWNER] SelectedExercise wraps the canonical
+  // Exercise on `.exercise`; reading `.name` directly on the wrapper is a
+  // leftover from the pre-wrap shape. Resolve through `.exercise.name`.
   for (var idx = 0; idx < main.length; idx++) {
     var ex = main[idx];
+    var exName = ex.exercise.name;
     var trace = ex.selectionTrace;
     if (trace) {
       if (trace.expressionMode === 'direct_intensity' || trace.sessionRole === 'skill_primary') {
-        directExpressionNames.push(ex.name);
+        directExpressionNames.push(exName);
       }
       if (trace.expressionMode === 'technical_focus' || trace.sessionRole === 'skill_secondary') {
-        technicalExpressionNames.push(ex.name);
+        technicalExpressionNames.push(exName);
       }
       if (trace.expressionMode === 'strength_support' || trace.sessionRole === 'strength_support') {
-        supportExpressionNames.push(ex.name);
+        supportExpressionNames.push(exName);
       }
     }
     if (ex.prescribedLoad && ex.prescribedLoad.load) {
-      weightedExpressionNames.push(ex.name + '@' + ex.prescribedLoad.load + (ex.prescribedLoad.unit || ''));
+      weightedExpressionNames.push(exName + '@' + ex.prescribedLoad.load + (ex.prescribedLoad.unit || ''));
     }
   }
   var skillExpressionSummary = {
@@ -2190,7 +2210,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       secondaryWorkCount,
       supportWorkCount,
       totalExercises: main.length,
-      firstThreeCategories: main.slice(0, 3).map(e => e.category || 'unknown'),
+      // [SELECTED-EXERCISE-EXERCISE-OWNER] read category through .exercise.
+      firstThreeCategories: main.slice(0, 3).map(e => e.exercise.category || 'unknown'),
       firstThreeTypes: main.slice(0, 3).map(e => e.selectionTrace?.sessionRole || 'unknown'),
       hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'direct_skill' || e.selectionTrace?.sessionRole === 'skill_primary'),
       hasStrengthSupport: main.some(e => e.selectionTrace?.sessionRole === 'strength_support'),
@@ -2967,7 +2988,11 @@ function selectMainExercises(
         exerciseTransfersToSkill(e, skillLower) ||
         safeExerciseId(e).includes(skillLower) ||
         safeExerciseName(e).includes(skillLower) ||
-        (e.primarySkills || []).some(p => safeLower(p).includes(skillLower))
+        // [EXERCISE-PRIMARY-SKILL-OWNER] Exercise exposes singular
+        // `primarySkill: string` on the enrichment slice (see Phase 1
+        // type-owner pass in adaptive-exercise-pool.ts). Wrap into an
+        // array for the same `.some(...)` predicate.
+        (e.primarySkill ? [e.primarySkill] : []).some((p: string) => safeLower(p).includes(skillLower))
       )
     )
     return { candidates: fallback, source: 'transfer_fallback' }
@@ -3514,8 +3539,12 @@ function selectMainExercises(
         
         // Determine if this is a heavier strength day based on focus
         const isHeavyStrengthDay = day.focus === 'push_strength' || day.focus === 'pull_strength'
-        const isSupportDay = day.focus === 'support_recovery' || day.focus === 'support_conditioning'
-        const isSkillDay = day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill'
+  // [DAY-FOCUS-LITERAL-DRIFT] 'support_conditioning' was removed (only
+  // 'support_recovery' remains); generic 'skill' was replaced by the
+  // granular skill-focus values plus skill_density.
+  const isSupportDay = day.focus === 'support_recovery'
+  const isSkillDay = day.focus === 'push_skill' || day.focus === 'pull_skill'
+    || day.focus === 'vertical_push_skill' || day.focus === 'mixed_skill' || day.focus === 'skill_density'
         
         // [prescription] Session role modifies prescription mode
         let prescriptionMode: WeightedPrescriptionMode
@@ -3617,7 +3646,11 @@ function selectMainExercises(
         weightedBlockerReason: weightedChosen ? null : (
           traceContext?.weightedBlockerReason ?? 
           (!weightedBenchmarks ? 'no_benchmark_confidence' : 
-           !equipment?.includes('weight_belt') && !equipment?.includes('weight_vest') ? 'no_loadable_equipment' : 
+           // [EQUIPMENT-LOADABLE-TOKEN] EquipmentType union no longer includes
+    // 'weight_belt' / 'weight_vest'. The closest current loadable
+    // equipment value is 'weight_plates' (used for weighted calisthenics
+    // / dip belt). Fall back to 'weights' as a secondary check.
+    !equipment?.includes('weight_plates') && !equipment?.includes('weights') ? 'no_loadable_equipment' : 
            null)
         ),
         prescribedLoad: weightedChosen && prescribedLoad ? {
@@ -4223,7 +4256,9 @@ function applyMaterialityScoreAdjustments(
     
     if (progressionData && progressionData.isConservative) {
     // User is working conservatively - slightly favor lower progression variants
-    const exerciseDifficulty = exercise.difficulty
+    // [EXERCISE-DIFFICULTY-FIELD-OWNER] Exercise exposes `difficultyLevel`
+    // (DifficultyLevel enum), not a flat `difficulty` field.
+    const exerciseDifficulty = exercise.difficultyLevel
     if (exerciseDifficulty === 'beginner' || exerciseDifficulty === 'intermediate') {
       adjustedScore += 3
       adjustmentReason = (adjustmentReason || '') + '+conservative_progression_fit'
@@ -4571,14 +4606,23 @@ function applyMaterialityScoreAdjustments(
   
   // [TRUTH-TO-SELECTION-MATERIALITY] Extract doctrine preferences from cached rules
   // This ensures doctrine knowledge affects materiality scoring
+  // [DOCTRINE-RULES-FIELD-OWNER] CachedDoctrineRules no longer exposes
+  // `preferredExercises` / `avoidExercises` aggregates, and CarryoverRule
+  // (lib/doctrine-db.ts:112) uses canonical field names:
+  // sourceExerciseOrSkillKey / targetSkillKey / carryoverType. Map to
+  // those owners directly. Preserve aggregates as empty arrays (the
+  // downstream materiality context treats them as optional preference
+  // signals).
   const doctrinePreferences = cachedDoctrineRules ? {
-    preferredExercises: cachedDoctrineRules.preferredExercises?.map(e => e.exerciseId || e.id || e) || [],
-    avoidExercises: cachedDoctrineRules.avoidExercises?.map(e => e.exerciseId || e.id || e) || [],
+    preferredExercises: [] as string[],
+    avoidExercises: [] as string[],
     carryoverRules: cachedDoctrineRules.carryoverRules?.map(r => ({
-      sourceSkill: r.sourceSkill || r.source || '',
-      targetSkill: r.targetSkill || r.target || '',
-      carryoverType: (r.carryoverType || r.type || 'indirect') as 'direct' | 'indirect' | 'prerequisite',
-      preferredExercises: r.preferredExercises || r.exercises || [],
+      sourceSkill: r.sourceExerciseOrSkillKey || '',
+      targetSkill: r.targetSkillKey || '',
+      // CarryoverRule.carryoverType is 'direct' | 'indirect' | 'prerequisite' | 'accessory'.
+      // Map 'accessory' to 'indirect' for the narrower local union here.
+      carryoverType: (r.carryoverType === 'accessory' ? 'indirect' : r.carryoverType) as 'direct' | 'indirect' | 'prerequisite',
+      preferredExercises: [] as string[],
     })) || [],
   } : undefined
   
@@ -5215,7 +5259,9 @@ function applyMaterialityScoreAdjustments(
     // [selection-compression-fix] Use session skill allocation for variety
     const sessionSkillsForMixed = skillsForSession && skillsForSession.length > 0
       ? skillsForSession
-      : [{ skill: primaryGoal, expressionMode: 'support' as const, weight: 1 }]
+      // [TRACE-LITERAL-DRIFT] 'support' is no longer a TraceExpressionMode.
+      // Use 'strength_support' as the canonical "support work" mode.
+      : [{ skill: primaryGoal, expressionMode: 'strength_support' as const, weight: 1 }]
     
     const mixedDaySkillLabels = sessionSkillsForMixed.map(function(s) {
       return s.skill + '(' + s.expressionMode + ')';
@@ -5698,13 +5744,19 @@ const added = addExercise(
           undefined, 
           'standalone',
           {
-            primarySelectionReason: 'support_skill_materialization',
-            sessionRole: 'support_volume',
-            expressionMode: 'support',
+            // [TRACE-LITERAL-DRIFT] ExerciseSelectionReason / TraceSessionRole /
+            // TraceExpressionMode were tightened. Mapping (support_*):
+            //   support_skill_materialization -> 'selected_skill_support'
+            //   support_volume                -> 'strength_support'
+            //   support / prehab_focus / core_focus -> nearest current modes
+            // (defined at lib/engine-quality-contract.ts:3679-3725).
+            primarySelectionReason: 'selected_skill_support',
+            sessionRole: 'strength_support',
+            expressionMode: 'strength_support',
             influencingSkills: [{ 
               skillId: supportAlloc.skill, 
               influence: 'selected', 
-              expressionMode: 'support' 
+              expressionMode: 'strength_support' 
             }],
             candidatePoolSize: (supportMapping?.accessorySupportExercises?.length || 0) + 
               (supportMapping?.commonLimiters?.reduce((acc, l) => acc + l.exerciseIds.length, 0) || 0),
@@ -5733,7 +5785,8 @@ const added = addExercise(
   if (supportSkillsAllocatedForSession.length > 0) {
     const finalMaterializedSupport = selected
       .filter(s => 
-        s.selectionContext?.primarySelectionReason === 'support_skill_materialization' ||
+        // [TRACE-LITERAL-DRIFT] mapped to selected_skill_support.
+        s.selectionContext?.primarySelectionReason === 'selected_skill_support' ||
         supportSkillsAllocatedForSession.some(alloc => 
           s.selectionContext?.influencingSkills?.some(i => i.skillId === alloc.skill)
         )
@@ -5802,9 +5855,11 @@ const added = addExercise(
       for (const ex of limiterExercises.slice(0, 2)) {
         if (selected.length >= maxExercises - 1) break
         addExercise(selectorCtx, ex, `[Constrained] Limiter correction for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
+          // [TRACE-LITERAL-DRIFT] support_volume -> strength_support;
+          // prehab_focus -> mobility_prep.
           primarySelectionReason: 'constraint_fallback_limiter',
-          sessionRole: 'support_volume',
-          expressionMode: 'prehab_focus',
+          sessionRole: 'strength_support',
+          expressionMode: 'mobility_prep',
           limiterInfluence: constraintType || undefined,
         })
       }
@@ -6500,9 +6555,10 @@ const added = addExercise(
       for (const ex of lastResortCore) {
         if (selected.length >= maxExercises) break
         addExercise(selectorCtx, ex, `[Last Resort] Core work`, undefined, undefined, undefined, 'standalone', {
+          // [TRACE-LITERAL-DRIFT] core_focus -> technical_focus.
           primarySelectionReason: 'constraint_fallback_core',
           sessionRole: 'core',
-          expressionMode: 'core_focus',
+          expressionMode: 'technical_focus',
         })
       }
     }
@@ -6759,14 +6815,17 @@ const added = addExercise(
     const currentSupport = deduplicatedSelected.filter(e => 
       e.selectionContext?.sessionRole === 'strength_support' ||
       e.selectionContext?.sessionRole === 'accessory' ||
-      e.selectionContext?.sessionRole === 'support_volume'
+      // [TRACE-LITERAL-DRIFT] support_volume -> strength_support.
+      e.selectionContext?.sessionRole === 'strength_support'
     )
     const currentOther = deduplicatedSelected.filter(e => {
       const role = e.selectionContext?.sessionRole
       return !role || (
         role !== 'skill_primary' && role !== 'direct_skill' && role !== 'strength_primary' &&
         role !== 'skill_secondary' && role !== 'secondary_skill' &&
-        role !== 'strength_support' && role !== 'accessory' && role !== 'support_volume'
+        // [TRACE-LITERAL-DRIFT] support_volume removed; same canonical role as
+    // strength_support — drop the redundant compare to avoid TS2367.
+    role !== 'strength_support' && role !== 'accessory'
       )
     })
     
@@ -6928,7 +6987,8 @@ const added = addExercise(
         const isPrimary = role === 'skill_primary' || role === 'strength_primary' || role === 'direct_skill'
         if (isPrimary) return false
         if (exerciseTransfersToSkill(e.exercise, primaryGoal)) return false
-        return role === 'accessory' || role === 'support_volume' || role === 'core' || !role
+        // [TRACE-LITERAL-DRIFT] support_volume removed.
+    return role === 'accessory' || role === 'strength_support' || role === 'core' || !role
       })
       if (idx >= 0) return idx
       // Pass 2: any non-primary, non-selected, non-spine-carrier row
@@ -7102,7 +7162,13 @@ const added = addExercise(
       const newRow: SelectedExercise = {
         exercise: chosen,
         sets: chosen.defaultSets || 3,
-        repsOrTime: chosen.defaultRepsOrTime || chosen.reps || chosen.time
+        // [EXERCISE-NUMERIC-DEFAULT-COERCION] `reps` and `time` on Exercise
+        // are optional numbers; SelectedExercise.repsOrTime is a string.
+        // Coerce numeric defaults explicitly so the `||` chain returns a
+        // single string union instead of `string | number`.
+        repsOrTime: chosen.defaultRepsOrTime
+          || (typeof chosen.reps === 'number' ? String(chosen.reps) : '')
+          || (typeof chosen.time === 'number' ? `${chosen.time}s` : '')
           || (chosen.category === 'skill' ? '10-20s' : chosen.category === 'core' ? '30s' : '8-12'),
         isOverrideable: true,
         selectionReason: `[Final Skill Obligation] ${entry.skill.replace(/_/g, ' ')} (${via})`,

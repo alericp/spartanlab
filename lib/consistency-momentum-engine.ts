@@ -159,10 +159,12 @@ function getStoredConsistencyData(): StoredConsistencyData {
   }
   
   // Try to infer from athlete profile
+  // [CONSISTENCY-TRAINING-DAYS-CANONICAL] Canonical AthleteProfile owns
+  // `trainingDaysPerWeek: TrainingDaysPerWeek | null` (numeric or
+  // 'flexible'), not the legacy stringified-range `trainingDays`.
   const profile = getAthleteProfile()
-  const targetFrequency = profile?.trainingDays === '5-6' ? 5 :
-                          profile?.trainingDays === '4-5' ? 4 :
-                          profile?.trainingDays === '3-4' ? 3 : 3
+  const tdpw = profile?.trainingDaysPerWeek
+  const targetFrequency = typeof tdpw === 'number' && tdpw > 0 ? tdpw : 3
   
   return {
     lastAnalyzedDate: new Date().toISOString(),
@@ -268,7 +270,10 @@ function calculateConsistencyMetrics(logs: WorkoutLog[], targetFrequency: number
     delayedSessionsLast14Days: 0, // Would need scheduled data to calculate
     consecutiveRestDays,
     daysSinceLastSession,
-    momentumTrend: momentum.trend,
+    // [CONSISTENCY-MOMENTUM-TREND-MAP] Map TrainingMomentum.trend
+    // ('increasing' | 'stable' | 'decreasing') to ConsistencyMetrics
+    // .momentumTrend ('improving' | 'stable' | 'declining').
+    momentumTrend: momentum.trend === 'increasing' ? 'improving' : momentum.trend === 'decreasing' ? 'declining' : 'stable',
     consistencyScore,
   }
 }
@@ -470,6 +475,10 @@ function determineConsistencyState(
   }
   
   // Building consistency
+  // [CONSISTENCY-MOMENTUM-TREND-LITERALS] `TrainingMomentum.trend` is
+  // `'increasing' | 'stable' | 'decreasing'` (training-momentum-engine.ts).
+  // `ConsistencyMetrics.momentumTrend` is `'improving' | 'stable' |
+  // 'declining'` — DO NOT confuse the two unions.
   if (consistencyScore >= 40 || (momentum.trend === 'increasing' && consistencyScore >= 30)) {
     return 'building'
   }
@@ -658,7 +667,7 @@ function getHabitTip(state: ConsistencyState, metrics: ConsistencyMetrics): stri
 function getTrustedWorkouts() {
   return getWorkoutLogs().filter(log => {
     // Reject demo workouts
-    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    if (log.sourceRoute === 'demo' || (log as unknown as { isDemo?: boolean }).isDemo === true) return false
     // Reject explicitly untrusted
     if (log.trusted === false) return false
     // PHASE 5: Require explicit trust OR known good sourceRoute
@@ -676,7 +685,10 @@ function getTrustedWorkouts() {
 export function getConsistencyStatus(): ConsistencyStatus {
   const logs = getTrustedWorkouts()
   const storedData = getStoredConsistencyData()
-  const momentum = getTrainingMomentum()
+  // [CONSISTENCY-MOMENTUM-FN-RENAME] training-momentum-engine exports
+  // `calculateTrainingMomentum` (the legacy `getTrainingMomentum` was
+  // removed). The hook above already imports the canonical fn.
+  const momentum = calculateTrainingMomentum()
   const readiness = getReadinessAssessment()
   
   // Calculate metrics

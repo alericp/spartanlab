@@ -259,10 +259,13 @@ export function getExerciseHistory(
     )
     
     if (exercise) {
-      // Get RPE data if available
-      const rpeSession = rpeSessions.find(s => s.workoutId === log.id)
-      const rpeData = rpeSession?.exercises.find(e => 
-        e.exerciseId === exerciseId || e.exerciseName === exerciseName
+      // [ADAPTIVE-PROGRESSION-RPE-FIELD-CANONICAL] StoredRPESession owns
+      // `sessionId` (fatigue-score-calculator.ts L54-55), not the legacy
+      // `workoutId`. Inner exercises only carry `exerciseName` — no
+      // `exerciseId`. Match by name only.
+      const rpeSession = rpeSessions.find(s => s.sessionId === log.id)
+      const rpeData = rpeSession?.exercises.find(e =>
+        e.exerciseName === exerciseName
       )
       
       const avgRPE = rpeData?.sets.length 
@@ -1008,9 +1011,12 @@ function calculateAverageDaysPerWeek(logs: WorkoutLog[], weeks: number): number 
 
 function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
   const profile = getOnboardingProfile()
-  const intendedDays = profile?.weeklyTraining 
-    ? mapWeeklyTrainingToDays(profile.weeklyTraining)
-    : 3
+  // [ADAPTIVE-PROGRESSION-TRAINING-DAYS-CANONICAL] Canonical
+  // OnboardingProfile owns `trainingDaysPerWeek: TrainingDaysPerWeek
+  // | null` (numeric or 'flexible'), not the legacy `weeklyTraining`
+  // string range.
+  const tdpw = profile?.trainingDaysPerWeek
+  const intendedDays = typeof tdpw === 'number' && tdpw > 0 ? tdpw : 3
   
   const actualDays = calculateAverageDaysPerWeek(logs, SCHEDULE_THRESHOLDS.weeksForPattern)
   const difference = intendedDays - actualDays
@@ -1162,11 +1168,12 @@ function analyzeTimePatterns(logs: WorkoutLog[]): TimeConstraintAnalysis {
   const recentLogs = getWorkoutsInDateRange(logs, 14)
   
   let intendedDuration = 45
-  if (profile?.trainingTime) {
-    const timeMap: Record<string, number> = {
-      '15_30': 25, '30_45': 37, '45_60': 52, '60_plus': 70,
-    }
-    intendedDuration = timeMap[profile.trainingTime] || 45
+  // [ADAPTIVE-PROGRESSION-SESSION-LENGTH-CANONICAL] Canonical
+  // OnboardingProfile owns `sessionLengthMinutes:
+  // SessionLengthPreference | null` (numeric minutes), not the legacy
+  // `trainingTime` string buckets.
+  if (typeof profile?.sessionLengthMinutes === 'number' && profile.sessionLengthMinutes > 0) {
+    intendedDuration = profile.sessionLengthMinutes
   }
   
   if (recentLogs.length === 0) {

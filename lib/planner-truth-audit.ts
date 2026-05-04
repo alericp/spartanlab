@@ -799,8 +799,14 @@ function auditLimiterInfluence(
   profile: CanonicalProgrammingProfile,
   program: AdaptiveProgram
 ): LimiterInfluenceAudit {
-  // Get current limiter from profile diagnostics
-  const currentLimiter = profile.limiterIdentification?.currentLimiter || null
+  // [PLANNER-TRUTH-AUDIT-LIMITER-OPTIONAL] `limiterIdentification`
+  // is an optional diagnostic field — not declared on the canonical
+  // `CanonicalProgrammingProfile` contract. Bridge through `unknown`
+  // so the audit still surfaces a stable `currentLimiter` when the
+  // diagnostic happens to be present at runtime, without TS2339.
+  const currentLimiter =
+    (profile as unknown as { limiterIdentification?: { currentLimiter?: string | null } })
+      .limiterIdentification?.currentLimiter || null
   const limiterClaimedInRationale = currentLimiter 
     ? (program.programRationale?.toLowerCase()?.includes(currentLimiter.toLowerCase()) || false)
     : false

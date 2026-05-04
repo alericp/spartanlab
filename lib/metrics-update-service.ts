@@ -196,9 +196,11 @@ export function analyzeMetricChanges(
     }
 
     // Weighted benchmarks
+    // [METRICS-WEIGHTED-BENCHMARK-LOAD] Canonical `WeightedBenchmark`
+    // owns `load`, not the legacy `addedWeight`.
     if (updates.strength.weightedPullUp !== undefined) {
-      const oldWeight = current.weightedPullUp?.addedWeight ?? 0
-      const newWeight = updates.strength.weightedPullUp?.addedWeight ?? 0
+      const oldWeight = current.weightedPullUp?.load ?? 0
+      const newWeight = updates.strength.weightedPullUp?.load ?? 0
       if (oldWeight !== newWeight) {
         changedMetrics.push('Weighted Pull-up')
         if (Math.abs(newWeight - oldWeight) >= 10) significantChanges++
@@ -206,8 +208,8 @@ export function analyzeMetricChanges(
     }
 
     if (updates.strength.weightedDip !== undefined) {
-      const oldWeight = current.weightedDip?.addedWeight ?? 0
-      const newWeight = updates.strength.weightedDip?.addedWeight ?? 0
+      const oldWeight = current.weightedDip?.load ?? 0
+      const newWeight = updates.strength.weightedDip?.load ?? 0
       if (oldWeight !== newWeight) {
         changedMetrics.push('Weighted Dip')
         if (Math.abs(newWeight - oldWeight) >= 10) significantChanges++

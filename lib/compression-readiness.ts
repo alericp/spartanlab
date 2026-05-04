@@ -82,12 +82,15 @@ const LEVEL_LABELS: Record<CompressionLevel, string> = {
 
 function getLSitCapacityScore(capacity: LSitCapacity | null): number {
   if (!capacity) return 0
+  // [COMPRESSION-LSIT-CAPACITY-LITERALS] Canonical `LSitCapacity`
+  // (athlete-profile.ts L1119) is
+  // `'none' | 'under_10' | '10_20' | '20_plus'` — the legacy
+  // `'3_sec' / '5_sec' / '10_sec'` buckets were removed.
   const scores: Record<LSitCapacity, number> = {
     'none': 0,
-    '3_sec': 20,
-    '5_sec': 35,
-    '10_sec': 55,
-    '20_plus': 80,
+    'under_10': 30,
+    '10_20': 60,
+    '20_plus': 85,
   }
   return scores[capacity]
 }
@@ -342,7 +345,17 @@ export function getCompressionReadiness(
   const effectiveCalibration = calibration ?? getAthleteCalibration()
   
   // Extract key values with defaults
-  const lSitCapacity = effectiveProfile?.lSitCapacity ?? null
+  // [COMPRESSION-PROFILE-LSIT-FIELD] Canonical OnboardingProfile owns
+  // `lSitHold: LSitHoldCapacity | null` (athlete-profile.ts L1048).
+  // Map `LSitHoldCapacity` ('none' | 'under_10' | '10_20' | '20_30' |
+  // '30_plus' | 'unknown') down to `LSitCapacity`
+  // ('none' | 'under_10' | '10_20' | '20_plus') used by this engine.
+  const lSitHoldRaw = effectiveProfile?.lSitHold ?? null
+  const lSitCapacity: LSitCapacity | null = (() => {
+    if (!lSitHoldRaw || lSitHoldRaw === 'unknown') return null
+    if (lSitHoldRaw === '20_30' || lSitHoldRaw === '30_plus') return '20_plus'
+    return lSitHoldRaw as LSitCapacity
+  })()
   const compressionTier = effectiveCalibration?.coreCompressionTier ?? 'low'
   const leverageProfile = effectiveCalibration?.leverageProfile ?? 'average'
   

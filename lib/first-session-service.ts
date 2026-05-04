@@ -255,15 +255,21 @@ export function generateFirstSessionReasoning(
   }
 
   // Add time-based factor
-  if (profile?.trainingTime) {
-    const timeMap: Record<string, string> = {
-      '30_min': 'Optimized for 30-minute sessions',
-      '45_min': 'Designed for 45-minute windows',
-      '60_min': 'Full 60-minute development',
-      '90_min': 'Comprehensive extended session',
+  // [FIRST-SESSION-SESSION-LENGTH-CANONICAL] Canonical
+  // OnboardingProfile owns `sessionLengthMinutes:
+  // SessionLengthPreference | null` (numeric minutes), not the legacy
+  // `trainingTime` string buckets.
+  const slm = profile?.sessionLengthMinutes
+  if (typeof slm === 'number' && slm > 0) {
+    const minutesLabel: Record<number, string> = {
+      30: 'Optimized for 30-minute sessions',
+      45: 'Designed for 45-minute windows',
+      60: 'Full 60-minute development',
+      90: 'Comprehensive extended session',
+      120: 'Extended training session',
     }
-    if (timeMap[profile.trainingTime]) {
-      keyFactors.push(timeMap[profile.trainingTime])
+    if (minutesLabel[slm]) {
+      keyFactors.push(minutesLabel[slm])
     }
   }
 

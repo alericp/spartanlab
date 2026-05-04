@@ -56,9 +56,37 @@ export const EMPTY_SKILL_TRACE = {
 } as const
 
 /**
+ * [SAFE-ACCESS-SKILL-TRACE-RETURN-SHAPE] `EMPTY_SKILL_TRACE` is declared
+ * with `as const` so its type is the deeply readonly literal-tuple
+ * version. The runtime path below builds a fresh mutable shape; the
+ * function's structural return type must accept both. Use a
+ * structural type alias so callers can still pass either the readonly
+ * fallback or the constructed mutable trace without TS2322 friction.
+ */
+type SafeSkillTrace = {
+  sourceSkillCount: number
+  weightedAllocationCount: number
+  primarySpineCount: number
+  secondaryAnchorCount: number
+  tertiaryCount: number
+  supportCount: number
+  deferredCount: number
+  sixSessionLogicTouched: boolean
+  skillTraces: readonly unknown[]
+  finalWeekExpression: {
+    directlyRepresentedSkills: readonly string[]
+    supportExpressedSkills: readonly string[]
+    rotationalSkills: readonly string[]
+    deferredSkills: readonly { skill: string; reasonCode: string; reasonLabel: string }[]
+    coverageVerdict: 'strong' | 'adequate' | 'weak'
+    coverageRatio: number
+  }
+}
+
+/**
  * Gets safe skill trace with all required fields populated
  */
-export function getSafeSkillTrace(trace: unknown): typeof EMPTY_SKILL_TRACE {
+export function getSafeSkillTrace(trace: unknown): SafeSkillTrace {
   if (!trace || typeof trace !== 'object') {
     return EMPTY_SKILL_TRACE
   }

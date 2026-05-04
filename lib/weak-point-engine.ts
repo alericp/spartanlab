@@ -1148,17 +1148,23 @@ export function detectWeakPointsWithReadiness(
   let readinessWeakPoints: WeakPointFromReadiness[] = []
   
   try {
-    // Convert OnboardingProfile to AthleteProfile format for readiness calculation
+    // [WEAK-POINT-READINESS-SHIM-COERCION] Convert OnboardingProfile to
+    // the legacy AthleteProfile shape consumed by
+    // `generateAthleteReadinessSummary`. Categorical capacity buckets
+    // are coerced via `bucketToNumber`; `experienceLevel` is not on
+    // OnboardingProfile so default to 'intermediate'; bodyweight and
+    // hollowHold/lSitHold are not on OnboardingProfile either —
+    // fall back to safe defaults.
     const athleteProfile = {
       userId: profile.userId || 'unknown',
-      experienceLevel: profile.experienceLevel || 'intermediate',
-      maxPullUps: profile.pullUpMax || 0,
-      maxDips: profile.dipMax || 0,
+      experienceLevel: 'intermediate' as const,
+      maxPullUps: bucketToNumber(profile.pullUpMax as string | null) || 0,
+      maxDips: bucketToNumber(profile.dipMax as string | null) || 0,
       weightedPullUp: profile.weightedPullUp?.load || 0,
       weightedDip: profile.weightedDip?.load || 0,
-      hollowHold: profile.hollowHold || 0,
-      lSitHold: profile.lSitHold || 0,
-      bodyweight: profile.bodyweight || 75,
+      hollowHold: 0,
+      lSitHold: 0,
+      bodyweight: 75,
       primaryGoal: primaryGoal || skillTarget,
     }
     
@@ -1486,17 +1492,24 @@ export function detectWeakPointsForProfile(
     return { primary: [], secondary: [] }
   }
   
+  // [WEAK-POINT-DETECTION-INPUT-CAPACITY-COERCION] DetectionInput expects
+  // numeric `pullUpMax` / `dipMax`. Canonical OnboardingProfile stores
+  // them as categorical bucket strings (`PullUpCapacity` / `DipCapacity`).
+  // Reuse `bucketToNumber` to coerce — same path used by
+  // `calculateBenchmarkScores`. `frontLeverHold` / `plancheHold` /
+  // `lSitHold` are NOT on OnboardingProfile; fall back to canonical
+  // `<skill>.progression`. `experienceLevel` is not on OnboardingProfile.
   const input: DetectionInput = {
-    pullUpMax: profile.pullUpMax,
-    dipMax: profile.dipMax,
-    weightedPullUp: profile.weightedPullUp,
-    weightedDip: profile.weightedDip,
-    frontLeverLevel: profile.frontLeverHold || profile.frontLever?.progression,
-    plancheLevel: profile.plancheHold || profile.planche?.progression,
-    lSitLevel: profile.lSitHold,
+    pullUpMax: bucketToNumber(profile.pullUpMax as string | null),
+    dipMax: bucketToNumber(profile.dipMax as string | null),
+    weightedPullUp: profile.weightedPullUp ?? null,
+    weightedDip: profile.weightedDip ?? null,
+    frontLeverLevel: profile.frontLever?.progression ?? null,
+    plancheLevel: profile.planche?.progression ?? null,
+    lSitLevel: profile.lSit?.progression ?? null,
     needsDeload: fatigueNeedsDeload,
     fatigueScore: fatigueScore,
-    experienceLevel: calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' || 'intermediate',
+    experienceLevel: (calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' | undefined) || 'intermediate',
   }
   
   // Get benchmark-derived weak points

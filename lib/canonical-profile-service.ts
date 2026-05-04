@@ -2363,19 +2363,17 @@ export function logCanonicalProfileState(context: string): void {
     },
     
     // FLEXIBILITY BENCHMARKS - with range intent
+    // [CANONICAL-FLEXIBILITY-BENCHMARK-NESTED-OWNER] Canonical
+    // `FlexibilityBenchmark` (athlete-profile.ts L575) is the nested
+    // object `{ level, rangeIntent }`. The legacy
+    // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
+    // when benchmarks were consolidated into nested slices on
+    // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
     flexibilityBenchmarks: {
-      pancake: profile.pancakeLevel 
-        ? { level: profile.pancakeLevel, rangeIntent: profile.pancakeRangeIntent }
-        : 'not set',
-      toeTouch: profile.toeTouchLevel 
-        ? { level: profile.toeTouchLevel, rangeIntent: profile.toeTouchRangeIntent }
-        : 'not set',
-      frontSplits: profile.frontSplitsLevel 
-        ? { level: profile.frontSplitsLevel, rangeIntent: profile.frontSplitsRangeIntent }
-        : 'not set',
-      sideSplits: profile.sideSplitsLevel 
-        ? { level: profile.sideSplitsLevel, rangeIntent: profile.sideSplitsRangeIntent }
-        : 'not set',
+      pancake: profile.pancake ?? 'not set',
+      toeTouch: profile.toeTouch ?? 'not set',
+      frontSplits: profile.frontSplits ?? 'not set',
+      sideSplits: profile.sideSplits ?? 'not set',
     },
     
     // Diagnostics

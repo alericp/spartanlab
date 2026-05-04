@@ -284,7 +284,10 @@ export const COACHING_FRAMEWORKS: Record<CoachingFrameworkId, CoachingFramework>
     progressionMethod: 'undulating',
     
     recommendedSkillTypes: ['front_lever', 'muscle_up', 'weighted_pull', 'weighted_dip', 'planche'],
-    recommendedExperienceLevels: ['intermediate', 'advanced', 'elite'],
+    // [COACHING-FRAMEWORK-EXPERIENCE-LEVEL-CANONICAL] Canonical
+    // `ExperienceLevel` is `'beginner' | 'intermediate' | 'advanced'`
+    // — `'elite'` was collapsed into `'advanced'`.
+    recommendedExperienceLevels: ['intermediate', 'advanced'],
     
     rules: {
       preferredRepRangeMin: 3,
@@ -475,7 +478,9 @@ export const COACHING_FRAMEWORKS: Record<CoachingFrameworkId, CoachingFramework>
     progressionMethod: 'block_periodization',
     
     recommendedSkillTypes: ['iron_cross', 'planche', 'back_lever', 'front_lever'],
-    recommendedExperienceLevels: ['advanced', 'elite'],
+    // [COACHING-FRAMEWORK-EXPERIENCE-LEVEL-CANONICAL] same as above —
+    // collapse `'elite'` into the canonical `'advanced'` literal.
+    recommendedExperienceLevels: ['advanced'],
     
     rules: {
       preferredRepRangeMin: 3,

@@ -1388,7 +1388,11 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     }
     areasToImprove.push(weakAreaLabels[profile.weakestArea] || profile.weakestArea)
   }
-  if (calibration?.leverageProfile === 'long_limbed') {
+  // [ONBOARDING-LEVERAGE-PROFILE-LITERAL] Canonical
+  // `LeverageProfile` (athlete-calibration.ts L118) is
+  // `'compact' | 'average' | 'long_lever'` — the legacy `'long_limbed'`
+  // literal was renamed to `'long_lever'`.
+  if (calibration?.leverageProfile === 'long_lever') {
     areasToImprove.push('Leverage disadvantage addressed')
   }
   

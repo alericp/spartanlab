@@ -1323,6 +1323,9 @@ export const RANGE_INTENT_DESCRIPTIONS: Record<RangeTrainingIntent, string> = {
   'hybrid': 'Balance both flexibility and mobility work',
 }
 
+// [EQUIPMENT-LABELS-EXHAUSTIVE-RECORD] EquipmentType (L584-594) added
+// `'barbell'` and `'weight_plates'` for hybrid strength setups; the
+// label record must be exhaustive per `Record<EquipmentType, string>`.
 export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
   'pullup_bar': 'Pull-up bar',
   'dip_bars': 'Dip bars',
@@ -1332,23 +1335,31 @@ export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
   'weights': 'Weights',
   'bench_box': 'Bench / Box',
   'minimal': 'Minimal / Home setup',
+  'barbell': 'Barbell + plates',
+  'weight_plates': 'Weight plates',
 }
 
+// [SESSION-LENGTH-LABELS-EXHAUSTIVE] SessionLengthPreference (L751)
+// includes 90 and 120 — must be present for the Record to typecheck.
 export const SESSION_LENGTH_LABELS: Record<SessionLengthPreference, string> = {
   20: '20–30 minutes',
   30: '30–45 minutes',
   45: '45–60 minutes',
   60: '60–75 minutes',
   75: '75–90 minutes',
+  90: '90 minutes',
+  120: '120 minutes',
   'flexible': 'Flexible / varies (Recommended)',
 }
 
+// [TRAINING-DAYS-LABELS-EXHAUSTIVE] TrainingDaysPerWeek (L748) includes 7.
 export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   2: '2 days',
   3: '3 days',
   4: '4 days',
   5: '5 days',
   6: '6 days',
+  7: '7 days',
   'flexible': 'Flexible (Recommended)',
 }
 

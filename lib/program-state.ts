@@ -1430,8 +1430,18 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
         weekNumber: 1,
       },
       
-      // materialSkillIntent - Required for skill intent display
-      materialSkillIntent: program.materialSkillIntent ?? {
+      // [PROGRAM-STATE-MATERIAL-SKILL-INTENT-OWNER] Canonical
+      // `AdaptiveProgram` (lib/adaptive-program-builder.ts L2053) does
+      // not own `materialSkillIntent` directly — it lives on the
+      // `multiSkillMaterialityContract` carried separately. Bridge
+      // through `unknown` so the legacy display contract still
+      // surfaces a stable shape without TS2339.
+      materialSkillIntent: ((program as unknown as { materialSkillIntent?: {
+        primarySkills: string[]
+        secondarySkills: string[]
+        methodsUsed: string[]
+        emphasis: string
+      } }).materialSkillIntent) ?? {
         primarySkills: [],
         secondarySkills: [],
         methodsUsed: [],
@@ -1455,7 +1465,7 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
     const missingFields: string[] = []
     if (!program.selectedSkillTrace) missingFields.push('selectedSkillTrace')
     if (!program.weeklyRepresentation) missingFields.push('weeklyRepresentation')
-    if (!program.materialSkillIntent) missingFields.push('materialSkillIntent')
+    if (!(program as unknown as { materialSkillIntent?: unknown }).materialSkillIntent) missingFields.push('materialSkillIntent')
     if (!program.currentWorkingProgressions) missingFields.push('currentWorkingProgressions')
     
     if (missingFields.length > 0) {

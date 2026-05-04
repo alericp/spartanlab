@@ -196,7 +196,7 @@ export function verifyDoctrineToOutput(
     selectedSkillCount: (resolvedProfile.selectedSkills || []).length,
     selectedSkills: resolvedProfile.selectedSkills || [],
     scheduleMode: resolvedProfile.scheduleMode || 'static',
-    trainingDays: resolvedProfile.trainingDays || program.sessions.length,
+    trainingDays: program.sessions?.length || 6,
     sessionDuration: resolvedProfile.sessionDurationMode || 'medium',
     equipmentAvailable: resolvedProfile.equipmentAvailable || [],
     experienceLevel: resolvedProfile.experienceLevel || 'intermediate',
@@ -435,7 +435,7 @@ function verifyWeeklyStructure(
   audit: PlannerTruthAuditReport
 ): DimensionVerdict {
   const sessionCount = program.sessions.length
-  const targetDays = profile.trainingDays || sessionCount
+  const targetDays = program.sessions?.length || 6
   
   // Check session differentiation
   const diffAudit = audit.sessionDifferentiationAudit
@@ -805,7 +805,7 @@ function verifyDoctrineShape(
   profile: CanonicalProgrammingProfile
 ): DimensionVerdict {
   const primaryGoal = profile.primaryGoal
-  const trainingPath = profile.trainingPath || 'hybrid'
+  const trainingPath = profile.trainingPathType || 'hybrid'
   
   // Check if week structure matches doctrine expectations
   const sessions = program.sessions

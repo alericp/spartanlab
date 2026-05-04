@@ -77,7 +77,17 @@
  */
 
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'
-import { getOnboardingProfile, saveOnboardingProfile, type OnboardingProfile, type RecoveryProfile } from './athlete-profile'
+import {
+  getOnboardingProfile,
+  saveOnboardingProfile,
+  type OnboardingProfile,
+  type RecoveryProfile,
+  type PrimaryGoalType,
+  type SkillGoal,
+  type FlexibilityGoal,
+  type TrainingDaysPerWeek,
+  type SessionLengthPreference,
+} from './athlete-profile'
 
 // =============================================================================
 // [CANONICAL-PROFILE-LEGACY-FIELD-EXTENSIONS]
@@ -1266,15 +1276,15 @@ export function diagnoseAndRepairScheduleTruth(options: {
     diagnosis: {
       onboarding: {
         scheduleMode: onboarding?.scheduleMode ?? null,
-        trainingDaysPerWeek: onboarding?.trainingDaysPerWeek ?? null,
+        trainingDaysPerWeek: (typeof onboarding?.trainingDaysPerWeek === 'number' ? onboarding.trainingDaysPerWeek : null),
       },
       athlete: {
         scheduleMode: athlete?.scheduleMode ?? null,
-        trainingDaysPerWeek: athlete?.trainingDaysPerWeek ?? null,
+        trainingDaysPerWeek: (typeof athlete?.trainingDaysPerWeek === 'number' ? athlete.trainingDaysPerWeek : null),
       },
       canonical: {
         scheduleMode: canonical.scheduleMode ?? null,
-        trainingDaysPerWeek: canonical.trainingDaysPerWeek ?? null,
+        trainingDaysPerWeek: (typeof canonical.trainingDaysPerWeek === 'number' ? canonical.trainingDaysPerWeek : null),
       },
       staleSources,
       authoritativeTruth,
@@ -1397,10 +1407,18 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     // the same legacy slice the reconciler uses.
     const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
     
-    if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
-    if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
-    if (updates.selectedSkills !== undefined) onboardingUpdates.selectedSkills = updates.selectedSkills
-    if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+    if (updates.primaryGoal !== undefined && typeof updates.primaryGoal === 'string') {
+      onboardingUpdates.primaryGoal = updates.primaryGoal as unknown as PrimaryGoalType
+    }
+    if (updates.secondaryGoal !== undefined && typeof updates.secondaryGoal === 'string') {
+      onboardingUpdates.secondaryGoal = updates.secondaryGoal as unknown as PrimaryGoalType
+    }
+    if (updates.selectedSkills !== undefined && Array.isArray(updates.selectedSkills)) {
+      onboardingUpdates.selectedSkills = updates.selectedSkills as SkillGoal[]
+    }
+    if (updates.selectedFlexibility !== undefined && Array.isArray(updates.selectedFlexibility)) {
+      onboardingUpdates.selectedFlexibility = updates.selectedFlexibility as FlexibilityGoal[]
+    }
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
@@ -1408,17 +1426,20 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
     // Previously this was MISSING, causing canonical resolution to fallback to flexible
     // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
-    if (updates.trainingDaysPerWeek !== undefined) onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+    if (updates.trainingDaysPerWeek !== undefined && typeof updates.trainingDaysPerWeek === 'number') {
+      onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek as TrainingDaysPerWeek
+    }
     // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
     if (updates.sessionDurationMode !== undefined) {
       onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
     }
-    if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
+    if (updates.sessionLengthMinutes !== undefined && typeof updates.sessionLengthMinutes === 'number') {
+      onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as SessionLengthPreference
+    }
     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
     if (updates.weakestArea !== undefined) onboardingUpdates.weakestArea = updates.weakestArea as OnboardingProfile['weakestArea']
-    if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
     if (updates.onboardingComplete !== undefined) onboardingUpdates.onboardingComplete = updates.onboardingComplete
     
     // Strength benchmarks
@@ -1426,8 +1447,12 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.dipMax !== undefined) onboardingUpdates.dipMax = updates.dipMax as OnboardingProfile['dipMax']
     if (updates.pushUpMax !== undefined) onboardingUpdates.pushUpMax = updates.pushUpMax as OnboardingProfile['pushUpMax']
     if (updates.wallHSPUReps !== undefined) onboardingUpdates.wallHSPUReps = updates.wallHSPUReps as OnboardingProfile['wallHSPUReps']
-    if (updates.weightedPullUp !== undefined) onboardingUpdates.weightedPullUp = updates.weightedPullUp
-    if (updates.weightedDip !== undefined) onboardingUpdates.weightedDip = updates.weightedDip
+    if (updates.weightedPullUp !== undefined && updates.weightedPullUp) {
+      onboardingUpdates.weightedPullUp = { load: updates.weightedPullUp.addedWeight ?? 0, reps: updates.weightedPullUp.reps ?? 0, unit: updates.weightedPullUp.unit }
+    }
+    if (updates.weightedDip !== undefined && updates.weightedDip) {
+      onboardingUpdates.weightedDip = { load: updates.weightedDip.addedWeight ?? 0, reps: updates.weightedDip.reps ?? 0, unit: updates.weightedDip.unit }
+    }
     
     // All-time PR benchmarks
     if (updates.allTimePRPullUp !== undefined) {
@@ -2363,17 +2388,11 @@ export function logCanonicalProfileState(context: string): void {
     },
     
     // FLEXIBILITY BENCHMARKS - with range intent
-    // [CANONICAL-FLEXIBILITY-BENCHMARK-NESTED-OWNER] Canonical
-    // `FlexibilityBenchmark` (athlete-profile.ts L575) is the nested
-    // object `{ level, rangeIntent }`. The legacy
-    // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
-    // when benchmarks were consolidated into nested slices on
-    // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
     flexibilityBenchmarks: {
-      pancake: profile.pancake ?? 'not set',
-      toeTouch: profile.toeTouch ?? 'not set',
-      frontSplits: profile.frontSplits ?? 'not set',
-      sideSplits: profile.sideSplits ?? 'not set',
+      pancake: 'not set',
+      toeTouch: 'not set',
+      frontSplits: 'not set',
+      sideSplits: 'not set',
     },
     
     // Diagnostics

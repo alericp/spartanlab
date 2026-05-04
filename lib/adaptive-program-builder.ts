@@ -8529,7 +8529,10 @@ async function generateAdaptiveProgramImpl(
         
         // If bundle has higher confidence (recent data), it could inform conservative selection
         // For now, we use bundle data to validate/confirm canonical progression choices
-        if (bundleData.progressScore !== null && bundleData.progressScore < 0.3) {
+        // [BUILDER-PROGRESS-SCORE-NULLISH] `bundleData.progressScore` is
+        // `number | null | undefined`. Use `!= null` so undefined is also
+        // gated out before the numeric comparison.
+        if (bundleData.progressScore != null && bundleData.progressScore < 0.3) {
           // Low progress score - skill may be struggling, be more conservative
           // This affects downstream selection by marking intent as conservative
           progressionEnrichmentApplied = true
@@ -8794,7 +8797,12 @@ async function generateAdaptiveProgramImpl(
       .map(intent => intent.skill)
     
     for (const skill of familySkills) {
-      const blocked = shouldBlockAdvancedVariant(readiness)
+      // [BUILDER-SHOULD-BLOCK-ADVANCED-VARIANT-SIGNATURE] Canonical
+      // `shouldBlockAdvancedVariant` requires a `variantDifficulty`
+      // arg and returns `{ blocked: boolean; reason: string }`. The
+      // gate is checking advanced-variant readiness for each skill in
+      // the family, so 'advanced' is the difficulty being interrogated.
+      const { blocked } = shouldBlockAdvancedVariant(readiness, 'advanced')
       advancedVariantGates.push({
         skill,
         family,
@@ -9950,7 +9958,21 @@ async function generateAdaptiveProgramImpl(
       materialityContract: multiSkillMaterialityContract,
       doctrineRuntimeContract,
       currentWorkingProgressions: cwpForArchitecture,
-      trainingMethodPreferences: inputs.trainingMethodPreferences || null,
+      // [BUILDER-TRAINING-METHOD-PREFERENCES-ID-MAP]
+      // `session-architecture-truth` declares
+      // `trainingMethodPreferences: Array<{ id: string; name: string }> | null`.
+      // The local `inputs.trainingMethodPreferences` shape is
+      // `Array<{ name: string; [k: string]: unknown }>` — only `name` is
+      // guaranteed. Synthesize `id` from an explicit `.id` if present,
+      // otherwise from a slugged `name`. Preserve null.
+      trainingMethodPreferences: inputs.trainingMethodPreferences
+        ? inputs.trainingMethodPreferences.map(p => ({
+            id: typeof p.id === 'string' && p.id.length > 0
+              ? p.id
+              : p.name.toLowerCase().replace(/\s+/g, '_'),
+            name: p.name,
+          }))
+        : null,
       sessionStylePreference: inputs.sessionStyle || null,
       scheduleMode: inputScheduleMode,
       effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
@@ -12750,7 +12772,13 @@ async function generateAdaptiveProgramImpl(
   // if the selector did not run / the cache was empty / no rule matched).
   // This is the durable evidence the program needs to claim or honestly deny
   // doctrine causality.
-  doctrineCausalAuditAccumulator: doctrineCausalAuditAccumulator as any,
+  // [BUILDER-DOCTRINE-CAUSAL-AUDIT-ACCUMULATOR-DROPPED] The
+  // `doctrineCausalAuditAccumulator` key is not declared on the
+  // canonical `AdaptiveSessionContext`. The accumulator is still
+  // owned by this function as a local variable (declared at L12479)
+  // and the post-selection block that mutates it does so via direct
+  // closure capture, so dropping the cross-function pass-through
+  // does not break the audit pipeline.
   // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Shared cluster budget -- the SAME
   // object reference is handed to every session this build, so session N's
   // cluster application is visible to session N+1's cluster materializer.
@@ -14428,7 +14456,7 @@ async function generateAdaptiveProgramImpl(
 
         // [3C] SECONDARY BLOCK on large tails.
         // Only fires when (a) at least 6 candidates remain AFTER the primary
-        // block was placed (i.e. original tail was 9–10+), and (b) both styles
+        // block was placed (i.e. original tail was 9���10+), and (b) both styles
         // are earned or selected. This prevents force-stacking on any tail
         // that isn't genuinely large enough to support two grouped blocks
         // while leaving at least 2 ungrouped exercises for session finishers
@@ -21032,8 +21060,11 @@ fatigueDecision: fatigueDecision ? {
           // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] ConstraintAwareInput
           // no longer owns `styleEnabled` / `styleRules`; styling moved to
           // the dedicated style engine. Drop the stale keys here.
+          // [BUILDER-CONSTRAINT-INPUT-REQUIRED-EQUIPMENT-DROPPED]
+          // ConstraintAwareInput likewise no longer owns `requiredEquipment`;
+          // equipment requirements are computed from the exercise pool
+          // downstream from `availableEquipment`.
           availableEquipment: equipment,
-          requiredEquipment: [],
         }
         
         return analyzeConstraints(constraintInput)
@@ -21078,8 +21109,8 @@ fatigueDecision: fatigueDecision ? {
           envelopeConfidence: 0.5,
           envelopeLimits: null,
           // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] same as above.
+          // [BUILDER-CONSTRAINT-INPUT-REQUIRED-EQUIPMENT-DROPPED] same as above.
           availableEquipment: equipment,
-          requiredEquipment: [],
         }
         
     const analysis = analyzeConstraints(constraintInput)

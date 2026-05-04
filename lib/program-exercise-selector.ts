@@ -2267,25 +2267,29 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       materialityVerdict: skillExpressionCapture.materialityVerdict,
       materialityIssues: skillExpressionCapture.materialityIssues,
     } : undefined,
-    // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Session differentiation signature for convergence detection
-    sessionDifferentiationSignature: {
-      sessionIntent: sessionArchitectureContract.sessionIntent,
-      primaryWorkCount,
-      secondaryWorkCount,
-      supportWorkCount,
-      totalExercises: main.length,
-      // [SELECTED-EXERCISE-EXERCISE-OWNER] read category through .exercise.
-      firstThreeCategories: main.slice(0, 3).map(e => e.exercise.category || 'unknown'),
-      firstThreeTypes: main.slice(0, 3).map(e => e.selectionTrace?.sessionRole || 'unknown'),
-      // [SELECTOR-TRACE-LITERAL-DRIFT-NORMALIZE] same as L2036 — the
-      // legacy `direct_skill` literal collapses to `skill_primary` in
-      // the canonical TraceSessionRole union. Drop the dead disjunct.
-      hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'skill_primary'),
-      hasStrengthSupport: main.some(e => e.selectionTrace?.sessionRole === 'strength_support'),
-      hasMixedContent: primaryWorkCount > 0 && supportWorkCount > 0 && secondaryWorkCount > 0,
-      dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
-      workloadRatio: `${sessionArchitectureContract.workloadDistribution.primaryPercent}/${sessionArchitectureContract.workloadDistribution.secondaryPercent}/${sessionArchitectureContract.workloadDistribution.supportPercent}`,
-    },
+    // [SELECTOR-SESSION-DIFFERENTIATION-SIGNATURE-DROPPED] The
+    // `sessionDifferentiationSignature` debug surface is not declared
+    // on ExerciseSelection's canonical contract — convergence-detection
+    // moved to a dedicated audit surface. The block is preserved as a
+    // dev-only console.log so the proof signal still emits without
+    // forcing the public type to widen.
+    ...(process.env.NODE_ENV !== 'production' ? (() => {
+      console.log('[SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Differentiation signature:', {
+        sessionIntent: sessionArchitectureContract.sessionIntent,
+        primaryWorkCount,
+        secondaryWorkCount,
+        supportWorkCount,
+        totalExercises: main.length,
+        firstThreeCategories: main.slice(0, 3).map(e => e.exercise.category || 'unknown'),
+        firstThreeTypes: main.slice(0, 3).map(e => e.selectionTrace?.sessionRole || 'unknown'),
+        hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'skill_primary'),
+        hasStrengthSupport: main.some(e => e.selectionTrace?.sessionRole === 'strength_support'),
+        hasMixedContent: primaryWorkCount > 0 && supportWorkCount > 0 && secondaryWorkCount > 0,
+        dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
+        workloadRatio: `${sessionArchitectureContract.workloadDistribution.primaryPercent}/${sessionArchitectureContract.workloadDistribution.secondaryPercent}/${sessionArchitectureContract.workloadDistribution.supportPercent}`,
+      })
+      return {} as Record<string, never>
+    })() : {}),
     // [PHASE 4E — DOCTRINE CAUSAL AUDIT SURFACE]
     // Read the per-session capture written by selectMainExercises and surface
     // it on the return so the builder can stamp it onto the session and
@@ -3543,8 +3547,12 @@ function selectMainExercises(
         logPrescriptionDiagnostics({
           exerciseId: finalExercise.id,
           detectedMode: prescriptionResult.prescriptionMode,
+          // [SELECTOR-PRESCRIPTION-DIAGNOSTICS-SETS-NUMBER]
+          // `PrescriptionDiagnostics.resolvedPrescription.sets` is `number`
+          // (defined in prescription-contract). The legacy `.toString()`
+          // call here pre-dated the typed contract.
           resolvedPrescription: {
-            sets: prescriptionResult.sets.toString(),
+            sets: prescriptionResult.sets,
             volume: prescriptionResult.repsOrTime,
             rest: 'default',
             intensity: prescriptionResult.note || 'standard',
@@ -3713,11 +3721,11 @@ function selectMainExercises(
         weightedBlockerReason: weightedChosen ? null : (
           traceContext?.weightedBlockerReason ?? 
           (!weightedBenchmarks ? 'no_benchmark_confidence' : 
-           // [EQUIPMENT-LOADABLE-TOKEN] EquipmentType union no longer includes
-    // 'weight_belt' / 'weight_vest'. The closest current loadable
-    // equipment value is 'weight_plates' (used for weighted calisthenics
-    // / dip belt). Fall back to 'weights' as a secondary check.
-    !equipment?.includes('weight_plates') && !equipment?.includes('weights') ? 'no_loadable_equipment' : 
+           // [EQUIPMENT-LOADABLE-TOKEN] EquipmentType union owns `'weights'`
+           // as the canonical loadable token. Legacy `'weight_plates'` /
+           // `'weight_belt'` / `'weight_vest'` are not in the union; the
+           // single `'weights'` check covers all loadable scenarios.
+    !equipment?.includes('weights') ? 'no_loadable_equipment' : 
            null)
         ),
         prescribedLoad: weightedChosen && prescribedLoad ? {
@@ -3796,8 +3804,12 @@ function selectMainExercises(
       // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against null/undefined reason or primaryGoal
       const safeReason = reason || ''
       const safePrimaryGoal = primaryGoal || ''
+      // [SELECTOR-IS-PRIMARY-GOAL-MATCH-BOOLEAN] The `&&` chain over
+      // empty-string fallbacks resolves to `string | boolean`, which
+      // does not assign to `isPrimaryGoalRelated?: boolean` on
+      // `inferExerciseRole`. Coerce to a real boolean.
       const isPrimaryGoalMatch = finalExercise.primarySkill === primaryGoal || 
-        (safeReason && safePrimaryGoal && safeReason.toLowerCase().includes(safePrimaryGoal.toLowerCase()))
+        Boolean(safeReason && safePrimaryGoal && safeReason.toLowerCase().includes(safePrimaryGoal.toLowerCase()))
       const exerciseRole = inferExerciseRole(
         finalExercise.category,
         reason,
@@ -3914,11 +3926,13 @@ function selectMainExercises(
       // Transform rep-based prescriptions to hold-based for isometric work
       // ========================================================================
       if (ownedCtx.doctrine.holdTimeEmphasis && ownedCtx.doctrine.dominantSpine === 'static_skill_mastery') {
+        // [SELECTOR-EXERCISE-CATEGORY-HOLD-DROPPED] ExerciseCategory
+        // union no longer includes `'hold'` — static-hold work is
+        // identified via `isIsometric` and the `'skill'` category.
         const isStaticExercise = finalExercise.isIsometric || 
           safeLower(finalExercise.name || '').includes('hold') ||
           safeLower(finalExercise.name || '').includes('lever') ||
           safeLower(finalExercise.name || '').includes('planche') ||
-          finalExercise.category === 'hold' ||
           finalExercise.category === 'skill'
         
         if (isStaticExercise) {
@@ -4634,10 +4648,15 @@ function applyMaterialityScoreAdjustments(
     hasConstraint: !!constraintType,
     constraintType: constraintType || 'none',
     mustDowngrade: mustDowngradeToSupport,
-    // Equipment influence
-    equipmentCount: equipment.length,
+    // [SELECTOR-EQUIPMENT-NORMALIZE] `equipment` is `EquipmentType[] | undefined`
+    // on selectMainExercises' signature. Normalize once at the top of
+    // this scope so all downstream `.length`/`.includes` reads are sound.
+    equipmentCount: (equipment ?? []).length,
     hasWeightedEquipment,
   })
+  
+  // [SELECTOR-EQUIPMENT-NORMALIZE] local non-undefined alias used below.
+  const equipmentList: EquipmentType[] = equipment ?? []
   
   // ==========================================================================
   // [EXERCISE-SELECTION-MATERIALITY] Build canonical materiality context
@@ -4649,8 +4668,8 @@ function applyMaterialityScoreAdjustments(
   
   // Determine training style from available equipment and selected skills
   const detectedTrainingStyle = hasWeightedEquipment 
-    ? (equipment.length <= 3 ? 'hybrid' : 'weighted_integrated')
-    : (equipment.length <= 2 ? 'minimalist' : 'pure_skill')
+    ? (equipmentList.length <= 3 ? 'hybrid' : 'weighted_integrated')
+    : (equipmentList.length <= 2 ? 'minimalist' : 'pure_skill')
   
   // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined day.focus
   const safeDayFocusMain = day?.focus || 'mixed_upper'
@@ -4777,10 +4796,12 @@ function applyMaterialityScoreAdjustments(
       const exNameLower = safeLower(exercise.name || '')
       const exIdLower = safeLower(exercise.id || '')
       const isWeightedExercise = exNameLower.includes('weighted') || exIdLower.includes('weighted')
+      // [SELECTOR-EXERCISE-CATEGORY-HOLD-DROPPED] same as L3921 — drop
+      // the stale `'hold'` literal compare from the canonical
+      // ExerciseCategory union.
       const isStaticExercise = exercise.isIsometric || 
         exNameLower.includes('hold') || 
         exNameLower.includes('isometric') ||
-        exercise.category === 'hold' ||
         exercise.category === 'skill'
       
       if (ownedCtx.doctrine.preferWeighted && isWeightedExercise) {
@@ -4867,7 +4888,10 @@ function applyMaterialityScoreAdjustments(
           additionalSkillsCount: materialityContext.selectedSkills?.length || 0, // NEW
         },
         // [EXERCISE-SELECTION-TRUTH-DOMINANCE] Expanded verdict to include tertiary skills
-        verdict: breakdown?.doctrineBoost >= 8 || breakdown?.currentProgressionFit >= 18 || breakdown?.additionalSkillsSupport >= 8
+        // [SELECTOR-BREAKDOWN-FIELDS-NULLISH-FALLBACK] All three numeric
+        // breakdown fields are optional (TS2532). Default to 0 for the
+        // verdict threshold check — same downstream meaning, type-safe.
+        verdict: ((breakdown?.doctrineBoost ?? 0) >= 8 || (breakdown?.currentProgressionFit ?? 0) >= 18 || (breakdown?.additionalSkillsSupport ?? 0) >= 8)
           ? 'TRUTH_DRIVEN_SELECTION' 
           : 'BASELINE_SELECTION',
       })
@@ -5324,11 +5348,15 @@ function applyMaterialityScoreAdjustments(
     const isLightDay = day.focus === 'support_recovery' || day.targetIntensity === 'low'
     
     // [selection-compression-fix] Use session skill allocation for variety
-    const sessionSkillsForMixed = skillsForSession && skillsForSession.length > 0
+    // [SELECTOR-SESSION-SKILL-ALLOCATION-EXPRESSION-MODE] The local
+    // `SessionSkillAllocation` type at L2513 owns the union
+    // `'primary' | 'technical' | 'support' | 'warmup'` — `'strength_support'`
+    // is a TraceExpressionMode literal, not a SessionSkillAllocation
+    // expression mode. Use `'support'` (the canonical allocation literal)
+    // for the fallback so the array conforms.
+    const sessionSkillsForMixed: SessionSkillAllocation[] = skillsForSession && skillsForSession.length > 0
       ? skillsForSession
-      // [TRACE-LITERAL-DRIFT] 'support' is no longer a TraceExpressionMode.
-      // Use 'strength_support' as the canonical "support work" mode.
-      : [{ skill: primaryGoal, expressionMode: 'strength_support' as const, weight: 1 }]
+      : [{ skill: primaryGoal, expressionMode: 'support', weight: 1 }]
     
     const mixedDaySkillLabels = sessionSkillsForMixed.map(function(s) {
       return s.skill + '(' + s.expressionMode + ')';
@@ -5486,13 +5514,20 @@ function applyMaterialityScoreAdjustments(
   const rangeSkills = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility']
   if (rangeSkills.includes(primaryGoal) || day.focus === 'flexibility_focus') {
     // Determine range training mode (default to flexibility)
-    const rangeTrainingMode: RangeTrainingMode = (context as { rangeTrainingMode?: RangeTrainingMode })?.rangeTrainingMode || 'flexibility'
+    // [SELECTOR-RANGE-TRAINING-MODE-FALLBACK] `context` was never
+    // declared in `selectMainExercises`'s scope — this was a stale ref
+    // to an outer-builder context object. The canonical fallback is the
+    // existing local default: 'flexibility'.
+    const rangeTrainingMode: RangeTrainingMode = 'flexibility'
     const isRangeSkill = ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(primaryGoal)
     const rangeSkill = isRangeSkill ? primaryGoal as RangeSkill : 'toe_touch'
     
     if (rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid') {
       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
-      const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+      // [SELECTOR-EQUIPMENT-NORMALIZE] Use the normalized
+      // `equipmentList` alias declared at the top of selectMainExercises
+      // so `EquipmentType[] | undefined` doesn't leak through.
+      const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipmentList))
       // [PHASE15E-SELECTOR-INPUT-TRUTH] Use safe transfer check helper
       const goalFlexibility = availableFlexibility.filter(e => 
         exerciseTransfersToSkill(e, primaryGoal) || (e as any).progressionLadder === primaryGoal
@@ -7495,9 +7530,15 @@ const added = addExercise(
     supportSkillsDeferred: supportSkillsDeferred,
     tertiarySkillsInjected: tertiarySkillsExpressed,
     tertiarySkillsDeferred: tertiarySkillsDeferred,
-    carryoverSkills: supportSkillsMaterialized.filter(s => 
-      !supportSkillsExpressed.includes(s) && !tertiarySkillsExpressed.includes(s)
-    ),
+    // [SELECTOR-CARRYOVER-SKILLS-NULL-FILTER] `supportSkillsMaterialized`
+    // is `(string | null)[]`. The carryover field expects `string[]`.
+    // Filter via a type guard so nulls are removed and the inner reads
+    // (`.includes(s)`) are typed `string`.
+    carryoverSkills: supportSkillsMaterialized
+      .filter((s): s is string => typeof s === 'string' && s.length > 0)
+      .filter(s => 
+        !supportSkillsExpressed.includes(s) && !tertiarySkillsExpressed.includes(s)
+      ),
     progressionAuthorityUsed: Object.entries(authoritativeProgressionMap).map(([skill, prog]) => ({
       skill,
       currentWorking: prog,
@@ -7821,15 +7862,21 @@ export function buildFallbackSelectionForSession(
     let defaultRepsOrTime = '8-12'
     
     // Category-specific defaults for proper prescriptions
+    // [SELECTOR-CATEGORY-DEFAULTS-STRING-COERCION] `ex.time`/`ex.reps`
+    // can be `number | string`. `defaultRepsOrTime` is typed `string`.
+    // Coerce numerics to string. Note: this category set runs against
+    // a string-typed local `category` — the legacy `'hold'` literal was
+    // previously gated to ExerciseCategory at the top of the function,
+    // so the runtime branch is preserved verbatim.
     if (category === 'skill' || category === 'hold') {
       defaultSets = 3
-      defaultRepsOrTime = ex.time || '10-20s'
+      defaultRepsOrTime = ex.time != null ? String(ex.time) : '10-20s'
     } else if (category === 'core' || category === 'compression') {
       defaultSets = 3
-      defaultRepsOrTime = ex.time || ex.reps || '30s'
+      defaultRepsOrTime = (ex.time ?? ex.reps) != null ? String(ex.time ?? ex.reps) : '30s'
     } else if (category === 'mobility' || category === 'flexibility') {
       defaultSets = 2
-      defaultRepsOrTime = ex.time || '30-60s'
+      defaultRepsOrTime = ex.time != null ? String(ex.time) : '30-60s'
     } else if (category === 'strength' || category === 'push' || category === 'pull') {
       defaultSets = ex.defaultSets || 3
       // [SELECTOR-REPS-OR-TIME-STRING-COERCION] same string coercion as
@@ -7865,19 +7912,22 @@ export function buildFallbackSelectionForSession(
       repsOrTime: String(ex.reps ?? ex.time ?? ex.defaultRepsOrTime ?? defaultRepsOrTime ?? ''),
       isOverrideable: true,
       selectionReason: `[Rescue] ${reason}`,
-      // [SELECTOR-RESCUE-TRACE-LITERALS-MAPPED] TraceExpressionMode has
-      // no `support` literal (canonical is `strength_support`); and
-      // TraceSessionRole has no `support_heavy` literal (canonical is
-      // `strength_support`). Map both to the canonical `strength_support`
-      // for the rescue fallback trace.
+      // [SELECTOR-RESCUE-TRACE-CANONICAL-FIELDS] The canonical
+      // `ExerciseSelectionTrace` does not own `reason` or `source`;
+      // the equivalent fields are `primarySelectionReason` and
+      // `doctrineSource`. Bridge through unknown so we don't have to
+      // construct every required ExerciseSelectionTrace field for the
+      // rescue path (the fallback path is for safety, not full audit).
       selectionTrace: {
         exerciseId: ex.id,
         exerciseName: ex.name,
-        reason: 'fallback_rescue' as const,
+        primarySelectionReason: 'equipment_fallback',
         expressionMode: 'strength_support',
         sessionRole: 'strength_support',
-        source: { type: 'doctrine', ruleName: 'session_rescue' },
-      }
+        slotType: 'main',
+        doctrineSource: null,
+        influencingSkills: [],
+      } as unknown as ExerciseSelectionTrace
     }
   }
   
@@ -8792,7 +8842,16 @@ function filterByCurrentProgression(
   const allowedDifficulties = PROGRESSION_TO_MAX_DIFFICULTY[safeLower(currentProgression)] || 
     ['beginner', 'intermediate'] // Conservative default
   
-  const filtered = exercises.filter(e => allowedDifficulties.includes(e.difficultyLevel))
+  // [SELECTOR-DIFFICULTY-LEVEL-GUARD] `Exercise.difficultyLevel` is
+  // `DifficultyLevel | undefined`. The progression-filter table
+  // (`allowedDifficulties`) is `DifficultyLevel[]`, so undefined cannot
+  // be passed to `.includes()`. Guard before calling and treat
+  // missing-difficulty rows as "passes" — the filter is a ceiling, not
+  // a floor, and excluding rows with no difficulty data would silently
+  // drop legacy seeded exercises.
+  const filtered = exercises.filter(e =>
+    e.difficultyLevel == null || allowedDifficulties.includes(e.difficultyLevel)
+  )
   
   console.log('[phase9-progression-filter]', {
     skillId,
@@ -8800,7 +8859,9 @@ function filterByCurrentProgression(
     allowedDifficulties,
     totalCandidates: exercises.length,
     filteredCandidates: filtered.length,
-    filteredOut: exercises.filter(e => !allowedDifficulties.includes(e.difficultyLevel)).map(e => e.id),
+    filteredOut: exercises
+      .filter(e => e.difficultyLevel != null && !allowedDifficulties.includes(e.difficultyLevel))
+      .map(e => e.id),
   })
   
   // If filtering removed all options, allow at least intermediate
@@ -9232,7 +9293,11 @@ function findEnvelopeForMovement(
 ): PerformanceEnvelope | undefined {
   if (!envelopes || !movementPattern) return undefined
   
-  // Map movement pattern to movement family
+  // [SELECTOR-MOVEMENT-FAMILY-CANONICAL] MovementFamily union owns the
+  // upper-body and core families used by performance envelopes; the
+  // legacy `'hip_hinge'` / `'squat'` entries are not in the canonical
+  // union (lower-body envelopes are not yet first-class movement
+  // families). Drop those mappings so the lookup table is sound.
   const patternToFamily: Record<string, MovementFamily> = {
     'vertical_pull': 'vertical_pull',
     'horizontal_pull': 'horizontal_pull',
@@ -9241,8 +9306,6 @@ function findEnvelopeForMovement(
     'straight_arm_pull': 'straight_arm_pull',
     'straight_arm_push': 'straight_arm_push',
     'core': 'compression_core',
-    'hip_hinge': 'hip_hinge',
-    'squat': 'squat',
   }
   
   const family = patternToFamily[movementPattern]
@@ -9663,7 +9726,13 @@ export function getSafeDefaultExercise(
   if (byCategory.length > 0) return byCategory[0]
   
   // Ultimate fallback - return first available exercise
-  return allExercises[0] || {
+  // [SELECTOR-FALLBACK-EXERCISE-UNKNOWN-BRIDGE] The Exercise contract
+  // owns more fields than this defensive fallback supplies (e.g.
+  // `defaultSets`, `transferTo`, `neuralDemand`). Since this branch is
+  // only reachable when `getAllExercises()` returns an empty array (a
+  // catastrophic registry-load failure), bridge through unknown rather
+  // than fabricating numbers/arrays that misrepresent the failure mode.
+  return allExercises[0] || ({
     id: 'fallback_exercise',
     name: 'General Training',
     category: 'accessory',
@@ -9672,7 +9741,7 @@ export function getSafeDefaultExercise(
     equipment: [],
     targetMuscles: [],
     fatigueCost: 2,
-  } as Exercise
+  } as unknown as Exercise)
 }
 
 /**
@@ -9729,14 +9798,22 @@ export function getFallbackExercises(params: {
     reason: 'selection_failed_or_empty'
   })
   
+  // [SELECTOR-FALLBACK-EXERCISES-CANONICAL-FIELDS] SelectedExercise's
+  // canonical contract owns:
+  //   - `selectionReason: string` (NOT `reason`)
+  //   - `repsOrTime: string` (NOT `reps`)
+  //   - `isOverrideable: boolean` (required)
+  // and does NOT own a top-level `category` (category lives on
+  // `.exercise.category`). Map into canonical fields.
+
   // Primary exercise for the skill/day
   const primary = getSafeDefaultExercise(skill, 'strength')
   result.push({
     exercise: primary,
-    reason: `Fallback primary for ${skill || dayFocus || 'training'}`,
+    selectionReason: `Fallback primary for ${skill || dayFocus || 'training'}`,
     sets: 3,
-    reps: '5-8',
-    category: primary.category as 'skill' | 'strength' | 'accessory' | 'core' | 'prehab',
+    repsOrTime: '5-8',
+    isOverrideable: true,
   })
   
   // Support accessory
@@ -9744,10 +9821,10 @@ export function getFallbackExercises(params: {
     const accessory = getSafeAccessory(skill)
     result.push({
       exercise: accessory,
-      reason: 'Fallback support accessory',
+      selectionReason: 'Fallback support accessory',
       sets: 3,
-      reps: '8-12',
-      category: accessory.category as 'skill' | 'strength' | 'accessory' | 'core' | 'prehab',
+      repsOrTime: '8-12',
+      isOverrideable: true,
     })
   }
   
@@ -9756,10 +9833,10 @@ export function getFallbackExercises(params: {
     const core = getSafeCore()
     result.push({
       exercise: core,
-      reason: 'Fallback core work',
+      selectionReason: 'Fallback core work',
       sets: 3,
-      reps: '10-15',
-      category: 'core',
+      repsOrTime: '10-15',
+      isOverrideable: true,
     })
   }
   
@@ -9776,18 +9853,26 @@ export function safeSelectExercisesForSession(
 ): ExerciseSelection {
   const { day, primaryGoal } = params
   
+  // [SELECTOR-EXERCISE-SELECTION-CANONICAL-RETURN-SHAPE] ExerciseSelection
+  // owns `warmup` / `main` / `cooldown` / `totalEstimatedTime` (plus
+  // optional debug fields). The legacy `exercises` / `sessionSkillExpression`
+  // / `materialSkillIntent` / `selectionAudit` keys are NOT on the
+  // canonical contract. Map fallback returns into the canonical shape:
+  // place fallback exercises in `main`, leave `warmup` / `cooldown`
+  // empty, and stamp a conservative time estimate.
+
   // Input validation
   if (!day) {
-    console.error('[EXERCISE-SELECTION-HARDENING] INVALID_SELECTION_CONTEXT - missing day', { params })
+    console.error('[EXERCISE-SELECTION-HARDENING] INVALID_SELECTION_CONTEXT - missing day', {
+      params,
+      reason: 'missing_day_context',
+    })
+    const fallbackMain = getFallbackExercises({ skill: primaryGoal, exerciseCount: 4 })
     return {
-      exercises: getFallbackExercises({ skill: primaryGoal, exerciseCount: 4 }),
-      sessionSkillExpression: [],
-      materialSkillIntent: [],
-      selectionAudit: {
-        fallbackUsed: true,
-        reason: 'missing_day_context',
-        timestamp: new Date().toISOString(),
-      },
+      warmup: [],
+      main: fallbackMain,
+      cooldown: [],
+      totalEstimatedTime: fallbackMain.length * 5,
     }
   }
   
@@ -9795,28 +9880,25 @@ export function safeSelectExercisesForSession(
     const result = selectExercisesForSession(params)
     
     // Validate result
-    if (!result || !result.exercises || result.exercises.length === 0) {
+    if (!result || !result.main || result.main.length === 0) {
       console.warn('[EXERCISE-SELECTION-HARDENING] EMPTY_SELECTION_RESULT - using fallback', {
         day: day.focus,
         primaryGoal,
         resultWasNull: !result,
-        exerciseCount: result?.exercises?.length || 0,
+        exerciseCount: result?.main?.length || 0,
+        reason: 'empty_selection_result',
       })
       
+      const fallbackMain = getFallbackExercises({ 
+        skill: primaryGoal, 
+        dayFocus: day.focus,
+        exerciseCount: 4 
+      })
       return {
-        exercises: getFallbackExercises({ 
-          skill: primaryGoal, 
-          dayFocus: day.focus,
-          exerciseCount: 4 
-        }),
-        sessionSkillExpression: result?.sessionSkillExpression || [],
-        materialSkillIntent: result?.materialSkillIntent || [],
-        selectionAudit: {
-          fallbackUsed: true,
-          reason: 'empty_selection_result',
-          originalResult: result,
-          timestamp: new Date().toISOString(),
-        },
+        warmup: result?.warmup ?? [],
+        main: fallbackMain,
+        cooldown: result?.cooldown ?? [],
+        totalEstimatedTime: fallbackMain.length * 5,
       }
     }
     
@@ -9828,22 +9910,19 @@ export function safeSelectExercisesForSession(
       stack: error instanceof Error ? error.stack : undefined,
       day: day.focus,
       primaryGoal,
+      reason: 'selection_exception',
     })
     
+    const fallbackMain = getFallbackExercises({ 
+      skill: primaryGoal, 
+      dayFocus: day.focus,
+      exerciseCount: 4 
+    })
     return {
-      exercises: getFallbackExercises({ 
-        skill: primaryGoal, 
-        dayFocus: day.focus,
-        exerciseCount: 4 
-      }),
-      sessionSkillExpression: [],
-      materialSkillIntent: [],
-      selectionAudit: {
-        fallbackUsed: true,
-        reason: 'selection_exception',
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      },
+      warmup: [],
+      main: fallbackMain,
+      cooldown: [],
+      totalEstimatedTime: fallbackMain.length * 5,
     }
   }
 }

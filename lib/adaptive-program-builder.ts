@@ -21128,12 +21128,17 @@ fatigueDecision: fatigueDecision ? {
     workoutReasoningSummary: (() => {
       try {
         // Calculate skill readiness for primary goal
-        const skillType = primaryGoal === 'front_lever' ? 'front_lever'
+        // [BUILDER-PRIMARY-GOAL-TO-SKILL-TYPE] PrimaryGoal (types/domain.ts L182)
+        // uses 'handstand_pushup'; the canonical SkillType
+        // (canonical-readiness-engine.ts L43) uses 'hspu'. Map at the
+        // boundary. PrimaryGoal does not include 'l_sit', so that branch
+        // is removed (no canonical drift).
+        const skillType: 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | null =
+          primaryGoal === 'front_lever' ? 'front_lever'
           : primaryGoal === 'planche' ? 'planche'
           : primaryGoal === 'muscle_up' ? 'muscle_up'
-          : primaryGoal === 'hspu' ? 'hspu'
-          : primaryGoal === 'back_lever' ? 'back_lever'
-          : primaryGoal === 'l_sit' ? 'l_sit'
+          : primaryGoal === 'handstand_pushup' ? 'hspu'
+          : (primaryGoal as string) === 'back_lever' ? 'back_lever'
           : null
 
         let readinessResult: CanonicalReadinessResult | null = null
@@ -21427,7 +21432,10 @@ fatigueDecision: fatigueDecision ? {
           adjustmentReasons: trainingFeedback.adjustmentReasons,
           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
   limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
-  weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+  // [PROGRAM-CONSTRAINT-CONTEXT-WEAKPOINTS-DROPPED] ProgramConstraintContext
+  // (constraint-integration.ts L23) does not own a `weakPoints` array —
+  // weak-point detection is resolved per-session via the canonical
+  // weak-point engine. Stale read removed.
   // TASK 6: Pass engine-grounded session distribution for truthful explanation
   sessionDistribution,
   durationLabel: resolveSessionBudget(
@@ -21565,7 +21573,10 @@ fatigueDecision: fatigueDecision ? {
       experienceLevel: canonicalProfile.experienceLevel,
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
-      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      // [PROFILE-SNAPSHOT-SESSION-DURATION-MODE-DROPPED] ProfileSnapshot
+      // no longer carries `sessionDurationMode` — duration intent lives
+      // in `sessionLengthMinutes` plus the canonical session-budget
+      // resolver. Stale snapshot field removed.
       scheduleMode: canonicalProfile.scheduleMode,
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       jointCautions: canonicalProfile.jointCautions || [],
@@ -22086,7 +22097,10 @@ fatigueDecision: fatigueDecision ? {
       experienceLevel,
       trainingDays: effectiveTrainingDays,
       scheduleMode: finalScheduleMode,
-      sessionLength: composedInput.sessionLength,
+      // [COMPOSED-PLANNER-INPUT-SESSION-LENGTH-MINUTES] ComposedPlannerInput
+      // (canonical-profile-service.ts L2493) owns `sessionLengthMinutes`
+      // — the legacy `sessionLength` was renamed during canonicalisation.
+      sessionLength: composedInput.sessionLengthMinutes,
       selectedSkillCount: expandedContext.selectedSkills.length,
       equipmentHash: equipment.sort().join(',').slice(0, 50),
     }
@@ -22883,7 +22897,12 @@ fatigueDecision: fatigueDecision ? {
   
   // [DOCTRINE RUNTIME CONTRACT] Store doctrine contract on the program for UI access
   if (doctrineRuntimeContract) {
-  finalProgram.doctrineRuntimeContract = doctrineRuntimeContract
+  // [DOCTRINE-RUNTIME-CONTRACT-OPTIONAL-PROOF] AdaptiveProgram does
+  // not declare `doctrineRuntimeContract` — same pattern as the
+  // adjacent `doctrineCausalVersion` stamp (L22923). Bridge through
+  // unknown to attach the optional proof field without widening the
+  // shared AdaptiveProgram type.
+  ;(finalProgram as unknown as { doctrineRuntimeContract?: typeof doctrineRuntimeContract }).doctrineRuntimeContract = doctrineRuntimeContract
   console.log('[DOCTRINE-PROGRAM-ATTACHED]', {
   available: doctrineRuntimeContract.available,
   source: doctrineRuntimeContract.source,
@@ -23661,26 +23680,104 @@ fatigueDecision: fatigueDecision ? {
   
   // [SESSION ARCHITECTURE TRUTH] Store architecture truth on the program for UI access
   if (sessionArchitectureTruth) {
-    finalProgram.sessionArchitectureTruth = sessionArchitectureTruth
+    // [SESSION-ARCHITECTURE-TRUTH-FIELD-MAP] AdaptiveProgram's
+    // `sessionArchitectureTruth` slot (L2794) declares a narrowed
+    // structural shape with `generatedAt: string` (and a smaller
+    // generationContext / audit set) — distinct from the canonical
+    // SessionArchitectureTruthContract (L70 in
+    // session-architecture-truth.ts) which uses `builtAt`. Map between
+    // shapes truthfully: reuse `builtAt` for `generatedAt`, project
+    // generationContext to the local trio, and keep audit slim.
+    finalProgram.sessionArchitectureTruth = {
+      sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+      builtFromTruth: sessionArchitectureTruth.builtFromTruth,
+      generationContext: {
+        complexity: sessionArchitectureTruth.generationContext.complexity,
+        primaryGoal: sessionArchitectureTruth.generationContext.primaryGoal,
+        secondaryGoal: sessionArchitectureTruth.generationContext.secondaryGoal,
+        totalSelectedSkills: sessionArchitectureTruth.audit.totalSelectedSkills,
+        trainingDaysPerWeek: sessionArchitectureTruth.generationContext.effectiveTrainingDays,
+      },
+      primarySpineSkills: sessionArchitectureTruth.primarySpineSkills,
+      secondaryAnchorSkills: sessionArchitectureTruth.secondaryAnchorSkills,
+      supportRotationSkills: sessionArchitectureTruth.supportRotationSkills,
+      deferredSkills: sessionArchitectureTruth.deferredSkills.map(d => ({
+        skill: d.skill,
+        reason: d.reason,
+        details: typeof (d as { details?: unknown }).details === 'string'
+          ? (d as { details: string }).details
+          : '',
+      })),
+      weeklyMinimums: sessionArchitectureTruth.weeklyMinimums,
+      structuralGuards: {
+        forbidHistoricalCeilingProgressions: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions,
+        forbidPrimaryGoalCollapse: Boolean(
+          (sessionArchitectureTruth.structuralGuards as { forbidPrimaryGoalCollapse?: unknown }).forbidPrimaryGoalCollapse
+        ),
+      },
+      audit: {
+        currentWorkingCapCount: sessionArchitectureTruth.audit.currentWorkingCapCount,
+        historicalCeilingBlockedCount: sessionArchitectureTruth.audit.historicalCeilingBlockedCount,
+      },
+      doctrineArchitectureBias: {
+        sessionRoleBias: String(sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias),
+        supportAllocationBias: String(sessionArchitectureTruth.doctrineArchitectureBias.supportAllocationBias),
+        methodPackagingBias: String(
+          (sessionArchitectureTruth.doctrineArchitectureBias as { methodPackagingBias?: unknown }).methodPackagingBias ?? ''
+        ),
+      },
+      generatedAt: sessionArchitectureTruth.builtAt,
+    }
     
     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     // Run weekly materiality validation. Canonical shape uses
     // `finalProgram.sessions` (flat AdaptiveSession[]); legacy shape
     // had `weeks[0].days`. `getProgramSessions` reconciles both.
+    // [WEEKLY-MATERIALITY-VALIDATION-EXERCISE-NARROW]
+    // `validateWeeklyMateriality` expects each session's exercises as
+    // `Array<{ id: string; category?: string }>`. Sessions returned by
+    // `getSessionExercisesArray` are typed as `unknown[]`; filter
+    // through a runtime guard so only entries with a string `id` make
+    // it downstream and `category` is preserved when it is also a
+    // string. `dayType` / `focus` are coerced to string-or-undefined
+    // exactly as the validator declares.
     const sessionsForValidation = getProgramSessions(finalProgram).map(d => {
       const day = (d ?? {}) as { dayType?: unknown; focus?: unknown }
+      const rawExercises = getSessionExercisesArray(d) as unknown[]
+      const exercises = rawExercises.flatMap((ex) => {
+        if (!ex || typeof ex !== 'object') return []
+        const e = ex as { id?: unknown; category?: unknown }
+        if (typeof e.id !== 'string') return []
+        return [{
+          id: e.id,
+          category: typeof e.category === 'string' ? e.category : undefined,
+        }]
+      })
       return {
-        exercises: getSessionExercisesArray(d),
-        dayType: day.dayType,
-        focus: day.focus,
+        exercises,
+        dayType: typeof day.dayType === 'string' ? day.dayType : undefined,
+        focus: typeof day.focus === 'string' ? day.focus : undefined,
       }
     })
     
     const materialityValidation = validateWeeklyMateriality(sessionsForValidation, sessionArchitectureTruth)
     
+    // [WEEKLY-MATERIALITY-METRICS-PROJECTION] AdaptiveProgram's
+    // weeklyMaterialityVerdict.metrics (L2870) declares the four
+    // canonical scores below. `validateWeeklyMateriality` returns a
+    // different shape (avgExercisesPerSession / distinctSessionRoles /
+    // ...). Project the validator output into the canonical metric set
+    // — only the verdict label is authoritative; numeric scores fall
+    // back to 0 since the validator does not compute the scored
+    // dimensions.
     finalProgram.weeklyMaterialityVerdict = {
       verdict: materialityValidation.verdict,
-      metrics: materialityValidation.metrics,
+      metrics: {
+        skillClassificationUniqueness: 0,
+        progressionDifferentiation: 0,
+        structuralPersonalization: materialityValidation.metrics.distinctSessionRoles,
+        overallMaterialityScore: 0,
+      },
       needsRefinement: materialityValidation.needsRefinement,
       refinementSuggestions: materialityValidation.refinementSuggestions,
     }
@@ -24007,7 +24104,16 @@ fatigueDecision: fatigueDecision ? {
       }
       
       // Deferred
-      for (const skill of (visibleAudit.deferredSkills || [])) {
+      // [VISIBLE-AUDIT-DEFERRED-ENTRY-TO-STRING] visibleAudit.deferredSkills
+      // is `DeferredSkillEntry[]` (session-architecture-truth.ts L35);
+      // the local `deferredSkills` accumulator is `string[]`. Pull the
+      // entry's `skill` string before pushing so dedup logic operates
+      // on the canonical skill key.
+      for (const entry of (visibleAudit.deferredSkills || [])) {
+        const skill = typeof entry === 'string'
+          ? entry
+          : (entry as { skill?: unknown }).skill
+        if (typeof skill !== 'string') continue
         if (!directlyExpressed.includes(skill) && 
             !technicallyExpressed.includes(skill) && 
             !supportExpressed.includes(skill) &&
@@ -24063,8 +24169,16 @@ fatigueDecision: fatigueDecision ? {
       for (const skill of sessionArchitectureTruth.supportRotationSkills) {
         supportExpressed.push(skill)
       }
-      for (const skill of sessionArchitectureTruth.deferredSkills) {
-        deferredSkills.push(skill)
+      for (const entry of sessionArchitectureTruth.deferredSkills) {
+        // [SESSION-ARCHITECTURE-DEFERRED-ENTRY-TO-STRING] same shape
+        // mismatch as the visibleAudit branch above — extract the
+        // canonical `skill` string from the DeferredSkillEntry.
+        const skill = typeof entry === 'string'
+          ? entry
+          : (entry as { skill?: unknown }).skill
+        if (typeof skill === 'string') {
+          deferredSkills.push(skill)
+        }
       }
     }
     // LEGACY FALLBACK: exercise-id matching (for old programs only)
@@ -24828,7 +24942,10 @@ fatigueDecision: fatigueDecision ? {
   // Calculate actual differentiation achieved
   const distinctSessionRoles = new Set(sessions.map(s => s.focus || 'generic')).size
   const nonPrimarySkillsExpressed = skillsWithDedicatedSupport.length + skillsRotational.length
-  const methodVarietyAchieved = sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied?.length > 1
+  // [METHOD-VARIETY-OPTIONAL-CHAIN-LENGTH] Optional-chained `.length`
+  // returns `number | undefined`; comparing with `> 1` requires a
+  // concrete number. Coalesce to 0 before the comparison.
+  const methodVarietyAchieved = (sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied?.length ?? 0) > 1
   const flexibilityIntegrated = sessionArchitectureTruth?.flexibilityIntegration?.hasFlexibilityGoals ?? false
   
   // Compute actual difference score
@@ -24891,7 +25008,14 @@ fatigueDecision: fatigueDecision ? {
   // ==========================================================================
   const rawCanonicalTrainingStyle = canonicalProfile.trainingStyle
   const rawCanonicalMethodPrefs = canonicalProfile.trainingMethodPreferences || []
-  const builderInputMethodPrefs = expandedContext.trainingMethodPreferences || ['straight_sets']
+  // [BUILDER-EXPANDED-CONTEXT-METHOD-PREFS-DROPPED] ExpandedAthleteContextLocal
+  // no longer carries `trainingMethodPreferences` directly — the
+  // canonical source is `canonicalProfile.trainingMethodPreferences`.
+  // Reuse the canonical reads above (`rawCanonicalMethodPrefs`) so the
+  // chain audit reflects the same truth the rest of the pipeline uses.
+  const builderInputMethodPrefs = rawCanonicalMethodPrefs.length > 0
+    ? rawCanonicalMethodPrefs
+    : ['straight_sets']
   
   // Analyze each session's style expression
   const sessionStyleAnalysis = sessions.map((s: any) => {
@@ -25397,96 +25521,13 @@ fatigueDecision: fatigueDecision ? {
     )
   }
   
-  // =========================================================================
-  // [selected-skill-exposure] STEP 7: Final weekly skill expression summary
-  // This answers: "why did this skill appear or not appear this week?"
-  // BUILD-HOTFIX: canonical skill exposure summary (duplicate removed - earlier version renamed to skillExposureByTrace)
-  // =========================================================================
-  const selectedSkillList = expandedContext.selectedSkills || []
-  const allExercisesInWeek = sessions.flatMap(s => s.exercises)
-  
-  const skillExposureSummary = selectedSkillList.map(skill => {
-    const skillLower = skill.toLowerCase()
-    
-    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-    // Count direct expressions (skill category exercises for this skill)
-    const directExpressions = allExercisesInWeek.filter(ex => 
-      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
-      ex.category === 'skill'
-    )
-    
-    // Count technical expressions (moderate fatigue, good transfer)
-    // [BUILDER-EXERCISE-FATIGUE-COST-LEGACY-NARROW] AdaptiveExercise no
-    // longer owns `fatigueCost` (programming-truth bundle now owns
-    // exercise-level fatigue scoring). Read through a runtime narrow so
-    // legacy persisted exercises still feed the technical-expression
-    // count and absent values default to the prior "moderate" (5).
-    const technicalExpressions = allExercisesInWeek.filter(ex =>
-      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
-      ex.category !== 'skill' &&
-      (((ex as { fatigueCost?: number }).fatigueCost) ?? 5) <= 3
-    )
-    
-    // Count support expressions (strength/accessory supporting this skill)
-    const supportExpressions = allExercisesInWeek.filter(ex =>
-      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
-      (ex.category === 'strength' || ex.category === 'accessory')
-    )
-    
-    // Determine if omitted and why
-    const totalExpressions = directExpressions.length + technicalExpressions.length + supportExpressions.length
-    const omissionReason = totalExpressions === 0 
-      ? (skill === primaryGoal ? 'NOT_OMITTED_PRIMARY' : 
-         equipment.length === 0 ? 'no_equipment_match' :
-         'no_exercises_found_for_skill')
-      : null
-    
-    return {
-      skill,
-      directExpressions: directExpressions.length,
-      technicalExpressions: technicalExpressions.length,
-      supportExpressions: supportExpressions.length,
-      totalExpressions,
-      omissionReason,
-    }
-  })
-  
-  console.log('[selected-skill-exposure] Weekly skill expression summary:', {
-    totalSelectedSkills: selectedSkillList.length,
-    primaryGoal,
-    skillExposure: skillExposureSummary.map(s => ({
-      skill: s.skill,
-      direct: s.directExpressions,
-      technical: s.technicalExpressions,
-      support: s.supportExpressions,
-      total: s.totalExpressions,
-      omitted: s.omissionReason,
-    })),
-    underExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions === 0 && s.skill !== primaryGoal),
-    wellExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions >= 2),
-  })
-  
-  // Log session role → actual exercise differentiation
-  console.log('[session-role-differentiation] Session role vs exercise composition:', sessions.map((s, i) => ({
-    day: i + 1,
-    focus: s.focus,
-    sessionIntent: sessionIntents[i]?.sessionType || 'unknown',
-    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-    exerciseCategories: s.exercises.reduce((acc, ex) => {
-      const cat = getExerciseCategory(ex) || 'unknown'
-      acc[cat] = (acc[cat] || 0) + 1
-      return acc
-    }, {} as Record<string, number>),
-      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-      weightedExercises: s.exercises.filter(ex => getExerciseId(ex)?.includes('weighted')).length,
-      skillExercises: s.exercises.filter(ex => getExerciseCategory(ex) === 'skill').length,
-  })))
-  
-  // [BUILDER-RETURN-RENAMED] The legacy return target was `tempProgram`,
-  // a name confined to two earlier validator IIFE scopes (L21259, L21305).
-  // The actual function-body program owner is `finalProgram` declared at
-  // L20355 — that is the value this top-level function must surface.
-  return finalProgram
+  // [POST-CATCH-UNREACHABLE-DEBUG-REMOVED] The wrapping try/catch above
+  // either returns `finalProgram` on success or throws inside the
+  // catch — control never reaches this point. The block that used to
+  // live here referenced `finalProgram` from an outer scope where it
+  // is no longer in scope (declared inside the try). Removed because
+  // it is dead code and was the sole remaining `Cannot find name
+  // 'finalProgram'` source.
 }
 
 /**
@@ -25932,7 +25973,10 @@ function getSkillsForSession(
         // Different day types should produce different expression modes
         let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'technical'
         
-        if (isAdvanced && advancedFamily?.technicalSlotWeight > 0.3) {
+        // [ADVANCED-FAMILY-TECHNICAL-SLOT-WEIGHT-COALESCE] Optional-chained
+    // numeric comparison must coalesce to a concrete number — score
+    // weighting only, so 0 keeps the threshold honest.
+    if (isAdvanced && (advancedFamily?.technicalSlotWeight ?? 0) > 0.3) {
           expressionMode = 'technical'
         } else if (dayFocus.includes('support') || dayFocus.includes('recovery')) {
           expressionMode = 'support'
@@ -27140,7 +27184,15 @@ function generateAdaptiveSession(
         selectedExerciseNames: safeMain.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
     selectedMovementPatterns: safeMain.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
-    selectedEquipmentNeeds: [...new Set(safeMain.flatMap(e => e?.exercise?.requiredEquipment || []))],
+    // [EXERCISE-EQUIPMENT-FIELD-MIGRATED] Canonical Exercise shape owns
+    // `equipment` (lib/exercises.ts L308), not `requiredEquipment`.
+    // Read through an unknown narrow because `safeMain` is a
+    // selection-result wrapper with a wider exercise field.
+    selectedEquipmentNeeds: [...new Set(safeMain.flatMap(e => {
+      const exr = (e as { exercise?: { equipment?: unknown } } | undefined)?.exercise
+      const eq = exr?.equipment
+      return Array.isArray(eq) ? (eq as string[]) : []
+    }))],
     selectedEstimatedMinutes: selection.totalEstimatedTime,
     validationStatus: postSelectionValidation.isValid ? 'valid' : 'invalid',
     rejectReason: postSelectionValidation.failureReasons.join(', ') || null,
@@ -27461,7 +27513,13 @@ function generateAdaptiveSession(
         selectedExerciseNames: adaptedMain.adapted.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
     selectedMovementPatterns: adaptedMain.adapted.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
-    selectedEquipmentNeeds: [...new Set(adaptedMain.adapted.flatMap(e => e?.exercise?.requiredEquipment || []))],
+    // [EXERCISE-EQUIPMENT-FIELD-MIGRATED] same migration as the
+    // post_selection log above — pull through `equipment` and narrow.
+    selectedEquipmentNeeds: [...new Set(adaptedMain.adapted.flatMap(e => {
+      const exr = (e as { exercise?: { equipment?: unknown } } | undefined)?.exercise
+      const eq = exr?.equipment
+      return Array.isArray(eq) ? (eq as string[]) : []
+    }))],
     selectedEstimatedMinutes: (adaptedMain.adapted.length * 5) + 10,
     validationStatus: postEquipmentValidation.isValid ? 'valid' : 'invalid',
     rejectReason: postEquipmentValidation.failureReasons.join(', ') || null,

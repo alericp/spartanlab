@@ -348,7 +348,6 @@ function buildCanonicalProfileOverride(
     
     // Skills - builder inputs can override
     selectedSkills: builderInputs.selectedSkills || canonicalProfile.selectedSkills || [],
-    selectedStrength: builderInputs.selectedStrength || canonicalProfile.selectedStrength || [],
     selectedFlexibility: builderInputs.selectedFlexibility || canonicalProfile.selectedFlexibility || [],
     
     // Equipment - builder inputs can override
@@ -366,7 +365,6 @@ function buildCanonicalProfileOverride(
     
     // Profile data - builder inputs can override some
     experienceLevel: builderInputs.experienceLevel || canonicalProfile.experienceLevel || 'intermediate',
-    bodyweight: builderInputs.bodyweight || canonicalProfile.bodyweight,
     sex: canonicalProfile.sex,
     
     // Optional fields from canonical
@@ -709,7 +707,7 @@ export async function executeAuthoritativeGeneration(
     // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Use ingestion's canonical profile as the authoritative source
     const authoritativeProfile = truthIngestion.profileTruth.canonicalProfile
     
-    const athleteCalibration = calibrateAthleteProfile(authoritativeProfile)
+    const athleteCalibration = calibrateAthleteProfile(authoritativeProfile as unknown as CalibrationProfile)
     const resolvedProgressions = resolveCurrentWorkingProgressions(authoritativeProfile, athleteCalibration)
     
     // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Log whether skill calibration was built successfully

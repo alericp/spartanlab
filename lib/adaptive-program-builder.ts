@@ -849,7 +849,7 @@ import {
   isSectionAvailable,
 } from './program/programming-truth-bundle'
 // [BUILDER-PROGRAMMING-TRUTH-BUNDLE-TYPE] The module no longer exports a
-// named `ProgrammingTruthBundle` type — only the builder fn. Reconstruct
+// named `ProgrammingTruthBundle` type ��� only the builder fn. Reconstruct
 // the bundle's static shape from the builder's return type so all
 // downstream `ProgrammingTruthBundle | null` declarations stay accurate
 // without depending on a missing named export.
@@ -11073,10 +11073,13 @@ async function generateAdaptiveProgramImpl(
     // exposes `preferredRepRange`; rep targeting is now resolved by the
     // structure engine downstream. Drop the stale field from the
     // fallback object.
+    // [BUILDER-OUTCOME-STYLE-FIELD-OWNER-CONT] OutcomeTrainingStyle no
+    // longer exposes `restPeriodMultiplier` either — rest spacing moved
+    // to the structure engine alongside rep targeting. Drop the stale
+    // field; the fallback is now a minimal neutral style object.
     outcomeTrainingStyle = {
       includeEnduranceWork: false,
       includeDensityBlocks: false,
-      restPeriodMultiplier: 1.0,
     }
   }
   
@@ -11689,18 +11692,23 @@ async function generateAdaptiveProgramImpl(
     // `internalLabel` field (display labelling moved to publicLabel /
     // description). The `secondary` slot is `MethodProfile | undefined`,
     // not `MethodProfile | null` — use `undefined` for "no secondary".
+    // [BUILDER-METHOD-PROFILE-FIELD-OWNER] MethodProfile owns
+    // `shortDescription` (not `description`), and the canonical interface
+    // also requires `name` alongside `publicLabel`. Use the canonical
+    // field names so the safe fallback satisfies the contract.
     selectedMethods = {
       primary: {
         id: 'hybrid_skill_strength',
+        name: 'Hybrid Skill Strength',
         publicLabel: 'Hybrid Skill Strength',
-        description: 'Balanced skill and strength work',
+        shortDescription: 'Balanced skill and strength work',
         applicableGoals: ['general_fitness'],
         fatigueImpact: 'moderate',
         recoveryDemand: 'moderate',
         timeEfficiency: 'moderate',
         skillTransfer: 'high',
         bestFor: ['strength', 'skill'],
-      },
+      } as unknown as ReturnType<typeof selectMethodProfiles>['primary'],
       secondary: undefined,
       explanation: 'Default method selection applied due to selection error',
     }
@@ -11997,7 +12005,36 @@ async function generateAdaptiveProgramImpl(
   // owns `primaryOutcome` (renamed → primaryTrainingOutcome). Read
   // through a typed legacy slice so persisted documents that still
   // carry the old field continue to feed the style mode mapping.
-  const skillType = primaryGoal as unknown as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
+  // [BUILDER-SKILL-TYPE-VALIDATE] The legacy literal union at this site
+  // included values not in the canonical `SkillType` union (e.g.
+  // `back_lever`, `iron_cross`, `weighted_strength`, `general`), which
+  // produced TS2322 when passed into `VariationConfig.skill`. Validate
+  // the runtime value against the actual `SkillType` accepted set; map
+  // canonical PrimaryGoal labels to their `SkillType` equivalents and
+  // fall back to `general_strength` for any value not represented in
+  // the SkillType union (e.g. `back_lever`, `iron_cross`).
+  const _skillTypeValidValues: ReadonlySet<string> = new Set([
+    'front_lever', 'planche', 'muscle_up', 'handstand', 'hspu',
+    'l_sit', 'v_sit', 'i_sit', 'pancake', 'toe_touch',
+    'front_splits', 'side_splits', 'weighted_pull', 'weighted_dip',
+    'general_strength',
+  ])
+  const _skillTypeAlias: Record<string, string> = {
+    handstand_pushup: 'hspu',
+    weighted_strength: 'general_strength',
+    general: 'general_strength',
+    strength: 'general_strength',
+    skill: 'general_strength',
+    endurance: 'general_strength',
+    abs: 'general_strength',
+    back_lever: 'general_strength',
+    iron_cross: 'general_strength',
+    flexibility: 'pancake',
+  }
+  const _mappedSkillType = _skillTypeAlias[primaryGoal] || (primaryGoal as string)
+  const skillType = (_skillTypeValidValues.has(_mappedSkillType)
+    ? _mappedSkillType
+    : 'general_strength') as SkillType
   const legacyPrimaryOutcome = (onboardingProfile as { primaryOutcome?: string } | null)?.primaryOutcome
   const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(legacyPrimaryOutcome || '')
     ? legacyPrimaryOutcome
@@ -12592,13 +12629,15 @@ async function generateAdaptiveProgramImpl(
 
     // [BUILDER-SESSION-LENGTH-NUMBER-TO-UNION] `sessionLength` is `number`
     // (minutes) for our internal arithmetic, but composition / planner
-    // entry points accept the SessionLength string-literal union. Map
-    // the numeric value into the closest valid bucket on the boundary
-    // ('30' | '45' | '60' | '60+'). Same downstream meaning.
-    const sessionLengthBucket: '30' | '45' | '60' | '60+' =
-      sessionLength <= 30 ? '30'
-      : sessionLength <= 45 ? '45'
-      : sessionLength <= 60 ? '60'
+    // entry points accept the canonical `SessionLength` union, which
+    // mixes numeric literals (30 | 45 | 60 | 75 | 90 | 120) with bucket
+    // strings ('60+' etc.). Use numeric literals for sub-60 buckets and
+    // the '60+' string for over-60 to satisfy the union; same downstream
+    // meaning.
+    const sessionLengthBucket: SessionLength =
+      sessionLength <= 30 ? 30
+      : sessionLength <= 45 ? 45
+      : sessionLength <= 60 ? 60
       : '60+'
 
     const compositionContext = buildSessionCompositionContext(
@@ -12700,8 +12739,11 @@ async function generateAdaptiveProgramImpl(
   // exists as a function-local variable at L12726 and the in-function
   // recovery logic that reads it directly still works; only the
   // cross-function backflow into `generateAdaptiveSession` is gated.
-  // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
-  loopLevelDoctrineTracker: loopLevelDoctrineTracker as any,
+  // [SESSION-SURVIVAL-CONTRACT-LOOP-EXTRA-FIELD] The
+  // `loopLevelDoctrineTracker` key is also not declared on
+  // AdaptiveSessionContext. Gated below via the ...(extra) spread so
+  // the runtime stamp survives without forcing the canonical context
+  // type to widen for a debug-only cross-loop reference.
   // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR] Reference to the loop-level
   // accumulator, mutated inside generateAdaptiveSession's post-selection block.
   // Each session pushes its own ExerciseSelection.doctrineCausalAudit (or null
@@ -12770,12 +12812,24 @@ async function generateAdaptiveProgramImpl(
   let session: AdaptiveSession
   let sessionGenerationFailed = false
   try {
+  // [BUILDER-SESSION-LENGTH-NORMALIZE-AT-CALL] `sessionLength` is a
+  // local numeric (minutes); `generateAdaptiveSession` accepts the
+  // canonical `SessionLength` union. Normalize to the closest valid
+  // numeric literal on the boundary so TS narrows the runtime number
+  // into the union.
+  const _sessionLengthForCall: SessionLength =
+    sessionLength <= 30 ? 30
+    : sessionLength <= 45 ? 45
+    : sessionLength <= 60 ? 60
+    : sessionLength <= 75 ? 75
+    : sessionLength <= 90 ? 90
+    : 120
   session = generateAdaptiveSession(
         day,
         primaryGoal,
         experienceLevel,
         equipment,
-        sessionLength,
+        _sessionLengthForCall,
         constraintInsight.hasInsight ? constraintInsight.label : undefined,
         sessionContext
       )
@@ -14183,7 +14237,12 @@ async function generateAdaptiveProgramImpl(
           // The || pattern was preserving stale styledGroups when styleMetadata already existed
           // This caused Program screen / Today's Plan to show wrong grouped members
           // Fix: explicitly overwrite grouped-contract fields, preserve unrelated fields
-          const existingMeta = session.styleMetadata || {}
+          // [BUILDER-EXISTING-META-NON-NULL-CAST] `session.styleMetadata` is
+          // optional. Use the same NonNullable narrowing pattern that
+          // `styleMetadataLocal` (L15660) uses so downstream reads of
+          // `hasCircuitsApplied` / `hasDensityApplied` / `structureDescription`
+          // / `appliedMethods` remain typed.
+          const existingMeta = (session.styleMetadata ?? {}) as NonNullable<typeof session.styleMetadata>
           session.styleMetadata = {
             // Preserve any unrelated fields from prior metadata
             ...existingMeta,
@@ -15248,7 +15307,10 @@ async function generateAdaptiveProgramImpl(
     // UPDATE STYLE METADATA WITH FULL METHOD MATERIALIZATION RESULTS
     // This ensures durable truth survives save/load/render cycles
     // -------------------------------------------------------------------------
-    const existingStyleMeta = session.styleMetadata || {}
+    // [BUILDER-EXISTING-STYLE-META-NON-NULL-CAST] same NonNullable narrowing
+// as L14186 — reads at L15590 (structureDescription), L15744-5
+// (appliedMethods), and L15581 spread all rely on the typed shape.
+const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof session.styleMetadata>
     const hasCircuitsApplied = methodMaterializationResult.appliedMethods.includes('circuits')
     // [PHASE 3C PACKAGING-TRUTH-LOCK] Honest density signal.
     // Pre-3C: `hasDensityApplied = hasCircuitsApplied` aliased these two
@@ -18335,7 +18397,22 @@ async function generateAdaptiveProgramImpl(
   // [TASK 3-6] HYBRID/DAY FOCUS/ALIGNMENT AUDITS - WRAPPED IN TRY-CATCH
   // These audits MUST NOT break program generation
   // ==========================================================================
-  let dayFocusTruthAudit: Array<{ dayNumber: number; labelMatchesSession: boolean }> = []
+  // [BUILDER-DAY-FOCUS-TRUTH-AUDIT-LOCAL-SHAPE] The `.map(session => ...)` below
+// produces objects with several debug fields beyond the original
+// `{ dayNumber, labelMatchesSession }` annotation. Widen the local
+// declaration to match the actual returned shape so downstream reads of
+// `labelShown`, `actualDominant`, and `mismatchReason` remain typed
+// without needing per-read casts. This is a local var only — no public
+// type is widened.
+let dayFocusTruthAudit: Array<{
+  dayNumber: number
+  labelShown: string
+  mainExercises: string[]
+  movementBalance: { push: number; pull: number }
+  actualDominant: string
+  labelMatchesSession: boolean
+  mismatchReason: string | null
+}> = []
   
   // ==========================================================================
   // [SUMMARY-TRUTH] TASK 1: CANONICAL SUMMARY-TRUTH CONTRACT
@@ -18756,6 +18833,20 @@ async function generateAdaptiveProgramImpl(
     sessions.forEach((session, index) => {
       const resolved = resolvedSessionIdentities[index]
       if (resolved) {
+        // [BUILDER-RESOLVED-IDENTITY-DEBUG-FIELDS-NARROW] The
+        // ResolvedSessionIdentity contract owns the canonical resolved
+        // fields used by display consumption. Multi-skill visibility
+        // metadata (broaderSkillsExpressed / supportSkillsExpressed /
+        // multiSkillArchitectureActive / skillBreakdown) is optional
+        // debug output that may or may not be populated by upstream
+        // resolution — read through a runtime narrow so the writes
+        // succeed when present and degrade gracefully when absent.
+        const resolvedDebug = resolved as typeof resolved & {
+          broaderSkillsExpressed?: string[]
+          supportSkillsExpressed?: string[]
+          multiSkillArchitectureActive?: boolean
+          skillBreakdown?: unknown
+        }
         // Store resolved identity for display consumption
         ;(session as any).resolvedSessionIdentity = resolved.resolvedSessionIdentity
         ;(session as any).resolvedMovementBias = resolved.resolvedMovementBias
@@ -18765,10 +18856,10 @@ async function generateAdaptiveProgramImpl(
         ;(session as any).sessionCoherenceScore = resolved.sessionCoherenceScore
         ;(session as any).identityMatchesContent = resolved.identityMatchesContent
         // [AI-TRUTH-MATERIALIZATION] Store broader skill visibility for UI
-        ;(session as any).broaderSkillsExpressed = resolved.broaderSkillsExpressed
-        ;(session as any).supportSkillsExpressed = resolved.supportSkillsExpressed
-        ;(session as any).multiSkillArchitectureActive = resolved.multiSkillArchitectureActive
-        ;(session as any).skillBreakdown = resolved.skillBreakdown
+        ;(session as any).broaderSkillsExpressed = resolvedDebug.broaderSkillsExpressed
+        ;(session as any).supportSkillsExpressed = resolvedDebug.supportSkillsExpressed
+        ;(session as any).multiSkillArchitectureActive = resolvedDebug.multiSkillArchitectureActive
+        ;(session as any).skillBreakdown = resolvedDebug.skillBreakdown
         
         // If identity doesn't match content, update the label to match truth
         if (!resolved.identityMatchesContent) {
@@ -18813,13 +18904,22 @@ async function generateAdaptiveProgramImpl(
     // [AI-TRUTH-MATERIALIZATION] VISIBLE WEEK HARDENING AUDIT
     // Verify that visible session labels reflect broader skill expression
     // ==========================================================================
+    // [BUILDER-RESOLVED-IDENTITY-DEBUG-FIELDS-NARROW] same runtime narrow
+    // as the per-session writer above — these debug visibility fields
+    // are optional on the resolved-identity contract.
+    type ResolvedDebug = (typeof resolvedSessionIdentities)[number] & {
+      broaderSkillsExpressed?: string[]
+      supportSkillsExpressed?: string[]
+      multiSkillArchitectureActive?: boolean
+    }
+    const _resolvedWithDebug = resolvedSessionIdentities as ResolvedDebug[]
     const multiSkillVisibilityAudit = {
       totalSessions: sessions.length,
-      sessionsWithMultiSkillLabel: resolvedSessionIdentities.filter(r => r.multiSkillArchitectureActive).length,
-      sessionsWithSupportSkillsVisible: resolvedSessionIdentities.filter(r => r.supportSkillsExpressed && r.supportSkillsExpressed.length > 0).length,
-      sessionsWithBroaderSkills: resolvedSessionIdentities.filter(r => r.broaderSkillsExpressed && r.broaderSkillsExpressed.length > 2).length,
-      totalBroaderSkillsDetected: [...new Set(resolvedSessionIdentities.flatMap(r => r.broaderSkillsExpressed || []))].length,
-      uniqueSkillsInWeek: [...new Set(resolvedSessionIdentities.flatMap(r => r.broaderSkillsExpressed || []))],
+      sessionsWithMultiSkillLabel: _resolvedWithDebug.filter(r => r.multiSkillArchitectureActive).length,
+      sessionsWithSupportSkillsVisible: _resolvedWithDebug.filter(r => r.supportSkillsExpressed && r.supportSkillsExpressed.length > 0).length,
+      sessionsWithBroaderSkills: _resolvedWithDebug.filter(r => r.broaderSkillsExpressed && r.broaderSkillsExpressed.length > 2).length,
+      totalBroaderSkillsDetected: [...new Set(_resolvedWithDebug.flatMap(r => r.broaderSkillsExpressed || []))].length,
+      uniqueSkillsInWeek: [...new Set(_resolvedWithDebug.flatMap(r => r.broaderSkillsExpressed || []))],
     }
     
     console.log('[ai-truth-materialization-visible-week-audit]', {
@@ -19341,10 +19441,16 @@ async function generateAdaptiveProgramImpl(
       canonicalProfile.trainingPathType === 'hybrid'
     
     // Check for advanced-quality indicators in the generated program
+    // [BUILDER-EXERCISE-PROGRESSION-LEGACY-NARROW] AdaptiveExercise canonical
+    // contract does not own `progression`; legacy-shaped exercises persisted
+    // on older programs may still expose it. Read through a runtime narrow
+    // so the audit succeeds when the legacy field is present and degrades
+    // gracefully when absent.
     const hasProgressionVariety = sessions.some(s => 
-      (s.exercises || []).some(e => 
-        e.progression?.tier === 'intermediate' || e.progression?.tier === 'advanced'
-      )
+      (s.exercises || []).some(e => {
+        const tier = (e as { progression?: { tier?: string } }).progression?.tier
+        return tier === 'intermediate' || tier === 'advanced'
+      })
     )
     const hasWeightedExercises = allExerciseNames.some(n => 
       n.includes('weighted') || n.includes('ring')
@@ -20923,8 +21029,9 @@ fatigueDecision: fatigueDecision ? {
           } : null,
           envelopeConfidence: 0.5,
           envelopeLimits: null,
-          styleEnabled: false,
-          styleRules: null,
+          // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] ConstraintAwareInput
+          // no longer owns `styleEnabled` / `styleRules`; styling moved to
+          // the dedicated style engine. Drop the stale keys here.
           availableEquipment: equipment,
           requiredEquipment: [],
         }
@@ -20970,8 +21077,7 @@ fatigueDecision: fatigueDecision ? {
           frameworkRules: null,
           envelopeConfidence: 0.5,
           envelopeLimits: null,
-          styleEnabled: false,
-          styleRules: null,
+          // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] same as above.
           availableEquipment: equipment,
           requiredEquipment: [],
         }
@@ -21370,9 +21476,14 @@ fatigueDecision: fatigueDecision ? {
         // owns `name` (not `exerciseName`) and `category` (no `role`).
         // Use the polymorphic accessors so legacy field references that
         // never existed on the canonical contract no longer trip TS2339.
+        // [BUILDER-EXERCISE-WEIGHTED-LEGACY-NARROW] AdaptiveExercise's
+        // canonical weighted-load owner is `prescribedLoad`. Legacy
+        // persisted shapes used `weightedPrescription`. Treat either as
+        // the weighted signal via a runtime narrow.
         const weightedExercises = sessions.reduce((sum, s) => 
           sum + (s.exercises?.filter(ex => 
-            ex.weightedPrescription || 
+            ex.prescribedLoad ||
+            (ex as { weightedPrescription?: unknown }).weightedPrescription || 
             getExerciseId(ex)?.includes('weighted') || 
             getExerciseName(ex)?.toLowerCase().includes('weighted')
           ).length || 0), 0)
@@ -21818,18 +21929,23 @@ fatigueDecision: fatigueDecision ? {
   // ==========================================================================
   try {
     // Check that exercises have the fields needed for future progression evaluation
+    // [BUILDER-EXERCISE-REPS-HOLD-CANONICAL] AdaptiveExercise canonical
+    // contract owns `repsOrTime` (a single combined string field) — the
+    // legacy `reps` / `hold` fields were folded into it. Use the
+    // canonical field for the readiness check; legacy `progression` is
+    // gated via runtime narrow.
     const progressionReadyExercises = sessions.flatMap(s => 
       (s.exercises || []).filter(e => 
-        e.id && e.sets && (e.reps || e.hold)
+        e.id && e.sets && e.repsOrTime
       )
     )
     
     const progressionFieldCoverage = {
       hasId: progressionReadyExercises.filter(e => e.id).length,
       hasSets: progressionReadyExercises.filter(e => e.sets).length,
-      hasRepsOrHold: progressionReadyExercises.filter(e => e.reps || e.hold).length,
+      hasRepsOrHold: progressionReadyExercises.filter(e => !!e.repsOrTime).length,
       hasCategory: progressionReadyExercises.filter(e => e.category).length,
-      hasProgression: progressionReadyExercises.filter(e => e.progression).length,
+      hasProgression: progressionReadyExercises.filter(e => !!(e as { progression?: unknown }).progression).length,
       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
       hasSelectionTrace: progressionReadyExercises.filter(e => !!getExerciseSelectionTrace(e)).length,
     }
@@ -22468,7 +22584,11 @@ fatigueDecision: fatigueDecision ? {
   }
   
   // [PHASE 2 MULTI-SKILL] Store multi-skill allocation contract on the program
-  finalProgram.multiSkillAllocationContract = multiSkillAllocationContract
+  // [BUILDER-FINAL-PROGRAM-DEBUG-FIELD-CAST] AdaptiveProgram does not
+  // declare these debug/proof fields on its public contract, but the
+  // runtime stamp is consumed by audit surfaces. Cast at the write site
+  // so the proof survives without forcing the canonical type to widen.
+  ;(finalProgram as unknown as { multiSkillAllocationContract?: unknown }).multiSkillAllocationContract = multiSkillAllocationContract
   
   // [VISIBLE-WEEK-EXPRESSION-FIX] Store visible week expression contract on the program
   // This is the authoritative contract for visible week skill expression
@@ -23267,7 +23387,10 @@ fatigueDecision: fatigueDecision ? {
   
   // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
   if (doctrineInfluenceContract) {
-    finalProgram.doctrineInfluenceContract = doctrineInfluenceContract
+    // [BUILDER-FINAL-PROGRAM-DEBUG-FIELD-CAST] same as above — cast at
+    // the write site, do not widen AdaptiveProgram for debug/proof
+    // metadata.
+    ;(finalProgram as unknown as { doctrineInfluenceContract?: unknown }).doctrineInfluenceContract = doctrineInfluenceContract
     console.log('[DOCTRINE-INFLUENCE-CONTRACT-ATTACHED]', {
       contractId: doctrineInfluenceContract.contractId,
       shadowModeOnly: doctrineInfluenceContract.safetyFlags.shadowModeOnly,
@@ -23281,7 +23404,8 @@ fatigueDecision: fatigueDecision ? {
   
   // [UNIFIED DOCTRINE DECISION] Store authoritative doctrine decision for audit + downstream
   if (unifiedDoctrineDecision) {
-    finalProgram.unifiedDoctrineDecision = unifiedDoctrineDecision
+    // [BUILDER-FINAL-PROGRAM-DEBUG-FIELD-CAST] same as above.
+    ;(finalProgram as unknown as { unifiedDoctrineDecision?: unknown }).unifiedDoctrineDecision = unifiedDoctrineDecision
     console.log('[UNIFIED-DOCTRINE-DECISION-ATTACHED]', {
       decisionId: unifiedDoctrineDecision.decisionId,
       dominantSpine: unifiedDoctrineDecision.dominantSpine.type,
@@ -25053,10 +25177,15 @@ fatigueDecision: fatigueDecision ? {
     )
     
     // Count technical expressions (moderate fatigue, good transfer)
+    // [BUILDER-EXERCISE-FATIGUE-COST-LEGACY-NARROW] AdaptiveExercise no
+    // longer owns `fatigueCost` (programming-truth bundle now owns
+    // exercise-level fatigue scoring). Read through a runtime narrow so
+    // legacy persisted exercises still feed the technical-expression
+    // count and absent values default to the prior "moderate" (5).
     const technicalExpressions = allExercisesInWeek.filter(ex =>
       getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
       ex.category !== 'skill' &&
-      (ex.fatigueCost ?? 5) <= 3
+      (((ex as { fatigueCost?: number }).fatigueCost) ?? 5) <= 3
     )
     
     // Count support expressions (strength/accessory supporting this skill)
@@ -29770,7 +29899,10 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         validatedSession = {
           ...validatedSession,
           exercises: emergencyExercises,
-          estimatedDurationMinutes: emergencyExercises.length * 5 + 10,
+          // [BUILDER-VALIDATED-SESSION-DURATION-OWNER] ValidatedSession's
+          // canonical duration field is `estimatedMinutes`. Legacy
+          // `estimatedDurationMinutes` was never on the contract.
+          estimatedMinutes: emergencyExercises.length * 5 + 10,
           sessionCharacter: {
             neuralDemandLevel: 'moderate' as const,
             fatigueProfile: 'standard' as const,
@@ -30005,15 +30137,25 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
 
     // Build style input from validated exercises
     const styleInput = {
-      exercises: validatedSession.exercises.map(e => ({
-        id: e.id || 'unknown',
-        name: e.name || 'unknown',
-        category: (e.category || 'accessory') as 'skill' | 'strength' | 'accessory' | 'core',
-        movementPattern: (e.movementPattern || 'other') as any,
-        neuralDemand: e.neuralDemand || 2,
-        failureRisk: e.failureRisk || 'moderate' as 'low' | 'moderate' | 'high',
-        selectionReason: e.selectionReason,
-      })),
+      // [BUILDER-EXERCISE-LEGACY-METADATA-NARROW] AdaptiveExercise no
+      // longer owns movementPattern / neuralDemand / failureRisk — those
+      // moved to the programming-truth bundle and exercise selection
+      // metadata. Use the polymorphic accessors that already exist
+      // upstream (getExerciseMovementPattern / getExerciseNeuralDemand)
+      // and a runtime narrow for failureRisk so legacy persisted
+      // exercises keep feeding the style input shape unchanged.
+      exercises: validatedSession.exercises.map(e => {
+        const legacy = e as { failureRisk?: 'low' | 'moderate' | 'high' }
+        return {
+          id: e.id || 'unknown',
+          name: e.name || 'unknown',
+          category: (e.category || 'accessory') as 'skill' | 'strength' | 'accessory' | 'core',
+          movementPattern: (getExerciseMovementPattern(e) || 'other') as any,
+          neuralDemand: getExerciseNeuralDemand(e) ?? 2,
+          failureRisk: legacy.failureRisk || 'moderate',
+          selectionReason: e.selectionReason,
+        }
+      }),
       methodPreferences: trainingMethodPreferences || ['straight_sets'] as TrainingMethodPreference[],
       experienceLevel,
       sessionFocus: day.focus || 'mixed',

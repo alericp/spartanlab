@@ -1120,7 +1120,7 @@ export async function executeAuthoritativeGeneration(
     markStage('truth_extraction_start')
     
     const truthExtraction = extractProgramTruth(
-      canonicalProfileOverride as CanonicalProgrammingProfile,
+      canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
       request.builderInputs,
       request.triggerSource
     )
@@ -1128,7 +1128,7 @@ export async function executeAuthoritativeGeneration(
     
     program = attachTruthExplanation(
       program,
-      canonicalProfileOverride as CanonicalProgrammingProfile,
+      canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
       request.triggerSource
     )
     
@@ -1150,7 +1150,7 @@ export async function executeAuthoritativeGeneration(
     // ==========================================================================
     markStage('truth_snapshot_attachment')
     
-    const canonicalProfileTyped = canonicalProfileOverride as CanonicalProgrammingProfile
+    const canonicalProfileTyped = canonicalProfileOverride as unknown as CanonicalProgrammingProfile
     
     program.generationTruthSnapshot = {
       // Generation metadata
@@ -1391,9 +1391,24 @@ export async function executeAuthoritativeGeneration(
     })
     
     // [PHASE 1 AI-TRUTH-ESCALATION] Elevate session architecture truth to program
-    // This allows UI to access multi-skill expression, flexibility integration, and method packaging decisions
+    // [ARCHITECTURE-TRUTH-SNAPSHOT-LOCAL] AdaptiveProgram does not own
+    // `architectureTruthSnapshot`; the snapshot is purely an audit
+    // artefact for the truth-attached log emitted below. Build it as a
+    // local variable so we don't write a stale property onto the
+    // program object.
+    let architectureTruthSnapshot: {
+      primarySpineSkills: string[]
+      secondaryAnchorSkills: string[]
+      supportRotationSkills: string[]
+      deferredSkillsWithReasons: Array<{ skill: string; reason: string; details?: string }>
+      flexibilityIntegration: unknown
+      methodPackaging: unknown
+      visibleDifferenceScore: number
+      templateEscapeRequired: boolean
+      doctrineInfluenceLevel: string
+    } | null = null
     if (program.sessionArchitectureTruth) {
-      program.architectureTruthSnapshot = {
+      architectureTruthSnapshot = {
         primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
         secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
         supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
@@ -1434,9 +1449,9 @@ export async function executeAuthoritativeGeneration(
       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
       // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
-      architectureTruthElevated: !!program.architectureTruthSnapshot,
-      visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
-      supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
+      architectureTruthElevated: !!architectureTruthSnapshot,
+      visibleDifferenceScore: architectureTruthSnapshot?.visibleDifferenceScore || 0,
+      supportSkillsCount: architectureTruthSnapshot?.supportRotationSkills?.length || 0,
       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
     })
     

@@ -577,10 +577,10 @@ export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillRe
   const strengthRecords = getStrengthRecords()
   
   // Find relevant metrics
-  const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
-  const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
-  const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
-  const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+  const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+  const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+  const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
   
   const maxPullUps = pullUpRecord?.reps || 0
   const weightedPullUp = weightedPullUpRecord?.weight || 0

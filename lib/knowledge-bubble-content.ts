@@ -295,13 +295,9 @@ export const EXERCISE_KNOWLEDGE: Record<string, ExerciseKnowledge> = {
     skillCarryover: ['front_lever', 'l_sit'],
   },
   
-  // Ring support
-  'ring_support_hold': {
-    exerciseId: 'ring_support_hold',
-    exerciseName: 'Ring Support Hold',
-    shortReason: 'Foundational ring stability required before any ring pressing.',
-    skillCarryover: ['ring_dip', 'iron_cross', 'muscle_up'],
-  },
+  // [DUP-RING-SUPPORT-HOLD-REMOVED] `ring_support_hold` is already
+  // declared earlier in this map (~L220); the entry below was a stale
+  // duplicate.
   'rto_support': {
     exerciseId: 'rto_support',
     exerciseName: 'Rings Turned Out Support',

@@ -643,7 +643,7 @@ function calculateReadinessBreakdown(
   // Clamp all scores to 0-100
   Object.keys(breakdown).forEach(key => {
     if (typeof breakdown[key as keyof ReadinessBreakdown] === 'number') {
-      (breakdown as Record<string, number>)[key] = Math.max(0, Math.min(100, 
+      (breakdown as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, 
         breakdown[key as keyof ReadinessBreakdown] as number
       ))
     }

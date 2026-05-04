@@ -32865,7 +32865,18 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     // TASK 7: Pass selected skills array for multi-goal awareness
     selectedSkills: canonicalProfile.selectedSkills || [],
     // TASK 3C: Pass training path and goal categories for richer planner context
-    trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+    // [TRAINING-PATH-TYPE-UNION-VALIDATE] TrainingPathType
+    // (athlete-profile.ts L729) is the strict union
+    // 'skill_progression' | 'strength_endurance' | 'hybrid'. Legacy
+    // canonical profiles can carry the loose label `'balanced'` which
+    // is NOT in the union. Validate at the boundary; invalid values
+    // collapse to `undefined` so the callee uses its own default.
+    trainingPathType: ((): TrainingPathType | undefined => {
+      const v = canonicalProfile.trainingPathType
+      return v === 'skill_progression' || v === 'strength_endurance' || v === 'hybrid'
+        ? v
+        : undefined
+    })(),
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 3C: Pass session duration mode for adaptive time awareness
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',

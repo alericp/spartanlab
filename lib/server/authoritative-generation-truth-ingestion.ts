@@ -364,7 +364,7 @@ function buildProfileTruthBlock(
         scheduleMode: 'weekly',
         trainingDaysPerWeek: 4,
         experienceLevel: 'intermediate',
-      } as CanonicalProgrammingProfile,
+      } as unknown as CanonicalProgrammingProfile,
       fieldSources: {
         primaryGoal: 'defaulted',
         secondaryGoal: 'none',

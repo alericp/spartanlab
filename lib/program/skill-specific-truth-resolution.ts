@@ -364,8 +364,8 @@ export function resolvePatternResponse(
   if (bundle.constraintHistory?.meta?.available) {
     const constraints = bundle.constraintHistory.recentConstraintPatterns || []
     const hasPatternConstraint = constraints.some(c => 
-      c.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
-      affectedFamilies.some(f => c.toLowerCase().includes(f.replace(/_/g, ' ')))
+      c.constraint.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
+      affectedFamilies.some(f => c.constraint.toLowerCase().includes(f.replace(/_/g, ' ')))
     )
     
     if (hasPatternConstraint) {
@@ -568,7 +568,7 @@ function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
 function hasRecentPainMarkers(bundle: ProgrammingTruthBundle, family: SkillFamily): boolean {
   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
   const familyStr = family.replace(/_/g, ' ')
-  return constraints.some(c => c.toLowerCase().includes(familyStr) || c.toLowerCase().includes('pain'))
+  return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
 }
 
 function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {

@@ -739,17 +739,26 @@ export function generateIntelligentMobilityBlock(context: MobilityActivationCont
     const prehabResult = generateIntelligentPrehab(prehabContext)
     
     // Return as mobility_activation block
+    // [INTELLIGENT-PREHAB-CURRENT-SHAPE] IntelligentPrehabResult exposes
+    // `preSession` / `weakPointAdjustments` / `adaptationNotes` /
+    // `totalPrepTime`. The legacy fields
+    // (`estimatedDuration`/`prehabExercises`/`primaryJointsFocused`/
+    // `weakPointAdaptations`) were renamed; map locally to the
+    // current shape.
     return {
       type: 'mobility_activation',
       name: 'Intelligent Joint Preparation',
-      durationMinutes: prehabResult.estimatedDuration,
-      exercises: prehabResult.prehabExercises.length,
+      durationMinutes: prehabResult.totalPrepTime,
+      exercises: prehabResult.preSession.exercises.length,
       intensity: 'low',
       restBetweenSets: [30, 45],
       notes: [
-        `Focused on: ${prehabResult.primaryJointsFocused.join(', ')}`,
-        ...prehabResult.weakPointAdaptations,
-        prehabResult.prehabExercises.map(ex => `${ex.name} - ${ex.prescription}`).join('; '),
+        `Focused on: ${prehabResult.preSession.prepFocus}`,
+        ...prehabResult.weakPointAdjustments,
+        ...prehabResult.adaptationNotes,
+        prehabResult.preSession.exercises
+          .map((ex: { name: string; prescription: string }) => `${ex.name} - ${ex.prescription}`)
+          .join('; '),
       ],
     }
   } catch (error) {

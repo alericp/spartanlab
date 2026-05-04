@@ -341,11 +341,9 @@ export const PREREQUISITE_RELATIONSHIPS: Record<string, {
     requiredMastery: 'proficient',
     rationale: 'Straight bar dip strength is required for muscle-up lockout',
   },
-  'ring_dip': {
-    preparesFor: ['ring_muscle_up'],
-    requiredMastery: 'proficient',
-    rationale: 'Ring dip depth and control required for ring muscle-up lockout',
-  },
+  // [DUP-RING-DIP-REMOVED] `ring_dip` is already declared earlier in
+  // this map (~L298, ring-prerequisite block). The duplicate entry
+  // here was a stale leftover.
   
   // HSPU prerequisites
   'pike_push_up': {

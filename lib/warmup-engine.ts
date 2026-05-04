@@ -1181,30 +1181,37 @@ export async function generateIntelligentWarmup(
     const prehabResult = generateIntelligentPrehab(prehabContext)
     
     // Convert to warmup format for compatibility
+    // [INTELLIGENT-PREHAB-CURRENT-SHAPE] Same field rename as the
+    // session-assembly-engine boundary: project from
+    // `preSession.exercises` / `totalPrepTime` /
+    // `weakPointAdjustments` / `adaptationNotes`.
     return {
       block: {
         focus: 'skill' as const,
-        exercises: prehabResult.prehabExercises.map(ex => ({
-          id: ex.id,
+        exercises: prehabResult.preSession.exercises.map((ex: { name: string; prescription: string; note?: string; targetArea: string }) => ({
+          id: ex.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
           name: ex.name,
           phase: 'general' as const,
-          targetPattern: ex.targetJoints as MovementPattern[],
-          targetMuscles: [],
-          equipment: ex.equipment as EquipmentType[],
+          targetPattern: [],
+          targetMuscles: [ex.targetArea],
+          equipment: [],
           reps: ex.prescription,
-          notes: ex.rationale,
+          notes: ex.note,
           priority: 2,
           intensity: 'low' as const,
         })),
-        durationMinutes: prehabResult.estimatedDuration,
-        rationale: `Intelligent preparation targeting ${prehabResult.primaryJointsFocused.join(', ')}. ${prehabResult.weakPointAdaptations.join(' ')}`,
+        durationMinutes: prehabResult.totalPrepTime,
+        rationale: `Intelligent preparation targeting ${prehabResult.preSession.prepFocus}. ${[
+          ...prehabResult.weakPointAdjustments,
+          ...prehabResult.adaptationNotes,
+        ].join(' ')}`,
       },
-      exercises: prehabResult.prehabExercises.map(ex => ({
+      exercises: prehabResult.preSession.exercises.map((ex: { name: string; prescription: string; note?: string }) => ({
         name: ex.name,
         prescription: ex.prescription,
-        note: ex.rationale,
+        note: ex.note,
       })),
-      totalMinutes: prehabResult.estimatedDuration,
+      totalMinutes: prehabResult.totalPrepTime,
       focusLabel: 'Session-Specific Preparation',
     }
   } catch (error) {

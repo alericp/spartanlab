@@ -151,7 +151,8 @@ const PROGRESSION_DIFFICULTY_TIERS: Record<string, number> = {
   'ring_dips': 7,
   
   // Front lever progressions
-  'dead_hang': 1,
+  // [DUP-DEAD-HANG-REMOVED] `dead_hang` is already declared at L125 in
+  // the pull-up progressions block. Remove the duplicate here.
   'tuck_front_lever': 4,
   'advanced_tuck_front_lever': 5,
   'straddle_front_lever': 7,

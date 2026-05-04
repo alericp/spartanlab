@@ -727,7 +727,11 @@ export function selectTrainingMethod(
 
   // RULE 4: Short sessions (20-30 min) = allow density finishers
   if ((sessionLength === '20-30' || sessionLength === '30-45') && isEndOfSession) {
-    if (compatibility.density && exerciseCategory !== 'skill') {
+    // [EXERCISE-CATEGORY-SKILL-NOT-IN-UNION] exerciseCategory is
+    // 'strength' | 'flexibility' | 'accessory' | 'core' | 'warmup' |
+    // 'cooldown' — there is no 'skill' literal in the union, so the
+    // legacy guard was unreachable. Drop it.
+    if (compatibility.density) {
       return {
         recommendedMethod: 'superset',
         alternativeMethods: ['density_block', 'emom'],

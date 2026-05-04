@@ -393,7 +393,7 @@ function getSessionDistribution(
 ): SessionDistribution[] {
   // 2-day distribution
   if (days === 2) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'support_volume', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
@@ -407,14 +407,14 @@ function getSessionDistribution(
   
   // 3-day distribution
   if (days === 3) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -431,7 +431,7 @@ function getSessionDistribution(
   
   // 4-day distribution
   if (days === 4) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -469,7 +469,7 @@ function getSessionDistribution(
       verdict: 'using_6day_distribution',
     })
     
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -479,7 +479,7 @@ function getSessionDistribution(
         { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' }, // Recovery-oriented
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -511,7 +511,7 @@ function getSessionDistribution(
       verdict: 'using_7day_distribution',
     })
     
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -522,7 +522,7 @@ function getSessionDistribution(
         { type: 'mixed_capacity', isPrimary: false, variant: 'B', supportVariant: 'secondary' }, // Light balanced day
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },

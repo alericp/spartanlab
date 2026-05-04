@@ -164,12 +164,12 @@ function calculateWeeklyBudget(ctx: WeeklyStimulusContext): WeeklyBudgetAllocati
   }
   
   // Adjust based on training style
-  if (ctx.trainingStyle === 'skill') {
+  if (ctx.trainingStyle === 'skill_focused') {
     baseAllocations.primarySkillPercent = 50
     baseAllocations.directWorkPercent = 40
     baseAllocations.staticHoldPercent = 40
     baseAllocations.carryoverWorkPercent = 20
-  } else if (ctx.trainingStyle === 'strength') {
+  } else if (ctx.trainingStyle === 'strength_focused') {
     baseAllocations.primarySkillPercent = 35
     baseAllocations.directWorkPercent = 30
     baseAllocations.carryoverWorkPercent = 30

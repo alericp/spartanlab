@@ -607,10 +607,20 @@ function detectDeloadNeed(
   const recentLogs = logs.slice(0, 5)
   let failedSessions = 0
   for (const log of recentLogs) {
-    const hasFailures = log.exercises.some(e => 
-      e.notes?.toLowerCase().includes('fail') || 
-      e.notes?.toLowerCase().includes('missed')
-    )
+    // [WORKOUT-EXERCISE-NOTES-RUNTIME-ONLY] WorkoutExercise type does
+    // not declare `notes`, but logged history may carry it. Read via
+    // a guarded local cast; never `as any`.
+    const hasFailures = log.exercises.some(e => {
+      const notes = (e as { notes?: unknown }).notes
+      const noteText =
+        typeof notes === 'string'
+          ? notes
+          : Array.isArray(notes)
+            ? notes.filter((n): n is string => typeof n === 'string').join(' ')
+            : ''
+      return noteText.toLowerCase().includes('fail') ||
+        noteText.toLowerCase().includes('missed')
+    })
     if (hasFailures) failedSessions++
   }
   if (failedSessions >= 2) {
@@ -768,7 +778,17 @@ export function getReadinessAssessment(): ReadinessAssessment {
   // Count recent failures
   let failuresRecent = 0
   for (const log of sortedLogs.slice(0, 5)) {
-    if (log.exercises.some(e => e.notes?.toLowerCase().includes('fail'))) {
+    // [WORKOUT-EXERCISE-NOTES-RUNTIME-ONLY]
+    if (log.exercises.some(e => {
+      const notes = (e as { notes?: unknown }).notes
+      const noteText =
+        typeof notes === 'string'
+          ? notes
+          : Array.isArray(notes)
+            ? notes.filter((n): n is string => typeof n === 'string').join(' ')
+            : ''
+      return noteText.toLowerCase().includes('fail')
+    })) {
       failuresRecent++
     }
   }

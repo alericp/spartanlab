@@ -675,11 +675,6 @@ function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 
       ['handstand_hold', 'wall_slides'],
       ['face_pull', 'rear_delt'],
     ],
-    back_lever: [
-      ['skin_the_cat', 'shoulder_extension'],
-      ['german_hang', 'bicep_curl'],
-      ['rear_delt', 'core_work'],
-    ],
     iron_cross: [
       ['ring_support', 'cross_pull'],
       ['wide_ring_fly', 'bicep_curl'],
@@ -695,16 +690,13 @@ function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 
       ['rows', 'push_ups'],
       ['accessory_arm', 'core'],
     ],
-    general: [
-      ['pull', 'push'],
-      ['core', 'mobility'],
-      ['accessory', 'conditioning'],
-    ],
   }
-  
+
+  // [SKILL-RECORD-NO-GENERAL] SkillType records no longer carry a
+  // 'general' fallback entry; use an empty array fallback instead.
   const variantIndex = variant === 'primary' ? 0 : variant === 'secondary' ? 1 : 2
-  const skillSupport = baseSupport[skill] || baseSupport.general
-  const focus = [...(skillSupport[variantIndex] || skillSupport[0])]
+  const skillSupport = baseSupport[skill] || []
+  const focus = [...(skillSupport[variantIndex] || skillSupport[0] || [])]
   
   // Add constraint-specific focus if relevant
   if (constraint) {
@@ -829,10 +821,11 @@ function getSkillMovementFamilies(skill: SkillType): MovementFamily[] {
     iron_cross: ['straight_arm_pull', 'straight_arm_push'],
     l_sit: ['compression_core', 'hip_hinge'],
     weighted_strength: ['vertical_pull', 'vertical_push', 'horizontal_pull', 'horizontal_push'],
-    general: ['vertical_pull', 'vertical_push', 'compression_core'],
   }
-  
-  return skillFamilyMap[skill] || skillFamilyMap.general
+
+  // [SKILL-RECORD-NO-GENERAL] empty array fallback in place of legacy
+  // 'general' entry.
+  return skillFamilyMap[skill] || []
 }
 
 // =============================================================================
@@ -870,11 +863,6 @@ export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
       variantB: ['wall_hspu_negative', 'elevated_pike', 'face_pull'],
       variantC: ['box_hspu', 'wall_walk', 'rear_delt_fly'],
     },
-    back_lever: {
-      variantA: ['skin_the_cat', 'german_hang', 'bicep_curl'],
-      variantB: ['back_lever_raise', 'shoulder_extension', 'rear_support'],
-      variantC: ['back_lever_negative', 'ring_row_supinated', 'core_rotation'],
-    },
     iron_cross: {
       variantA: ['ring_support', 'cross_pull', 'ring_fly'],
       variantB: ['rto_support', 'wide_pull', 'tendon_conditioning'],
@@ -890,14 +878,10 @@ export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
       variantB: ['weighted_chin_up', 'ring_dip', 'push_up'],
       variantC: ['one_arm_row', 'close_grip_dip', 'archer_pull'],
     },
-    general: {
-      variantA: ['pull_up', 'push_up', 'hollow_hold'],
-      variantB: ['row', 'dip', 'plank'],
-      variantC: ['chin_up', 'pike_push', 'dead_bug'],
-    },
   }
-  
-  return variants[skill] || variants.general
+
+  // [SKILL-RECORD-NO-GENERAL] empty variation set fallback.
+  return variants[skill] || { variantA: [], variantB: [], variantC: [] }
 }
 
 // =============================================================================

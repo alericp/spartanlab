@@ -1164,17 +1164,42 @@ export async function generateIntelligentWarmup(
 ): Promise<GeneratedWarmUp> {
   try {
     // Build prehab context from warmup context
+    // [INTELLIGENT-PREHAB-CONTEXT-CURRENT-SHAPE] same migration as
+    // session-assembly-engine.
+    const sessionDuration =
+      typeof context.sessionLength === 'number'
+        ? context.sessionLength
+        : context.sessionLength === '10-20'
+          ? 20
+          : context.sessionLength === '20-30'
+            ? 30
+            : context.sessionLength === '30-45'
+              ? 45
+              : context.sessionLength === '45-60'
+                ? 60
+                : 75
+
     const prehabContext: IntelligentPrehabContext = {
-      mainExercises: context.mainExercises.map(ex => ({
+      plannedExercises: context.mainExercises.map(ex => ({
         id: ex.id,
         name: ex.name,
-        category: ex.category,
-        movementPattern: ex.movementPattern,
-        primaryMuscles: ex.primaryMuscles,
+        isSkillWork: ex.category === 'skill',
+        isWeighted: ex.category === 'strength' || ex.category === 'weighted',
+        isExplosive: ex.movementPattern?.includes('explosive') ?? false,
       })),
-      sessionLength: context.sessionLength,
-      athleteWeakPoints,
-      sessionFocus: sessionFocus || 'skill',
+      sessionDuration,
+      skillGoals: [],
+      hasRings: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('ring')
+      ),
+      hasWeights: context.mainExercises.some(ex =>
+        ex.category === 'weighted' ||
+        ex.category === 'strength' ||
+        ex.name.toLowerCase().includes('weighted')
+      ),
+      hasBands: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('band')
+      ),
     }
     
     // Get intelligent prehab recommendation

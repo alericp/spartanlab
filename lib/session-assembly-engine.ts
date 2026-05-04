@@ -722,17 +722,44 @@ export interface MobilityActivationContext {
 export function generateIntelligentMobilityBlock(context: MobilityActivationContext): SessionBlock {
   try {
     // Convert to prehab context
+    // [INTELLIGENT-PREHAB-CONTEXT-CURRENT-SHAPE] PrehabGenerationContext
+    // expects plannedExercises/sessionDuration/skillGoals/hasRings/
+    // hasWeights/hasBands. Map session-length buckets to a numeric
+    // duration before calling into the prehab engine.
+    const sessionDuration =
+      typeof context.sessionLength === 'number'
+        ? context.sessionLength
+        : context.sessionLength === '10-20'
+          ? 20
+          : context.sessionLength === '20-30'
+            ? 30
+            : context.sessionLength === '30-45'
+              ? 45
+              : context.sessionLength === '45-60'
+                ? 60
+                : 75
+
     const prehabContext: IntelligentPrehabContext = {
-      mainExercises: context.mainExercises.map((ex, idx) => ({
+      plannedExercises: context.mainExercises.map((ex, idx) => ({
         id: `ex_${idx}`,
         name: ex.name,
-        category: ex.category as any,
-        movementPattern: ex.movementPattern as any,
-        primaryMuscles: ex.primaryMuscles,
+        isSkillWork: ex.category === 'skill',
+        isWeighted: ex.category === 'strength' || ex.category === 'weighted',
+        isExplosive: ex.movementPattern?.includes('explosive') ?? false,
       })),
-      sessionLength: context.sessionLength,
-      athleteWeakPoints: context.athleteWeakPoints,
-      sessionFocus: 'skill',
+      sessionDuration,
+      skillGoals: [],
+      hasRings: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('ring')
+      ),
+      hasWeights: context.mainExercises.some(ex =>
+        ex.category === 'weighted' ||
+        ex.category === 'strength' ||
+        ex.name.toLowerCase().includes('weighted')
+      ),
+      hasBands: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('band')
+      ),
     }
     
     // Generate intelligent prehab

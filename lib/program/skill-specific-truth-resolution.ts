@@ -377,7 +377,8 @@ export function resolvePatternResponse(
   // Check training response for completion/adherence signals
   if (bundle.trainingResponse?.meta?.available) {
     const adherence = bundle.trainingResponse.recentAdherencePattern
-    if (adherence === 'declining' || adherence === 'sporadic') {
+    // [ADHERENCE-PATTERN-UNION-CURRENT] declining is impossible.
+    if (adherence === 'sporadic') {
       response.lastSessionQuality = 'partial'
       response.recoveryAdequate = false
     } else if (adherence === 'consistent') {
@@ -548,11 +549,11 @@ function inferToleranceSignal(
   }
   
   // Fall back to adherence pattern
+  // [ADHERENCE-PATTERN-UNION-CURRENT] declining/improving impossible.
   const adherence = bundle.trainingResponse?.recentAdherencePattern
-  if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+  if (adherence === 'sporadic') return 'poor'
   if (adherence === 'consistent') return 'good'
-  if (adherence === 'improving') return 'moderate'
-  
+
   return 'unknown'
 }
 

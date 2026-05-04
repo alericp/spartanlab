@@ -442,10 +442,10 @@ export function detectWeakPoints(): WeakPointSummary {
     secondaryGoal: benchmarks.secondaryGoal,
     pullUpMax: benchmarks.pullUpMax,
     dipMax: benchmarks.dipMax,
-    // [WEAK-POINT-DETECTION-WEIGHTED-LOAD-CANONICAL] `.load` is the
-    // canonical WeightedBenchmark numeric field.
-    weightedPullUp: benchmarks.weightedPullUp?.load || 'none',
-    weightedDip: benchmarks.weightedDip?.load || 'none',
+    // [WEIGHTED-BENCHMARK-ADDED-WEIGHT] WeightedBenchmark exposes
+    // `addedWeight`/`reps`; legacy `.load` was renamed.
+    weightedPullUp: benchmarks.weightedPullUp?.addedWeight ?? 'none',
+    weightedDip: benchmarks.weightedDip?.addedWeight ?? 'none',
     frontLeverProgression: benchmarks.frontLeverProgression,
     plancheProgression: benchmarks.plancheProgression,
     jointCautions: benchmarks.jointCautions?.length || 0,

@@ -37,7 +37,7 @@ import {
   type MethodDecisionStampSummary,
   type MethodDecisionProfileSnapshotLike,
 } from '@/lib/program/method-decision-engine'
-import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
+import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence, type TruthTriggerSource } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
 import { 
@@ -857,7 +857,10 @@ export async function executeAuthoritativeGeneration(
         normalizedBuilderInput as AdaptiveProgramInputs,
         builderStageCallback,
         {
-          canonicalProfileOverride,
+          // [CANONICAL-PROFILE-OVERRIDE-CAST] cast to CanonicalProgrammingProfile
+          // at the option boundary; the same cast is used downstream
+          // when reading back canonicalProfileOverride.
+          canonicalProfileOverride: canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
           isFreshBaselineBuild: request.isFreshBaselineBuild,
           // [AUTHORITATIVE-INGRESS-UNIFICATION] Pass the ONE bundle - builder will reuse, not rebuild
           preBuiltProgrammingTruthBundle: authoritativeProgrammingTruthBundle,
@@ -1119,17 +1122,23 @@ export async function executeAuthoritativeGeneration(
     // ==========================================================================
     markStage('truth_extraction_start')
     
+    // [TRUTH-TRIGGER-SOURCE-NORMALIZE] TruthTriggerSource lacks the
+    // local 'rebuild' literal; map it to 'main_build' before calling
+    // into the truth extractor / explainer.
+    const truthTriggerSource: TruthTriggerSource =
+      request.triggerSource === 'rebuild' ? 'main_build' : request.triggerSource
+
     const truthExtraction = extractProgramTruth(
       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
       request.builderInputs,
-      request.triggerSource
+      truthTriggerSource
     )
     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
     
     program = attachTruthExplanation(
       program,
       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
-      request.triggerSource
+      truthTriggerSource
     )
     
     console.log('[authoritative-generation-truth-attached]', {
@@ -1316,15 +1325,29 @@ export async function executeAuthoritativeGeneration(
     
     // [WEEK-ADAPTATION-DECISION-CONTRACT] Elevate week adaptation decision to first-class program field
     // This ensures the week-level dosage/adaptation decisions are accessible and traceable
+    // [WEEK-ADAPTATION-DECISION-CURRENT-CONTRACT]
+    // AdaptiveProgram.weekAdaptationDecision exposes phase/confidence/
+    // targetDays/dayCountReason/loadStrategy/firstWeekGovernor/
+    // complexityContext/adaptationSummary/decidedAt. The legacy
+    // triggerSource/doctrineConstraints/evidence keys are not part of
+    // the program-level contract.
     program.weekAdaptationDecision = {
       phase: weekAdaptationDecision.phase,
       targetDays: weekAdaptationDecision.targetDays,
       confidence: weekAdaptationDecision.confidence,
-      triggerSource: weekAdaptationDecision.triggerSource,
+      dayCountReason: weekAdaptationDecision.dayCountReason,
       loadStrategy: weekAdaptationDecision.loadStrategy,
       firstWeekGovernor: weekAdaptationDecision.firstWeekGovernor,
-      doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
-      evidence: weekAdaptationDecision.evidence,
+      complexityContext: {
+        onboardingComplexity: weekAdaptationDecision.complexityContext.onboardingComplexity,
+        goalComplexity: weekAdaptationDecision.complexityContext.goalComplexity,
+        rawCounts: {
+          goals: weekAdaptationDecision.complexityContext.rawCounts.goals,
+          styles: weekAdaptationDecision.complexityContext.rawCounts.styles,
+          skills: weekAdaptationDecision.complexityContext.rawCounts.skills,
+        },
+      },
+      adaptationSummary: getAdaptationSummary(weekAdaptationDecision),
       decidedAt: weekAdaptationDecision.decidedAt,
     }
     
@@ -1336,17 +1359,35 @@ export async function executeAuthoritativeGeneration(
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
     // This ensures displayed progressions match actual current ability, not historical ceiling
+    // [SKILL-STRENGTH-PROFILE-CURRENT-SHAPE]
+    // AdaptiveProgram.skillStrengthProfile expects numeric capacities;
+    // CanonicalProgrammingProfile owns
+    // weightedPullUp/weightedDip (object with addedWeight) and
+    // pullUpMax/dipMax/wallHSPUReps (capacity buckets / numbers).
+    // Convert weighted benchmarks to numeric `addedWeight` and parse
+    // capacity buckets to numeric values.
+    const capacityBucketToNumber = (value: unknown): number | null => {
+      if (typeof value === 'number') return value
+      if (typeof value !== 'string') return null
+
+      const matches = value.match(/\d+/g)
+      if (!matches || matches.length === 0) return null
+
+      const parsed = Number(matches[matches.length - 1])
+      return Number.isFinite(parsed) ? parsed : null
+    }
+
     program.skillStrengthProfile = {
       // Use resolved current working progressions (respects conservative/reacquisition)
       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
-      // Weighted strength benchmarks unchanged
-      weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
-      weightedDip: canonicalProfileTyped.weightedDip || null,
-      pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
-      dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
-      wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+      // Weighted strength benchmarks: project to numeric addedWeight
+      weightedPullUp: canonicalProfileTyped.weightedPullUp?.addedWeight ?? null,
+      weightedDip: canonicalProfileTyped.weightedDip?.addedWeight ?? null,
+      pullUpCapacity: capacityBucketToNumber(canonicalProfileTyped.pullUpMax),
+      dipCapacity: capacityBucketToNumber(canonicalProfileTyped.dipMax),
+      wallHspuCapacity: capacityBucketToNumber(canonicalProfileTyped.wallHSPUReps),
       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
     }
     
@@ -1419,26 +1460,28 @@ export async function executeAuthoritativeGeneration(
           reason: d.reason,
           details: d.details || '',
         })),
-        flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+        // [SESSION-ARCHITECTURE-TRUTH-CURRENT-SHAPE] flexibilityIntegration/
+        // methodPackaging/audit.doctrineInfluenceLevel are no longer on
+        // sessionArchitectureTruth; emit safe defaults so the audit
+        // snapshot remains structurally stable.
+        flexibilityIntegration: {
           hasFlexibilityGoals: false,
-          selectedFlexibility: [],
+          selectedFlexibility: program.selectedFlexibility || [],
           integrationMode: 'none',
           affectedSessions: [],
           flexibilityTimeReserved: 0,
         },
-        methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+        methodPackaging: {
           preferredMethods: ['straight_sets'],
           actualMethodsApplied: ['straight_sets'],
           methodsLimitedBySkillQuality: [],
           packagingDecision: 'straight_sets',
           rationale: 'default',
         },
-        // [VISIBLE-DIFFERENCE-TARGETS-DROPPED] sessionArchitectureTruth
-        // no longer exposes `visibleDifferenceTargets`; safe defaults
-        // for the snapshot keep the audit row intact.
+        // [VISIBLE-DIFFERENCE-TARGETS-DROPPED]
         visibleDifferenceScore: 0,
         templateEscapeRequired: false,
-        doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+        doctrineInfluenceLevel: 'none',
       }
     }
     

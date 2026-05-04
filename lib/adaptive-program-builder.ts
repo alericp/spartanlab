@@ -20822,7 +20822,7 @@ console.log('[program-generate] Generation complete:', {
     programRationale,
     // [SESSION-STYLE-MATERIALITY] Store how session style materially affected generation
     sessionStyleMateriality: {
-      styleRequested: expandedContext.sessionStylePreference,
+      styleRequested: expandedContext.sessionStylePreference ?? null,
       styleMateriallyApplied: !!styleAdjustmentApplied,
       adjustmentReason: styleAdjustmentReason,
       exerciseCountAdjustment: styleAdjustmentApplied 
@@ -21683,12 +21683,8 @@ fatigueDecision: fatigueDecision ? {
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       jointCautions: canonicalProfile.jointCautions || [],
       selectedSkills: canonicalProfile.selectedSkills || [],
-      // TASK 3C: Include training path and goal categories in snapshot
-      // [PROFILE-SNAPSHOT-TRAINING-PATH-TYPE-DROPPED] ProfileSnapshot
-      // no longer declares `trainingPathType` — path resolution moved
-      // to the canonical training-path resolver. Stale snapshot key
-      // removed; goalCategories remains the persisted classifier.
-      goalCategories: canonicalProfile.goalCategories || [],
+      // [PROFILE-SNAPSHOT-NO-GOAL-CATEGORIES] ProfileSnapshot does not
+      // own `goalCategories`; canonical taxonomy lives elsewhere.
       selectedFlexibility: canonicalProfile.selectedFlexibility || [],
       strengthBenchmarks: {
         pullUpMax: canonicalProfile.pullUpMax,
@@ -27231,7 +27227,7 @@ function generateAdaptiveSession(
       dayFocus: string
       audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
     }>).push({
-      sessionIndex: sessionIndex,
+      sessionIndex: sessionIndex ?? 0,
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
       audit: harvestedDoctrineCausalAudit,
@@ -31067,13 +31063,16 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         // `'limited' | 'normal' | 'expanded'`). Validate at the
         // boundary so any out-of-band value collapses to `'normal'`.
         loadStrategyApplied: {
-          volumeBias: ((): 'reduced' | 'normal' | 'elevated' => {
+          // [LOAD-STRATEGY-BIAS-CURRENT-UNION] volumeBias/intensityBias
+          // narrow to the finisherBias-style union ('limited'|'normal'|
+          // 'expanded'); legacy 'elevated' literal is impossible.
+          volumeBias: ((): 'reduced' | 'normal' | 'expanded' => {
             const v = weekAdaptation.loadStrategy?.volumeBias
-            return v === 'reduced' || v === 'elevated' ? v : 'normal'
+            return v === 'reduced' || v === 'expanded' ? v : 'normal'
           })(),
-          intensityBias: ((): 'reduced' | 'normal' | 'elevated' => {
+          intensityBias: ((): 'reduced' | 'normal' | 'expanded' => {
             const v = weekAdaptation.loadStrategy?.intensityBias
-            return v === 'reduced' || v === 'elevated' ? v : 'normal'
+            return v === 'reduced' || v === 'expanded' ? v : 'normal'
           })(),
           finisherBias: ((): 'limited' | 'normal' | 'expanded' => {
             const v = weekAdaptation.loadStrategy?.finisherBias

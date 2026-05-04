@@ -867,7 +867,9 @@ export function detectWeakPoints(
   }
   
   return {
-    athleteId: profile.userId || 'unknown',
+    // [ONBOARDING-PROFILE-NO-USER-ID] OnboardingProfile does not own
+    // `userId`; weak-point output uses the canonical 'unknown' tag.
+    athleteId: 'unknown',
     skillTarget,
     evaluatedAt: new Date().toISOString(),
     
@@ -1156,12 +1158,14 @@ export function detectWeakPointsWithReadiness(
     // hollowHold/lSitHold are not on OnboardingProfile either —
     // fall back to safe defaults.
     const athleteProfile = {
-      userId: profile.userId || 'unknown',
+      // [ONBOARDING-PROFILE-NO-USER-ID]
+      userId: 'unknown',
       experienceLevel: 'intermediate' as const,
       maxPullUps: bucketToNumber(profile.pullUpMax as string | null) || 0,
       maxDips: bucketToNumber(profile.dipMax as string | null) || 0,
-      weightedPullUp: profile.weightedPullUp?.load || 0,
-      weightedDip: profile.weightedDip?.load || 0,
+      // [WEIGHTED-BENCHMARK-ADDED-WEIGHT]
+      weightedPullUp: profile.weightedPullUp?.addedWeight || 0,
+      weightedDip: profile.weightedDip?.addedWeight || 0,
       hollowHold: 0,
       lSitHold: 0,
       bodyweight: 75,

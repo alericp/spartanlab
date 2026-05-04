@@ -5561,10 +5561,12 @@ function applyMaterialityScoreAdjustments(
       })
     }
     
-    if (rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid') {
+    // [RANGE-MODE-NARROWED-MOBILITY] rangeTrainingMode is narrowed to
+    // 'mobility' here; legacy 'hybrid' branch removed.
+    if (rangeTrainingMode === 'mobility') {
       // MOBILITY MODE: Loaded work, RPE-based, strength-style recovery
       const mobilityExercises = MOBILITY_EXERCISES[rangeSkill] || []
-      const mobilityCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(3, maxExercises - selected.length)
+      const mobilityCount = Math.min(3, maxExercises - selected.length)
       
       mobilityExercises.slice(0, mobilityCount).forEach((mobEx) => {
         // Find matching exercise in pool or create reference

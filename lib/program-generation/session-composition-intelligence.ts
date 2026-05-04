@@ -843,9 +843,12 @@ export function determineMethodEligibility(
   // Check doctrine contract for method permissions (if not already blocked)
   const doctrineMethods = ctx.doctrineRuntimeContract?.methodDoctrine
   if (doctrineMethods) {
-    if (doctrineMethods.supersetsAllowed && supersets !== 'blocked') supersets = 'allowed'
-    if (doctrineMethods.circuitsAllowed && circuits !== 'blocked') circuits = 'allowed'
-    if (doctrineMethods.densityAllowed && density !== 'blocked') density = 'allowed'
+    // [METHOD-STATUS-NARROWED-DISCOURAGED] supersets/circuits/density
+    // are already narrowed away from 'blocked' at this point, so the
+    // legacy guards are impossible.
+    if (doctrineMethods.supersetsAllowed) supersets = 'allowed'
+    if (doctrineMethods.circuitsAllowed) circuits = 'allowed'
+    if (doctrineMethods.densityAllowed) density = 'allowed'
   }
   
   // Upgrade to "earned" based on context (only if not already blocked)

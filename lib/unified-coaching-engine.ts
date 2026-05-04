@@ -447,7 +447,7 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   // `equipment`; canonical + onboarding remain the truthful sources.
   const equipment = canonical.equipmentAvailable.length > 0
     ? canonical.equipmentAvailable
-    : (onboarding?.equipmentAvailable || ['pull_bar', 'dip_bars', 'floor'])
+    : (onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   
   // Determine training style - prefer DB, then infer from onboarding
@@ -783,14 +783,19 @@ function determineFatigueLevel(
   if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
   if (deload?.shouldDeload) return 'fatigued'
   
-  switch (decision.recommendation) {
-    case 'full_session':
+  // [TRAINING-DECISION-IS-STRING-UNION] TrainingDecision is a string
+  // literal union (TRAIN_AS_PLANNED/PRESERVE_QUALITY/...). Switch on
+  // the value directly; there is no `.recommendation` field.
+  switch (decision) {
+    case 'TRAIN_AS_PLANNED':
       return 'fresh'
-    case 'modified_session':
+    case 'PRESERVE_QUALITY':
       return 'normal'
-    case 'light_session':
+    case 'LIGHTEN_SESSION':
       return 'fatigued'
-    case 'rest_day':
+    case 'COMPRESS_WEEKLY_LOAD':
+      return 'fatigued'
+    case 'DELOAD_RECOMMENDED':
       return 'overtrained'
     default:
       return 'normal'
@@ -892,16 +897,13 @@ function buildProtocolContext(
   }
   
   // Get protocols using the session recommendation function
-  const allProtocols = recommendProtocolsForSession({
-    primarySkill: athleteContext.primaryGoal,
-    jointCautions: athleteContext.jointCautions as JointCaution[],
-    sessionFocus: skillContext.primarySkillState?.skill 
-      ? [skillContext.primarySkillState.skill as string]
-      : [],
-    experienceLevel: 'intermediate',
-    sessionLength: athleteContext.sessionDurationMinutes,
-    includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
-  })
+  // [RECOMMEND-PROTOCOLS-CURRENT-SIG] recommendProtocolsForSession
+  // accepts (primaryGoal, jointCautions?). Extra context fields are
+  // not part of the contract.
+  const allProtocols = recommendProtocolsForSession(
+    athleteContext.primaryGoal,
+    athleteContext.jointCautions as JointCaution[]
+  )
   
   // Categorize protocols by activation type
   // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
@@ -951,10 +953,17 @@ function buildFrameworkContext(
     skillLevels[state.skill] = levelScores[state.currentLevel] || 1
   }
   
+  // [EXPERIENCE-LEVEL-CLAMP] FrameworkSelectionInput.experienceLevel is
+  // beginner|intermediate|advanced — `elite` (training-age util) is
+  // clamped down to `advanced` here.
+  const trainingAgeLevel = getExperienceLevelFromTrainingAge(athleteContext.trainingAge)
+  const frameworkExperienceLevel: 'beginner' | 'intermediate' | 'advanced' =
+    trainingAgeLevel === 'elite' ? 'advanced' : trainingAgeLevel
+
   const input: FrameworkSelectionInput = {
     primaryGoal: athleteContext.primaryGoal,
     secondaryGoals: athleteContext.secondaryGoals,
-    experienceLevel: getExperienceLevelFromTrainingAge(athleteContext.trainingAge),
+    experienceLevel: frameworkExperienceLevel,
     trainingStyle: athleteContext.trainingStyle,
     equipment: athleteContext.equipment,
     jointCautions: athleteContext.jointCautions,

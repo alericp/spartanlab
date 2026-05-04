@@ -199,7 +199,7 @@ export function buildRankingModifiersFromBundle(
       
       for (const family of families) {
         const envelope = envelopes[family]
-        if (envelope.confidenceScore !== null) {
+        if (envelope.confidenceScore != null) {
           totalConfidence += envelope.confidenceScore
           count++
         }
@@ -248,9 +248,10 @@ export function buildRankingModifiersFromBundle(
     if (bundle.trainingResponse.hasEarnedHistory) {
       // Adherence pattern affects exercise complexity tolerance
       const adherence = bundle.trainingResponse.recentAdherencePattern
+      // [ADHERENCE-PATTERN-UNION-CURRENT] recentAdherencePattern is
+      // 'consistent' | 'sporadic' | 'unknown' | null | undefined; the
+      // legacy 'improving'/'declining' branches are impossible.
       modifiers.adherenceModifier = adherence === 'consistent' ? 5 :
-                                    adherence === 'improving' ? 3 :
-                                    adherence === 'declining' ? -5 :
                                     adherence === 'sporadic' ? -8 : 0
       
       // Consistency signal affects fatigue-sensitive selections
@@ -394,16 +395,20 @@ export function buildPrescriptionCalibrationFromBundle(
       sourceSections.push('performance_envelopes')
       
       // Volume calibration from preferred rep ranges
-      if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+      // [REP-RANGE-NULLISH-NARROW] guard both null and undefined.
+      const preferredRepRangeMin = envelope.preferredRepRangeMin
+      const preferredRepRangeMax = envelope.preferredRepRangeMax
+
+      if (preferredRepRangeMin != null && preferredRepRangeMax != null) {
         // Adjust volume target based on envelope preference
-        const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+        const envelopeCenter = (preferredRepRangeMin + preferredRepRangeMax) / 2
         const templateCenter = 8  // Typical template center
         const diff = envelopeCenter - templateCenter
-        
+
         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
-        calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+        calibration.volumeReason = `envelope_preferred_range_${preferredRepRangeMin}-${preferredRepRangeMax}`
       }
       
       // Density calibration
@@ -450,9 +455,13 @@ export function buildPrescriptionCalibrationFromBundle(
       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
     }
     
-    const hasWeakBenchmarks = 
-      (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
-      (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+    // [BENCHMARK-NULLISH-NARROW] guard both null and undefined.
+    const pullUpMax = strengthBenchmarks.pullUpMax
+    const dipMax = strengthBenchmarks.dipMax
+
+    const hasWeakBenchmarks =
+      (pullUpMax != null && pullUpMax < 5) ||
+      (dipMax != null && dipMax < 5)
     
     if (hasWeakBenchmarks) {
       // Weak benchmarks = be conservative
@@ -471,7 +480,9 @@ export function buildPrescriptionCalibrationFromBundle(
     
     const adherence = bundle.trainingResponse.recentAdherencePattern
     
-    if (adherence === 'declining' || adherence === 'sporadic') {
+    // [ADHERENCE-PATTERN-UNION-CURRENT] only 'consistent' | 'sporadic'
+    // are valid adherence flags; 'declining' is impossible here.
+    if (adherence === 'sporadic') {
       // Poor adherence = reduce volume to improve completion
       calibration.setsModifier = Math.min(calibration.setsModifier, -1)
       calibration.setsConfidence = 'medium'

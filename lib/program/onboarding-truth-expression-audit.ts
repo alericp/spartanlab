@@ -278,7 +278,9 @@ export function buildMethodPreferenceDisposition(
     finalDisposition = 'not_selected'
   } else if (actuallyApplied) {
     finalDisposition = 'materially_applied'
-  } else if (eligibilityStatus === 'blocked' || eligibilityStatus === 'discouraged') {
+  } else if (eligibilityStatus === 'discouraged') {
+    // [ELIGIBILITY-STATUS-NARROWED] 'blocked' is no longer reachable
+    // here; only 'discouraged' remains as a doctrine block reason.
     finalDisposition = 'blocked_by_doctrine'
     blockReason = `method_eligibility_${eligibilityStatus}`
   } else if (methodReadinessGating?.some(g => g.gatedFromComplex)) {

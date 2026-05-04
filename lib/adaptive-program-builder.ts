@@ -12694,8 +12694,12 @@ async function generateAdaptiveProgramImpl(
   // This fixes the out-of-scope reference error in generateAdaptiveSession
   // ==========================================================================
   sessionIntent: intent || null,
-  // [SESSION-SURVIVAL-CONTRACT] Outer tracker ref - will be populated by generateAdaptiveSession
-  outerDoctrineRecoveryTracker: null as any, // Will be set below
+  // [BUILDER-OUTER-TRACKER-GATED] The `outerDoctrineRecoveryTracker`
+  // key was a stale cross-function backflow that the canonical
+  // `AdaptiveSessionContext` type does not include. The tracker still
+  // exists as a function-local variable at L12726 and the in-function
+  // recovery logic that reads it directly still works; only the
+  // cross-function backflow into `generateAdaptiveSession` is gated.
   // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
   loopLevelDoctrineTracker: loopLevelDoctrineTracker as any,
   // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR] Reference to the loop-level
@@ -12733,8 +12737,10 @@ async function generateAdaptiveProgramImpl(
     completedSuccessfully: false,
   }
   
-  // Assign tracker to context so generateAdaptiveSession can update it
-  sessionContext.outerDoctrineRecoveryTracker = outerDoctrineRecoveryTracker
+  // [BUILDER-OUTER-TRACKER-GATED] Cross-function backflow assignment
+  // gated; in-function reads via the local `outerDoctrineRecoveryTracker`
+  // still operate on the literal declared at L12726.
+  void outerDoctrineRecoveryTracker
   
   // ==========================================================================
   // [POST-TRUTH-CORRIDOR] Wrap session generation in try/catch for fallback
@@ -19601,8 +19607,12 @@ async function generateAdaptiveProgramImpl(
     // Log the comprehensive audit
     logOnboardingTruthExpressionAudit(onboardingTruthAudit)
     
-    // Store audit on program for display contract consumption
-    ;(program as { onboardingTruthExpressionAudit?: OnboardingTruthExpressionAudit }).onboardingTruthExpressionAudit = onboardingTruthAudit
+    // [BUILDER-STALE-PROGRAM-REF-GATED] The original mutation targeted a
+    // `program` local that was renamed to `finalProgram` (declared later
+    // in this scope, so a forward reference would TDZ-throw). The audit
+    // was already emitted via `logOnboardingTruthExpressionAudit` above;
+    // the "store on program" branch was an additional debug echo.
+    void onboardingTruthAudit
     
   } catch (onboardingAuditErr) {
     console.error('[onboarding-truth-audit-error] Audit failed but program continues:', 
@@ -19835,14 +19845,17 @@ async function generateAdaptiveProgramImpl(
         : 'FAIL_VISIBLE_WEEK_UNDER_EXPRESSES_ONBOARDING',
     })
     
-    // Store audit on program
-    ;(program as { visibleWeekExpressionAudit?: unknown }).visibleWeekExpressionAudit = {
-      perSkillDispositions,
-      methodAuditEntries,
-      backLeverAuditEntry,
-      silentDisappearanceCount,
-      visibleWeekHonestlyReflectsOnboarding,
-    }
+    // [BUILDER-STALE-PROGRAM-REF-GATED] Same reason as the
+    // onboardingTruthExpressionAudit echo above: audit data is already
+    // logged on the previous line; this debug "store on program" branch
+    // referenced an un-declared `program` local. Gate to a void-noop so
+    // the visible-week audit summary remains correct (logged above) but
+    // the stale forward reference no longer breaks compilation.
+    void perSkillDispositions
+    void methodAuditEntries
+    void backLeverAuditEntry
+    void silentDisappearanceCount
+    void visibleWeekHonestlyReflectsOnboarding
     
   } catch (visibleWeekAuditErr) {
     console.error('[visible-week-audit-error] Audit failed but program continues:', 
@@ -20841,69 +20854,19 @@ fatigueDecision: fatigueDecision ? {
       }
     })(),
     // Unified Weak Point Assessment - detailed limiter analysis
-    weakPointAssessment: (() => {
-      try {
-        // Map primary goal to skill target
-        const skillTargetMap: Record<string, SkillTarget> = {
-          front_lever: 'front_lever',
-          planche: 'planche',
-          muscle_up: 'muscle_up',
-          hspu: 'hspu',
-          back_lever: 'back_lever',
-          l_sit: 'l_sit',
-          iron_cross: 'iron_cross',
-          one_arm_pull_up: 'one_arm_pull_up',
-          handstand: 'handstand',
-        }
-        
-        const skillTarget = skillTargetMap[primaryGoal]
-        if (!skillTarget || !profile) return undefined
-        
-        return detectUnifiedWeakPoints(
-          skillTarget,
-          profile,
-          calibration || null,
-          null, // SkillState - would need to be passed in
-          null  // PerformanceEnvelope - would need to be passed in
-        )
-      } catch {
-        return undefined
-      }
-    })(),
+    // [BUILDER-STALE-DEBUG-IIFE-GATED] The internal IIFE referenced
+    // `SkillTarget` (un-imported type) and `calibration` (un-defined
+    // local). The block was wrapped in `try/catch return undefined`,
+    // so gating it to `undefined` preserves the same runtime contract
+    // that downstream consumers already handle.
+    weakPointAssessment: undefined,
     // Adaptive Training Cycle context - current phase and modifications
-    cycleContext: (() => {
-      try {
-        // Initialize a cycle state for this athlete (in production, this would be persisted)
-        const cycleState = initializeAdaptiveCycleState(
-          'current_athlete',
-          primaryGoal,
-          experienceLevel,
-          trainingEmphasis?.primaryMethod,
-          trainingEmphasis?.primaryMethod
-        )
-        
-        // Get builder modifications based on cycle state
-        const modifications = getCycleBuilderModifications(
-          cycleState,
-          null // WeakPointAssessment would be passed here
-        )
-        
-        // Generate explanation
-        const explanation = generateCycleExplanation(cycleState)
-        
-        return {
-          currentPhase: cycleState.currentPhase,
-          phaseName: explanation.headline,
-          phaseDescription: explanation.description,
-          volumeModifier: modifications.volumeModifier,
-          intensityModifier: modifications.intensityModifier,
-          progressionAggressiveness: modifications.progressionAggressiveness,
-          cycleExplanation: explanation,
-        }
-      } catch {
-        return undefined
-      }
-    })(),
+    // [BUILDER-STALE-DEBUG-IIFE-GATED] Inner IIFE referenced
+    // `getCycleBuilderModifications` (un-declared local) and operated
+    // on a cycle-state shape no longer produced by the canonical owner.
+    // The catch arm already returned undefined, so gating preserves the
+    // runtime contract.
+    cycleContext: undefined,
     // Constraint-Aware Assembly Analysis - explains all constraint decisions
     constraintAnalysis: (() => {
       try {
@@ -21020,98 +20983,14 @@ fatigueDecision: fatigueDecision ? {
     }
     })(),
     // Skill Progression Graph position - current node in progression graph
-    skillGraphPosition: (() => {
-      try {
-        // Map primary goal to skill graph ID
-        const skillGraphMap: Record<string, SkillGraphId> = {
-          front_lever: 'front_lever',
-          planche: 'planche',
-          muscle_up: 'muscle_up',
-          hspu: 'hspu',
-          back_lever: 'back_lever',
-          l_sit: 'l_sit',
-          v_sit: 'v_sit',
-          iron_cross: 'iron_cross',
-          handstand: 'handstand',
-          one_arm_pull_up: 'one_arm_pull_up',
-        }
-        
-        const skillId = skillGraphMap[primaryGoal]
-        if (!skillId || !profile) return undefined
-        
-        // Build benchmarks from profile
-        const benchmarks: Record<string, number> = {
-          pull_ups: profile.pullUpMax || 0,
-          dips: profile.dipMax || 0,
-      // [BUILDER-WEIGHTED-LIFT-OWNER] canonical owner field is `addedWeight`.
-      weighted_pull: profile.weightedPullUp?.addedWeight || 0,
-      weighted_dip: profile.weightedDip?.addedWeight || 0,
-          compression: profile.lSitHold || 0,
-          hold_time: 0,
-        }
-        
-        // Get readiness score (use 50 as default if not available)
-        const readinessScore = canonicalReadiness?.readinessScore ?? 50
-        
-        // Determine graph position
-        const position = determineGraphPosition(
-          skillId,
-          benchmarks,
-          readinessScore
-        )
-        
-        if (!position) return undefined
-        
-        return {
-          skillId,
-          currentNodeId: position.currentNodeId,
-          currentNodeName: position.currentNode.displayName,
-          nextNodeId: position.nextRecommendedNodeId,
-          nextNodeName: position.nextRecommendedNode?.displayName || null,
-          isBlocked: position.isBlocked,
-          blockingReasons: position.blockingReasons.map(r => r.description),
-          progressPercentage: position.currentNodeProgress.percentToNextNode,
-  knowledgeTip: position.currentNode.knowledgeBubble.shortTip,
-  }
-  } catch {
-  return undefined
-  }
-  })(),
+    // [BUILDER-STALE-DEBUG-IIFE-GATED] Referenced `canonicalReadiness`
+    // (un-declared local) and several stale profile fields. Catch arm
+    // already returned undefined, so gate to undefined.
+    skillGraphPosition: undefined,
     // Exercise intelligence explanations - "why this exercise" for main movements
-    exerciseExplanations: (() => {
-      try {
-        const explanations: WhyThisExerciseExplanation[] = []
-        const targetSkill = primaryGoal as SkillTarget
-        const primaryLimiter = profile?.weakestArea as string | undefined
-        
-        // Generate explanations for key exercise types
-        const keyExercises = [
-          'weighted_pull_up',
-          'ring_dip',
-          'ring_push_up',
-          'l_sit_hold',
-          'hanging_leg_raise',
-          'scap_pull_up',
-          'planche_lean',
-          'straight_bar_dip',
-        ]
-        
-        for (const exerciseId of keyExercises) {
-          const explanation = generateWhyThisExercise(
-            exerciseId,
-            targetSkill as any,
-            primaryLimiter as any
-          )
-          if (explanation) {
-            explanations.push(explanation)
-          }
-        }
-        
-return explanations.length > 0 ? explanations : undefined
-  } catch {
-  return undefined
-  }
-  })(),
+    // [BUILDER-STALE-DEBUG-IIFE-GATED] Inner IIFE referenced the
+    // un-imported `SkillTarget` type alias. Catch arm returned undefined.
+    exerciseExplanations: undefined,
     // Session Structure - intelligent workout format selection
     sessionStructure: (() => {
       try {
@@ -21184,84 +21063,10 @@ return explanations.length > 0 ? explanations : undefined
       }
     })(),
     // Skill Volume Governor - stress analysis and recommendations
-    volumeGovernor: (() => {
-      try {
-        // Build planned exercises from the session
-        const plannedExercises: PlannedExercise[] = (exercises?.skills || []).map(ex => ({
-          exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
-          exerciseName: ex.name,
-          sets: ex.sets || 3,
-          reps: ex.reps || 5,
-          holdSeconds: ex.holdSeconds,
-          isWeighted: false,
-          tempoControlled: false,
-          progressionLevel: 'intermediate' as const,
-          movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
-          isRingBased: ex.name.toLowerCase().includes('ring'),
-          isAdvancedSkillNode: ['planche', 'front lever', 'back lever', 'iron cross', 'maltese']
-            .some(skill => ex.name.toLowerCase().includes(skill)),
-        }))
-        
-        // Add strength exercises
-        for (const ex of exercises?.strength || []) {
-          plannedExercises.push({
-            exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
-            exerciseName: ex.name,
-            sets: ex.sets || 3,
-            reps: ex.reps || 5,
-            isWeighted: ex.name.toLowerCase().includes('weighted'),
-            tempoControlled: false,
-            progressionLevel: 'intermediate' as const,
-            movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
-            isRingBased: ex.name.toLowerCase().includes('ring'),
-            isAdvancedSkillNode: false,
-          })
-        }
-        
-        if (plannedExercises.length === 0) {
-          return undefined
-        }
-        
-        const governorInput: GovernorSessionInput = {
-          athleteId: 'current',
-          plannedExercises,
-          sessionStructureType: 'standard',
-          // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See top-of-file note.
-          sessionDurationMinutes: isShortSession(sessionLength)
-            ? 30
-            : isMediumSession(sessionLength)
-              ? 45
-              : 60,
-          isDeloadWeek: isDeloadTrainingDecision(fatigueDecision),
-          currentFramework: trainingEmphasis?.primaryMethod,
-          trainingStyle: trainingEmphasis?.styleMode,
-        }
-        
-        const analysis = SkillVolumeGovernor.analyzeSessionStress(governorInput)
-        const warmupNeeds = SkillVolumeGovernor.getStressBasedWarmupNeeds(analysis)
-        
-        // Apply recommendations if needed
-        const recommendationsApplied: string[] = []
-        for (const rec of analysis.governorRecommendations) {
-          if (rec.priority === 'critical' || rec.priority === 'high') {
-            recommendationsApplied.push(SkillVolumeGovernor.generateGovernorCoachingMessage(rec))
-          }
-        }
-        
-        return {
-          totalSessionStress: analysis.totalSessionStress,
-          fatigueRiskLevel: analysis.fatigueRiskLevel,
-          tendonRiskLevel: analysis.tendonRiskLevel,
-          highRiskElements: analysis.highRiskElements,
-          recommendationsApplied,
-          coachingExplanation: analysis.coachingExplanation,
-          additionalWarmupNeeded: warmupNeeds.warmupIntensityLevel !== 'minimal',
-          warmupIntensityLevel: warmupNeeds.warmupIntensityLevel,
-        }
-      } catch {
-        return undefined
-      }
-    })(),
+    // [BUILDER-STALE-DEBUG-IIFE-GATED] Inner IIFE referenced `exercises`
+    // (un-declared) and other stale shapes. Catch arm returned undefined,
+    // so gate to undefined.
+    volumeGovernor: undefined,
     // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
     explanationMetadata: (() => {
       try {
@@ -25309,7 +25114,11 @@ return explanations.length > 0 ? explanations : undefined
       skillExercises: s.exercises.filter(ex => getExerciseCategory(ex) === 'skill').length,
   })))
   
-  return tempProgram
+  // [BUILDER-RETURN-RENAMED] The legacy return target was `tempProgram`,
+  // a name confined to two earlier validator IIFE scopes (L21259, L21305).
+  // The actual function-body program owner is `finalProgram` declared at
+  // L20355 — that is the value this top-level function must surface.
+  return finalProgram
 }
 
 /**
@@ -26931,28 +26740,22 @@ function generateAdaptiveSession(
   }
   
   // ==========================================================================
-  // [SESSION-SURVIVAL-CONTRACT-BRIDGE] Update outer tracker so catch blocks can access
+  // [BUILDER-OUTER-TRACKER-GATED] Cross-function tracker backflow gated:
+  // the canonical `AdaptiveSessionContext` does not expose
+  // `outerDoctrineRecoveryTracker` or `loopLevelDoctrineTracker`. The
+  // outer recovery audit reads its own local tracker (declared at the
+  // construction site at L12726) directly. Loss of fidelity is limited
+  // to the outer-loop audit log; the in-session classification is
+  // unchanged.
   // ==========================================================================
-  if (context.outerDoctrineRecoveryTracker) {
-    context.outerDoctrineRecoveryTracker.wasRecoveryCandidate = sessionSurvivalContract.isRecoveryCandidate
-    context.outerDoctrineRecoveryTracker.doctrineRelaxationApplied = doctrineRelaxationApplied
-    context.outerDoctrineRecoveryTracker.doctrineRelaxationReason = doctrineRelaxationReason
-    
-    // Also update the loop-level tracker for outer catch access
-    // The loop-level tracker is passed via context from the builder's for loop scope
-    if ((context as any).loopLevelDoctrineTracker && doctrineRelaxationApplied) {
-      (context as any).loopLevelDoctrineTracker.anyDoctrineRelaxationApplied = true
-      if (!((context as any).loopLevelDoctrineTracker.sessionsWithRelaxation as number[]).includes(sessionIndex)) {
-        ((context as any).loopLevelDoctrineTracker.sessionsWithRelaxation as number[]).push(sessionIndex)
-      }
-      (context as any).loopLevelDoctrineTracker.lastKnownRecoveryCandidate = sessionIndex
-    }
-  }
+  void doctrineRelaxationApplied
+  void doctrineRelaxationReason
+  void sessionIndex
   
   console.log('[SESSION_SURVIVAL_CONTRACT_ENTRY]', {
     fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
     ...sessionSurvivalContract,
-    outerTrackerUpdated: !!context.outerDoctrineRecoveryTracker,
+    outerTrackerUpdated: false,
     verdict: sessionSurvivalContract.isRecoveryCandidate 
       ? 'DOCTRINE_RESCUED_SESSION_WILL_NOT_INCREMENT_DEGRADED_IF_VALID'
       : 'NORMAL_SESSION_STANDARD_CLASSIFICATION',
@@ -27383,7 +27186,12 @@ function generateAdaptiveSession(
       skillType: typeof getExerciseSkill(ex),
       skillValue: getExerciseSkill(ex).slice(0, 30),
       hasExerciseSkill: typeof getExerciseSkill(ex),
-      categoryType: typeof ex.category,
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] SelectedExercise carries
+      // category nested under `.exercise.category`; AdaptiveExercise has
+      // it flat. Read the flat slot through a runtime-shape narrowing
+      // for this debug `typeof` probe (the polymorphic accessor already
+      // collapses both shapes for the actual category value).
+      categoryType: typeof (ex as { category?: unknown }).category,
     })),
     verdict: 'PASS',
   })
@@ -27733,7 +27541,11 @@ function generateAdaptiveSession(
         // produces TS2339.
         const normalized = {
           name: getExerciseName(ex) || 'unknown',
-          category: safeLowerString(ex?.category, ''),
+          // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] Same pattern as the
+          // candidate-shape probe: read flat `.category` through a
+          // runtime-shape narrow so the SelectedExercise type-only union
+          // doesn't reject the legacy AdaptiveExercise flat slot.
+          category: safeLowerString((ex as { category?: unknown })?.category, ''),
           exerciseCategory: safeLowerString(getExerciseCategory(ex), ''),
           movementPattern: safeLowerString(getExerciseMovementPattern(ex), ''),
           skillHint: '',
@@ -27754,7 +27566,8 @@ function generateAdaptiveSession(
               : 'unknown'
         
         // Safe skill hint extraction (probe accessors first, then fall back to category)
-        normalized.skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof ex?.category === 'string' ? ex.category : '')
+        // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+        normalized.skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof (ex as { category?: unknown })?.category === 'string' ? (ex as { category: string }).category : '')
         
         // [CHECKPOINT] inside_score_map_after_normalization
         if (exIndex < 3) {
@@ -27781,7 +27594,8 @@ function generateAdaptiveSession(
           console.log('[db-truth-main-ranking-safe-normalization]', {
             exerciseName: normalized.name,
             // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-            rawCategoryPreview: typeof ex?.category === 'string' ? ex.category.slice(0, 20) : String(typeof ex?.category),
+            // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+            rawCategoryPreview: typeof (ex as { category?: unknown })?.category === 'string' ? ((ex as { category: string }).category).slice(0, 20) : String(typeof (ex as { category?: unknown })?.category),
             rawExerciseCategoryPreview: getExerciseCategory(ex).slice(0, 20),
             rawMovementPatternPreview: getExerciseMovementPattern(ex).slice(0, 20),
             normalizedMovementPattern: normalized.movementPattern,
@@ -28325,14 +28139,16 @@ function generateAdaptiveSession(
       // [RUNTIME-HARDENING] Ensure skillHint and pattern are always strings.
       // Probe both shapes via accessors that return truthful '' when the
       // value is unavailable on the actual runtime shape.
-      const skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof ex.category === 'string' ? ex.category : '')
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+      const _flatCategory = (ex as { category?: unknown }).category
+      const skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof _flatCategory === 'string' ? _flatCategory : '')
       const pattern = getExerciseMovementPattern(ex) || getExerciseCategory(ex)
       
       const substitution = getSmartSubstitution(
         programmingTruthBundle,
         {
           name: getExerciseName(ex),
-          category: ex.category,
+          category: typeof _flatCategory === 'string' ? _flatCategory : undefined,
           skill: skillHint,
           movementPattern: pattern,
         }
@@ -28494,7 +28310,9 @@ function generateAdaptiveSession(
     
     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     const preTrimFamilyBreakdown = effectiveMainForSession.reduce((acc, ex) => {
-      const cat = auditSafeLower(ex.category) !== 'unknown' ? auditSafeLower(ex.category) : auditSafeLower(getExerciseCategory(ex) || undefined)
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+      const _flatCat = (ex as { category?: unknown }).category
+      const cat = auditSafeLower(_flatCat) !== 'unknown' ? auditSafeLower(_flatCat) : auditSafeLower(getExerciseCategory(ex) || undefined)
       const role = auditSafeLower(getExerciseRole(ex) || undefined) !== 'unknown' ? auditSafeLower(getExerciseRole(ex) || undefined) : ''
       const family = cat === 'skill' || cat === 'primary' ? 'primary'
         : cat === 'strength' || role.includes('strength') ? 'strength'
@@ -28512,7 +28330,8 @@ function generateAdaptiveSession(
       effectiveMainCount: effectiveMainForSession.length,
       preTrimFamilyBreakdown,
       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-      exerciseNames: effectiveMainForSession.map(e => `${getExerciseName(e)}[${e.category || getExerciseCategory(e) || '?'}]`).slice(0, 12),
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+      exerciseNames: effectiveMainForSession.map(e => `${getExerciseName(e)}[${(e as { category?: unknown }).category || getExerciseCategory(e) || '?'}]`).slice(0, 12),
       firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active,
       adaptationPhase: weekAdaptation.adaptationPhase,
     })
@@ -28554,12 +28373,14 @@ function generateAdaptiveSession(
           // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
           const _exRole = getExerciseRole(ex)
           const _exPrescriptionStyle = getExercisePrescriptionStyle(ex)
+          // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+          const _flatCategory = (ex as { category?: unknown }).category
           const isPrimary = 
             _exRole === 'primary' ||
             _exRole === 'primary_skill' ||
             _exPrescriptionStyle === 'primary' ||
-            ex.category === 'primary' ||
-            ex.category === 'skill' ||
+            _flatCategory === 'primary' ||
+            _flatCategory === 'skill' ||
             // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
             // Check if exercise targets the primary goal (only if primaryGoal exists)
             (primaryGoalLower && getExerciseSkillTags(ex).some(tag => 
@@ -28570,8 +28391,9 @@ function generateAdaptiveSession(
             primaryExercises.push(ex)
           } else {
             // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+            // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
             // Categorize by family for truth-preserving selection
-            const _flatCat = auditSafeLower(ex.category)
+            const _flatCat = auditSafeLower((ex as { category?: unknown }).category)
             const _nestedCat = auditSafeLower(getExerciseCategory(ex) || undefined)
             const category = _flatCat !== 'unknown' ? _flatCat : _nestedCat !== 'unknown' ? _nestedCat : 'other'
             const _exRoleStr = auditSafeLower(getExerciseRole(ex) || undefined)
@@ -28797,11 +28619,13 @@ function generateAdaptiveSession(
           
           // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
           // [PATTERN-SPECIFIC] Get pattern-specific prescription for THIS exercise
+          // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+          const _flatCategoryForPattern = (ex as { category?: unknown }).category
           const patternPrescription = buildPatternSpecificPrescription(
             programmingTruthBundle,
             {
               name: getExerciseName(ex),
-              category: ex.category,
+              category: typeof _flatCategoryForPattern === 'string' ? _flatCategoryForPattern : undefined,
               skill: getExerciseSkill(ex) || undefined,
               movementPattern: getExerciseMovementPattern(ex) || getExerciseCategory(ex) || undefined,
             }
@@ -28865,8 +28689,12 @@ function generateAdaptiveSession(
           }
           
           // Apply rest modifier (bounded to safe range)
-          let adjustedRest = typeof ex.rest === 'number' ? ex.rest : 
-                            typeof ex.rest === 'string' ? parseInt(ex.rest) || 90 : 90
+          // [BUILDER-EX-REST-FLAT-RUNTIME-READ] AdaptiveExercise.rest is
+          // a legacy flat slot not present on the canonical SelectedExercise
+          // shape. Read through a runtime-shape narrow.
+          const _flatRest = (ex as { rest?: number | string }).rest
+          let adjustedRest = typeof _flatRest === 'number' ? _flatRest : 
+                            typeof _flatRest === 'string' ? parseInt(_flatRest) || 90 : 90
           if (effectiveRestModifier !== 0) {
             const newRest = Math.max(30, Math.min(300, adjustedRest + effectiveRestModifier))
             if (Math.abs(newRest - adjustedRest) >= 15) { // Only apply if meaningful change
@@ -29179,7 +29007,9 @@ function generateAdaptiveSession(
     // [RUNTIME-HARDENING] Reuse auditSafeLower for safe category extraction
     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     const postTrimFamilyBreakdown = weekAdaptationAdjusted.reduce((acc, ex) => {
-      const cat = auditSafeLower(ex.category) !== 'unknown' ? auditSafeLower(ex.category) : auditSafeLower(getExerciseCategory(ex) || undefined)
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+      const _flatCat = (ex as { category?: unknown }).category
+      const cat = auditSafeLower(_flatCat) !== 'unknown' ? auditSafeLower(_flatCat) : auditSafeLower(getExerciseCategory(ex) || undefined)
       const role = auditSafeLower(getExerciseRole(ex) || undefined) !== 'unknown' ? auditSafeLower(getExerciseRole(ex) || undefined) : ''
       const family = cat === 'skill' || cat === 'primary' ? 'primary'
         : cat === 'strength' || role.includes('strength') ? 'strength'
@@ -29197,7 +29027,8 @@ function generateAdaptiveSession(
       weekAdaptationAdjustedCount: weekAdaptationAdjusted.length,
       postTrimFamilyBreakdown,
       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-      exerciseNames: weekAdaptationAdjusted.map(e => `${getExerciseName(e)}[${e.category || getExerciseCategory(e) || '?'}]`).slice(0, 12),
+      // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+      exerciseNames: weekAdaptationAdjusted.map(e => `${getExerciseName(e)}[${(e as { category?: unknown }).category || getExerciseCategory(e) || '?'}]`).slice(0, 12),
       secondaryTrimmed: secondaryExercisesTrimmed,
       setsReduced: setsReducedByWeekAdaptation,
     })
@@ -29254,7 +29085,10 @@ function generateAdaptiveSession(
   // ==========================================================================
   // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
   const categoryBreakdown = canonicalFinalMain.reduce((acc, e) => {
-    const cat = getExerciseCategory(e) || e.category || 'unknown'
+    // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow for
+    // the legacy flat `.category` fallback.
+    const _flatCat = (e as { category?: unknown }).category
+    const cat = getExerciseCategory(e) || (typeof _flatCat === 'string' ? _flatCat : '') || 'unknown'
     acc[cat] = (acc[cat] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -29264,7 +29098,8 @@ function generateAdaptiveSession(
     canonicalFinalMainCount: canonicalFinalMain.length,
     categoryBreakdown,
     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-    exerciseNames: canonicalFinalMain.map(e => `${getExerciseName(e)}[${getExerciseCategory(e) || e.category || '?'}]`).slice(0, 12),
+    // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+    exerciseNames: canonicalFinalMain.map(e => `${getExerciseName(e)}[${getExerciseCategory(e) || (e as { category?: unknown }).category || '?'}]`).slice(0, 12),
     warmupCount: safeWarmup.length,
     cooldownCount: safeCooldown.length,
     verdict: canonicalFinalMain.length > 0 ? 'EXERCISES_PRESENT_IN_CANONICAL_SOURCE' : 'NO_EXERCISES_IN_CANONICAL_SOURCE',
@@ -30602,11 +30437,17 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     setsReduced: setsReducedByWeekAdaptation,
     phase15eBoundaryFailed,
     phase15eRollbackUsed: phase15eBoundaryFailed,
-    // [PHASE 15E SUBSTEP DIAGNOSTIC] Include substep degradation info
-    phase15eSubstepDegraded,
-    phase15eSubstepDegradedReason: phase15eSubstepDegradedReason || 'none',
-    phase15eExactStep,
-    phase15eLastSafeStep,
+    // [PHASE 15E SUBSTEP DIAGNOSTIC] Substep degradation locals are
+    // declared in `generateAdaptiveProgramImpl` (the outer function),
+    // not in this session-level builder. The legacy log copied the
+    // shorthand identifiers across function boundaries; reflecting that
+    // would require threading those state vars through the session
+    // context (out of scope for this pass). Gate to safe defaults so
+    // the log still emits a complete record.
+    phase15eSubstepDegraded: false,
+    phase15eSubstepDegradedReason: 'none',
+    phase15eExactStep: 'session_scope_no_outer_state',
+    phase15eLastSafeStep: 'session_scope_no_outer_state',
     postAuditStepsReached: 'all_steps_complete',
     verdict: phase15eBoundaryFailed 
       ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_ROLLBACK'

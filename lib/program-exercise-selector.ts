@@ -5522,7 +5522,12 @@ function applyMaterialityScoreAdjustments(
     const isRangeSkill = ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(primaryGoal)
     const rangeSkill = isRangeSkill ? primaryGoal as RangeSkill : 'toe_touch'
     
-    if (rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid') {
+    const includeFlexibilityRange =
+      rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid'
+    const includeMobilityRange =
+      rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid'
+
+    if (includeFlexibilityRange) {
       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
       // [SELECTOR-EQUIPMENT-NORMALIZE] Use the normalized
       // `equipmentList` alias declared at the top of selectMainExercises
@@ -5548,7 +5553,7 @@ function applyMaterialityScoreAdjustments(
       })
       
       // Flexibility: 15s holds, 3 rounds
-      const flexCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(4, maxExercises - 1)
+      const flexCount = includeMobilityRange ? 2 : Math.min(4, maxExercises - 1)
       sortedFlexExercises.slice(0, flexCount).forEach((exercise) => {
         addExercise(
           selectorCtx,
@@ -5561,12 +5566,10 @@ function applyMaterialityScoreAdjustments(
       })
     }
     
-    // [RANGE-MODE-NARROWED-MOBILITY] rangeTrainingMode is narrowed to
-    // 'mobility' here; legacy 'hybrid' branch removed.
-    if (rangeTrainingMode === 'mobility') {
+    if (includeMobilityRange) {
       // MOBILITY MODE: Loaded work, RPE-based, strength-style recovery
       const mobilityExercises = MOBILITY_EXERCISES[rangeSkill] || []
-      const mobilityCount = Math.min(3, maxExercises - selected.length)
+      const mobilityCount = includeFlexibilityRange ? 2 : Math.min(3, maxExercises - selected.length)
       
       mobilityExercises.slice(0, mobilityCount).forEach((mobEx) => {
         // Find matching exercise in pool or create reference

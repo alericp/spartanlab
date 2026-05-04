@@ -258,9 +258,9 @@ export function getWeekAdaptationDisplay(program: AdaptiveProgram): WeekAdaptati
         decision.loadStrategy.intensityBias === 'reduced',
       targetDays: decision.targetDays,
       loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
-      doctrineConstraints: decision.doctrineConstraints,
+      doctrineConstraints: [],
       isFirstWeekProtected: decision.firstWeekGovernor.active,
-      evidence: decision.evidence,
+      evidence: [],
       source: 'weekAdaptationDecision',
     }
   }
@@ -541,7 +541,7 @@ export function getOmittedSkillDisplay(program: AdaptiveProgram): OmittedSkillDi
   if (weeklyRep?.policies) {
     const supportCoverage = weeklyRep.policies.filter(p => 
       deferredSkills.includes(p.skill) && 
-      (p.representationVerdict === 'support_only' || p.representationVerdict === 'carryover_only')
+      p.representationVerdict === 'broadly_represented'
     )
     if (supportCoverage.length > 0) {
       return {
@@ -3675,11 +3675,11 @@ export function buildExerciseCardContract(
     const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
     const catLower = categoryLower
     const exprMode = expressionMode
-    const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+    const roleSession = ''
     const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
     
     // PRIORITY 1: Protection / tissue management
-    if (isProtected || prescriptionIntent === 'protection') {
+    if (isProtected) {
       intensityBadge = rpe <= 7 
         ? `RPE ${rpe} · tissue-safe load`
         : `RPE ${rpe} · managed for longevity`
@@ -5708,11 +5708,7 @@ export function buildExerciseRowSurface(
     source = 'authoritative'
   } else if (categoryLower === 'strength') {
     // Generic strength — use movement family if available
-    if (movementFamily === 'pull') {
-      intentLabel = 'Pulling strength'
-    } else if (movementFamily === 'push') {
-      intentLabel = 'Pressing strength'
-    } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
       intentLabel = 'Strength overload'
     } else if (sessionIntent.includes('volume')) {
       intentLabel = 'Strength volume'

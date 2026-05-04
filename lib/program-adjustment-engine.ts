@@ -457,7 +457,7 @@ export function swapExercise(
   
   // Build context for exercise intelligence
   const context: ExerciseIntelligenceContext = {
-    experienceLevel: (profile?.experienceLevel as 'beginner' | 'intermediate' | 'advanced') || 'intermediate',
+    experienceLevel: 'intermediate',
     availableEquipment,
     // REGRESSION GUARD: Only use fallback if profile truly has no goal
     primaryGoal: actualGoal || 'general',  // 'general' not 'front_lever' to avoid goal pollution
@@ -483,7 +483,7 @@ export function swapExercise(
     newExercise: replacement?.exerciseId || exerciseId,
     swapReason: reasonMessages[reason],
     progressionContinuity: true,
-    alternativeOptions: replacement?.alternatives?.map(a => a.exerciseId) || [],
+    alternativeOptions: [],
   }
 }
 

@@ -566,8 +566,10 @@ export function calculateAllProjections(): GoalProjection[] {
 }
 
 export function calculateProjectionForPrimaryGoal(): GoalProjection | null {
+  // [GOAL-PROJECTION-PROFILE-NULL-GUARD] `getAthleteProfile()` can
+  // return null in server contexts.
   const profile = getAthleteProfile()
-  
+  if (!profile) return null
   if (!profile.primaryGoal) return null
   
   const goalMap: Record<string, GoalType> = {

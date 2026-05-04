@@ -608,36 +608,46 @@ export function buildAthleteState(): AthleteState {
   // [PHASE 16L] FIX: Handle null profile in server context
   // Return a safe default state instead of crashing
   if (!profile) {
+    // [ADAPTIVE-ATHLETE-STATE-CANONICAL-FALLBACK] Canonical
+    // `AthleteState` (L31-77) owns flat fields:
+    // `currentSkillLevel` / `targetSkillLevel` (not `currentLevel`),
+    // `pullStrengthTrend` / `pushStrengthTrend` (not `strengthTrends`),
+    // `skillReadinessStatus` (not `readinessStatus`),
+    // `fatigueState` (not `fatigueLevel`),
+    // `sessionConsistency` (not `consistencyScore`),
+    // separate `primaryConstraint` / `constraintLabel` /
+    // `constraintCategory` / `constraintConfidence` (not nested
+    // `constraintFocus`), `strengthSupportLevel` (not `strengthSupport`),
+    // and `dataQuality` directly on AthleteState (no nested `state`).
     return {
       username: 'Athlete',
       experienceLevel: 'intermediate',
       primaryGoal: null,
-      // [ADAPTIVE-ATHLETE-ENGINE-PRIMARY-SKILL-DROPPED] AthleteState
-      // does not declare a `primarySkill` field — it was a legacy
-      // companion field to `primaryGoal` that has since been folded
-      // into the goal itself.
-      currentLevel: null,
-      targetLevel: null,
+      primaryGoalLabel: '',
+      currentSkillLevel: 0,
+      targetSkillLevel: 0,
+      primaryConstraint: 'insufficient_data',
+      constraintLabel: 'Insufficient Data',
+      constraintCategory: 'data',
+      constraintConfidence: 'low',
+      strengthSupportLevel: 'unknown',
+      pullStrengthTrend: 'insufficient_data',
+      pushStrengthTrend: 'insufficient_data',
+      trainingMomentum: 'insufficient_data',
       momentumScore: 0,
-      // [PLATEAU-STATUS-LITERAL-DRIFT] PlateauStatus is
-      // 'no_plateau' | 'possible_plateau' | 'plateau_detected' — there
-      // is no 'insufficient_data' value. Map to 'no_plateau' since
-      // absence of evidence is the conservative no-plateau verdict.
       plateauStatus: 'no_plateau',
-      strengthTrends: { pull: 'insufficient_data', push: 'insufficient_data' },
-      readinessStatus: null,
-      fatigueLevel: 'optimal',
-      consistencyScore: 0,
-      constraintFocus: { label: 'Insufficient Data', code: 'insufficient_data' },
-      strengthSupport: 'unknown',
-      state: {
-        hasData: false,
-        dataQuality: 'insufficient',
-        isOptimal: false,
-        needsDeload: false,
-        hasSkillData: false,
-        hasStrengthData: false,
-      },
+      fatigueState: 'optimal',
+      recoveryLevel: 'green',
+      recoveryScore: 0,
+      sessionConsistency: 0,
+      weeklyFrequency: 0,
+      recentWorkoutCount: 0,
+      skillReadinessStatus: null,
+      skillReadinessConfidence: 0,
+      deloadStatus: 'not_needed',
+      deloadScore: 0,
+      dataQuality: 'insufficient',
+      lastUpdated: new Date().toISOString(),
     }
   }
   

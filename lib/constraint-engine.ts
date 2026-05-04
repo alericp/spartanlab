@@ -79,31 +79,21 @@ export function analyzeConstraints(): ConstraintResult {
       reason: 'getAthleteProfile_returns_null_in_server_context',
       fix: 'returning_insufficient_data_result',
     })
+    // [CONSTRAINT-RESULT-CANONICAL-FALLBACK] Canonical
+    // `ConstraintResult` (types/constraint-engine.ts L43-54) owns
+    // `score`, `recommendedFocus: FocusItem[]`, and `dataQuality` —
+    // not the legacy `recommendations` / `skillSignals` /
+    // `strengthSignals` / `recoverySignals` slabs. Map the
+    // null-profile fallback onto the canonical shape.
     return {
       primaryConstraint: 'insufficient_data',
       constraintLabel: 'Insufficient Data',
       category: 'data',
       confidence: 'low',
+      score: 0,
+      recommendedFocus: [],
       explanation: 'Profile data not available in this context.',
-      recommendations: ['Complete profile setup'],
-      skillSignals: {
-        weeklyDensity: 0,
-        sessionsThisWeek: 0,
-        cleanHoldRate: 0,
-        readinessStatus: null,
-        holdTrend: 'insufficient_data',
-        hasSkillData: false,
-      },
-      strengthSignals: {
-        pullRatio: null,
-        pushRatio: null,
-        hasStrengthData: false,
-      },
-      recoverySignals: {
-        needsDeload: false,
-        fatigueScore: 0,
-        hasRecoveryData: false,
-      },
+      dataQuality: 'insufficient',
     }
   }
   

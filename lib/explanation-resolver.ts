@@ -204,26 +204,36 @@ function buildSummaryExplanation(context: ExplanationContext): ProgramExplanatio
 }
 
 function getPrimaryGoalExplanation(goal: PrimaryGoal, label: string): string {
+  // [EXPLANATION-RESOLVER-PRIMARY-GOAL-CANONICAL] `PrimaryGoal`
+  // (program-service.ts L41) is the curated programming-surface union:
+  // 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' |
+  // 'handstand_pushup' | 'iron_cross' | 'weighted_strength' |
+  // 'general' | 'skill' | 'strength' | 'endurance' | 'abs' |
+  // 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' |
+  // 'flexibility'. Skill literals like `l_sit` / `v_sit` / `maltese` /
+  // `victorian` / `straddle_planche` / `full_planche` / `one_arm_chin`
+  // / `ring_muscle_up` / `skill_variety` / `mobility_flexibility` are
+  // NOT on this union and were producing TS2353. They map onto the
+  // canonical bucket `'skill'` (or `'flexibility'` for the splits/
+  // pancake/toe-touch already in the union).
   const goalExplanations: Partial<Record<PrimaryGoal, string>> = {
     front_lever: 'Building toward front lever through straight-arm pulling and anti-extension strength.',
     planche: 'Developing planche through straight-arm pushing and protraction control.',
     muscle_up: 'Training muscle-up with transition work and pulling/pushing power.',
-    l_sit: 'Developing L-sit through compression strength and hip flexor conditioning.',
-    v_sit: 'Building V-sit through advanced compression and hamstring flexibility.',
     handstand_pushup: 'Training handstand push-up through vertical pressing and overhead stability.',
-    handstand: 'Developing handstand balance and line through positioning practice.',
     iron_cross: 'Working toward iron cross through straight-arm strength and ring stability.',
-    maltese: 'Building maltese prerequisites through advanced straight-arm work.',
-    victorian: 'Developing victorian through straight-arm pulling and lever control.',
     back_lever: 'Training back lever through straight-arm pulling and shoulder extension.',
-    straddle_planche: 'Building straddle planche through advanced protraction and lean.',
-    full_planche: 'Working toward full planche with maximum straight-arm pushing development.',
-    one_arm_chin: 'Developing one-arm chin through unilateral pulling strength.',
-    ring_muscle_up: 'Training ring muscle-up through ring-specific transition work.',
-    general_strength: 'Building overall calisthenics strength foundation.',
-    skill_variety: 'Developing multiple skills through varied practice.',
-    mobility_flexibility: 'Improving mobility and flexibility for skill prerequisites.',
-    muscle_building: 'Focused hypertrophy work for muscle development.',
+    weighted_strength: 'Building weighted pulling and pushing strength with progressive overload.',
+    general: 'Building overall calisthenics strength foundation.',
+    skill: 'Developing the chosen skill through targeted progressions and supportive strength work.',
+    strength: 'Building raw strength to support skill expression.',
+    endurance: 'Developing muscular endurance and work capacity.',
+    abs: 'Targeted core development with compression and anti-extension work.',
+    pancake: 'Improving pancake position through hip mobility and compression strength.',
+    toe_touch: 'Building toe-touch through posterior chain mobility.',
+    front_splits: 'Developing front splits through hip flexor and hamstring mobility.',
+    side_splits: 'Developing side splits through adductor and hip mobility work.',
+    flexibility: 'Improving flexibility for skill prerequisites.',
   }
   
   return goalExplanations[goal] || `Training ${label} with appropriate progression.`

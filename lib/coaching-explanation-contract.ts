@@ -317,7 +317,15 @@ export function normalizeExplanationInput(
       trainingPath: (program as unknown as { trainingPath?: string }).trainingPath || null,
       isFirstWeek: weekAdaptation?.firstWeekGovernor?.active ?? false,
       adaptationPhase: weekAdaptation?.phase || 'normal_progression',
-      doctrineConstraints: weekAdaptation?.doctrineConstraints || [],
+      // [WEEK-ADAPTATION-DECISION-EMBED-PARTIAL] AdaptiveProgram's
+      // `weekAdaptationDecision?:` embed only declares phase /
+      // loadStrategy / firstWeekGovernor / complexityContext /
+      // adaptationSummary / decidedAt — `doctrineConstraints` lives on
+      // the upstream WeekAdaptationDecision contract but is not threaded
+      // into the embed. Read defensively via a typed unknown bridge.
+      doctrineConstraints:
+        (weekAdaptation as unknown as { doctrineConstraints?: string[] } | undefined)
+          ?.doctrineConstraints || [],
     },
     week: {
       totalSessions: sessions.length,

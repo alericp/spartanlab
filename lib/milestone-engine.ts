@@ -130,8 +130,10 @@ function detectSkillMilestones(): Milestone[] {
 
 function detectStrengthMilestones(): Milestone[] {
   const records = getStrengthRecords()
+  // [MILESTONE-PROFILE-NULL-GUARD] `getAthleteProfile()` can return
+  // null in server contexts. Use optional chain with a sane default.
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight || 160
+  const bodyweight = profile?.bodyweight ?? 160
   const milestones: Milestone[] = []
   
   const exerciseLabels: Record<ExerciseType, string> = {

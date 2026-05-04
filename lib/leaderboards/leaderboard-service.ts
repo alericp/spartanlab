@@ -235,7 +235,10 @@ function generateGlobalSpartanScoreLeaderboard(timeScope: LeaderboardTimeScope =
   // Add current user with their actual subscription tier
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] AthleteProfile does not own
+    // a `username` field — display identity in the canonical contract is
+    // implicit. Fall back to `'You'` for the current-user entry.
+    displayName: 'You',
     rank: 1,
     score: score,
     scoreLabel: `${score} pts`,
@@ -282,7 +285,8 @@ function generateConsistencyLeaderboard(): LeaderboardData {
   
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] same fallback as above.
+    displayName: 'You',
     rank: 1,
     score: currentUser.streak,
     scoreLabel: `${currentUser.streak} day streak`,
@@ -318,7 +322,8 @@ function generateSkillLeaderboard(skillKey: string): LeaderboardData {
   const levelName = skillLevelNames[currentSkillLevel] || `Level ${currentSkillLevel}`
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] same fallback as above.
+    displayName: 'You',
     rank: 1,
     score: currentSkillLevel,
     scoreLabel: levelName,

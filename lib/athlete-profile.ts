@@ -1490,7 +1490,11 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
       scheduleMode: profile.scheduleMode,
       sessionDurationMode: profile.sessionDurationMode,
       sessionLengthMinutes: profile.sessionLengthMinutes,
-      trainingStyle: profile.trainingStyle,
+      // [ATHLETE-PROFILE-DEBUG-FIELD-DROPPED] `trainingStyle` is not on
+      // the canonical OnboardingProfile contract — it's debug
+      // metadata that was previously logged. Dropped from the audit
+      // payload because the canonical surface owns the equivalent
+      // (`primaryTrainingOutcome` / `trainingPathType`).
       trainingPathType: profile.trainingPathType,
       primaryGoal: profile.primaryGoal,
       secondaryGoal: profile.secondaryGoal,
@@ -1512,7 +1516,9 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
         scheduleMode: profile.scheduleMode,
         sessionDurationMode: profile.sessionDurationMode,
         sessionLengthMinutes: profile.sessionLengthMinutes,
-        experienceLevel: profile.experienceLevel,
+        // [ATHLETE-PROFILE-DEBUG-FIELD-DROPPED] `experienceLevel` is
+        // not on canonical OnboardingProfile — `trainingExperience` is.
+        // The audit log shouldn't read a non-existent field.
         primaryGoal: profile.primaryGoal,
         secondaryGoal: profile.secondaryGoal,
       },

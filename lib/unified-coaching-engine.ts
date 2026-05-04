@@ -527,7 +527,11 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
 function inferTrainingStyle(profile: OnboardingProfile | null): TrainingStyleMode {
   if (!profile) return 'balanced_hybrid'
   
-  const outcome = profile.primaryOutcome
+  // [UNIFIED-COACHING-PRIMARY-OUTCOME-CANONICAL] Canonical
+  // OnboardingProfile owns `primaryTrainingOutcome:
+  // PrimaryTrainingOutcome | null` (athlete-profile.ts L1012). The
+  // legacy `primaryOutcome` field was renamed.
+  const outcome = profile.primaryTrainingOutcome
   
   switch (outcome) {
     case 'strength':

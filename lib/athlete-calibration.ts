@@ -868,6 +868,9 @@ function buildSkillCalibrationFromCanonicalProfile(
 function isCanonicalProgrammingProfile(profile: CalibrationProfile): boolean {
   // CanonicalProgrammingProfile has flat fields like plancheProgression
   // OnboardingProfile has nested objects like planche: { progression, isAssisted }
+  // [CALIBRATION-PROFILE-NULL-GUARD] CalibrationProfile is nullable
+  // (L86) — `in` requires a non-null operand (TS18047/TS2322).
+  if (!profile) return false
   return (
     'plancheProgression' in profile ||
     'frontLeverProgression' in profile ||

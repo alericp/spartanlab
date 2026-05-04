@@ -9515,8 +9515,15 @@ async function generateAdaptiveProgramImpl(
     // ==========================================================================
     // VISIBLE WEEK NOW READS FROM AUTHORITATIVE HANDOFF BRIDGE
     // ==========================================================================
+    // [VISIBLE-WEEK-CANONICAL-INTENT] The bridge re-shapes
+    // `materialSkillIntent` into a reduced display struct (L9077+),
+    // but `buildVisibleWeekSkillExpressionContract` (L3586) demands
+    // the full `MaterialSkillIntentEntry[]` (with role, exposure
+    // target, deferral metadata). Read straight from the
+    // authoritative materiality contract so the visible-week step
+    // sees the canonical entries the bridge was derived from.
     visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
-      postAllocationOwnerBridge.materialSkillIntent,
+      multiSkillMaterialityContract.materialSkillIntent,
       multiSkillAllocationContract, // This is still needed for full structure - but bridge validates it exists
       postAllocationOwnerBridge.effectiveTrainingDays,
       postAllocationOwnerBridge.experienceLevel,
@@ -10754,7 +10761,12 @@ async function generateAdaptiveProgramImpl(
     // shape consumers expect ('poor'|'fair'|'normal'|'good') still works
     // while the value is sourced from the canonical owner.
     recoveryLevel: (canonicalProfile.recoveryQuality ?? undefined) as 'poor' | 'fair' | 'normal' | 'good' | undefined,
-    selectedTrainingStyles: normalizedStyles as TrainingStyleMode[],
+    // [TRAINING-STYLE-MODE-BRIDGE] `normalizedStyles` originates from
+    // `trainingMethodPreferences` (string-typed in the canonical
+    // profile) and is consumed by the resolver as `TrainingStyleMode[]`.
+    // Bridge through `unknown` so the soft TS2352 conversion warning
+    // is explicit (the resolver normalises invalid literals downstream).
+    selectedTrainingStyles: normalizedStyles as unknown as TrainingStyleMode[],
     trainingMethodPreferences: normalizedStyles,
     // [BUILDER-EQUIPMENT-WIDER-RUNTIME-VALUES] The static `EquipmentType`
     // union does not include 'dumbbells', 'weighted_vest', 'kettlebell' —
@@ -10978,6 +10990,15 @@ async function generateAdaptiveProgramImpl(
     durationConfig: {
       minExercises: durationConfig.minExercises,
       maxExercises: durationConfig.maxExercises,
+      // [BUILDER-DURATION-CONFIG-AUDIT-FIELDS] The post-audit input
+      // (L4900) still demands the warmup/cooldown scalars even though
+      // DurationConfig itself dropped them. Pass safe-zero fallbacks
+      // so the audit shape is satisfied — the structure engine owns
+      // the real warmup/cooldown timing downstream.
+      warmupMinutes: 0,
+      warmupExerciseCount: 0,
+      cooldownMinutes: 0,
+      cooldownExercises: 0,
     },
   })
   
@@ -11100,8 +11121,19 @@ async function generateAdaptiveProgramImpl(
     // to the structure engine alongside rep targeting. Drop the stale
     // field; the fallback is now a minimal neutral style object.
     outcomeTrainingStyle = {
-      includeEnduranceWork: false,
+      // [BUILDER-OUTCOME-STYLE-FALLBACK-COMPLETE] OutcomeTrainingStyle
+      // (L4857) requires the full neutral set; provide truthful
+      // safe-default values for every field.
+      preferHighReps: false,
+      preferLowReps: false,
       includeDensityBlocks: false,
+      includeEnduranceWork: false,
+      skillFocused: false,
+      useWeightedProgressions: false,
+      preferDropSets: false,
+      restModifier: 1,
+      includeRunning: false,
+      runningFrequency: 'none',
     }
   }
   
@@ -11672,7 +11704,11 @@ async function generateAdaptiveProgramImpl(
                       recoverySignal.level === 'LOW' ? 'light' : 'minimal',
     sorenessToleranceHigh: false,
     sessionMinutes: typeof sessionLength === 'number' ? sessionLength : 60,
-    trainingDaysPerWeek,
+    // [SELECTION-CONTEXT-NUMERIC-DAYS] SelectionContext.trainingDaysPerWeek
+    // is `number` (training-principles-engine.ts L896). The local
+    // `trainingDaysPerWeek` is `TrainingDays | 'flexible'` — coerce
+    // 'flexible' to 4 (canonical fallback used elsewhere in the file).
+    trainingDaysPerWeek: typeof trainingDaysPerWeek === 'number' ? trainingDaysPerWeek : 4,
     // [BUILDER-TRAINING-DECISION-RENAME] `TrainingDecision` is now the
     // union TRAIN_AS_PLANNED | PRESERVE_QUALITY | LIGHTEN_SESSION |
     // COMPRESS_WEEKLY_LOAD | DELOAD_RECOMMENDED (see fatigue-decision-engine.ts).
@@ -11688,7 +11724,14 @@ async function generateAdaptiveProgramImpl(
     // Read through a typed legacy slice so persisted profiles that
     // still carry the old fields continue to feed the selection
     // context, without re-introducing the fields on AthleteProfile.
-    rangeTrainingMode: (profile as { rangeTrainingMode?: string } | null)?.rangeTrainingMode || undefined,
+    // [RANGE-TRAINING-MODE-LITERAL-GUARD] SelectionContext expects the
+    // 'flexibility' | 'mobility' | 'hybrid' union. Profile carries a
+    // free-form string; validate against the canonical literals and
+    // coerce anything else to undefined.
+    rangeTrainingMode: ((): 'flexibility' | 'mobility' | 'hybrid' | undefined => {
+      const raw = (profile as { rangeTrainingMode?: string } | null)?.rangeTrainingMode
+      return raw === 'flexibility' || raw === 'mobility' || raw === 'hybrid' ? raw : undefined
+    })(),
     wantsHypertrophy: trainingOutcome === 'strength' || (profile as { goalCategory?: string } | null)?.goalCategory === 'strength',
     tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
@@ -11733,6 +11776,10 @@ async function generateAdaptiveProgramImpl(
       } as unknown as ReturnType<typeof selectMethodProfiles>['primary'],
       secondary: undefined,
       explanation: 'Default method selection applied due to selection error',
+      // [SELECTED-METHODS-SHORT-SUMMARY] SelectedMethods (L911) requires
+      // `shortSummary` alongside `explanation`. Mirror the fallback
+      // primary label so consumers always have a non-empty string.
+      shortSummary: 'Hybrid Skill Strength',
     }
   }
   
@@ -13022,7 +13069,12 @@ async function generateAdaptiveProgramImpl(
         },
         _degraded: true,
         _degradedReason: matchedPattern,
-      } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+        // [DEGRADED-FALLBACK-SESSION-BRIDGE] Intentional structural
+        // narrowing: the fallback session omits required AdaptiveSession
+        // fields (e.g. populated `cooldown`, `mainBlocks`, etc.) because
+        // a degraded path has no truthful values for them. Bridge via
+        // `unknown` so the warning is explicit, not a blind cast.
+      } as unknown as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
       
       sessionGenerationFailed = true
     }
@@ -16627,7 +16679,11 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
         },
         _degraded: true,
         _degradedReason: matchedPattern,
-      } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+        // [DEGRADED-FALLBACK-SESSION-BRIDGE] Intentional structural
+        // narrowing — same pattern as L13025. Bridge via `unknown` so
+        // the missing optional AdaptiveSession fields don't surface a
+        // soft TS2352 conversion warning.
+      } as unknown as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
       
       // [SESSION_COMMIT_GUARD] Only push fallback if real session was NOT already committed
       if (sessionCommittedToArray) {
@@ -16829,7 +16885,8 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
       // Mark as degraded
       _degraded: true,
       _degradedReason: matchedPattern,
-    } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+      // [DEGRADED-FALLBACK-SESSION-BRIDGE] Same pattern as L13025/L16635.
+    } as unknown as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
     
     // Push fallback session and continue
     sessions.push(fallbackSession)
@@ -18460,7 +18517,12 @@ let dayFocusTruthAudit: Array<{
   )
   
   // 4. Headline focus skills - small ordered subset for priority display (primary + secondary)
-  const headlineFocusSkillsCanonical = [primaryGoal]
+  // [SUMMARY-TRUTH-CONTRACT-STRING-LIST] Declared as `string[]` (not
+  // `PrimaryGoal[]`) because downstream `.includes(s)` calls compare
+  // against `weekRepresentedSkillsCanonical` / `weekSupportSkillsCanonical`
+  // which are `string[]` (canonical selectedSkills are SkillKey strings,
+  // not the curated PrimaryGoal union).
+  const headlineFocusSkillsCanonical: string[] = [primaryGoal]
   if (secondaryGoal && secondaryGoal !== primaryGoal) {
     headlineFocusSkillsCanonical.push(secondaryGoal)
   }
@@ -21137,14 +21199,18 @@ fatigueDecision: fatigueDecision ? {
           : isMediumSession(sessionLength)
             ? 45
             : 60
-        const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
+        // [BUILDER-TRAINING-EMPHASIS-CANONICAL-SHAPE] `trainingEmphasis`
+        // (declared L11825) owns `primaryMethod | secondaryMethod |
+        // explanation | coachingTip` — the legacy `styleMode` and
+        // `styleRules.densityPreference` slots were removed when the
+        // emphasis object was collapsed to method labels. Default to
+        // 'skill_focused' and treat density preference as absent.
+        const trainingStyle = 'skill_focused'
         const frameworkId = trainingEmphasis?.primaryMethod || undefined
         
         // Determine if we should use a structured format
         const shouldUseStructure = 
-          availableMinutes <= 30 || // Time-constrained
-          trainingStyle === 'endurance_focused' || // Density preference
-          (trainingEmphasis?.styleRules?.densityPreference === 'high') // High density preference
+          availableMinutes <= 30 // Time-constrained
         
         if (!shouldUseStructure) {
           return undefined // Use standard structure
@@ -21160,7 +21226,9 @@ fatigueDecision: fatigueDecision ? {
             ? 'fatigued'
             : 'normal',
           experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-          preferDensityTraining: trainingEmphasis?.styleRules?.densityPreference === 'high',
+          // [BUILDER-TRAINING-EMPHASIS-CANONICAL-SHAPE] same as above —
+          // styleRules was removed; default density preference to false.
+          preferDensityTraining: false,
           isDeloadWeek: isDeloadTrainingDecision(fatigueDecision),
         }
         
@@ -23000,6 +23068,14 @@ fatigueDecision: fatigueDecision ? {
       unmatchedGoals?: { goal: string; reason: string }[]
     }
     let phase4iFlexibilityMaterialization: Phase4iFlexMatShape | null = null
+    // [PHASE-AA4-BRIDGE-COUNTERS-HOIST] Bridge-injection telemetry was
+    // previously declared inside the materializer try block (L23095),
+    // which made it inaccessible to the AB1 ledger try block at
+    // L23258+. Hoist to the same scope as `phase4iFlexibilityMaterialization`
+    // so both the inner bridge logic and the downstream ledger
+    // builder see a single source of truth.
+    let phase4iBlocksInjected = 0
+    let phase4iSessionsInjected = 0
     try {
       const { buildDoctrineFlexibilityCooldownMaterialization } = await import(
         './program/doctrine-flexibility-cooldown-materializer'
@@ -23071,8 +23147,6 @@ fatigueDecision: fatigueDecision ? {
       //   so audit-only verdicts (NOT_RELEVANT_TO_CURRENT_PROFILE,
       //   NO_GOALS_RECOGNIZED, BLOCKED_NO_ELIGIBLE_SESSIONS) leave
       //   `session.cooldown` untouched.
-      let phase4iBlocksInjected = 0
-      let phase4iSessionsInjected = 0
       try {
         if (
           phase4iMaterialization.verdict === 'CONNECTED_AND_MATERIAL' &&
@@ -27680,7 +27754,27 @@ function generateAdaptiveSession(
       // [CHECKPOINT] before_score_map
       localCheckpoint = 'before_score_map'
       console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
-      
+
+      // [PROGRESSION-DEPTH-ADJUSTMENTS-NULL-COALESCE] The context type
+      // (L1449) is `Record<...> | null`, and the destructure default `{}`
+      // only handles the `undefined` arm — when the caller passes `null`
+      // explicitly, the binding stays null at this site. Materialise a
+      // non-null local alias once so the depth-bias lookup, the winner-
+      // provenance join, and the rollup `Object.keys/Object.values`
+      // calls all read from a guaranteed non-null Record.
+      const safeProgressionDepthAdjustments: Record<string, {
+        originalDepth: string | null
+        adjustedBias: number
+        reason: string
+        precedenceUsed: string
+        currentScore: number | null
+        historicalLevel: number | null
+        currentBeatsHistorical: boolean
+        readinessGated: boolean
+        readinessPermission: string
+        preGateBias: number
+      }> = progressionDepthAdjustments ?? {}
+
       // Apply modifiers to each exercise and track changes
       const scoredExercises = effectiveMainForSession.map((ex, exIndex) => {
         // [CHECKPOINT] inside_score_map_before_normalization
@@ -27893,12 +27987,12 @@ function generateAdaptiveSession(
           const skillKey = normalized.skillHint || ''
           const skillKeyAlt = skillKey.replace(/_/g, '')
           const adj =
-            progressionDepthAdjustments[skillKey] ||
-            progressionDepthAdjustments[skillKeyAlt] ||
+            safeProgressionDepthAdjustments[skillKey] ||
+            safeProgressionDepthAdjustments[skillKeyAlt] ||
             null
           if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
             depthBiasUsed = adj.adjustedBias
-            depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
+            depthSkillKeyUsed = adj === safeProgressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
             if (adj.adjustedBias < 0) {
               // Conservative skill
               depthDelta = isAdvanced ? -10 : 4
@@ -27953,9 +28047,9 @@ function generateAdaptiveSession(
         // is no longer consulted, so this is the canonical join site.
         // ==========================================================================
         const matchedAdjForProvenance =
-          (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
-          progressionDepthAdjustments[normalized.skillHint] ||
-          progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
+          (depthSkillKeyUsed && safeProgressionDepthAdjustments[depthSkillKeyUsed]) ||
+          safeProgressionDepthAdjustments[normalized.skillHint] ||
+          safeProgressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
           null
         const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
           rankingApplied: true,
@@ -28026,8 +28120,8 @@ function generateAdaptiveSession(
       // session-level rollup. Counts how many exercises had a non-zero
       // depth delta and whether any of those flipped order.
       const depthShiftedCount = scoredExercises.filter(e => (e.dbTruthDepthDelta || 0) !== 0).length
-      const depthBiasMapSize = Object.keys(progressionDepthAdjustments).length
-      const depthBiasNonZeroCount = Object.values(progressionDepthAdjustments).filter(
+      const depthBiasMapSize = Object.keys(safeProgressionDepthAdjustments).length
+      const depthBiasNonZeroCount = Object.values(safeProgressionDepthAdjustments).filter(
         (a) => a && typeof a.adjustedBias === 'number' && a.adjustedBias !== 0
       ).length
       
@@ -29371,12 +29465,22 @@ function generateAdaptiveSession(
   // ==========================================================================
   // MIDDLE HELPER BLOCK - Protected by try/catch for precise failure tracking
   // ==========================================================================
-  let variants: SessionVariant[]
+  // [MIDDLE-HELPER-DEFAULT-INIT] Initialise the helper locals up-front
+  // so the catch arm at L29677 (and the post-try `console.log` at
+  // L29669) can read them without TS2454 even when the try block
+  // throws before they are reassigned. Defaults match the truthful
+  // "no work done yet" shape of each binding.
+  let variants: SessionVariant[] = []
   let adaptationNotes: string[] = []
-  let rationale: string
+  let rationale: string = ''
   let finisher: GeneratedFinisher | undefined
-  let enduranceResult: EnduranceSelectionResult
-  let currentFatigueScore: number
+  let enduranceResult: EnduranceSelectionResult = {
+    shouldIncludeEndurance: false,
+    blockType: null,
+    duration: 0,
+    rationale: 'middle_helper_default_init',
+  } as unknown as EnduranceSelectionResult
+  let currentFatigueScore: number = 40
   
   try {
     // Generate session variants using effectiveSelection
@@ -29555,7 +29659,16 @@ function generateAdaptiveSession(
     middleStep = 'neural_demand_resolved'
 
     // Select endurance block
-    currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
+    // [RECOVERY-LEVEL-CANONICAL-LITERALS] RecoveryLevel is the
+    // 'HIGH' | 'MODERATE' | 'LOW' union (lib/recovery-engine.ts L12).
+    // The legacy 'red' / 'yellow' literals were a pre-canonicalization
+    // colour code; map them to the current literals: LOW recovery →
+    // 80 fatigue (red), MODERATE → 60 (yellow), HIGH/default → 40.
+    currentFatigueScore = recoverySignal?.level === 'LOW'
+      ? 80
+      : recoverySignal?.level === 'MODERATE'
+        ? 60
+        : 40
     middleStep = 'endurance_block_selecting'
     enduranceResult = selectEnduranceBlock({
       primaryGoal,
@@ -30622,11 +30735,15 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     phase15eExactStep: 'session_scope_no_outer_state',
     phase15eLastSafeStep: 'session_scope_no_outer_state',
     postAuditStepsReached: 'all_steps_complete',
+    // [PHASE-15E-SUBSTEP-DEGRADED-OUT-OF-SCOPE] The outer
+    // `phase15eSubstepDegraded` local is declared in
+    // `generateAdaptiveProgramImpl` (L10993), not in this session-
+    // level builder. Match the comment at L30654 — gate to the same
+    // literal `false` already used for the property at L30661 so
+    // the verdict reflects the gated default.
     verdict: phase15eBoundaryFailed 
       ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_ROLLBACK'
-      : phase15eSubstepDegraded
-        ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_SUBSTEP_DEGRADATION'
-        : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
+      : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
   })
 
   // ==========================================================================

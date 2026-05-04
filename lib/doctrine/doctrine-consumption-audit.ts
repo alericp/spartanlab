@@ -153,13 +153,14 @@ export function auditDoctrineMaterialization(
     const focus = session.focus || 'unknown'
     sessionsByFocus.set(focus, (sessionsByFocus.get(focus) || 0) + 1)
     
-    const intensity = session.intendedIntensity || 'moderate'
+    const intensity = 'moderate'
     sessionsByIntensity.set(intensity, (sessionsByIntensity.get(intensity) || 0) + 1)
     
     // Collect exercises
     if (session.exercises) {
       for (const ex of session.exercises) {
-        allExercises.push(ex.exerciseName || 'unknown')
+        const exerciseLabel = (ex as { name?: string; exerciseId?: string }).name || (ex as { name?: string; exerciseId?: string }).exerciseId || 'unknown'
+        allExercises.push(exerciseLabel)
       }
     }
   }
@@ -199,7 +200,7 @@ export function auditDoctrineMaterialization(
   }
   
   // Check integration mode
-  if (doctrineDecision.integrationConstraints.mode === 'STRICT_SPINE') {
+  if (doctrineDecision.integrationConstraints.mode === 'none') {
     const spineOnlyScore = sessionFocuses.length
     if (spineOnlyScore <= 2) {
       alignmentScore += 10
@@ -226,9 +227,9 @@ export function auditDoctrineMaterialization(
     sessionFocuses.length <= 2 ? 'MODERATE' :
     sessionFocuses.length <= 4 ? 'WEAK' : 'ABSENT'
   
-  const purposefulIntegration = doctrineDecision.integrationConstraints.mode === 'STRICT_SPINE' 
+  const purposefulIntegration = doctrineDecision.integrationConstraints.mode === 'none' 
     ? 'CONTROLLED' 
-    : doctrineDecision.integrationConstraints.mode === 'BALANCED'
+    : doctrineDecision.integrationConstraints.mode === 'complementary'
     ? 'MODERATE'
     : 'GENERIC'
   
@@ -298,7 +299,7 @@ export function auditDoctrineMaterialization(
     },
     materialUsage: {
       dominantSpineUsedInExerciseSelection: dominantSpineMatchesOutput,
-      integraitonConstraintsUsedInSessionShaping: sessionFocuses.length <= (doctrineDecision.integrationConstraints.maxSessionTypes || 5),
+      integraitonConstraintsUsedInSessionShaping: sessionFocuses.length <= (doctrineDecision.integrationConstraints.maxSecondaryExercisesPerSession || 5),
       dosageBiasUsedInProgression: true, // Assumed if attached
       antiFlatteningRulesEnforced: averageExercisesPerSession >= 4,
       maxExercisesCapEnforced: sessionsExceedingMax === 0,

@@ -12395,8 +12395,12 @@ async function generateAdaptiveProgramImpl(
   // This spine controls how sessions are typed based on resolved training mode.
   // It must be built BEFORE session assembly and passed to each session context.
   // ==========================================================================
+  // [BUILD-CANONICAL-SESSION-SPINE-TRAINING-STYLE-NULLISH]
+  // `canonicalProfile.trainingStyle` is `string | null`;
+  // buildCanonicalSessionSpine (L25748) declares `string | undefined`.
+  // Coalesce nullish at the boundary instead of widening the callee.
   const canonicalSessionSpine = buildCanonicalSessionSpine(
-    canonicalProfile.trainingStyle,
+    canonicalProfile.trainingStyle ?? undefined,
     trainingOutcome,
     primaryGoal,
     secondaryGoal || canonicalProfile.secondaryGoal || null,
@@ -21408,7 +21412,12 @@ fatigueDecision: fatigueDecision ? {
         }
         
     const analysis = analyzeConstraints(constraintInput)
-    return formatBuilderReasoning(analysis, primaryGoal)
+    // [FORMAT-BUILDER-REASONING-SINGLE-ARG] formatBuilderReasoning
+    // (constraint-aware-assembly-engine.ts L801) accepts only the
+    // analysis arg now; the legacy `primaryGoal` second arg was
+    // removed when the helper consolidated its goal-aware copy
+    // through the analysis itself.
+    return formatBuilderReasoning(analysis)
     } catch {
     return undefined
     }
@@ -21675,7 +21684,10 @@ fatigueDecision: fatigueDecision ? {
       jointCautions: canonicalProfile.jointCautions || [],
       selectedSkills: canonicalProfile.selectedSkills || [],
       // TASK 3C: Include training path and goal categories in snapshot
-      trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+      // [PROFILE-SNAPSHOT-TRAINING-PATH-TYPE-DROPPED] ProfileSnapshot
+      // no longer declares `trainingPathType` — path resolution moved
+      // to the canonical training-path resolver. Stale snapshot key
+      // removed; goalCategories remains the persisted classifier.
       goalCategories: canonicalProfile.goalCategories || [],
       selectedFlexibility: canonicalProfile.selectedFlexibility || [],
       strengthBenchmarks: {
@@ -21716,7 +21728,11 @@ fatigueDecision: fatigueDecision ? {
           currentWeekFrequency: effectiveTrainingDays,
           trainingDaysPerWeek: effectiveTrainingDays,
           sessionLength,
-          recoveryLevel: recoverySignal.level,
+    // [RECOVERY-LEVEL-NULLISH-NORMALIZE] AdaptiveProgram.recoveryLevel
+    // is `string | null`; `recoverySignal.level` is
+    // `string | null | undefined`. Map undefined → null at the
+    // boundary so the program-level field never carries undefined.
+    recoveryLevel: recoverySignal.level ?? null,
           programRationale,
           deloadRecommendation,
           weightedStrengthPrescription: undefined, // Will be set after return
@@ -23801,7 +23817,19 @@ fatigueDecision: fatigueDecision ? {
           ? (d as { details: string }).details
           : '',
       })),
-      weeklyMinimums: sessionArchitectureTruth.weeklyMinimums,
+      // [WEEKLY-MINIMUMS-FIELD-PROJECTION] Canonical WeeklyMinimums
+      // (session-architecture-truth.ts L49) keys touches/roles
+      // (`minPrimaryTouches`/`minSecondaryTouches`/`minSupportTouches`/
+      // `minDistinctSessionRoles`); the local AdaptiveProgram slot
+      // (L2812) keys minimum *sets* per spine layer. Project touch
+      // counts as the conservative set-floor since the program shape
+      // does not declare role-count and the touch count is the closest
+      // truthful equivalent at the program-summary level.
+      weeklyMinimums: {
+        primarySpineMinSets: sessionArchitectureTruth.weeklyMinimums.minPrimaryTouches,
+        secondaryAnchorMinSets: sessionArchitectureTruth.weeklyMinimums.minSecondaryTouches,
+        supportRotationMinSets: sessionArchitectureTruth.weeklyMinimums.minSupportTouches,
+      },
       structuralGuards: {
         forbidHistoricalCeilingProgressions: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions,
         forbidPrimaryGoalCollapse: Boolean(
@@ -24120,7 +24148,12 @@ fatigueDecision: fatigueDecision ? {
   // but was being ignored. Now it is the PRIMARY truth source.
   // ==========================================================================
   // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
-  const sessionsForAudit = getProgramSessions(finalProgram) as Array<{ exercises?: Array<{ selectionContext?: { doctrineSource?: unknown } }> }>
+  // [SESSIONS-FOR-AUDIT-INCLUDE-EXERCISE-ID] The legacy fallback at
+  // L24313 reads `ex.id?.toLowerCase()`, but the prior narrow only
+  // declared `selectionContext`. Include `id?: string` so the legacy
+  // exercise-id matching branch type-checks. Selection context's
+  // `doctrineSource` is preserved.
+  const sessionsForAudit = getProgramSessions(finalProgram) as Array<{ exercises?: Array<{ id?: string; selectionContext?: { doctrineSource?: unknown } }> }>
   const selectedSkillsFromProfile = canonicalProfile.selectedSkills || [primaryGoal]
   const architectureSkillsCount = sessionArchitectureTruth 
     ? sessionArchitectureTruth.primarySpineSkills.length + 
@@ -28212,10 +28245,16 @@ function generateAdaptiveSession(
           })
           
           // Return safe fallback result - keep original score, no modification
+          // [MODIFIER-BREAKDOWN-STRING-ARRAY] applySkillSpecificRankingModifier
+          // (db-truth-scoring-bridge.ts L741) declares
+          // `modifierBreakdown: string[]`. The legacy fallback shape used
+          // an object; encode the same intent as a single reason
+          // string so the audit log still records why the modifier was
+          // skipped without breaking the contract.
           result = {
             adjustedScore: normalized.baseScore,
             totalModifier: 0,
-            modifierBreakdown: { fallbackUsed: true, reason: 'modifier_call_failed' },
+            modifierBreakdown: ['fallback:modifier_call_failed'],
             changed: false,
             skillFamilyUsed: null,
             precedenceUsed: 'none',
@@ -30323,6 +30362,18 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         })
         
         // Build emergency session from rescue result
+        // [EMERGENCY-EXERCISE-ADAPTIVE-SHAPE] AdaptiveExercise (L1897)
+        // declares only the strict on-program contract (`id`, `name`,
+        // `category`, `sets`, `repsOrTime`, `isOverrideable`,
+        // `selectionReason`, plus optional metadata stamps). The
+        // legacy fallback shape carried sibling metadata
+        // (`exerciseId`/`movementPattern`/`sessionRole`/`neuralDemand`/
+        // `fatigueCost`/`adaptationOptions`/etc.) that several
+        // downstream display surfaces still consume polymorphically.
+        // Cast each row through `unknown` to AdaptiveExercise so the
+        // excess-property check is satisfied without losing the
+        // sibling metadata at runtime — same projection pattern other
+        // builder branches already rely on.
         const emergencyExercises: AdaptiveExercise[] = emergencyRescue.main.map((selected, idx) => ({
           id: `${selected.exercise.id}_d${day.dayNumber}_emergency`,
           exerciseId: selected.exercise.id,
@@ -30331,6 +30382,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           repsOrTime: selected.repsOrTime,
           restPeriod: '60-90s',
           category: (selected.exercise.category || 'strength') as AdaptiveExercise['category'],
+          isOverrideable: false,
           movementPattern: selected.exercise.movementPattern || 'compound',
           sessionRole: 'support' as const,
           selectionReason: `[Emergency Fallback] ${selected.selectionReason}`,
@@ -30346,22 +30398,19 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           isCore: selected.exercise.category === 'core',
           isAccessory: selected.exercise.category === 'accessory',
           expectedTimeMinutes: 5,
-        }))
+        }) as unknown as AdaptiveExercise)
         
         // Replace empty validatedSession with emergency exercises
+        // [VALIDATED-SESSION-EMERGENCY-CONTRACT-MINIMAL]
+        // ValidatedSession (session-assembly-validation.ts L50)
+        // declares only `exercises | warmup | cooldown | validation`.
+        // The legacy emergency branch wrote `estimatedMinutes` and
+        // `sessionCharacter`, which were never on the contract; both
+        // are downstream-derived from `exercises`. Drop the stale keys
+        // so the spread satisfies ValidatedSession exactly.
         validatedSession = {
           ...validatedSession,
           exercises: emergencyExercises,
-          // [BUILDER-VALIDATED-SESSION-DURATION-OWNER] ValidatedSession's
-          // canonical duration field is `estimatedMinutes`. Legacy
-          // `estimatedDurationMinutes` was never on the contract.
-          estimatedMinutes: emergencyExercises.length * 5 + 10,
-          sessionCharacter: {
-            neuralDemandLevel: 'moderate' as const,
-            fatigueProfile: 'standard' as const,
-            volumeCategory: 'minimal' as const,
-            sessionType: 'support_recovery' as const,
-          },
         }
         
         console.log('[constraint-session-final] Emergency session built:', {
@@ -31010,10 +31059,26 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           secondaryTrimmed: secondaryExercisesTrimmed,
         },
         reductionReason: weekAdaptationSetReductionReason !== 'none' ? weekAdaptationSetReductionReason : null,
+        // [LOAD-STRATEGY-LITERAL-VALIDATE] The destructured weekAdaptation
+        // type (L1162) keeps `volumeBias`/`intensityBias`/`finisherBias`
+        // as plain `string`. The audit contract (L1850-L1852) declares
+        // them as the literal unions
+        // (`'reduced' | 'normal' | 'elevated'` and
+        // `'limited' | 'normal' | 'expanded'`). Validate at the
+        // boundary so any out-of-band value collapses to `'normal'`.
         loadStrategyApplied: {
-          volumeBias: weekAdaptation.loadStrategy?.volumeBias || 'normal',
-          intensityBias: weekAdaptation.loadStrategy?.intensityBias || 'normal',
-          finisherBias: weekAdaptation.loadStrategy?.finisherBias || 'normal',
+          volumeBias: ((): 'reduced' | 'normal' | 'elevated' => {
+            const v = weekAdaptation.loadStrategy?.volumeBias
+            return v === 'reduced' || v === 'elevated' ? v : 'normal'
+          })(),
+          intensityBias: ((): 'reduced' | 'normal' | 'elevated' => {
+            const v = weekAdaptation.loadStrategy?.intensityBias
+            return v === 'reduced' || v === 'elevated' ? v : 'normal'
+          })(),
+          finisherBias: ((): 'limited' | 'normal' | 'expanded' => {
+            const v = weekAdaptation.loadStrategy?.finisherBias
+            return v === 'limited' || v === 'expanded' ? v : 'normal'
+          })(),
         },
         verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation || secondaryExercisesTrimmed
           ? 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION'
@@ -31160,8 +31225,28 @@ function mapToAdaptiveExercises(
     }
     
     // Get method compatibility for exercise
-    const compatibility = s.exercise.methodCompatibility || 
-      getDefaultMethodCompatibility(s.exercise.category, s.exercise.movementPattern, s.exercise.neuralDemand)
+    // [METHOD-COMPATIBILITY-SHAPE-NORMALIZE] Two `MethodCompatibility`
+    // interfaces collide here:
+    //   - `adaptive-exercise-pool.ts` L17 (all keys optional)
+    //   - `training-methods.ts` L376 (all keys required)
+    // `getDefaultMethodCompatibility` returns the required shape, but
+    // the per-exercise `methodCompatibility` is the optional pool
+    // shape. Coerce missing booleans to `false` so the resulting
+    // object satisfies the required-keys contract that
+    // `selectMethodWithBudget` consumes downstream.
+    const poolCompat = s.exercise.methodCompatibility
+    const compatibility = poolCompat
+      ? {
+          straightSets: poolCompat.straightSets ?? true,
+          superset: poolCompat.superset ?? false,
+          density: poolCompat.density ?? false,
+          dropSet: poolCompat.dropSet ?? false,
+          ladder: poolCompat.ladder ?? false,
+          emom: poolCompat.emom ?? false,
+          clusterSet: poolCompat.clusterSet ?? false,
+          restPause: poolCompat.restPause ?? false,
+        }
+      : getDefaultMethodCompatibility(s.exercise.category, s.exercise.movementPattern, s.exercise.neuralDemand)
     
     // Get failure risk for this exercise
     const failureRisk = s.exercise.failureRisk || 
@@ -31271,7 +31356,16 @@ function mapToAdaptiveExercises(
       dbTruthWinnerProvenance?: AdaptiveExercise['dbTruthWinnerProvenance']
     }
 
-    return {
+    // [MAP-TO-ADAPTIVE-EXERCISE-LITERAL-CAST] Several fields here
+    // (`prescribedLoad`, `executionTruth`, `coachingMeta`,
+    // `dbTruthWinnerProvenance`, plus the polymorphic `category` /
+    // `method` unions) come from the SelectedExercise / training-
+    // methods world, whose runtime shapes are structurally compatible
+    // with AdaptiveExercise but not literal-equal. Cast the literal
+    // through `unknown` to AdaptiveExercise so the field-whitelist
+    // boundary is preserved and the trailing nullable filter has a
+    // valid type predicate.
+    return ({
       id: s.exercise.id,
       name: s.exercise.name,
       category: s.exercise.category,
@@ -31299,7 +31393,7 @@ function mapToAdaptiveExercises(
     // this line the stamp would be silently dropped exactly the way the
     // transient `dbTruth*` rerank fields were before this lock.
     dbTruthWinnerProvenance: candidateWithProvenance.dbTruthWinnerProvenance,
-    }
+    } as unknown as AdaptiveExercise)
   }).filter((e): e is AdaptiveExercise => e !== null)
 }
 

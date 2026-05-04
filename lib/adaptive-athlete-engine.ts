@@ -612,7 +612,10 @@ export function buildAthleteState(): AthleteState {
       username: 'Athlete',
       experienceLevel: 'intermediate',
       primaryGoal: null,
-      primarySkill: null,
+      // [ADAPTIVE-ATHLETE-ENGINE-PRIMARY-SKILL-DROPPED] AthleteState
+      // does not declare a `primarySkill` field — it was a legacy
+      // companion field to `primaryGoal` that has since been folded
+      // into the goal itself.
       currentLevel: null,
       targetLevel: null,
       momentumScore: 0,

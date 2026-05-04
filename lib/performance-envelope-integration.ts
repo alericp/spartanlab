@@ -173,32 +173,59 @@ export async function recordWorkoutEnvelopeSignals(
         performanceMetric: result.performanceMetric,
         performanceVsPrevious: result.performanceVsPrevious || 'unknown',
         
-        // Session context
-        sessionDensity: (workoutLog.sessionDensity as 'low_density' | 'moderate_density' | 'high_density') || 'moderate_density',
-        restSecondsUsed: result.restSecondsUsed || 120,
-        sessionDurationMinutes: workoutLog.sessionDurationMinutes || 0,
-        
-        // Weekly volume context (movement-family specific)
-        weeklyVolumePrior,
-        weeklyVolumeAfter,
-        weeklySessionCount: 1, // Will be properly calculated by the signal processor
-        
-        // Response indicators
-        difficultyRating: result.difficultyRating,
-        completionRatio: workoutLog.completionRatio || 1,
-        qualityRating: result.qualityRating || 'moderate',
-        sessionTruncated: workoutLog.timeCompressedFlag || false,
-        exercisesSkipped: workoutLog.skippedExercises?.length || 0,
-        exercisesSubstituted: workoutLog.substitutedExercises?.length || 0,
-        
-        // Progression tracking
-        progressionAdjustment: 'none',
-        wasDeloadSession: workoutLog.wasDeloadSession || false,
-        
-        // Metadata
-        recordedAt: new Date(workoutLog.sessionDate),
-        dataQuality: workoutLog.logQuality === 'complete' ? 'complete' : 
-                     workoutLog.logQuality === 'partial' ? 'partial' : 'partial',
+        // [PERF-ENVELOPE-INTEGRATION-WORKOUT-LOG-LEGACY-FIELDS]
+        // Canonical `WorkoutLog` (workout-log-service.ts) owns
+        // `durationMinutes`, `exercises`, `perceivedDifficulty`,
+        // `completionStatus`, etc. — but NOT `sessionDensity`,
+        // `sessionDurationMinutes`, `completionRatio`,
+        // `timeCompressedFlag`, `skippedExercises`,
+        // `substitutedExercises`, `wasDeloadSession`, or `logQuality`.
+        // These are pre-canonical-migration debug fields that some
+        // legacy logs still carry. Read them through a structural
+        // slice so the canonical contract isn't widened.
+        ...(() => {
+          const legacy = workoutLog as unknown as {
+            sessionDensity?: 'low_density' | 'moderate_density' | 'high_density'
+            sessionDurationMinutes?: number
+            completionRatio?: number
+            timeCompressedFlag?: boolean
+            skippedExercises?: unknown[]
+            substitutedExercises?: unknown[]
+            wasDeloadSession?: boolean
+            logQuality?: 'complete' | 'partial'
+          }
+          return {
+            // Session context
+            sessionDensity: legacy.sessionDensity || 'moderate_density',
+            restSecondsUsed: result.restSecondsUsed || 120,
+            // [PERF-ENVELOPE-INTEGRATION-DURATION-MINUTES] Canonical
+            // `WorkoutLog.durationMinutes` is the duration field
+            // (sessionDurationMinutes is the legacy pre-migration name).
+            sessionDurationMinutes: legacy.sessionDurationMinutes ?? workoutLog.durationMinutes ?? 0,
+            
+            // Weekly volume context (movement-family specific)
+            weeklyVolumePrior,
+            weeklyVolumeAfter,
+            weeklySessionCount: 1,
+            
+            // Response indicators
+            difficultyRating: result.difficultyRating,
+            completionRatio: legacy.completionRatio || 1,
+            qualityRating: result.qualityRating || 'moderate',
+            sessionTruncated: legacy.timeCompressedFlag || false,
+            exercisesSkipped: legacy.skippedExercises?.length || 0,
+            exercisesSubstituted: legacy.substitutedExercises?.length || 0,
+            
+            // Progression tracking
+            progressionAdjustment: 'none' as const,
+            wasDeloadSession: legacy.wasDeloadSession || false,
+            
+            // Metadata
+            recordedAt: new Date(workoutLog.sessionDate),
+            dataQuality: legacy.logQuality === 'complete' ? 'complete' as const :
+                         legacy.logQuality === 'partial' ? 'partial' as const : 'partial' as const,
+          }
+        })(),
       }
 
       await recordSignal(signal)
@@ -446,13 +473,16 @@ export function calculateWeeklyVolumeFromLogs(
 ): number {
   const oneWeekAgo = new Date(beforeDate.getTime() - 7 * 24 * 60 * 60 * 1000)
   
-  // Map exercise categories to movement families
+  // [PERF-ENVELOPE-INTEGRATION-MOVEMENT-FAMILY-CANONICAL] Canonical
+  // `MovementFamily` union (declared in performance-envelope-engine.ts)
+  // does not include `'squat'` or `'hip_hinge'` literals — lower-body
+  // training is not yet first-class in the envelope contract. Drop the
+  // 'legs' mapping. Calorie-style legs work isn't tracked here yet.
   const categoryToFamily: Record<string, MovementFamily[]> = {
     'pull': ['vertical_pull', 'horizontal_pull'],
     'push': ['vertical_push', 'horizontal_push'],
     'core': ['compression_core', 'anti_extension_core'],
     'skill': ['straight_arm_pull', 'straight_arm_push'],
-    'legs': ['squat', 'hip_hinge'],
     'mobility': ['mobility'],
   }
   
@@ -515,13 +545,14 @@ export function extractMovementFamilyResultsFromLog(
     completedCount: number
   }>()
   
-  // Map exercise categories to movement families
+  // [PERF-ENVELOPE-INTEGRATION-MOVEMENT-FAMILY-CANONICAL] same as the
+  // multi-family table above — `'squat'` is not a canonical
+  // MovementFamily literal. Drop the 'legs' entry.
   const categoryToFamily: Record<string, MovementFamily> = {
     'pull': 'vertical_pull',
     'push': 'vertical_push',
     'core': 'compression_core',
     'skill': 'straight_arm_pull', // Will be refined based on focus area
-    'legs': 'squat',
     'mobility': 'mobility',
   }
   

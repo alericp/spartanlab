@@ -851,15 +851,39 @@ export function buildProgramTruthExplanation(
     
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Prefer program.skillStrengthProfile (durable) over snapshot/profile
     // This ensures saved programs retain the exact skill/strength truth used to generate them
+    // [AI-TRUTH-AUDIT-CANONICAL-FIELDS] `CanonicalProgrammingProfile`
+    // exposes `pullUpMax` / `dipMax` / `wallHSPUReps` (capacity strings)
+    // and `plancheProgression` / `frontLeverProgression` (progression
+    // strings on the canonical profile output surface).
+    // `GenerationTruthSnapshot` is intentionally a small fixed contract;
+    // prediction-source fields like `plancheProgression` are not declared
+    // on it, so the legacy reads must go through a structural slice. We
+    // keep the same fallback chain via `as unknown as` to a narrow
+    // structural type.
     skillStrengthProfile: program.skillStrengthProfile || {
-      plancheProgression: program.generationTruthSnapshot?.plancheProgression || profile?.plancheProgression || null,
-      frontLeverProgression: program.generationTruthSnapshot?.frontLeverProgression || profile?.frontLeverProgression || null,
-      hspuCapability: program.generationTruthSnapshot?.hspuProgression || profile?.hspu || null,
-      weightedPullUp: program.generationTruthSnapshot?.weightedPullUp || profile?.weightedPullUp || null,
-      weightedDip: program.generationTruthSnapshot?.weightedDip || profile?.weightedDip || null,
-      pullUpCapacity: profile?.pullUps || null,
-      dipCapacity: profile?.dips || null,
-      wallHspuCapacity: profile?.wallHSPU || null,
+      plancheProgression:
+        (program.generationTruthSnapshot as unknown as { plancheProgression?: string | null } | undefined)?.plancheProgression
+        || profile?.plancheProgression
+        || null,
+      frontLeverProgression:
+        (program.generationTruthSnapshot as unknown as { frontLeverProgression?: string | null } | undefined)?.frontLeverProgression
+        || profile?.frontLeverProgression
+        || null,
+      hspuCapability:
+        (program.generationTruthSnapshot as unknown as { hspuProgression?: string | null } | undefined)?.hspuProgression
+        || profile?.wallHSPUReps
+        || null,
+      weightedPullUp:
+        (program.generationTruthSnapshot as unknown as { weightedPullUp?: unknown } | undefined)?.weightedPullUp
+        || profile?.weightedPullUp
+        || null,
+      weightedDip:
+        (program.generationTruthSnapshot as unknown as { weightedDip?: unknown } | undefined)?.weightedDip
+        || profile?.weightedDip
+        || null,
+      pullUpCapacity: profile?.pullUpMax || null,
+      dipCapacity: profile?.dipMax || null,
+      wallHspuCapacity: profile?.wallHSPUReps || null,
       experienceLevel: program.experienceLevel || profile?.experienceLevel || 'intermediate',
     },
     skillStrengthMateriallyApplied: !!(
@@ -1574,7 +1598,10 @@ export function getProgramVisibleDifferenceVerdict(
     const prev = prevSessions[i]
     const next = nextSessions[i]
     
-    if (prev.title !== next.title || prev.name !== next.name) {
+    // [AI-TRUTH-AUDIT-ADAPTIVE-SESSION-LABEL-OWNER] AdaptiveSession owns
+    // `dayLabel` / `focusLabel` (canonical user-facing labels) — there
+    // are no `title` / `name` fields on the contract.
+    if (prev.dayLabel !== next.dayLabel || prev.focusLabel !== next.focusLabel) {
       sessionTitlesChanged++
     }
     if (prev.focus !== next.focus) {
@@ -1594,9 +1621,12 @@ export function getProgramVisibleDifferenceVerdict(
   const prevExerciseMap = new Map<string, unknown>()
   const nextExerciseMap = new Map<string, unknown>()
   
+  // [AI-TRUTH-AUDIT-DAY-NUMBER-CANONICAL] AdaptiveSession owns
+  // `dayNumber` only — there is no canonical `dayOfWeek` field. Use
+  // `dayNumber` directly.
   for (const session of prevSessions) {
     for (const ex of (session.exercises || [])) {
-      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      const key = `${session.dayNumber}-${ex.name}`
       prevExerciseNames.add(key)
       prevExerciseMap.set(key, ex)
     }
@@ -1604,7 +1634,7 @@ export function getProgramVisibleDifferenceVerdict(
   
   for (const session of nextSessions) {
     for (const ex of (session.exercises || [])) {
-      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      const key = `${session.dayNumber}-${ex.name}`
       nextExerciseNames.add(key)
       nextExerciseMap.set(key, ex)
     }

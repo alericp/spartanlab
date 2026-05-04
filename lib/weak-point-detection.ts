@@ -87,12 +87,22 @@ const FOCUS_LABELS: Record<DevelopmentFocus, string> = {
  */
 function estimatePullStrengthScore(
   profile: OnboardingProfile,
-  canonicalBenchmarks?: { pullUpMax?: number | null; weightedPullUp?: { addedWeight: number; reps: number } | null }
+  // [WEAK-POINT-DETECTION-CANONICAL-BENCHMARK-LOAD] `WeightedBenchmark`
+  // (declared in `lib/athlete-profile.ts`) owns `load: number | null`,
+  // not `addedWeight`. Match the canonical shape so callers don't have
+  // to cast.
+  canonicalBenchmarks?: { pullUpMax?: number | null; weightedPullUp?: { load: number | null; reps?: number } | null }
 ): number {
   let score = 50 // Default middle score
   
-  // TASK 3: Use canonical benchmark if available, else profile
-  const pullUpMax = canonicalBenchmarks?.pullUpMax ?? profile?.pullUpMax ?? null
+  // [WEAK-POINT-DETECTION-PROFILE-PULL-UP-MAX-IS-CAPACITY-ENUM]
+  // `OnboardingProfile.pullUpMax` is `PullUpCapacity | null` (a string
+  // enum like '0' | '1_3' | '4_7' | ...). The numeric comparisons
+  // below ('=== 0', '<= 3') only make sense for the canonical numeric
+  // pullUpMax. Use canonical only here; the profile capacity enum is
+  // surfaced through canonical-profile-service which already converts
+  // it to a parsed number.
+  const pullUpMax = canonicalBenchmarks?.pullUpMax ?? null
   
   // Pull-up max (major factor)
   if (pullUpMax !== null) {
@@ -104,10 +114,12 @@ function estimatePullStrengthScore(
     else score = 90  // 18+ pull-ups = advanced
   }
   
-  // TASK 3: Weighted pull-up bonus (use canonical or profile)
+  // [WEAK-POINT-DETECTION-WEIGHTED-LOAD-CANONICAL] `WeightedBenchmark`
+  // canonical field is `load`. Use canonical bench OR profile bench;
+  // both expose `load`.
   const weightedPullUp = canonicalBenchmarks?.weightedPullUp || profile?.weightedPullUp
-  if (weightedPullUp?.addedWeight || (weightedPullUp as any)?.load) {
-    const load = weightedPullUp.addedWeight || (weightedPullUp as any).load || 0
+  if (weightedPullUp?.load) {
+    const load = weightedPullUp.load || 0
     if (load >= 45) score = Math.max(score, 85)
     else if (load >= 25) score = Math.max(score, 70)
     else if (load >= 10) score = Math.max(score, 55)
@@ -122,13 +134,16 @@ function estimatePullStrengthScore(
  */
 function estimatePushStrengthScore(
   profile: OnboardingProfile,
-  canonicalBenchmarks?: { dipMax?: number | null; pushUpMax?: number | null; weightedDip?: { addedWeight: number; reps: number } | null }
+  // [WEAK-POINT-DETECTION-CANONICAL-BENCHMARK-LOAD] same as
+  // estimatePullStrengthScore — match `WeightedBenchmark.load`.
+  canonicalBenchmarks?: { dipMax?: number | null; pushUpMax?: number | null; weightedDip?: { load: number | null; reps?: number } | null }
 ): number {
   let score = 50
   
-  // TASK 3: Use canonical benchmark if available
-  const dipMax = canonicalBenchmarks?.dipMax ?? profile?.dipMax ?? null
-  const pushUpMax = canonicalBenchmarks?.pushUpMax ?? profile?.pushUpMax ?? null
+  // [WEAK-POINT-DETECTION-PROFILE-CAPACITY-ENUM] same as pull side —
+  // profile.dipMax/pushUpMax are capacity enums, not numbers.
+  const dipMax = canonicalBenchmarks?.dipMax ?? null
+  const pushUpMax = canonicalBenchmarks?.pushUpMax ?? null
   
   // Dip max
   if (dipMax !== null) {
@@ -145,10 +160,10 @@ function estimatePushStrengthScore(
     else if (pushUpMax >= 25) score = Math.max(score, 50)
   }
   
-  // TASK 3: Weighted dip bonus (use canonical or profile)
+  // [WEAK-POINT-DETECTION-WEIGHTED-LOAD-CANONICAL]
   const weightedDip = canonicalBenchmarks?.weightedDip || profile?.weightedDip
-  if (weightedDip?.addedWeight || (weightedDip as any)?.load) {
-    const load = weightedDip.addedWeight || (weightedDip as any).load || 0
+  if (weightedDip?.load) {
+    const load = weightedDip.load || 0
     if (load >= 45) score = Math.max(score, 85)
     else if (load >= 25) score = Math.max(score, 70)
     else if (load >= 10) score = Math.max(score, 55)
@@ -322,7 +337,12 @@ function detectSkillBottlenecks(
   
   // Muscle-up - needs pull strength + explosive power
   if (profile.muscleUp === 'none' || profile.muscleUp === 'working_on') {
-    if (pullScore >= 55 && profile.pullUpMax && profile.pullUpMax >= 10) {
+    // [WEAK-POINT-DETECTION-PULL-UP-CAPACITY-ENUM] PullUpCapacity is a
+    // string union — '10_plus' / '13_17' / '18_22' / '23_plus' are the
+    // canonical "10+ pull-ups" markers. Use enum membership.
+    if (pullScore >= 55 && profile.pullUpMax && (
+      profile.pullUpMax === '8_12' || profile.pullUpMax === '13_17' || profile.pullUpMax === '18_22' || profile.pullUpMax === '23_plus'
+    )) {
       priorities.push({
         skill: 'Muscle-up',
         reason: 'Strength ready, technique focus',
@@ -349,9 +369,12 @@ function detectSkillBottlenecks(
 function calculateConfidence(profile: OnboardingProfile): 'low' | 'medium' | 'high' {
   let dataPoints = 0
   
-  if (profile.pullUpMax !== null) dataPoints++
-  if (profile.dipMax !== null) dataPoints++
-  if (profile.pushUpMax !== null) dataPoints++
+  // [WEAK-POINT-DETECTION-CAPACITY-PRESENCE] profile pullUpMax /
+  // dipMax / pushUpMax are capacity enums (`PullUpCapacity` etc.), so
+  // `!== null` is enough as a presence check (no numeric comparison).
+  if (profile.pullUpMax !== null && profile.pullUpMax !== 'unknown') dataPoints++
+  if (profile.dipMax !== null && profile.dipMax !== 'unknown') dataPoints++
+  if (profile.pushUpMax !== null && profile.pushUpMax !== 'unknown') dataPoints++
   if (profile.weightedPullUp?.load) dataPoints++
   if (profile.weightedDip?.load) dataPoints++
   if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown') dataPoints++
@@ -380,16 +403,30 @@ export function detectWeakPoints(): WeakPointSummary {
   const profile = getOnboardingProfile() // Fallback for detailed benchmark data
   const calibration = getAthleteCalibration()
   
-  // TASK 3: Build unified benchmark view from canonical + profile
-  // Canonical is authoritative, profile fills gaps
+  // [WEAK-POINT-DETECTION-CANONICAL-AUTHORITATIVE] Profile capacity
+  // enums (PullUpCapacity etc.) cannot mix with numeric canonical
+  // values; use canonical (already-parsed numeric form) as the only
+  // source. Profile is preserved for skill-progression, lSitHold,
+  // pancake, etc., where its enum-typed shape is consumed directly
+  // by other helpers in this file.
+  const canonicalPullUp = typeof canonical.pullUpMax === 'string' ? parseInt(canonical.pullUpMax, 10) : null
+  const canonicalDip = typeof canonical.dipMax === 'string' ? parseInt(canonical.dipMax, 10) : null
+  const canonicalPushUp = typeof canonical.pushUpMax === 'string' ? parseInt(canonical.pushUpMax, 10) : null
   const benchmarks = {
-    pullUpMax: canonical.pullUpMax ? parseInt(canonical.pullUpMax) : profile?.pullUpMax ?? null,
-    dipMax: canonical.dipMax ? parseInt(canonical.dipMax) : profile?.dipMax ?? null,
-    pushUpMax: canonical.pushUpMax ? parseInt(canonical.pushUpMax) : profile?.pushUpMax ?? null,
+    pullUpMax: Number.isFinite(canonicalPullUp) ? canonicalPullUp : null,
+    dipMax: Number.isFinite(canonicalDip) ? canonicalDip : null,
+    pushUpMax: Number.isFinite(canonicalPushUp) ? canonicalPushUp : null,
     weightedPullUp: canonical.weightedPullUp || profile?.weightedPullUp || null,
     weightedDip: canonical.weightedDip || profile?.weightedDip || null,
-    frontLeverProgression: canonical.frontLeverProgression || profile?.frontLeverProgress || null,
-    plancheProgression: canonical.plancheProgression || profile?.plancheProgress || null,
+    // [WEAK-POINT-DETECTION-PROGRESSION-CANONICAL-FIELDS] Canonical
+    // owns *progression strings; profile owns nested objects with
+    // `.progression`. Pull progression strings from each side properly.
+    frontLeverProgression: canonical.frontLeverProgression || profile?.frontLever?.progression || null,
+    plancheProgression: canonical.plancheProgression || profile?.planche?.progression || null,
+    // [WEAK-POINT-DETECTION-LSIT-HOLD] canonical.lSitHoldSeconds is a
+    // numeric (seconds); profile.lSitHold is `LSitHoldCapacity` (an
+    // enum). Keep them separate; this benchmark is only consumed for
+    // logging here.
     lSitHold: canonical.lSitHoldSeconds || profile?.lSitHold || null,
     weakestArea: canonical.weakestArea || profile?.weakestArea || null,
     primaryLimitation: canonical.primaryLimitation || profile?.primaryLimitation || null,
@@ -405,8 +442,10 @@ export function detectWeakPoints(): WeakPointSummary {
     secondaryGoal: benchmarks.secondaryGoal,
     pullUpMax: benchmarks.pullUpMax,
     dipMax: benchmarks.dipMax,
-    weightedPullUp: benchmarks.weightedPullUp?.addedWeight || 'none',
-    weightedDip: benchmarks.weightedDip?.addedWeight || 'none',
+    // [WEAK-POINT-DETECTION-WEIGHTED-LOAD-CANONICAL] `.load` is the
+    // canonical WeightedBenchmark numeric field.
+    weightedPullUp: benchmarks.weightedPullUp?.load || 'none',
+    weightedDip: benchmarks.weightedDip?.load || 'none',
     frontLeverProgression: benchmarks.frontLeverProgression,
     plancheProgression: benchmarks.plancheProgression,
     jointCautions: benchmarks.jointCautions?.length || 0,

@@ -562,14 +562,17 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
   }
   
   // Weighted pull-up bonus
-  // [WEAK-POINT-ENGINE-WEIGHTED-LIFT-OWNER] canonical owner field is
-  // `addedWeight`, not `load`; legacy `bodyweight` lives outside the
-  // strict OnboardingProfile type, so cast through a structural slice
-  // rather than mutating the type.
+  // [WEAK-POINT-ENGINE-WEIGHTED-LIFT-OWNER] canonical
+  // `WeightedBenchmark.load` is the numeric load (lbs/kg). Previous
+  // edit incorrectly wrote `addedWeight`; the correct canonical field
+  // is `load`. Bodyweight is *not* on `OnboardingProfile`, so we drop
+  // the bodyweight-relative percentage path and use absolute load
+  // thresholds instead.
   const legacyProfile = profile as OnboardingProfile & { bodyweight?: number | null }
-  if (profile.weightedPullUp?.addedWeight) {
+  if (profile.weightedPullUp?.load) {
+    const load = profile.weightedPullUp.load
     const bwPercent = legacyProfile.bodyweight
-      ? (profile.weightedPullUp.addedWeight / legacyProfile.bodyweight) * 100
+      ? (load / legacyProfile.bodyweight) * 100
       : 0
     if (bwPercent >= 50) pullStrength = Math.max(pullStrength, 90)
     else if (bwPercent >= 30) pullStrength = Math.max(pullStrength, 75)
@@ -594,8 +597,9 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
   }
   
   // Weighted dip bonus
-  if (profile.weightedDip?.addedWeight) {
-    const load = profile.weightedDip.addedWeight
+  // [WEAK-POINT-ENGINE-WEIGHTED-LIFT-OWNER] canonical field is `load`.
+  if (profile.weightedDip?.load) {
+    const load = profile.weightedDip.load
     if (load >= 45) pushStrength = Math.max(pushStrength, 90)
     else if (load >= 25) pushStrength = Math.max(pushStrength, 75)
     else if (load >= 10) pushStrength = Math.max(pushStrength, 60)

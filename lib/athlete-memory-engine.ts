@@ -566,12 +566,17 @@ function buildPeakStrengthMetrics(
     // `volume`) in favor of the `best_*` family. Compare the canonical
     // labels and gate the legacy short-forms behind a string projection
     // for backwards-compat without widening the canonical union.
+    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] The canonical `prType` union
+    // exposes `'max_weight' | 'best_reps' | 'best_hold' | 'best_volume' |
+    // 'weighted_calisthenics'`. Legacy `'max_reps'` / `'max_hold'`
+    // labels were dropped — TS2367 (impossible compare) fires when
+    // they're checked. Use only canonical labels.
     const _prTypeStr = String(pr.prType)
     if (pr.prType === 'max_weight' || _prTypeStr === 'weighted_calisthenics') {
       metrics.maxWeight = Math.max(metrics.maxWeight || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_reps' || _prTypeStr === 'best_reps') {
+    } else if (_prTypeStr === 'best_reps') {
       metrics.maxReps = Math.max(metrics.maxReps || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_hold' || _prTypeStr === 'best_hold') {
+    } else if (_prTypeStr === 'best_hold') {
       metrics.maxHold = Math.max(metrics.maxHold || 0, pr.valuePrimary)
     } else if (_prTypeStr === 'best_volume') {
       metrics.maxVolume = Math.max(metrics.maxVolume || 0, pr.valuePrimary)
@@ -607,15 +612,15 @@ function buildRecentStrengthMetrics(
     
     const metrics = metricsMap.get(exerciseKey)!
     
-    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] same pattern as
-    // buildPeakStrengthMetrics; canonical `best_*` labels with legacy
-    // short-form fallback behind a string projection.
+    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] same as buildPeakStrengthMetrics:
+    // legacy `max_reps` / `max_hold` literals are not on the canonical
+    // `prType` union and produce TS2367 when compared.
     const _prTypeStr = String(pr.prType)
     if (pr.prType === 'max_weight' || _prTypeStr === 'weighted_calisthenics') {
       metrics.maxWeight = Math.max(metrics.maxWeight || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_reps' || _prTypeStr === 'best_reps') {
+    } else if (_prTypeStr === 'best_reps') {
       metrics.maxReps = Math.max(metrics.maxReps || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_hold' || _prTypeStr === 'best_hold') {
+    } else if (_prTypeStr === 'best_hold') {
       metrics.maxHold = Math.max(metrics.maxHold || 0, pr.valuePrimary)
     }
   }

@@ -771,16 +771,19 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     dipMax: pick(onboardingProfile?.dipMax, athleteProfile?.dipMax?.toString(), null),
     pushUpMax: pick(onboardingProfile?.pushUpMax, null, null),
     wallHSPUReps: pick(onboardingProfile?.wallHSPUReps, null, null),
-    // [WEIGHTED-BENCHMARK-CANONICAL-OWNER] WeightedBenchmark exposes
-    // `addedWeight` (not legacy `load`). Reads of `.load` were left over
-    // from the migration. Use the canonical field directly.
+    // [WEIGHTED-BENCHMARK-CANONICAL-OWNER] `OnboardingProfile.weightedPullUp`
+    // is `WeightedBenchmark` whose canonical numeric field is `load`
+    // (declared in `lib/athlete-profile.ts`). The CANONICAL output
+    // surface (this file's `weightedPullUp` field at L332) uses
+    // `addedWeight` as its public name. So we MAP load → addedWeight
+    // here at the boundary, not propagate the wrong field name in.
     weightedPullUp: onboardingProfile?.weightedPullUp ? {
-      addedWeight: onboardingProfile.weightedPullUp.addedWeight ?? 0,
+      addedWeight: onboardingProfile.weightedPullUp.load ?? 0,
       reps: onboardingProfile.weightedPullUp.reps ?? 1,
       unit: onboardingProfile.weightedPullUp.unit ?? 'lbs',
     } : null,
     weightedDip: onboardingProfile?.weightedDip ? {
-      addedWeight: onboardingProfile.weightedDip.addedWeight ?? 0,
+      addedWeight: onboardingProfile.weightedDip.load ?? 0,
       reps: onboardingProfile.weightedDip.reps ?? 1,
       unit: onboardingProfile.weightedDip.unit ?? 'lbs',
     } : null,

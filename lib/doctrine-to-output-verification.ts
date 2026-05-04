@@ -528,7 +528,9 @@ function verifyDosageQuality(
     const hasAnyDosage = hasSets || hasReps || hasHold
     
     // RPE should be specified for main work
-    const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+    // [ADAPTIVE-EXERCISE-TARGET-RPE] AdaptiveExercise exposes
+    // `targetRPE` (not `rpe`).
+    const hasRPE = ex.targetRPE !== undefined && ex.targetRPE >= 1 && ex.targetRPE <= 10
     
     if (hasAnyDosage && hasSets) {
       wellDosedCount++

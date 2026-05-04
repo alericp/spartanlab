@@ -543,7 +543,7 @@ export function extractCompletedSetEvidence(
       timestamp: log.createdAt ?? log.sessionDate,
       exerciseClass: classifyExerciseFromName(ex.name),
       completed: ex.completed,
-      trusted: log.trusted !== false,
+      trusted: log.trusted ?? true,
     })
   }
   return evidence

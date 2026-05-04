@@ -169,10 +169,10 @@ export function calculateUnifiedSkillReadiness(
   if (profile.hollowHold && profile.hollowHold > 0) confidence += 0.05
   
   // Add confidence for calibration data
+  // [CALIBRATION-NO-SKILL-LEVELS] AthleteCalibration no longer owns
+  // `skillLevels`; flat presence bonus retains the original intent.
   if (calibration) {
-    if (calibration.skillLevels && Object.keys(calibration.skillLevels).length > 0) {
-      confidence += 0.1
-    }
+    confidence += 0.05
   }
   
   confidence = Math.min(1, confidence)

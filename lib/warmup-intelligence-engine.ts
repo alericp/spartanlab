@@ -1205,13 +1205,21 @@ export function enhanceWarmupFromGovernor(
       if (!existingIds.includes(tendonPrep)) {
         const tendonExercise = WARMUP_EXERCISE_DATABASE.find(e => e.id === tendonPrep)
         if (tendonExercise) {
+          // [WARMUP-EXERCISE-WITH-RATIONALE-CURRENT-SHAPE]
+          // WarmUpExerciseWithRationale exposes
+          // exerciseId/name/prescription/targetJoint/rationale/priority/
+          // isRequired (+ optional knowledgeBubble). The prior
+          // exerciseName/instruction/jointCategory keys came from a
+          // legacy shape and are not on the current contract. The
+          // source definition stores joints in `targetJoints[]`.
           enhancedWarmup.exercises.push({
             exerciseId: tendonExercise.id,
-            exerciseName: tendonExercise.name,
-            instruction: tendonExercise.defaultPrescription,
+            name: tendonExercise.name,
+            prescription: tendonExercise.prescription,
+            targetJoint: tendonExercise.targetJoints[0] ?? 'shoulder',
             rationale: `Added for tendon preparation based on session stress analysis.`,
-            jointCategory: tendonExercise.primaryJoint,
             priority: tendonExercise.priority,
+            isRequired: false,
             knowledgeBubble: tendonExercise.knowledgeBubble,
           })
         }
@@ -1220,18 +1228,23 @@ export function enhanceWarmupFromGovernor(
     
     // Add joint prep for high-stress joints
     for (const joint of warmupNeeds.additionalJointPrep) {
-      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+      // [WARMUP-EXERCISE-DEFINITION-CURRENT-SHAPE] WarmUpExerciseDefinition
+      // exposes `targetJoints: string[]`; legacy `primaryJoint` is gone.
+      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.targetJoints.includes(joint))
       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
       const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
       
       if (newJointExercise) {
+        // [WARMUP-EXERCISE-WITH-RATIONALE-CURRENT-SHAPE] same migration
+        // as the tendon-prep branch above.
         enhancedWarmup.exercises.push({
           exerciseId: newJointExercise.id,
-          exerciseName: newJointExercise.name,
-          instruction: newJointExercise.defaultPrescription,
+          name: newJointExercise.name,
+          prescription: newJointExercise.prescription,
+          targetJoint: newJointExercise.targetJoints[0] ?? joint,
           rationale: `Added for ${joint} preparation due to elevated stress.`,
-          jointCategory: newJointExercise.primaryJoint,
           priority: newJointExercise.priority,
+          isRequired: false,
           knowledgeBubble: newJointExercise.knowledgeBubble,
         })
       }

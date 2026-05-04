@@ -1291,7 +1291,9 @@ export async function executeAuthoritativeGeneration(
       trainingDaysPerWeek: canonicalProfileTyped.trainingDaysPerWeek || null,
       sessionDurationMode: canonicalProfileTyped.sessionDurationMode || null,
       sessionLengthMinutes: canonicalProfileTyped.sessionLengthMinutes || null,
-      equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
+      // [CANONICAL-EQUIPMENT-FIELD] CanonicalProgrammingProfile owns
+      // `equipmentAvailable` only; legacy `equipment` was renamed.
+      equipment: canonicalProfileTyped.equipmentAvailable ?? [],
     }
     
     // [AI-TRUTH-PERSISTENCE] Elevate jointCautions to first-class program field
@@ -1431,8 +1433,11 @@ export async function executeAuthoritativeGeneration(
           packagingDecision: 'straight_sets',
           rationale: 'default',
         },
-        visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
-        templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+        // [VISIBLE-DIFFERENCE-TARGETS-DROPPED] sessionArchitectureTruth
+        // no longer exposes `visibleDifferenceTargets`; safe defaults
+        // for the snapshot keep the audit row intact.
+        visibleDifferenceScore: 0,
+        templateEscapeRequired: false,
         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
       }
     }

@@ -1350,14 +1350,17 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
       : exercisesCount
     
     // Determine primary focus from session blocks or focusLabel
+    // [TRAINING-BLOCK-NO-NAME] TrainingBlock has no `name`; derive a
+    // searchable label from the canonical id + method instead.
     let primaryFocus = 'Strength and skill development'
+    const blockLabel = (block: { id?: string; method?: unknown }) =>
+      `${block.id ?? ''} ${String(block.method ?? '')}`.toLowerCase()
     if (blocks.length > 0) {
-      if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
-        const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
-        primaryFocus = skillBlock?.name || 'Skill progression'
-      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+      if (blocks.some(b => blockLabel(b).includes('skill'))) {
+        primaryFocus = 'Skill progression'
+      } else if (blocks.some(b => blockLabel(b).includes('pull'))) {
         primaryFocus = 'Pulling strength'
-      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+      } else if (blocks.some(b => blockLabel(b).includes('push'))) {
         primaryFocus = 'Pushing strength'
       }
     } else if (session.focusLabel) {

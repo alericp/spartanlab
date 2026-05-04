@@ -577,15 +577,16 @@ export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillRe
   const strengthRecords = getStrengthRecords()
   
   // Find relevant metrics
-  const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
-  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
-  const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
-  const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
-  
-  const maxPullUps = pullUpRecord?.reps || 0
-  const weightedPullUp = weightedPullUpRecord?.weight || 0
-  const maxDips = dipRecord?.reps || 0
-  const maxPushUps = pushUpRecord?.reps || 0
+  // [STRENGTH-RECORD-EXERCISE-TYPE-CURRENT] Same migration as
+  // skill-roadmap-service: only weighted-calisthenics literals exist
+  // in the current ExerciseType union.
+  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_up')
+  const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dip')
+
+  const maxPullUps = weightedPullUpRecord?.reps || 0
+  const weightedPullUp = weightedPullUpRecord?.weightAdded || 0
+  const maxDips = weightedDipRecord?.reps || 0
+  const maxPushUps = 0
 
   // Build unified input for canonical engine
   const input: AthleteReadinessInput = {

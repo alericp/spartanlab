@@ -584,17 +584,20 @@ export function determineRoadmapPosition(
   )
   
   // Get strength data
-  const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
-  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
-  const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
-  const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
-  const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
-  
-  const maxPullUps = pullUpRecord?.reps || 0
-  const weightedPullUp = weightedPullUpRecord?.weight || 0
-  const maxDips = dipRecord?.reps || 0
-  const weightedDips = weightedDipRecord?.weight || 0
-  const maxPushUps = pushUpRecord?.reps || 0
+  // [STRENGTH-RECORD-EXERCISE-TYPE-CURRENT] StrengthRecord ExerciseType
+  // only includes the weighted-calisthenics literals
+  // (`weighted_pull_up`/`weighted_dip`/...). Unweighted pull-up/dip/
+  // push-up max-rep records are not part of the current taxonomy, so
+  // derive max-rep proxies from the weighted records and fall back to
+  // 0 for unweighted push-ups.
+  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_up')
+  const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dip')
+
+  const maxPullUps = weightedPullUpRecord?.reps || 0
+  const weightedPullUp = weightedPullUpRecord?.weightAdded || 0
+  const maxDips = weightedDipRecord?.reps || 0
+  const weightedDips = weightedDipRecord?.weightAdded || 0
+  const maxPushUps = 0
   
   // Calculate readiness for the skill
   let readinessResult: ReadinessResult

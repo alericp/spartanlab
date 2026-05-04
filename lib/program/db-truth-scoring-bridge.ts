@@ -413,13 +413,17 @@ export function buildPrescriptionCalibrationFromBundle(
       }
       
       // Rest calibration based on fatigue threshold
-      if (envelope.fatigueThreshold !== null) {
+      // [FATIGUE-THRESHOLD-NULLISH-NARROW] envelope.fatigueThreshold is
+      // optional/nullable; lift to a local const so the comparisons
+      // narrow correctly without re-reading the optional property.
+      const fatigueThreshold = envelope.fatigueThreshold
+      if (fatigueThreshold != null) {
         // Lower fatigue threshold = need more rest
-        if (envelope.fatigueThreshold < 0.4) {
+        if (fatigueThreshold < 0.4) {
           calibration.restModifier = 30  // Add 30s rest
           calibration.restConfidence = 'medium'
           calibration.restReason = 'low_fatigue_threshold_needs_more_rest'
-        } else if (envelope.fatigueThreshold > 0.7) {
+        } else if (fatigueThreshold > 0.7) {
           calibration.restModifier = -15  // Reduce rest slightly
           calibration.restConfidence = 'low'
           calibration.restReason = 'high_fatigue_tolerance_allows_less_rest'

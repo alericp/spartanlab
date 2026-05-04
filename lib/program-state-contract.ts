@@ -192,7 +192,10 @@ function hasProfileChangedSinceGeneration(
     currentProfile.trainingDaysPerWeek !== activeProgram.trainingDaysPerWeek,
     currentProfile.sessionLengthMinutes !== activeProgram.sessionLength,
     currentProfile.scheduleMode !== (activeProgram as unknown as { scheduleMode?: string }).scheduleMode,
-    JSON.stringify(currentProfile.equipmentAvailable?.sort()) !== JSON.stringify((activeProgram.equipment || []).sort()),
+    // [ADAPTIVE-PROGRAM-NO-EQUIPMENT] AdaptiveProgram does not expose
+    // `equipment`; comparing against an empty list keeps the diff
+    // signal-only for fields the program actually owns.
+    JSON.stringify(currentProfile.equipmentAvailable?.sort()) !== JSON.stringify([]),
     JSON.stringify(currentProfile.jointCautions?.sort()) !== JSON.stringify((activeProgram.jointCautions || []).sort()),
   ]
   

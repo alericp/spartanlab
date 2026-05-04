@@ -425,10 +425,16 @@ export function calculateStrengthProgress(): StrengthProgressData[] {
   const results: StrengthProgressData[] = []
   
   for (const exercise of STRENGTH_EXERCISES) {
-    const exerciseRecords = records.filter(r => 
-      r.exerciseType.toLowerCase().replace(/\s+/g, '_') === exercise.key ||
-      r.exerciseType.toLowerCase().includes(exercise.key.replace(/_/g, ' '))
-    )
+    // [STRENGTH-RECORD-FIELD-MIGRATION] StrengthRecord exposes
+    // `exercise`/`dateLogged`/`weightAdded`; legacy
+    // `exerciseType`/`recordedAt`/`addedWeight` were renamed.
+    const exerciseRecords = records.filter(r => {
+      const recordExercise = String(r.exercise).toLowerCase()
+      return (
+        recordExercise.replace(/\s+/g, '_') === exercise.key ||
+        recordExercise.includes(exercise.key.replace(/_/g, ' '))
+      )
+    })
     
     if (exerciseRecords.length === 0) {
       results.push({
@@ -446,13 +452,13 @@ export function calculateStrengthProgress(): StrengthProgressData[] {
     
     // Sort by date
     const sorted = [...exerciseRecords].sort(
-      (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+      (a, b) => new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
     )
     
-    const currentBest = sorted[0]?.addedWeight || sorted[0]?.reps || 0
+    const currentBest = sorted[0]?.weightAdded || sorted[0]?.reps || 0
     const previousRecords = sorted.slice(1)
     const previousBest = previousRecords.length > 0 
-      ? Math.max(...previousRecords.map(r => r.addedWeight || r.reps || 0))
+      ? Math.max(...previousRecords.map(r => r.weightAdded || r.reps || 0))
       : currentBest
     
     const improvement = currentBest - previousBest
@@ -468,7 +474,7 @@ export function calculateStrengthProgress(): StrengthProgressData[] {
       improvement,
       unit: exercise.unit,
       trend,
-      lastRecordDate: sorted[0]?.recordedAt || null,
+      lastRecordDate: sorted[0]?.dateLogged || null,
     })
   }
   

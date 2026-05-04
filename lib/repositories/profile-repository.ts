@@ -307,8 +307,11 @@ export function saveAthleteProfile(
         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
-        scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
-        trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+        // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+        // exposes `scheduleMode` / `trainingStyle`; preserve the
+        // existing onboarding values verbatim.
+        scheduleMode: currentOnboarding.scheduleMode,
+        trainingStyle: currentOnboarding.trainingStyle,
         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
         // Sync strength benchmarks if present
         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
@@ -330,10 +333,10 @@ export function saveAthleteProfile(
       selectedFlexibility: updated.selectedFlexibility ?? undefined,
       selectedStrength: updated.selectedStrength ?? undefined,
       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
-      scheduleMode: updated.scheduleMode ?? undefined,
+      // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] dropped from sync; canonical
+      // profile derives these from the onboarding source of truth.
       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
       equipmentAvailable: updated.equipmentAvailable ?? undefined,
-      trainingStyle: updated.trainingStyle ?? undefined,
       onboardingComplete: updated.onboardingComplete ?? undefined,
     })
     logCanonicalProfileState('After saveAthleteProfile sync')

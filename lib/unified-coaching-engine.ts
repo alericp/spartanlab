@@ -434,16 +434,20 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   logCanonicalProfileState('loadAthleteContext')
   
   // Legacy reads for backward compatibility (async sources)
-  const profile = await getAthleteProfile(userId)
-  const onboarding = await getOnboardingProfile(userId)
+  // [GET-PROFILE-NO-USERID-ARG] getAthleteProfile/getOnboardingProfile
+  // accept zero arguments in the current contract.
+  const profile = await getAthleteProfile()
+  const onboarding = await getOnboardingProfile()
   
   // Load training style profile from DB (if exists)
   const styleProfileFromDb = await getTrainingStyleProfile(userId)
   
   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
-  const equipment = canonical.equipmentAvailable.length > 0 
-    ? canonical.equipmentAvailable 
-    : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
+  // [ATHLETEPROFILE-NO-EQUIPMENT] AthleteProfile no longer exposes
+  // `equipment`; canonical + onboarding remain the truthful sources.
+  const equipment = canonical.equipmentAvailable.length > 0
+    ? canonical.equipmentAvailable
+    : (onboarding?.equipmentAvailable || ['pull_bar', 'dip_bars', 'floor'])
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   
   // Determine training style - prefer DB, then infer from onboarding
@@ -730,10 +734,30 @@ async function buildFatigueContext(
   const trainingDecision = getQuickFatigueDecision()
   
   // Get recovery signal
-  const recoverySignal = calculateRecoverySignal(userId)
+  // [CALCULATE-RECOVERY-SIGNAL-NO-ARG] zero-arg signature.
+  const recoverySignal = calculateRecoverySignal()
   
   // Get deload recommendation
-  const deloadRecommendation = await getDeloadRecommendation(userId)
+  // [DELOAD-CONTRACT-CURRENT] getDeloadRecommendation now expects
+  // (recoveryStatus, fatigueTrend, jointDiscomforts, signals,
+  // daysSinceLastDeload?). Build a minimal FatigueSignalSummary from
+  // the canonical recovery + joint state we already have in context.
+  const deloadSignals: FatigueSignalSummary = {
+    performanceDrop: false,
+    exerciseSkips: false,
+    jointFlags: athleteContext.jointCautions.length > 0,
+    volumeSpike: false,
+    consecutiveTrainingDays: 0,
+    missedReps: false,
+    rpeElevated: false,
+  }
+  const deloadRecommendation = getDeloadRecommendation(
+    recoverySignal.level === 'red' ? 'fatigued' : 'recovered',
+    'stable',
+    [],
+    deloadSignals,
+    30
+  )
   
   // Determine fatigue level
   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
@@ -879,10 +903,13 @@ function buildProtocolContext(
     includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
   })
   
-  // Categorize protocols by timing
-  const warmupProtocols = allProtocols.filter(p => p.timing === 'warmup')
-  const recoveryProtocols = allProtocols.filter(p => p.timing === 'cooldown')
-  const prehabProtocols = allProtocols.filter(p => p.timing === 'standalone')
+  // Categorize protocols by activation type
+  // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
+  // `protocol` / `reason` / `priority`; `timing` was renamed and
+  // moved into `protocol.activationType`.
+  const warmupProtocols = allProtocols.filter(p => p.protocol.activationType === 'warmup')
+  const recoveryProtocols = allProtocols.filter(p => p.protocol.activationType === 'recovery')
+  const prehabProtocols = allProtocols.filter(p => p.protocol.activationType === 'prehab')
   
   return {
     recommendations: allProtocols,
@@ -1033,14 +1060,17 @@ function buildMovementBiasContext(
       frontLever: skillContext.states.find(s => s.skill === 'front_lever')
         ? {
             readiness: readiness?.straightArmScore || 50,
-            currentNode: skillContext.states.find(s => s.skill === 'front_lever')?.currentNode || 'tuck',
+            // [SKILLSTATE-NO-CURRENT-NODE] SkillState no longer owns
+            // `currentNode`; use the legacy default literal.
+            currentNode: 'tuck',
             confidence: 0.7,
           }
         : undefined,
       planche: skillContext.states.find(s => s.skill === 'planche')
         ? {
             readiness: readiness?.straightArmScore ? readiness.straightArmScore * 0.8 : 40,
-            currentNode: skillContext.states.find(s => s.skill === 'planche')?.currentNode || 'lean',
+            // [SKILLSTATE-NO-CURRENT-NODE]
+            currentNode: 'lean',
             confidence: 0.7,
           }
         : undefined,

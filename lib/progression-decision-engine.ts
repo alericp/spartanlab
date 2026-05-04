@@ -342,13 +342,14 @@ export function getRecentPerformance(
     )
     
     // Filter for trusted logs only
+    // [TRUSTED-IS-TRUE-OR-UNDEFINED] log.trusted is `true | undefined`;
+    // explicit-false comparisons are impossible. Coalesce to the
+    // legacy default of trusted-true.
     const trustedLogs = sortedLogs.filter(log => {
-      // Explicit trusted field takes precedence
-      if (log.trusted === false) return false
       // Demo sources are never trusted
       if (log.sourceRoute === 'demo') return false
       // Default to trusted for legacy logs
-      return log.trusted !== false
+      return log.trusted ?? true
     })
     
     console.log('[progression-loop] Getting recent performance:', {

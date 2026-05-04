@@ -382,14 +382,17 @@ function buildWarmupBlock(context: UnifiedEngineContext, isPrimaryDay: boolean):
   }
   
   // Add protocol exercises
+  // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
+  // `protocol`/`reason`/`priority`. The display fields live on the
+  // nested `protocol` object (id/name/exercises/purpose).
   protocols.slice(0, 2).forEach(protocol => {
     exercises.push({
-      id: protocol.id,
-      name: protocol.name,
+      id: protocol.protocol.id,
+      name: protocol.protocol.name,
       sets: 2,
-      reps: protocol.prescription || '8-12 reps',
+      reps: protocol.protocol.exercises[0]?.prescription || '8-12 reps',
       rest: '30s',
-      notes: [protocol.rationale || ''],
+      notes: [protocol.reason || protocol.protocol.purpose || 'Joint integrity support'],
       movementFamily: 'joint_integrity',
       isSubstitutable: true,
     })
@@ -648,14 +651,15 @@ function buildCooldownBlock(context: UnifiedEngineContext, includeExtra: boolean
   
   // Add recovery protocols
   if (includeExtra) {
+    // [PROTOCOL-RECOMMENDATION-NESTED] same migration as warmup branch.
     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
       exercises.push({
-        id: protocol.id,
-        name: protocol.name,
+        id: protocol.protocol.id,
+        name: protocol.protocol.name,
         sets: 1,
-        reps: protocol.prescription || '2 minutes',
+        reps: protocol.protocol.exercises[0]?.prescription || '2 minutes',
         rest: '-',
-        notes: [protocol.rationale || 'Recovery support'],
+        notes: [protocol.reason || protocol.protocol.purpose || 'Recovery support'],
         movementFamily: 'mobility',
         isSubstitutable: true,
       })

@@ -384,7 +384,8 @@ function analyzeShoulderMobility(factors: UserProfileFactors): WeakPointAssessme
   // Experience level impacts assumed mobility development
   if (factors.experienceLevel === 'beginner') {
     score = Math.max(40, score - 15)
-    severity = severity === 'none' ? 'moderate' : severity
+    // [SEVERITY-NONE-COMPARE-IMPOSSIBLE] severity is narrowed to
+    // 'moderate' | 'significant' here; legacy 'none' check removed.
     recommendations.push('Build shoulder extension mobility gradually')
     priorityExercises.push('skin_the_cat', 'german_hang_progressions')
   } else if (factors.experienceLevel === 'intermediate') {

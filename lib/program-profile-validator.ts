@@ -1268,15 +1268,17 @@ export function checkDisplayedStateDrift(
   let genExercisesWithRest = 0
   let displayExercisesWithRest = 0
   
+  // [ADAPTIVE-EXERCISE-REST-SECONDS] AdaptiveExercise exposes
+  // `restSeconds` (number); legacy `rest` was renamed.
   for (const session of generatedProgram.sessions || []) {
     for (const ex of session.exercises || []) {
-      if (ex.rest) genExercisesWithRest++
+      if (ex.restSeconds != null) genExercisesWithRest++
     }
   }
   
   for (const session of displayedProgram.sessions || []) {
     for (const ex of session.exercises || []) {
-      if (ex.rest) displayExercisesWithRest++
+      if (ex.restSeconds != null) displayExercisesWithRest++
     }
   }
   

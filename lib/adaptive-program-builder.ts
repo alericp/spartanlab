@@ -12198,11 +12198,16 @@ async function generateAdaptiveProgramImpl(
   // stable across the cycle (each role's intensity caps stay protected for
   // week-1 build, but the role labels persist regardless).
   // ==========================================================================
+  // [WEEK-PHASE-TAG-LITERAL-PRESERVE] The IIFE returned a widened
+  // `string` because no type-context flowed through the closure. Use
+  // an `as const` literal so TS keeps the value at type
+  // `'acclimation'` and accepts assignment into WeekPhaseTag
+  // (weekly-session-role-contract.ts L207).
   const weeklyRoleWeekPhase: WeekPhaseTag = (() => {
     // Builder is currently always producing week-1 dosage for the saved
     // program object. We do NOT lie about this — even when the user is
     // viewing later weeks, the saved generation is week-1.
-    return 'acclimation'
+    return 'acclimation' as const
   })()
 
   const weeklyRoleComplexityScore = (() => {
@@ -15824,7 +15829,11 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
       // applied/rejected/deferred" survives intact. Only the *binary*
       // applied/rejected verdict now defers to the upstream owner.
       appliedMethods: (() => {
-        const result: string[] = []
+        // [APPLIED-METHODS-CANONICAL-LITERAL] styleMetadata.appliedMethods
+        // is `TrainingMethodPreference[]` (training-methods.ts L1975).
+        // Each push uses a literal from that union, so type the
+        // accumulator narrowly instead of the legacy `string[]`.
+        const result: TrainingMethodPreference[] = []
         const hasSupersetGroup = finalStyledGroups.some(g => g.groupType === 'superset')
         const hasCircuitGroup = finalStyledGroups.some(g => g.groupType === 'circuit')
         const hasDensityGroup = finalStyledGroups.some(g => g.groupType === 'density_block')
@@ -19526,7 +19535,7 @@ let dayFocusTruthAudit: Array<{
       // [BUILDER-FINAL-SCHEDULE-MODE-EARLY-READ] `finalScheduleMode` is
       // declared at ~line 19595 as `const finalScheduleMode = inputScheduleMode`.
       // This read happens before that declaration (TS2552). Use the actual
-      // upstream source `inputScheduleMode` — same value, same string union.
+      // upstream source `inputScheduleMode` ��� same value, same string union.
       adaptiveScheduleUsed: inputScheduleMode === 'flexible',
       pullExpressionPresent,
       pushExpressionPresent,
@@ -20703,7 +20712,19 @@ console.log('[program-generate] Generation complete:', {
     goalLabel: GOAL_LABELS[primaryGoal],
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
-    sessionLength,
+    // [SESSION-LENGTH-LITERAL-BUCKET] AdaptiveProgram.sessionLength
+    // (L2061) is the canonical `SessionLength` union 30|45|60|75
+    // (types/domain.ts L185). The local `sessionLength` is a free
+    // number after normalisation (L6140). Bucket it into the closest
+    // canonical literal to preserve truthful display while satisfying
+    // the type — same buckets the existing `sessionLengthBucket`
+    // resolver at L12726 uses.
+    sessionLength: ((): 30 | 45 | 60 | 75 => {
+      if (sessionLength <= 35) return 30
+      if (sessionLength <= 50) return 45
+      if (sessionLength <= 67) return 60
+      return 75
+    })(),
     // TASK 3C: Store training path and selected skills for summary display
     trainingPathType: canonicalProfile.trainingPathType || 'balanced',
     // [TASK 1 FIX] Store FULL canonical selectedSkills, not just represented subset
@@ -20854,10 +20875,24 @@ fatigueDecision: fatigueDecision ? {
   // Deload recommendation
   deloadRecommendation,
   // Session variety analysis
+  // [VARIETY-ANALYSIS-CONTRACT-FILL] Type owner (L2303-L2311) requires
+  // four extra fields the program-level summary did not previously
+  // populate. Wire truthful values from local fatigueDecision /
+  // deloadRecommendation when available, otherwise fall back to
+  // neutral defaults so the contract is satisfied without inventing
+  // data.
   varietyAnalysis: {
     sessionIntents,
     repetitionJustifications,
     varietyScore,
+    fatigueLevel: isReduceTrainingDecision(fatigueDecision) || isDeloadTrainingDecision(fatigueDecision)
+      ? 'elevated'
+      : 'normal',
+    coachingMessage: fatigueDecision?.shortGuidance || '',
+    volumeReductionPercent: deloadRecommendation?.shouldDeload
+      ? Math.round((1 - (feedbackState?.volumeModifier ?? 1)) * 100)
+      : 0,
+    recommendedProtocols: deloadRecommendation?.recommendedProtocols || [],
   },
   // TASK 4 & 6: Weekly progression and load balancing
   // [post-validation-step] Step 6: Weekly progression context
@@ -20973,16 +21008,52 @@ fatigueDecision: fatigueDecision ? {
     // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Guard against null skillIntelligence
     skillIntelligence: (() => {
       postValidationStep = 'finalize_skill_intelligence'
+      // [SKILL-INTELLIGENCE-SHAPE-COERCE] Type owner (L2371-L2390)
+      // declares prioritization/globalLimiters/affectedSkills/etc. as
+      // string-valued. The unified intelligence service returns
+      // SkillKey-typed values. Coerce each through `String(...)` (or
+      // null) so the shared display contract receives plain strings,
+      // and the empty fallback shape now matches the declared object
+      // shape (objects, not arrays).
+      const toStringOrNull = (v: unknown): string | null =>
+        v === null || v === undefined ? null : String(v)
+      const toStringArray = (v: unknown): string[] =>
+        Array.isArray(v) ? v.map(s => String(s)) : []
       return skillIntelligence ? {
-      prioritization: skillIntelligence.prioritization,
-      globalLimiters: skillIntelligence.globalLimiters,
-      dataQuality: skillIntelligence.dataQuality,
-      adjustments: intelligenceAdjustments?.slice(0, 3) || [], // Top 3 adjustments
+        prioritization: {
+          primaryEmphasis: toStringOrNull(skillIntelligence.prioritization?.primaryEmphasis),
+          secondaryEmphasis: toStringOrNull(skillIntelligence.prioritization?.secondaryEmphasis),
+          exposureOnly: toStringArray(skillIntelligence.prioritization?.exposureOnly),
+          shouldAvoid: toStringArray(skillIntelligence.prioritization?.shouldAvoid),
+        },
+        globalLimiters: {
+          primaryPattern: toStringOrNull(skillIntelligence.globalLimiters?.primaryPattern),
+          affectedSkills: toStringArray(skillIntelligence.globalLimiters?.affectedSkills),
+          recommendation: skillIntelligence.globalLimiters?.recommendation
+            ? String(skillIntelligence.globalLimiters.recommendation)
+            : '',
+        },
+        dataQuality: skillIntelligence.dataQuality,
+        adjustments: (intelligenceAdjustments?.slice(0, 3) || []).map(a => ({
+          type: String(a.type),
+          target: String(a.target),
+          reason: String(a.reason),
+          priority: a.priority,
+        })),
       } : {
-      prioritization: [],
-      globalLimiters: [],
-      dataQuality: 'insufficient' as const,
-      adjustments: [],
+        prioritization: {
+          primaryEmphasis: null,
+          secondaryEmphasis: null,
+          exposureOnly: [],
+          shouldAvoid: [],
+        },
+        globalLimiters: {
+          primaryPattern: null,
+          affectedSkills: [],
+          recommendation: '',
+        },
+        dataQuality: 'insufficient' as const,
+        adjustments: [],
       }
     })(),
     // [post-validation-step] Step 9: Progression insights
@@ -21166,9 +21237,20 @@ fatigueDecision: fatigueDecision ? {
 
         return buildWorkoutReasoningSummary(
           readinessResult,
+          // [WORKOUT-REASONING-CONSTRAINT-NULL-TO-UNDEFINED]
+          // buildWorkoutReasoningSummary (canonical-readiness-engine.ts
+          // L1154) expects `primaryConstraint?: string;
+          // secondaryConstraint?: string`. The local
+          // `constraintContext.secondaryConstraint` is
+          // `ConstraintCategory | null`. Map nullish → undefined and
+          // coerce to plain string at the boundary.
           constraintInsight.hasInsight ? {
-            primaryConstraint: constraintInsight.label,
-            secondaryConstraint: constraintContext.secondaryConstraint || null,
+            primaryConstraint: typeof constraintInsight.label === 'string'
+              ? constraintInsight.label
+              : undefined,
+            secondaryConstraint: constraintContext.secondaryConstraint
+              ? String(constraintContext.secondaryConstraint)
+              : undefined,
             protocolsAdded: deloadRecommendation?.recommendedProtocols || [],
           } : null,
           trainingEmphasis ? {
@@ -21258,14 +21340,20 @@ fatigueDecision: fatigueDecision ? {
           } : null,
           envelopeConfidence: 0.5,
           envelopeLimits: null,
-          // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] ConstraintAwareInput
-          // no longer owns `styleEnabled` / `styleRules`; styling moved to
-          // the dedicated style engine. Drop the stale keys here.
-          // [BUILDER-CONSTRAINT-INPUT-REQUIRED-EQUIPMENT-DROPPED]
-          // ConstraintAwareInput likewise no longer owns `requiredEquipment`;
-          // equipment requirements are computed from the exercise pool
-          // downstream from `availableEquipment`.
+          // [CONSTRAINT-AWARE-INPUT-CANONICAL-FIELDS] ConstraintAwareInput
+          // (constraint-aware-assembly-engine.ts L106) declares
+          // `trainingStyle: string`, `styleProgrammingRules:
+          // StyleProgrammingRules | null`, and
+          // `missingCriticalEquipment: string[]`. Pull truthful values
+          // from the canonical profile / training emphasis where
+          // available; otherwise pass neutral defaults rather than
+          // omitting the keys.
+          trainingStyle: typeof canonicalProfile.trainingStyle === 'string'
+            ? canonicalProfile.trainingStyle
+            : '',
+          styleProgrammingRules: null,
           availableEquipment: equipment,
+          missingCriticalEquipment: [],
         }
         
         return analyzeConstraints(constraintInput)
@@ -21309,9 +21397,14 @@ fatigueDecision: fatigueDecision ? {
           frameworkRules: null,
           envelopeConfidence: 0.5,
           envelopeLimits: null,
-          // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] same as above.
-          // [BUILDER-CONSTRAINT-INPUT-REQUIRED-EQUIPMENT-DROPPED] same as above.
+          // [CONSTRAINT-AWARE-INPUT-CANONICAL-FIELDS] Same canonical
+          // contract as the analyseConstraints call above.
+          trainingStyle: typeof canonicalProfile.trainingStyle === 'string'
+            ? canonicalProfile.trainingStyle
+            : '',
+          styleProgrammingRules: null,
           availableEquipment: equipment,
+          missingCriticalEquipment: [],
         }
         
     const analysis = analyzeConstraints(constraintInput)
@@ -28013,7 +28106,12 @@ function generateAdaptiveSession(
         
         // Safe skill hint extraction (probe accessors first, then fall back to category)
         // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
-        normalized.skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof (ex as { category?: unknown })?.category === 'string' ? (ex as { category: string }).category : '')
+        // [SELECTED-EXERCISE-CATEGORY-RUNTIME-NARROW] SelectedExercise
+        // wraps the canonical exercise inside `.exercise` and does not
+        // expose a flat `category` on the wrapper itself. Bridge the
+        // narrowed cast through `unknown` so the wider SelectedExercise
+        // shape is not coerced directly to `{ category: string }`.
+        normalized.skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof (ex as { category?: unknown })?.category === 'string' ? (ex as unknown as { category: string }).category : '')
         
         // [CHECKPOINT] inside_score_map_after_normalization
         if (exIndex < 3) {
@@ -28041,7 +28139,10 @@ function generateAdaptiveSession(
             exerciseName: normalized.name,
             // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
             // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
-            rawCategoryPreview: typeof (ex as { category?: unknown })?.category === 'string' ? ((ex as { category: string }).category).slice(0, 20) : String(typeof (ex as { category?: unknown })?.category),
+            // [SELECTED-EXERCISE-CATEGORY-RUNTIME-NARROW] same bridge as
+            // skillHint — go through `unknown` to dodge the
+            // SelectedExercise wrapper type.
+            rawCategoryPreview: typeof (ex as { category?: unknown })?.category === 'string' ? ((ex as unknown as { category: string }).category).slice(0, 20) : String(typeof (ex as { category?: unknown })?.category),
             rawExerciseCategoryPreview: getExerciseCategory(ex).slice(0, 20),
             rawMovementPatternPreview: getExerciseMovementPattern(ex).slice(0, 20),
             normalizedMovementPattern: normalized.movementPattern,
@@ -28876,7 +28977,12 @@ function generateAdaptiveSession(
         // [BUNDLE-CONSUMED-DOSAGE] Max exercises per family - now bundle-informed
         // If bundle has high dosage confidence from benchmarks/envelopes, allow more
         // ==========================================================================
-        const bundleDosageDecision = sessionContext?.bundleDecisions?.dosage
+        // [BUNDLE-DOSAGE-CONTEXT-OWNER] `sessionContext` is the outer-
+        // builder local declared at L12772; inside generateAdaptiveSession
+        // (L26672) the parameter name is `context` and it is the only
+        // owner of `bundleDecisions`. Read through the destructured
+        // wrapper directly.
+        const bundleDosageDecision = context?.bundleDecisions?.dosage
         const bundleDosageAdjustment = bundleDosageDecision?.adjustment ?? 0
         const bundleDosageConfidenceLevel = bundleDosageDecision?.confidence ?? 'low'
         
@@ -29227,7 +29333,12 @@ function generateAdaptiveSession(
           exerciseName: getExerciseName(ex) || 'unknown',
               rawSkillType: typeof rawExerciseSkill,
               isArray: Array.isArray(rawExerciseSkill),
-              constructorName: rawExerciseSkill?.constructor?.name || 'unknown',
+              // [RAW-SKILL-NEVER-NARROWED] After the prior null/undefined
+              // and `typeof !== 'string'` guards, TS narrows
+              // `rawExerciseSkill` to `never` inside this debug log. Read
+              // through `unknown` so `.constructor.name` still produces
+              // a useful diagnostic string.
+              constructorName: (rawExerciseSkill as unknown as { constructor?: { name?: string } } | null | undefined)?.constructor?.name || 'unknown',
               fallbackApplied: true,
               verdict: 'MALFORMED_EXERCISE_SKILL_SKIPPED',
             })
@@ -29238,6 +29349,12 @@ function generateAdaptiveSession(
           if (!exerciseSkill) return ex
           
           const family = mapSkillToFamily(exerciseSkill)
+          // [EXPOSURE-READINESS-MAP-NULL-GUARD] `getReadinessForFamily`
+          // (lib/program/exposure-adaptation-readiness.ts L583) declares
+          // its first param as a non-nullable Map. The destructured
+          // context default is `null`, so guard before the call rather
+          // than passing a nullable value.
+          if (!exposureReadinessMap) return ex
           const readiness = getReadinessForFamily(exposureReadinessMap, family)
           if (!readiness) return ex
           

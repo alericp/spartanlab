@@ -197,7 +197,11 @@ export function hasBaselineCapability(): boolean {
 export function getTrustedWorkoutLogs(): WorkoutLog[] {
   return getWorkoutLogs().filter(log => {
     // Reject demo workouts
-    if (log.sourceRoute === 'demo' || (log as Record<string, unknown>).isDemo === true) return false
+    // [BASELINE-EARNED-TRUTH-LEGACY-FIELD-BRIDGE] `WorkoutLog` is a
+    // structurally narrow contract; legacy demo logs occasionally carry
+    // an `isDemo` flag. Bridge through `unknown` so the cast is
+    // type-safe (TS2352).
+    if (log.sourceRoute === 'demo' || (log as unknown as Record<string, unknown>).isDemo === true) return false
     // Reject explicitly untrusted
     if (log.trusted === false) return false
     // Require explicit trust OR known good sourceRoute
@@ -225,7 +229,9 @@ export function getEarnedStrengthRecords(): StrengthRecord[] {
     const recordDate = r.dateLogged?.split('T')[0]
     // If record date matches a trusted workout date, it's earned
     // Also accept records with explicit "earned" source if that field exists
-    const source = (r as Record<string, unknown>).source as string | undefined
+    // [BASELINE-EARNED-TRUTH-LEGACY-FIELD-BRIDGE] same pattern as above:
+    // bridge through `unknown` for the legacy `source` field.
+    const source = (r as unknown as Record<string, unknown>).source as string | undefined
     if (source?.startsWith('earned_')) return true
     if (source?.startsWith('baseline_')) return false
     // Fallback: check if date matches a trusted workout

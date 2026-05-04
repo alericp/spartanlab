@@ -740,8 +740,12 @@ export function getCycleBuilderModifications(
   let priorityFamilies: string[] = []
   let reducedFamilies: string[] = []
   
-  if (weakPoint?.primary) {
-    priorityFamilies = weakPoint.primary.priorityExercises.slice(0, 3)
+  // [TRAINING-CYCLE-WEAK-POINT-ASSESSMENT-FLAT-SHAPE] Canonical
+  // `WeakPointAssessment` (weak-point-priority-engine.ts) is flat —
+  // `priorityExercises: string[]` lives directly on the assessment.
+  // The legacy nested `.primary.priorityExercises` shape was removed.
+  if (weakPoint?.priorityExercises?.length) {
+    priorityFamilies = weakPoint.priorityExercises.slice(0, 3)
   }
   
   // Phase-specific adjustments
@@ -890,9 +894,15 @@ export function selectInitialCycle(
   }
   
   // Find matching strength cycle
-  if (primaryGoal === 'weighted_pull' || primaryGoal === 'weighted_dip') {
+  // [TRAINING-CYCLE-PRIMARY-GOAL-WEIGHTED-LITERALS] `'weighted_pull'`
+  // and `'weighted_dip'` are not on the canonical `PrimaryGoal` union
+  // (`weighted_strength` is the canonical aggregate). Compare via a
+  // string projection so DB-sourced legacy values still match without
+  // widening `PrimaryGoal`.
+  const _primaryGoalStr = String(primaryGoal)
+  if (_primaryGoalStr === 'weighted_pull' || _primaryGoalStr === 'weighted_dip' || primaryGoal === 'weighted_strength') {
     const matchingCycle = ALL_TRAINING_CYCLES.find(
-      c => c.type === 'strength' && c.focus === primaryGoal
+      c => c.type === 'strength' && c.focus === _primaryGoalStr
     )
     if (matchingCycle) return matchingCycle
   }

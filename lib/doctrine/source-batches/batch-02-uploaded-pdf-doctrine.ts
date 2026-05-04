@@ -33,7 +33,10 @@ import type {
   CarryoverRule,
 } from "../../doctrine-db"
 
-const NOW = new Date().toISOString()
+// [BATCH-02-NOW-DATE] DoctrineSource declares `createdAt: Date` and
+// `updatedAt: Date`. Use a Date instance, not an ISO string, so the
+// many `createdAt: NOW` rows below match the canonical type.
+const NOW = new Date()
 const BATCH_02_VERSION = "batch_02_v1"
 const PROVENANCE_NOTE = "derived_from_prompt_section_3_summary"
 
@@ -740,18 +743,33 @@ function addProgression(args: {
   userVisibleEvidenceLabel: string
 }): void {
   const id = atomId("prog", args.n)
+  // [BATCH-02-PROGRESSION-RULE-CANONICAL] Canonical `ProgressionRule`
+  // (lib/doctrine-db.ts L49-60) owns `skillKey`, `currentLevelKey`,
+  // `nextLevelKey`, `requiredPrerequisitesJson`, `minReadinessJson`,
+  // `progressionRuleSummary`, `cautionFlagsJson`, `confidenceWeight`.
+  // The legacy batch-02 helper used a wider shape (`exerciseFamily`,
+  // `fromLevelKey`, `toLevelKey`, …). Map at the boundary here so the
+  // legacy authoring API stays the same but the stored row matches the
+  // canonical contract. Trigger JSONs are folded into requiredPrereqs.
+  const requiredPrereqs: Record<string, string> | null = (() => {
+    if (!args.entryCriteriaJson && !args.progressionTriggerJson) return null
+    const merged: Record<string, string> = {}
+    for (const [k, v] of Object.entries({ ...(args.entryCriteriaJson ?? {}), ...(args.progressionTriggerJson ?? {}) })) {
+      merged[k] = typeof v === 'string' ? v : JSON.stringify(v)
+    }
+    return merged
+  })()
   BATCH_02_PROGRESSION_RULES.push({
     id,
     sourceId: args.sourceId,
-    exerciseFamily: args.exerciseFamily,
-    fromLevelKey: args.fromLevelKey,
-    toLevelKey: args.toLevelKey,
-    entryCriteriaJson: args.entryCriteriaJson,
-    progressionTriggerJson: args.progressionTriggerJson,
-    regressionTriggerJson: args.regressionTriggerJson,
-    assistedVariation: args.assistedVariation,
-    advancedVariationLockout: args.advancedVariationLockout,
-    rationale: args.rationale,
+    skillKey: args.exerciseFamily,
+    currentLevelKey: args.fromLevelKey ?? '',
+    nextLevelKey: args.toLevelKey ?? '',
+    requiredPrerequisitesJson: requiredPrereqs,
+    minReadinessJson: null,
+    progressionRuleSummary: args.rationale,
+    cautionFlagsJson: args.advancedVariationLockout ? [args.advancedVariationLockout] : null,
+    confidenceWeight: 1,
   })
   recordProvenance({
     atomId: id,
@@ -1289,15 +1307,27 @@ function addContra(args: {
   userVisibleEvidenceLabel: string
 }): void {
   const id = atomId("contra", args.n)
+  // [BATCH-02-CONTRAINDICATION-RULE-CANONICAL] Canonical
+  // `ContraindicationRule` (lib/doctrine-db.ts L76-84) owns
+  // `exerciseKey`, `blockedJointJson`, `blockedContextJson`,
+  // `modificationGuidance`, `severity: 'warning' | 'caution' | 'blocked'`.
+  // Map: numeric `severity` → labeled `severity`; legacy
+  // `exerciseFamily` is folded into `blockedContextJson.exerciseFamily`;
+  // `contraindicationKey` and description go into modificationGuidance.
+  const severityLabel: 'warning' | 'caution' | 'blocked' =
+    args.severity >= 8 ? 'blocked' : args.severity >= 5 ? 'caution' : 'warning'
   BATCH_02_CONTRAINDICATION_RULES.push({
     id,
     sourceId: args.sourceId,
-    exerciseKey: args.exerciseKey,
-    exerciseFamily: args.exerciseFamily,
-    contraindicationKey: args.contraindicationKey,
-    contraindicationDescription: args.contraindicationDescription,
-    severity: args.severity,
-    alternativeExercise: args.alternativeExercise,
+    exerciseKey: args.exerciseKey ?? '',
+    blockedJointJson: null,
+    blockedContextJson: args.exerciseFamily
+      ? { exerciseFamily: true }
+      : null,
+    modificationGuidance: args.alternativeExercise
+      ? `${args.contraindicationDescription} → use ${args.alternativeExercise}`
+      : args.contraindicationDescription,
+    severity: severityLabel,
   })
   recordProvenance({
     atomId: id,
@@ -1376,13 +1406,28 @@ function addMethod(args: {
   conflictGroup?: string
 }): void {
   const id = atomId("method", args.n)
+  // [BATCH-02-METHOD-RULE-CANONICAL] Canonical `MethodRule`
+  // (lib/doctrine-db.ts L86-96) owns `category`, `compatibleGoalsJson`,
+  // `compatibleLevelsJson`, `bestUseCasesJson`, `avoidUseCasesJson`,
+  // `structureBiasJson` — not the legacy `contextKey` / `recommendation`
+  // / `reasoning` shape. Map at the boundary: contextKey routes to
+  // `category`, `recommendation` decides whether the contextKey lands
+  // in `bestUseCasesJson` or `avoidUseCasesJson`, and `reasoning` is
+  // preserved on `structureBiasJson.reasoning`.
+  const isPositive = args.recommendation === 'preferred'
   BATCH_02_METHOD_RULES.push({
     id,
     sourceId: args.sourceId,
     methodKey: args.methodKey,
-    contextKey: args.contextKey,
-    recommendation: args.recommendation,
-    reasoning: args.reasoning,
+    category: args.contextKey,
+    compatibleGoalsJson: null,
+    compatibleLevelsJson: null,
+    bestUseCasesJson: isPositive ? [args.contextKey] : null,
+    avoidUseCasesJson: !isPositive ? [args.contextKey] : null,
+    structureBiasJson: {
+      recommendation: args.recommendation,
+      reasoning: args.reasoning,
+    },
   })
   recordProvenance({
     atomId: id,
@@ -1983,12 +2028,23 @@ function addCarryover(args: {
   userVisibleEvidenceLabel: string
 }): void {
   const id = atomId("carry", args.n)
+  // [BATCH-02-CARRYOVER-TYPE-CANONICAL] Canonical
+  // `CarryoverRule.carryoverType` is the union
+  // `'direct' | 'indirect' | 'prerequisite' | 'accessory'`. Legacy
+  // batch-02 entries use richer labels (e.g. `complementary_skill`).
+  // Normalize at the boundary; unknown labels collapse to
+  // `'accessory'` (the catch-all support carryover).
+  const validCarryover = (() => {
+    const t = args.carryoverType
+    if (t === 'direct' || t === 'indirect' || t === 'prerequisite' || t === 'accessory') return t
+    return 'accessory' as const
+  })()
   BATCH_02_CARRYOVER_RULES.push({
     id,
     sourceId: args.sourceId,
     sourceExerciseOrSkillKey: args.sourceExerciseOrSkillKey,
     targetSkillKey: args.targetSkillKey,
-    carryoverType: args.carryoverType,
+    carryoverType: validCarryover,
     carryoverStrength: args.carryoverStrength,
     rationale: args.rationale,
   })

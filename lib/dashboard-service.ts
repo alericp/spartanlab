@@ -317,7 +317,11 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
       secondaryGoal: adaptiveProgram.secondaryGoal || 'none',
       scheduleMode: adaptiveProgram.scheduleMode,
       selectedSkillsCount: adaptiveProgram.selectedSkills?.length || 0,
-      trainingPathType: (adaptiveProgram as Record<string, unknown>).trainingPathType || 'not set',
+      // [DASHBOARD-SERVICE-LEGACY-FIELD-BRIDGE] AdaptiveProgram does
+      // not declare `trainingPathType` / `sessionDurationMode` in its
+      // canonical contract — they're set at runtime by the program
+      // composer. Bridge through `unknown` to satisfy TS2352.
+      trainingPathType: (adaptiveProgram as unknown as Record<string, unknown>).trainingPathType || 'not set',
     })
     
     return {
@@ -333,10 +337,11 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
       secondaryGoal: adaptiveProgram.secondaryGoal || null,
       scheduleMode: adaptiveProgram.scheduleMode || null,
       // TASK C FIX: Access sessionDurationMode safely (may not be typed but is set at runtime)
-      sessionDurationMode: (adaptiveProgram as Record<string, unknown>).sessionDurationMode as string || null,
+      // [DASHBOARD-SERVICE-LEGACY-FIELD-BRIDGE] same bridge pattern.
+      sessionDurationMode: (adaptiveProgram as unknown as Record<string, unknown>).sessionDurationMode as string || null,
       // Program composition fields
       selectedSkills: adaptiveProgram.selectedSkills || null,
-      trainingPathType: (adaptiveProgram as Record<string, unknown>).trainingPathType as string || null,
+      trainingPathType: (adaptiveProgram as unknown as Record<string, unknown>).trainingPathType as string || null,
       programRationale: adaptiveProgram.programRationale || null,
     }
   }

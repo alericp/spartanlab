@@ -780,8 +780,14 @@ export async function detectConstraints(
       primaryConstraint: 'none',
       secondaryConstraint: null,
       strongQualities: [],
-      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      // [CONSTRAINT-DETECTION-SCHEDULE-STATUS-CONTRACT] L379 declares
+      // `scheduleStatus` with `isTimeLimited` / `averageSessionMinutes`
+      // / `shortenedSessionRate` / `recommendation`. The legacy
+      // `isOptimal` / `weeksConsistent` keys were removed.
+      scheduleStatus: { isTimeLimited: false, averageSessionMinutes: 0, shortenedSessionRate: 0, recommendation: 'Insufficient data' },
       fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
+      // [CONSTRAINT-DETECTION-SKILL-RESULTS-EXHAUSTIVE]
+      // Record<SkillType, ...> (L373) includes `iron_cross`.
       skillResults: {
         front_lever: null,
         back_lever: null,
@@ -789,8 +795,12 @@ export async function detectConstraints(
         hspu: null,
         muscle_up: null,
         l_sit: null,
+        iron_cross: null,
       },
-      recommendations: ['Complete profile setup'],
+      // [CONSTRAINT-DETECTION-RECOMMENDATIONS-FIELD] L385 owns
+      // `overallRecommendations`, not `recommendations`.
+      overallRecommendations: ['Complete profile setup'],
+      dataQuality: 'insufficient',
     }
   }
   
@@ -925,7 +935,8 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
       primaryConstraint: 'none',
       secondaryConstraint: null,
       strongQualities: [],
-      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      // [CONSTRAINT-DETECTION-SCHEDULE-STATUS-CONTRACT] same as L783.
+      scheduleStatus: { isTimeLimited: false, averageSessionMinutes: 0, shortenedSessionRate: 0, recommendation: 'Insufficient data' },
       fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
       skillResults: {
         front_lever: null,
@@ -934,8 +945,10 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
         hspu: null,
         muscle_up: null,
         l_sit: null,
+        iron_cross: null,
       },
-      recommendations: ['Complete profile setup'],
+      overallRecommendations: ['Complete profile setup'],
+      dataQuality: 'insufficient',
     }
   }
   

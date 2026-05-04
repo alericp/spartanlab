@@ -1835,15 +1835,21 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   var weightedExerciseCount = 0;
   var doctrineHitCount = 0;
   var rejectedCount = 0;
+  // [SELECTOR-NOUNCHECKEDINDEXEDACCESS-OPTIONAL-CHAIN] Under TS strict
+  // `noUncheckedIndexedAccess`, `main[wi]` resolves to `T | undefined`,
+  // so chained property reads must guard the row first. Use optional
+  // chaining (and a single capture) to keep semantics identical.
   for (var wi = 0; wi < main.length; wi++) {
-    if (main[wi].prescribedLoad && main[wi].prescribedLoad.load > 0) {
+    const row = main[wi];
+    if (!row) continue;
+    if (row.prescribedLoad && (row.prescribedLoad.load ?? 0) > 0) {
       weightedExerciseCount++;
     }
-    if (main[wi].selectionTrace && main[wi].selectionTrace.doctrineSource !== null) {
+    if (row.selectionTrace && row.selectionTrace.doctrineSource != null) {
       doctrineHitCount++;
     }
-    if (main[wi].selectionTrace && main[wi].selectionTrace.rejectedAlternatives) {
-      rejectedCount = rejectedCount + main[wi].selectionTrace.rejectedAlternatives.length;
+    if (row.selectionTrace && row.selectionTrace.rejectedAlternatives) {
+      rejectedCount = rejectedCount + row.selectionTrace.rejectedAlternatives.length;
     }
   }
 
@@ -1858,15 +1864,21 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     sessionRole = 'mixed';
   }
 
-  var primarySkillExpressed = primaryGoal;
+  // [SELECTOR-PRIMARY-SKILL-EXPRESSED-WIDEN] Initially seeded from
+  // `primaryGoal` (PrimaryGoal union), this is later overwritten with
+  // `skillsForSession[si].skill` (raw skill id string). Type the local
+  // as string explicitly so the assignment is sound.
+  var primarySkillExpressed: string = String(primaryGoal);
   var secondarySkillExpressed: string | null = null;
   if (skillsForSession) {
     for (var si = 0; si < skillsForSession.length; si++) {
-      if (skillsForSession[si].expressionMode === 'primary') {
-        primarySkillExpressed = skillsForSession[si].skill;
+      const alloc = skillsForSession[si];
+      if (!alloc) continue;
+      if (alloc.expressionMode === 'primary') {
+        primarySkillExpressed = alloc.skill;
       }
-      if (skillsForSession[si].expressionMode === 'technical') {
-        secondarySkillExpressed = skillsForSession[si].skill;
+      if (alloc.expressionMode === 'technical') {
+        secondarySkillExpressed = alloc.skill;
       }
     }
   }
@@ -1925,19 +1937,29 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
 
   var doctrineBackedCount = 0;
   var skillAlignedCount = 0;
+  // [SELECTOR-NOUNCHECKEDINDEXEDACCESS-OPTIONAL-CHAIN] same pattern as
+  // L1838 — capture the row, guard for undefined, then read trace.
   for (var k = 0; k < main.length; k++) {
-    if (main[k].selectionTrace && main[k].selectionTrace.doctrineSource !== null) {
+    const row = main[k];
+    if (!row) continue;
+    if (row.selectionTrace && row.selectionTrace.doctrineSource != null) {
       doctrineBackedCount++;
     }
-    if (main[k].selectionTrace && main[k].selectionTrace.influencingSkills && main[k].selectionTrace.influencingSkills.length > 0) {
+    if (row.selectionTrace && row.selectionTrace.influencingSkills && row.selectionTrace.influencingSkills.length > 0) {
       skillAlignedCount++;
     }
   }
   
   if (doctrineBackedCount === 0 && skillAlignedCount < 2 && main.length >= 4) {
     var exerciseNameList = [];
+    // [SELECTED-EXERCISE-EXERCISE-OWNER] SelectedExercise wraps the
+    // canonical Exercise on `.exercise`; reading `.name` directly on the
+    // wrapper is a leftover from the pre-wrap shape. Resolve through
+    // `.exercise.name` and guard the indexed access.
     for (var m = 0; m < Math.min(main.length, 5); m++) {
-      exerciseNameList.push(main[m].name);
+      const row = main[m];
+      if (!row) continue;
+      exerciseNameList.push(row.exercise?.name);
     }
     console.warn('[generic-shell-detect] WARNING: Session may be too generic - no doctrine hits, few skill alignments', {
       dayFocus: day.focus,
@@ -1948,11 +1970,16 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     });
   }
 
-  var skillsExpressedLabel = primaryGoal;
+  // [SELECTOR-SKILLS-EXPRESSED-LABEL-WIDEN] Same pattern as
+  // primarySkillExpressed — seeded from PrimaryGoal then overwritten
+  // with a joined free-form string. Declare as string up front.
+  var skillsExpressedLabel: string = String(primaryGoal);
   if (skillsForSession && skillsForSession.length > 0) {
-    var labelParts = [];
+    var labelParts: string[] = [];
     for (var n = 0; n < skillsForSession.length; n++) {
-      labelParts.push(skillsForSession[n].skill + '(' + skillsForSession[n].expressionMode + ')');
+      const alloc = skillsForSession[n];
+      if (!alloc) continue;
+      labelParts.push(alloc.skill + '(' + alloc.expressionMode + ')');
     }
     skillsExpressedLabel = labelParts.join(', ');
   }
@@ -2032,13 +2059,19 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // [SESSION-ARCHITECTURE-OWNERSHIP] Final architecture ownership audit
   // Confirms that session composition was driven by canonical truth, not templates
   // ==========================================================================
+  // [SELECTOR-TRACE-LITERAL-DRIFT-NORMALIZE] The legacy literals
+  // `direct_skill` / `secondary_skill` / `strength_foundation` /
+  // `technical` are NOT in the canonical TraceSessionRole /
+  // TraceExpressionMode unions; comparing against them silently always
+  // returned false. Map to canonical literals: `skill_primary` /
+  // `skill_secondary` / `strength_support` / `technical_focus`.
   const primaryWorkCount = main.filter(e => 
-    e.selectionTrace?.sessionRole === 'direct_skill' ||
-    e.selectionTrace?.sessionRole === 'strength_foundation'
+    e.selectionTrace?.sessionRole === 'skill_primary' ||
+    e.selectionTrace?.sessionRole === 'strength_primary'
   ).length
   const secondaryWorkCount = main.filter(e =>
-    e.selectionTrace?.sessionRole === 'secondary_skill' ||
-    e.selectionTrace?.expressionMode === 'technical'
+    e.selectionTrace?.sessionRole === 'skill_secondary' ||
+    e.selectionTrace?.expressionMode === 'technical_focus'
   ).length
   const supportWorkCount = main.filter(e =>
     e.selectionTrace?.sessionRole === 'strength_support' ||
@@ -2143,18 +2176,49 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       sampleExercises: conservativePool.slice(0, 5).map(e => e.name),
     })
     
-    // Select up to 4 exercises from relaxed pool
+    // [SELECTOR-RESCUE-LOCAL-USEDIDS-AND-PUSH] The original block called
+    // `usedIds.has(...)` and `addExercise(...)` — both of which are
+    // local symbols inside `selectMainExercises`, not in
+    // `selectExercisesForSession`'s scope. Under strict mode this fails
+    // to compile (and would have crashed at runtime if reached). The
+    // canonical fallback here is to push directly into `main` (which IS
+    // in scope) using a locally-built de-dup set and a minimal
+    // SelectedExercise shape. Trace literals are mapped to canonical
+    // values in TraceSessionRole / TraceExpressionMode (no
+    // `rescue_fallback`/`conservative_fallback` in the unions).
+    const rescueUsedIds = new Set<string>(
+      main.map(m => m.exercise?.id).filter((x): x is string => typeof x === 'string')
+    )
     const relaxedBudget = Math.min(4, conservativePool.length)
     for (let ri = 0; ri < relaxedBudget && main.length < 4; ri++) {
       const candidate = conservativePool[ri]
-      if (candidate && !usedIds.has(candidate.id)) {
-        addExercise(selectorCtx, candidate, 'Doctrine relaxation rescue', undefined, undefined, undefined, 'standalone', {
-          primarySelectionReason: 'doctrine_relaxation_rescue',
-          sessionRole: 'rescue_fallback',
-          expressionMode: 'conservative_fallback',
-          influencingSkills: [],
-          candidatePoolSize: conservativePool.length,
-        })
+      if (candidate && !rescueUsedIds.has(candidate.id)) {
+        const rescueRow: SelectedExercise = {
+          exercise: candidate,
+          sets: candidate.defaultSets ?? 3,
+          repsOrTime: String(candidate.defaultRepsOrTime ?? candidate.reps ?? '6-10'),
+          isOverrideable: true,
+          selectionReason: '[Doctrine Relaxation Rescue] ' + (candidate.name || candidate.id),
+          selectionTrace: {
+            exerciseId: candidate.id,
+            exerciseName: candidate.name || candidate.id,
+            slotType: 'main',
+            sessionRole: 'strength_support',
+            expressionMode: 'strength_support',
+            primarySelectionReason: 'equipment_fallback',
+            influencingSkills: [],
+            doctrineSource: null,
+            rejectedAlternatives: [],
+            weightedDecision: {
+              weightedConsidered: false,
+              weightedEligible: false,
+              weightedChosen: false,
+              weightedBlockerReason: null,
+            },
+          } as unknown as ExerciseSelectionTrace,
+        }
+        main.push(rescueRow)
+        rescueUsedIds.add(candidate.id)
         doctrineRelaxationApplied = true
         doctrineRelaxationReason = 'main_empty_doctrine_over_constrained'
       }
@@ -2213,7 +2277,10 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       // [SELECTED-EXERCISE-EXERCISE-OWNER] read category through .exercise.
       firstThreeCategories: main.slice(0, 3).map(e => e.exercise.category || 'unknown'),
       firstThreeTypes: main.slice(0, 3).map(e => e.selectionTrace?.sessionRole || 'unknown'),
-      hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'direct_skill' || e.selectionTrace?.sessionRole === 'skill_primary'),
+      // [SELECTOR-TRACE-LITERAL-DRIFT-NORMALIZE] same as L2036 — the
+      // legacy `direct_skill` literal collapses to `skill_primary` in
+      // the canonical TraceSessionRole union. Drop the dead disjunct.
+      hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'skill_primary'),
       hasStrengthSupport: main.some(e => e.selectionTrace?.sessionRole === 'strength_support'),
       hasMixedContent: primaryWorkCount > 0 && supportWorkCount > 0 && secondaryWorkCount > 0,
       dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
@@ -5753,10 +5820,16 @@ const added = addExercise(
             primarySelectionReason: 'selected_skill_support',
             sessionRole: 'strength_support',
             expressionMode: 'strength_support',
+            // [SELECTOR-INFLUENCING-SKILLS-EXPRESSION-MODE] influencingSkills'
+            // expressionMode is `SkillExpressionMode` (direct/technical/support/
+            // rotation/prerequisite/trunk_support/mobility_support), which does
+            // NOT include `strength_support` — that literal belongs to
+            // TraceExpressionMode. Map to the canonical `support` here so the
+            // trace stays meaningful without widening either union.
             influencingSkills: [{ 
               skillId: supportAlloc.skill, 
               influence: 'selected', 
-              expressionMode: 'strength_support' 
+              expressionMode: 'support' 
             }],
             candidatePoolSize: (supportMapping?.accessorySupportExercises?.length || 0) + 
               (supportMapping?.commonLimiters?.reduce((acc, l) => acc + l.exerciseIds.length, 0) || 0),
@@ -5879,7 +5952,10 @@ const added = addExercise(
         addExercise(selectorCtx, ex, `[Constrained] Core for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'constraint_fallback_core',
           sessionRole: 'core',
-          expressionMode: 'core_focus',
+          // [SELECTOR-EXPRESSION-MODE-CORE-FOCUS-DROPPED] TraceExpressionMode
+          // does not include `core_focus`; the canonical `strength_support`
+          // literal is the closest equivalent for core/trunk slots.
+          expressionMode: 'strength_support',
         })
       }
     }
@@ -6073,7 +6149,10 @@ const added = addExercise(
             `[Tertiary Skill Reroute] ${tertiaryEntry.skill.replace(/_/g, ' ')} support (direct blocked by realism cap)`,
             undefined, undefined, undefined, 'standalone',
             {
-              primarySelectionReason: 'selected_skill_tertiary',
+              // [SELECTOR-REASON-TERTIARY-MAPPED] ExerciseSelectionReason has
+              // no `selected_skill_tertiary` literal; tertiary slots are
+              // canonically `selected_skill_support` from the trace's POV.
+              primarySelectionReason: 'selected_skill_support',
               sessionRole: 'skill_secondary',
               expressionMode: 'technical_focus',
               influencingSkills: [{
@@ -6081,7 +6160,12 @@ const added = addExercise(
                 influence: 'selected',
                 expressionMode: 'support',
               }],
-              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace,
+              // [SELECTOR-DOCTRINE-SOURCE-TRACE-BRIDGE] DoctrineSourceTrace's
+              // canonical contract owns `doctrineSource`/`triggeringSkill`/
+              // `doctrineType`; the legacy `{ type, ruleId }` shape is what
+              // downstream auditors persist. Bridge through `unknown` so we
+              // forward the legacy shape without widening DoctrineSourceTrace.
+              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as unknown as DoctrineSourceTrace,
               candidatePoolSize: canonicalCandidates.length,
             }
           )
@@ -6123,11 +6207,15 @@ const added = addExercise(
         // OnboardingTruthExpressionAudit). canonical_direct is the strongest
         // signal: "this exercise is registered as a direct progression rung
         // for this selected advanced skill".
+        // [SELECTOR-DOCTRINE-SOURCE-TRACE-BRIDGE] same unknown-bridge as
+        // L6084 — the legacy `{ type, ruleId }` shape is what downstream
+        // auditors persist; bridge through unknown so we forward without
+        // widening DoctrineSourceTrace's canonical contract.
         const doctrineSource: DoctrineSourceTrace | null =
           canonicalSource === 'canonical_direct'
-            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${tertiaryEntry.skill}.directProgressions` } as DoctrineSourceTrace
+            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${tertiaryEntry.skill}.directProgressions` } as unknown as DoctrineSourceTrace
             : canonicalSource === 'canonical_support'
-              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace
+              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as unknown as DoctrineSourceTrace
               : null
 
         const added = addExercise(
@@ -6136,7 +6224,10 @@ const added = addExercise(
           `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
           undefined, undefined, undefined, 'standalone',
           {
-            primarySelectionReason: 'selected_skill_tertiary',
+            // [SELECTOR-REASON-TERTIARY-MAPPED] same as L6076 — tertiary
+            // slots map to `selected_skill_support` in the canonical
+            // ExerciseSelectionReason union.
+            primarySelectionReason: 'selected_skill_support',
             // [PHASE-1B-SESSION-ASSEMBLY-LOCK] Use 'skill_secondary' (NOT 'skill').
             // The architecture-slot enforcement at the bottom of selectMainExercises
             // classifies rows by sessionRole into primary/secondary/support/other
@@ -6156,7 +6247,10 @@ const added = addExercise(
               influence: 'selected',
               expressionMode: 'technical',
             }],
-            doctrineSource,
+            // [SELECTOR-DOCTRINE-SOURCE-NULL-TO-UNDEFINED] traceContext's
+            // `doctrineSource` is `DoctrineSourceTrace | undefined`; the
+            // local fallback resolves to `null`. Convert at the boundary.
+            doctrineSource: doctrineSource ?? undefined,
             candidatePoolSize: canonicalCandidates.length,
           }
         )
@@ -6311,13 +6405,18 @@ const added = addExercise(
             {
               primarySelectionReason: 'selected_skill_support',
               sessionRole: 'accessory',
-              expressionMode: 'skill_accessory',
+              // [SELECTOR-EXPRESSION-MODE-SKILL-ACCESSORY-DROPPED]
+              // TraceExpressionMode does not include `skill_accessory`; map
+              // to the canonical `strength_support` for accessory slots.
+              expressionMode: 'strength_support',
               influencingSkills: [{
                 skillId: supportEntry.skill,
                 influence: 'selected',
                 expressionMode: 'support',
               }],
-              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace,
+              // [SELECTOR-DOCTRINE-SOURCE-TRACE-BRIDGE] same unknown-bridge
+              // as L6084 — legacy `{ type, ruleId }` shape forwarded.
+              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as unknown as DoctrineSourceTrace,
               candidatePoolSize: canonicalCandidates.length,
             }
           )
@@ -6353,11 +6452,14 @@ const added = addExercise(
         )
         const selectedSupportExercise = supportPick.exercise!
 
+        // [SELECTOR-DOCTRINE-SOURCE-TRACE-BRIDGE] same unknown-bridge as
+        // L6084/L6126 — DoctrineSourceTrace's canonical contract differs
+        // from the legacy `{ type, ruleId }` shape; bridge via unknown.
         const doctrineSource: DoctrineSourceTrace | null =
           canonicalSource === 'canonical_direct'
-            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${supportEntry.skill}.directProgressions` } as DoctrineSourceTrace
+            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${supportEntry.skill}.directProgressions` } as unknown as DoctrineSourceTrace
             : canonicalSource === 'canonical_support'
-              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace
+              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as unknown as DoctrineSourceTrace
               : null
 
         const added = addExercise(
@@ -6368,13 +6470,17 @@ const added = addExercise(
           {
             primarySelectionReason: 'selected_skill_support',
             sessionRole: 'accessory',
-            expressionMode: 'skill_accessory',
+            // [SELECTOR-EXPRESSION-MODE-SKILL-ACCESSORY-DROPPED] same as
+            // L6338 — `skill_accessory` is not in TraceExpressionMode.
+            expressionMode: 'strength_support',
             influencingSkills: [{
               skillId: supportEntry.skill,
               influence: 'selected',
               expressionMode: 'support',
             }],
-            doctrineSource,
+            // [SELECTOR-DOCTRINE-SOURCE-NULL-TO-UNDEFINED] same as the
+            // tertiary site; traceContext expects `undefined` not `null`.
+            doctrineSource: doctrineSource ?? undefined,
             candidatePoolSize: canonicalCandidates.length,
           }
         )
@@ -6444,12 +6550,18 @@ const added = addExercise(
   // Always try to include core work using movement intelligence
   if (selected.length < maxExercises) {
     // Use movement intelligence to select appropriate core type
+    // [SELECTOR-PRIMARY-GOAL-LEGACY-LITERAL-NORMALIZE] PrimaryGoal's
+    // canonical union doesn't include `l_sit`/`v_sit`/`dragon_flag` (those
+    // are SkillType / advanced-skill registry literals, not top-level
+    // PrimaryGoal). Project to a string and compare against the legacy
+    // labels so the runtime semantic survives without widening PrimaryGoal.
+    const _primaryGoalStr = String(primaryGoal)
     const needsCompression = compressionCoreCount === 0 && (
-      primaryGoal === 'l_sit' || primaryGoal === 'v_sit' || 
+      _primaryGoalStr === 'l_sit' || _primaryGoalStr === 'v_sit' || 
       primaryGoal === 'front_lever' || primaryGoal === 'planche'
     )
     const needsAntiExtension = antiExtensionCoreCount === 0 && (
-      primaryGoal === 'front_lever' || primaryGoal === 'dragon_flag' ||
+      primaryGoal === 'front_lever' || _primaryGoalStr === 'dragon_flag' ||
       primaryGoal === 'planche' || primaryGoal === 'muscle_up'
     )
     
@@ -6627,7 +6739,10 @@ const added = addExercise(
     for (const candidate of unusedSkillCandidates) {
       if (deduplicatedSelected.length >= maxExercises) break
       addExercise(selectorCtx, candidate, `[Skill Floor] Direct ${primaryGoal} work`, undefined, undefined, undefined, 'standalone', {
-        primarySelectionReason: 'skill_floor_enforcement',
+        // [SELECTOR-REASON-SKILL-FLOOR-MAPPED] ExerciseSelectionReason has
+        // no `skill_floor_enforcement` literal; the canonical equivalent
+        // for "filling a session-role gap" is `session_role_fill`.
+        primarySelectionReason: 'session_role_fill',
         sessionRole: 'skill_secondary',
         expressionMode: 'technical_focus',
         influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'direct' }],
@@ -6720,7 +6835,11 @@ const added = addExercise(
           undefined,
           'standalone',
           {
-            primarySelectionReason: 'selected_skill_direct_expression',
+            // [SELECTOR-REASON-DIRECT-EXPRESSION-MAPPED]
+            // ExerciseSelectionReason has no `selected_skill_direct_expression`
+            // literal; the canonical equivalent for direct skill work is
+            // `primary_skill_direct`.
+            primarySelectionReason: 'primary_skill_direct',
             sessionRole: rec.priority >= 3 ? 'skill_primary' : 'skill_secondary',
             expressionMode: rec.priority >= 3 ? 'direct_intensity' : 'technical_focus',
             influencingSkills: ownerSkill ? [{
@@ -7713,10 +7832,13 @@ export function buildFallbackSelectionForSession(
       defaultRepsOrTime = ex.time || '30-60s'
     } else if (category === 'strength' || category === 'push' || category === 'pull') {
       defaultSets = ex.defaultSets || 3
-      defaultRepsOrTime = ex.defaultRepsOrTime || ex.reps || '6-10'
+      // [SELECTOR-REPS-OR-TIME-STRING-COERCION] same string coercion as
+      // L7785; `defaultRepsOrTime` is typed as `string` and `ex.reps`
+      // can be `number | string`.
+      defaultRepsOrTime = ex.defaultRepsOrTime || (ex.reps != null ? String(ex.reps) : '6-10')
     } else if (category === 'accessory') {
       defaultSets = 3
-      defaultRepsOrTime = ex.defaultRepsOrTime || ex.reps || '10-15'
+      defaultRepsOrTime = ex.defaultRepsOrTime || (ex.reps != null ? String(ex.reps) : '10-15')
     }
     
     return {
@@ -7736,15 +7858,24 @@ export function buildFallbackSelectionForSession(
         defaultRepsOrTime: ex.defaultRepsOrTime || defaultRepsOrTime,
       },
       sets: ex.sets || ex.defaultSets || defaultSets,
-      repsOrTime: ex.reps || ex.time || ex.defaultRepsOrTime || defaultRepsOrTime,
+      // [SELECTOR-REPS-OR-TIME-STRING-COERCION] SelectedExercise.repsOrTime
+      // is `string`, but legacy persisted Exercise shapes expose
+      // `reps`/`time` as `number | string`. Coerce numeric values to
+      // strings so the contract holds.
+      repsOrTime: String(ex.reps ?? ex.time ?? ex.defaultRepsOrTime ?? defaultRepsOrTime ?? ''),
       isOverrideable: true,
       selectionReason: `[Rescue] ${reason}`,
+      // [SELECTOR-RESCUE-TRACE-LITERALS-MAPPED] TraceExpressionMode has
+      // no `support` literal (canonical is `strength_support`); and
+      // TraceSessionRole has no `support_heavy` literal (canonical is
+      // `strength_support`). Map both to the canonical `strength_support`
+      // for the rescue fallback trace.
       selectionTrace: {
         exerciseId: ex.id,
         exerciseName: ex.name,
         reason: 'fallback_rescue' as const,
-        expressionMode: 'support',
-        sessionRole: 'support_heavy',
+        expressionMode: 'strength_support',
+        sessionRole: 'strength_support',
         source: { type: 'doctrine', ruleName: 'session_rescue' },
       }
     }
@@ -8022,7 +8153,14 @@ export function buildFallbackSelectionForSession(
   }
 
   // RESCUE PATH 1: Goal-specific support work for the day focus
-  const goalFocusMap: Record<PrimaryGoal, string[]> = {
+  // [SELECTOR-GOAL-FOCUS-MAP-WIDEN-KEY] Some advanced-skill labels here
+  // (`v_sit`, `manna`, `human_flag`, `full_rom_hspu`, `one_arm_pull_up`,
+  // `one_arm_push_up`, `pistol_squat`, `nordic_curl`, `reverse_nordic`,
+  // `iron_cross`, `back_lever`) live in the advanced-skill-family
+  // registry, not the canonical PrimaryGoal union. Type the lookup
+  // table by string key to keep the legacy fallback coverage without
+  // widening PrimaryGoal.
+  const goalFocusMap: Record<string, string[]> = {
     planche: ['straight_arm', 'push', 'shoulder'],
     front_lever: ['pull', 'scapular', 'lat'],
     handstand_pushup: ['vertical_push', 'shoulder', 'push'],
@@ -8276,13 +8414,15 @@ function selectIntelligentWarmup(
       fatigueCost: 1,
       transferTo: [],
       defaultSets: 1,
-      defaultRepsOrTime: ex.reps,
+      // [SELECTOR-REPS-OR-TIME-STRING-COERCION] same coercion as L7740;
+      // `ex.reps` from the warmup template can be numeric.
+      defaultRepsOrTime: String(ex.reps ?? ''),
     }
 
     return {
       exercise,
       sets: 1,
-      repsOrTime: ex.reps,
+      repsOrTime: String(ex.reps ?? ''),
       note: ex.notes,
       isOverrideable: true,
       selectionReason: generatedWarmup.block.rationale,

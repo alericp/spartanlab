@@ -162,7 +162,10 @@ function getSkillPRs(): SkillPR[] {
 function getStrengthPRs(): StrengthPR[] {
   const prs = getPersonalRecords()
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight
+  // [PR-VAULT-PROFILE-NULL-GUARD] `getAthleteProfile()` may return null
+  // for a freshly-created athlete record. Guard the bodyweight read so
+  // downstream relativeStrength math is safe.
+  const bodyweight = profile?.bodyweight
   
   // Only include weighted calisthenics here
   const exercises = EXERCISE_DEFINITIONS.filter(e => e.category === 'weighted_calisthenics')
@@ -211,7 +214,9 @@ function getStrengthPRs(): StrengthPR[] {
 function getBarbellPRs(): BarbellPR[] {
   const prs = getPersonalRecords()
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight
+  // [PR-VAULT-PROFILE-NULL-GUARD] same null-guard pattern as
+  // getStrengthPRs().
+  const bodyweight = profile?.bodyweight
   
   // Get all barbell exercises
   const barbellExercises = EXERCISE_DEFINITIONS.filter(e => e.isBarbell)
@@ -263,7 +268,10 @@ function getVariantName(exerciseId: ExerciseType): string {
 
 function getStreetliftingTotalPR(): StreetliftingTotalPR | null {
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight
+  // [PR-VAULT-PROFILE-NULL-GUARD] same null-guard. The downstream
+  // `getStreetliftingTotal` consumer expects `number | undefined` (not
+  // `number | null`); coerce the null to undefined here.
+  const bodyweight = profile?.bodyweight ?? undefined
   
   const streetTotal = getStreetliftingTotal(bodyweight)
   
@@ -398,7 +406,10 @@ function calculateConsistencyStreak(logs: WorkoutLog[]): { value: number; endDat
   const weeksWithWorkouts = new Set<string>()
   sorted.forEach(log => {
     const weekStart = getWeekStart(new Date(log.sessionDate))
-    weeksWithWorkouts.set(weekStart.toISOString().split('T')[0])
+    // [PR-VAULT-SET-API-FIX] `weeksWithWorkouts` is a `Set<string>`;
+    // the legacy `.set(key)` call was a `Map`-API leftover. Use the
+    // canonical `Set.add()` method.
+    weeksWithWorkouts.add(weekStart.toISOString().split('T')[0])
   })
   
   // Find longest consecutive week streak

@@ -4650,7 +4650,16 @@ export function StreamlinedWorkoutSession({
       sets: ex.sets,
       repsOrTime: ex.repsOrTime,
       note: ex.note,
-      executionTruth: ex.executionTruth,
+      // [WORKOUT-EXEC-TRUTH-NARROW] `ex.executionTruth` is typed as
+      // `unknown` upstream; the snapshot consumer accepts only the
+      // band-color slice. Narrow at the boundary so we forward the
+      // exact shape without widening the consumer contract.
+      executionTruth: (() => {
+        const e = ex.executionTruth as { recommendedBandColor?: unknown } | null | undefined
+        if (!e || typeof e !== 'object') return undefined
+        const c = e.recommendedBandColor
+        return typeof c === 'string' ? { recommendedBandColor: c as ResistanceBandColor } : undefined
+      })(),
     }))
     const { snapshot, isWorkoutComplete, guardError } = buildUnifiedTransitionSnapshot(
       { ...liveSession, selectedRPE: normalizeRPEValue(liveSession.selectedRPE) },

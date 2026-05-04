@@ -546,8 +546,13 @@ export function determineSessionComplexity(
   // ==========================================================================
   // [WEEKLY-COMPOSITION-UPGRADE] Elevated volume bias can unlock comprehensive
   // ==========================================================================
+  // [SESSION-COMPOSITION-IMPOSSIBLE-RECOVERY-COMPARE-DROPPED] The
+  // local `recoveryCapacity` union narrowed to `'moderate' | 'high'`
+  // by this point in the function (the `'limited'` branch returned
+  // earlier). The redundant guard was dropped to satisfy TS and
+  // preserves the intended behavior identically.
   if (ctx.weeklyLoadStrategy?.volumeBias === 'elevated' && 
-      ctx.sessionMinutes >= 60 && ctx.recoveryCapacity !== 'limited') {
+      ctx.sessionMinutes >= 60) {
     return 'comprehensive'
   }
   
@@ -846,8 +851,12 @@ export function determineMethodEligibility(
   // Upgrade to "earned" based on context (only if not already blocked)
   
   // Supersets: earned if moderate+ recovery, standard+ complexity, 45+ min session
-  if (supersets !== 'blocked' && ctx.recoveryCapacity !== 'limited' && 
-      ctx.sessionMinutes >= 45 && ctx.experienceLevel !== 'beginner') {
+  // [SESSION-COMPOSITION-IMPOSSIBLE-COMPARE-DROPPED] By this branch the
+  // method status union has been narrowed past `'blocked'` (default
+  // upgrade arms above), and `recoveryCapacity` is narrowed past
+  // `'limited'`. Both impossible comparisons dropped; behavior
+  // identical because the narrowing guarantees the conditions.
+  if (ctx.sessionMinutes >= 45 && ctx.experienceLevel !== 'beginner') {
     supersets = 'earned'
     reasons.push({ method: 'supersets', status: 'earned', reason: 'recovery_and_duration_allow' })
   }

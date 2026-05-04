@@ -76,7 +76,19 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // Only add safe defaults for missing structural fields - never re-evaluate.
   // ==========================================================================
   
-  const existingMeta = session.styleMetadata || {}
+  // [PROGRAM-STATE-STYLE-META-LOCAL-TYPE] The session's `styleMetadata`
+  // is typed as an opaque map upstream; pin a precise structural type
+  // here so the in-block `.styledGroups`/`.hasSupersetsApplied`/
+  // `.appliedMethods` reads are type-safe without widening the
+  // canonical session contract.
+  const existingMeta = (session.styleMetadata || {}) as {
+    styledGroups?: Array<{ groupType: string }>
+    hasSupersetsApplied?: boolean
+    hasCircuitsApplied?: boolean
+    hasDensityApplied?: boolean
+    structureDescription?: string
+    appliedMethods?: string[]
+  }
   
   // --------------------------------------------------------------------------
   // PRIORITY 1 - Authoritative builder styledGroups
@@ -630,28 +642,36 @@ export function getErrorUserMessage(
       return 'Unable to create a plan with those settings. Try adjusting your schedule or goals.' + suffix
     case 'session_assembly_failed':
       // [PHASE 4] Precise error messages for each session assembly subcode
-      if (subCode === 'empty_exercise_pool') {
+      // [PROGRAM-STATE-SUBCODE-NORMALIZED] The local `subCode` type is
+      // narrowed by the outer error-code switch to a sub-set of the
+      // canonical `BuildAttemptSubCode` union, which makes some
+      // explicit-literal compares unreachable at the type level even
+      // though the runtime value can still match. Compare via the
+      // string projection so every literal arm is reachable while
+      // keeping the canonical `BuildAttemptSubCode` union unchanged.
+      const _sub = String(subCode)
+      if (_sub === 'empty_exercise_pool') {
         return 'No suitable exercises found for your equipment. Check your equipment settings.' + suffix
       }
-      if (subCode === 'empty_final_session_array') {
+      if (_sub === 'empty_final_session_array') {
         return 'Sessions could not be built. Try different goals or schedule.' + suffix
       }
-      if (subCode === 'session_has_no_exercises') {
+      if (_sub === 'session_has_no_exercises') {
         return 'One part of your updated plan could not be built with the current settings.' + suffix
       }
-      if (subCode === 'session_count_mismatch') {
+      if (_sub === 'session_count_mismatch') {
         return 'Session count does not match the selected schedule. Try rebuilding your program.' + suffix
       }
-      if (subCode === 'empty_structure_days') {
+      if (_sub === 'empty_structure_days') {
         return 'Weekly structure has no days defined. Try a different schedule configuration.' + suffix
       }
-      if (subCode === 'no_valid_candidate_after_filtering') {
+      if (_sub === 'no_valid_candidate_after_filtering') {
         return 'No valid exercises found after filtering. Try adjusting your equipment or goals.' + suffix
       }
-      if (subCode === 'equipment_filtered_all_candidates') {
+      if (_sub === 'equipment_filtered_all_candidates') {
         return 'Your equipment settings filtered out all exercises. Update your available equipment.' + suffix
       }
-      if (subCode === 'hybrid_structure_unresolvable') {
+      if (_sub === 'hybrid_structure_unresolvable') {
         return 'Hybrid training structure could not be resolved. Try fewer selected skills.' + suffix
       }
       return 'A session could not be assembled. Try adjusting your goals or equipment.' + suffix

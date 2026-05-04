@@ -4,6 +4,7 @@ import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { getCanonicalProfile } from '@/lib/canonical-profile-service'
 import { executeAuthoritativeGeneration, logGenerationParityTable, type AuthoritativeGenerationRequest } from '@/lib/server/authoritative-program-generation'
 import type { PrimaryGoal } from '@/lib/program-service'
+import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -266,6 +267,14 @@ export async function POST(request: Request) {
     // it — they live on the canonical profile, which we also pass via
     // `canonicalProfile`. Only forward keys the builder accepts. The
     // builder reads the rest from `canonicalProfile.*` directly.
+    // [REBUILD-BUILDER-INPUTS-PARTIAL-CAST] The strict
+    // `AdaptiveProgramInputs` contract narrows several fields to specific
+    // unions (e.g. `PrimaryGoal`, `ExperienceLevel`,
+    // `TrainingDays | 'flexible'`, `EquipmentType[]`). Canonical-profile
+    // values are stored as broader strings/arrays for flexibility.
+    // Project the input as `Partial<AdaptiveProgramInputs>` via an
+    // unknown bridge so the builder receives a partial — the builder
+    // already prefers canonical values via `canonicalProfile.X || inputs.X`.
     const builderInputs = {
       primaryGoal: builderPrimaryGoal,
       secondaryGoal: builderSecondaryGoal,
@@ -280,7 +289,7 @@ export async function POST(request: Request) {
       sessionLength: canonicalProfile.sessionLengthMinutes,
       // The strict input contract field is `equipment`, not `equipmentAvailable`.
       equipment: canonicalProfile.equipmentAvailable,
-    }
+    } as unknown as Partial<AdaptiveProgramInputs>
     
     // ==========================================================================
     // STEP 7: Build Authoritative Generation Request

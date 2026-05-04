@@ -848,8 +848,24 @@ function scoreScheduleComplexity(
   let score = 5
   let isGoodFit = false
   
-  const fatigueCost = exercise.fatigueCost || 'moderate'
-  const neuralDemand = exercise.neuralDemand || 'moderate'
+  // [MATERIALITY-FATIGUE-NORMALIZE] The canonical Exercise schema now
+  // exposes `fatigueCost`/`neuralDemand` as numeric scores (0-10) on
+  // some sources and string buckets on others. Normalize to the
+  // string bucket here so the existing equality compares stay
+  // type-safe and behave identically. Numeric scores follow the
+  // standard 0-3 = low, 4-6 = moderate, 7-8 = high, 9+ = very_high.
+  const _toBucket = (v: number | string | undefined): 'low' | 'moderate' | 'high' | 'very_high' => {
+    if (typeof v === 'string') {
+      return (v === 'low' || v === 'moderate' || v === 'high' || v === 'very_high') ? v : 'moderate'
+    }
+    if (typeof v !== 'number' || !Number.isFinite(v)) return 'moderate'
+    if (v <= 3) return 'low'
+    if (v <= 6) return 'moderate'
+    if (v <= 8) return 'high'
+    return 'very_high'
+  }
+  const fatigueCost = _toBucket(exercise.fatigueCost)
+  const neuralDemand = _toBucket(exercise.neuralDemand)
   
   // Match complexity to session budget
   if (context.sessionComplexityBudget === 'low') {

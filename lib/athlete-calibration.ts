@@ -469,14 +469,17 @@ function inferEnduranceCompatibility(
   // Abs goal often involves circuits (legacy)
   if (goal === 'abs' && session !== 'short') return 'high'
   
-  // General fitness / overall_fitness supports endurance
-  if ((goal === 'general' || goal === 'overall_fitness') && session !== 'short') return 'moderate'
+  // [CALIBRATION-STALE-GOAL-COMPARES-GATED] Legacy OnboardingGoal labels
+  // `overall_fitness`/`muscle_and_strength`/`skills_and_moves` were
+  // removed from the canonical PrimaryGoalType union. Drop the
+  // stale-literal arms; the canonical labels still match below.
+  if (goal === 'general' && session !== 'short') return 'moderate'
   
   // Short sessions = lower endurance compatibility
   if (session === 'short') return 'low'
   
-  // Skill/strength/muscle_and_strength focused goals are lower endurance compatibility by default
-  if (goal === 'skill' || goal === 'strength' || goal === 'muscle_and_strength' || goal === 'skills_and_moves') {
+  // Skill/strength focused goals are lower endurance compatibility by default
+  if (goal === 'skill' || goal === 'strength') {
     return consistency === 'high' ? 'moderate' : 'low'
   }
   

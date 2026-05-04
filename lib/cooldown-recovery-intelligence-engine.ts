@@ -623,7 +623,12 @@ export function analyzeSessionForRecovery(
   for (const exercise of input.completedExercises) {
     // Movement family mapping
     if (exercise.movementFamily && SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]) {
-      const regions = SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]
+      // [COOLDOWN-REGION-LOOKUP-DEFAULT] The map's value type is
+      // `RecoveryRegion[] | undefined`. The truthy guard above keeps
+      // this branch reachable only when the lookup was non-undefined,
+      // but TS's narrowing doesn't survive the second indexed read; pin
+      // an empty-array fallback so the for-loop is type-safe.
+      const regions = SESSION_STRESS_TO_RECOVERY[exercise.movementFamily] ?? []
       for (const region of regions) {
         regionScores[region] += exercise.setsCompleted
         if (!reasonMap[region]) {
@@ -658,7 +663,8 @@ export function analyzeSessionForRecovery(
   if (input.stressAnalysis) {
     for (const [family, stress] of Object.entries(input.stressAnalysis.stressByFamily || {})) {
       if (stress > 10 && SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus]) {
-        const regions = SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus]
+        // [COOLDOWN-REGION-LOOKUP-DEFAULT] same narrowing-loss as above.
+        const regions = SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus] ?? []
         for (const region of regions) {
           regionScores[region] += Math.floor(stress / 5)
         }

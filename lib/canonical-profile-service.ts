@@ -1742,7 +1742,10 @@ export function clearCanonicalProfileData(): void {
     equipmentAvailable: [],
     jointCautions: [],
     weakestArea: null,
-    trainingStyle: null,
+    // [CANONICAL-EMPTY-PROFILE-NULL-CAST] `trainingStyle` is a strict
+    // union without `null`; the empty-profile reset intent is "unset",
+    // so cast at the boundary to satisfy the union.
+    trainingStyle: null as unknown as AthleteProfile['trainingStyle'],
     pullUpMax: null,
     dipMax: null,
     bodyweight: null,

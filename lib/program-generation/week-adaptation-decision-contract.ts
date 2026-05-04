@@ -555,7 +555,11 @@ function buildLoadStrategy(
   }
   
   // Advanced athletes with stable adherence can handle more
-  if (input.experienceLevel === 'advanced' || input.experienceLevel === 'elite') {
+  // [WEEK-ADAPT-EXPERIENCE-LITERAL-DROPPED] The canonical
+  // `experienceLevel` union is `'beginner' | 'intermediate' | 'advanced'`.
+  // The legacy `'elite'` literal was dropped from the union; the arm
+  // is now unreachable.
+  if (input.experienceLevel === 'advanced') {
     if (adherence.consistencyStatus === 'stable' && recovery.recoveryRisk === 'low') {
       // Don't override governor, but allow normal/elevated if not constrained
       if (strategy.finisherBias === 'normal') {

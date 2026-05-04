@@ -69,8 +69,12 @@ export function generateProgramReasonSummary(
   // Build base context from program
   const goal = program.primaryGoal?.replace(/_/g, ' ') || 'skill progression'
   // [ADAPTIVE BASELINE FIX] Use actual session count for flexible users, not fallback 4
-  const days = program.trainingDaysPerWeek === 'flexible' 
-    ? (program.sessions?.length || 4)  // Use actual generated session count
+  // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] Canonical
+  // `trainingDaysPerWeek` is `TrainingDays | 'flexible'` (mixed type).
+  // Compare via the string projection so the equality stays valid
+  // regardless of the upstream narrowed type.
+  const days = String(program.trainingDaysPerWeek) === 'flexible' 
+    ? ((program as unknown as { sessions?: unknown[] }).sessions?.length || 4)  // Use actual generated session count
     : (program.trainingDaysPerWeek || 4)
   const sessionMins = typeof program.sessionLength === 'number'
     ? program.sessionLength
@@ -181,8 +185,9 @@ function buildScheduleChangeReason(
   previousProgram: ProgramHistory | null | undefined
 ): string {
   // [ADAPTIVE BASELINE FIX] Handle flexible schedule comparison
-  const oldDays = previousProgram?.trainingDaysPerWeek === 'flexible'
-    ? (previousProgram?.sessions?.length || days)  // Compare against actual session count
+  // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+  const oldDays = String(previousProgram?.trainingDaysPerWeek) === 'flexible'
+    ? ((previousProgram as unknown as { sessions?: unknown[] } | null | undefined)?.sessions?.length || days)
     : (previousProgram?.trainingDaysPerWeek || 4)
   const oldSession = previousProgram?.sessionLengthMinutes || 60
   
@@ -351,13 +356,36 @@ export function buildAthleteInputsSnapshot(
   
   // REGRESSION GUARD: These fallbacks are for historical snapshots only.
   // Live program generation uses canonical-profile-service instead.
+  // [PROGRAM-HISTORY-PROFILE-STALE-FIELDS-NARROWED] OnboardingProfile
+  // dropped several legacy snapshot fields (`bodyweight`, `weightUnit`,
+  // `skillInterests`, `weightedPullUpLoad`/`weightedDipLoad`,
+  // `frontLeverLevel`, `plancheLevel`, `muscleUpReadiness`, `hspuLevel`,
+  // `sleepQuality`, `stressLevel`, `recoveryConfidence`). They are still
+  // present on legacy persisted shapes; read them via a runtime-shape
+  // narrow so the snapshot writer captures whatever data is available
+  // without forcing the canonical type to widen.
+  const _legacyProfile = (profile ?? {}) as Partial<{
+    bodyweight: number
+    weightUnit: 'kg' | 'lb'
+    skillInterests: string[]
+    weightedPullUpLoad: number
+    weightedDipLoad: number
+    frontLeverLevel: string
+    plancheLevel: string
+    muscleUpReadiness: string
+    hspuLevel: string
+    sleepQuality: string
+    stressLevel: string
+    recoveryConfidence: string
+  }>
   return {
-    bodyweight: profile?.bodyweight || undefined,
-    weightUnit: profile?.weightUnit || 'kg',
+    bodyweight: _legacyProfile.bodyweight || undefined,
+    weightUnit: _legacyProfile.weightUnit || 'kg',
     // Note: fallback values here are for snapshot display, not generation truth
     experienceLevel: program.experienceLevel || 'intermediate',
     // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
-    trainingDaysPerWeek: program.trainingDaysPerWeek === 'flexible'
+    // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+    trainingDaysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
       ? (program.sessions?.length || 4)
       : (program.trainingDaysPerWeek || 4),  // Snapshot display only
     sessionLengthMinutes,
@@ -365,19 +393,19 @@ export function buildAthleteInputsSnapshot(
     jointCautions: profile?.jointCautions || [],
     primaryGoal: program.primaryGoal,
     secondaryGoal: undefined, // Not directly in AdaptiveProgram
-    selectedSkills: profile?.skillInterests || [],
+    selectedSkills: _legacyProfile.skillInterests || [],
     pullUpMax: profile?.pullUpMax,
     pushUpMax: profile?.pushUpMax,
     dipMax: profile?.dipMax,
-    weightedPullUpLoad: profile?.weightedPullUpLoad,
-    weightedDipLoad: profile?.weightedDipLoad,
-    frontLeverProgression: profile?.frontLeverLevel,
-    plancheProgression: profile?.plancheLevel,
-    muscleUpReadiness: profile?.muscleUpReadiness,
-    hspuProgression: profile?.hspuLevel,
-    sleepQuality: profile?.sleepQuality,
-    stressLevel: profile?.stressLevel,
-    recoveryConfidence: profile?.recoveryConfidence,
+    weightedPullUpLoad: _legacyProfile.weightedPullUpLoad,
+    weightedDipLoad: _legacyProfile.weightedDipLoad,
+    frontLeverProgression: _legacyProfile.frontLeverLevel,
+    plancheProgression: _legacyProfile.plancheLevel,
+    muscleUpReadiness: _legacyProfile.muscleUpReadiness,
+    hspuProgression: _legacyProfile.hspuLevel,
+    sleepQuality: _legacyProfile.sleepQuality,
+    stressLevel: _legacyProfile.stressLevel,
+    recoveryConfidence: _legacyProfile.recoveryConfidence,
     
     // Hybrid strength fields (Phase 2)
     deadlift1RM: (profile as unknown as { deadlift1RM?: number })?.deadlift1RM,
@@ -416,7 +444,9 @@ export function buildGoalsSnapshot(
     primaryGoal: program.primaryGoal || 'general',
     primaryGoalLabel: program.goalLabel || program.primaryGoal || 'General',
     secondaryEmphasis: program.secondaryEmphasis,
-    selectedSkills: profile?.skillInterests || [],
+    // [PROGRAM-HISTORY-PROFILE-STALE-FIELDS-NARROWED] same legacy
+    // narrow as the strength snapshot above.
+    selectedSkills: (profile as unknown as { skillInterests?: string[] } | null | undefined)?.skillInterests || [],
     targetTimeline: undefined,
     specificTargets: [],
     
@@ -442,27 +472,36 @@ export function buildProgramStructureSnapshot(
   return {
     programName: program.goalLabel || `${program.primaryGoal || 'General'} Program`,
     // [ADAPTIVE BASELINE FIX] Use actual session count for flexible users
-    daysPerWeek: program.trainingDaysPerWeek === 'flexible'
+    // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+    daysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
       ? sessions.length
       : (program.trainingDaysPerWeek || 4),  // Snapshot display fallback only
     sessionLengthMinutes: typeof program.sessionLength === 'number' 
       ? program.sessionLength 
       : parseInt(String(program.sessionLength)) || 60,  // Snapshot display fallback only
-    blockStructure: program.structure?.pattern || undefined,
+    // [PROGRAM-HISTORY-WEEKLY-STRUCTURE-PATTERN-NARROW] WeeklyStructure
+    // dropped the legacy `pattern` field; read via runtime narrow.
+    blockStructure: (program.structure as unknown as { pattern?: string } | null | undefined)?.pattern || undefined,
     days: sessions.map((session, index) => ({
       dayNumber: session.dayNumber || index + 1,
       dayLabel: session.dayLabel || `Day ${index + 1}`,
       focus: session.focus || session.focusLabel || 'General',
-      exercises: (session.exercises || []).map(ex => ({
-        exerciseId: ex.id,
-        exerciseName: ex.name,
-        category: ex.category || 'strength',
-        sets: ex.sets,
-        reps: typeof ex.reps === 'number' ? String(ex.reps) : ex.reps,
-        hold: ex.hold,
-        rest: ex.rest,
-        notes: ex.notes,
-      })),
+      // [PROGRAM-HISTORY-EXERCISE-LEGACY-FIELDS-NARROW] AdaptiveExercise
+      // canonical fields are `repsOrTime` and `note`; the legacy
+      // `reps`/`hold`/`rest`/`notes` are still on persisted shapes.
+      exercises: (session.exercises || []).map(ex => {
+        const legacy = ex as unknown as { reps?: number | string; hold?: string; rest?: string | number; notes?: string }
+        return {
+          exerciseId: ex.id,
+          exerciseName: ex.name,
+          category: ex.category || 'strength',
+          sets: ex.sets,
+          reps: typeof legacy.reps === 'number' ? String(legacy.reps) : (legacy.reps ?? ex.repsOrTime),
+          hold: legacy.hold,
+          rest: legacy.rest,
+          notes: legacy.notes ?? ex.note,
+        }
+      }),
     })),
     strengthNote: program.programRationale,
     coachingNotes: program.constraintInsight?.focus || [],

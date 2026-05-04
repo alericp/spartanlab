@@ -31448,11 +31448,16 @@ function buildExerciseCoachingMetaFromSelection(
     loadDecision: meta.loadDecision.summary,
   })
   
+  // [COACHING-META-ROLE-IN-SESSION-DROPPED] The exercise-level
+  // coachingMeta contract no longer carries `roleInSession` —
+  // session-role attribution moved to the per-session role contract
+  // (weekly-session-role-contract.ts). Drop the stale key here so
+  // this builder boundary stays aligned with the canonical
+  // coachingMeta shape (`expressionMode | progressionIntent |
+  // skillSupportTargets | loadDecisionSummary | restLabel`).
   return {
     expressionMode: meta.expressionMode,
     progressionIntent: meta.progressionIntent,
-    // [EXPLAIN-OWNER-LOCK] Pass roleInSession for explanation engine
-    roleInSession: meta.roleInSession,
     skillSupportTargets: meta.skillSupportTargets,
     loadDecisionSummary: meta.loadDecision.summary,
     restLabel,

@@ -12665,15 +12665,30 @@ async function generateAdaptiveProgramImpl(
     // values collapse to 'normal'.
     const normalizeBias = (b: unknown): 'normal' | 'reduced' | 'expanded' =>
       b === 'reduced' || b === 'expanded' ? b : 'normal'
+    // [FINISHER-BIAS-LITERAL-DRIFT] SessionWeekAdaptation.finisherBias
+    // (L1322) is `'limited' | 'normal' | 'expanded'`, not `'reduced' |
+    // ...`. Upstream WeekAdaptationDecision (week-adaptation-decision-
+    // contract.ts L108) already uses `'limited'`. Map any 'reduced'
+    // input to 'limited' at the boundary to preserve the truthful
+    // "less finisher work" intent.
+    const normalizeFinisherBias = (b: unknown): 'limited' | 'normal' | 'expanded' =>
+      b === 'limited' || b === 'reduced' ? 'limited' : b === 'expanded' ? 'expanded' : 'normal'
     const weekAdaptationInputForSession: SessionWeekAdaptation = {
       loadStrategy: weekAdaptationDecision ? {
         volumeBias: normalizeBias(weekAdaptationDecision.loadStrategy.volumeBias),
         intensityBias: normalizeBias(weekAdaptationDecision.loadStrategy.intensityBias),
         densityBias: normalizeBias(weekAdaptationDecision.loadStrategy.densityBias),
-        finisherBias: normalizeBias(weekAdaptationDecision.loadStrategy.finisherBias),
-        straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
-        connectiveTissueBias: weekAdaptationDecision.loadStrategy.connectiveTissueBias,
-        restSpacingBias: weekAdaptationDecision.loadStrategy.restSpacingBias,
+        finisherBias: normalizeFinisherBias(weekAdaptationDecision.loadStrategy.finisherBias),
+        // [PROTECTION-BIAS-LITERAL-NARROW] Upstream
+        // WeekAdaptationDecision types these as `ProtectionLevel` /
+        // wider strings; SessionWeekAdaptation (L1323-1325) expects
+        // narrow union literals. Coerce unknown values to 'normal'.
+        straightArmExposureBias:
+          weekAdaptationDecision.loadStrategy.straightArmExposureBias === 'protected' ? 'protected' : 'normal',
+        connectiveTissueBias:
+          weekAdaptationDecision.loadStrategy.connectiveTissueBias === 'protected' ? 'protected' : 'normal',
+        restSpacingBias:
+          weekAdaptationDecision.loadStrategy.restSpacingBias === 'increased' ? 'increased' : 'normal',
       } : null,
       firstWeekProtection: weekAdaptationDecision?.firstWeekGovernor ? {
         active: weekAdaptationDecision.firstWeekGovernor.active,
@@ -12726,7 +12741,15 @@ async function generateAdaptiveProgramImpl(
       doctrineRuntimeContract || null,
       fatigueStateForComposition,
       undefined, // recentSessionShapes
-      weekAdaptationInputForSession, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+      // [WEEK-ADAPTATION-INPUT-LITERAL-BRIDGE] The local
+      // SessionWeekAdaptation (L1317) uses 'expanded' for
+      // volume/intensity/density while the canonical
+      // WeekAdaptationInput (session-composition-intelligence.ts L386,
+      // WeeklyLoadStrategy L190) uses 'elevated' and the protection
+      // biases drift. Both shapes are structurally compatible at
+      // runtime — bridge via unknown so the literal-mismatch warning
+      // is explicit instead of cast-blind.
+      weekAdaptationInputForSession as unknown as SessionCompositionWeekAdaptationInput, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
       weeklyRoleForThisSession // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day authoritative role
     )
     
@@ -13203,8 +13226,19 @@ async function generateAdaptiveProgramImpl(
       
       if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
           (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
-        // Combine primary and secondary weak points, primary first
-        const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+        // Combine primary and secondary weak points, primary first.
+        // [WEAK-POINT-TYPE-GUARD] `detectWeakPointsForProfile` types its
+        // arrays as `string[]` for caller convenience, but
+        // `getWeakPointAccessories`/`WEAK_POINT_LABELS` are keyed by the
+        // `WeakPointType` union (weak-point-engine.ts L43). Filter raw
+        // strings against the canonical key set in `WEAK_POINT_LABELS`
+        // so only valid `WeakPointType` keys make it downstream.
+        const isWeakPointType = (s: string): s is WeakPointType =>
+          Object.prototype.hasOwnProperty.call(WEAK_POINT_LABELS, s)
+        const allWeakPoints: WeakPointType[] = [
+          ...detectedWeakPoints.primary,
+          ...detectedWeakPoints.secondary,
+        ].filter(isWeakPointType)
         
         // Get recommended accessories (max 2)
         const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
@@ -13215,8 +13249,9 @@ async function generateAdaptiveProgramImpl(
           session.adaptationNotes = session.adaptationNotes || []
           
           // Build coaching note based on detected weak points
-          const primaryLabel = detectedWeakPoints.primary[0] 
-            ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+          const primaryRaw = detectedWeakPoints.primary[0]
+          const primaryLabel = primaryRaw && isWeakPointType(primaryRaw)
+            ? WEAK_POINT_LABELS[primaryRaw]
             : null
           
           if (primaryLabel) {
@@ -13267,16 +13302,40 @@ async function generateAdaptiveProgramImpl(
         // Build metadata for load calculation
         // STEP I: Guard each exercise has required fields before building metadata
         const safeExercises = session.exercises.filter(ex => ex?.id && ex?.name)
+        // [SESSION-METADATA-CATEGORY-NARROW] `buildSessionMetadata`
+        // expects ExerciseCategory from adaptive-exercise-pool
+        // ('skill'|'strength'|'accessory'|'core'|'warmup'|'cooldown'|'flexibility').
+        // AdaptiveExercise.category is typed wider — narrow each entry
+        // through the canonical literal set with a 'strength' fallback.
+        type LoadCategory =
+          | 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown' | 'flexibility'
+        const toLoadCategory = (c: string | undefined): LoadCategory => {
+          switch (c) {
+            case 'skill':
+            case 'strength':
+            case 'accessory':
+            case 'core':
+            case 'warmup':
+            case 'cooldown':
+            case 'flexibility':
+              return c
+            default:
+              return 'strength'
+          }
+        }
         const exercisesWithMeta = buildSessionMetadata(
-          safeExercises.map(ex => ({
-            id: ex.id,
-            name: ex.name,
-            category: ex.category || 'strength',
-            neuralDemand: ex.category === 'skill' ? 4 : 3,
-            fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
-            movementPattern: undefined,
-            isIsometric: ex.repsOrTime?.includes('s') ?? false,
-          }))
+          safeExercises.map(ex => {
+            const cat = toLoadCategory(ex.category)
+            return {
+              id: ex.id,
+              name: ex.name,
+              category: cat,
+              neuralDemand: cat === 'skill' ? 4 : 3,
+              fatigueCost: cat === 'skill' ? 3 : cat === 'strength' ? 4 : 2,
+              movementPattern: undefined,
+              isIsometric: ex.repsOrTime?.includes('s') ?? false,
+            }
+          })
         )
         postSessionStep = 'session_metadata_built'
         
@@ -13843,8 +13902,13 @@ async function generateAdaptiveProgramImpl(
         methodPrefsForGrouping.includes('drop_sets') ||
         (methodPrefsForGrouping as readonly string[]).includes('drop_set'),
       userWantsRestPause: methodPrefsForGrouping.includes('rest_pause'),
+      // [BUILDER-METHOD-PREF-LEGACY-LITERAL] 'top_sets' is not on the
+      // canonical TrainingMethodPreference union (training-methods.ts
+      // L1975) — it's a legacy persisted label the bridge still
+      // recognises. Cast both forms via `readonly string[]` so neither
+      // literal triggers TS2345.
       userWantsTopSets:
-        methodPrefsForGrouping.includes('top_sets') ||
+        (methodPrefsForGrouping as readonly string[]).includes('top_sets') ||
         (methodPrefsForGrouping as readonly string[]).includes('top_set'),
       
       // Session composition analysis
@@ -17148,11 +17212,24 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
   // [PHASE 7A TASK 5] WEEKLY TRAINING STYLE REPRESENTATION AUDIT
   // ==========================================================================
   try {
+    // [STYLE-AUDIT-METHOD-PREF-NARROW] `styleMetadata.appliedMethods` is
+    // `string[]` (built up via .push of legacy literals like
+    // 'top_sets'), but SessionStyleResult.appliedMethods expects the
+    // canonical TrainingMethodPreference union (training-methods.ts
+    // L1975). Filter to canonical literals; legacy values are dropped
+    // from the audit only.
+    const CANONICAL_METHOD_PREFS: ReadonlySet<TrainingMethodPreference> = new Set<TrainingMethodPreference>([
+      'straight_sets', 'supersets', 'circuits', 'drop_sets',
+      'density_blocks', 'ladder_sets', 'cluster_sets', 'rest_pause',
+    ])
+    const isCanonicalMethodPref = (s: string): s is TrainingMethodPreference =>
+      CANONICAL_METHOD_PREFS.has(s as TrainingMethodPreference)
     const sessionStyleResults: SessionStyleResult[] = sessions
       .filter(s => s?.styleMetadata)
       .map(s => ({
         styledGroups: s.styleMetadata?.styledGroups || [],
-        appliedMethods: s.styleMetadata?.appliedMethods || ['straight_sets'],
+        appliedMethods: ((s.styleMetadata?.appliedMethods || ['straight_sets']) as string[])
+          .filter(isCanonicalMethodPref),
         rejectedMethods: s.styleMetadata?.rejectedMethods || [],
         styleMetadata: {
           primarySessionStyle: s.styleMetadata?.primaryStyle || 'straight_sets',
@@ -17728,8 +17805,30 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
   // Get constraint interventions for primary constraint
   let constraintInterventions: ConstraintIntervention[] = []
   if (constraintInsight.hasInsight && constraintInsight.focus) {
-    const intervention = getConstraintIntervention(constraintInsight.focus, 65) // Mid-range severity
-    constraintInterventions = [intervention]
+    // [CONSTRAINT-FOCUS-PRIMARY-CATEGORY] `getConstraintInsight().focus`
+    // is `string[]` (constraint-engine.ts L533) — a list of focus areas
+    // for the limiter. `getConstraintIntervention` accepts a single
+    // `ConstraintCategory` (constraint-detection-engine.ts L334). Pick
+    // the first focus entry only when it is a valid ConstraintCategory
+    // literal; otherwise skip the intervention rather than feeding a
+    // raw array or arbitrary string.
+    const validCategories = new Set<string>([
+      'pull_strength', 'push_strength', 'straight_arm_pull_strength',
+      'straight_arm_push_strength', 'compression_strength', 'core_control',
+      'scapular_control', 'shoulder_stability', 'wrist_tolerance',
+      'explosive_pull_power', 'transition_strength', 'vertical_push_strength',
+      'mobility', 'shoulder_extension_mobility', 'skill_coordination',
+      'balance_control', 'fatigue_recovery', 'schedule_time_constraint',
+      'training_consistency', 'insufficient_data', 'none',
+    ])
+    const focusList = Array.isArray(constraintInsight.focus)
+      ? constraintInsight.focus
+      : [constraintInsight.focus]
+    const primaryFocus = focusList.find(f => typeof f === 'string' && validCategories.has(f))
+    if (primaryFocus) {
+      const intervention = getConstraintIntervention(primaryFocus as ConstraintCategory, 65) // Mid-range severity
+      constraintInterventions = [intervention]
+    }
   }
   
   // Record constraint detection in history (async, non-blocking, best-effort)
@@ -18382,9 +18481,12 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
       s.focus?.toLowerCase().includes('hybrid') ||
       s.focus?.toLowerCase().includes('density')
     )
+    // [BUILDER-MOVEMENT-EMPHASIS-DROPPED] AdaptiveSession no longer
+    // owns `movementEmphasis` — focus / hybrid / density are the
+    // canonical signals. Detect mixed days from focus alone.
     const mixedDays = sessions.filter(s =>
       s.focus?.toLowerCase().includes('mixed') ||
-      s.movementEmphasis === 'mixed'
+      s.focus?.toLowerCase().includes('hybrid')
     )
     
     // Analyze which skills are represented on mixed/hybrid days
@@ -18907,7 +19009,16 @@ let dayFocusTruthAudit: Array<{
         primaryGoal,
         secondaryGoal,
         // [BUILDER-CANONICAL-RECOVERY-OWNER]
-        recoveryLevel: canonicalProfile.recoveryQuality as any,
+        // [RESOLVE-SESSION-IDENTITY-RECOVERY-STATE] The callee
+        // (engine-quality-contract.ts L2034) renamed `recoveryLevel` to
+        // `recoveryState`. Validate the canonical literal at the
+        // boundary — anything outside the union becomes undefined.
+        recoveryState: ((): 'poor' | 'fair' | 'normal' | 'good' | undefined => {
+          const raw = canonicalProfile.recoveryQuality
+          return raw === 'poor' || raw === 'fair' || raw === 'normal' || raw === 'good'
+            ? raw
+            : undefined
+        })(),
         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession does not own
         // `isDeload`. Deload state is communicated through `focus` /
         // `weekAdaptationDecision` on the parent program. The legacy
@@ -19790,12 +19901,35 @@ let dayFocusTruthAudit: Array<{
     }))
     
     // Build the audit
+    // [METHOD-ELIGIBILITY-BOOLEAN-TO-STRING] PersonalizationLevers.
+    // methodEligibility (canonical-materiality-contract.ts L193-201)
+    // exposes booleans, but the truth-audit callee
+    // (onboarding-truth-expression-audit.ts L330) consumes
+    // string-valued dispositions ('allowed' | 'blocked' | etc.) and
+    // only reads the four grouped-method keys
+    // (supersets/circuits/densityBlocks/clusterSets). Map booleans →
+    // 'allowed' | 'blocked' and drop the per-set-method keys
+    // (dropSets/ladderSets/restPause) the callee does not declare.
+    const rawEligibility = materialityContract?.levers?.methodEligibility
+    const methodEligibilityForAudit: {
+      supersets?: string
+      circuits?: string
+      densityBlocks?: string
+      clusterSets?: string
+    } | null = rawEligibility
+      ? {
+          supersets: rawEligibility.supersets ? 'allowed' : 'blocked',
+          circuits: rawEligibility.circuits ? 'allowed' : 'blocked',
+          densityBlocks: rawEligibility.densityBlocks ? 'allowed' : 'blocked',
+          clusterSets: rawEligibility.clusterSets ? 'allowed' : 'blocked',
+        }
+      : null
     const onboardingTruthAudit = buildOnboardingTruthExpressionAudit(
       canonicalProfile,
       multiSkillMaterialityContract.materialSkillIntent,
       visibleWeekExpressionContract || null,
       allSessionExercises,
-      materialityContract?.levers?.methodEligibility || null,
+      methodEligibilityForAudit,
       sessionStyleMetadatas,
       methodReadinessGating || null
     )

@@ -367,12 +367,22 @@ interface ContraArgs extends ProvShared {
 }
 function addContra(a: ContraArgs) {
   const id = aid("ctr", a.n)
+  // [BLOCKED-CONTEXT-JSON-BOOL-COERCE] CONTRA_RULES expects
+  // `Record<string, boolean> | null`, but ContraArgs.blockedContextJson
+  // is widened to `Record<string, unknown> | null`. Coerce values to
+  // booleans at the boundary so neither contract has to widen.
+  const blockedContextJson =
+    a.blockedContextJson == null
+      ? null
+      : Object.fromEntries(
+          Object.entries(a.blockedContextJson).map(([key, value]) => [key, Boolean(value)])
+        )
   CONTRA_RULES.push({
     id,
     sourceId: a.sourceId,
     exerciseKey: a.exerciseKey,
     blockedJointJson: a.blockedJointJson ?? null,
-    blockedContextJson: a.blockedContextJson ?? null,
+    blockedContextJson,
     modificationGuidance: a.modificationGuidance ?? null,
     severity: a.severity,
   })

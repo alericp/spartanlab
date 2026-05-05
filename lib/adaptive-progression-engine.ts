@@ -1009,6 +1009,20 @@ function calculateAverageDaysPerWeek(logs: WorkoutLog[], weeks: number): number 
   return Math.round((recentLogs.length / weeks) * 10) / 10
 }
 
+// [TRAINING-DAYS-LITERAL-CLAMP] Math.max/min/round return plain
+// `number`, but `recommendedDays` is the literal TrainingDays union
+// (2|3|4|5|6|7). Clamp arithmetic results back into the union without
+// widening the schedule contract.
+function toTrainingDays(value: number): 2 | 3 | 4 | 5 | 6 | 7 {
+  const rounded = Math.round(value)
+  if (rounded <= 2) return 2
+  if (rounded === 3) return 3
+  if (rounded === 4) return 4
+  if (rounded === 5) return 5
+  if (rounded === 6) return 6
+  return 7
+}
+
 function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
   const profile = getOnboardingProfile()
   // [ADAPTIVE-PROGRESSION-TRAINING-DAYS-CANONICAL] Canonical
@@ -1046,7 +1060,7 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
     if (actualDays < intendedDays) {
       if (consistentPattern) {
         adaptation = 'reduce'
-        recommendedDays = Math.max(2, Math.round(actualDays))
+        recommendedDays = toTrainingDays(Math.max(2, Math.round(actualDays)))
         // ISSUE C FIX: Only use "actual pattern" wording when we have sufficient history
         if (historyConfidence === 'sufficient') {
           adaptationReason = `Based on your recent training history (${totalWorkouts} sessions over 3 weeks), adjusting to ${recommendedDays} sessions/week.`
@@ -1060,14 +1074,14 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
         }
       } else {
         adaptation = 'reduce'
-        recommendedDays = Math.max(2, intendedDays - 1)
+        recommendedDays = toTrainingDays(Math.max(2, intendedDays - 1))
         temporaryReduction = true
         adaptationReason = 'Reducing volume temporarily while you settle into a rhythm.'
         wordingSource = 'current_week_resolution'
       }
     } else {
       adaptation = 'increase'
-      recommendedDays = Math.min(6, Math.round(actualDays))
+      recommendedDays = toTrainingDays(Math.min(6, Math.round(actualDays)))
       // ISSUE C FIX: Clear wording for increased frequency
       if (historyConfidence === 'sufficient') {
         adaptationReason = `Based on your recent training history, you're training ${recommendedDays} days/week.`

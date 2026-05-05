@@ -851,9 +851,10 @@ export function buildProgramTruthExplanation(
     // [SESSION-STYLE-TRUTH] Prefer program.sessionStylePreference (durable) over profile (ephemeral)
     // This ensures saved programs retain their generation-time session style preference
     sessionStyleUsed: program.sessionStylePreference || program.generationTruthSnapshot?.sessionStylePreference || profile?.sessionStylePreference || null,
-    // [SESSION-STYLE-MATERIALITY] Track whether style materially affected construction
-    sessionStyleMateriallyApplied: program.sessionStyleMateriality?.styleMateriallyApplied || false,
-    sessionStyleAdjustmentReason: program.sessionStyleMateriality?.adjustmentReason || null,
+  // [SESSION-STYLE-MATERIALITY-NOT-ON-PROGRAM-TRUTH-EXPLANATION]
+  // ProgramTruthExplanation does not own session style materiality
+  // fields; those legacy keys belonged on a different audit shape.
+  // Drop them here so the truth contract stays narrow.
     
     // [PHASE 2] Actual applied methods from session structures
     methodPreferencesApplied: aggregateActualAppliedMethods(program),

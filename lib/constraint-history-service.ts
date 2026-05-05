@@ -52,7 +52,12 @@ export interface ConstraintImprovement {
  */
 function toConstraintHistoryRecord(
   result: ConstraintResult,
-  fallbackCategory: ConstraintCategory = 'skill_specific'
+  // [CONSTRAINT-CATEGORY-FALLBACK-VALID-LITERAL] `skill_specific` is
+  // not part of the canonical ConstraintCategory union (the closest
+  // valid bucket for unattributed skill-side constraints is
+  // `skill_coordination`). Use a real category so the adapter doesn't
+  // fall back to an unknown literal.
+  fallbackCategory: ConstraintCategory = 'skill_coordination'
 ): {
   category: ConstraintCategory
   score: number

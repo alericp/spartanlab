@@ -893,7 +893,7 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
     rationale: 'Reduce session frequency only when fatigue warrants it',
   },
 
-  sessionPlacement: {
+  sessionPlacementRules: {
     idealPlacement: 'early',
     maxFatigueBeforeSkill: 20,
     conflictingExercises: ['front_lever_work', 'heavy_pulling', 'planche_work'],

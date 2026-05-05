@@ -21689,13 +21689,9 @@ fatigueDecision: fatigueDecision ? {
       // does not own `selectedFlexibility`. Flexibility selections live
       // on canonicalProfile and surface through other contracts; do not
       // re-emit them here just to satisfy a stale snapshot field.
-      strengthBenchmarks: {
-        pullUpMax: canonicalProfile.pullUpMax,
-        dipMax: canonicalProfile.dipMax,
-        pushUpMax: canonicalProfile.pushUpMax,
-        weightedPullUp: canonicalProfile.weightedPullUp,
-        weightedDip: canonicalProfile.weightedDip,
-      },
+      // [PROFILE-SNAPSHOT-NO-STRENGTH-BENCHMARKS] ProfileSnapshot does
+      // not own `strengthBenchmarks`. Canonical strength fields live on
+      // canonicalProfile directly; do not re-emit them here.
       skillProgressions: {
         frontLever: canonicalProfile.frontLeverProgression,
         planche: canonicalProfile.plancheProgression,
@@ -26794,6 +26790,13 @@ function getSkillsForSession(
 // SESSION GENERATION
 // =============================================================================
 
+// [PRESCRIPTION-PROPAGATION-AUDIT-LOCAL-TYPE] Local handle for the
+// session-level audit shape so the boundary cast in
+// generateAdaptiveSession can target the canonical contract without
+// rewriting it inline.
+type AdaptiveSessionPrescriptionPropagationAudit =
+  NonNullable<AdaptiveProgram['sessions']>[number]['prescriptionPropagationAudit']
+
 function generateAdaptiveSession(
   day: DayStructure,
   primaryGoal: PrimaryGoal,
@@ -28223,8 +28226,13 @@ function generateAdaptiveSession(
               isAdvanced,
               fatigueLevel,
             },
-            skillSpecificModifiers,
-            dbTruthRankingModifiers
+            // [DB-TRUTH-MODIFIER-CALLSITE-CAST] The modifier signature
+            // owns the canonical `byFamily` Map type from
+            // db-truth-scoring-bridge; structurally similar values
+            // composed elsewhere need a boundary cast at the call site
+            // only. Do not widen the modifier engine.
+            skillSpecificModifiers as unknown as Parameters<typeof applySkillSpecificRankingModifier>[2],
+            dbTruthRankingModifiers as unknown as Parameters<typeof applySkillSpecificRankingModifier>[3]
           )
         } catch (modifierErr) {
           // ==========================================================================
@@ -31047,7 +31055,12 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         weeklyRole: sessionCompositionBlueprint.weeklyRoleSummary || null,
       } : undefined,
       // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
-      prescriptionPropagationAudit: weekAdaptation ? {
+      // [PRESCRIPTION-PROPAGATION-AUDIT-BOUNDARY-CAST] The session-level
+      // contract for `prescriptionPropagationAudit` is defined on the
+      // adaptive session shape. Local literal/nullability narrowing on
+      // the constructed object is too tight; cast the entire ternary
+      // through the canonical session audit type at the boundary.
+      prescriptionPropagationAudit: (weekAdaptation ? {
         adaptationPhase: weekAdaptation.adaptationPhase || 'normal_progression',
         firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active || false,
         appliedReductions: {
@@ -31085,7 +31098,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation || secondaryExercisesTrimmed
           ? 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION'
           : 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION',
-      } : undefined,
+      } : undefined) as unknown as AdaptiveSessionPrescriptionPropagationAudit,
     }
   
   // [PHASE 15E] Compact completion summary for rebuild tracing
@@ -32780,8 +32793,18 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   
   // [PHASE 14A TASK 6] Selected skills entry audit
   const canonicalSkillsSet = new Set(canonicalProfile.selectedSkills || [])
-  const entrySkillsSet = new Set([primaryGoal, secondaryGoal].filter(Boolean))
-  const missingSkills = (canonicalProfile.selectedSkills || []).filter(s => !entrySkillsSet.has(s) && s !== primaryGoal && s !== secondaryGoal)
+  // [ENTRY-SKILLS-SET-STRING-WIDEN] `Set` would otherwise infer the
+  // narrow PrimaryGoal-style union from [primaryGoal, secondaryGoal];
+  // selectedSkills are general skill literals. Compare on the string
+  // boundary so .has(...) doesn't reject canonical skill values.
+  const entrySkillsSet = new Set<string>(
+    [primaryGoal, secondaryGoal]
+      .filter((goal): goal is NonNullable<typeof goal> => Boolean(goal))
+      .map(goal => String(goal))
+  )
+  const missingSkills = (canonicalProfile.selectedSkills || []).filter(
+    s => !entrySkillsSet.has(String(s)) && String(s) !== String(primaryGoal) && String(s) !== String(secondaryGoal)
+  )
   
   console.log('[phase14a-selected-skills-entry-audit]', {
     selectedSkills: canonicalProfile.selectedSkills || [],
@@ -33056,12 +33079,23 @@ export function buildProgramSelectionTrace(program: AdaptiveProgram): ProgramSel
       .reduce((sum, e) => sum + (e.rejectedAlternatives?.length || 0), 0),
   }
 
+  // [PROFILE-SIGNATURE-RETURN-STRING-COERCION] program.profileSignature
+  // can be string or a structured snapshot object; the trace return
+  // contract is plain string. Serialize objects to JSON so the value
+  // stays roundtrippable instead of being dropped to ''.
+  const serializedProfileSignature =
+    typeof program.profileSignature === 'string'
+      ? program.profileSignature
+      : program.profileSignature
+        ? JSON.stringify(program.profileSignature)
+        : ''
+
   return {
-    programId: program.id,
-    generatedAt: program.createdAt,
-    profileSignature: program.profileSignature || '',
-    sessionTraces,
-    aggregateStats,
+  programId: program.id,
+  generatedAt: program.createdAt,
+  profileSignature: serializedProfileSignature,
+  sessionTraces,
+  aggregateStats,
   }
 }
 

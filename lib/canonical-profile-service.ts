@@ -82,6 +82,7 @@ import {
   saveOnboardingProfile,
   type OnboardingProfile,
   type RecoveryProfile,
+  type FlexibilityBenchmark,
   type PrimaryGoalType,
   type SkillGoal,
   type FlexibilityGoal,
@@ -1539,9 +1540,18 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       }
     }
     if (updates.sideSplitsLevel !== undefined || updates.sideSplitsRangeIntent !== undefined) {
+      // [SIDE-SPLITS-LEGACY-NARROWING] Canonical FlexibilityBenchmark
+      // does not expose `level`/`rangeIntent` directly; legacy persisted
+      // shapes still carry them. Read through a legacy intersection so
+      // the canonical type stays narrow.
+      const legacySideSplits =
+        currentOnboarding.sideSplits as (FlexibilityBenchmark & {
+          level?: OnboardingProfile['sideSplits']['level'] | null
+          rangeIntent?: OnboardingProfile['sideSplits']['rangeIntent'] | null
+        }) | null
       onboardingUpdates.sideSplits = { 
-        level: (updates.sideSplitsLevel ?? currentOnboarding.sideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
-        rangeIntent: (updates.sideSplitsRangeIntent ?? currentOnboarding.sideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
+        level: (updates.sideSplitsLevel ?? legacySideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
+        rangeIntent: (updates.sideSplitsRangeIntent ?? legacySideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
       }
     }
     
@@ -1561,8 +1571,19 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     
     // TASK A FIX: Recovery quality - map to onboarding profile recovery object
     if (updates.recoveryQuality !== undefined) {
+      // [RECOVERY-LEGACY-NARROWING] Canonical RecoveryProfile does not
+      // expose the legacy onboarding recovery fields directly. Spread
+      // through a legacy intersection so the canonical contract stays
+      // narrow.
+      const legacyRecovery =
+        currentOnboarding.recovery as (RecoveryProfile & {
+          sleepQuality?: OnboardingProfile['recovery']['sleepQuality']
+          energyLevel?: OnboardingProfile['recovery']['energyLevel']
+          stressLevel?: OnboardingProfile['recovery']['stressLevel']
+          recoveryConfidence?: OnboardingProfile['recovery']['recoveryConfidence']
+        }) | null
       onboardingUpdates.recovery = {
-        ...(currentOnboarding.recovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
+        ...(legacyRecovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
         // Use recoveryQuality as the primary recovery indicator
         recoveryConfidence: updates.recoveryQuality as OnboardingProfile['recovery']['recoveryConfidence'],
       }

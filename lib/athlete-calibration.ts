@@ -940,8 +940,17 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
   const sessionCapacity = inferSessionCapacityFromMinutes(sessionMinutes) ?? 'medium'
   const consistencyCapacity = inferConsistencyCapacityFromDays(daysPerWeek) ?? 'moderate'
   
+  // [CALIBRATION-PRIMARY-GOAL-NULLISH-NORMALIZE] profile.primaryGoal
+  // ships as `string | null | undefined`; inferEnduranceCompatibility
+  // accepts `OnboardingGoal | PrimaryGoalType | null`. Coerce undefined
+  // to null and narrow the string at the boundary so neither contract
+  // has to widen.
+  const calibrationPrimaryGoal =
+    profile.primaryGoal == null
+      ? null
+      : profile.primaryGoal as OnboardingGoal | PrimaryGoalType
   const enduranceCompatibility = inferEnduranceCompatibility(
-    profile.primaryGoal,
+    calibrationPrimaryGoal,
     sessionCapacity,
     consistencyCapacity
   )

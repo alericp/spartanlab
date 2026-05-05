@@ -397,6 +397,13 @@ function normalizeExerciseInput(exercise: AdaptiveExercise): NormalizedExerciseI
     movementFamily = 'skill'
   }
   
+  // [COACHING-META-LEGACY-NARROW] Canonical coachingMeta does not own
+  // `roleInSession`; legacy persisted coaching meta still carries it.
+  // Read through a legacy intersection so the canonical type stays
+  // narrow.
+  const legacyCoaching =
+    coaching as (typeof coaching & { roleInSession?: string }) | undefined
+
   return {
     id: exercise.id,
     name: exercise.name,
@@ -410,7 +417,7 @@ function normalizeExerciseInput(exercise: AdaptiveExercise): NormalizedExerciseI
     // AdaptiveExercise type but are still present on legacy persisted
     // shapes; read through a runtime-shape narrow with a coaching-meta
     // fallback for `roleInSession`.
-    roleInSession: coaching?.roleInSession || (exercise as { roleInSession?: string }).roleInSession || 'support',
+    roleInSession: legacyCoaching?.roleInSession || (exercise as { roleInSession?: string }).roleInSession || 'support',
     expressionMode: coaching?.expressionMode || 'support',
     progressionIntent: coaching?.progressionIntent || 'maintain',
     isPrimary: (exercise as { isPrimary?: boolean }).isPrimary ?? false,
@@ -920,11 +927,31 @@ function buildExerciseRoleExplanation(
     emphasisKind = 'accessory'
   }
   
+  // [EMPHASIS-KIND-DISPLAY-CONTRACT-MAP] Local `emphasisKind` uses
+  // accessory/support/primary_skill/strength_output, while the display
+  // contract owns the narrower primary/secondary/support/protection/
+  // fallback_minimal union. Map at the boundary so neither contract
+  // has to widen.
+  const displayEmphasisKind:
+    | 'primary'
+    | 'secondary'
+    | 'support'
+    | 'protection'
+    | 'fallback_minimal'
+    | undefined =
+      emphasisKind === 'primary_skill' || emphasisKind === 'strength_output'
+        ? 'primary'
+        : emphasisKind === 'accessory'
+          ? 'secondary'
+          : emphasisKind === 'support'
+            ? 'support'
+            : undefined
+
   // Call the sophisticated reasoning engine
   const purposeLine = buildPurposeLineFromDisplayContract(
     exerciseForPurposeLine,
     sessionContextForPurposeLine,
-    emphasisKind
+    displayEmphasisKind
   )
   
   // Return the result, with a fallback if the engine returns null

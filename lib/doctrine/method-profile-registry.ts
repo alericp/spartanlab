@@ -559,8 +559,18 @@ export function validateMethodProfileCoverage(): {
   }
   
   // Check common goals have coverage
+  // [COMMON-GOALS-MAP-TO-CANONICAL-PRIMARY-GOAL] PrimaryGoal (program-
+  // service.ts) does not include the legacy literals `handstand`,
+  // `l_sit`, or `general_strength`. Map them to the canonical literals
+  // `handstand_pushup`, `abs`, and `strength` so coverage validation
+  // runs against real PrimaryGoal values.
   const commonGoals: PrimaryGoal[] = [
-    'front_lever', 'planche', 'muscle_up', 'handstand', 'l_sit', 'general_strength'
+    'front_lever',
+    'planche',
+    'muscle_up',
+    'handstand_pushup',
+    'abs',
+    'strength',
   ]
   for (const goal of commonGoals) {
     if (!coverage[goal] || coverage[goal].length === 0) {

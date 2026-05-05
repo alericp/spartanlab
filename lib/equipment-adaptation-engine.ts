@@ -149,7 +149,10 @@ export function analyzeEquipmentProfile(available: EquipmentType[]): EquipmentPr
   // [TASK 9] Final equipment verdict
   const hasFullSetup = missingCritical.length === 0
   console.log('[equipment-final-verdict]', {
-    settingsPullUpBar: available.includes('pullup_bar'),
+    // [EQUIPMENT-LITERAL-CANONICAL] EquipmentType uses `pull_bar`, not
+    // the legacy `pullup_bar` literal. Use the canonical literal so the
+    // verdict log compares against a real EquipmentType value.
+    settingsPullUpBar: available.includes('pull_bar'),
     canonicalPullUpBar: hasPullBar,
     warningCardPullUpBarMissing: !hasPullBar,
     verticalPullingNowEligible: hasPullBar,

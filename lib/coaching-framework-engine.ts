@@ -698,7 +698,13 @@ export function selectFramework(input: FrameworkSelectionInput): FrameworkSelect
     }
     
     // 5. Iron Cross / advanced rings detection
-    if (input.primaryGoal === 'iron_cross' || input.primarySkill === 'iron_cross') {
+    // [IRON-CROSS-STRING-BOUNDARY-COMPARE] primarySkill SkillKey union
+    // does not include 'iron_cross'; compare on the string boundary so
+    // the heuristic continues to work without widening the SkillKey
+    // union just to recognize this skill literal.
+    const primaryGoalKey = input.primaryGoal == null ? null : String(input.primaryGoal)
+    const primarySkillKey = input.primarySkill == null ? null : String(input.primarySkill)
+    if (primaryGoalKey === 'iron_cross' || primarySkillKey === 'iron_cross') {
       if (frameworkId === 'tendon_conservative') {
         score += 30
         reasons[frameworkId].push('Required for Iron Cross progression')

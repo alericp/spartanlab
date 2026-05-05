@@ -1531,11 +1531,16 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
         primaryGoal: previousPayload.primaryGoal,
       } : 'no_previous_payload',
       // Verify removed/unselected values are truly removed
+      // [REMOVED-DIFF-STRING-COMPARE] profile.selectedSkills /
+      // profile.equipment narrow to SkillGoal[] / EquipmentType[]; the
+      // `previousPayload` shadow snapshot stores plain strings. Compare
+      // on the string boundary so we don't have to coerce inputs into
+      // the canonical literal unions just to compute a diff.
       removedSelectedSkills: previousPayload?.selectedSkills?.filter(
-        (s: string) => !(profile.selectedSkills || []).includes(s)
+        (s: string) => !(profile.selectedSkills || []).map(String).includes(String(s))
       ) || [],
       removedEquipment: previousPayload?.equipment?.filter(
-        (e: string) => !(profile.equipment || []).includes(e)
+        (e: string) => !(profile.equipment || []).map(String).includes(String(e))
       ) || [],
       // Confirm no stale arrays survive
       staleArraysSurvived: false, // Full JSON.stringify replace guarantees this

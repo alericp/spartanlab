@@ -257,9 +257,13 @@ export function getTrainingHistorySnapshot(): TrainingHistorySnapshot {
   })
   
   // Calculate frequency trend
+  // [TREND-DIRECTION-CANONICAL-LITERAL] TrendDirection's negative
+  // literal is `regressing`, not the legacy `declining`. Match the
+  // existing holdTrend usage above so both sites use the canonical
+  // union literal.
   let frequencyTrend: TrendDirection = 'stable'
   if (recentLogs.length > previousWeekLogs.length + 1) frequencyTrend = 'improving'
-  else if (recentLogs.length < previousWeekLogs.length - 1) frequencyTrend = 'declining'
+  else if (recentLogs.length < previousWeekLogs.length - 1) frequencyTrend = 'regressing'
   
   // Average session duration
   const avgDuration = logs.reduce((sum, l) => sum + l.durationMinutes, 0) / logs.length

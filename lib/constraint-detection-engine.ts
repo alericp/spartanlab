@@ -9,7 +9,9 @@ import { getAthleteProfile, type AthleteProfile } from './data-service'
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getSkillReadiness, getAthleteSkillReadiness, type SkillReadinessData } from './readiness-service'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
-import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
+// [CONSTRAINT-RESULT-NOT-RE-EXPORTED] constraint-engine doesn't
+// re-export ConstraintResult; it isn't used here anyway.
+import { analyzeConstraints } from './constraint-engine'
 import type { SkillState } from './skill-state-service'
 import type { LimitingFactor } from './readiness/canonical-readiness-engine'
 
@@ -1041,7 +1043,20 @@ export function getConstraintInsightForSkill(skill: SkillType): {
   recommendations: string[]
   explanation: string
 } {
+  // [ATHLETE-PROFILE-NULL-GUARD] getAthleteProfile may return null
+  // before persisted profile exists; surface the same insufficient-data
+  // payload instead of forcing a non-null profile through.
   const profile = getAthleteProfile()
+  if (!profile) {
+    return {
+      hasInsight: false,
+      primaryLabel: 'More Data Needed',
+      secondaryLabel: null,
+      strongQualitiesLabel: '',
+      recommendations: ['Log workouts to unlock constraint detection'],
+      explanation: 'Track your training to receive personalized constraint analysis.',
+    }
+  }
   const result = detectSkillConstraints(skill, null, profile)
   
   if (result.primaryConstraint === 'insufficient_data') {

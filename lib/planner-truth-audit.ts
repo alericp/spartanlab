@@ -472,7 +472,9 @@ function auditWeightedEligibility(
       }
       
       // Check if weighted actually appeared
-      const hasLoad = ex.prescribedLoad && ex.prescribedLoad.load > 0
+      // [HAS-LOAD-FORCE-BOOLEAN] && short-circuit returned the
+      // truthy operand; the audit detail wants a strict boolean.
+      const hasLoad = Boolean(ex.prescribedLoad && ex.prescribedLoad.load > 0)
       if (hasLoad) actuallyAppeared++
       
       // Classify absence

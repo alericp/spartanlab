@@ -147,6 +147,9 @@ export interface PriorSetContext {
 // CANONICAL SUMMARY BUILDER
 // =============================================================================
 
+// [COACHING-SIGNAL-SEVERITY-COMPLETE] cover the full canonical
+// CoachingSignalTag union — including the live-workout normalizer
+// additions — so this Record is exhaustive.
 const COACHING_SIGNAL_SEVERITY_MAP: Record<CoachingSignalTag, 'info' | 'warning' | 'critical'> = {
   'too_easy': 'info',
   'too_hard': 'warning',
@@ -160,6 +163,12 @@ const COACHING_SIGNAL_SEVERITY_MAP: Record<CoachingSignalTag, 'info' | 'warning'
   'breathing_issue': 'warning',
   'joint_stress': 'critical',
   'muscle_cramping': 'warning',
+  'straight_arm_fatigue': 'warning',
+  'support_mismatch': 'warning',
+  'load_mismatch': 'warning',
+  'recovery_concern': 'warning',
+  'technique_breakdown': 'warning',
+  'endurance_limited': 'warning',
 }
 
 /**

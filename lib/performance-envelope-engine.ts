@@ -1787,6 +1787,10 @@ export function applyFatigueFeedbackToEnvelope(
   }
   
   // If deload was triggered, we may have found the true fatigue threshold
+  // [APPLY-FATIGUE-FEEDBACK-RETURN] no envelope mutation paths exist
+  // yet for the deload branch; preserve the original envelope so the
+  // caller's reference contract remains intact.
+  return envelope
 }
 
 // =============================================================================

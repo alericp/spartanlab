@@ -506,10 +506,13 @@ export async function generateFirstProgram(
     })
     
     // ENGINE PROOF: Verify schedule mode resolution
+    // [SCHEDULE-RESOLUTION-SOURCE-UNION] verifyScheduleModeResolution
+    // expects 'fallback'|'engine'|'profile'; 'canonical_profile' was
+    // narrowed to 'profile'.
     verifyScheduleModeResolution(
       programInputs.scheduleMode || 'static',
       programInputs.trainingDaysPerWeek,
-      'canonical_profile'
+      'profile'
     )
     
     // PRODUCTION SAFETY: Verify flexible mode semantics are intact
@@ -658,7 +661,12 @@ export async function generateFirstProgram(
     
     // Ensure top-level fields used by downstream UI exist
     if (typeof program.trainingDaysPerWeek !== 'number') {
-      program.trainingDaysPerWeek = program.sessions.length
+      // [TRAINING-DAYS-LITERAL-UNION] AdaptiveProgram.trainingDaysPerWeek
+      // is a 2|3|4|5|6|7 union; clamp before assignment.
+      const sessionCount = program.sessions.length
+      program.trainingDaysPerWeek = ([2, 3, 4, 5, 6, 7].includes(sessionCount)
+        ? (sessionCount as 2 | 3 | 4 | 5 | 6 | 7)
+        : 4) as typeof program.trainingDaysPerWeek
     }
     if (typeof program.goalLabel !== 'string' || !program.goalLabel) {
       program.goalLabel = 'Strength Training'

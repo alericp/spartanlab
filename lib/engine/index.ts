@@ -124,7 +124,8 @@ export {
   refineStyleRulesWithEnvelope,
   getStyleCoachingSummary,
   STYLE_MODE_DEFINITIONS,
-  type TrainingStyleMode,
+  // [DUPLICATE-IDENTIFIER] TrainingStyleMode is already re-exported
+  // above from unified-coaching-engine.
   type TrainingStyleProfile,
   type StylePriorities,
   type StyleProgrammingRules,
@@ -201,7 +202,8 @@ export {
   type MovementBias,
   type BiasAdjustment,
   type BenchmarkInput,
-  type SkillStateInput,
+  // [DUPLICATE-IDENTIFIER] SkillStateInput is already re-exported
+  // above from skill-state-service.
   type BiasDetectionInput,
   type BiasAdjustedVolume,
   type BiasExplanation,

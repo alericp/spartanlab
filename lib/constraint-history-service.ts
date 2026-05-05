@@ -1,5 +1,7 @@
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
-import { ConstraintCategory, ConstraintResult } from './constraint-detection-engine'
+// [CONSTRAINT-RESULT-RENAMED] constraint-detection-engine now exports
+// SkillConstraintResult (no plain ConstraintResult export).
+import { ConstraintCategory, type SkillConstraintResult as ConstraintResult } from './constraint-detection-engine'
 
 // =============================================================================
 // LAZY DATABASE CONNECTION

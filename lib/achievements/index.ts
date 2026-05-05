@@ -16,4 +16,8 @@ export {
   onTrainingEvent,
   getUnlockedAchievements,
   markAchievementSeen,
+  // [NOTIFICATION-QUEUE-RE-EXPORTS] surface the achievement-engine
+  // notification helpers consumers expect from `@/lib/achievements`.
+  popNextNotification,
+  hasUnseenAchievements,
 } from './achievement-engine'

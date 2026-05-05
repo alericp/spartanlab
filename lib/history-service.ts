@@ -832,7 +832,9 @@ export async function getWorkoutSessionsForProgram(
       LIMIT ${limit}
     `
 
-    return result.map(row => toWorkoutSession(row as WorkoutSessionRow))
+    // [DB-ROW-TYPE-AT-BOUNDARY] explicit Record<string, unknown> avoids
+    // implicit-any on the row callback parameter.
+    return result.map((row: Record<string, unknown>) => toWorkoutSession(row as unknown as WorkoutSessionRow))
   } catch (error) {
     console.error('[HistoryService] Error fetching program sessions:', error)
     return []

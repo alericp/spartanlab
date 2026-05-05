@@ -102,7 +102,9 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         ...existingMeta,
         // Ensure these fields exist but don't overwrite builder values
         hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
-        appliedMethods: existingMeta.appliedMethods ?? ['straight_sets'],
+        // [APPLIED-METHODS-PREFERENCE-CAST] appliedMethods is
+        // TrainingMethodPreference[]; cast string[] fallback at boundary.
+        appliedMethods: existingMeta.appliedMethods ?? (['straight_sets'] as unknown as typeof existingMeta.appliedMethods),
       },
     }
   }
@@ -178,10 +180,22 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // method materialization existed. These minimal straight groups are safe
   // defaults, not authoritative truth.
   // --------------------------------------------------------------------------
+  // [STYLED-GROUP-DISPLAY-CONTRACT] Display contract requires
+  // trainingMethod, methodRationale, instruction, and restProtocol on
+  // every fallback group; supplying them avoids stripping the
+  // contract on the no-truth path.
   const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
     id: `straight-${idx}`,
     groupType: 'straight' as const,
-    exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
+    exercises: [{
+      id: ex.id || `ex-${idx}`,
+      name: ex.name,
+      prefix: undefined as string | undefined,
+      trainingMethod: 'straight',
+      methodRationale: 'Default straight-set execution',
+    }],
+    instruction: 'Complete each exercise with standard straight-set execution.',
+    restProtocol: 'Rest as prescribed between sets.',
   }))
   
   return {
@@ -190,7 +204,9 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       ...existingMeta,
       hasSupersetsApplied: false,
       styledGroups: fallbackStyledGroups,
-      appliedMethods: ['straight_sets'],
+      // [APPLIED-METHODS-PREFERENCE-CAST] mirror the cast above for the
+      // straight-fallback path.
+      appliedMethods: (['straight_sets'] as unknown as typeof existingMeta.appliedMethods),
       structureDescription: existingMeta.structureDescription || '',
     },
   }

@@ -336,9 +336,11 @@ export async function createInputSnapshot(
       bodyWeight: context.athlete.weightKg,
     },
     skillStateSnapshot: {
+      // [SKILL-STATE-SNAPSHOT-STRINGS] snapshot expects string fields;
+      // upstream skill/currentLevel may be number-coded enums.
       skills: context.skills.states.map(s => ({
-        skill: s.skill,
-        currentLevel: s.currentLevel,
+        skill: String(s.skill),
+        currentLevel: String(s.currentLevel),
         readinessScore: s.readinessScore || 50,
         limitingFactor: s.limitingFactor,
       })),
@@ -646,13 +648,15 @@ export async function regenerateProgramIfNeeded(
   
   // Also create an entry in the program_history table for durable history
   // Build a minimal program-like object for the history versioning system
+  // [PROGRAM-FOR-HISTORY-INDEXED-CASTS] coerce athlete-context primitives
+  // to the AdaptiveProgram literal unions at this snapshot boundary.
   const programForHistory: Partial<AdaptiveProgram> = {
-    primaryGoal: context.athlete.primaryGoal,
+    primaryGoal: context.athlete.primaryGoal as AdaptiveProgram['primaryGoal'],
     goalLabel: summary.primaryGoal,
-    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
-    sessionLengthMinutes: context.athlete.sessionDurationMinutes,
-    sessionLength: context.athlete.sessionDurationMinutes,
-    equipment: context.athlete.equipment,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek as AdaptiveProgram['trainingDaysPerWeek'],
+    sessionLengthMinutes: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLengthMinutes'],
+    sessionLength: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLength'],
+    equipment: context.athlete.equipment as unknown as AdaptiveProgram['equipment'],
     styleMode: context.athlete.trainingStyle,
     constraintFocus: context.constraints.primaryConstraint,
     primaryConstraint: context.constraints.primaryConstraint,

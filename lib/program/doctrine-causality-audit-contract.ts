@@ -480,8 +480,11 @@ function changedFieldsFromCausalChallenge(
     if (!d.doctrineChangedTopWinner) continue
     out.push({
       path: `sessions[day=${d.dayNumber ?? '?'}].topExerciseWinner`,
-      before: safeString(d.preTopExerciseId, null) || null,
-      after: safeString(d.postTopExerciseId, null) || null,
+      // [SAFE-STRING-FALLBACK-UNDEFINED] safeString fallback is string;
+      // omit it (defaults to '') and use plain `|| null` for the
+      // RuleChangedField string|null shape.
+      before: safeString(d.preTopExerciseId) || null,
+      after: safeString(d.postTopExerciseId) || null,
       reasonCode: 'doctrine_changed_top_winner',
     })
   }

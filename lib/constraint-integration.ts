@@ -193,7 +193,19 @@ export interface RoadmapConstraintContext {
 export function getConstraintContextForRoadmap(
   skill: SkillType
 ): RoadmapConstraintContext {
+  // [ATHLETE-PROFILE-NULL-GUARD] return a neutral roadmap snapshot
+  // when the canonical profile is not yet hydrated.
   const profile = getAthleteProfile()
+  if (!profile) {
+    return {
+      skill,
+      isBlocked: false,
+      blockingConstraints: [],
+      readinessForNextMilestone: 0,
+      explanation: 'Profile not loaded yet.',
+      recommendations: [],
+    }
+  }
   const result = detectSkillConstraints(skill, null, profile)
   
   // Determine if blocked (low readiness for next milestone)
@@ -290,7 +302,21 @@ function getCategoryFromConstraint(constraint: ConstraintCategory): string {
  * Get constraints for a specific skill (for skill detail pages, roadmaps, etc.)
  */
 export function getSkillConstraints(skill: SkillType): SkillConstraintResult {
+  // [ATHLETE-PROFILE-NULL-GUARD] mirror detectSkillConstraints'
+  // insufficient-data branch when no profile is hydrated.
   const profile = getAthleteProfile()
+  if (!profile) {
+    return {
+      skill,
+      primaryConstraint: 'insufficient_data',
+      secondaryConstraint: null,
+      constraintScores: [],
+      strongQualities: [],
+      overallReadiness: 0,
+      explanation: 'Profile not loaded yet.',
+      recommendations: [],
+    }
+  }
   return detectSkillConstraints(skill, null, profile)
 }
 
@@ -298,10 +324,12 @@ export function getSkillConstraints(skill: SkillType): SkillConstraintResult {
  * Get all skill constraints at once
  */
 export function getAllSkillConstraints(): Record<SkillType, SkillConstraintResult> {
+  // [ATHLETE-PROFILE-NULL-GUARD] return empty record when no profile.
   const profile = getAthleteProfile()
   const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit']
   
   const results: Record<SkillType, SkillConstraintResult> = {} as any
+  if (!profile) return results
   
   for (const skill of skills) {
     results[skill] = detectSkillConstraints(skill, null, profile)

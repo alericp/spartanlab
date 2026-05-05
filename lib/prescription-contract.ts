@@ -165,7 +165,10 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_weight',
-      secondary: 'add_reps',
+      // [SECONDARY-PROGRESSION-WORKLOAD] secondary union is sets/rest/
+      // accessory; add_sets is the closest "add workload" mapping for
+      // the legacy 'add_reps' secondary.
+      secondary: 'add_sets',
       thresholdToProgress: 'Complete top of rep range at RPE 7-8',
     },
     coachingNotes: [
@@ -249,7 +252,9 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_hold_time',
-      secondary: 'progress_variation',
+      // [SECONDARY-PROGRESSION-VARIATION] 'progress_variation' is a
+      // primary-only literal; map secondary to 'add_accessory'.
+      secondary: 'add_accessory',
       thresholdToProgress: 'Hold 45s+ with solid compression',
     },
     coachingNotes: [
@@ -277,7 +282,8 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_hold_time',
-      secondary: 'progress_variation',
+      // [SECONDARY-PROGRESSION-VARIATION] map to 'add_accessory'.
+      secondary: 'add_accessory',
       thresholdToProgress: 'Comfortable at position for 60s',
     },
     coachingNotes: [

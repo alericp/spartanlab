@@ -1021,9 +1021,13 @@ export function applyRowLevelMethodPrescriptionMutations(
     // `methodStructures`; legacy/runtime sessions still carry the array
     // after the structural materialization corridor stamps it. Read it
     // through a narrow structural cast so the type system stays honest.
+    const legacyMethodStructures =
+      (session as unknown as { methodStructures?: unknown[] }).methodStructures
+
     const stampedMethodStructures =
-      ((session as unknown as { methodStructures?: unknown[] })?.methodStructures
-        as Parameters<typeof classifyDoctrineBlocksForSession>[0]['methodStructures']) ?? []
+      (legacyMethodStructures ?? []) as Parameters<
+        typeof classifyDoctrineBlocksForSession
+      >[0]['methodStructures']
     if (Array.isArray(stampedMethodStructures) && stampedMethodStructures.length > 0) {
       const sessionRoleRaw =
         (session as { weeklyRole?: { roleId?: unknown } } | null)?.weeklyRole?.roleId ?? null

@@ -108,6 +108,12 @@ import { buildGroupedDisplayModel, getGroupedMethodSemantics, minMembersFor, typ
 // [STEP 4 OF 19] Display-time prescription clarity overlay (ROM, purpose,
 // HSPU/pike sanity). Pure resolver — no state, no I/O.
 import { resolveExercisePrescriptionClarity } from '@/lib/program/exercise-prescription-clarity'
+// [PHASE AB7] Row-level progression prescription resolver. Pure helper that
+// maps coachDecision → progressionMode → exercise-shape into a single short
+// athlete-facing instruction. Renders ONE compact line under the Phase O
+// Trend/Coach line, only when the resolver established a trustworthy
+// progression intent. Never contradicts the Phase O coach decision.
+import { resolveExerciseProgressionPrescription } from '@/lib/program/exercise-progression-prescription'
 // [PHASE AB5] Single authoritative grouped execution prescription resolver.
 // Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
 // complete execution contract that carries rounds, member doses, rest
@@ -7771,6 +7777,47 @@ function ExerciseRow({
             {trendLabel && <span>Trend: {trendLabel}</span>}
             {trendLabel && coachLabel && <span className="text-[#5A5A5A]"> · </span>}
             {coachLabel && <span>Coach: {coachLabel}</span>}
+          </p>
+        )
+      })()}
+
+      {/* [PHASE AB7] PROGRESSION PRESCRIPTION LINE.
+          One compact athlete-facing line that converts the row's existing
+          coachDecision / adaptive-dosage progressionMode / exercise shape
+          into a single instruction (e.g. "Progression: Add clean seconds
+          before advancing." or "Conservative: Reduce volume before
+          progressing."). The resolver enforces the Phase O coach decision
+          as the highest-priority truth, so this line cannot contradict the
+          Trend/Coach line above. Hidden on warm-up/cooldown rows and on
+          rows with no trustworthy progression intent (the resolver returns
+          `shouldRender:false`). Tagged with `data-ab7-*` attributes for
+          screenshot / DOM proof without any visible debug clutter. */}
+      {!isWarmupCooldown && (() => {
+        const ab7 = resolveExerciseProgressionPrescription({
+          exercise,
+          exerciseName: exercise.name || '',
+          reps: effectiveReps,
+          sets: typeof exercise.sets === 'number' ? exercise.sets : null,
+          isWarmupCooldown: false,
+        })
+        if (!ab7.shouldRender || !ab7.shortText) return null
+        // Hover/title text uses the resolver's detailText when present
+        // (e.g. coachDecision.explanation or trendIntelligence
+        // .conciseExplanation). Otherwise falls back to label + shortText.
+        const titleText = ab7.detailText
+          ? `${ab7.label}: ${ab7.shortText} — ${ab7.detailText}`
+          : `${ab7.label}: ${ab7.shortText}`
+        return (
+          <p
+            className="mt-1 text-[10px] text-sky-300/70 italic leading-snug"
+            title={titleText}
+            aria-label={titleText}
+            {...ab7.dataAttributes}
+          >
+            <span className="font-semibold text-sky-300/85 not-italic">
+              {ab7.label}:
+            </span>{' '}
+            {ab7.shortText}
           </p>
         )
       })()}

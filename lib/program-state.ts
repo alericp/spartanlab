@@ -91,7 +91,13 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // applied/circuits/density flags) so spread + read sites are
   // type-safe without widening the canonical session contract.
     const existingMeta = (session.styleMetadata || {}) as {
-    styledGroups?: Array<{ groupType: string }>
+    // [STYLED-GROUPS-RAW-LEGACY-INPUT] Treat persisted styledGroups as
+    // unknown raw legacy input here. The strict canonical display
+    // contract is enforced by `normalizeStyledGroups` /
+    // `isValidStyledGroup` below — typing this slot as
+    // `Array<{ groupType: string }>` would let wrong-shaped groups
+    // leak into the strict `AdaptiveSession['styleMetadata']` target.
+    styledGroups?: unknown
     hasSupersetsApplied?: boolean
     hasCircuitsApplied?: boolean
     hasDensityApplied?: boolean
@@ -111,6 +117,15 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     methodMaterializationSummary?: unknown
   }
 
+  // [SAFE-STYLE-METADATA-LOCAL-ALIASES] Pin the canonical
+  // AdaptiveSession styleMetadata target shape so the explicit
+  // `styleMetadata` locals below cannot drift. Sourcing from the
+  // session contract makes the target fields the source of truth —
+  // not a duplicate local copy.
+  type SafeStyleMetadata = NonNullable<AdaptiveSession['styleMetadata']>
+  type SafeStyledGroups = NonNullable<SafeStyleMetadata['styledGroups']>
+  type SafeStyledGroup = SafeStyledGroups[number]
+
   // [REJECTED-METHODS-NORMALIZER] Canonical styleMetadata expects
   // `rejectedMethods: Array<{ method; reason }>`. Legacy data is a
   // bare string[] / TrainingMethodPreference[]; promote those entries
@@ -122,17 +137,22 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       | string[]
       | Array<{ method: string; reason: string }>
       | undefined,
-  ): Array<{ method: TrainingMethodPreference; reason: string }> => {
+  ): Array<{ method: string; reason: string }> => {
     if (!Array.isArray(methods)) return []
     return methods.map((entry) => {
-      if (typeof entry === 'object' && entry !== null && 'method' in entry && 'reason' in entry) {
+      if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        'method' in entry &&
+        'reason' in entry
+      ) {
         return {
-          method: entry.method as TrainingMethodPreference,
-          reason: entry.reason,
+          method: String(entry.method),
+          reason: String(entry.reason),
         }
       }
       return {
-        method: String(entry) as TrainingMethodPreference,
+        method: String(entry),
         reason: 'not_selected_or_not_applicable',
       }
     })
@@ -182,33 +202,103 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     }
     return undefined
   }
-  
+
+  // [STYLED-GROUP-DISPLAY-CONTRACT-VALIDATOR] Strictly type-guard each
+  // candidate styled group against the canonical display contract:
+  //   { id; groupType; exercises[{id,name,trainingMethod,methodRationale}];
+  //     instruction; restProtocol }
+  // Only fully-valid groups pass through; legacy short-shaped groups
+  // (e.g. `{ groupType: string }`) are rejected so they cannot leak into
+  // `AdaptiveSession['styleMetadata']`.
+  const isValidStyledGroup = (group: unknown): group is SafeStyledGroup => {
+    if (!group || typeof group !== 'object') return false
+
+    const candidate = group as {
+      id?: unknown
+      groupType?: unknown
+      exercises?: unknown
+      instruction?: unknown
+      restProtocol?: unknown
+    }
+
+    if (typeof candidate.id !== 'string') return false
+
+    const validGroupType =
+      candidate.groupType === 'superset' ||
+      candidate.groupType === 'density_block' ||
+      candidate.groupType === 'straight' ||
+      candidate.groupType === 'circuit' ||
+      candidate.groupType === 'cluster'
+
+    if (!validGroupType) return false
+    if (!Array.isArray(candidate.exercises)) return false
+    if (typeof candidate.instruction !== 'string') return false
+    if (typeof candidate.restProtocol !== 'string') return false
+
+    return candidate.exercises.every((exercise) => {
+      if (!exercise || typeof exercise !== 'object') return false
+      const item = exercise as {
+        id?: unknown
+        name?: unknown
+        trainingMethod?: unknown
+        methodRationale?: unknown
+      }
+      return (
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.trainingMethod === 'string' &&
+        typeof item.methodRationale === 'string'
+      )
+    })
+  }
+
+  // [NORMALIZE-STYLED-GROUPS] Preserve only already-valid builder
+  // styledGroups; never fabricate missing fields here. Returning `[]`
+  // when nothing valid is present keeps the strict contract satisfied
+  // and lets exercise-level grouped truth remain authoritative
+  // downstream.
+  const normalizeStyledGroups = (groups: unknown): SafeStyledGroups => {
+    if (!Array.isArray(groups)) return []
+    return groups.filter(isValidStyledGroup)
+  }
+
+  // [BUILDER-STYLED-GROUPS-PRECOMPUTE] Compute once so Priority 1's
+  // entry condition and the explicit `styleMetadata` local both read
+  // the same validated value.
+  const normalizedExistingStyledGroups = normalizeStyledGroups(existingMeta.styledGroups)
+
   // --------------------------------------------------------------------------
   // PRIORITY 1 - Authoritative builder styledGroups
   // --------------------------------------------------------------------------
-  // If the builder already computed styledGroups, PRESERVE them exactly.
-  if (existingMeta.styledGroups && Array.isArray(existingMeta.styledGroups) && existingMeta.styledGroups.length > 0) {
-    // Builder truth exists - preserve it intact, only ensure structural fields
+  // If the builder already computed valid styledGroups, PRESERVE them exactly.
+  // [PRIORITY-1-VALIDATED-ENTRY] Only enter this branch when normalized
+  // styledGroups pass the strict display contract; legacy short-shaped
+  // groups fall through to Priority 2/3 instead of polluting the target.
+  if (normalizedExistingStyledGroups.length > 0) {
+    // [PRIORITY-1-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread
+    // here — that previously let wrong-shaped legacy fields leak into
+    // the strict `AdaptiveSession['styleMetadata']` contract. Build an
+    // explicit `SafeStyleMetadata` local so every owned field is
+    // accounted for through a normalizer or a safe default.
+    const styleMetadata: SafeStyleMetadata = {
+      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+      hasSupersetsApplied:
+        existingMeta.hasSupersetsApplied ??
+        normalizedExistingStyledGroups.some((group) => group.groupType === 'superset'),
+      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+      structureDescription: existingMeta.structureDescription ?? '',
+      appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+      styledGroups: normalizedExistingStyledGroups,
+      methodMaterializationSummary: normalizeMethodMaterializationSummary(
+        existingMeta.methodMaterializationSummary,
+      ),
+    }
     return {
       ...session,
-      styleMetadata: {
-        ...existingMeta,
-        // Ensure these fields exist but don't overwrite builder values
-        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
-        // [APPLIED-METHODS-PREFERENCE-NORMALIZE] appliedMethods is
-        // TrainingMethodPreference[]; normalize legacy string[] data
-        // through the local guard rather than casting through unknown.
-        appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
-        // [STYLE-METADATA-CONTRACT-FIELDS] target type owns these
-        // fields; default conservatively rather than letting the
-        // spread leave them missing.
-        primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
-        rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
-        hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
-        hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-        hasClusterApplied: existingMeta.hasClusterApplied ?? false,
-        methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-      },
+      styleMetadata,
     }
   }
   
@@ -261,29 +351,36 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     // Preserve exercise-level grouped truth intact. Only set safe structural
     // defaults on styleMetadata -- do NOT invent styledGroups, do NOT override
     // appliedMethods, do NOT act as a shadow builder.
+    //
+    // [PRIORITY-2-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread,
+    // no `styledGroups: existingMeta.styledGroups`. The strict
+    // `AdaptiveSession['styleMetadata']` contract requires the full
+    // styled-group display shape; legacy short-shaped groups would
+    // fail that. Use the validated `normalizedExistingStyledGroups`
+    // (almost always `[]` here, since Priority 1 already returned for
+    // valid builder groups). Empty-array styledGroups does NOT
+    // fabricate a false straight-set group — downstream consumers
+    // (buildFullSessionRoutineSurface, AdaptiveSessionCard, etc.) keep
+    // reading per-exercise `blockId` / `method` / `setExecutionMethod`
+    // to reconstruct grouped display from the authoritative
+    // exercise-level truth.
+    const styleMetadata: SafeStyleMetadata = {
+      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+      hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
+      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+      structureDescription: existingMeta.structureDescription ?? '',
+      appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+      styledGroups: normalizedExistingStyledGroups,
+      methodMaterializationSummary: normalizeMethodMaterializationSummary(
+        existingMeta.methodMaterializationSummary,
+      ),
+    }
     return {
       ...session,
-      styleMetadata: {
-        ...existingMeta,
-        // Keep whatever the upstream metadata already said; never force false.
-        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
-        // Do NOT default appliedMethods here -- leaving it undefined signals
-        // "metadata incomplete, defer to exercise-level truth" to downstream
-        // consumers. Overriding with ['straight_sets'] would lie about intent.
-        appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
-        structureDescription: existingMeta.structureDescription ?? '',
-        // [STYLE-METADATA-CONTRACT-FIELDS] target type owns
-        // primaryStyle, rejectedMethods, hasCircuitsApplied,
-        // hasDensityApplied; default conservatively rather than
-        // letting the spread leave them missing.
-        primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
-        rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
-        hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
-        hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-        hasClusterApplied: existingMeta.hasClusterApplied ?? false,
-        methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-        styledGroups: existingMeta.styledGroups,
-      },
+      styleMetadata,
     }
   }
   
@@ -299,40 +396,43 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // trainingMethod, methodRationale, instruction, and restProtocol on
   // every fallback group; supplying them avoids stripping the
   // contract on the no-truth path.
-  const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
+  const fallbackStyledGroups: SafeStyledGroups = session.exercises.map((ex, idx) => ({
     id: `straight-${idx}`,
-    groupType: 'straight' as const,
-    exercises: [{
-      id: ex.id || `ex-${idx}`,
-      name: ex.name,
-      prefix: undefined as string | undefined,
-      trainingMethod: 'straight',
-      methodRationale: 'Default straight-set execution',
-    }],
+    groupType: 'straight',
+    exercises: [
+      {
+        id: ex.id || `ex-${idx}`,
+        name: ex.name,
+        prefix: undefined,
+        trainingMethod: 'straight',
+        methodRationale: 'Default straight-set execution',
+      },
+    ],
     instruction: 'Complete each exercise with standard straight-set execution.',
     restProtocol: 'Rest as prescribed between sets.',
   }))
-  
+
+  // [PRIORITY-3-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread —
+  // the no-truth straight fallback writes every owned field explicitly
+  // so wrong-shaped legacy fields cannot leak into the strict
+  // `AdaptiveSession['styleMetadata']` contract.
+  const styleMetadata: SafeStyleMetadata = {
+    primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+    hasSupersetsApplied: false,
+    hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+    hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+    hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+    structureDescription: existingMeta.structureDescription || '',
+    appliedMethods: trainingMethodsFallback,
+    rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+    styledGroups: fallbackStyledGroups,
+    methodMaterializationSummary: normalizeMethodMaterializationSummary(
+      existingMeta.methodMaterializationSummary,
+    ),
+  }
   return {
     ...session,
-    styleMetadata: {
-      ...existingMeta,
-      hasSupersetsApplied: false,
-      styledGroups: fallbackStyledGroups,
-      // [APPLIED-METHODS-PREFERENCE-NORMALIZE] straight-set fallback
-      // — type the literal as TrainingMethodPreference[] so the
-      // styleMetadata contract is satisfied without unknown casts.
-      appliedMethods: ['straight_sets'] as TrainingMethodPreference[],
-      structureDescription: existingMeta.structureDescription || '',
-      // [STYLE-METADATA-CONTRACT-FIELDS] same contract fields for the
-      // no-truth straight fallback.
-      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
-      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
-      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
-      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
-      methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-    },
+    styleMetadata,
   }
 }
 

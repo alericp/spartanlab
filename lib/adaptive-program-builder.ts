@@ -20739,13 +20739,14 @@ console.log('[program-generate] Generation complete:', {
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
-    intensityDistribution: {
-      highDays: intensityDistribution.highIntensityDays,
-      moderateDays: intensityDistribution.moderateIntensityDays,
-      lightDays: intensityDistribution.lightIntensityDays,
-      pattern: intensityDistribution.suggestedPattern,
-      rationale: intensityDistribution.rationale,
-    },
+    // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-INTENSITY-DISTRIBUTION] Canonical
+    // AdaptiveProgram does not own a top-level `intensityDistribution`.
+    // Per-week / per-day intensity truth lives on
+    // `weeklyStressDistributionPlan` and `weeklyStressGovernorAdjustments`
+    // and on session-level stress fields below; do not re-emit a
+    // duplicate planner mirror here (the local `intensityDistribution`
+    // computation is preserved and still used to derive those owned
+    // fields, but it is not stored as a top-level program property).
     flexibilityInsertions: flexibilityInsertions.map(f => ({
       point: f.insertionPoint,
       targets: f.targetedMuscles,

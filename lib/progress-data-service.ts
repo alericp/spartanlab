@@ -73,6 +73,10 @@ const STRENGTH_LABELS: Record<ExerciseType, string> = {
   sumo_deadlift: 'Sumo Deadlift',
   romanian_deadlift: 'Romanian Deadlift',
   trap_bar_deadlift: 'Trap Bar Deadlift',
+  back_squat: 'Back Squat',
+  front_squat: 'Front Squat',
+  bench_press: 'Bench Press',
+  overhead_press: 'Overhead Press',
 }
 
 export function getStrengthProgressData(): StrengthProgressData[] {

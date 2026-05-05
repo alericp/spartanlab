@@ -148,6 +148,10 @@ function detectStrengthMilestones(): Milestone[] {
     sumo_deadlift: 'Sumo Deadlift',
     romanian_deadlift: 'Romanian Deadlift',
     trap_bar_deadlift: 'Trap Bar Deadlift',
+    back_squat: 'Back Squat',
+    front_squat: 'Front Squat',
+    bench_press: 'Bench Press',
+    overhead_press: 'Overhead Press',
   }
   
   // Weight thresholds for milestones
@@ -159,6 +163,10 @@ function detectStrengthMilestones(): Milestone[] {
     sumo_deadlift: [],
     romanian_deadlift: [],
     trap_bar_deadlift: [],
+    back_squat: [],
+    front_squat: [],
+    bench_press: [],
+    overhead_press: [],
   }
   
   // Track best records per exercise
@@ -170,6 +178,10 @@ function detectStrengthMilestones(): Milestone[] {
     sumo_deadlift: null,
     romanian_deadlift: null,
     trap_bar_deadlift: null,
+    back_squat: null,
+    front_squat: null,
+    bench_press: null,
+    overhead_press: null,
   }
   
   records.forEach(record => {

@@ -67,13 +67,17 @@ const TIER_THRESHOLDS: Record<ExerciseType, TierThresholds> = {
     advanced: 0.45,    // +45% BW
     elite: 0.60,       // +60% BW
   },
-  // [EXERCISE-TYPE-RECORD-COMPLETION] Deadlift variants use total-load
-  // ratios; these thresholds are conservative scaffolding so the
-  // record stays exhaustive without misleading tier labels.
+  // [EXERCISE-TYPE-RECORD-COMPLETION] Hybrid strength variants use
+  // total-load ratios; these thresholds are conservative scaffolding
+  // so the Record stays exhaustive without misleading tier labels.
   conventional_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
   sumo_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
   romanian_deadlift: { novice: 0.8, developing: 1.2, strong: 1.6, advanced: 2.0, elite: 2.4 },
   trap_bar_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
+  back_squat: { novice: 0.8, developing: 1.2, strong: 1.5, advanced: 2.0, elite: 2.5 },
+  front_squat: { novice: 0.6, developing: 0.9, strong: 1.2, advanced: 1.5, elite: 2.0 },
+  bench_press: { novice: 0.6, developing: 1.0, strong: 1.3, advanced: 1.6, elite: 2.0 },
+  overhead_press: { novice: 0.4, developing: 0.6, strong: 0.8, advanced: 1.0, elite: 1.3 },
 }
 
 const TIER_LABELS: Record<RelativeStrengthTier, string> = {
@@ -231,6 +235,26 @@ export const EXERCISE_RELATIVE_INFO: Record<ExerciseType, ExerciseRelativeInfo> 
     name: 'Trap Bar Deadlift',
     supportedSkills: ['Total-body strength', 'Power transfer'],
     tipForImprovement: 'Stay tall, drive through mid-foot, and finish with full hip extension.',
+  },
+  back_squat: {
+    name: 'Back Squat',
+    supportedSkills: ['Lower-body strength', 'Trunk stability'],
+    tipForImprovement: 'Brace, sit back, drive knees out, and reach depth before standing up.',
+  },
+  front_squat: {
+    name: 'Front Squat',
+    supportedSkills: ['Quad strength', 'Upright posture'],
+    tipForImprovement: 'Maintain rack position with elbows high; keep torso upright through depth.',
+  },
+  bench_press: {
+    name: 'Bench Press',
+    supportedSkills: ['Horizontal push strength'],
+    tipForImprovement: 'Pin shoulder blades back and down; press to a slight arc over the lower chest.',
+  },
+  overhead_press: {
+    name: 'Overhead Press',
+    supportedSkills: ['Vertical push strength', 'Shoulder stability'],
+    tipForImprovement: 'Brace hard, drive bar straight up, and finish with stacked elbows over wrists.',
   },
 }
 

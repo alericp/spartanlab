@@ -102,6 +102,10 @@ const STRENGTH_LEVEL_MAPPINGS: Record<ExerciseType, Record<number, number>> = {
   sumo_deadlift: {},
   romanian_deadlift: {},
   trap_bar_deadlift: {},
+  back_squat: {},
+  front_squat: {},
+  bench_press: {},
+  overhead_press: {},
 }
 
 // Strength names for display
@@ -113,6 +117,10 @@ const STRENGTH_LABELS: Record<ExerciseType, string> = {
   sumo_deadlift: 'Sumo Deadlift',
   romanian_deadlift: 'Romanian Deadlift',
   trap_bar_deadlift: 'Trap Bar Deadlift',
+  back_squat: 'Back Squat',
+  front_squat: 'Front Squat',
+  bench_press: 'Bench Press',
+  overhead_press: 'Overhead Press',
 }
 
 // Normalize a 1RM value against the strength mapping

@@ -40,8 +40,10 @@ const NOW = new Date()
 const BATCH_02_VERSION = "batch_02_v1"
 const PROVENANCE_NOTE = "derived_from_prompt_section_3_summary"
 
-type Batch02PriorityType = "hard_constraint" | "strong_preference" | "soft_preference" | "example_only"
-type Batch02IntelligenceTier = "base_week_intelligence" | "phase_week_modulation" | "cross_cutting"
+// [BATCH-02-TYPE-EXPORTS] surface these so the source-batches barrel
+// can re-export them for downstream provenance helpers.
+export type Batch02PriorityType = "hard_constraint" | "strong_preference" | "soft_preference" | "example_only"
+export type Batch02IntelligenceTier = "base_week_intelligence" | "phase_week_modulation" | "cross_cutting"
 
 export interface Batch02Provenance {
   atomId: string

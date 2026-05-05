@@ -18,7 +18,11 @@ import {
   applyFatigueFeedbackToEnvelope,
   MOVEMENT_FAMILY_FATIGUE_DEFAULTS,
 } from './performance-envelope-engine'
-import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
+// [TRAINING-GOAL-TYPE-OWNER] TrainingGoalType is owned by
+// performance-envelope-engine (it encodes goal-aligned envelope
+// semantics). MovementFamily is canonical in movement-family-registry.
+import type { MovementFamily } from './movement-family-registry'
+import type { TrainingGoalType } from './performance-envelope-engine'
 
 // [PERFORMANCE-ENVELOPE-SERVICE-RE-EXPORT]
 // `getEnvelopeBasedRecommendations` is the canonical envelope→recommendation

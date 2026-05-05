@@ -6,7 +6,11 @@ import { recordSignal, type TrainingResponseSignal } from './performance-envelop
 import { type RepZone, type DensityLevel } from './performance-envelope-engine'
 import { saveSkillState, type SkillKey, type SkillStateInput } from './skill-state-service'
 import { getExerciseClassification } from './exercise-classification-registry'
-import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
+// [TRAINING-GOAL-TYPE-OWNER] movement-family-registry owns
+// MovementFamily; performance-envelope-engine owns TrainingGoalType.
+// Pull each from its true owner.
+import type { MovementFamily } from './movement-family-registry'
+import type { TrainingGoalType } from './performance-envelope-engine'
 import { 
   getActiveProgramVersion, 
   type ProgramVersion 

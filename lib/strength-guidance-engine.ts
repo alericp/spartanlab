@@ -202,6 +202,10 @@ export function generateStrengthAnalysis(
     sumo_deadlift: null,
     romanian_deadlift: null,
     trap_bar_deadlift: null,
+    back_squat: null,
+    front_squat: null,
+    bench_press: null,
+    overhead_press: null,
   }
   
   // Get relative strength ratios for skill support assessment

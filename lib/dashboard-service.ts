@@ -160,6 +160,10 @@ const emptyStrengthRecords: Record<ExerciseType, StrengthRecord | null> = {
   sumo_deadlift: null,
   romanian_deadlift: null,
   trap_bar_deadlift: null,
+  back_squat: null,
+  front_squat: null,
+  bench_press: null,
+  overhead_press: null,
 }
 
 // Get complete dashboard overview

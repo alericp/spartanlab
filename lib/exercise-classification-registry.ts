@@ -23,6 +23,12 @@ import {
   TRAINING_INTENT_METADATA,
 } from './movement-family-registry'
 
+// [EXERCISE-CLASSIFICATION-RE-EXPORT] downstream consumers
+// (enhanced-exercise-intelligence, exercise-family-integration)
+// import this type from `exercise-classification-registry`. Re-export
+// it explicitly so the module surface matches expectations.
+export type { ExerciseClassification }
+
 // =============================================================================
 // EXERCISE CLASSIFICATION REGISTRY
 // =============================================================================

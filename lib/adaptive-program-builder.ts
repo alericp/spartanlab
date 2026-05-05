@@ -20747,11 +20747,14 @@ console.log('[program-generate] Generation complete:', {
     // duplicate planner mirror here (the local `intensityDistribution`
     // computation is preserved and still used to derive those owned
     // fields, but it is not stored as a top-level program property).
-    flexibilityInsertions: flexibilityInsertions.map(f => ({
-      point: f.insertionPoint,
-      targets: f.targetedMuscles,
-      frequency: f.frequency,
-    })),
+    //
+    // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-FLEXIBILITY-INSERTIONS] Same
+    // pattern as `intensityDistribution` above and `weightedSkillAllocation`
+    // earlier: canonical `AdaptiveProgram` does not own a top-level
+    // `flexibilityInsertions` mapped display block. The local
+    // `flexibilityInsertions` variable/computation is preserved and
+    // still feeds session-level mobility/flexibility insertion logic
+    // downstream; do not re-emit a duplicate planner mirror here.
     // FLEXIBLE SCHEDULING: Full schedule mode semantics
     scheduleMode: finalScheduleMode,
     currentWeekFrequency: effectiveTrainingDays,

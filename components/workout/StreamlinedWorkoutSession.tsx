@@ -84,6 +84,15 @@ import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-b
 // history surface). Replaces 4+ divergent inline regex variants that missed
 // bare-second shorthand like "6s" and silently logged hold exercises as reps.
 import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
+// [AB10 — START WORKOUT RUNTIME PARITY LOCK] Read the runtime proof
+// forwarded from the workout route, render a compact visible chip near the
+// Today's Plan strip, and stamp `data-ab10-*` DOM proof attributes on a
+// stable live wrapper. `safeAB10RuntimeParityProof` tolerates legacy /
+// direct-navigation cases where no proof was forwarded.
+import {
+  safeAB10RuntimeParityProof,
+  type AB10RuntimeParityProof,
+} from '@/lib/workout/selected-variant-session-contract'
 // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Single authoritative helper for
 // resolving the default seed value the user sees on a fresh logging card.
 // Returns the LOW END of the prescribed range (e.g. "4-6" -> 4) and
@@ -6713,8 +6722,62 @@ if (shouldShowLocalFallback) {
       dayLabel: safeSession.dayLabel,
       exerciseCount: exercises.length,
     })
+    // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Resolve the runtime proof
+    // for this render. `safeAB10RuntimeParityProof` returns a defaulted
+    // "unknown" proof when the route did not forward one (legacy / direct
+    // navigation), so the wrapper attributes always have stable values
+    // and no scary warnings appear unless an actual fallback or mismatch
+    // is detected.
+    const ab10ProofRender: AB10RuntimeParityProof = safeAB10RuntimeParityProof(
+      ab10RuntimeParityProof
+    )
+    const ab10ChipTone =
+      ab10ProofRender.bootSource === 'visible_snapshot' && ab10ProofRender.parityOk
+        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+        : ab10ProofRender.bootSource === 'visible_snapshot' && !ab10ProofRender.parityOk
+          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+          : ab10ProofRender.bootSource === 'fallback_loaded_session'
+            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+            : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+    const ab10ChipLabel: string =
+      ab10ProofRender.bootSource === 'unknown'
+        ? 'Runtime parity: unknown'
+        : ab10ProofRender.bootSource === 'fallback_loaded_session'
+          ? `Runtime fallback used — ${ab10ProofRender.snapshotValidationReason}`
+          : ab10ProofRender.parityOk
+            ? 'Runtime matched Program card'
+            : `Runtime mismatch — ${ab10ProofRender.parityMismatches[0] ?? 'check selected mode'}`
+    const ab10ModeSummary: string = (() => {
+      const modeLabel =
+        ab10ProofRender.executionMode === '45_min'
+          ? '45 min'
+          : ab10ProofRender.executionMode === '30_min'
+            ? '30 min'
+            : ab10ProofRender.executionMode === 'full'
+              ? 'Full'
+              : 'mode ?'
+      const exCount = ab10ProofRender.actualExerciseCount
+      const groupedTag = ab10ProofRender.groupedRuntimeBuilt
+        ? ' · grouped'
+        : ' · straight-set'
+      return `${modeLabel} · ${exCount} exercises${groupedTag}`
+    })()
     return (
-      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+      <div
+        className="min-h-screen bg-[#0F1115] p-4 sm:p-5"
+        data-ab10-runtime-parity="true"
+        data-ab10-version={ab10ProofRender.version}
+        data-ab10-boot-source={ab10ProofRender.bootSource}
+        data-ab10-snapshot-valid={String(ab10ProofRender.snapshotValid)}
+        data-ab10-parity-ok={String(ab10ProofRender.parityOk)}
+        data-ab10-mode={ab10ProofRender.executionMode ?? 'unknown'}
+        data-ab10-variant-index={String(ab10ProofRender.variantIndex ?? '')}
+        data-ab10-expected-count={String(ab10ProofRender.expectedExerciseCount)}
+        data-ab10-actual-count={String(ab10ProofRender.actualExerciseCount)}
+        data-ab10-grouped-built={String(ab10ProofRender.groupedRuntimeBuilt)}
+        data-ab10-row-method-count={String(ab10ProofRender.rowLevelMethodCount)}
+        data-ab10-style-meta-source={ab10ProofRender.styleMetadataSource}
+      >
         <div className="max-w-lg mx-auto space-y-4">
           {/* Compact Header */}
           <div className="text-center pt-6 pb-2">
@@ -6864,6 +6927,53 @@ if (shouldShowLocalFallback) {
                 </div>
               )
             })()}
+            {/* [AB10 — START WORKOUT RUNTIME PARITY LOCK] Compact runtime
+                parity proof. Production-visible (not dev-only). Sits next to
+                the Shell proof and reports whether the live runtime matched
+                the body the Program card promised at launch. Honest fallback:
+                when bootSource is fallback, snapshot reason is shown instead
+                of a green "matched" message. The companion `data-ab10-*` DOM
+                proof attributes on the outer wrapper carry the same truth in
+                a non-UI surface for QA / regression scanning. */}
+            <div
+              className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight"
+              data-ab10-chip="runtime-parity"
+            >
+              <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
+                <span>Runtime parity</span>
+                <span className={`rounded-sm border px-1 ${ab10ChipTone}`}>
+                  {ab10ChipLabel}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[#7FA8CC]">
+                <span>{ab10ModeSummary}</span>
+                {ab10ProofRender.bootSource === 'visible_snapshot' && (
+                  <span className="text-[#6A6A6A]">
+                    boot=snapshot
+                  </span>
+                )}
+                {ab10ProofRender.bootSource === 'fallback_loaded_session' && (
+                  <span className="text-amber-300/80">
+                    boot=fallback
+                  </span>
+                )}
+                {ab10ProofRender.bootSource === 'unknown' && (
+                  <span className="text-[#6A6A6A]">
+                    boot=unknown
+                  </span>
+                )}
+                {ab10ProofRender.rowLevelMethodCount > 0 && (
+                  <span className="text-[#6A6A6A]">
+                    method-rows={ab10ProofRender.rowLevelMethodCount}
+                  </span>
+                )}
+                {ab10ProofRender.parityMismatches.length > 0 && (
+                  <span className="text-amber-300/80">
+                    drift={ab10ProofRender.parityMismatches[0]}
+                  </span>
+                )}
+              </div>
+            </div>
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
             {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
             {renderTodayPlanRows()}

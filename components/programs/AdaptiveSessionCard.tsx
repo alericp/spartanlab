@@ -114,6 +114,15 @@ import { resolveExercisePrescriptionClarity } from '@/lib/program/exercise-presc
 // Trend/Coach line, only when the resolver established a trustworthy
 // progression intent. Never contradicts the Phase O coach decision.
 import { resolveExerciseProgressionPrescription } from '@/lib/program/exercise-progression-prescription'
+// [PHASE AB8] Row-level skill progression calibration proof. Pure helper
+// that converts the row's existing `dbTruthWinnerProvenance` (post-rerank
+// winner stamp from `lib/adaptive-program-builder.ts`) and `executionTruth`
+// fields into a single compact line proving whether the chosen variant was
+// actually calibrated to the athlete's current skill progression truth.
+// Sibling to AB7 — AB7 says "how to progress next", AB8 says "was this row
+// matched to your current skill level". Never contradicts a conservative
+// AB7 verdict because every conservative AB8 verdict uses conservative copy.
+import { resolveSkillProgressionCalibrationProof } from '@/lib/program/skill-progression-calibration-proof'
 // [PHASE AB5] Single authoritative grouped execution prescription resolver.
 // Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
 // complete execution contract that carries rounds, member doses, rest
@@ -7818,6 +7827,45 @@ function ExerciseRow({
               {ab7.label}:
             </span>{' '}
             {ab7.shortText}
+          </p>
+        )
+      })()}
+
+      {/* [PHASE AB8] SKILL PROGRESSION CALIBRATION PROOF.
+          Sibling line to AB7. Where AB7 answers "how should this exercise
+          progress next?", AB8 answers "was this row actually calibrated to
+          the athlete's current skill progression truth?". Reads the durable
+          `dbTruthWinnerProvenance` stamp written by the program builder
+          (post-rerank, see `lib/adaptive-program-builder.ts`) and falls back
+          to `executionTruth.currentWorkingProgression` for older saved
+          programs. Hidden on warm-up/cooldown rows and on rows where no
+          provenance / execution truth / explicit support claim survived,
+          so this line never invents calibration proof from name alone. The
+          resolver is conservative — every readiness/conservative verdict
+          uses conservative copy so it cannot contradict an AB7 line that
+          said "Reduce volume" or "Maintain". Tagged with `data-ab8-*`
+          attributes for screenshot / DOM proof without visible debug. */}
+      {!isWarmupCooldown && (() => {
+        const ab8 = resolveSkillProgressionCalibrationProof({
+          exercise,
+          exerciseName: exercise.name || '',
+          isWarmupCooldown: false,
+        })
+        if (!ab8.shouldRender || !ab8.shortText) return null
+        const titleText = ab8.detailText
+          ? `${ab8.label}: ${ab8.shortText} — ${ab8.detailText}`
+          : `${ab8.label}: ${ab8.shortText}`
+        return (
+          <p
+            className="mt-1 text-[10px] text-emerald-300/70 italic leading-snug"
+            title={titleText}
+            aria-label={titleText}
+            {...ab8.dataAttributes}
+          >
+            <span className="font-semibold text-emerald-300/85 not-italic">
+              {ab8.label}:
+            </span>{' '}
+            {ab8.shortText}
           </p>
         )
       })()}

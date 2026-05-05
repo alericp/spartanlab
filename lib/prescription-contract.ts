@@ -1270,7 +1270,10 @@ export function determineProgressionPhase(
 // =============================================================================
 
 export interface AdvancedSkillPrescription {
-  mode: 'quality_singles' | 'cluster_exposure' | 'max_holds' | 'volume_accumulation'
+  // [ADVANCED-SKILL-PRESCRIPTION-MODE-UNION] `volume_accumulation` was
+  // removed from the canonical mode union; the engine maps that intent
+  // through `cluster_exposure` instead.
+  mode: 'quality_singles' | 'cluster_exposure' | 'max_holds'
   setsRange: [number, number]
   holdSecondsRange: [number, number]
   restSeconds: number
@@ -1350,17 +1353,10 @@ export function getAdvancedSkillPrescription(
       progressionThreshold = 'Hit target time for 3 sets to confirm readiness'
       break
       
-    case 'volume_accumulation':
-      // Build total time under tension
-      setsRange = [5, 8]
-      holdSecondsRange = isStaticHold ? [5, 10] : [2, 4]
-      restSeconds = 90
-      rpe = 7
-      coachingNotes.push('Accumulate total hold time')
-      coachingNotes.push('Maintain consistent quality across all sets')
-      progressionThreshold = 'Total time > 60s across all sets'
-      break
-      
+    // [VOLUME-ACCUMULATION-FOLDED-INTO-CLUSTER] The legacy
+    // `volume_accumulation` branch is no longer reachable via the
+    // canonical mode union; cluster exposure now serves the same
+    // accumulation intent.
     case 'cluster_exposure':
     default:
       // Multiple short exposures

@@ -10,6 +10,36 @@ import type { AthleteProfile as DomainAthleteProfile } from '@/types/domain'
 // ONBOARDING -> ATHLETE PROFILE MAPPING
 // =============================================================================
 
+// [WEAKEST-AREA-NORMALIZER] OnboardingProfile.weakestArea is a wider
+// vocabulary than AthleteProfile.weakestArea; map equivalent legacy
+// values onto the canonical AthleteProfile union.
+function normalizeWeakestAreaForAthleteProfile(
+  area: unknown
+): 'pulling_strength' | 'pushing_strength' | 'core_strength' | 'shoulder_stability' | 'hip_mobility' | 'hamstring_flexibility' | null {
+  switch (area) {
+    case 'pulling_strength':
+    case 'pull_strength':
+      return 'pulling_strength'
+    case 'pushing_strength':
+    case 'push_strength':
+      return 'pushing_strength'
+    case 'core_strength':
+    case 'compression_strength':
+      return 'core_strength'
+    case 'shoulder_stability':
+    case 'scapular_control':
+      return 'shoulder_stability'
+    case 'hip_mobility':
+    case 'mobility':
+      return 'hip_mobility'
+    case 'hamstring_flexibility':
+    case 'flexibility':
+      return 'hamstring_flexibility'
+    default:
+      return null
+  }
+}
+
 /**
  * Maps comprehensive OnboardingProfile to the simplified AthleteProfile
  * Call this after onboarding completes to ensure data consistency
@@ -84,7 +114,7 @@ export function mapOnboardingToAthleteProfile(onboarding: OnboardingProfile): Pa
     jointCautions: onboarding.jointCautions ?? [],
     
     // Weakest area for programming emphasis
-    weakestArea: onboarding.weakestArea ?? null,
+    weakestArea: normalizeWeakestAreaForAthleteProfile(onboarding.weakestArea),
     
     // Meta
     onboardingComplete: true,
@@ -260,7 +290,10 @@ export function getProfileChangeDescription(
  * Returns data from AthleteProfile, enriched with OnboardingProfile data if available
  */
 export function getUnifiedProfile(): {
-  athleteProfile: AthleteProfile
+  // [UNIFIED-PROFILE-NULLABLE-ATHLETE] Persisted AthleteProfile is
+  // optional until the user completes onboarding; consumers should
+  // guard for null instead of casting through a fake default.
+  athleteProfile: AthleteProfile | null
   onboardingProfile: OnboardingProfile | null
   isComplete: boolean
 } {
@@ -290,12 +323,14 @@ export function getProfileForProgramGeneration() {
   const { athleteProfile, onboardingProfile } = getUnifiedProfile()
   
   return {
-    // From AthleteProfile (simplified, authoritative)
-    experienceLevel: athleteProfile.experienceLevel,
-    trainingDaysPerWeek: athleteProfile.trainingDaysPerWeek,
-    sessionLengthMinutes: athleteProfile.sessionLengthMinutes,
-    primaryGoal: athleteProfile.primaryGoal,
-    equipment: athleteProfile.equipmentAvailable,
+    // [UNIFIED-PROFILE-NULLABLE-CONSUMER] athleteProfile may be null
+    // before the user completes onboarding; fall back to safe
+    // defaults instead of crashing the program generator.
+    experienceLevel: athleteProfile?.experienceLevel ?? 'beginner',
+    trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+    sessionLengthMinutes: athleteProfile?.sessionLengthMinutes ?? 60,
+    primaryGoal: athleteProfile?.primaryGoal ?? null,
+    equipment: athleteProfile?.equipmentAvailable ?? [],
     
     // From OnboardingProfile (detailed, supplementary)
     selectedSkills: onboardingProfile?.selectedSkills ?? [],

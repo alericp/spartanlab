@@ -553,15 +553,57 @@ let rulesCache: CachedDoctrineRules | null = null
 const CACHE_TTL_MS = 60000 // 1 minute cache
 
 /**
- * Pre-fetch doctrine rules for a primary goal.
- * Call this before synchronous scoring to enable doctrine integration.
+ * [AB10-CONTRACT-CLEANUP / PHASE 4G] Multi-skill prefetch context.
+ *
+ * Pre-AB10 the prefetcher only accepted a primaryGoal string, which silently
+ * discarded the athlete's selected secondary goal and selectedSkills set.
+ * The Phase 4G fix in adaptive-program-builder passes the deduplicated union
+ * so doctrine sees rules for every skill the athlete actually selected. This
+ * union type is the authoritative input shape — string still works for legacy
+ * call sites; the structured form opts into multi-skill doctrine.
  */
-export async function prefetchDoctrineRules(primaryGoal: string): Promise<CachedDoctrineRules | null> {
+export interface DoctrinePrefetchContext {
+  primaryGoal: string
+  secondaryGoal?: string | null
+  selectedSkills?: string[]
+}
+
+/**
+ * Pre-fetch doctrine rules for a primary goal (or a structured multi-skill
+ * context). Call this before synchronous scoring to enable doctrine
+ * integration.
+ *
+ * The scorer's underlying rule fetchers are still primary-goal-keyed today,
+ * so the structured form normalizes to the primary goal for fetching but the
+ * cache key encodes the full skill set so callers that change selectedSkills
+ * mid-session still trigger a fresh fetch.
+ */
+export async function prefetchDoctrineRules(
+  goalOrContext: string | DoctrinePrefetchContext,
+): Promise<CachedDoctrineRules | null> {
+  const ctx: DoctrinePrefetchContext =
+    typeof goalOrContext === 'string'
+      ? { primaryGoal: goalOrContext }
+      : goalOrContext
+  const primaryGoal = ctx.primaryGoal
+  // Stable cache key encodes the full deduped skill set so multi-skill
+  // doctrine prefetch is observed even though the underlying fetchers are
+  // primary-goal-keyed. Sorted for determinism.
+  const dedupedSkills = Array.from(
+    new Set(
+      [
+        primaryGoal,
+        ctx.secondaryGoal ?? null,
+        ...(ctx.selectedSkills ?? []),
+      ].filter((s): s is string => typeof s === 'string' && s.length > 0),
+    ),
+  ).sort()
+  const cacheKey = dedupedSkills.join('|')
   // Check if cached rules are still valid
   if (rulesCache && 
-      rulesCache.primaryGoal === primaryGoal && 
+      rulesCache.primaryGoal === cacheKey &&
       Date.now() - rulesCache.fetchedAt < CACHE_TTL_MS) {
-    console.log('[PHASE4-DOCTRINE-CACHE] Using cached rules for:', primaryGoal)
+    console.log('[PHASE4-DOCTRINE-CACHE] Using cached rules for:', cacheKey)
     return rulesCache
   }
   
@@ -577,11 +619,13 @@ export async function prefetchDoctrineRules(primaryGoal: string): Promise<Cached
       contraindicationRules: contraRules,
       carryoverRules: carryRules,
       fetchedAt: Date.now(),
-      primaryGoal,
+      primaryGoal: cacheKey,
     }
     
     console.log('[PHASE4-DOCTRINE-CACHE] Rules prefetched:', {
       primaryGoal,
+      cacheKey,
+      selectedSkills: dedupedSkills,
       selectionRules: selRules.length,
       contraindicationRules: contraRules.length,
       carryoverRules: carryRules.length,

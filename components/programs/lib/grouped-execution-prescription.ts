@@ -391,7 +391,7 @@ export function resolveGroupedExecutionPrescription(
   let intraExerciseRestText = ''
   let afterRoundRestText = ''
   if (groupType === 'superset' && restMicrocopy.includes(',')) {
-    const [intra, after] = restMicrocopy.split(',').map(s => s.trim())
+    const [intra, after] = restMicrocopy.split(',').map((s: string) => s.trim())
     intraExerciseRestText = intra
     afterRoundRestText = after
   } else {

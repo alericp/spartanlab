@@ -60,9 +60,17 @@ export default function DatabasePage() {
   
   const user = getCurrentUser()
   const profile = getAthleteProfile()
+  // [AB10-CONTRACT-CLEANUP] HistoryOverview's authoritative shape is
+  // skillSnapshots[] / strengthSnapshots[] / trainingSnapshot — there are no
+  // `.skills`, `.strength`, or `.training` aggregate fields. Derive
+  // hasAnyData from the real arrays / snapshot's own totalWorkouts.
   const hasAnyData = (prVault && prVault.totalPRs > 0) || 
                      (milestones && milestones.totalMilestones > 0) ||
-                     (history && (history.skills.totalSessions > 0 || history.strength.totalRecords > 0 || history.training.totalWorkouts > 0))
+                     (history && (
+                       history.skillSnapshots.length > 0 ||
+                       history.strengthSnapshots.length > 0 ||
+                       (history.trainingSnapshot && history.trainingSnapshot.totalWorkouts > 0)
+                     ))
   
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
@@ -152,7 +160,11 @@ export default function DatabasePage() {
                   <div>
                     <p className="text-xs text-[#6A6A6A]">Primary Goal</p>
                     <p className="text-sm font-medium text-[#E63946] capitalize">
-                      {profile.primaryGoal?.replace('_', ' ') || 'Not set'}
+                      {/* [AB10-CONTRACT-CLEANUP] getAthleteProfile() can return
+                          null for new users — guard before reading
+                          primaryGoal so the database page no longer crashes
+                          on first visit. */}
+                      {profile?.primaryGoal?.replace('_', ' ') || 'Not set'}
                     </p>
                   </div>
                 </div>

@@ -92,6 +92,38 @@ const PR_TYPE_CONFIG: Record<PRType, {
     unit: () => 'Unlocked',
     color: 'text-amber-500',
   },
+  // [AB10-CONTRACT-CLEANUP] Hybrid / barbell PR types from the authoritative
+  // PRType union in types/history.ts (barbell_1rm / barbell_top_set /
+  // weighted_calisthenics / relative_strength). Map shape mirrors the
+  // surrounding entries: label, shortLabel, icon, unit formatter, color.
+  barbell_1rm: {
+    label: 'Barbell 1RM',
+    shortLabel: '1RM',
+    icon: <Dumbbell className="w-3.5 h-3.5" />,
+    unit: (v, u) => u ? `${v} ${u}` : `${v} lb`,
+    color: 'text-amber-400',
+  },
+  barbell_top_set: {
+    label: 'Barbell Top Set',
+    shortLabel: 'Top Set',
+    icon: <TrendingUp className="w-3.5 h-3.5" />,
+    unit: (v, u) => u ? `${v} ${u}` : `${v} lb`,
+    color: 'text-amber-300',
+  },
+  weighted_calisthenics: {
+    label: 'Weighted Calisthenics',
+    shortLabel: 'Weighted',
+    icon: <Dumbbell className="w-3.5 h-3.5" />,
+    unit: (v, u) => u ? `+${v} ${u}` : `+${v} lb`,
+    color: 'text-emerald-400',
+  },
+  relative_strength: {
+    label: 'Relative Strength',
+    shortLabel: 'Rel Strength',
+    icon: <Target className="w-3.5 h-3.5" />,
+    unit: (v) => Number.isFinite(v) ? `${v.toFixed(2)}x BW` : `${v}x BW`,
+    color: 'text-cyan-400',
+  },
 }
 
 const CATEGORY_CONFIG: Record<ExerciseCategory, {
@@ -104,6 +136,12 @@ const CATEGORY_CONFIG: Record<ExerciseCategory, {
   bodyweight: { label: 'Bodyweight', color: 'text-purple-400' },
   mobility: { label: 'Mobility', color: 'text-cyan-400' },
   conditioning: { label: 'Conditioning', color: 'text-orange-400' },
+  // [AB10-CONTRACT-CLEANUP] Hybrid / barbell categories from authoritative
+  // ExerciseCategory union in types/history.ts.
+  barbell_hinge: { label: 'Barbell Hinge', color: 'text-amber-400' },
+  barbell_squat: { label: 'Barbell Squat', color: 'text-amber-400' },
+  barbell_press: { label: 'Barbell Press', color: 'text-amber-400' },
+  weighted_calisthenics: { label: 'Weighted Calisthenics', color: 'text-emerald-400' },
 }
 
 // =============================================================================

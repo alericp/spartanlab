@@ -60,6 +60,12 @@ const PR_TYPE_CONFIG: Record<PRType, {
   best_level: { label: 'Best Level', icon: Target, color: 'text-cyan-400' },
   best_sets: { label: 'Best Sets', icon: Hash, color: 'text-emerald-400' },
   first_unlock: { label: 'First Unlock', icon: Trophy, color: 'text-amber-400' },
+  // [AB10-CONTRACT-CLEANUP] Hybrid / barbell PR types from the authoritative
+  // PRType union in types/history.ts. Use already-imported icons.
+  barbell_1rm: { label: 'Barbell 1RM', icon: Dumbbell, color: 'text-amber-400' },
+  barbell_top_set: { label: 'Barbell Top Set', icon: TrendingUp, color: 'text-amber-300' },
+  weighted_calisthenics: { label: 'Weighted Calisthenics', icon: Dumbbell, color: 'text-emerald-400' },
+  relative_strength: { label: 'Relative Strength', icon: Target, color: 'text-cyan-400' },
 }
 
 // =============================================================================

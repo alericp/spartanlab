@@ -197,6 +197,9 @@ const BASE_STRESS_BY_FAMILY: Record<SkillStressFocus, number> = {
   explosive_push: 5,
   joint_integrity: 1,
   mobility: 1,
+  // [SKILL-ISOMETRIC-BASE-STRESS] Static skill holds carry meaningful
+  // tendon and neural cost; score similar to ring_support.
+  skill_isometric: 7,
   transition: 5,
   rings_stability: 6,
   rings_strength: 9,
@@ -259,6 +262,9 @@ const WEEKLY_STRESS_THRESHOLDS: Record<SkillStressFocus, { safe: number; warning
   explosive_push: { safe: 100, warning: 150, limit: 200 },
   joint_integrity: { safe: 200, warning: 300, limit: 400 },
   mobility: { safe: 300, warning: 400, limit: 500 },
+  // [SKILL-ISOMETRIC-WEEKLY-THRESHOLDS] Conservative ring-support
+  // adjacent thresholds for skill-position holds.
+  skill_isometric: { safe: 60, warning: 90, limit: 120 },
   transition: { safe: 80, warning: 120, limit: 160 },
   rings_stability: { safe: 100, warning: 150, limit: 200 },
   rings_strength: { safe: 60, warning: 90, limit: 120 },
@@ -491,6 +497,9 @@ function getJointStressForExercise(exercise: PlannedExercise): Record<JointStres
     explosive_push: { shoulder: 50, wrist: 50 },
     joint_integrity: {},
     mobility: {},
+    // [SKILL-ISOMETRIC-JOINT-DIST] Skill holds load shoulders/scapular
+    // tendons primarily, with secondary elbow/wrist stress.
+    skill_isometric: { shoulder: 70, scapular_tendon: 70, elbow: 40, wrist: 40 },
     shoulder_isolation: { shoulder: 40 },
     arm_isolation: { elbow: 30 },
     grip_strength: { wrist: 40 },

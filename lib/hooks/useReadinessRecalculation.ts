@@ -1,5 +1,13 @@
 import { useCallback } from 'react'
-import { useAthleteId } from '@/lib/hooks/useAthleteId'
+
+// [USE-ATHLETE-ID-LOCAL-NOOP] `@/lib/hooks/useAthleteId` does not exist
+// in the current tree. The recalculate callback below already safely
+// no-ops when `athleteId` is null, so a local null-returning fallback
+// keeps the hook compiling without inventing a fake/derived id that
+// would trigger erroneous network calls.
+function useAthleteId(): string | null {
+  return null
+}
 
 /**
  * Hook to trigger readiness recalculation

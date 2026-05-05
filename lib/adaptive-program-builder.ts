@@ -21692,11 +21692,11 @@ fatigueDecision: fatigueDecision ? {
       // [PROFILE-SNAPSHOT-NO-STRENGTH-BENCHMARKS] ProfileSnapshot does
       // not own `strengthBenchmarks`. Canonical strength fields live on
       // canonicalProfile directly; do not re-emit them here.
-      skillProgressions: {
-        frontLever: canonicalProfile.frontLeverProgression,
-        planche: canonicalProfile.plancheProgression,
-        hspu: canonicalProfile.hspuProgression,
-      },
+      // [PROFILE-SNAPSHOT-NO-SKILL-PROGRESSIONS] ProfileSnapshot also
+      // does not own `skillProgressions`; per-skill progression state
+      // lives on canonicalProfile (`frontLeverProgression`,
+      // `plancheProgression`, `hspuProgression`) and surfaces through
+      // skill-readiness contracts. Do not re-emit it on the snapshot.
     },
     // STATE CONTRACT: Generation mode used
     generationMode,

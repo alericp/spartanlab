@@ -270,17 +270,47 @@ const WELCOME_MESSAGES = {
   general: "Welcome to SpartanLab! Your balanced program covers strength, skills, and conditioning for overall fitness.",
 }
 
+// [PRIMARY-GOAL-CATEGORY-SETS] PrimaryGoalType is the specific-goal
+// union (front_lever, weighted_pull_up, etc.); the broad category
+// strings 'skill' and 'strength' are not part of the union. Bucket the
+// canonical goal IDs to recover the welcome-message routing.
+const SKILL_WELCOME_GOALS = new Set<string>([
+  'front_lever',
+  'back_lever',
+  'planche',
+  'hspu',
+  'handstand_pushup',
+  'muscle_up',
+  'l_sit',
+  'v_sit',
+  'dragon_flag',
+  'iron_cross',
+  'one_arm_pull_up',
+  'one_arm_push_up',
+  'planche_push_up',
+])
+
+const STRENGTH_WELCOME_GOALS = new Set<string>([
+  'weighted_strength',
+  'weighted_pull_up',
+  'weighted_dip',
+  'weighted_muscle_up',
+  'general_strength',
+  'strength_endurance',
+  'hypertrophy',
+])
+
 function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
   const goal = profile.primaryGoal
-  
-  if (goal === 'skill') {
+
+  if (goal != null && SKILL_WELCOME_GOALS.has(String(goal))) {
     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
   }
-  
-  if (goal === 'strength') {
+
+  if (goal != null && STRENGTH_WELCOME_GOALS.has(String(goal))) {
     return WELCOME_MESSAGES.strength
   }
-  
+
   return WELCOME_MESSAGES.general
 }
 
@@ -597,7 +627,14 @@ export async function generateFirstProgram(
     
     markStage('db_validation_start')
     // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
-    const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+    // [PROGRAM-TO-VALIDATE-BOUNDARY] `validateAndLogProgram` accepts the
+    // narrower validation projection `ProgramToValidate`; the richer
+    // `AdaptiveProgram` carries every field it needs and more. Cast
+    // through `unknown` only at this validator boundary.
+    const dbValidationPassed = validateAndLogProgram(
+      program as unknown as Parameters<typeof validateAndLogProgram>[0],
+      'First Program',
+    )
     if (!dbValidationPassed) {
       console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
     }

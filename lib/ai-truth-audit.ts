@@ -871,49 +871,15 @@ export function buildProgramTruthExplanation(
     limiterAddressed: profile?.primaryLimitation || null,
     recoveryLevelUsed: program.recoveryLevel || profile?.recoveryQuality || null,
     
-    // [SKILL-STRENGTH-TRUTH-CONTRACT] Prefer program.skillStrengthProfile (durable) over snapshot/profile
-    // This ensures saved programs retain the exact skill/strength truth used to generate them
-    // [AI-TRUTH-AUDIT-CANONICAL-FIELDS] `CanonicalProgrammingProfile`
-    // exposes `pullUpMax` / `dipMax` / `wallHSPUReps` (capacity strings)
-    // and `plancheProgression` / `frontLeverProgression` (progression
-    // strings on the canonical profile output surface).
-    // `GenerationTruthSnapshot` is intentionally a small fixed contract;
-    // prediction-source fields like `plancheProgression` are not declared
-    // on it, so the legacy reads must go through a structural slice. We
-    // keep the same fallback chain via `as unknown as` to a narrow
-    // structural type.
-    skillStrengthProfile: program.skillStrengthProfile || {
-      plancheProgression:
-        (program.generationTruthSnapshot as unknown as { plancheProgression?: string | null } | undefined)?.plancheProgression
-        || profile?.plancheProgression
-        || null,
-      frontLeverProgression:
-        (program.generationTruthSnapshot as unknown as { frontLeverProgression?: string | null } | undefined)?.frontLeverProgression
-        || profile?.frontLeverProgression
-        || null,
-      hspuCapability:
-        (program.generationTruthSnapshot as unknown as { hspuProgression?: string | null } | undefined)?.hspuProgression
-        || profile?.wallHSPUReps
-        || null,
-      weightedPullUp:
-        (program.generationTruthSnapshot as unknown as { weightedPullUp?: unknown } | undefined)?.weightedPullUp
-        || profile?.weightedPullUp
-        || null,
-      weightedDip:
-        (program.generationTruthSnapshot as unknown as { weightedDip?: unknown } | undefined)?.weightedDip
-        || profile?.weightedDip
-        || null,
-      pullUpCapacity: profile?.pullUpMax || null,
-      dipCapacity: profile?.dipMax || null,
-      wallHspuCapacity: profile?.wallHSPUReps || null,
-      experienceLevel: program.experienceLevel || profile?.experienceLevel || 'intermediate',
-    },
-    skillStrengthMateriallyApplied: !!(
-      program.skillStrengthProfile?.plancheProgression ||
-      program.skillStrengthProfile?.frontLeverProgression ||
-      program.skillStrengthProfile?.weightedPullUp ||
-      program.skillStrengthProfile?.weightedDip
-    ),
+    // [PROGRAM-TRUTH-EXPLANATION-NO-SKILL-STRENGTH-PROFILE]
+    // `ProgramTruthExplanation` no longer owns `skillStrengthProfile`
+    // or `skillStrengthMateriallyApplied`. Skill/strength truth is
+    // now sourced through `program.skillStrengthProfile` directly
+    // (durable on the program) and the per-skill capacity surfaces
+    // (`pullUpMax`, `dipMax`, `wallHSPUReps`, `plancheProgression`,
+    // `frontLeverProgression`) on the canonical profile. Re-emitting
+    // the legacy explanation block here would only compile-fail and
+    // duplicate state already preserved on the program.
     
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Include current working progressions contract
     // This shows the user their true current ability vs historical ceiling

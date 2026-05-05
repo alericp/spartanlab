@@ -465,29 +465,58 @@ function rowToEnvelope(row: any): PerformanceEnvelope {
     toleratedWeeklyVolumeMax: row.tolerated_weekly_volume_max ?? Math.round(row.preferred_weekly_volume_max * 1.3),
     excessiveVolumeThreshold: row.excessive_volume_threshold ?? Math.round(row.preferred_weekly_volume_max * 1.5),
     weeklyVolumeConfidence: row.weekly_volume_confidence ?? 0,
-    
+
+    // [PERFORMANCE-ENVELOPE-VOLUME-METRICS-DEFAULT] Persisted columns for
+    // planned-vs-completed metrics may be absent on legacy rows; default
+    // to zeros so the canonical PerformanceEnvelope contract is honored.
+    volumeMetrics: {
+      avgPlannedWeeklyVolume: row.avg_planned_weekly_volume ?? 0,
+      avgCompletedWeeklyVolume: row.avg_completed_weekly_volume ?? 0,
+      completionRate: row.volume_completion_rate ?? 0,
+      volumeVariance: row.volume_variance ?? 0,
+    },
+
     // Density preferences
     preferredDensityLevel: row.preferred_density_level,
     densityTolerance: row.density_tolerance || 'moderate',
     densityConfidence: row.density_confidence ?? 0,
-    
+
     // Fatigue threshold
     fatigueThreshold: row.fatigue_threshold,
     fatigueThresholdConfidence: row.fatigue_threshold_confidence ?? 0,
     recoveryNeeds: row.recovery_needs || (familyDefaults.recoveryMultiplier > 1.2 ? 'elevated' : 'standard'),
-    
+    // [RECOVERY-RATE-ESTIMATE-DEFAULT] Days needed for full recovery;
+    // baseline derives from the family-default recovery multiplier.
+    recoveryRateEstimate: row.recovery_rate_estimate ?? Math.max(1, Math.round(2 * familyDefaults.recoveryMultiplier)),
+
     // Performance tracking
     performanceTrend: row.performance_trend,
     trendConfidence: row.trend_confidence ?? 0,
+    // [TREND-STRENGTH-DEFAULT] 0–1 strength of the trend; legacy rows
+    // missing the column report `0` (no measured strength yet).
+    trendStrength: row.trend_strength ?? 0,
+    consecutiveImprovements: row.consecutive_improvements ?? 0,
+    consecutiveDeclines: row.consecutive_declines ?? 0,
     lastPositiveSignal: row.last_positive_signal ? new Date(row.last_positive_signal) : null,
     lastNegativeSignal: row.last_negative_signal ? new Date(row.last_negative_signal) : null,
-    
+
+    // [FRAMEWORK-AFFINITY-DEFAULT] Framework affinity scores are 0–1;
+    // legacy rows without these columns default to neutral 0 with a
+    // null preferred framework until enough signal accumulates.
+    frameworkAffinity: {
+      preferredFramework: row.preferred_framework ?? null,
+      frameworkConfidence: row.framework_confidence ?? 0,
+      lowRepResponse: row.low_rep_response ?? 0,
+      highDensityResponse: row.high_density_response ?? 0,
+      frequencyResponse: row.frequency_response ?? 0,
+    },
+
     // Overall confidence
     confidenceScore: row.confidence_score,
     signalCount: row.signal_count,
     recentSignalCount: row.recent_signal_count ?? 0,
     dataQualityScore: row.data_quality_score ?? 0,
-    
+
     // Metadata
     lastUpdated: new Date(row.last_updated),
     createdAt: row.created_at ? new Date(row.created_at) : new Date(row.last_updated),

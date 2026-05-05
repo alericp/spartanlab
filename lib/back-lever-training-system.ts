@@ -894,10 +894,11 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
   },
 
   sessionPlacementRules: {
-    idealPlacement: 'early',
-    maxFatigueBeforeSkill: 20,
-    conflictingExercises: ['front_lever_work', 'heavy_pulling', 'planche_work'],
-    synergyExercises: ['hollow_holds', 'ring_support', 'inverted_work'],
+    preferredPosition: 'early',
+    afterWarmup: true,
+    beforeStrengthWork: true,
+    maxDurationMinutes: 20,
+    rationale: 'Back lever should be trained early after warm-up, before heavy pulling or planche work, while shoulders and straight-arm tissues are fresh.',
   },
 }
 

@@ -2645,8 +2645,12 @@ export async function executeAuthoritativeGeneration(
           const { reconcileFinalMethodMaterializationTruth } = await import(
             '@/lib/program/final-method-truth-reconciler'
           )
+          // [RECONCILABLE-PROGRAM-UNKNOWN-BOUNDARY] AdaptiveProgram and
+          // ReconcilableProgram overlap structurally but are distinct
+          // nominal contracts; route through `unknown` first so the
+          // boundary cast is explicit instead of a TS2352 mistake-cast.
           const reconciliationRollup = reconcileFinalMethodMaterializationTruth(
-            program as Parameters<typeof reconcileFinalMethodMaterializationTruth>[0],
+            program as unknown as Parameters<typeof reconcileFinalMethodMaterializationTruth>[0],
           )
           ;(program as unknown as { finalMethodTruthReconciliation?: unknown }).finalMethodTruthReconciliation =
             reconciliationRollup

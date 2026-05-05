@@ -440,18 +440,31 @@ export async function getEnvelopeBasedProgramAdjustments(
   }>
 > {
   try {
-    const adjustments = []
+    // [ADJUSTMENTS-DISPLAY-CONTRACT] `getEnvelopeBasedRecommendations`
+    // returns structured recommendation objects with `.display`
+    // strings; this function promises display strings. Project each
+    // recommendation through `.display` and bridge the legacy
+    // optional `fatigueWarning` field that does not live on the
+    // canonical EnvelopeRecommendation contract.
+    const adjustments: Array<{
+      movementFamily: MovementFamily
+      repRange: string
+      weeklyVolume: string
+      sessionDensity: string
+      fatigueWarning?: string
+    }> = []
 
     for (const family of movementFamilies) {
       // Try to get envelope for strength goal first (most common)
       const envelope = await getOrCreateEnvelope(athleteId, family, 'strength')
       const recs = getEnvelopeBasedRecommendations(envelope)
+      const legacyRecs = recs as unknown as { fatigueWarning?: string }
       adjustments.push({
         movementFamily: family,
-        repRange: recs.repRange,
-        weeklyVolume: recs.weeklyVolume,
-        sessionDensity: recs.sessionDensity,
-        fatigueWarning: recs.fatigueWarning,
+        repRange: recs.repRange.display,
+        weeklyVolume: recs.weeklyVolume.display,
+        sessionDensity: recs.sessionDensity.display,
+        ...(legacyRecs.fatigueWarning ? { fatigueWarning: legacyRecs.fatigueWarning } : {}),
       })
     }
 

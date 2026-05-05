@@ -196,6 +196,11 @@ export const MOVEMENT_FAMILY_FATIGUE_DEFAULTS: Record<MovementFamily, {
   arm_isolation: { baseThreshold: 60, recoveryMultiplier: 0.7, description: 'Low recovery needs' },
   grip_strength: { baseThreshold: 45, recoveryMultiplier: 1.0, description: 'Moderate recovery needs' },
   hypertrophy_accessory: { baseThreshold: 60, recoveryMultiplier: 0.7, description: 'Low recovery needs' },
+  // [SKILL-ISOMETRIC-FATIGUE-DEFAULT] Skill-position holds (front lever,
+  // planche, l-sit, etc.) carry high neural-quality cost and joint
+  // stress similar to straight-arm work; mirror the conservative
+  // recovery profile.
+  skill_isometric: { baseThreshold: 8, recoveryMultiplier: 1.15, description: 'Static skill hold and isometric tension work requiring high neural quality and joint control.' },
 }
 
 /**
@@ -947,7 +952,9 @@ function createConservativeEnvelope(
     endurance: { min: 12, max: 20, zone: 'endurance' },
     power: { min: 1, max: 3, zone: 'strength_low' },
     mobility: { min: 1, max: 1, zone: 'strength_low' },
-    conditioning: { min: 15, max: 25, zone: 'high_rep' },
+    // [CONDITIONING-MAPS-TO-ENDURANCE] TrainingGoalType has no
+    // `conditioning` literal; circuit/conditioning rep ranges are
+    // already covered by the `endurance` entry above. Stale key removed.
   }
   
   const repDefaults = repRangeDefaults[goalType] || repRangeDefaults.strength
@@ -1435,6 +1442,8 @@ function formatMovementFamily(family: MovementFamily): string {
     arm_isolation: 'Arm isolation',
     grip_strength: 'Grip strength',
     hypertrophy_accessory: 'Accessory',
+    // [SKILL-ISOMETRIC-LABEL] readable label for skill-position holds.
+    skill_isometric: 'Skill isometric holds',
   }
   return labels[family] || family.replace(/_/g, ' ')
 }

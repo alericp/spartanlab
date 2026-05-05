@@ -1091,8 +1091,25 @@ function buildGenerationSourceMap(
     influenceSummary.push('First week - acclimation protection active')
   }
   
+  // [SIGNAL-QUALITY-NEON-MAPPER] `NeonSignalQuality` includes
+  // `'unavailable'`, which is not part of `SignalQuality`. Map the
+  // Neon-side quality label to the canonical `SignalQuality` union;
+  // `'unavailable'` collapses to `'missing'`.
+  const normalizeSignalQuality = (quality: unknown): SignalQuality => {
+    if (
+      quality === 'strong' ||
+      quality === 'usable' ||
+      quality === 'partial' ||
+      quality === 'weak' ||
+      quality === 'missing'
+    ) {
+      return quality
+    }
+    return 'missing'
+  }
+
   return {
-    overallQuality: neonPackage?.overallQuality || 'unavailable',
+    overallQuality: normalizeSignalQuality(neonPackage?.overallQuality),
     profileQuality: profileTruth.quality,
     recoveryQuality: recoveryTruth.quality,
     adherenceQuality: adherenceTruth.quality,

@@ -80,13 +80,24 @@ function detectBiggestImprovement(): EliteInsight | null {
     }
   })
   
-  if (!bestImprovement) return null
-  
+  // [BEST-IMPROVEMENT-CLOSURE-NARROWING] `bestImprovement` is reassigned
+  // inside `forEach` callbacks; TypeScript's control-flow analysis does
+  // not track those writes, so it narrows back to its initial `null`
+  // type after the loops. Snapshot through a typed const so the
+  // downstream reads keep the structured shape.
+  const finalBestImprovement: {
+    area: string
+    improvement: number
+    type: 'skill' | 'strength'
+  } | null = bestImprovement
+
+  if (!finalBestImprovement) return null
+
   return {
     type: 'biggest_improvement',
     title: 'Biggest Improvement',
-    value: bestImprovement.area,
-    explanation: `${bestImprovement.area} improved ${Math.round(bestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
+    value: finalBestImprovement.area,
+    explanation: `${finalBestImprovement.area} improved ${Math.round(finalBestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
     significance: 'positive',
   }
 }

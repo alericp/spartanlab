@@ -5,6 +5,13 @@
  * Re-exports key types and provides additional typing for SEO pages.
  */
 
+// [SKILL-TYPE-LOCAL-IMPORT] `export type {}` re-exports do not put a
+// type in local scope (TS treats `isolatedModules` re-exports as
+// pass-through only). Import `SkillType` from the canonical owner so
+// the in-file references on `CalculatorPageConfig` and
+// `validateCalculatorInput` resolve.
+import type { SkillType } from '../readiness/canonical-readiness-engine'
+
 // Re-export core types from service
 export type {
   SkillReadinessInput,

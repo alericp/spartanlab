@@ -90,11 +90,12 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // styleMetadata contract owns (primaryStyle, rejectedMethods, the
   // applied/circuits/density flags) so spread + read sites are
   // type-safe without widening the canonical session contract.
-  const existingMeta = (session.styleMetadata || {}) as {
+    const existingMeta = (session.styleMetadata || {}) as {
     styledGroups?: Array<{ groupType: string }>
     hasSupersetsApplied?: boolean
     hasCircuitsApplied?: boolean
     hasDensityApplied?: boolean
+    hasClusterApplied?: boolean
     structureDescription?: string
     appliedMethods?: TrainingMethodPreference[] | string[]
     primaryStyle?: TrainingMethodPreference
@@ -105,6 +106,9 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       | TrainingMethodPreference[]
       | string[]
       | Array<{ method: string; reason: string }>
+    // [METHOD-MATERIALIZATION-SUMMARY-PASS-THROUGH] preserve summary if
+    // the upstream builder/saved session attached it.
+    methodMaterializationSummary?: unknown
   }
 
   // [REJECTED-METHODS-NORMALIZER] Canonical styleMetadata expects
@@ -135,11 +139,16 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // to the TrainingMethodPreference union, defaulting to a single
   // straight-set lane when the legacy field is absent or all values
   // were dropped.
+  // [TRAINING-METHODS-TYPED-FALLBACK] Inferring `['straight_sets']` as
+  // a literal at the return position widens it to `string[]` in some
+  // call positions; declare a typed fallback so both branches return
+  // `TrainingMethodPreference[]`.
+  const trainingMethodsFallback: TrainingMethodPreference[] = ['straight_sets']
   const normalizeTrainingMethods = (
     methods: string[] | TrainingMethodPreference[] | undefined
   ): TrainingMethodPreference[] => {
     if (!Array.isArray(methods) || methods.length === 0) {
-      return ['straight_sets']
+      return trainingMethodsFallback
     }
     const allowed = new Set<TrainingMethodPreference>([
       'straight_sets',
@@ -154,7 +163,7 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     const filtered = methods.filter((method): method is TrainingMethodPreference =>
       allowed.has(method as TrainingMethodPreference),
     )
-    return filtered.length > 0 ? filtered : ['straight_sets']
+    return filtered.length > 0 ? filtered : trainingMethodsFallback
   }
   
   // --------------------------------------------------------------------------

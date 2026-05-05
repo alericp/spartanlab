@@ -254,17 +254,27 @@ export function buildMethodPreferenceDisposition(
 ): MethodPreferenceDispositionEntry {
   const normalizedMethod = method.toLowerCase().replace(/_/g, '')
   
-  // Get eligibility status
-  let eligibilityStatus: MethodPreferenceDispositionEntry['eligibilityStatus'] = 'unknown'
+  // [ELIGIBILITY-STATUS-EXPLICIT-UNION] Casting through `typeof
+  // eligibilityStatus` preserved the initial literal `'unknown'` and
+  // collapsed downstream comparisons to `'discouraged'`. Anchor the
+  // declaration on the explicit union and route all assignments
+  // through a normalizer so narrowing stays open.
+  const normalizeEligibilityStatus = (
+    value: string | undefined,
+  ): 'unknown' | 'allowed' | 'discouraged' => {
+    return value === 'allowed' || value === 'discouraged' ? value : 'unknown'
+  }
+
+  let eligibilityStatus: 'unknown' | 'allowed' | 'discouraged' = 'unknown'
   if (methodEligibility) {
     if (normalizedMethod.includes('superset')) {
-      eligibilityStatus = (methodEligibility.supersets || 'unknown') as typeof eligibilityStatus
+      eligibilityStatus = normalizeEligibilityStatus(methodEligibility.supersets)
     } else if (normalizedMethod.includes('circuit')) {
-      eligibilityStatus = (methodEligibility.circuits || 'unknown') as typeof eligibilityStatus
+      eligibilityStatus = normalizeEligibilityStatus(methodEligibility.circuits)
     } else if (normalizedMethod.includes('density')) {
-      eligibilityStatus = (methodEligibility.densityBlocks || 'unknown') as typeof eligibilityStatus
+      eligibilityStatus = normalizeEligibilityStatus(methodEligibility.densityBlocks)
     } else if (normalizedMethod.includes('cluster')) {
-      eligibilityStatus = (methodEligibility.clusterSets || 'unknown') as typeof eligibilityStatus
+      eligibilityStatus = normalizeEligibilityStatus(methodEligibility.clusterSets)
     }
   }
   

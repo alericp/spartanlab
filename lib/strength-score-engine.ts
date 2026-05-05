@@ -590,9 +590,11 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     }
   ]
   
-  // Generate explanation and focus areas
+  // [SCORE-EXPLANATION-ACHIEVEMENT-ARG] generateScoreExplanation now
+  // takes the achievement summary as its 5th argument before level;
+  // pass through the already-computed achievementResult.
   const { explanation, focusAreas, strengths } = generateScoreExplanation(
-    skillResult, strengthResult, readinessResult, consistencyResult, level
+    skillResult, strengthResult, readinessResult, consistencyResult, achievementResult, level
   )
   
   // [baseline-vs-earned] ISSUE C: Track baseline vs earned contributions
@@ -658,7 +660,7 @@ function generateScoreExplanation(
   strengthResult: { score: number; details: { exercise: string; oneRM: number; score: number }[] },
   readinessResult: { score: number; description: string },
   consistencyResult: { score: number; weeklyWorkouts: number; daysSinceLastWorkout: number },
-  achievementResult: { score: number; unlockedCount: number; totalCount: number; earnedPoints: number },
+  achievementResult: { score: number; unlockedCount: number; totalPossible: number; earnedPoints: number },
   level: SpartanLevel
 ): { explanation: string; focusAreas: string[]; strengths: string[] } {
   const focusAreas: string[] = []

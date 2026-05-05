@@ -688,7 +688,9 @@ export async function regenerateProgramIfNeeded(
     // [PARTIAL-ADAPTIVE-PROGRAM-NO-STYLE-MODE] Canonical AdaptiveProgram
     // does not own a `styleMode` property; training style truth lives
     // on the program's styleMetadata / trainingMethodPreferences.
-    constraintFocus: context.constraints.primaryConstraint,
+    // [PARTIAL-ADAPTIVE-PROGRAM-NO-CONSTRAINT-FOCUS] AdaptiveProgram
+    // owns `primaryConstraint`; the legacy `constraintFocus` mirror is
+    // not part of the canonical surface.
     primaryConstraint: context.constraints.primaryConstraint,
     experienceLevel: 'intermediate',
     sessions: [],

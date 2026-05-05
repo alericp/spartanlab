@@ -1544,14 +1544,19 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       // does not expose `level`/`rangeIntent` directly; legacy persisted
       // shapes still carry them. Read through a legacy intersection so
       // the canonical type stays narrow.
+      // [SIDE-SPLITS-NON-NULLABLE-SLICE] `OnboardingProfile['sideSplits']`
+      // is nullable, which blocks direct indexed access for `['level']`
+      // / `['rangeIntent']`. Strip null with NonNullable so the indexed
+      // access type-resolves cleanly.
+      type SideSplitsSlice = NonNullable<OnboardingProfile['sideSplits']>
       const legacySideSplits =
         currentOnboarding.sideSplits as (FlexibilityBenchmark & {
-          level?: OnboardingProfile['sideSplits']['level'] | null
-          rangeIntent?: OnboardingProfile['sideSplits']['rangeIntent'] | null
+          level?: SideSplitsSlice['level'] | null
+          rangeIntent?: SideSplitsSlice['rangeIntent'] | null
         }) | null
-      onboardingUpdates.sideSplits = { 
-        level: (updates.sideSplitsLevel ?? legacySideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
-        rangeIntent: (updates.sideSplitsRangeIntent ?? legacySideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
+      onboardingUpdates.sideSplits = {
+        level: (updates.sideSplitsLevel ?? legacySideSplits?.level ?? 'unknown') as SideSplitsSlice['level'],
+        rangeIntent: (updates.sideSplitsRangeIntent ?? legacySideSplits?.rangeIntent ?? null) as SideSplitsSlice['rangeIntent'],
       }
     }
     
@@ -1575,17 +1580,22 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       // expose the legacy onboarding recovery fields directly. Spread
       // through a legacy intersection so the canonical contract stays
       // narrow.
+      // [RECOVERY-NON-NULLABLE-SLICE] `OnboardingProfile['recovery']`
+      // is nullable. Strip null with NonNullable so the indexed accesses
+      // for sleepQuality/energyLevel/stressLevel/recoveryConfidence
+      // type-resolve.
+      type RecoverySlice = NonNullable<OnboardingProfile['recovery']>
       const legacyRecovery =
         currentOnboarding.recovery as (RecoveryProfile & {
-          sleepQuality?: OnboardingProfile['recovery']['sleepQuality']
-          energyLevel?: OnboardingProfile['recovery']['energyLevel']
-          stressLevel?: OnboardingProfile['recovery']['stressLevel']
-          recoveryConfidence?: OnboardingProfile['recovery']['recoveryConfidence']
+          sleepQuality?: RecoverySlice['sleepQuality']
+          energyLevel?: RecoverySlice['energyLevel']
+          stressLevel?: RecoverySlice['stressLevel']
+          recoveryConfidence?: RecoverySlice['recoveryConfidence']
         }) | null
       onboardingUpdates.recovery = {
         ...(legacyRecovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
         // Use recoveryQuality as the primary recovery indicator
-        recoveryConfidence: updates.recoveryQuality as OnboardingProfile['recovery']['recoveryConfidence'],
+        recoveryConfidence: updates.recoveryQuality as RecoverySlice['recoveryConfidence'],
       }
     }
     

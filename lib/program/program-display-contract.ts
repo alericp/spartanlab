@@ -2150,7 +2150,7 @@ export function resolveCanonicalMethodBodyRender(
       let allBlocksCorrelate = true
       for (const b of blocks) {
         const memberIds = Array.isArray(b.memberIds)
-          ? b.memberIds.map(memberId => String(memberId))
+          ? b.memberIds.map((memberId: string) => String(memberId))
           : []
         const overlaps = canonicalIdSets.some(set =>
           memberIds.some((id: string) => set.has(id)),

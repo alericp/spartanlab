@@ -606,12 +606,23 @@ export function getSkillPrincipleRules(skill: SkillType, selectedMethod: MethodP
   holdDuration?: { min: number; max: number }
   restTime: { min: number; max: number }
   targetRPE: [number, number]
-  failurePolicy: 'never' | 'avoid' | 'occasional' | 'allowed'
+  // [FAILURE-POLICY-ENCOURAGED] MethodProfile.rules.failurePolicy now
+  // includes 'encouraged'; the public summary type omitted it. Mirror
+  // the canonical union and drop the legacy 'never' literal that no
+  // method profile actually emits.
+  failurePolicy: 'avoid' | 'occasional' | 'allowed' | 'encouraged'
   skillFirst: boolean
   densityAllowed: boolean
 } {
   const profile = METHOD_PROFILES[selectedMethod]
   const rules = profile.rules
+
+  // [TARGET-RPE-NORMALIZE-TUPLE] rules.targetRPE is `RPEValue | [RPEValue, RPEValue]`.
+  // The public summary advertises a strict tuple, so promote a single
+  // RPEValue to `[v, v]` rather than leak the union outward.
+  const targetRPE: [number, number] = Array.isArray(rules.targetRPE)
+    ? [rules.targetRPE[0] as number, rules.targetRPE[1] as number]
+    : [rules.targetRPE as number, rules.targetRPE as number]
 
   return {
     repRange: { min: rules.repRangeMin, max: rules.repRangeMax },
@@ -621,7 +632,7 @@ export function getSkillPrincipleRules(skill: SkillType, selectedMethod: MethodP
       max: rules.holdDurationMax || rules.holdDurationMin,
     } : undefined,
     restTime: { min: rules.restTimeMin, max: rules.restTimeMax },
-    targetRPE: rules.targetRPE,
+    targetRPE,
     failurePolicy: rules.failurePolicy,
     skillFirst: rules.skillFirst,
     densityAllowed: rules.densityAllowed,

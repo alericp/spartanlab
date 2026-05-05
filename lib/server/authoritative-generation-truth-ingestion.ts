@@ -539,7 +539,12 @@ function buildProfileTruthBlock(
       if (!callerOverriddenFields.includes('scheduleMode')) callerOverriddenFields.push('scheduleMode')
     }
     if (callerInputs.trainingDaysPerWeek !== undefined && callerInputs.trainingDaysPerWeek !== merged.trainingDaysPerWeek) {
-      merged.trainingDaysPerWeek = callerInputs.trainingDaysPerWeek
+      // [TRAINING-DAYS-FLEXIBLE-NORMALIZE] callerInputs may carry the
+      // legacy `"flexible"` sentinel; the merged shape is `number | null`.
+      // Map non-numeric inputs to `null` rather than poisoning the
+      // numeric field with a string.
+      const callerDays = callerInputs.trainingDaysPerWeek
+      merged.trainingDaysPerWeek = typeof callerDays === 'number' ? callerDays : null
       fieldSources.trainingDaysPerWeek = 'caller_override'
       if (!callerOverriddenFields.includes('trainingDaysPerWeek')) callerOverriddenFields.push('trainingDaysPerWeek')
     }

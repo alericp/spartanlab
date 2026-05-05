@@ -3247,20 +3247,54 @@ export async function executeAuthoritativeGeneration(
       },
       summary: {
         sessionCount: program.sessions.length,
-        primaryGoal: program.primaryGoal,
+        // [SUMMARY-REQUIRED-STRINGS] The summary contract requires
+        // `primaryGoal` and `scheduleMode` as plain strings. Defend
+        // against legacy programs where those fields could be missing.
+        primaryGoal: program.primaryGoal ?? 'unknown',
         secondaryGoal: program.secondaryGoal,
         trainingDaysPerWeek: program.trainingDaysPerWeek,
-        scheduleMode: program.scheduleMode,
+        scheduleMode: program.scheduleMode ?? 'unknown',
         goalLabel: program.goalLabel,
       },
       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
-      // [REBUILD-FAILURE-SUMMARY-LEGACY-BRIDGE] AdaptiveProgram does
-      // not formally own rebuildFailureSummary; legacy programs may
-      // still carry it. Read at the boundary through unknown so a
-      // missing field reads as null rather than a TS2339.
-      rebuildFailureSummary:
-        (program as unknown as { rebuildFailureSummary?: string | null })
-          .rebuildFailureSummary ?? null,
+      // [REBUILD-FAILURE-SUMMARY-STRUCTURED-CONTRACT] The result type
+      // owns a fully-structured `rebuildFailureSummary`; legacy
+      // programs may carry only a string message. Promote a string
+      // payload into the structured shape so the contract is honored
+      // without leaking a raw string into a structured field.
+      rebuildFailureSummary: (() => {
+        const raw = (program as unknown as { rebuildFailureSummary?: unknown })
+          .rebuildFailureSummary
+        if (raw && typeof raw === 'object' && 'failureVerdict' in (raw as object)) {
+          return raw as {
+            totalAttempted: number
+            totalSucceeded: number
+            totalDegraded: number
+            firstFailedIndex: number | null
+            firstFailedFocus: string | null
+            firstFailedCheckpoint: string | null
+            firstFailedErrorName: string | null
+            firstFailedErrorMessage: string | null
+            failureVerdict: string
+            actionRequired: string
+          }
+        }
+        if (typeof raw === 'string' && raw.length > 0) {
+          return {
+            totalAttempted: 1,
+            totalSucceeded: 0,
+            totalDegraded: 1,
+            firstFailedIndex: null,
+            firstFailedFocus: null,
+            firstFailedCheckpoint: null,
+            firstFailedErrorName: null,
+            firstFailedErrorMessage: raw,
+            failureVerdict: 'degraded',
+            actionRequired: 'review_rebuild_failure_summary',
+          }
+        }
+        return undefined
+      })(),
       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
       generationIngressProof,
     }
@@ -3465,7 +3499,30 @@ function createFallbackIngestion(
       'No recovery/adherence/execution signals available',
       'Conservative defaults should be applied',
     ],
-  }
+    // [INGESTION-SOURCE-MAP-FALLBACK] AuthoritativeGenerationTruthIngestion
+    // owns `sourceMap` and `neonTruthPackage`; the fallback path must
+    // still satisfy the contract with conservative "fallback" markers
+    // rather than omit them.
+    sourceMap: {
+      overallQuality: 'weak',
+      profileQuality: 'weak',
+      recoveryQuality: 'missing',
+      adherenceQuality: 'missing',
+      executionQuality: 'missing',
+      doctrineQuality: 'missing',
+      programContextQuality: 'partial',
+      dbSignalsRead: [],
+      callerOverrideSignals: [],
+      defaultedSignals: [],
+      missingSignals: ['recovery', 'adherence', 'execution', 'doctrine'],
+      neonDbAvailable: false,
+      neonAvailableDomains: [],
+      neonUnavailableDomains: ['profile', 'recovery', 'adherence', 'execution', 'doctrine'],
+      influenceSummary: 'fallback_ingestion_no_neon_truth',
+      generatedAt: new Date().toISOString(),
+    },
+    neonTruthPackage: null,
+  } as unknown as AuthoritativeGenerationTruthIngestion
 }
 
 // ==========================================================================

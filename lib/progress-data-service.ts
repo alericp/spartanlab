@@ -3,7 +3,10 @@
 
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getStrengthRecords, type StrengthRecord, type ExerciseType } from './strength-service'
-import { getSkillSessions, type SkillSession } from './skill-session-service'
+// [SKILL-SESSION-NO-LONGER-EXPORTED] `skill-session-service` no longer
+// exports a `SkillSession` type; this file does not reference the type
+// directly, so only the value import is needed.
+import { getSkillSessions } from './skill-session-service'
 import { calculateSpartanScore } from './strength-score-engine'
 
 // =============================================================================

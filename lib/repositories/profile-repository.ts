@@ -23,6 +23,72 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined'
 }
 
+// [DEFAULT-ATHLETE-PROFILE-FACTORY] Build a fully-typed AthleteProfile
+// fallback so the localStorage save path satisfies the canonical
+// interface without scattered `as any` null casts. Every required
+// nullable field is set to `null`, arrays default to `[]`, and the
+// schedule/duration defaults match the previous inline fallback.
+function createDefaultAthleteProfile(
+  id: string = 'local-profile',
+  userId: string = 'local-user',
+): AthleteProfile {
+  return {
+    id,
+    userId,
+    sex: null,
+    height: null,
+    heightUnit: 'inches',
+    bodyweight: null,
+    weightUnit: 'lbs',
+    bodyFatPercent: null,
+    bodyFatSource: null,
+    trainingExperience: null,
+    experienceLevel: 'beginner',
+    goalCategories: [],
+    primaryGoal: null,
+    secondaryGoal: null,
+    selectedSkills: [],
+    selectedFlexibility: [],
+    selectedStrength: [],
+    pullUpMax: null,
+    pushUpMax: null,
+    dipMax: null,
+    wallHspuReps: null,
+    weightedPullUpLoad: null,
+    weightedPullUpUnit: null,
+    weightedDipLoad: null,
+    weightedDipUnit: null,
+    frontLeverProgression: null,
+    frontLeverHoldSeconds: null,
+    plancheProgression: null,
+    plancheHoldSeconds: null,
+    muscleUpReadiness: null,
+    hspuProgression: null,
+    lSitHoldSeconds: null,
+    vSitHoldSeconds: null,
+    pancakeLevel: null,
+    pancakeRangeIntent: null,
+    toeTouchLevel: null,
+    frontSplitsLevel: null,
+    frontSplitsRangeIntent: null,
+    sideSplitsLevel: null,
+    sideSplitsRangeIntent: null,
+    equipmentAvailable: [],
+    trainingDaysPerWeek: 3,
+    sessionLengthMinutes: 60,
+    sessionStyle: null,
+    sleepQuality: null,
+    energyLevel: null,
+    stressLevel: null,
+    recoveryConfidence: null,
+    rangeIntent: null,
+    rangeTrainingMode: null,
+    goalCategory: null,
+    onboardingComplete: false,
+    createdAt: new Date().toISOString(),
+  }
+}
+
 // =============================================================================
 // PREVIEW MODE IMPLEMENTATION
 // =============================================================================
@@ -61,31 +127,9 @@ const previewProfileRepository: ProfileRepository = {
 
     const current = (await this.getProfile(userId))
     
-    // TASK 3: Handle null profile safely
-    const baseProfile: AthleteProfile = current ?? {
-      id: 'local-profile',
-      userId: 'local-user',
-      sex: null as any,
-      height: null as any,
-      heightUnit: 'inches',
-      bodyweight: null as any,
-      weightUnit: 'lbs',
-      experienceLevel: 'beginner',
-      trainingDaysPerWeek: 3,
-      sessionLengthMinutes: 60,
-      goalCategory: null as any,
-      selectedSkills: [],
-      selectedFlexibility: [],
-      selectedStrength: [],
-      primaryGoal: null,
-      equipmentAvailable: [],
-      rangeIntent: null,
-      rangeTrainingMode: null,
-      pullUpMax: null,
-      dipMax: null,
-      onboardingComplete: false,
-      createdAt: new Date().toISOString(),
-    }
+    // [DEFAULT-PROFILE-FACTORY] Use typed helper instead of an inline
+    // fallback that needs `as any` to silence missing-field errors.
+    const baseProfile: AthleteProfile = current ?? createDefaultAthleteProfile()
     
     const updated: AthleteProfile = {
       ...baseProfile,
@@ -253,31 +297,9 @@ export function saveAthleteProfile(
 
   const current = getAthleteProfile()
   
-  // TASK 3: Handle null profile safely - create safe local-only base if needed
-  const baseProfile: AthleteProfile = current ?? {
-    id: 'local-profile',
-    userId: 'local-user',
-    sex: null as any,
-    height: null as any,
-    heightUnit: 'inches',
-    bodyweight: null as any,
-    weightUnit: 'lbs',
-    experienceLevel: 'beginner',
-    trainingDaysPerWeek: 3,
-    sessionLengthMinutes: 60,
-    goalCategory: null as any,
-    selectedSkills: [],
-    selectedFlexibility: [],
-    selectedStrength: [],
-    primaryGoal: null,
-    equipmentAvailable: [],
-    rangeIntent: null,
-    rangeTrainingMode: null,
-    pullUpMax: null,
-    dipMax: null,
-    onboardingComplete: false,
-    createdAt: new Date().toISOString(),
-  }
+  // [DEFAULT-PROFILE-FACTORY] Same typed helper as the repository path
+  // — keeps both fallbacks honest against the AthleteProfile contract.
+  const baseProfile: AthleteProfile = current ?? createDefaultAthleteProfile()
   
   // TASK 3: Now safely merge - baseProfile is guaranteed to exist
   const updated: AthleteProfile = {

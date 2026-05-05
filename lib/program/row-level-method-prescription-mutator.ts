@@ -914,6 +914,12 @@ export function applyRowLevelMethodPrescriptionMutations(
         prescriptionBoundsProofs: [],
         challenge,
         doctrineApplicationCorridor: null,
+        // [SUMMARY-CONTRACT-EARLY-RETURN] RowLevelMutatorSummary owns these
+        // fields; the no-session early return must still satisfy the
+        // contract with null/empty placeholders rather than omitting them.
+        structuralMaterialization: null,
+        blockResolution: null,
+        doctrineParticipation: null,
       },
     }
   }
@@ -1011,8 +1017,13 @@ export function applyRowLevelMethodPrescriptionMutations(
   // -----------------------------------------------------------------------
   let blockResolution: ClassifyDoctrineBlocksResult | null = null
   try {
+    // [SESSION-METHOD-STRUCTURES-LEGACY-BRIDGE] SessionLike does not own
+    // `methodStructures`; legacy/runtime sessions still carry the array
+    // after the structural materialization corridor stamps it. Read it
+    // through a narrow structural cast so the type system stays honest.
     const stampedMethodStructures =
-      (session?.methodStructures as Parameters<typeof classifyDoctrineBlocksForSession>[0]['methodStructures']) ?? []
+      ((session as unknown as { methodStructures?: unknown[] })?.methodStructures
+        as Parameters<typeof classifyDoctrineBlocksForSession>[0]['methodStructures']) ?? []
     if (Array.isArray(stampedMethodStructures) && stampedMethodStructures.length > 0) {
       const sessionRoleRaw =
         (session as { weeklyRole?: { roleId?: unknown } } | null)?.weeklyRole?.roleId ?? null

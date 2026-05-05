@@ -16,7 +16,12 @@
  */
 
 import type { DoctrineRuntimeContract } from './doctrine-runtime-contract'
-import type { MaterialityContract } from './adaptive-program-builder'
+// [MATERIALITY-CONTRACT-DERIVED-FROM-BUILDER] adaptive-program-builder
+// no longer exports a `MaterialityContract` type. Derive it from the
+// `buildMaterialityContract` return type so consumers stay aligned with
+// the actual contract shape without a stale re-export.
+import { buildMaterialityContract } from './adaptive-program-builder'
+type MaterialityContract = ReturnType<typeof buildMaterialityContract>
 
 // =============================================================================
 // TYPES

@@ -562,16 +562,28 @@ export function determineRoadmapPosition(
   const profile = getAthleteProfile()
   
   // [PHASE 16L] FIX: Handle null profile in server context
+  // [ATHLETE-ROADMAP-POSITION-CANONICAL-FIELDS] AthleteRoadmapPosition
+  // does not own `phase`/`phases`/`phaseIndex`/`readinessLevel`/etc.
+  // The current contract carries level-based fields (`currentLevel`,
+  // `nextLevel`, `targetLevel`, ...). Build the no-profile fallback
+  // straight from the canonical SKILL_ROADMAPS levels.
   if (!profile) {
+    const firstLevel = roadmap.levels[0]
     return {
-      phase: roadmap.phases[0],
-      phaseIndex: 0,
-      progressPercent: 0,
+      skillKey,
+      skillName: roadmap.skillName,
+      currentLevelIndex: 0,
+      currentLevel: firstLevel,
+      nextLevel: roadmap.levels[1] ?? null,
+      targetLevelIndex: 0,
+      targetLevel: firstLevel,
       readinessScore: 0,
-      readinessLevel: 'not_ready' as const,
-      constraintsBlocking: [],
-      nextMilestone: null,
-      estimatedWeeksToNext: null,
+      readinessTier: 'not_ready',
+      weakPoints: [],
+      missingPrerequisites: [],
+      progressPercentage: 0,
+      coachingMessage: 'Complete onboarding to see your roadmap.',
+      actionableNextStep: 'Finish onboarding so we can place you on the roadmap.',
     }
   }
   
@@ -628,11 +640,15 @@ export function determineRoadmapPosition(
       break
     }
     case 'planche': {
+      // [PLANCHE-INPUTS-CURRENT-FIELDS] Canonical PlancheInputs uses
+      // `plancheLeanHold` (not `leanHoldTime`) and owns
+      // `shoulderMobilityConfidence`/`wallHandstandHold`. Drop the
+      // legacy `bodyweightLbs` field which is not part of the input.
       const inputs: PlancheInputs = {
         maxDips,
         maxPushUps,
-        leanHoldTime: 15,
-        bodyweightLbs: profile.bodyweight || 160,
+        plancheLeanHold: 15,
+        shoulderMobilityConfidence: 'moderate',
         hasParallettes: profile.equipmentAvailable?.includes('parallettes') || false,
         hasFloor: true,
       }
@@ -640,13 +656,18 @@ export function determineRoadmapPosition(
       break
     }
     case 'muscle-up': {
+      // [MUSCLE-UP-INPUTS-CURRENT-FIELDS] Canonical MuscleUpInputs uses
+      // `hasExplosivePulls`/`hasBands` and does not own
+      // `straightBarDipReps`/`hasRings`. Drop legacy fields and derive
+      // an explosive-pull proxy from the chest-to-bar capacity.
+      const explosivePullProxy = Math.floor(maxPullUps * 0.4)
       const inputs: MuscleUpInputs = {
         maxPullUps,
         maxDips,
-        chestToBarReps: Math.floor(maxPullUps * 0.4),
-        straightBarDipReps: Math.floor(maxDips * 0.5),
+        chestToBarReps: explosivePullProxy,
+        hasExplosivePulls: explosivePullProxy >= 1,
         hasBar: true,
-        hasRings: profile.equipmentAvailable?.includes('rings') || false,
+        hasBands: false,
       }
       readinessResult = calculateMuscleUpReadiness(inputs)
       break

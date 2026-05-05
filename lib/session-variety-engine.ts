@@ -654,7 +654,12 @@ function getFatigueProfileForSessionType(type: SessionType): FatigueProfile {
 }
 
 function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 'tertiary', constraint: string | null): string[] {
-  const baseSupport: Record<SkillType, string[][]> = {
+  // [BASE-SUPPORT-PARTIAL-RECORD] Canonical SkillType excludes
+  // `iron_cross` and `weighted_strength`; relax this lookup to a
+  // `Partial<Record<SkillType, ...>>` so the missing keys are handled
+  // by the empty-array fallback below rather than breaking the record
+  // contract. Invalid keys are removed.
+  const baseSupport: Partial<Record<SkillType, string[][]>> = {
     front_lever: [
       ['weighted_pull', 'compression'],
       ['rows', 'scapular_control'],
@@ -675,20 +680,10 @@ function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 
       ['handstand_hold', 'wall_slides'],
       ['face_pull', 'rear_delt'],
     ],
-    iron_cross: [
-      ['ring_support', 'cross_pull'],
-      ['wide_ring_fly', 'bicep_curl'],
-      ['shoulder_rehab', 'tendon_conditioning'],
-    ],
     l_sit: [
       ['compression', 'pike_stretch'],
       ['hanging_leg_raise', 'hip_flexor'],
       ['support_hold', 'wrist_prep'],
-    ],
-    weighted_strength: [
-      ['weighted_pull', 'weighted_dip'],
-      ['rows', 'push_ups'],
-      ['accessory_arm', 'core'],
     ],
   }
 
@@ -812,19 +807,19 @@ function buildWeakPointPhrase(weakPoint: string): string {
 }
 
 function getSkillMovementFamilies(skill: SkillType): MovementFamily[] {
-  const skillFamilyMap: Record<SkillType, MovementFamily[]> = {
+  // [SKILL-FAMILY-MAP-PARTIAL] Canonical SkillType excludes
+  // `iron_cross`, `back_lever`, and `weighted_strength`. Use a partial
+  // record so the missing keys flow through the empty-array fallback
+  // instead of producing record-key errors. Also replace the legacy
+  // `hip_hinge` MovementFamily with `hinge_pattern`.
+  const skillFamilyMap: Partial<Record<SkillType, MovementFamily[]>> = {
     front_lever: ['straight_arm_pull', 'horizontal_pull', 'compression_core'],
     planche: ['straight_arm_push', 'horizontal_push', 'compression_core'],
     muscle_up: ['vertical_pull', 'vertical_push', 'horizontal_pull'],
     hspu: ['vertical_push', 'compression_core'],
-    back_lever: ['straight_arm_pull', 'compression_core'],
-    iron_cross: ['straight_arm_pull', 'straight_arm_push'],
-    l_sit: ['compression_core', 'hip_hinge'],
-    weighted_strength: ['vertical_pull', 'vertical_push', 'horizontal_pull', 'horizontal_push'],
+    l_sit: ['compression_core', 'hinge_pattern'],
   }
 
-  // [SKILL-RECORD-NO-GENERAL] empty array fallback in place of legacy
-  // 'general' entry.
   return skillFamilyMap[skill] || []
 }
 
@@ -842,7 +837,11 @@ export interface ExerciseVariationSet {
  * Get exercise variants for a skill to ensure variety across days
  */
 export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
-  const variants: Record<SkillType, ExerciseVariationSet> = {
+  // [VARIANTS-PARTIAL-RECORD] Canonical SkillType excludes
+  // `iron_cross` and `weighted_strength`; relax to a Partial record so
+  // the empty-variation fallback handles them instead of breaking the
+  // record contract. Invalid keys are removed.
+  const variants: Partial<Record<SkillType, ExerciseVariationSet>> = {
     front_lever: {
       variantA: ['front_lever_hold', 'weighted_pull_up', 'compression_hold'],
       variantB: ['front_lever_raise', 'row_progression', 'scapular_pull'],
@@ -863,20 +862,10 @@ export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
       variantB: ['wall_hspu_negative', 'elevated_pike', 'face_pull'],
       variantC: ['box_hspu', 'wall_walk', 'rear_delt_fly'],
     },
-    iron_cross: {
-      variantA: ['ring_support', 'cross_pull', 'ring_fly'],
-      variantB: ['rto_support', 'wide_pull', 'tendon_conditioning'],
-      variantC: ['iron_cross_negative', 'band_cross', 'shoulder_stability'],
-    },
     l_sit: {
       variantA: ['l_sit_hold', 'compression_lift', 'pike_stretch'],
       variantB: ['tuck_l_sit', 'hanging_leg_raise', 'hip_flexor_march'],
       variantC: ['straddle_l', 'v_up', 'pancake_compression'],
-    },
-    weighted_strength: {
-      variantA: ['weighted_pull_up', 'weighted_dip', 'ring_row'],
-      variantB: ['weighted_chin_up', 'ring_dip', 'push_up'],
-      variantC: ['one_arm_row', 'close_grip_dip', 'archer_pull'],
     },
   }
 

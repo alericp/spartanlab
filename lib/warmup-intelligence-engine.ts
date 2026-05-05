@@ -1226,11 +1226,57 @@ export function enhanceWarmupFromGovernor(
       }
     }
     
+    // [JOINT-STRESS-TO-CATEGORY-MAPPER] `additionalJointPrep` carries
+    // `JointStressFocus` values (singular forms / tendon-specific
+    // labels); `targetJoints` is typed as `JointCategory[]` (plural
+    // canonical joints). Map stress-focus values to their nearest
+    // valid JointCategory before calling `.includes()`.
+    const toJointCategory = (focus: string): JointCategory => {
+      switch (focus) {
+        case 'wrist':
+        case 'wrists':
+          return 'wrists'
+        case 'elbow':
+        case 'elbows':
+        case 'bicep_tendon':
+          return 'elbows'
+        case 'forearm':
+        case 'forearms':
+          return 'forearms'
+        case 'shoulder':
+        case 'shoulders':
+        case 'shoulder_tendon':
+        case 'scapular_tendon':
+        case 'sternum':
+          return 'shoulders'
+        case 'scapula':
+          return 'scapula'
+        case 'thoracic':
+        case 'thoracic_spine':
+          return 'thoracic_spine'
+        case 'core':
+          return 'core'
+        case 'hip':
+        case 'hips':
+        case 'hip_flexor':
+          return 'hips'
+        case 'hamstring':
+        case 'hamstrings':
+          return 'hamstrings'
+        case 'ankle':
+        case 'ankles':
+          return 'ankles'
+        default:
+          return 'shoulders'
+      }
+    }
+
     // Add joint prep for high-stress joints
     for (const joint of warmupNeeds.additionalJointPrep) {
       // [WARMUP-EXERCISE-DEFINITION-CURRENT-SHAPE] WarmUpExerciseDefinition
       // exposes `targetJoints: string[]`; legacy `primaryJoint` is gone.
-      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.targetJoints.includes(joint))
+      const jointCategory = toJointCategory(joint as unknown as string)
+      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.targetJoints.includes(jointCategory))
       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
       const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
       
@@ -1241,8 +1287,8 @@ export function enhanceWarmupFromGovernor(
           exerciseId: newJointExercise.id,
           name: newJointExercise.name,
           prescription: newJointExercise.prescription,
-          targetJoint: newJointExercise.targetJoints[0] ?? joint,
-          rationale: `Added for ${joint} preparation due to elevated stress.`,
+          targetJoint: newJointExercise.targetJoints[0] ?? jointCategory,
+          rationale: `Added for ${jointCategory} preparation due to elevated stress.`,
           priority: newJointExercise.priority,
           isRequired: false,
           knowledgeBubble: newJointExercise.knowledgeBubble,

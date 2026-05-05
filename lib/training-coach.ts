@@ -278,11 +278,20 @@ function determinePrimaryLimiter(
   // Use constraint engine result
   if (constraints.primaryConstraint && constraints.confidence !== 'low') {
     const category = mapConstraintToCategory(constraints.primaryConstraint)
+    // [CONSTRAINT-RESULT-LEGACY-DISPLAY-BRIDGE] Canonical ConstraintResult
+    // does not own `label` / `focusItems`; legacy/runtime values still
+    // carry them. Read display extras through a narrow legacy slice
+    // rather than widening the canonical contract.
+    const legacyConstraintDisplay = constraints as unknown as {
+      label?: string
+      focusItems?: Array<{ action?: string }>
+    }
     return {
       category,
-      label: constraints.label,
+      label: legacyConstraintDisplay.label ?? constraints.primaryConstraint,
       whyItMatters: constraints.explanation,
-      recommendedFocus: constraints.focusItems[0]?.action || 'Address the identified constraint.',
+      recommendedFocus:
+        legacyConstraintDisplay.focusItems?.[0]?.action ?? 'Address the identified constraint.',
       urgency: constraints.confidence === 'high' ? 'high' : 'medium',
     }
   }

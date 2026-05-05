@@ -168,16 +168,50 @@ export function calculateUnifiedSkillReadiness(
   calibration?: AthleteCalibration | null
 ): SkillReadinessScore {
   const canonicalResult = calculateReadinessFromProfile(skill, profile)
-  
+
   // Calculate confidence based on available data
   let confidence = 0.5 // Base confidence
-  
+
+  // [ATHLETE-PROFILE-LEGACY-BENCHMARK-BRIDGE] Canonical AthleteProfile
+  // does not expose maxPullUps/maxDips/weightedPullUp/weightedDip/
+  // hollowHold directly; legacy/runtime profiles still carry them via
+  // either the legacy plain numbers or the canonical `pullUpMax` /
+  // `dipMax` / `hollowHoldSeconds` capacity fields. Read both shapes
+  // through a narrow legacy slice without widening AthleteProfile.
+  const legacyProfile = profile as unknown as {
+    maxPullUps?: number | null
+    pullUpMax?: number | null
+    maxDips?: number | null
+    dipMax?: number | null
+    weightedPullUp?: number | { addedWeight?: number; load?: number } | null
+    weightedDip?: number | { addedWeight?: number; load?: number } | null
+    hollowHold?: number | null
+    hollowHoldSeconds?: number | null
+  }
+
+  const weightedValue = (
+    value: number | { addedWeight?: number; load?: number } | null | undefined,
+  ): number | null => {
+    if (typeof value === 'number') return value
+    if (value && typeof value === 'object') {
+      if (typeof value.addedWeight === 'number') return value.addedWeight
+      if (typeof value.load === 'number') return value.load
+    }
+    return null
+  }
+
+  const pullUpCount = legacyProfile.maxPullUps ?? legacyProfile.pullUpMax ?? 0
+  const dipCount = legacyProfile.maxDips ?? legacyProfile.dipMax ?? 0
+  const weightedPullUpLoad = weightedValue(legacyProfile.weightedPullUp)
+  const weightedDipLoad = weightedValue(legacyProfile.weightedDip)
+  const hollowHoldSeconds = legacyProfile.hollowHold ?? legacyProfile.hollowHoldSeconds ?? 0
+
   // Add confidence for strength data
-  if (profile.maxPullUps && profile.maxPullUps > 0) confidence += 0.1
-  if (profile.maxDips && profile.maxDips > 0) confidence += 0.1
-  if (profile.weightedPullUp) confidence += 0.1
-  if (profile.weightedDip) confidence += 0.05
-  if (profile.hollowHold && profile.hollowHold > 0) confidence += 0.05
+  if (pullUpCount > 0) confidence += 0.1
+  if (dipCount > 0) confidence += 0.1
+  if (weightedPullUpLoad != null && weightedPullUpLoad > 0) confidence += 0.1
+  if (weightedDipLoad != null && weightedDipLoad > 0) confidence += 0.05
+  if (hollowHoldSeconds > 0) confidence += 0.05
   
   // Add confidence for calibration data
   // [CALIBRATION-NO-SKILL-LEVELS] AthleteCalibration no longer owns

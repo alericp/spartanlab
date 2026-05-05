@@ -16,7 +16,7 @@
  * 5. Full diagnostic logging for debugging
  */
 
-import type { AdaptiveSession, AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import type { AdaptiveSession, AdaptiveProgram, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 import { 
   normalizeWorkoutSession, 
   normalizeAndValidateSession,

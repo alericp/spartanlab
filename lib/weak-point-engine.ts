@@ -37,6 +37,33 @@ import {
 } from './unified-readiness-integration'
 
 // =============================================================================
+// BENCHMARK NORMALIZERS
+// =============================================================================
+
+/**
+ * [WEIGHTED-BENCHMARK-LOAD] Read weighted-benchmark load defensively.
+ * Canonical WeightedBenchmark owns `load`; legacy persisted documents
+ * may still ship `addedWeight`. Returns 0 when no usable load is found.
+ */
+function getBenchmarkLoad(value: unknown): number {
+  if (value && typeof value === 'object') {
+    const record = value as { load?: unknown; addedWeight?: unknown }
+    if (typeof record.load === 'number' && Number.isFinite(record.load)) return record.load
+    if (typeof record.addedWeight === 'number' && Number.isFinite(record.addedWeight)) return record.addedWeight
+  }
+  return 0
+}
+
+/**
+ * [DETECTION-INPUT-LOAD] Project a weighted benchmark down to the
+ * `{ load: number } | null` shape DetectionInput expects.
+ */
+function toDetectionLoad(value: unknown): { load: number } | null {
+  const load = getBenchmarkLoad(value)
+  return load > 0 ? { load } : null
+}
+
+// =============================================================================
 // WEAK POINT TYPES
 // =============================================================================
 
@@ -664,9 +691,15 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
   // Explosive power (estimated from pull-ups + muscle-up capability)
   let explosivePower = pullStrength * 0.6
   // [WEAK-POINT-ENGINE-MUSCLEUP-OWNER] `OnboardingProfile.muscleUp` is
-  // `MuscleUpReadiness | null` ('none' | 'working_on' | 'capable' | ...).
-  // Treat the explicit "can do a muscle-up" tokens as capable.
-  const muscleUpCapable = profile.muscleUp === 'capable' || profile.muscleUp === 'working_on'
+  // `MuscleUpReadiness | null`. The literal union here may not overlap
+  // every legacy persisted token, so bridge through `string | null`
+  // instead of comparing directly to keep persisted-doc compatibility.
+  const muscleUpReadiness = profile.muscleUp == null ? null : String(profile.muscleUp)
+  const muscleUpCapable =
+    muscleUpReadiness === 'capable' ||
+    muscleUpReadiness === 'working_on' ||
+    muscleUpReadiness === 'can_do' ||
+    muscleUpReadiness === 'yes'
   if (muscleUpCapable) explosivePower = Math.max(explosivePower, 80)
   
   // Scapular control (inferred from skill levels)
@@ -993,9 +1026,21 @@ function getPriorityExercises(
   const primaryExercises = exerciseMap[primary] || []
   const secondaryExercises = secondary ? (exerciseMap[secondary] || []).slice(0, 1) : []
   
+  // [RECOMMENDED-EXERCISE-SHAPE] consumer expects { exerciseId,
+  // exerciseName, reason, targetedLimiter }, not raw { id, name, ... }.
   return [
-    ...primaryExercises.map(e => ({ ...e, targetedLimiter: primary })),
-    ...secondaryExercises.map(e => ({ ...e, targetedLimiter: secondary! })),
+    ...primaryExercises.map(e => ({
+      exerciseId: e.id,
+      exerciseName: e.name,
+      reason: e.reason,
+      targetedLimiter: primary,
+    })),
+    ...secondaryExercises.map(e => ({
+      exerciseId: e.id,
+      exerciseName: e.name,
+      reason: e.reason,
+      targetedLimiter: secondary!,
+    })),
   ]
 }
 
@@ -1163,9 +1208,11 @@ export function detectWeakPointsWithReadiness(
       experienceLevel: 'intermediate' as const,
       maxPullUps: bucketToNumber(profile.pullUpMax as string | null) || 0,
       maxDips: bucketToNumber(profile.dipMax as string | null) || 0,
-      // [WEIGHTED-BENCHMARK-ADDED-WEIGHT]
-      weightedPullUp: profile.weightedPullUp?.addedWeight || 0,
-      weightedDip: profile.weightedDip?.addedWeight || 0,
+      // [WEIGHTED-BENCHMARK-LOAD-NORMALIZER] WeightedBenchmark owns
+      // `load`, but legacy persisted docs may still ship `addedWeight`.
+      // getBenchmarkLoad coerces both to a finite number.
+      weightedPullUp: getBenchmarkLoad(profile.weightedPullUp),
+      weightedDip: getBenchmarkLoad(profile.weightedDip),
       hollowHold: 0,
       lSitHold: 0,
       bodyweight: 75,
@@ -1503,17 +1550,30 @@ export function detectWeakPointsForProfile(
   // `calculateBenchmarkScores`. `frontLeverHold` / `plancheHold` /
   // `lSitHold` are NOT on OnboardingProfile; fall back to canonical
   // `<skill>.progression`. `experienceLevel` is not on OnboardingProfile.
+  // [DETECTION-INPUT-WEIGHTED-SHAPE] DetectionInput expects
+  // { load: number } | null for weighted benchmarks, not the full
+  // WeightedBenchmark. Use toDetectionLoad to project at the boundary.
+  // [LEGACY-PROFILE-LSIT] OnboardingProfile no longer carries `lSit`;
+  // narrow through a structural-legacy slice for persisted-doc support.
+  // [LEGACY-CALIBRATION-FITNESS-LEVEL] AthleteCalibration no longer
+  // owns `fitnessLevel`; structurally narrow only here.
+  const legacyProfileForLSit = profile as OnboardingProfile & {
+    lSit?: { progression?: string | null } | null
+  }
+  const legacyCalibrationForExperience = calibration as (typeof calibration & {
+    fitnessLevel?: 'beginner' | 'intermediate' | 'advanced'
+  }) | null
   const input: DetectionInput = {
     pullUpMax: bucketToNumber(profile.pullUpMax as string | null),
     dipMax: bucketToNumber(profile.dipMax as string | null),
-    weightedPullUp: profile.weightedPullUp ?? null,
-    weightedDip: profile.weightedDip ?? null,
+    weightedPullUp: toDetectionLoad(profile.weightedPullUp),
+    weightedDip: toDetectionLoad(profile.weightedDip),
     frontLeverLevel: profile.frontLever?.progression ?? null,
     plancheLevel: profile.planche?.progression ?? null,
-    lSitLevel: profile.lSit?.progression ?? null,
+    lSitLevel: legacyProfileForLSit.lSit?.progression ?? null,
     needsDeload: fatigueNeedsDeload,
     fatigueScore: fatigueScore,
-    experienceLevel: (calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' | undefined) || 'intermediate',
+    experienceLevel: legacyCalibrationForExperience?.fitnessLevel ?? 'intermediate',
   }
   
   // Get benchmark-derived weak points

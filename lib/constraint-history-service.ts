@@ -44,6 +44,47 @@ export interface ConstraintImprovement {
 }
 
 /**
+ * [CONSTRAINT-RESULT-ADAPTER] SkillConstraintResult does not own the
+ * legacy { category, score, isPrimaryLimiter, indicatorMetrics }
+ * shape this history layer was originally written against. This
+ * adapter projects the current shape into the legacy fields, falling
+ * back through structurally narrowed legacy slots when present.
+ */
+function toConstraintHistoryRecord(
+  result: ConstraintResult,
+  fallbackCategory: ConstraintCategory = 'skill_specific'
+): {
+  category: ConstraintCategory
+  score: number
+  isPrimaryLimiter: boolean
+  indicatorMetrics: Record<string, unknown>
+} {
+  const legacy = result as unknown as {
+    category?: ConstraintCategory
+    score?: number
+    severityScore?: number
+    isPrimaryLimiter?: boolean
+    indicatorMetrics?: Record<string, unknown>
+    metrics?: Record<string, unknown>
+    primaryConstraint?: ConstraintCategory
+    overallReadiness?: number
+  }
+
+  return {
+    category: legacy.category ?? legacy.primaryConstraint ?? fallbackCategory,
+    score: typeof legacy.score === 'number'
+      ? legacy.score
+      : typeof legacy.severityScore === 'number'
+        ? legacy.severityScore
+        : typeof legacy.overallReadiness === 'number'
+          ? legacy.overallReadiness
+          : 0,
+    isPrimaryLimiter: legacy.isPrimaryLimiter ?? false,
+    indicatorMetrics: legacy.indicatorMetrics ?? legacy.metrics ?? {},
+  }
+}
+
+/**
  * Record a constraint detection result in history
  */
 export async function recordConstraintHistory(
@@ -58,6 +99,9 @@ export async function recordConstraintHistory(
   }
   
   try {
+    // [HISTORY-ADAPTER] go through the adapter so legacy reads compile
+    // against the current SkillConstraintResult shape.
+    const historyConstraint = toConstraintHistoryRecord(constraint)
     await sql`
       INSERT INTO constraint_history (
         athlete_id,
@@ -69,12 +113,12 @@ export async function recordConstraintHistory(
       ) VALUES (
         ${athleteId},
         ${skillType},
-        ${constraint.category},
-        ${constraint.score},
+        ${historyConstraint.category},
+        ${historyConstraint.score},
         NOW(),
         ${JSON.stringify({
-          primaryLimiter: constraint.isPrimaryLimiter,
-          indicatorMetrics: constraint.indicatorMetrics,
+          primaryLimiter: historyConstraint.isPrimaryLimiter,
+          indicatorMetrics: historyConstraint.indicatorMetrics,
         })}
       )
     `
@@ -220,10 +264,13 @@ export async function hasConstraintChanged(
 
   if (!latest) return false
 
-  if (latest.constraintCategory !== currentConstraint.category) {
+  // [HISTORY-ADAPTER] re-project the current SkillConstraintResult so
+  // the diff comparison reads from a known legacy-shaped record.
+  const historyConstraint = toConstraintHistoryRecord(currentConstraint)
+  if (latest.constraintCategory !== historyConstraint.category) {
     return true // Different constraint type
   }
 
-  const scoreDifference = Math.abs(latest.severityScore - currentConstraint.score)
+  const scoreDifference = Math.abs(latest.severityScore - historyConstraint.score)
   return scoreDifference > threshold
 }

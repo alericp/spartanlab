@@ -64,10 +64,15 @@ export interface ProgressDashboardData {
 // STRENGTH PROGRESS
 // =============================================================================
 
+// [EXERCISE-TYPE-RECORD-COMPLETION] cover full ExerciseType.
 const STRENGTH_LABELS: Record<ExerciseType, string> = {
   weighted_pull_up: 'Weighted Pull-Up',
   weighted_dip: 'Weighted Dip',
   weighted_muscle_up: 'Weighted Muscle-Up',
+  conventional_deadlift: 'Conventional Deadlift',
+  sumo_deadlift: 'Sumo Deadlift',
+  romanian_deadlift: 'Romanian Deadlift',
+  trap_bar_deadlift: 'Trap Bar Deadlift',
 }
 
 export function getStrengthProgressData(): StrengthProgressData[] {

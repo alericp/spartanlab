@@ -46,6 +46,9 @@ import {
   assertDashboardTruthful,
   markCanonicalPathUsed,
 } from './production-safety'
+// [CANONICAL-PROFILE-TYPE] EMPTY_PROFILE casts to literal-union
+// fields owned by CanonicalProgrammingProfile.
+import type { CanonicalProgrammingProfile } from './canonical-profile-service'
 
 export interface DashboardOverview {
   user: User
@@ -134,17 +137,48 @@ const EMPTY_PROFILE: AthleteProfile = {
   createdAt: new Date().toISOString(),
 }
 
+// [DASHBOARD-NUMBER-COERCION] AdaptiveProgram fields like
+// `trainingDaysPerWeek` and `sessionLength` may be string unions
+// (e.g., '45-60'); ProgramSummary owns plain numbers.
+const toDashboardNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  return fallback
+}
+
+// [STRENGTH-RECORDS-FULL-RECORD] getLatestRecords() returns
+// Partial<Record<ExerciseType, ...>>; the dashboard contract expects
+// the full Record. Default any missing key to null at the boundary.
+const emptyStrengthRecords: Record<ExerciseType, StrengthRecord | null> = {
+  weighted_pull_up: null,
+  weighted_dip: null,
+  weighted_muscle_up: null,
+  conventional_deadlift: null,
+  sumo_deadlift: null,
+  romanian_deadlift: null,
+  trap_bar_deadlift: null,
+}
+
 // Get complete dashboard overview
 // SAFE: Returns empty/default values if no profile exists
 export function getDashboardOverview(): DashboardOverview {
   const profile = getAthleteProfile()
+  
+  const partialStrengthRecords = getLatestRecords()
+  const strengthRecordsByExercise: Record<ExerciseType, StrengthRecord | null> = {
+    ...emptyStrengthRecords,
+    ...partialStrengthRecords,
+  }
   
   return {
     user: getCurrentUser(),
     // Return empty profile if none exists - dashboard will handle this state
     profile: profile || EMPTY_PROFILE,
     progressions: getSkillProgressions(),
-    strengthRecords: getLatestRecords(),
+    strengthRecords: strengthRecordsByExercise,
     latestProgram: getLatestProgram(),
   }
 }
@@ -329,8 +363,11 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
     
     return {
       goalLabel: adaptiveProgram.goalLabel,
-      daysPerWeek: adaptiveProgram.trainingDaysPerWeek,
-      sessionLength: adaptiveProgram.sessionLength,
+      // [DASHBOARD-NUMBER-COERCION] AdaptiveProgram fields can be
+      // string-ish unions (SessionLength); ProgramSummary owns plain
+      // number. Coerce defensively at the boundary.
+      daysPerWeek: toDashboardNumber(adaptiveProgram.trainingDaysPerWeek),
+      sessionLength: toDashboardNumber(adaptiveProgram.sessionLength),
       createdAt: adaptiveProgram.createdAt,
       hasData: true,
       // TASK C FIX: Additional derived fields
@@ -371,8 +408,9 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
   // Legacy fallback - less rich data
   return {
     goalLabel: GOAL_LABELS[latestProgram.primaryGoal],
-    daysPerWeek: latestProgram.trainingDaysPerWeek,
-    sessionLength: latestProgram.sessionLength,
+    // [DASHBOARD-NUMBER-COERCION] same coercion for legacy fallback.
+    daysPerWeek: toDashboardNumber(latestProgram.trainingDaysPerWeek),
+    sessionLength: toDashboardNumber(latestProgram.sessionLength),
     createdAt: latestProgram.createdAt,
     hasData: true,
     programName: GOAL_LABELS[latestProgram.primaryGoal] + ' Program',

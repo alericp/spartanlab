@@ -15,7 +15,8 @@ import { detectConstraintsSync, type GlobalConstraintResult } from './constraint
 import { getAthleteEnvelopes, getEnvelopeBasedRecommendations, type PerformanceEnvelope } from './performance-envelope-service'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type DeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
-import { analyzeEquipmentProfile, type EquipmentProfile } from './equipment-adaptation-engine'
+  // [EQUIPMENT-TYPE-IMPORT] EquipmentType is the union analyzeEquipmentProfile expects.
+  import { analyzeEquipmentProfile, type EquipmentProfile, type EquipmentType } from './equipment-adaptation-engine'
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { recommendProtocolsForSession, type ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
@@ -448,10 +449,34 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   const equipment = canonical.equipmentAvailable.length > 0
     ? canonical.equipmentAvailable
     : (onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
-  const equipmentProfile = analyzeEquipmentProfile(equipment)
+  // [EQUIPMENT-TYPE-BOUNDARY] canonical/onboarding equipment arrives
+  // as `string[]`; analyzeEquipmentProfile owns the EquipmentType
+  // union. Project at this single boundary instead of widening callers.
+  const typedEquipment = equipment as unknown as EquipmentType[]
+  const equipmentProfile = analyzeEquipmentProfile(typedEquipment)
   
+  // [INFER-STYLE-PROJECTION] inferStyleFromOnboarding owns a narrow
+  // input shape ({ primaryOutcome, workoutDuration, trainingAge }).
+  // OnboardingProfile + persisted-doc legacy slice may both ship those
+  // fields but with looser types; project here at the boundary.
+  const onboardingLooseForStyle = onboarding as unknown as {
+    primaryOutcome?: unknown
+    workoutDuration?: unknown
+    trainingAge?: unknown
+  } | null | undefined
+  const onboardingForStyle = {
+    primaryOutcome: typeof onboardingLooseForStyle?.primaryOutcome === 'string'
+      ? onboardingLooseForStyle.primaryOutcome
+      : undefined,
+    workoutDuration: typeof onboardingLooseForStyle?.workoutDuration === 'string'
+      ? onboardingLooseForStyle.workoutDuration
+      : undefined,
+    trainingAge: typeof onboardingLooseForStyle?.trainingAge === 'number'
+      ? onboardingLooseForStyle.trainingAge
+      : undefined,
+  }
   // Determine training style - prefer DB, then infer from onboarding
-  const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboarding || {})
+  const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboardingForStyle)
   const stylePriorities = styleProfileFromDb 
     ? {
         skill: styleProfileFromDb.skillPriority,
@@ -495,7 +520,15 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     heightCm: canonical.height || onboardingLegacy?.heightCm || null,
     weightKg: canonical.bodyweight || onboardingLegacy?.weightKg || null,
     bodyFatPercent: onboarding?.bodyFatPercent || null,
-    trainingAge: onboardingLegacy?.trainingAge || 1,
+    // [TRAINING-AGE-NUMBER-COERCION] AthleteContext.trainingAge is
+    // `number`; legacy onboarding slice may ship `string | number`.
+    trainingAge: typeof onboardingLegacy?.trainingAge === 'number'
+      ? onboardingLegacy.trainingAge
+      : typeof onboardingLegacy?.trainingAge === 'string'
+        ? Number.isFinite(Number(onboardingLegacy.trainingAge))
+          ? Number(onboardingLegacy.trainingAge)
+          : 1
+        : 1,
     // CANONICAL FIX: Use canonical goals
     primaryGoal,
     primaryGoalLabel: getGoalLabel(primaryGoal),
@@ -509,7 +542,10 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
       }
       // Only fallback for legacy users without canonical data
       console.log('[UnifiedCoaching] FALLBACK: trainingDaysPerWeek using onboarding fallback')
-      return onboarding?.trainingDaysPerWeek || 3
+      // [TRAINING-DAYS-NUMBER-COERCION] OnboardingProfile.trainingDaysPerWeek
+      // is `2|3|4|5|6|7|'flexible'|null`; AthleteContext owns plain `number`.
+      const fallbackDays = onboarding?.trainingDaysPerWeek
+      return typeof fallbackDays === 'number' ? fallbackDays : 3
     })(),
     sessionDurationMinutes: (() => {
       // ISSUE A FIX: Prefer canonical, only fallback when truly absent
@@ -776,18 +812,20 @@ async function buildFatigueContext(
     30
   )
   
-  // Determine fatigue level
-  const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+  // [QUICK-FATIGUE-WRAPPER-UNWRAP] getQuickFatigueDecision returns
+  // { decision, shortGuidance, needsAttention } — downstream APIs
+  // expect just the TrainingDecision literal.
+  const fatigueLevel = determineFatigueLevel(trainingDecision.decision, deloadRecommendation)
   
   // Calculate session adjustments
-  const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+  const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision.decision)
   
   return {
     fatigueLevel,
     recoveryLevel: recoverySignal.level,
     recoveryScore: recoverySignal.score,
     deloadRecommendation,
-    trainingDecision,
+    trainingDecision: trainingDecision.decision,
     requiresDeload: deloadRecommendation?.shouldDeload || false,
     sessionAdjustments,
   }

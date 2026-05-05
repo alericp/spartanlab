@@ -828,7 +828,9 @@ export async function detectConstraints(
     recommendation: fatigueDecision.shortGuidance,
   }
   
-  // Detect constraints for each skill
+  // [SKILL-RECORD-IRON-CROSS] SkillType union owns 'iron_cross';
+  // Record<SkillType, ...> must include the key. Initialize null so
+  // it remains a sentinel when iron_cross is not in the active list.
   const skillResults: Record<SkillType, SkillConstraintResult | null> = {
     front_lever: null,
     back_lever: null,
@@ -836,6 +838,7 @@ export async function detectConstraints(
     hspu: null,
     muscle_up: null,
     l_sit: null,
+    iron_cross: null,
   }
   
   const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit']
@@ -969,6 +972,9 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
   }
   
   // Initialize skill results (without readiness data - will use profile-based scoring)
+  // [SKILL-RECORD-IRON-CROSS] include iron_cross to satisfy
+  // Record<SkillType, ...> completeness; default null (no profile
+  // scoring path defined for iron_cross yet).
   const skillResults: Record<SkillType, SkillConstraintResult | null> = {
     front_lever: detectSkillConstraints('front_lever', null, profile),
     back_lever: detectSkillConstraints('back_lever', null, profile),
@@ -976,6 +982,7 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
     hspu: detectSkillConstraints('hspu', null, profile),
     muscle_up: detectSkillConstraints('muscle_up', null, profile),
     l_sit: detectSkillConstraints('l_sit', null, profile),
+    iron_cross: null,
   }
   
   // Determine global constraints

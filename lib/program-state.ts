@@ -168,6 +168,14 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         // "metadata incomplete, defer to exercise-level truth" to downstream
         // consumers. Overriding with ['straight_sets'] would lie about intent.
         structureDescription: existingMeta.structureDescription || '',
+        // [STYLE-METADATA-CONTRACT-FIELDS] target type owns
+        // primaryStyle, rejectedMethods, hasCircuitsApplied,
+        // hasDensityApplied; default conservatively rather than
+        // letting the spread leave them missing.
+        primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+        rejectedMethods: existingMeta.rejectedMethods ?? [],
+        hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+        hasDensityApplied: existingMeta.hasDensityApplied ?? false,
       },
     }
   }
@@ -208,6 +216,12 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       // straight-fallback path.
       appliedMethods: (['straight_sets'] as unknown as typeof existingMeta.appliedMethods),
       structureDescription: existingMeta.structureDescription || '',
+      // [STYLE-METADATA-CONTRACT-FIELDS] same contract fields for the
+      // no-truth straight fallback.
+      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+      rejectedMethods: existingMeta.rejectedMethods ?? [],
+      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
     },
   }
 }
@@ -1295,13 +1309,16 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
           ? program.engineContext.recommendations 
           : [],
       } : undefined,
-      equipmentProfile: program.equipmentProfile ? {
-        ...DEFAULT_EQUIPMENT_PROFILE,
-        ...program.equipmentProfile,
-        adaptationNotes: Array.isArray(program.equipmentProfile.adaptationNotes)
-          ? program.equipmentProfile.adaptationNotes
-          : [],
-      } : undefined,
+    // [EQUIPMENT-PROFILE-REQUIRED] target type owns EquipmentProfile,
+    // not optional; fall through to DEFAULT_EQUIPMENT_PROFILE so this
+    // never collapses to undefined.
+    equipmentProfile: {
+      ...DEFAULT_EQUIPMENT_PROFILE,
+      ...(program.equipmentProfile || {}),
+      adaptationNotes: Array.isArray(program.equipmentProfile?.adaptationNotes)
+        ? program.equipmentProfile.adaptationNotes
+        : [],
+    },
       
     // [PHASE-X] Ensure sessions array exists and normalize each session
     // This prevents downstream crashes from malformed session data
@@ -1465,17 +1482,29 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       },
       
       // currentWorkingProgressions - Required for progression truth display
-      currentWorkingProgressions: program.currentWorkingProgressions ?? {
-        planche: null,
-        frontLever: null, 
-        hspu: null,
-        backLever: null,
-        muscleUp: null,
-        lSit: null,
+    // [CURRENT-WORKING-PROGRESSIONS-NESTED-SHAPE] target type expects
+    // nested objects per skill, not raw `null` slots. Default to a
+    // safe empty entry shape so this fallback satisfies the contract.
+    currentWorkingProgressions: program.currentWorkingProgressions ?? (() => {
+      const emptyWorkingProgression = {
+        currentWorkingProgression: null,
+        historicalCeiling: null,
+        truthSource: 'fallback',
+        truthNote: null,
+        isConservative: false,
+      }
+      return {
+        planche: { ...emptyWorkingProgression },
+        frontLever: { ...emptyWorkingProgression },
+        hspu: { ...emptyWorkingProgression },
+        backLever: { ...emptyWorkingProgression },
+        muscleUp: { ...emptyWorkingProgression },
+        lSit: { ...emptyWorkingProgression },
         resolvedAt: null,
         anyConservativeStart: false,
-      },
-    }
+      }
+    })(),
+  }
     
     // [CONTRACT NORMALIZATION] Log when missing fields were normalized
     const missingFields: string[] = []

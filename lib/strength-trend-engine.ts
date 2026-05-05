@@ -252,10 +252,15 @@ export function calculateAllTrends(
  * Format exercise name for display
  */
 function formatExerciseName(exercise: ExerciseType): string {
+  // [EXERCISE-TYPE-RECORD-COMPLETION] cover all ExerciseType keys.
   const names: Record<ExerciseType, string> = {
     weighted_pull_up: 'weighted pull-up',
     weighted_dip: 'weighted dip',
     weighted_muscle_up: 'weighted muscle-up',
+    conventional_deadlift: 'conventional deadlift',
+    sumo_deadlift: 'sumo deadlift',
+    romanian_deadlift: 'romanian deadlift',
+    trap_bar_deadlift: 'trap bar deadlift',
   }
   return names[exercise]
 }

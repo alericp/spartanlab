@@ -67,6 +67,13 @@ const TIER_THRESHOLDS: Record<ExerciseType, TierThresholds> = {
     advanced: 0.45,    // +45% BW
     elite: 0.60,       // +60% BW
   },
+  // [EXERCISE-TYPE-RECORD-COMPLETION] Deadlift variants use total-load
+  // ratios; these thresholds are conservative scaffolding so the
+  // record stays exhaustive without misleading tier labels.
+  conventional_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
+  sumo_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
+  romanian_deadlift: { novice: 0.8, developing: 1.2, strong: 1.6, advanced: 2.0, elite: 2.4 },
+  trap_bar_deadlift: { novice: 1.0, developing: 1.5, strong: 2.0, advanced: 2.5, elite: 3.0 },
 }
 
 const TIER_LABELS: Record<RelativeStrengthTier, string> = {
@@ -203,6 +210,27 @@ export const EXERCISE_RELATIVE_INFO: Record<ExerciseType, ExerciseRelativeInfo> 
     name: 'Weighted Muscle-Up',
     supportedSkills: ['Muscle-Up'],
     tipForImprovement: 'Build explosive pull strength and practice the transition at lower weights first.',
+  },
+  // [EXERCISE-TYPE-RECORD-COMPLETION] Hybrid strength info entries.
+  conventional_deadlift: {
+    name: 'Conventional Deadlift',
+    supportedSkills: ['Posterior chain strength', 'Trunk stability'],
+    tipForImprovement: 'Brace bracing-then-pull, drive the floor away, and keep the bar tight to the body.',
+  },
+  sumo_deadlift: {
+    name: 'Sumo Deadlift',
+    supportedSkills: ['Posterior chain strength', 'Hip abduction strength'],
+    tipForImprovement: 'Externally rotate hips, keep chest tall, and push knees out as you drive up.',
+  },
+  romanian_deadlift: {
+    name: 'Romanian Deadlift',
+    supportedSkills: ['Hamstring strength', 'Hip hinge'],
+    tipForImprovement: 'Hinge from hips with neutral spine and stop at end-range hamstring tension.',
+  },
+  trap_bar_deadlift: {
+    name: 'Trap Bar Deadlift',
+    supportedSkills: ['Total-body strength', 'Power transfer'],
+    tipForImprovement: 'Stay tall, drive through mid-foot, and finish with full hip extension.',
   },
 }
 

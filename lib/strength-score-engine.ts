@@ -92,10 +92,16 @@ const SKILL_LABELS: Record<string, string> = {
 
 // Strength level mappings (1RM values in lbs added weight)
 // Based on reasonable calisthenics strength standards
+// [EXERCISE-TYPE-RECORD-COMPLETION] ExerciseType union owns
+// barbell hinge variants; map empty rather than fabricating thresholds.
 const STRENGTH_LEVEL_MAPPINGS: Record<ExerciseType, Record<number, number>> = {
   weighted_pull_up: { 0: 15, 25: 35, 45: 55, 70: 75, 90: 90, 115: 100 },
   weighted_dip: { 0: 10, 35: 30, 55: 50, 80: 70, 100: 85, 135: 100 },
   weighted_muscle_up: { 0: 30, 15: 55, 30: 75, 50: 90, 70: 100 },
+  conventional_deadlift: {},
+  sumo_deadlift: {},
+  romanian_deadlift: {},
+  trap_bar_deadlift: {},
 }
 
 // Strength names for display
@@ -103,6 +109,10 @@ const STRENGTH_LABELS: Record<ExerciseType, string> = {
   weighted_pull_up: 'Weighted Pull-Up',
   weighted_dip: 'Weighted Dip',
   weighted_muscle_up: 'Weighted Muscle-Up',
+  conventional_deadlift: 'Conventional Deadlift',
+  sumo_deadlift: 'Sumo Deadlift',
+  romanian_deadlift: 'Romanian Deadlift',
+  trap_bar_deadlift: 'Trap Bar Deadlift',
 }
 
 // Normalize a 1RM value against the strength mapping

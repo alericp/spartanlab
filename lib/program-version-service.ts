@@ -335,6 +335,14 @@ export async function createInputSnapshot(
       trainingAge: context.athlete.trainingAge,
       bodyWeight: context.athlete.weightKg,
     },
+    // [FRAMEWORK-SNAPSHOT-REQUIRED] ProgramInputSnapshot owns
+    // frameworkSnapshot; default to null fields when context.framework
+    // is unavailable to satisfy the contract.
+    frameworkSnapshot: {
+      selectedFramework: (context as unknown as { framework?: { selectedFramework?: string | null } })?.framework?.selectedFramework ?? null,
+      frameworkWeek: (context as unknown as { framework?: { frameworkWeek?: number | null } })?.framework?.frameworkWeek ?? null,
+      selectionReason: (context as unknown as { framework?: { selectionReason?: string | null } })?.framework?.selectionReason ?? null,
+    },
     skillStateSnapshot: {
       // [SKILL-STATE-SNAPSHOT-STRINGS] snapshot expects string fields;
       // upstream skill/currentLevel may be number-coded enums.
@@ -650,13 +658,14 @@ export async function regenerateProgramIfNeeded(
   // Build a minimal program-like object for the history versioning system
   // [PROGRAM-FOR-HISTORY-INDEXED-CASTS] coerce athlete-context primitives
   // to the AdaptiveProgram literal unions at this snapshot boundary.
+  // [PROGRAM-FOR-HISTORY-FIELDS-CURRENT] AdaptiveProgram no longer
+  // owns sessionLengthMinutes or equipment; only sessionLength
+  // survives. Drop the stale keys instead of fabricating shape.
   const programForHistory: Partial<AdaptiveProgram> = {
     primaryGoal: context.athlete.primaryGoal as AdaptiveProgram['primaryGoal'],
     goalLabel: summary.primaryGoal,
     trainingDaysPerWeek: context.athlete.trainingDaysPerWeek as AdaptiveProgram['trainingDaysPerWeek'],
-    sessionLengthMinutes: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLengthMinutes'],
     sessionLength: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLength'],
-    equipment: context.athlete.equipment as unknown as AdaptiveProgram['equipment'],
     styleMode: context.athlete.trainingStyle,
     constraintFocus: context.constraints.primaryConstraint,
     primaryConstraint: context.constraints.primaryConstraint,

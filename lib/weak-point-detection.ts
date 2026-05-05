@@ -81,6 +81,26 @@ const FOCUS_LABELS: Record<DevelopmentFocus, string> = {
 // DETECTION HELPERS
 // =============================================================================
 
+// [DETECTION-BENCHMARK-DUAL-SHAPE] Two distinct WeightedBenchmark shapes
+// flow into weak-point detection: athlete-profile uses `{load, unit, reps?}`
+// while canonical-profile-service persists `{addedWeight, reps, unit?}`.
+// Normalize both to the scorer-side `{load, reps?}` so downstream
+// estimators can stay narrow without each call site casting.
+const normalizeDetectionBenchmark = (
+  benchmark: unknown,
+): { load: number | null; reps?: number } | null => {
+  if (!benchmark || typeof benchmark !== 'object') return null
+  const record = benchmark as { load?: unknown; addedWeight?: unknown; reps?: unknown }
+  const load =
+    typeof record.load === 'number'
+      ? record.load
+      : typeof record.addedWeight === 'number'
+        ? record.addedWeight
+        : null
+  const reps = typeof record.reps === 'number' ? record.reps : undefined
+  return reps !== undefined ? { load, reps } : { load }
+}
+
 /**
  * Estimate pull strength score (0-100)
  * TASK 3: Enhanced to accept canonical benchmark data
@@ -444,8 +464,13 @@ export function detectWeakPoints(): WeakPointSummary {
     dipMax: benchmarks.dipMax,
     // [WEIGHTED-BENCHMARK-ADDED-WEIGHT] WeightedBenchmark exposes
     // `addedWeight`/`reps`; legacy `.load` was renamed.
-    weightedPullUp: benchmarks.weightedPullUp?.addedWeight ?? 'none',
-    weightedDip: benchmarks.weightedDip?.addedWeight ?? 'none',
+    // [DETECTION-BENCHMARK-DUAL-SHAPE] benchmarks.weightedPullUp can
+    // be either canonical-profile-service's `{addedWeight,...}` or
+    // athlete-profile's `{load,...}`. Read both keys via the dual-shape
+    // normalizer so the audit log surfaces the actual weight regardless
+    // of source.
+    weightedPullUp: normalizeDetectionBenchmark(benchmarks.weightedPullUp)?.load ?? 'none',
+    weightedDip: normalizeDetectionBenchmark(benchmarks.weightedDip)?.load ?? 'none',
     frontLeverProgression: benchmarks.frontLeverProgression,
     plancheProgression: benchmarks.plancheProgression,
     jointCautions: benchmarks.jointCautions?.length || 0,
@@ -470,14 +495,18 @@ export function detectWeakPoints(): WeakPointSummary {
   }
   
   // TASK 3: Calculate strength scores using unified canonical benchmarks
+  // [DETECTION-BENCHMARK-DUAL-SHAPE] estimatePull/PushStrengthScore
+  // expect `{ load: number | null; reps?: number } | null`; the
+  // benchmark sources ship with mixed `load`/`addedWeight` keys.
+  // Normalize at the call site so the scorers stay narrow.
   const pullScore = estimatePullStrengthScore(profile, {
     pullUpMax: benchmarks.pullUpMax,
-    weightedPullUp: benchmarks.weightedPullUp,
+    weightedPullUp: normalizeDetectionBenchmark(benchmarks.weightedPullUp),
   })
   const pushScore = estimatePushStrengthScore(profile, {
     dipMax: benchmarks.dipMax,
     pushUpMax: benchmarks.pushUpMax,
-    weightedDip: benchmarks.weightedDip,
+    weightedDip: normalizeDetectionBenchmark(benchmarks.weightedDip),
   })
   const coreScore = estimateCoreStrengthScore(profile, calibration)
   const { score: flexScore, limitedAreas: flexLimitedAreas } = estimateFlexibilityScore(profile)

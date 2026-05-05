@@ -1371,7 +1371,12 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
   // ISSUE A FIX: Do not fallback to 4 - preserve the actual canonical value
   // Only use the value if explicitly set, never inject defaults during save
-  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+  // [TRAINING-DAYS-NULL-TO-UNDEFINED] CanonicalProgrammingProfile owns
+  // `trainingDaysPerWeek: number | null` (null = flexible baseline) but
+  // AthleteProfile['trainingDaysPerWeek'] is the narrower number-or-undefined
+  // literal union. Coerce null -> undefined at the boundary so the
+  // partial assignment does not widen AthleteProfile.
+  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? undefined
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
   // ISSUE A/B FIX: sessionDurationMode - store in athlete profile for downstream consumption
   if (updates.sessionDurationMode !== undefined) {

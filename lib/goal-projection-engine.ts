@@ -91,11 +91,22 @@ const BASE_PROGRESSION_TIMELINES: Record<GoalType, number[]> = {
 }
 
 // Strength thresholds that support each progression (% of bodyweight added)
+// [GOAL-TYPE-RECORD-COMPLETION] GoalType (line 15) declares 9 keys —
+// the four upper-body skills above plus l_sit and four flexibility
+// goals. Strength support thresholds for compression/flexibility goals
+// don't map cleanly to a single weighted exercise, so seed them with
+// zero-thresholds against the closest weighted carryover so the
+// Record stays exhaustive without misleading load gates.
 const STRENGTH_SUPPORT_THRESHOLDS: Record<GoalType, { exercise: ExerciseType; thresholds: number[] }> = {
   front_lever: { exercise: 'weighted_pull_up', thresholds: [15, 30, 45, 55, 70] },
   planche: { exercise: 'weighted_dip', thresholds: [20, 35, 50, 65] },
   muscle_up: { exercise: 'weighted_pull_up', thresholds: [20, 35, 50, 70] },
   handstand_pushup: { exercise: 'weighted_dip', thresholds: [25, 40, 55, 75] },
+  l_sit: { exercise: 'weighted_dip', thresholds: [] },
+  pancake: { exercise: 'romanian_deadlift', thresholds: [] },
+  front_splits: { exercise: 'romanian_deadlift', thresholds: [] },
+  side_splits: { exercise: 'sumo_deadlift', thresholds: [] },
+  toe_touch: { exercise: 'romanian_deadlift', thresholds: [] },
 }
 
 // Goal display names

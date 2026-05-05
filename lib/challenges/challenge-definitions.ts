@@ -1167,6 +1167,10 @@ export const CHALLENGE_CATEGORY_LABELS: Record<ChallengeCategory, string> = {
 }
 
 // Goal type labels for display
+// [CHALLENGE-GOAL-TYPE-RECORD-COMPLETION] ChallengeGoalType union
+// (lines 7-19) declares 12 keys; this Record was missing the six
+// strength/skill/timed/h2h variants. Fill in display labels so every
+// challenge type renders without falling through to undefined.
 export const GOAL_TYPE_LABELS: Record<ChallengeGoalType, string> = {
   workout_count: 'Workouts',
   rep_total: 'Reps',
@@ -1174,4 +1178,10 @@ export const GOAL_TYPE_LABELS: Record<ChallengeGoalType, string> = {
   skill_sessions: 'Skill Sessions',
   training_minutes: 'Minutes',
   exercise_count: 'Exercises',
+  skill_milestone: 'Skill Milestone',
+  strength_reps: 'Strength Reps',
+  weighted_strength: 'Weighted Strength',
+  timed_max_reps: 'Timed Max Reps',
+  hold_time: 'Hold Time',
+  h2h_challenge: 'Head-to-Head',
 }

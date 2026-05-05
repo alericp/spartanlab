@@ -18,6 +18,23 @@ import type { CanonicalProgrammingProfile } from './canonical-profile-service'
 import type { AdaptiveProgram, AdaptiveProgramInputs } from './adaptive-program-builder'
 
 // =============================================================================
+// LOCAL NUMERIC COERCION
+// =============================================================================
+// [AUDIT-NUMBER-COERCION] AdaptiveProgram-side fields like `sessionLength`
+// can ship as a string union ('45-60') for flexible-duration profiles
+// while the audit contract carries plain numbers. Centralize the
+// number-or-fallback coercion so audit fields stay strictly numeric
+// without depending on caller-side normalization.
+const toAuditNumber = (value: unknown, fallback = 60): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  return fallback
+}
+
+// =============================================================================
 // TRUTH FIELD DEFINITIONS
 // =============================================================================
 
@@ -810,7 +827,11 @@ export function buildProgramTruthExplanation(
     frequencyAdaptationReason: program.flexibleFrequencyRootCause?.reasonDetails || null,
     
     durationModeUsed: program.sessionDurationMode || 'static',
-    durationTargetUsed: program.sessionLength || 60,
+    // [DURATION-TARGET-NUMBER-COERCION] program.sessionLength may be a
+    // string union (e.g. '45-60') for flexible-duration mode while the
+    // audit field is plain number. Coerce through a local guard so the
+    // truth audit doesn't carry a stringly-typed minute target.
+    durationTargetUsed: toAuditNumber(program.sessionLength, 60),
     
     experienceLevelUsed: program.experienceLevel || profile?.experienceLevel || 'intermediate',
     equipmentUsed: program.equipmentProfile?.available || profile?.equipmentAvailable || [],

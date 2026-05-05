@@ -851,6 +851,39 @@ export const MOVEMENT_FAMILY_METADATA: Record<MovementFamily, MovementFamilyMeta
     typicalIntents: ['strength', 'durability'],
     skillTransfers: ['one_arm_pull_up', 'front_lever'],
   },
+  // [MOVEMENT-FAMILY-RECORD-COMPLETION] These three families exist in
+  // the MovementFamily union (rings_stability/rings_strength on line
+  // 50-51, hypertrophy_accessory on line 57) but were missing from the
+  // metadata Record. Fill in canonical descriptors so consumers
+  // (program builder, exercise-classification-registry) can resolve a
+  // metadata entry for every family literal.
+  rings_stability: {
+    id: 'rings_stability',
+    name: 'Rings Stability',
+    description: 'Ring support, stabilization, and control work under unstable support.',
+    primaryMuscles: ['shoulders', 'chest', 'triceps', 'scapular_stabilizers'],
+    relatedFamilies: ['rings_strength', 'joint_integrity', 'scapular_control'],
+    typicalIntents: ['skill', 'strength'],
+    skillTransfers: ['muscle_up', 'iron_cross'],
+  },
+  rings_strength: {
+    id: 'rings_strength',
+    name: 'Rings Strength',
+    description: 'Strength work performed on rings requiring stabilization and joint control.',
+    primaryMuscles: ['chest', 'back', 'shoulders', 'triceps', 'biceps'],
+    relatedFamilies: ['rings_stability', 'straight_arm_pull', 'straight_arm_push'],
+    typicalIntents: ['skill', 'strength', 'hypertrophy'],
+    skillTransfers: ['muscle_up', 'iron_cross', 'front_lever', 'back_lever'],
+  },
+  hypertrophy_accessory: {
+    id: 'hypertrophy_accessory',
+    name: 'Hypertrophy Accessory',
+    description: 'Accessory work used to build muscle, address weak points, and support primary skills.',
+    primaryMuscles: ['arms', 'shoulders', 'chest', 'back', 'legs'],
+    relatedFamilies: ['arm_isolation', 'shoulder_isolation', 'joint_integrity'],
+    typicalIntents: ['hypertrophy', 'strength'],
+    skillTransfers: [],
+  },
 }
 
 // =============================================================================
@@ -956,6 +989,24 @@ export const SKILL_CARRYOVER_METADATA: Record<SkillCarryover, SkillCarryoverMeta
     primaryFamilies: ['anti_extension_core', 'compression_core'],
     supportFamilies: ['scapular_control', 'vertical_pull'],
     keyIntents: ['strength', 'skill'],
+  },
+  // [SKILL-CARRYOVER-RECORD-COMPLETION] i_sit and planche_push_up are
+  // declared in the SkillCarryover union (lines 93 and 100) but were
+  // missing from this metadata Record. Fill in canonical primary /
+  // support family mappings so Record<SkillCarryover,...> is complete.
+  i_sit: {
+    id: 'i_sit',
+    name: 'I-Sit',
+    primaryFamilies: ['compression_core', 'straight_arm_push'],
+    supportFamilies: ['mobility', 'scapular_control', 'joint_integrity'],
+    keyIntents: ['skill', 'strength'],
+  },
+  planche_push_up: {
+    id: 'planche_push_up',
+    name: 'Planche Push-Up',
+    primaryFamilies: ['straight_arm_push', 'horizontal_push'],
+    supportFamilies: ['compression_core', 'joint_integrity', 'scapular_control'],
+    keyIntents: ['skill', 'strength'],
   },
 }
 

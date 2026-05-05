@@ -335,14 +335,33 @@ export async function createInputSnapshot(
       trainingAge: context.athlete.trainingAge,
       bodyWeight: context.athlete.weightKg,
     },
-    // [FRAMEWORK-SNAPSHOT-REQUIRED] ProgramInputSnapshot owns
-    // frameworkSnapshot; default to null fields when context.framework
-    // is unavailable to satisfy the contract.
-    frameworkSnapshot: {
-      selectedFramework: (context as unknown as { framework?: { selectedFramework?: string | null } })?.framework?.selectedFramework ?? null,
-      frameworkWeek: (context as unknown as { framework?: { frameworkWeek?: number | null } })?.framework?.frameworkWeek ?? null,
-      selectionReason: (context as unknown as { framework?: { selectionReason?: string | null } })?.framework?.selectionReason ?? null,
-    },
+    // [FRAMEWORK-SNAPSHOT-REQUIRED] ProgramInputSnapshot.frameworkSnapshot
+    // is `{ frameworkId; frameworkName; confidenceScore; selectionReason } | null`.
+    // Project the loose context.framework shape onto those required
+    // string/number fields, falling back to safe sentinels.
+    frameworkSnapshot: ((): {
+      frameworkId: string
+      frameworkName: string
+      confidenceScore: number
+      selectionReason: string
+    } | null => {
+      const framework = (context as unknown as {
+        framework?: {
+          frameworkId?: string | null
+          frameworkName?: string | null
+          selectedFramework?: string | null
+          confidenceScore?: number | null
+          selectionReason?: string | null
+        }
+      })?.framework
+      if (!framework) return null
+      return {
+        frameworkId: framework.frameworkId ?? framework.selectedFramework ?? 'unknown',
+        frameworkName: framework.frameworkName ?? framework.selectedFramework ?? 'unknown',
+        confidenceScore: framework.confidenceScore ?? 0,
+        selectionReason: framework.selectionReason ?? 'unknown',
+      }
+    })(),
     skillStateSnapshot: {
       // [SKILL-STATE-SNAPSHOT-STRINGS] snapshot expects string fields;
       // upstream skill/currentLevel may be number-coded enums.
@@ -666,7 +685,9 @@ export async function regenerateProgramIfNeeded(
     goalLabel: summary.primaryGoal,
     trainingDaysPerWeek: context.athlete.trainingDaysPerWeek as AdaptiveProgram['trainingDaysPerWeek'],
     sessionLength: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLength'],
-    styleMode: context.athlete.trainingStyle,
+    // [PARTIAL-ADAPTIVE-PROGRAM-NO-STYLE-MODE] Canonical AdaptiveProgram
+    // does not own a `styleMode` property; training style truth lives
+    // on the program's styleMetadata / trainingMethodPreferences.
     constraintFocus: context.constraints.primaryConstraint,
     primaryConstraint: context.constraints.primaryConstraint,
     experienceLevel: 'intermediate',

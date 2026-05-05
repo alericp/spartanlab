@@ -474,6 +474,12 @@ export function attachTruthExplanation(
       materializationVerdict: program.materializationVerdict || null,
       // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
       dbTruthWinnerSummary,
+      // [SESSION-STYLE-MATERIALIZATION-CONTRACT] truthExplanation owns
+      // these required fields; default to "not materially applied" so
+      // the contract is satisfied without inventing fake adjustment
+      // reasoning.
+      sessionStyleMateriallyApplied: false,
+      sessionStyleAdjustmentReason: null,
       // [TRUTH-EXPLANATION-NO-AUTHORITATIVE-CONTRACT] truthExplanation
       // shape no longer carries authoritativeMultiSkillIntentContract;
       // the canonical multi-skill intent lives elsewhere now.

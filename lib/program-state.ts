@@ -98,7 +98,37 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     structureDescription?: string
     appliedMethods?: TrainingMethodPreference[] | string[]
     primaryStyle?: TrainingMethodPreference
-    rejectedMethods?: TrainingMethodPreference[]
+    // [REJECTED-METHODS-LEGACY-SHAPES] Canonical contract carries
+    // `Array<{ method; reason }>`; legacy persisted shapes may still
+    // hold a flat `TrainingMethodPreference[]` or `string[]`.
+    rejectedMethods?:
+      | TrainingMethodPreference[]
+      | string[]
+      | Array<{ method: string; reason: string }>
+  }
+
+  // [REJECTED-METHODS-NORMALIZER] Canonical styleMetadata expects
+  // `rejectedMethods: Array<{ method; reason }>`. Legacy data is a
+  // bare string[] / TrainingMethodPreference[]; promote those entries
+  // to the structured shape with a sensible default reason so the
+  // contract is satisfied without widening the canonical type.
+  const normalizeRejectedMethodEntries = (
+    methods:
+      | TrainingMethodPreference[]
+      | string[]
+      | Array<{ method: string; reason: string }>
+      | undefined,
+  ): Array<{ method: string; reason: string }> => {
+    if (!Array.isArray(methods)) return []
+    return methods.map((entry) => {
+      if (typeof entry === 'object' && entry !== null && 'method' in entry && 'reason' in entry) {
+        return entry as { method: string; reason: string }
+      }
+      return {
+        method: String(entry),
+        reason: 'not_selected_or_not_applicable',
+      }
+    })
   }
 
   // [APPLIED-METHODS-NORMALIZER] Filter unknown method strings down
@@ -143,6 +173,13 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         // TrainingMethodPreference[]; normalize legacy string[] data
         // through the local guard rather than casting through unknown.
         appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+        // [STYLE-METADATA-CONTRACT-FIELDS] target type owns these
+        // fields; default conservatively rather than letting the
+        // spread leave them missing.
+        primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+        rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+        hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+        hasDensityApplied: existingMeta.hasDensityApplied ?? false,
       },
     }
   }
@@ -211,7 +248,7 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         // hasDensityApplied; default conservatively rather than
         // letting the spread leave them missing.
         primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
-        rejectedMethods: existingMeta.rejectedMethods ?? [],
+        rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
         hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
         hasDensityApplied: existingMeta.hasDensityApplied ?? false,
       },
@@ -258,7 +295,7 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       // [STYLE-METADATA-CONTRACT-FIELDS] same contract fields for the
       // no-truth straight fallback.
       primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
-      rejectedMethods: existingMeta.rejectedMethods ?? [],
+      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
       hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
       hasDensityApplied: existingMeta.hasDensityApplied ?? false,
     },
@@ -1510,23 +1547,11 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
         weekNumber: 1,
       }) as unknown as NonNullable<AdaptiveProgram['weeklyRepresentation']>,
       
-      // [PROGRAM-STATE-MATERIAL-SKILL-INTENT-OWNER] Canonical
-      // `AdaptiveProgram` (lib/adaptive-program-builder.ts L2053) does
-      // not own `materialSkillIntent` directly — it lives on the
-      // `multiSkillMaterialityContract` carried separately. Bridge
-      // through `unknown` so the legacy display contract still
-      // surfaces a stable shape without TS2339.
-      materialSkillIntent: ((program as unknown as { materialSkillIntent?: {
-        primarySkills: string[]
-        secondarySkills: string[]
-        methodsUsed: string[]
-        emphasis: string
-      } }).materialSkillIntent) ?? {
-        primarySkills: [],
-        secondarySkills: [],
-        methodsUsed: [],
-        emphasis: 'general',
-      },
+      // [PROGRAM-STATE-NO-TOP-LEVEL-MATERIAL-SKILL-INTENT] Canonical
+      // `AdaptiveProgram` does not own `materialSkillIntent` at the
+      // top level — equivalent truth lives on the carried
+      // `multiSkillMaterialityContract`. Do not re-emit a top-level
+      // field here.
       
       // currentWorkingProgressions - Required for progression truth display
     // [CURRENT-WORKING-PROGRESSIONS-NESTED-SHAPE] target type expects

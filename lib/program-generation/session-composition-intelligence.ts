@@ -20,7 +20,10 @@
 
 import type { DayStructure, DayFocus } from '../program-structure-engine'
 import type { ExperienceLevel, SessionLength, PrimaryGoal } from '../program-service'
-import type { EquipmentType } from '../equipment'
+// [EQUIPMENT-TYPE-CANONICAL-IMPORT] EquipmentType is owned by the
+// adaptive exercise pool; there is no separate `lib/equipment.ts` in
+// this codebase.
+import type { EquipmentType } from '../adaptive-exercise-pool'
 import type { SessionArchitectureTruthContract } from '../session-architecture-truth'
 import type { DoctrineRuntimeContract } from '../doctrine-runtime-contract'
 // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role.

@@ -329,8 +329,14 @@ export function deriveMethodMaterializationSummary(
   // orphaned methods. Drop any method from the orphan list that ended up with
   // a real count via fallback (so we don't lie either way).
   const orphanedStyledGroupMethods: string[] = []
+  // [GROUPED-METHOD-COUNTS-KEY-GUARD] groupedMethodCounts is keyed by
+  // a closed union of method names; orphanedMethodSet is `Set<string>`.
+  // Narrow the key to the union before indexing instead of trusting a
+  // raw string.
   for (const m of orphanedMethodSet) {
-    if (groupedMethodCounts[m] === 0) orphanedStyledGroupMethods.push(m)
+    if (m === 'superset' || m === 'circuit' || m === 'density_block' || m === 'cluster') {
+      if (groupedMethodCounts[m] === 0) orphanedStyledGroupMethods.push(m)
+    }
   }
 
   // -------------------------------------------------------------------------

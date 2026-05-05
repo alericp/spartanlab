@@ -699,8 +699,10 @@ function scoreEquipmentFit(
   
   const requiredEquipment = exercise.equipment || []
   
-  // No equipment needed - good for minimalist
-  if (requiredEquipment.length === 0 || requiredEquipment.includes('none')) {
+  // [NO-EQUIPMENT-CHECK] EquipmentType union does not include `'none'`;
+  // bodyweight-only exercises register with an empty equipment array
+  // or a `'floor'` entry instead.
+  if (requiredEquipment.length === 0 || requiredEquipment.includes('floor')) {
     if (context.trainingStyle === 'minimalist') {
       score = 15
       notes.push('Bodyweight-only matches minimalist style')
@@ -1080,7 +1082,10 @@ export function buildExerciseSelectionMaterialityContext(
   }
 ): ExerciseMaterialityContext {
   // Detect training style from equipment if not provided
-  const hasWeightedEquipment = equipmentAvailable.includes('weighted_belt') ||
+  // [WEIGHTED-EQUIPMENT-CANONICAL] EquipmentType uses `'weights'` for
+  // any weighted-belt / dumbbell / plate equipment; legacy
+  // `'weighted_belt'` is no longer in the union.
+  const hasWeightedEquipment = equipmentAvailable.includes('weights') ||
                                equipmentAvailable.includes('dumbbells' as EquipmentType) ||
                                equipmentAvailable.includes('weight_plates' as EquipmentType)
   

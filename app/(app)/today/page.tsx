@@ -775,12 +775,24 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
                   },
                 },
                 hydrate: ({ id, name }) => {
-                  const ex =
-                    exerciseMap.get(id) ||
-                    (typeof name === 'string'
+                  // [PHASE AB5 - HYDRATE TYPE GUARD] The shared resolver
+                  // contract allows `id` to be `string | undefined`, but
+                  // `exerciseMap` is `Map<string, AdaptiveExercise>` and
+                  // therefore `.get()` only accepts `string`. Narrow both
+                  // lookup keys before calling `.get()` instead of casting
+                  // — this preserves resolver type strictness and never
+                  // allows a non-string key into the map. Returns the
+                  // first non-null hit, or `null` for the resolver to
+                  // record as an unbound (orphan) member.
+                  const byId =
+                    typeof id === 'string' && id.trim().length > 0
+                      ? exerciseMap.get(id)
+                      : undefined
+                  const byName =
+                    typeof name === 'string' && name.trim().length > 0
                       ? exerciseMap.get(name.toLowerCase())
-                      : undefined)
-                  return ex ?? null
+                      : undefined
+                  return byId ?? byName ?? null
                 },
               })
 

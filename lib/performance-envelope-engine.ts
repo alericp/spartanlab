@@ -952,6 +952,8 @@ function createConservativeEnvelope(
     endurance: { min: 12, max: 20, zone: 'endurance' },
     power: { min: 1, max: 3, zone: 'strength_low' },
     mobility: { min: 1, max: 1, zone: 'strength_low' },
+    durability: { min: 8, max: 15, zone: 'endurance' },
+    general: { min: 6, max: 12, zone: 'hypertrophy' },
     // [CONDITIONING-MAPS-TO-ENDURANCE] TrainingGoalType has no
     // `conditioning` literal; circuit/conditioning rep ranges are
     // already covered by the `endurance` entry above. Stale key removed.

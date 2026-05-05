@@ -122,14 +122,17 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       | string[]
       | Array<{ method: string; reason: string }>
       | undefined,
-  ): Array<{ method: string; reason: string }> => {
+  ): Array<{ method: TrainingMethodPreference; reason: string }> => {
     if (!Array.isArray(methods)) return []
     return methods.map((entry) => {
       if (typeof entry === 'object' && entry !== null && 'method' in entry && 'reason' in entry) {
-        return entry as { method: string; reason: string }
+        return {
+          method: entry.method as TrainingMethodPreference,
+          reason: entry.reason,
+        }
       }
       return {
-        method: String(entry),
+        method: String(entry) as TrainingMethodPreference,
         reason: 'not_selected_or_not_applicable',
       }
     })
@@ -160,10 +163,24 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       'cluster_sets',
       'rest_pause',
     ])
-    const filtered = methods.filter((method): method is TrainingMethodPreference =>
-      allowed.has(method as TrainingMethodPreference),
-    )
+    const filtered: TrainingMethodPreference[] = methods
+      .map((method) => String(method))
+      .filter((method): method is TrainingMethodPreference =>
+        allowed.has(method as TrainingMethodPreference),
+      )
     return filtered.length > 0 ? filtered : trainingMethodsFallback
+  }
+  
+  type SafeMethodMaterializationSummary =
+    NonNullable<NonNullable<AdaptiveSession['styleMetadata']>['methodMaterializationSummary']>
+  
+  const normalizeMethodMaterializationSummary = (
+    value: unknown
+  ): SafeMethodMaterializationSummary | undefined => {
+    if (value && typeof value === 'object') {
+      return value as SafeMethodMaterializationSummary
+    }
+    return undefined
   }
   
   // --------------------------------------------------------------------------
@@ -189,7 +206,9 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
         hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
         hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-      },
+        hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+        methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
+      } as any,
     }
   }
   
@@ -251,7 +270,8 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         // Do NOT default appliedMethods here -- leaving it undefined signals
         // "metadata incomplete, defer to exercise-level truth" to downstream
         // consumers. Overriding with ['straight_sets'] would lie about intent.
-        structureDescription: existingMeta.structureDescription || '',
+        appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+        structureDescription: existingMeta.structureDescription ?? '',
         // [STYLE-METADATA-CONTRACT-FIELDS] target type owns
         // primaryStyle, rejectedMethods, hasCircuitsApplied,
         // hasDensityApplied; default conservatively rather than
@@ -260,7 +280,10 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
         hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
         hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-      },
+        hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+        methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
+        styledGroups: existingMeta.styledGroups as any,
+      } as any,
     }
   }
   
@@ -307,7 +330,9 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
       hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
       hasDensityApplied: existingMeta.hasDensityApplied ?? false,
-    },
+      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+      methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
+    } as any,
   }
 }
 

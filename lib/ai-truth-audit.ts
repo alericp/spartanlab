@@ -881,23 +881,6 @@ export function buildProgramTruthExplanation(
     // the legacy explanation block here would only compile-fail and
     // duplicate state already preserved on the program.
     
-    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Include current working progressions contract
-    // This shows the user their true current ability vs historical ceiling
-    currentWorkingProgressions: program.currentWorkingProgressions || null,
-    progressionTruthNote: program.currentWorkingProgressions?.anyConservativeStart
-      ? 'Current progression is set conservatively based on training recency and skill state.'
-      : null,
-    
-    // [PHASE 6] Output quality materiality - proves how well profile shapes actual sessions
-    outputQualityReport: computeOutputQualityMateriality(
-      program,
-      program.experienceLevel || profile?.experienceLevel || 'intermediate'
-    ),
-    
-    // [PHASE 7] Visible difference verdict - for use when comparing before/after rebuild
-    // This is populated by the calling code when a previousProgram is available
-    visibleDifferenceReport: null as ProgramDiffReport | null,
-    
     // [DOCTRINE RUNTIME CONTRACT] Extract doctrine influence data from the program
     doctrineInfluence: (() => {
       const docContract = (program as { doctrineRuntimeContract?: {

@@ -47,8 +47,8 @@ function detectBiggestImprovement(): EliteInsight | null {
   let bestImprovement: { area: string; improvement: number; type: 'skill' | 'strength' } | null = null
   
   // Check skill improvements (hold time increase)
-  skillSnapshots.forEach(skill => {
-    if (!skill.hasData || skill.previousBestHold === 0) return
+  for (const skill of skillSnapshots) {
+    if (!skill.hasData || skill.previousBestHold === 0) continue
     
     const improvement = skill.bestHoldSeconds - skill.previousBestHold
     if (improvement > 0) {
@@ -61,11 +61,11 @@ function detectBiggestImprovement(): EliteInsight | null {
         }
       }
     }
-  })
+  }
   
   // Check strength improvements (1RM increase)
-  strengthSnapshots.forEach(strength => {
-    if (!strength.hasData || strength.previousOneRM === 0) return
+  for (const strength of strengthSnapshots) {
+    if (!strength.hasData || strength.previousOneRM === 0) continue
     
     const improvement = strength.estimatedOneRM - strength.previousOneRM
     if (improvement > 0) {
@@ -78,26 +78,15 @@ function detectBiggestImprovement(): EliteInsight | null {
         }
       }
     }
-  })
+  }
   
-  // [BEST-IMPROVEMENT-CLOSURE-NARROWING] `bestImprovement` is reassigned
-  // inside `forEach` callbacks; TypeScript's control-flow analysis does
-  // not track those writes, so it narrows back to its initial `null`
-  // type after the loops. Snapshot through a typed const so the
-  // downstream reads keep the structured shape.
-  const finalBestImprovement: {
-    area: string
-    improvement: number
-    type: 'skill' | 'strength'
-  } | null = bestImprovement
-
-  if (!finalBestImprovement) return null
+  if (!bestImprovement) return null
 
   return {
     type: 'biggest_improvement',
     title: 'Biggest Improvement',
-    value: finalBestImprovement.area,
-    explanation: `${finalBestImprovement.area} improved ${Math.round(finalBestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
+    value: bestImprovement.area,
+    explanation: `${bestImprovement.area} improved ${Math.round(bestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
     significance: 'positive',
   }
 }

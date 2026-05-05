@@ -900,6 +900,12 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
     maxDurationMinutes: 20,
     rationale: 'Back lever should be trained early after warm-up, before heavy pulling or planche work, while shoulders and straight-arm tissues are fresh.',
   },
+
+  safetyWarnings: [
+    'Do not force german hang or skin-the-cat depth if biceps, elbow, or shoulder-extension discomfort appears.',
+    'Reduce or skip back lever work when straight-arm pulling, planche, or heavy pulling has already created tendon tension.',
+    'Prioritize banded back lever holds, scapular preparation, and low-risk shoulder-extension preparation over repeated max-depth skin-the-cat exposure.',
+  ],
 }
 
 // =============================================================================

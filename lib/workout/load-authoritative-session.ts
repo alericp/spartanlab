@@ -152,6 +152,18 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
       // narrow boundary `as unknown as <field type>` casts at this
       // single hydration point preserve the typed contract without
       // weakening AdaptiveExercise itself.
+      
+      type LiveWorkoutPreservedExerciseFields = {
+        densityPrescription?: unknown
+        doctrineApplicationDeltas?: unknown
+        structuralMethodDeltas?: unknown
+        numericPrescriptionDelta?: unknown
+        targetWeightedRPE?: unknown
+      }
+      
+      type LoadableAdaptiveExercise =
+        AdaptiveExercise & LiveWorkoutPreservedExerciseFields
+      
       return {
         id: typeof e.id === 'string' && e.id ? e.id : `exercise-${idx}`,
         name: typeof e.name === 'string' && e.name ? e.name : 'Exercise',
@@ -181,13 +193,13 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         // where these are stamped and lib/workout/normalize-workout-session.ts
         // for the parallel preservation block in the secondary normalizer.
         setExecutionMethod: e.setExecutionMethod as unknown as AdaptiveExercise['setExecutionMethod'],
-        densityPrescription: e.densityPrescription as unknown as AdaptiveExercise['densityPrescription'],
-        doctrineApplicationDeltas: e.doctrineApplicationDeltas as unknown as AdaptiveExercise['doctrineApplicationDeltas'],
+        densityPrescription: e.densityPrescription,
+        doctrineApplicationDeltas: e.doctrineApplicationDeltas,
         // [PHASE 4P] Structural method materialization corridor flags. Used
         // by the live workout to attribute superset/circuit/density block
         // membership to the corridor vs the builder.
         structuralMethodApplied: typeof e.structuralMethodApplied === 'boolean' ? e.structuralMethodApplied : undefined,
-        structuralMethodDeltas: e.structuralMethodDeltas as unknown as AdaptiveExercise['structuralMethodDeltas'],
+        structuralMethodDeltas: e.structuralMethodDeltas,
         // [PHASE 4Z / PHASE I] Numeric prescription mutation per-row proof.
         // Stamped by lib/program/numeric-prescription-mutation-contract.ts
         // and carries the row's mutated sets/reps/holdSeconds before/after,
@@ -195,10 +207,10 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         // label. Without this pass-through the Program-card chip and live
         // workout coaching surface would lose proof that doctrine actually
         // changed the prescription.
-        numericPrescriptionDelta: e.numericPrescriptionDelta as unknown as AdaptiveExercise['numericPrescriptionDelta'],
+        numericPrescriptionDelta: e.numericPrescriptionDelta,
         // [WEEK-PROGRESSION-TRUTH] Preserve weighted RPE if present.
-        targetWeightedRPE: e.targetWeightedRPE as unknown as AdaptiveExercise['targetWeightedRPE'],
-      } as unknown as AdaptiveExercise
+        targetWeightedRPE: e.targetWeightedRPE,
+      } as unknown as LoadableAdaptiveExercise
     })
     .filter((ex): ex is NonNullable<typeof ex> => ex !== null)
   

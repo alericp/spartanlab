@@ -1447,11 +1447,13 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.dipMax !== undefined) onboardingUpdates.dipMax = updates.dipMax as OnboardingProfile['dipMax']
     if (updates.pushUpMax !== undefined) onboardingUpdates.pushUpMax = updates.pushUpMax as OnboardingProfile['pushUpMax']
     if (updates.wallHSPUReps !== undefined) onboardingUpdates.wallHSPUReps = updates.wallHSPUReps as OnboardingProfile['wallHSPUReps']
+    // [WEIGHTED-BENCHMARK-UNIT-NOT-OPTIONAL] OnboardingProfile weighted
+    // benchmark unit is required 'lbs'|'kg'; fallback to 'lbs'.
     if (updates.weightedPullUp !== undefined && updates.weightedPullUp) {
-      onboardingUpdates.weightedPullUp = { load: updates.weightedPullUp.addedWeight ?? 0, reps: updates.weightedPullUp.reps ?? 0, unit: updates.weightedPullUp.unit }
+      onboardingUpdates.weightedPullUp = { load: updates.weightedPullUp.addedWeight ?? 0, reps: updates.weightedPullUp.reps ?? 0, unit: updates.weightedPullUp.unit ?? 'lbs' }
     }
     if (updates.weightedDip !== undefined && updates.weightedDip) {
-      onboardingUpdates.weightedDip = { load: updates.weightedDip.addedWeight ?? 0, reps: updates.weightedDip.reps ?? 0, unit: updates.weightedDip.unit }
+      onboardingUpdates.weightedDip = { load: updates.weightedDip.addedWeight ?? 0, reps: updates.weightedDip.reps ?? 0, unit: updates.weightedDip.unit ?? 'lbs' }
     }
     
     // All-time PR benchmarks

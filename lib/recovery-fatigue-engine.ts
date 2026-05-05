@@ -9,7 +9,6 @@ import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getStoredRPESessions, type StoredRPESession } from './fatigue-score-calculator'
 import { calculateRecoverySignal, type RecoverySignal } from './recovery-engine'
 import { getFatigueTrainingDecision, type FatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
-import { calculateDailyReadiness, type DailyReadinessResult } from './daily-readiness'
 import { type MethodProfileId, METHOD_PROFILES } from './training-principles-engine'
 import { 
   computeFatigueStateFromFeedback, 

@@ -517,9 +517,23 @@ function verifyDosageQuality(
   let oddDosageCount = 0
   
   for (const ex of allExercises) {
+    // [ADAPTIVE-EXERCISE-LEGACY-REPS-HOLD] AdaptiveExercise canonical
+    // field is `repsOrTime`; legacy persisted exercises may still
+    // carry `reps`/`holdTime`. Read via runtime narrow.
+    const legacyExercise = ex as unknown as { reps?: string | number; holdTime?: string | number }
     const sets = ex.sets || 0
-    const reps = ex.reps || 0
-    const holdTime = ex.holdTime || 0
+    const repsRaw = ex.repsOrTime ?? legacyExercise.reps
+    const reps = typeof repsRaw === 'number'
+      ? repsRaw
+      : typeof repsRaw === 'string'
+        ? Number.parseInt(repsRaw, 10) || 0
+        : 0
+    const holdRaw = legacyExercise.holdTime
+    const holdTime = typeof holdRaw === 'number'
+      ? holdRaw
+      : typeof holdRaw === 'string'
+        ? Number.parseInt(holdRaw, 10) || 0
+        : 0
     
     // Basic dosage sanity checks
     const hasSets = sets >= 2 && sets <= 8

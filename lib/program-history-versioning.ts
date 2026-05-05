@@ -380,7 +380,14 @@ export function buildAthleteInputsSnapshot(
   }>
   return {
     bodyweight: _legacyProfile.bodyweight || undefined,
-    weightUnit: _legacyProfile.weightUnit || 'kg',
+    // [WEIGHT-UNIT-LB-LBS-NORMALIZE] snapshot type uses 'lbs'|'kg';
+    // map legacy 'lb' → 'lbs'.
+    weightUnit: ((): 'lbs' | 'kg' => {
+      const u = _legacyProfile.weightUnit
+      if (u === 'kg') return 'kg'
+      if (u === 'lb' || u === 'lbs') return 'lbs'
+      return 'kg'
+    })(),
     // Note: fallback values here are for snapshot display, not generation truth
     experienceLevel: program.experienceLevel || 'intermediate',
     // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
@@ -394,9 +401,42 @@ export function buildAthleteInputsSnapshot(
     primaryGoal: program.primaryGoal,
     secondaryGoal: undefined, // Not directly in AdaptiveProgram
     selectedSkills: _legacyProfile.skillInterests || [],
-    pullUpMax: profile?.pullUpMax,
-    pushUpMax: profile?.pushUpMax,
-    dipMax: profile?.dipMax,
+    // [SNAPSHOT-CAPACITY-NUMBER-COERCE] snapshot fields are number|undefined;
+    // canonical profile capacity types may be objects/buckets — extract
+    // the first numeric reading from common shape keys.
+    pullUpMax: ((): number | undefined => {
+      const v = profile?.pullUpMax as unknown
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      if (v && typeof v === 'object') {
+        for (const key of ['value', 'max', 'maxReps', 'reps', 'count']) {
+          const c = (v as Record<string, unknown>)[key]
+          if (typeof c === 'number' && Number.isFinite(c)) return c
+        }
+      }
+      return undefined
+    })(),
+    pushUpMax: ((): number | undefined => {
+      const v = profile?.pushUpMax as unknown
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      if (v && typeof v === 'object') {
+        for (const key of ['value', 'max', 'maxReps', 'reps', 'count']) {
+          const c = (v as Record<string, unknown>)[key]
+          if (typeof c === 'number' && Number.isFinite(c)) return c
+        }
+      }
+      return undefined
+    })(),
+    dipMax: ((): number | undefined => {
+      const v = profile?.dipMax as unknown
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      if (v && typeof v === 'object') {
+        for (const key of ['value', 'max', 'maxReps', 'reps', 'count']) {
+          const c = (v as Record<string, unknown>)[key]
+          if (typeof c === 'number' && Number.isFinite(c)) return c
+        }
+      }
+      return undefined
+    })(),
     weightedPullUpLoad: _legacyProfile.weightedPullUpLoad,
     weightedDipLoad: _legacyProfile.weightedDipLoad,
     frontLeverProgression: _legacyProfile.frontLeverLevel,
@@ -498,7 +538,8 @@ export function buildProgramStructureSnapshot(
           sets: ex.sets,
           reps: typeof legacy.reps === 'number' ? String(legacy.reps) : (legacy.reps ?? ex.repsOrTime),
           hold: legacy.hold,
-          rest: legacy.rest,
+          // [SNAPSHOT-REST-STRING] snapshot rest is string|undefined.
+          rest: legacy.rest == null ? undefined : String(legacy.rest),
           notes: legacy.notes ?? ex.note,
         }
       }),
@@ -597,7 +638,8 @@ export async function createProgramVersion(
       primaryGoal: program.primaryGoal,
       trainingDaysPerWeek: program.trainingDaysPerWeek,
       sessionLengthMinutes,
-      blockSummary: program.structure?.pattern || program.programRationale,
+      // [WEEKLY-STRUCTURE-PATTERN-NARROW] WeeklyStructure dropped legacy `pattern`.
+    blockSummary: (program.structure as unknown as { pattern?: string } | null | undefined)?.pattern || program.programRationale,
     }
     
     const newEntry = await createProgramHistoryEntry(input)

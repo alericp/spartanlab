@@ -1259,7 +1259,10 @@ export function enhanceWarmupFromGovernor(
     )
     
     enhancedWarmup.tendonPrepIncluded = true
-    enhancedWarmup.coachingNote = `Enhanced warm-up recommended due to ${stressAnalysis.fatigueRiskLevel} session stress. ${stressAnalysis.coachingExplanation}`
+    // [WARMUP-RESULT-NO-COACHING-NOTE] warmup result type no longer
+    // carries `coachingNote`; route the explanation into focusSummary
+    // so it remains visible without widening the contract.
+    enhancedWarmup.focusSummary = `Enhanced warm-up recommended due to ${stressAnalysis.fatigueRiskLevel} session stress. ${stressAnalysis.coachingExplanation}`
     
     return enhancedWarmup
   }

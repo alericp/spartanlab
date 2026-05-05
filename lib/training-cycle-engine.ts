@@ -1413,7 +1413,9 @@ export function selectRecommendedCycle(factors: CycleSelectionFactors): Training
   // Goal-based selection
   if (primaryGoal === 'planche') return PLANCHE_SKILL_CYCLE
   if (primaryGoal === 'front_lever') return FRONT_LEVER_SKILL_CYCLE
-  if (primaryGoal === 'handstand_pushup' || primaryGoal === 'handstand') return HANDSTAND_SKILL_CYCLE
+  // [PRIMARY-GOAL-NO-HANDSTAND] PrimaryGoal union no longer carries
+  // a standalone 'handstand'; only 'handstand_pushup' remains.
+  if (primaryGoal === 'handstand_pushup') return HANDSTAND_SKILL_CYCLE
   if (primaryGoal === 'muscle_up') return MUSCLE_UP_SKILL_CYCLE
   if (primaryGoal === 'weighted_strength') return STREETLIFTING_STRENGTH_CYCLE
 

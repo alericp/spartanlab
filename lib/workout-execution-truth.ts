@@ -213,7 +213,9 @@ export function buildSessionRuntimeTruth(
   )
   
   return {
-    sessionId: session?.id || `session-${Date.now()}`,
+    // [ADAPTIVE-SESSION-NO-ID] AdaptiveSession does not declare `id`;
+    // legacy logged sessions may still carry one — read via narrow.
+    sessionId: (session as unknown as { id?: string })?.id || `session-${Date.now()}`,
     programId,
     dayNumber,
     dayLabel,
@@ -313,9 +315,10 @@ export function buildExerciseRuntimeTruth(
   const { isFixed, reason } = checkFixedPrescription(exercise)
   
   // [AI-RUNTIME-CONTRACT] Extract AI context from coachingMeta
-  const coachingNote = exercise.coachingMeta?.adaptationNote 
-    ?? exercise.coachingMeta?.loadDecisionSummary 
-    ?? null
+  // [COACHING-META-NO-ADAPTATION-NOTE] coachingMeta no longer carries
+  // an `adaptationNote` field; use loadDecisionSummary as the single
+  // source of coaching note text.
+  const coachingNote = exercise.coachingMeta?.loadDecisionSummary ?? null
   
   return {
     exerciseId: exercise.id ?? `exercise-${exerciseIndex}`,

@@ -473,14 +473,29 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
   
+  // [ATHLETE-CONTEXT-LEGACY-FIELD-NARROW] AthleteProfile no longer
+  // exposes `username`; OnboardingProfile no longer declares
+  // heightCm/weightKg/trainingAge/workoutDuration. Persisted shapes
+  // may still carry these — read via runtime narrows.
+  const profileLegacy = profile as unknown as { username?: unknown }
+  const onboardingLegacy = onboarding as unknown as {
+    heightCm?: number
+    weightKg?: number
+    trainingAge?: string | number
+    workoutDuration?: string
+  }
+  const usernameValue = typeof profileLegacy?.username === 'string' && profileLegacy.username
+    ? profileLegacy.username
+    : 'Athlete'
+
   return {
     userId,
-    username: profile?.username || 'Athlete',
+    username: usernameValue,
     sex: (onboarding?.sex as 'male' | 'female') || 'male',
-    heightCm: canonical.height || onboarding?.heightCm || null,
-    weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+    heightCm: canonical.height || onboardingLegacy?.heightCm || null,
+    weightKg: canonical.bodyweight || onboardingLegacy?.weightKg || null,
     bodyFatPercent: onboarding?.bodyFatPercent || null,
-    trainingAge: onboarding?.trainingAge || 1,
+    trainingAge: onboardingLegacy?.trainingAge || 1,
     // CANONICAL FIX: Use canonical goals
     primaryGoal,
     primaryGoalLabel: getGoalLabel(primaryGoal),
@@ -507,7 +522,7 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
         return canonical.sessionLengthMinutes
       }
       // Only fallback for legacy users
-      const durationMinutes = getSessionMinutes(onboarding?.workoutDuration || 'standard')
+      const durationMinutes = getSessionMinutes(onboardingLegacy?.workoutDuration || 'standard')
       console.log('[UnifiedCoaching] FALLBACK: sessionDurationMinutes using onboarding fallback')
       logDurationTruth('loadAthleteContext', {
         canonicalPreference: durationMinutes,
@@ -751,8 +766,10 @@ async function buildFatigueContext(
     missedReps: false,
     rpeElevated: false,
   }
+  // [RECOVERY-LEVEL-CURRENT-UNION] RecoveryLevel is 'HIGH'|'MODERATE'|
+  // 'LOW'; the legacy traffic-light 'red' literal maps to 'LOW'.
   const deloadRecommendation = getDeloadRecommendation(
-    recoverySignal.level === 'red' ? 'fatigued' : 'recovered',
+    recoverySignal.level === 'LOW' ? 'fatigued' : 'recovered',
     'stable',
     [],
     deloadSignals,
@@ -780,7 +797,8 @@ function determineFatigueLevel(
   decision: TrainingDecision,
   deload: DeloadRecommendation | null
 ): FatigueContext['fatigueLevel'] {
-  if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
+  // [DELOAD-RECOMMENDATION-NO-SEVERITY] DeloadRecommendation no longer
+  // exposes a severity bucket; any deload trigger maps to 'fatigued'.
   if (deload?.shouldDeload) return 'fatigued'
   
   // [TRAINING-DECISION-IS-STRING-UNION] TrainingDecision is a string

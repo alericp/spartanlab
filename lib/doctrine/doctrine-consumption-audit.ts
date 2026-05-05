@@ -281,7 +281,10 @@ export function auditDoctrineMaterialization(
       },
       dominantSpineExpression: {
         spineType: doctrineDecision.dominantSpine.type,
-        sessionsByFocus,
+        // [DOCTRINE-AUDIT-SESSIONS-BY-FOCUS-IS-STRING-ARRAY] the audit
+        // contract types this field as string[]; project the focus
+        // distribution Map down to its key list.
+        sessionsByFocus: Array.from(sessionsByFocus.keys()),
         representationScore: dominantSpineMatchesOutput ? 100 : 25,
       },
       exerciseSpecificity: {

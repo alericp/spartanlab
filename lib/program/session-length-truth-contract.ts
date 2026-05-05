@@ -593,7 +593,9 @@ function buildSessionStamp(session: SessionLike): SessionLengthTruthStamp {
 
   // Summary copy.
   const summary = (() => {
-    if (verdict === 'LEGACY_NO_VARIANTS') return 'Session length: legacy session — no variants.'
+    // [VERDICT-NO-LEGACY-NO-VARIANTS] verdict union no longer carries
+    // the 'LEGACY_NO_VARIANTS' literal; the modern fallback is
+    // 'NO_VARIANTS'.
     if (verdict === 'NO_LAUNCHABLE_SHORTS') {
       return 'Session length: full only — short modes not applicable for this day.'
     }

@@ -243,7 +243,10 @@ function auditFieldPresence(
   }
   
   // Check profile
-  const profileValue = profile ? getFieldValue(profile, field) : undefined
+  // [GET-FIELD-VALUE-RECORD-BOUNDARY] getFieldValue accepts a flat
+  // record; bridge CanonicalProgrammingProfile via unknown only at
+  // this read-only call site.
+  const profileValue = profile ? getFieldValue(profile as unknown as Record<string, unknown>, field) : undefined
   if (profileValue !== undefined && profileValue !== null) {
     const isEmpty = Array.isArray(profileValue) ? profileValue.length === 0 : false
     if (!isEmpty) {
@@ -321,18 +324,20 @@ function buildNormalizedInputs(
     return entry?.value ?? DEFAULTS[field] ?? null
   }
   
+  // [NORMALIZED-INPUTS-INDEXED-TYPE-BOUNDARY] cast each resolved value
+  // to the matching AdaptiveProgramInputs field type at the boundary.
   return {
-    primaryGoal: getValue('primaryGoal') as string,
-    secondaryGoal: getValue('secondaryGoal') as string | undefined,
-    selectedSkills: (getValue('selectedSkills') as string[]) || [],
-    trainingPathType: getValue('trainingPathType') as string | undefined,
+    primaryGoal: getValue('primaryGoal') as AdaptiveProgramInputs['primaryGoal'],
+    secondaryGoal: getValue('secondaryGoal') as AdaptiveProgramInputs['secondaryGoal'],
+    selectedSkills: (getValue('selectedSkills') as AdaptiveProgramInputs['selectedSkills']) || [],
+    trainingPathType: getValue('trainingPathType') as AdaptiveProgramInputs['trainingPathType'],
     goalCategories: (getValue('goalCategories') as string[]) || [],
-    experienceLevel: getValue('experienceLevel') as string,
-    scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
-    trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
-    sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
-    sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
-    equipment: (getValue('equipment') as string[]) || [],
+    experienceLevel: getValue('experienceLevel') as AdaptiveProgramInputs['experienceLevel'],
+    scheduleMode: (getValue('scheduleMode') as AdaptiveProgramInputs['scheduleMode']) || 'flexible',
+    trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as AdaptiveProgramInputs['trainingDaysPerWeek']) || 4,
+    sessionDurationMode: (getValue('sessionDurationMode') as AdaptiveProgramInputs['sessionDurationMode']) || 'adaptive',
+    sessionLength: (getValue('sessionLengthMinutes') as AdaptiveProgramInputs['sessionLength']) || 60,
+    equipment: (getValue('equipment') as AdaptiveProgramInputs['equipment']) || [],
     // Pass through any additional fields from inputs
     ...inputs,
   }
@@ -389,23 +394,9 @@ export function attachTruthExplanation(
 ): AdaptiveProgram {
   const explanation = buildProgramTruthExplanation(program, profile)
   
-  // [CHECKLIST 1 OF 5] Extract authoritativeMultiSkillIntentContract from program if available
-  const authoritativeContract = (program as {
-    authoritativeMultiSkillIntentContract?: {
-      selectedSkills: string[]
-      primarySkill: string | null
-      secondarySkill: string | null
-      supportSkills: string[]
-      deferredSkills: Array<{ skill: string; reasonCode: string; reasonLabel: string; details?: string }>
-      materiallyExpressedSkills: string[]
-      reducedThisCycleSkills: string[]
-      skillPriorityOrder: Array<{ skill: string; role: string; priorityScore: number; exposureSessions: number; currentWorkingProgression?: string | null; historicalCeiling?: string | null }>
-      coverageVerdict: 'strong' | 'adequate' | 'weak'
-      sourceTruthCount: number
-      materiallyUsedCount: number
-      auditTrail: { canonicalSourceSkillCount: number; builderInputSkillCount: number; weightedAllocationSkillCount: number; sessionArchitectureSkillCount: number; skillsLostInPipeline: string[]; skillsNarrowedReason: string | null }
-    } | null
-  }).authoritativeMultiSkillIntentContract || null
+  // [TRUTH-EXPLANATION-NO-AUTHORITATIVE-CONTRACT] previously extracted
+  // authoritativeMultiSkillIntentContract here for the truthExplanation
+  // block; that field is no longer part of the contract.
   
   // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Build the rollup ENTIRELY from final
@@ -483,28 +474,9 @@ export function attachTruthExplanation(
       materializationVerdict: program.materializationVerdict || null,
       // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
       dbTruthWinnerSummary,
-      // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
-      authoritativeMultiSkillIntentContract: authoritativeContract ? {
-        selectedSkills: authoritativeContract.selectedSkills,
-        primarySkill: authoritativeContract.primarySkill,
-        secondarySkill: authoritativeContract.secondarySkill,
-        supportSkills: authoritativeContract.supportSkills,
-        deferredSkills: authoritativeContract.deferredSkills,
-        materiallyExpressedSkills: authoritativeContract.materiallyExpressedSkills,
-        reducedThisCycleSkills: authoritativeContract.reducedThisCycleSkills,
-        skillPriorityOrder: authoritativeContract.skillPriorityOrder.map(s => ({
-          skill: s.skill,
-          role: s.role as 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred',
-          priorityScore: s.priorityScore,
-          exposureSessions: s.exposureSessions,
-          currentWorkingProgression: s.currentWorkingProgression,
-          historicalCeiling: s.historicalCeiling,
-        })),
-        coverageVerdict: authoritativeContract.coverageVerdict,
-        sourceTruthCount: authoritativeContract.sourceTruthCount,
-        materiallyUsedCount: authoritativeContract.materiallyUsedCount,
-        auditTrail: authoritativeContract.auditTrail,
-      } : null,
+      // [TRUTH-EXPLANATION-NO-AUTHORITATIVE-CONTRACT] truthExplanation
+      // shape no longer carries authoritativeMultiSkillIntentContract;
+      // the canonical multi-skill intent lives elsewhere now.
     },
   }
 }

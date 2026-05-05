@@ -123,8 +123,11 @@ const EMPTY_PROFILE: AthleteProfile = {
   bodyweight: null,
   weightUnit: 'lbs',
   experienceLevel: 'beginner',
-  trainingDaysPerWeek: 0,
-  sessionLengthMinutes: 0,
+  // [EMPTY-PROFILE-LITERAL-CASTS] CanonicalProgrammingProfile types
+  // these fields with literal unions; cast 0 at the boundary for the
+  // empty/no-data sentinel.
+  trainingDaysPerWeek: 0 as CanonicalProgrammingProfile['trainingDaysPerWeek'],
+  sessionLengthMinutes: 0 as CanonicalProgrammingProfile['sessionLengthMinutes'],
   primaryGoal: null,
   equipmentAvailable: [],
   onboardingComplete: false,

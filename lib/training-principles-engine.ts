@@ -1004,7 +1004,10 @@ export function selectMethodProfiles(context: SelectionContext): SelectedMethods
   const tendonLevel = context.tendonAdaptationLevel
   if (tendonLevel === 'low' || tendonLevel === 'low_moderate') {
     // Low tendon adaptation - start with static density for controlled exposure
-    if (primary.id === 'dynamic_skill_mastery' || primary.id === 'hybrid_skill_strength') {
+    // [METHOD-PROFILE-NO-DYNAMIC-MASTERY] MethodProfileId no longer
+    // includes 'dynamic_skill_mastery'; only hybrid_skill_strength
+    // remains as the high-dynamic option.
+    if (primary.id === 'hybrid_skill_strength') {
       primary = METHOD_PROFILES.static_skill_density
     }
   } else if ((tendonLevel === 'moderate_high' || tendonLevel === 'high') && experienceLevel !== 'beginner') {

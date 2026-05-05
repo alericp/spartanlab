@@ -463,7 +463,10 @@ function isHighRPE(ex: AdaptiveExercise): boolean {
 function hasGroupedDensity(session: AdaptiveSession): boolean {
   // The session carries grouped density when its styledGroups (or method
   // metadata) actually contains a non-straight grouped block.
-  const styled = session.styledGroups || []
+  // [ADAPTIVE-SESSION-NO-STYLED-GROUPS-FIELD] AdaptiveSession no
+  // longer declares `styledGroups` as a typed field; persisted
+  // sessions still carry it. Read via narrow.
+  const styled = (session as unknown as { styledGroups?: Array<{ groupType?: string } | null | undefined> }).styledGroups || []
   if (Array.isArray(styled) && styled.length > 0) {
     if (styled.some(g => g && g.groupType && g.groupType !== 'straight')) {
       return true

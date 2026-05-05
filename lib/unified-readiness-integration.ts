@@ -114,6 +114,8 @@ export function canonicalToSkillReadinessScore(
     confidenceScore >= 0.7 ? 'solid' :
     confidenceScore >= 0.4 ? 'developing' : 'sparse'
   
+  // [SKILL-TYPE-LABELS-COMPLETE] cover the full canonical SkillType
+  // union — missing keys broke Record completeness.
   const skillLabels: Record<SkillType, string> = {
     front_lever: 'Front Lever',
     back_lever: 'Back Lever',
@@ -122,6 +124,11 @@ export function canonicalToSkillReadinessScore(
     muscle_up: 'Muscle-Up',
     l_sit: 'L-Sit',
     iron_cross: 'Iron Cross',
+    v_sit: 'V-Sit',
+    dragon_flag: 'Dragon Flag',
+    one_arm_pull_up: 'One-Arm Pull-Up',
+    one_arm_push_up: 'One-Arm Push-Up',
+    planche_push_up: 'Planche Push-Up',
   }
   
   return {

@@ -13,7 +13,7 @@
  */
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength, GeneratedProgram } from './program-service'
-import type { EquipmentType } from './adaptive-exercise-pool'
+import { getAllExercises, type EquipmentType, type Exercise } from './adaptive-exercise-pool'
 import { getProgressionUp, getProgressionDown, getBestSubstitute } from './progression-ladders'
 import { findBestReplacement, type ExerciseIntelligenceContext } from './exercise-intelligence-engine'
 import { getOnboardingProfile } from './athlete-profile'
@@ -456,18 +456,41 @@ export function swapExercise(
   const actualGoal = profile?.primaryGoal ?? null
   
   // Build context for exercise intelligence
+  // [SESSION-MINUTES-NUMBER-COERCE] sessionLengthMinutes is a literal
+  // bucket union (string|number); coerce to a finite number at the
+  // intelligence boundary which expects number.
+  const toAdjustmentNumber = (value: unknown, fallback = 60): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : fallback
+    }
+    return fallback
+  }
+
   const context: ExerciseIntelligenceContext = {
     experienceLevel: 'intermediate',
     availableEquipment,
     // REGRESSION GUARD: Only use fallback if profile truly has no goal
     primaryGoal: actualGoal || 'general',  // 'general' not 'front_lever' to avoid goal pollution
-    targetSkills: actualGoal ? [actualGoal as any] : [],  // Empty array better than fake goal
+    targetSkills: actualGoal
+      ? ([actualGoal] as unknown as ExerciseIntelligenceContext['targetSkills'])
+      : [],  // Empty array better than fake goal
     fatigueLevel: 'moderate',
-    sessionMinutes: profile?.sessionLengthMinutes || 60,
+    sessionMinutes: toAdjustmentNumber(profile?.sessionLengthMinutes, 60),
   }
 
   // Find replacement using exercise intelligence
-  const replacement = findBestReplacement(exerciseId, reason, context)
+  // [FIND-BEST-REPLACEMENT-CURRENT-SIG] findBestReplacement now takes
+  // (Exercise, context, reason). Look up the original exercise from
+  // the canonical pool and map adjustment 'dislike' → intelligence
+  // 'equipment' (closest substitute reason).
+  const originalExercise = getAllExercises().find(ex => ex.id === exerciseId) as Exercise | undefined
+  const intelligenceReason: Parameters<typeof findBestReplacement>[2] =
+    reason === 'dislike' ? 'equipment' : reason
+  const replacement = originalExercise
+    ? findBestReplacement(originalExercise, context, intelligenceReason)
+    : null
 
   // Map reason to user-friendly message
   const reasonMessages: Record<typeof reason, string> = {
@@ -613,7 +636,9 @@ export function handleEquipmentChange(
   
   // Map common equipment-dependent swaps
   const equipmentSwapMap: Record<string, { requires: EquipmentType; alternatives: string[] }> = {
-    dips: { requires: 'dip_station', alternatives: ['decline_pushups', 'pseudo_planche_pushups', 'tricep_dips_bench'] },
+    // [EQUIPMENT-TYPE-CANONICAL] EquipmentType uses 'dip_bars' for the
+    // dip station; the legacy 'dip_station' literal was renamed.
+    dips: { requires: 'dip_bars', alternatives: ['decline_pushups', 'pseudo_planche_pushups', 'tricep_dips_bench'] },
     ring_dips: { requires: 'rings', alternatives: ['bar_dips', 'decline_pushups'] },
     ring_rows: { requires: 'rings', alternatives: ['inverted_rows', 'band_rows'] },
     weighted_pullups: { requires: 'weights', alternatives: ['pullups', 'band_resisted_pullups'] },

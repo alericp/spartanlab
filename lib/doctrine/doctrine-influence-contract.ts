@@ -494,11 +494,14 @@ function buildSourceAttribution(
   // Owner is 'merged' if using both
   // Owner is 'missing' if neither available
   
-  const hasDbProgression = runtimeContract?.doctrineCoverage?.progressionRuleCount ?? 0 > 0
-  const hasDbMethod = runtimeContract?.doctrineCoverage?.methodRuleCount ?? 0 > 0
-  const hasDbPrescription = runtimeContract?.doctrineCoverage?.prescriptionRuleCount ?? 0 > 0
-  const hasDbCarryover = runtimeContract?.doctrineCoverage?.carryoverRuleCount ?? 0 > 0
-  const hasDbExercise = runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0 > 0
+  // [HAS-RULE-COUNT-PARENS] `?? 0 > 0` parses as `?? (0 > 0)` which
+  // returned number|boolean. Parenthesize so each predicate is a clean
+  // boolean.
+  const hasDbProgression = (runtimeContract?.doctrineCoverage?.progressionRuleCount ?? 0) > 0
+  const hasDbMethod = (runtimeContract?.doctrineCoverage?.methodRuleCount ?? 0) > 0
+  const hasDbPrescription = (runtimeContract?.doctrineCoverage?.prescriptionRuleCount ?? 0) > 0
+  const hasDbCarryover = (runtimeContract?.doctrineCoverage?.carryoverRuleCount ?? 0) > 0
+  const hasDbExercise = (runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0) > 0
   const hasDbContraindication = readiness.hasContraindicationRules
   
   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0

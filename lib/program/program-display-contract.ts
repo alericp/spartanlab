@@ -2149,9 +2149,11 @@ export function resolveCanonicalMethodBodyRender(
       const canonicalIdSets = renderedGroups.map(g => new Set(g.matchedRowIds))
       let allBlocksCorrelate = true
       for (const b of blocks) {
-        const memberIds = Array.isArray(b.memberIds) ? b.memberIds : []
+        const memberIds = Array.isArray(b.memberIds)
+          ? b.memberIds.map(memberId => String(memberId))
+          : []
         const overlaps = canonicalIdSets.some(set =>
-          memberIds.some(id => set.has(id)),
+          memberIds.some((id: string) => set.has(id)),
         )
         if (!overlaps) {
           allBlocksCorrelate = false
@@ -6543,9 +6545,15 @@ export function buildProgramIntelligenceContract(
   }
   
   // Density cap
-  const densityCapActive = dominantSpine?.densityIntegration?.allowed === false ||
-    (dominantSpine?.densityIntegration?.maxSessionsPerWeek && 
-     dominantSpine.densityIntegration.maxSessionsPerWeek < sessions.length)
+  // [DENSITY-CAP-FORCE-BOOLEAN] WeeklyProtectionDisplay.densityCapActive
+  // is a boolean; the truthy `&&` chain returned number|boolean.
+  const densityCapActive = Boolean(
+    dominantSpine?.densityIntegration?.allowed === false ||
+    (
+      typeof dominantSpine?.densityIntegration?.maxSessionsPerWeek === 'number' &&
+      dominantSpine.densityIntegration.maxSessionsPerWeek < sessions.length
+    )
+  )
   
   if (densityCapActive) {
     protectedAreas.push({

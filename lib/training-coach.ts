@@ -349,15 +349,9 @@ function determineProgressionGuidance(
     }
   }
   
-  // Band-assisted movements
-  if (snapshot.state.skillReadinessStatus === 'consolidate') {
-    return {
-      decision: 'maintain_assistance',
-      explanation: 'Current level needs more consolidation before reducing assistance.',
-      specificAction: 'Focus on cleaner reps at current assistance level.',
-      confidence: 'medium',
-    }
-  }
+  // [READINESS-STATUS-NO-CONSOLIDATE] ReadinessStatus union no longer
+  // includes 'consolidate'; the band-assisted maintain branch is dead.
+
   
   // Check for progression too aggressive
   if (calibration.suggestedProgressionLevel === 'very_conservative') {

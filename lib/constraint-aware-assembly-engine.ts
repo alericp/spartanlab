@@ -406,8 +406,11 @@ function analyzeFatigueConstraint(input: ConstraintAwareInput): ActiveConstraint
     }
   }
   
-  // Check fatigue decision
-  if (input.fatigueDecision === 'REDUCE_INTENSITY') {
+  // [TRAINING-DECISION-NO-REDUCE-INTENSITY] TrainingDecision union is
+  // TRAIN_AS_PLANNED|PRESERVE_QUALITY|LIGHTEN_SESSION|COMPRESS_WEEKLY_LOAD|
+  // DELOAD_RECOMMENDED. The legacy 'REDUCE_INTENSITY' literal is
+  // covered by LIGHTEN_SESSION.
+  if (input.fatigueDecision === 'LIGHTEN_SESSION') {
     return {
       type: 'fatigue_constraint',
       severity: 'moderate',

@@ -395,8 +395,12 @@ export function getAverageRPE(
     const rpeValues: number[] = []
     
     for (const session of rpeSessions.slice(0, sessionCount)) {
+      // [STORED-RPE-EXERCISE-NAME-ONLY] StoredRPESession exercises
+      // expose only `exerciseName` now; legacy exerciseId lookups are
+      // dropped. The unused id parameter is preserved for callers.
+      void exerciseId
       const exerciseRPE = session.exercises.find(e =>
-        e.exerciseId === exerciseId || e.exerciseName === exerciseName
+        e.exerciseName === exerciseName
       )
       
       if (exerciseRPE && exerciseRPE.sets.length > 0) {
@@ -420,8 +424,10 @@ export function getFatigueState(): { needsDeload: boolean; fatigueScore: number 
     const fatigueDecision = getFatigueTrainingDecision()
     const feedbackState = computeFatigueStateFromFeedback()
     
-    const needsDeload = fatigueDecision.decision === 'SKIP_TODAY' ||
-                        fatigueDecision.decision === 'DELOAD_RECOMMENDED' ||
+    // [TRAINING-DECISION-NO-SKIP-TODAY] TrainingDecision no longer
+    // includes 'SKIP_TODAY'; DELOAD_RECOMMENDED + feedback signal is
+    // the canonical deload trigger.
+    const needsDeload = fatigueDecision.decision === 'DELOAD_RECOMMENDED' ||
                         feedbackState.needsDeload
     
     // Convert fatigue score to 0-100 scale

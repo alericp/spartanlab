@@ -5518,14 +5518,14 @@ function applyMaterialityScoreAdjustments(
     // declared in `selectMainExercises`'s scope — this was a stale ref
     // to an outer-builder context object. The canonical fallback is the
     // existing local default: 'flexibility'.
-    const rangeTrainingMode: RangeTrainingMode = 'flexibility'
+const rangeTrainingMode = 'flexibility' as RangeTrainingMode
     const isRangeSkill = ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(primaryGoal)
     const rangeSkill = isRangeSkill ? primaryGoal as RangeSkill : 'toe_touch'
     
     const includeFlexibilityRange =
-      rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid'
+      ['flexibility', 'hybrid'].includes(rangeTrainingMode)
     const includeMobilityRange =
-      rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid'
+      ['mobility', 'hybrid'].includes(rangeTrainingMode)
 
     if (includeFlexibilityRange) {
       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue

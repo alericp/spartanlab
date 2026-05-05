@@ -890,6 +890,7 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
     minimumFrequency: 2,
     maximumFrequency: 4,
     restBetweenSessions: 1,
+    rationale: 'Reduce session frequency only when fatigue warrants it',
   },
 
   sessionPlacement: {

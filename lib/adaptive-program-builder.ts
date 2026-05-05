@@ -2973,6 +2973,28 @@ exerciseExplanations?: {
   // See lib/program/session-length-truth-contract.ts.
   // ===========================================================================
   sessionLengthTruth?: import('./program/session-length-truth-contract').ProgramSessionLengthTruthStamp
+  // ===========================================================================
+  // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Rebuild Failure Summary
+  // Authoritative session failure tracker rollup, promoted onto the program
+  // so that the regenerate route (`app/api/program/regenerate/route.ts`),
+  // authoritative generation (`lib/server/authoritative-program-generation.ts`),
+  // and the program page (`app/(app)/program/page.tsx`) can include it in
+  // API responses for surgical debugging of partial-rebuild failures.
+  // Optional + JSON-safe; round-trips through the existing `...program`
+  // spread. The shape mirrors the literal already emitted by finalProgram.
+  // ===========================================================================
+  rebuildFailureSummary?: {
+    totalAttempted: number
+    totalSucceeded: number
+    totalDegraded: number
+    firstFailedIndex: number | null
+    firstFailedFocus: string | null
+    firstFailedCheckpoint: string | null
+    firstFailedErrorName: string | null
+    firstFailedErrorMessage: string | null
+    failureVerdict: string
+    actionRequired: string
+  }
 }
 
 // =============================================================================
@@ -21186,22 +21208,17 @@ fatigueDecision: fatigueDecision ? {
     })() : undefined,
     // Override Signal Feedback - patterns from user exercise overrides
     overrideSignalFeedback: getOverrideSignalFeedback(),
-    // Constraint Detection - AI engine identifying limiting factors
-    constraintDetection: {
-      primaryConstraint: constraintInsight.hasInsight ? {
-        category: constraintInsight.focus || 'none',
-        score: 65,
-        indicatorMetrics: [],
-        isPrimaryLimiter: true,
-      } : null,
-      secondaryConstraints: [],
-      interventions: constraintInterventions,
-      coachingNote: constraintInsight.hasInsight
-        ? `${constraintInsight.label} is currently limiting your ${GOAL_LABELS[primaryGoal]} progress. SpartanLab is adjusting your program to prioritize this area.`
-        : 'No significant constraints detected. Continue your current approach.',
-    },
-    // Constraint Improvement Tracking - showing progress over time
-    constraintImprovement: constraintImprovementData || undefined,
+    // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-CONSTRAINT-DETECTION-OR-IMPROVEMENT]
+    // Same pattern as `intensityDistribution` / `flexibilityInsertions` /
+    // `weightedSkillAllocation` / `constraintImprovementData` removed
+    // earlier: canonical `AdaptiveProgram` does not own a top-level
+    // `constraintDetection` raw display object nor a top-level
+    // `constraintImprovement` mirror. Constraint truth on the program
+    // already lives on the owned `constraintInsight` and
+    // `constraintAnalysis` fields; the upstream `constraintInsight`,
+    // `constraintAnalysis`, `constraintInterventions`, and
+    // `constraintImprovementData` computations are preserved and
+    // continue to feed those owned fields and downstream UI.
     // Unified Workout Reasoning Summary - explains WHY this workout was generated
     workoutReasoningSummary: (() => {
       try {
@@ -21574,101 +21591,20 @@ fatigueDecision: fatigueDecision ? {
         return undefined
       }
     })(),
-    // TASK 9: Final engine diagnostics (dev-safe logging)
-    engineDiagnostics: (() => {
-      // Only log in development
-      if (process.env.NODE_ENV === 'production') return undefined
-      
-      const diagnostics = {
-        primaryGoal,
-        secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || 'none',
-        sessionDurationBudget: resolveSessionBudget(
-          typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
-        ),
-        scheduleMode: inputs.scheduleMode || 'static',
-        effectiveTrainingDays,
-        goalHierarchyWeights,
-        sessionDistribution,
-        rankedBottlenecks: rankedBottlenecks.map(b => ({ type: b.type, severity: b.severityScore })),
-        warmupPatternType: sessions[0]?.warmup?.length > 0 ? 'skill-aware' : 'default',
-        weeklySplitTemplate: sessions.map(s => s.focus).join(' / '),
-        keyMetricsDetected: {
-          pullUpMax: canonicalProfile.pullUpMax,
-          dipMax: canonicalProfile.dipMax,
-          weightedPullUp: canonicalProfile.weightedPullUp,
-          weightedDip: canonicalProfile.weightedDip,
-          frontLeverProgression: canonicalProfile.frontLeverProgression,
-          plancheProgression: canonicalProfile.plancheProgression,
-        },
-      }
-      
-      console.log('[EngineDiagnostics] === GENERATION COMPLETE ===')
-      console.log('[EngineDiagnostics]', JSON.stringify(diagnostics, null, 2))
-      
-      // ==========================================================================
-      // [PHASE-MATERIALITY] TASK 7: FINAL VERIFICATION REPORT
-      // ==========================================================================
-      console.log('PHASE_MATERIALITY_GENERATION_CONTRACT_COMPLETE', {
-      // 1. 6-session flexible behavior
-      sixSessionBehavior: {
-        effectiveTrainingDays,
-        scheduleMode: finalScheduleMode,
-        isFlexible: finalScheduleMode === 'flexible',
-        sessionsGenerated: sessions.length,
-        verdict: sessions.length === effectiveTrainingDays ? 'ALIGNED' : 'MISMATCH',
-      },
-      // 2. Multi-skill materiality
-      multiSkillMateriality: {
-        selectedSkillsCount: multiSkillMaterialityContract.selectedSkills.length,
-        primarySpine: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'primary_spine').map(e => e.skill),
-        secondaryAnchor: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'secondary_anchor').map(e => e.skill),
-        supportSkills: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').map(e => e.skill),
-        deferredSkills: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'deferred').map(e => e.skill),
-        supportCount: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').length,
-        deferredCount: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'deferred').length,
-        verdict: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').length > 0 
-        ? 'MULTI_SKILL_MATERIALITY_ACTIVE' 
-        : 'PRIMARY_SECONDARY_ONLY',
-      },
-      // 3. Current progression truth
-      currentProgressionTruth: {
-        hasCurrentWorkingProgressions: !!multiSkillMaterialityContract.currentWorkingProgressions,
-        skillsWithConservativeProgression: multiSkillMaterialityContract.materialSkillIntent
-        .filter(e => e.currentWorkingProgression && e.historicalCeiling && 
-              e.currentWorkingProgression !== e.historicalCeiling).length,
-        verdict: multiSkillMaterialityContract.currentWorkingProgressions 
-        ? 'PROGRESSION_TRUTH_AVAILABLE' 
-        : 'NO_PROGRESSION_DATA',
-      },
-      // 4. Exercise selection quality
-      exerciseSelectionQuality: {
-        totalExercises,
-        dbVerifiedExercises,
-        dbCoverage: totalExercises > 0 ? Math.round((dbVerifiedExercises / totalExercises) * 100) : 0,
-        verdict: dbVerifiedExercises >= totalExercises * 0.5 ? 'TRUTH_CONSTRAINED' : 'FALLBACK_HEAVY',
-      },
-      // 5. Doctrine influence
-      doctrineInfluence: {
-        enabled: multiSkillMaterialityContract.doctrineInfluenceEnabled,
-        summaryCount: multiSkillMaterialityContract.doctrineInfluenceSummary.length,
-        verdict: multiSkillMaterialityContract.doctrineInfluenceEnabled 
-        ? 'DOCTRINE_SCORING_ACTIVE' 
-        : 'DOCTRINE_NOT_AVAILABLE',
-      },
-      // 6. No-breakage confirmation
-      noBreakageConfirmation: {
-        sessionsValid: sessions.length > 0,
-        exercisesValid: totalExercises > 0,
-        scheduleValid: effectiveTrainingDays >= 2 && effectiveTrainingDays <= 7,
-        verdict: sessions.length > 0 && totalExercises > 0 ? 'NO_REGRESSION' : 'POTENTIAL_ISSUE',
-      },
-      // Overall verdict
-      overallVerdict: 'PHASE_MATERIALITY_CONTRACT_VERIFIED',
-      contractVersion: multiSkillMaterialityContract.contractVersion,
-      })
-      
-      return diagnostics
-    })(),
+    // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-ENGINE-DIAGNOSTICS] Same pattern as
+    // the constraint-* / flexibility / intensity / weighted-skill stale
+    // top-level fields removed earlier: canonical `AdaptiveProgram`
+    // does not own a top-level `engineDiagnostics` debug rollup, and
+    // there is no downstream consumer of this raw shape. The IIFE
+    // that previously built this object also produced dev-only
+    // `console.log('[EngineDiagnostics]' / 'PHASE_MATERIALITY_*')`
+    // output; that logging lived inside the IIFE and is removed with
+    // it. All authoritative materiality / verification persistence
+    // paths (plannerTruthAudit, materialityValidation,
+    // generationProvenance, qualityClassification, weekAdaptationDecision,
+    // sessionLengthTruth, doctrineUtilizationTrace) remain on the
+    // program and continue to carry the truth that the dev console
+    // log was previously summarizing.
     // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
     profileSnapshot: {
       snapshotId: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,

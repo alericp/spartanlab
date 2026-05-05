@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { PageContainer, Section, SectionHeader } from '@/components/layout'
-import type { LucideIcon } from 'lucide-react'
 import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AchievementBadge } from '@/components/achievements/AchievementBadge'
@@ -17,24 +16,12 @@ import {
   CATEGORY_LABELS,
 } from '@/lib/achievements/achievement-definitions'
 
-// [BUILD-FIX] Must be exhaustive for every member of the authoritative
-// AchievementCategory union in lib/achievements/achievement-definitions.ts
-// (training | strength | skill | consistency | volume | challenge | h2h |
-// longevity | balance). Stores `LucideIcon` *component references* (not
-// rendered JSX) because `SectionHeader.icon` is typed as `LucideIcon`
-// (see components/layout/index.tsx) and renders the component itself
-// internally. The filter chip strip below instantiates the component
-// inline with the desired className.
-const CATEGORY_ICONS: Record<AchievementCategory, LucideIcon> = {
-  training: Dumbbell,
-  strength: Target,
-  skill: Star,
-  consistency: Flame,
-  volume: Trophy,
-  challenge: Zap,
-  h2h: Crown,
-  longevity: Medal,
-  balance: Trophy,
+const CATEGORY_ICONS: Record<AchievementCategory, React.ReactNode> = {
+  training: <Dumbbell className="w-4 h-4" />,
+  strength: <Target className="w-4 h-4" />,
+  skill: <Star className="w-4 h-4" />,
+  consistency: <Flame className="w-4 h-4" />,
+  volume: <Trophy className="w-4 h-4" />,
 }
 
 export default function AchievementsPage() {
@@ -63,20 +50,7 @@ export default function AchievementsPage() {
   }
 
   const unlockedIds = new Set(unlocked.map(ua => ua.achievementId))
-  // [BUILD-FIX] Aligned with the authoritative AchievementCategory union
-  // so the filter chip strip surfaces every category that has achievements.
-  const categories: (AchievementCategory | 'all')[] = [
-    'all',
-    'training',
-    'strength',
-    'skill',
-    'consistency',
-    'volume',
-    'challenge',
-    'h2h',
-    'longevity',
-    'balance',
-  ]
+  const categories: (AchievementCategory | 'all')[] = ['all', 'training', 'strength', 'skill', 'consistency', 'volume']
   
   const filteredAchievements = selectedCategory === 'all' 
     ? ACHIEVEMENTS 
@@ -86,17 +60,14 @@ export default function AchievementsPage() {
   const totalAchievements = ACHIEVEMENTS.length
   const progressPercent = (totalUnlocked / totalAchievements) * 100
 
-  // [BUILD-FIX] Group by category for display. Partial<Record<...>> is
-  // the honest shape: after filtering not every category is necessarily
-  // present, and the render path below null-coalesces the per-category
-  // array so the UI never crashes on an empty entry.
+  // Group by category for display
   const groupedAchievements = filteredAchievements.reduce((acc, achievement) => {
     if (!acc[achievement.category]) {
       acc[achievement.category] = []
     }
-    acc[achievement.category]!.push(achievement)
+    acc[achievement.category].push(achievement)
     return acc
-  }, {} as Partial<Record<AchievementCategory, Achievement[]>>)
+  }, {} as Record<AchievementCategory, Achievement[]>)
 
   return (
     <PageContainer>
@@ -125,56 +96,43 @@ export default function AchievementsPage() {
 
       {/* Category filter */}
       <div className="flex gap-2 flex-wrap mb-6">
-        {categories.map(category => {
-          // [BUILD-FIX] CATEGORY_ICONS now stores LucideIcon component
-          // references, so the filter chip must instantiate the
-          // component inline with the desired sizing className.
-          const ChipIcon = category !== 'all' ? CATEGORY_ICONS[category] : null
-          return (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
-                selectedCategory === category
-                  ? "bg-[#2A2D31] text-[#F5F5F5]"
-                  : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
-              )}
-            >
-              {ChipIcon && <ChipIcon className="w-4 h-4" />}
-              {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
-            </button>
-          )
-        })}
+        {categories.map(category => (
+          <button
+            key={category}
+            onClick={() => setSelectedCategory(category)}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
+              selectedCategory === category
+                ? "bg-[#2A2D31] text-[#F5F5F5]"
+                : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
+            )}
+          >
+            {category !== 'all' && CATEGORY_ICONS[category]}
+            {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
+          </button>
+        ))}
       </div>
 
       {/* Achievements by category */}
       {selectedCategory === 'all' ? (
-        Object.entries(groupedAchievements).map(([category, achievements]) => {
-          // [BUILD-FIX] Partial<Record> means `achievements` is
-          // `Achievement[] | undefined`. Null-coalesce so a missing
-          // category entry never crashes the render.
-          const typedCategory = category as AchievementCategory
-          const categoryAchievements = achievements ?? []
-          return (
-            <Section key={category} className="mb-8">
-              <SectionHeader
-                title={CATEGORY_LABELS[typedCategory]}
-                icon={CATEGORY_ICONS[typedCategory]}
-              />
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {categoryAchievements.map(achievement => (
-                  <AchievementCard
-                    key={achievement.id}
-                    achievement={achievement}
-                    unlocked={unlockedIds.has(achievement.id)}
-                    unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
-                  />
-                ))}
-              </div>
-            </Section>
-          )
-        })
+        Object.entries(groupedAchievements).map(([category, achievements]) => (
+          <Section key={category} className="mb-8">
+            <SectionHeader 
+              title={CATEGORY_LABELS[category as AchievementCategory]}
+              icon={CATEGORY_ICONS[category as AchievementCategory]}
+            />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {achievements.map(achievement => (
+                <AchievementCard 
+                  key={achievement.id}
+                  achievement={achievement}
+                  unlocked={unlockedIds.has(achievement.id)}
+                  unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
+                />
+              ))}
+            </div>
+          </Section>
+        ))
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAchievements.map(achievement => (
@@ -229,18 +187,12 @@ function AchievementCard({ achievement, unlocked, unlockedAt }: AchievementCardP
           </p>
         )}
         {!unlocked && (
-          // [BUILD-FIX] TIER_COLORS shape is { bg, text, border, glow }
-          // (all Tailwind class strings) — there is no `primary` raw
-          // color. Render the locked-tier pill with the existing class
-          // tokens via `cn` so the same visual intent is preserved
-          // without re-introducing a phantom raw-color contract.
-          <div
-            className={cn(
-              "mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase border",
-              tierColors.bg,
-              tierColors.text,
-              tierColors.border,
-            )}
+          <div 
+            className="mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase"
+            style={{ 
+              backgroundColor: `${tierColors.primary}20`,
+              color: tierColors.primary
+            }}
           >
             {achievement.tier}
           </div>

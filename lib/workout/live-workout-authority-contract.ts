@@ -78,21 +78,6 @@ export function resolveExerciseInputMode(
       isWeighted?: boolean
       isTimedHold?: boolean
       isUnilateral?: boolean
-      // [BAND-TRUTH-STAGE-C-FIX] Additional canonical band-support
-      // signals already written by upstream truth resolvers
-      // (program-exercise-selector.ts, workout-execution-truth.ts).
-      // The contract previously ignored these and relied on
-      // `bandSelectable` alone, which caused legitimately
-      // band-supportable skill work like "Tuck Front Lever Hold"
-      // to fall through to `timed_hold` mode with band UI closed
-      // whenever the source path didn't explicitly set
-      // `bandSelectable`. Declaring them here lets the contract
-      // consume the same richer truth the rest of the system
-      // already produces.
-      assistedAllowed?: boolean
-      supportsBandAdjustment?: boolean
-      recommendedBand?: ResistanceBandColor | null
-      recommendedBandColor?: ResistanceBandColor | null
     }
     prescribedLoad?: {
       load?: number
@@ -167,56 +152,8 @@ export function resolveExerciseInputMode(
     }
   }
 
-  // ===========================================================================
-  // [BAND-TRUTH-STAGE-C-FIX] Band-assisted skill work
-  //
-  // Weighted variants were already intercepted above. Reaching this branch
-  // guarantees the exercise is NOT weighted and has no prescribed external
-  // load, so opening band controls cannot collide with a load input.
-  //
-  // The contract now recognises ANY of the canonical band-support signals
-  // the rest of the system already produces, rather than only the single
-  // `bandSelectable` flag that was written by one specific selector path:
-  //
-  //   1. exec.bandSelectable === true            (explicit; existing path)
-  //   2. exec.assistedAllowed === true           (program-exercise-selector)
-  //   3. exec.supportsBandAdjustment === true    (alternative canonical flag)
-  //   4. exec.recommendedBand / recommendedBandColor present
-  //      (upstream assigned a specific band, so band UI is clearly in scope)
-  //   5. Canonical name fallback for legitimately band-supportable skill
-  //      patterns: 'lever', 'planche', 'muscle up', 'pull-up', 'pullup',
-  //      'dip', 'assisted'. This pattern list is the SAME one used by the
-  //      canonical `checkBandSupport` helper in workout-execution-truth.ts
-  //      (line 564) - we are not inventing a new heuristic, only aligning
-  //      the live-workout contract with the fallback the app already
-  //      trusts elsewhere.
-  //
-  // This branch runs BEFORE `timed_hold`, so band-supportable skill holds
-  // like "Tuck Front Lever Hold" resolve to band_assisted_skill mode
-  // (which already exposes showHoldInput: true) instead of shunting to
-  // pure `timed_hold` with band UI closed.
-  // ===========================================================================
-  const BAND_SUPPORTED_NAME_PATTERNS = [
-    'lever',
-    'planche',
-    'muscle up',
-    'muscle-up',
-    'pull-up',
-    'pullup',
-    'pull up',
-    'dip',
-    'assisted',
-  ]
-  const nameMatchesBandSupportedSkill = BAND_SUPPORTED_NAME_PATTERNS.some(p => name.includes(p))
-  const hasRecommendedBand = Boolean(exec.recommendedBand || exec.recommendedBandColor)
-  const bandSupportedByCanonicalTruth =
-    exec.bandSelectable === true ||
-    exec.assistedAllowed === true ||
-    exec.supportsBandAdjustment === true ||
-    hasRecommendedBand ||
-    nameMatchesBandSupportedSkill
-
-  if (bandSupportedByCanonicalTruth) {
+  // Band-assisted skill work (bodyweight only - weighted branch above wins first)
+  if (exec.bandSelectable === true) {
     return {
       mode: 'band_assisted_skill',
       showBandSelector: true,

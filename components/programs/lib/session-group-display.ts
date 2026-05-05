@@ -13,146 +13,6 @@
 // Types matching what the builder produces
 export type GroupType = 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
 
-// =============================================================================
-// [PHASE 3F METHOD SEMANTIC TRUTH LOCK]
-// SINGLE AUTHORITATIVE SEMANTIC OWNER for visible grouped-method naming.
-//
-// Pre-3F, visible method language for Circuit / Density Block / Cluster Set /
-// Superset was scattered across four independent owners that could drift
-// from one another:
-//   1. AdaptiveSessionCard.getGroupTypeLabel()           (pill noun)
-//   2. AdaptiveSessionCard.buildGroupedMemberSemanticLine() (per-row line)
-//   3. AdaptiveSessionCard.getMethodBodyCue()            (in-body strip)
-//   4. session-group-display.ts restProtocol literals    (rest microcopy)
-//
-// Result: the user could read "Density Block" in the pill, "Timed block,
-// minimal rest" in the rest microcopy, and "Rotation 1 of 3 — rotate within
-// the time cap" in the row line, all describing the same group, without ever
-// being told at a glance the one thing that distinguishes Density Block from
-// Circuit: that Density is *time-capped work-capacity* whereas Circuit is
-// *round/station based*. That is the exact "is this a circuit or density,
-// and are they the same thing?" symptom Phase 3F locks down.
-//
-// Contract:
-//   - `label`            — full noun the pill / chip / strip use ("Density Block")
-//   - `headerTagline`    — 1-3 word distinguishing qualifier the pill carries
-//                          immediately after the label so semantic intent is
-//                          visible without needing to read the muted rest
-//                          microcopy ("timed work cap", "rounds & stations")
-//   - `bodyCue`          — optional in-body strip {primary, secondary}; reserved
-//                          for methods that *cannot* be expressed by member
-//                          structure alone (cluster + density). Superset and
-//                          circuit have null bodyCue because A1/A2/B1/B2
-//                          prefixes already carry the structural semantic;
-//                          adding a body cue for them would be duplicate
-//                          paragraph clutter.
-//   - `memberLine(args)` — per-row compact one-liner under the row content.
-//                          Only superset takes `partnerName`; the others
-//                          ignore it.
-//   - `restProtocol`     — rest microcopy shown in the pill header.
-//
-// Every visible owner (getGroupTypeLabel, buildGroupedMemberSemanticLine,
-// getMethodBodyCue, restProtocol assignment) now reads from this table. To
-// rename or reword anything, edit one entry here and the entire visible
-// program corridor updates atomically.
-//
-// Row-level set-execution methods (top_set / drop_set / rest_pause / single-
-// row cluster) are NOT in this table because they are owned by the
-// row-level resolveRowMethodTruth contract installed in Phase 3E. The two
-// owners stay strictly separated to preserve the grouped-vs-row taxonomy
-// honesty rule.
-// =============================================================================
-export interface GroupedMethodSemantics {
-  /** Full noun used in the pill header, in-body strips, and chips. */
-  label: string
-  /**
-   * Compact distinguishing qualifier rendered in the pill header
-   * immediately after the label, so the user sees what makes this method
-   * structurally distinct without parsing the rest microcopy. Kept short
-   * (1-3 words) to avoid header clutter.
-   */
-  headerTagline: string
-  /**
-   * Reserved for methods whose nature cannot be communicated by member
-   * structure alone (currently cluster + density). null for superset and
-   * circuit because A1/A2/B1/B2 prefixes already carry their semantic.
-   */
-  bodyCue: { primary: string; secondary: string } | null
-  /** Per-row compact line shown beneath the row content. */
-  memberLine: (args: {
-    positionIndex: number
-    totalMembers: number
-    partnerName?: string
-  }) => string | null
-  /** Rest microcopy shown in the pill header after the exercise count. */
-  restProtocol: string
-}
-
-export const GROUPED_METHOD_SEMANTICS: Record<
-  Exclude<GroupType, 'straight'>,
-  GroupedMethodSemantics
-> = {
-  superset: {
-    label: 'Superset',
-    headerTagline: 'paired sets',
-    bodyCue: null,
-    memberLine: ({ partnerName }) => {
-      const safePartner = (partnerName || '').trim()
-      return safePartner.length >= 2
-        ? `Paired with ${safePartner} — minimal rest between, full rest after the pair.`
-        : 'Paired superset — minimal rest between, full rest after the pair.'
-    },
-    restProtocol: '0-15s between, 90-120s after pair',
-  },
-  circuit: {
-    label: 'Circuit',
-    headerTagline: 'rounds & stations',
-    bodyCue: null,
-    memberLine: ({ positionIndex, totalMembers }) =>
-      totalMembers > 1
-        ? `Circuit station ${positionIndex} of ${totalMembers} — cycle through, rest after the full round.`
-        : 'Circuit station — cycle through, rest after the full round.',
-    restProtocol: '60-90s after full round',
-  },
-  density_block: {
-    label: 'Density Block',
-    headerTagline: 'timed work cap',
-    bodyCue: {
-      primary: 'Work capacity',
-      secondary: 'Rotate movements within the time cap — quality reps, rest as needed.',
-    },
-    memberLine: ({ positionIndex, totalMembers }) =>
-      totalMembers > 1
-        ? `Density rotation ${positionIndex} of ${totalMembers} — rotate within the time cap, quality over speed.`
-        : 'Density block — work within the time cap, quality over speed.',
-    restProtocol: 'Within window, minimal rest',
-  },
-  cluster: {
-    label: 'Cluster Set',
-    headerTagline: 'intra-set rest',
-    bodyCue: {
-      primary: 'Intra-set rest',
-      secondary: 'Mini-efforts with a short pause, then full rest between clusters.',
-    },
-    memberLine: ({ positionIndex, totalMembers }) =>
-      totalMembers === 1
-        ? 'Cluster set — mini-efforts with short intra-set rest, full rest between clusters.'
-        : `Cluster ${positionIndex} of ${totalMembers} — mini-efforts with short intra-set rest, full rest between clusters.`,
-    restProtocol: '10-20s intra-set, 120-180s inter-set',
-  },
-}
-
-/**
- * Single accessor for grouped-method semantic truth. Returns null for
- * 'straight' (which has no method semantic) so callers can branch cleanly.
- */
-export function getGroupedMethodSemantics(
-  groupType: GroupType
-): GroupedMethodSemantics | null {
-  if (groupType === 'straight') return null
-  return GROUPED_METHOD_SEMANTICS[groupType] ?? null
-}
-
 export interface DisplayGroupExercise {
   id: string
   name: string
@@ -321,34 +181,15 @@ function getGroupLabel(groupType: GroupType, index: number): string {
 // this adapter -- making clusters invisible on the Program card even when
 // compression/variant selection kept the cluster exercise.
 //
-// Per-method minimums:
+// Per-method minimums (unchanged):
 //   superset/circuit/density_block -> 2  (method requires pairing to mean anything)
-//   cluster                         -> 2  (see CLUSTER-DOCTRINE-CORRECTION below)
-//
-// [CLUSTER-DOCTRINE-CORRECTION] Cluster was previously treated as a 1-member
-// GROUPED BLOCK because the builder emits cluster onto a single primary-effort
-// exercise without a blockId. That made single-exercise cluster masquerade as
-// grouped structure on the Program card -- an overclaim that the user read as
-// "everything is a cluster set". The corrected doctrine:
-//
-//   - Superset / circuit / density_block  = grouped-structure methods (must
-//     render as a visible block). They keep the >= 2 member minimum.
-//   - Cluster                              = METHOD-ONLY execution cue by
-//     default. It only renders as a grouped block when there is a REAL
-//     multi-member cluster block (>= 2 members sharing a blockId or a styled
-//     cluster group). Otherwise it renders as a row-level method chip and
-//     surfaces in the card's "Method cues present: Cluster" status line --
-//     NEVER as a 1-member fake group header.
-//
-// Single-row cluster without a blockId is handled by the row-level chip path
-// in AdaptiveSessionCard (Dumbbell icon + "Cluster" label on the exercise
-// row) and by the card-level "Method cues present" status line.
+//   cluster                         -> 1  (method is intra-set, single exercise)
 export function minMembersFor(groupType: GroupType): number {
   switch (groupType) {
     case 'superset': return 2
     case 'circuit': return 2
     case 'density_block': return 2
-    case 'cluster': return 2
+    case 'cluster': return 1
     default: return 1
   }
 }
@@ -368,48 +209,16 @@ function hasUsableName(ex: { name?: string }): boolean {
  * Build grouped display model from styledGroups (authoritative source)
  */
 function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplayModel {
-  // [METHOD-TAXONOMY-LOCK] Defensive invariant: no upstream source may emit
-  // a styledGroup with `groupType: 'cluster'`. Cluster is a SET-EXECUTION
-  // METHOD (see lib/workout/execution-unit-contract.ts taxonomy). Any cluster
-  // styledGroup that reaches here is a contract violation and is stripped
-  // BEFORE partial-validity filtering so it cannot inflate grouped counters
-  // or reach the renderer. A dev warning is logged so the offending
-  // upstream path can be found and fixed. This guard protects the display
-  // corridor even if a future builder change incorrectly emits cluster as
-  // a grouped type.
-  const clusterStyledGroupCount = styledGroups.filter(g => g.groupType === 'cluster').length
-  if (clusterStyledGroupCount > 0 && typeof console !== 'undefined') {
-    console.warn(
-      '[METHOD-TAXONOMY-LOCK] Stripped cluster styledGroup(s) from display input — cluster is a set-execution method, not a grouped structure.',
-      { count: clusterStyledGroupCount },
-    )
-  }
-  const taxonomyCleanGroups = styledGroups.filter(g => g.groupType !== 'cluster')
-
   // [PARTIAL-VALIDITY] Filter each group's members to those that actually
   // resolve, then keep the block only when enough real members remain for the
   // method to be meaningful. This stops us from rendering a "Superset" header
   // over a single lonely row (prior behavior) while preserving the block when
   // one of several members fails to resolve (desired behavior).
-  const filteredGroups: StyledGroupInput[] = taxonomyCleanGroups
+  const filteredGroups: StyledGroupInput[] = styledGroups
     .map(g => ({ ...g, exercises: g.exercises.filter(hasUsableName) }))
     .filter(g => {
       if (g.groupType === 'straight') return true
-      // [CLUSTER-DOCTRINE-CORRECTION] Cluster is now also gated at >= 2 so
-      // single-exercise cluster cannot masquerade as a grouped block. The
-      // builder emits cluster onto a lone primary-effort exercise without a
-      // blockId; the method-pill + row-level chip + "Method cues present"
-      // status line carry that truth. Grouped structure is reserved for
-      // real multi-member coordination.
-      //
-      // Density_block retains >= 1 because the current builder rebuild pass
-      // (lib/adaptive-program-builder.ts ~12326-12354) can emit a legitimate
-      // single-member density_block and that remains in the governor's
-      // grouped-structure list.
-      if (g.groupType === 'superset' || g.groupType === 'circuit' || g.groupType === 'cluster') {
-        return g.exercises.length >= 2
-      }
-      return g.exercises.length >= 1
+      return g.exercises.length >= minMembersFor(g.groupType)
     })
   const nonStraightGroups = filteredGroups.filter(g => g.groupType !== 'straight')
   
@@ -428,14 +237,12 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
       case 'cluster': index = clusterIndex++; break
     }
     
-    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] restProtocol now reads from the
-    // single authoritative GROUPED_METHOD_SEMANTICS table. Pre-3F these
-    // literals lived inline here and could drift from AdaptiveSessionCard's
-    // pill noun + body cue + member semantic line. Straight (non-grouped)
-    // exercises keep the legacy '60-120s between sets' fallback because
-    // straight is not represented in the semantics table.
-    const semantics = getGroupedMethodSemantics(group.groupType)
-    const restProtocol = semantics?.restProtocol ?? '60-120s between sets'
+    // [GROUPED-RENDER-FIX] Include prefix derived from methodLabel and restProtocol for render
+    const restProtocol = group.groupType === 'circuit' ? '60-90s after full circuit'
+      : group.groupType === 'superset' ? '0-15s between, 90-120s after pair'
+      : group.groupType === 'density_block' ? 'Timed block, minimal rest'
+      : group.groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+      : '60-120s between sets'
     
     return {
       id: group.id,
@@ -506,22 +313,11 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     // was missing/unusable, which produced the "method wrote density but body
     // rendered flat" symptom. The builder writes method='density_block' at
     // training-style-service.ts:921, so the adapter must honor it here.
-    //
-    // [METHOD-TAXONOMY-LOCK] 'cluster' is deliberately EXCLUDED from this
-    // recognized-grouped-method set. Per the taxonomy split in
-    // lib/workout/execution-unit-contract.ts, cluster is a SET-EXECUTION
-    // METHOD, not a grouped structure. A row with method='cluster' must
-    // fall through to `standaloneExercises` and render as a flat row with
-    // a row-level cluster chip + execution microcopy — never as a grouped
-    // block. Previously this branch tried to recognize cluster as a group
-    // type; that path was then gated out by `minMembersFor('cluster')=2`
-    // downstream, but leaving the branch here kept a drift surface alive.
-    // Removing the branch makes it impossible for cluster to re-enter the
-    // grouped-render corridor through this fallback.
     if (
       ex.blockId &&
       (method === 'superset' ||
         method === 'circuit' ||
+        method === 'cluster' ||
         method === 'density_block' ||
         method === 'density')
     ) {
@@ -534,10 +330,9 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   }
   
   // Convert to display groups
-  // [METHOD-TAXONOMY-LOCK] No clusterIndex — cluster is a set-execution
-  // method, never materialized as a grouped block from this fallback path.
   let supersetIndex = 0
   let circuitIndex = 0
+  let clusterIndex = 0
   let densityIndex = 0
   
   const displayGroups: DisplayGroup[] = []
@@ -552,15 +347,12 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     let groupType: GroupType = 'straight'
     let index = 0
     
-    // [METHOD-TAXONOMY-LOCK] Only TRUE grouped structures are recognized
-    // here. Cluster is a SET-EXECUTION METHOD and cannot reach this block
-    // anyway (the method filter above excludes it), but we also do not
-    // enumerate it as a groupType case here — that would leave a zombie
-    // branch that a future code change could reactivate.
     if (method === 'superset') {
       groupType = 'superset'
     } else if (method === 'circuit') {
       groupType = 'circuit'
+    } else if (method === 'cluster') {
+      groupType = 'cluster'
     } else if (method === 'density_block' || method === 'density') {
       groupType = 'density_block'
     }
@@ -573,14 +365,15 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
 
     if (groupType === 'superset') index = supersetIndex++
     else if (groupType === 'circuit') index = circuitIndex++
+    else if (groupType === 'cluster') index = clusterIndex++
     else if (groupType === 'density_block') index = densityIndex++
 
     if (groupType !== 'straight') {
-      // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Read from the single
-      // authoritative semantics table so this exercise-fallback branch
-      // stays in lockstep with the styledGroups branch above.
-      const restProtocol =
-        getGroupedMethodSemantics(groupType)?.restProtocol ?? '60-120s between sets'
+      // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
+      const restProtocol = groupType === 'circuit' ? '60-90s after full circuit'
+        : groupType === 'superset' ? '0-15s between, 90-120s after pair'
+        : groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+        : '60-120s between sets'
       
       displayGroups.push({
         id: blockId,
@@ -597,74 +390,13 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
       })
     }
   }
-
-  // [METHOD-ONLY-VISIBILITY -- DENSITY ONLY AFTER CLUSTER DOCTRINE CORRECTION]
-  // Second pass: exercises carrying method='density_block'/'density' WITHOUT a
-  // blockId. Density_block remains in the grouped-structure taxonomy per the
-  // cluster doctrine correction, so 1-member density blocks still render as
-  // method groups.
-  //
-  // Cluster is NO LONGER wrapped into a 1-member fake group here. Per the
-  // CLUSTER-DOCTRINE-CORRECTION above, single-exercise cluster is a
-  // METHOD-ONLY execution cue (row-level method chip + "Method cues present"
-  // status line in the card), NOT a grouped block. Previously this loop
-  // synthesized a `method-only-${ex.id}` group for every single-row cluster
-  // which produced a fake "Cluster Set A" header over a lone row and caused
-  // the Program page to read as "everything is a cluster set". Cluster
-  // exercises without a blockId now fall through to the standalone path and
-  // render as ordinary rows with their method chip.
-  //
-  // The synthetic `method-only-${ex.id}` group id remains reserved for this
-  // density-only path -- it does not collide with real blockIds.
-  for (const ex of exercises) {
-    if (ex.blockId) continue // already handled by the blockId loop above
-    if (!hasUsableName(ex)) continue
-    const method = ex.method?.toLowerCase()
-    let groupType: GroupType | null = null
-    if (method === 'density_block' || method === 'density') groupType = 'density_block'
-    if (!groupType) continue
-
-    const index = densityIndex++
-    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Read from semantics table.
-    // The legacy '30-60s between rounds' literal was a pre-3F drift point;
-    // density's authoritative microcopy is "Within window, minimal rest"
-    // because a density block is time-capped, not round-counted.
-    const restProtocol =
-      getGroupedMethodSemantics(groupType)?.restProtocol ?? '60-120s between sets'
-
-    displayGroups.push({
-      id: `method-only-${ex.id}`,
-      groupType,
-      label: getGroupLabel(groupType, index),
-      exercises: [{
-        id: ex.id,
-        name: ex.name,
-        methodLabel: ex.methodLabel,
-        prefix: undefined,
-      }],
-      restProtocol,
-    })
-    const sIdx = standaloneExercises.findIndex(s => s.id === ex.id)
-    if (sIdx !== -1) standaloneExercises.splice(sIdx, 1)
-  }
-
+  
   // Build summary
-  // [METHOD-TAXONOMY-LOCK] No cluster entry in the summary: the exercise
-  // fallback branch deliberately does NOT materialize cluster as a grouped
-  // block (cluster is a set-execution method, not a grouped structure).
-  // Prior to the taxonomy refactor this branch declared `let clusterIndex = 0`
-  // and pushed a "X Cluster Sets" summary part here; that declaration was
-  // removed when cluster was taken out of grouped ownership, but two stale
-  // references remained alive (the `if (clusterIndex > 0)` push below and
-  // the `clusterCount: clusterIndex` in the return). Those produced a
-  // `ReferenceError: clusterIndex is not defined` at runtime and crashed
-  // the Program page. Both references are now removed at the root rather
-  // than masked with a redeclared zero-valued variable, which would have
-  // kept a zombie ownership concept alive.
   const summaryParts: string[] = []
   if (supersetIndex > 0) summaryParts.push(`${supersetIndex} Superset${supersetIndex > 1 ? 's' : ''}`)
   if (circuitIndex > 0) summaryParts.push(`${circuitIndex} Circuit${circuitIndex > 1 ? 's' : ''}`)
   if (densityIndex > 0) summaryParts.push(`${densityIndex} Density Block${densityIndex > 1 ? 's' : ''}`)
+  if (clusterIndex > 0) summaryParts.push(`${clusterIndex} Cluster Set${clusterIndex > 1 ? 's' : ''}`)
   
   return {
     hasGroups: displayGroups.length > 0,
@@ -673,13 +405,7 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     supersetCount: supersetIndex,
     circuitCount: circuitIndex,
     densityCount: densityIndex,
-    // [METHOD-TAXONOMY-LOCK] Always 0 in the exercise fallback branch. This
-    // branch cannot produce grouped cluster blocks by design (cluster is a
-    // set-execution method). Single-exercise cluster truth is carried by the
-    // row-level method chip and the card's "Method cues present" status
-    // line, not by this grouped-count field. Any downstream consumer that
-    // treats clusterCount as "grouped cluster blocks exist" stays correct.
-    clusterCount: 0,
+    clusterCount: clusterIndex,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
     // sourceUsed, flatReason, renderBlocks, and the display-first fallback
@@ -874,36 +600,24 @@ function buildRawFallbackBlocks(
     if (blocks.length > 0) return blocks
   }
 
-  // Priority 2: exercises with blockId + non-straight method,
-  // OR exercises with method='density_block' WITHOUT blockId (method-only
-  // density still renders as a grouped structure per the cluster doctrine
-  // correction).
-  //
-  // [CLUSTER-DOCTRINE-CORRECTION] Cluster without a blockId is no longer
-  // emitted as a raw fallback block. Single-exercise cluster is a method
-  // cue, not a grouped block; it renders via the row-level method chip and
-  // the card's "Method cues present" status line.
+  // Priority 2: exercises with blockId + non-straight method
   const blockOrder: string[] = []
   const blockMembers = new Map<string, ExerciseInput[]>()
   const blockMethod = new Map<string, GroupType>()
   for (const ex of exercises) {
     const m = ex.method?.toLowerCase()
-    if (!m) continue
-    // Superset/circuit/cluster are TRUE grouped-block methods and require
-    // blockId. Cluster joined this gate in the doctrine correction -- a
-    // cluster block must be a real multi-member coordination, not a
-    // single-exercise method cue.
-    if ((m === 'superset' || m === 'circuit' || m === 'cluster') && !ex.blockId) continue
-    // Recognize all non-straight methods we can emit as raw blocks.
-    if (!(m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')) continue
-    // Method-only density without blockId uses a synthetic per-exercise id.
-    const key = ex.blockId || `method-only-${ex.id}`
-    if (!blockMembers.has(key)) {
-      blockMembers.set(key, [])
-      blockOrder.push(key)
-      blockMethod.set(key, (m === 'density' ? 'density_block' : m) as GroupType)
+    if (
+      ex.blockId &&
+      m &&
+      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
+    ) {
+      if (!blockMembers.has(ex.blockId)) {
+        blockMembers.set(ex.blockId, [])
+        blockOrder.push(ex.blockId)
+        blockMethod.set(ex.blockId, (m === 'density' ? 'density_block' : m) as GroupType)
+      }
+      blockMembers.get(ex.blockId)!.push(ex)
     }
-    blockMembers.get(key)!.push(ex)
   }
   const typeIndex: Record<string, number> = {
     superset: 0,
@@ -948,28 +662,13 @@ export function buildGroupedDisplayModel(
   // [GROUPED-RENDER-CONTRACT] Priority 1: authoritative styledGroups from builder.
   // Priority 2: per-exercise blockId+method fallback. Priority 1 wins only when
   // it actually produced usable non-straight groups; otherwise Priority 2 runs.
-  //
-  // [METHOD-ONLY-TRUTH-SPLIT + CLUSTER-DOCTRINE-CORRECTION]
-  // Grouped-block methods (superset / circuit / cluster) require a blockId
-  // for their truth to count as grouped-structure truth on the card.
-  //
-  // Cluster joined this gate in the doctrine correction: the builder emits
-  // cluster onto a single primary-effort exercise without a blockId, and the
-  // previous behavior let that single-row cluster inflate `hasGroupedTruth`
-  // -- which forced the card off the honest flat branch and into a fake
-  // grouped-body path. The user read the result as "everything is being
-  // labeled as a cluster set". With this gate, single-exercise cluster is
-  // honestly flat at the truth layer and surfaces only through the row-level
-  // method chip and the card's "Method cues present" status line.
-  //
-  // Density_block stays at method-only truth (no blockId requirement) because
-  // the governor keeps density_block in the grouped-structure list.
   const hasAnyExerciseMethodTruth = exercises.some(e => {
     const m = e.method?.toLowerCase()
-    if (!m) return false
-    if (m === 'superset' || m === 'circuit' || m === 'cluster') return !!e.blockId
-    if (m === 'density_block' || m === 'density') return true
-    return false
+    return (
+      !!e.blockId &&
+      !!m &&
+      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
+    )
   })
   const styledGroupsPresent = !!(styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0)
   // [DISPLAY-FIRST-FALLBACK] Detect RAW upstream grouped truth BEFORE any
@@ -977,12 +676,6 @@ export function buildGroupedDisplayModel(
   // even if the rich path can't hydrate" and must be computed from pre-filter
   // signals only.
   const hasAnyStyledNonStraightRaw = !!(styleMetadata?.styledGroups?.some(g => g.groupType !== 'straight'))
-  // [METHOD-ONLY-TRUTH-SPLIT] `hasAnyExerciseMethodTruth` now includes the
-  // method-only cluster/density path above, so `hasGroupedTruth` fires for
-  // sessions where the builder wrote method='cluster' onto a single exercise
-  // even when styledGroups did not survive into the card. This is the signal
-  // that forces the card off the honest-flat branch and into a visible
-  // method-programming body.
   const hasGroupedTruth = hasAnyStyledNonStraightRaw || hasAnyExerciseMethodTruth
 
   let fromStyledGroups: GroupedDisplayModel | null = null

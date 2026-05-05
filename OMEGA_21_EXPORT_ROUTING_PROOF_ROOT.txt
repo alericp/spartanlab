@@ -1,0 +1,42 @@
+OMEGA-21-EXPORT-ROUTING-PROOF
+created_at: 2026-04-30 (v0 turn boundary)
+branch: unknown to agent (assigned by v0 platform at end-of-turn push; visible in chat GitHub indicator)
+sha_before_commit: unknown to agent (no shell access)
+workspace_path: /vercel/share/v0-project
+project_identity: spartanlab (alericp/spartanlab) - confirmed via persistent presence of docs/build-sync/omega-10-delivery-refresh.md and omega-17-delivery-sweep-refresh.md from prior turns
+purpose: prove v0 is editing the exact user-downloadable/exportable SpartanLab project
+
+previous_zip_failure_evidence:
+  - user OMEGA-19 zip: contained omega-10/omega-17 markers, lacked omega-19 markers
+  - user OMEGA-20 zip: contained omega-10/omega-17 markers, lacked omega-20 markers
+  - both prior turns DID write proof files to /vercel/share/v0-project (verified by Grep this turn:
+    docs/build-sync/omega-19-delivery-proof.md, omega-19-file-manifest.json,
+    omega-20-delivery-proof.md, omega-20-file-manifest.json all exist on disk right now,
+    plus OMEGA_20_DELIVERY_PROOF_ROOT.txt at workspace root)
+
+diagnostic_setup_for_this_turn:
+  marker_a (NEW FILE):    OMEGA_21_EXPORT_ROUTING_PROOF_ROOT.txt at repo root (this file)
+  marker_b (NEW FILE):    docs/build-sync/omega-21-export-routing-proof.md
+  marker_c (APPEND ONLY): docs/build-sync/omega-17-delivery-sweep-refresh.md gets a new section
+                          containing OMEGA-21-DIAGNOSTIC-APPEND-MARKER
+
+interpretation_matrix_for_next_zip:
+  case_1 - root_marker_present AND append_marker_present:
+    -> export channel is healthy this turn. previous failures were due to user
+       downloading from an older version block or pulling stale branch.
+  case_2 - root_marker_absent AND append_marker_present:
+    -> v0 export channel is dropping NEW files but preserving edits to PREEXISTING files.
+       This is a v0-platform export bug. Escalate to vercel.com/help with this chat URL.
+  case_3 - root_marker_absent AND append_marker_absent:
+    -> the zip the user is inspecting is NOT from this chat. It is a different chat,
+       different project, or cached older artifact. User must verify the chat URL.
+  case_4 - root_marker_present AND append_marker_absent:
+    -> impossible without v0 export bug; report to vercel.com/help.
+
+agent_environment_disclosure:
+  shell_access: NONE
+  cannot_run: git, unzip, pnpm, shasum, find, ls, pwd
+  can_run:    Read, Write, Edit, Glob, Grep on /vercel/share/v0-project filesystem
+  end_of_turn_push: performed by v0 platform itself, not agent
+
+OMEGA-21-EXPORT-ROUTING-PROOF

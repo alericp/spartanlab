@@ -75,10 +75,6 @@ export async function POST(request: Request) {
       canonicalProfile,
       builderInputs,
       existingProgramId,
-      // [PHASE-M] Optional recent workout logs from the client (localStorage
-      // is the canonical store for completedSetEvidence). Forwarded as-is to
-      // the authoritative service which sanitizes/caps/hashes them.
-      recentWorkoutLogs,
     } = body
     
     if (!canonicalProfile || !builderInputs) {
@@ -111,9 +107,6 @@ export async function POST(request: Request) {
       isFreshBaselineBuild: true,  // Fresh main build uses baseline contract
       preserveHistory: false,
       archiveCurrentProgram: false,
-      // [PHASE-M] Forward recent workout logs into the authoritative service
-      // so the freshly built program already reflects recent performance.
-      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     console.log('[generate-fresh-route-dispatching-to-authoritative-service]', {

@@ -55,81 +55,10 @@ export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = {
 }
 
 // =============================================================================
-// METHOD TAXONOMY (AUTHORITATIVE)
-// =============================================================================
-// [METHOD-TAXONOMY-LOCK] Training methods divide into THREE distinct categories.
-// Mixing them produced every "cluster leaked as grouped structure" symptom the
-// audit documented. Treat these three types as non-overlapping.
-//
-//   1. GROUPED STRUCTURE METHOD   — changes SESSION structure across multiple
-//      exercises. Requires >=2 members sharing a blockId. Examples: superset,
-//      circuit, density block. Renders as a framed grouped block in the UI.
-//
-//   2. SET-EXECUTION METHOD       — changes how a SINGLE exercise's sets are
-//      executed. Orthogonal to grouping. Examples: cluster, rest-pause, top
-//      set, drop set. Renders as a per-exercise execution cue on a flat row,
-//      never as a grouped block.
-//
-//   3. CONTEXTUAL TRAINING CUE    — informational only. Never creates
-//      structure. Examples: strength emphasis, skill priority, primer,
-//      overload. Renders as non-structural annotation.
-//
-// Cluster specifically belongs in category 2 (SET-EXECUTION METHOD). The
-// legacy `GroupType` union below still enumerates 'cluster' for backward
-// compatibility with runtime paths that predate this split, but NEW code
-// must treat cluster through `SetExecutionMethod` and the `isGroupedStructure`
-// predicate, not by reading `GroupType`.
-
-/** True multi-exercise grouped structures that require >=2 members. */
-export type GroupedStructureType = 'superset' | 'circuit' | 'density_block'
-
-/** Per-exercise set-execution methods. Orthogonal to grouping. */
-export type SetExecutionMethod = 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
-
-/** Informational-only training cues. Never produces structure. */
-export type ContextualCueType = 'strength_emphasis' | 'skill_priority' | 'primer' | 'overload'
-
-export const GROUPED_STRUCTURE_LABELS: Record<GroupedStructureType, string> = {
-  superset: 'Superset',
-  circuit: 'Circuit',
-  density_block: 'Density Block',
-}
-
-export const SET_EXECUTION_METHOD_LABELS: Record<SetExecutionMethod, string> = {
-  cluster: 'Cluster',
-  rest_pause: 'Rest-Pause',
-  top_set: 'Top Set',
-  drop_set: 'Drop Set',
-}
-
-/**
- * Type guard: is this value an authoritative grouped structure? Use this in
- * preference to comparing `GroupType === 'cluster'` or similar — the legacy
- * `GroupType` union still contains 'cluster' but cluster is NOT a grouped
- * structure; it's a set-execution method.
- */
-export function isGroupedStructureType(value: unknown): value is GroupedStructureType {
-  return value === 'superset' || value === 'circuit' || value === 'density_block'
-}
-
-/** Type guard for set-execution methods. */
-export function isSetExecutionMethod(value: unknown): value is SetExecutionMethod {
-  return value === 'cluster' || value === 'rest_pause' || value === 'top_set' || value === 'drop_set'
-}
-
-// =============================================================================
-// GROUP TYPES (LEGACY — see METHOD TAXONOMY above)
+// GROUP TYPES
 // =============================================================================
 
 // [GROUPED-CONTRACT-ALIGN] GroupType must match all values from styledGroups.groupType
-// [METHOD-TAXONOMY-LOCK] 'cluster' remains in this union ONLY for backward
-// compatibility with the runtime `deriveExecutionPlan()` path in this file
-// and with existing display adapters that were built before the taxonomy
-// split. NEW code MUST NOT emit styledGroups with `groupType: 'cluster'` and
-// MUST NOT create ExecutionBlocks with `groupType: 'cluster'` unless there is
-// a genuine multi-member cluster block (shared blockId, >=2 members). Single-
-// exercise cluster is a SET-EXECUTION METHOD and belongs on the exercise via
-// `setExecutionMethod`, not on a grouped block.
 export type GroupType = 'superset' | 'circuit' | 'cluster' | 'density_block' | null
 
 export const GROUP_TYPE_LABELS: Record<NonNullable<GroupType>, string> = {
@@ -368,12 +297,6 @@ export interface ExerciseWithMeta {
   methodLabel?: string
   blockId?: string
   restSeconds?: number
-  // [METHOD-TAXONOMY-LOCK] Set-execution method for THIS single exercise.
-  // Orthogonal to `blockId`-based grouping. Populated only when a set-
-  // execution method (cluster / rest-pause / top set / drop set) applies to
-  // this one exercise. Does NOT imply a grouped block — a single-exercise
-  // cluster row has `setExecutionMethod: 'cluster'` but no blockId.
-  setExecutionMethod?: SetExecutionMethod
 }
 
 /**

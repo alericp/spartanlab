@@ -1,0 +1,82 @@
+{
+  "marker": "OMEGA-19-DELIVERY-PROOF-MARKER",
+  "generatedBy": "v0 turn (no shell access; fingerprints are emitted from on-disk Read+Grep results)",
+  "vercelProjectId": "prj_mvwi5hBTAB1MZElzuZYtYY9BIRkx",
+  "vercelProjectName": "v0-skill-progression-tracker",
+  "githubRepo": "alericp/spartanlab",
+  "branch": "UNKNOWN_TO_AGENT (set by v0 platform at push time; visible in chat GitHub indicator)",
+  "sha": "UNKNOWN_TO_AGENT (set by v0 platform at push time)",
+  "shaProofMethod": "fingerprint-string-grep (agent has no shell; cannot compute shasum or git hash-object)",
+  "pathCorrections": {
+    "promptClaimedButMissing": [
+      "app/(app)/program/page.tsx",
+      "components/active-workout/AdaptiveWorkoutIterator.tsx"
+    ],
+    "actualLiveWorkoutFiles": [
+      "components/workout/StreamlinedWorkoutSession.tsx",
+      "components/workout/ActiveWorkoutStartCorridor.tsx",
+      "lib/workout/live-workout-machine.ts"
+    ]
+  },
+  "changedFiles": [
+    {
+      "path": "components/workout/StreamlinedWorkoutSession.tsx",
+      "fingerprints": [
+        { "line": 3,    "match": "// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker." },
+        { "line": 1523, "match": "// MERGE_LANE_REACTIVATE_V1" },
+        { "line": 5954, "match": "// [COMPLETED-SET-NOTE-SURFACE] Free-text coaching note passthrough so" }
+      ]
+    },
+    {
+      "path": "components/workout/ActiveWorkoutStartCorridor.tsx",
+      "fingerprints": [
+        { "line": 3,    "match": "// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker. See" },
+        { "line": 706,  "match": "// [LOAD-PRESS-AND-HOLD] Weighted load +/- auto-repeat" },
+        { "line": 806,  "match": "// [LOG-SET-SAVING-STATE] Local in-flight flag for the Log Set button only." },
+        { "line": 1076, "match": "{/* Last Set Snapshot - immediate coaching-oriented summary of the just-finished set */}" },
+        { "line": 1104, "match": "Last Set Snapshot" },
+        { "line": 1419, "match": "Hold to adjust faster" },
+        { "line": 1892, "match": "Current progress" }
+      ]
+    },
+    {
+      "path": "lib/workout/live-workout-machine.ts",
+      "fingerprints": [
+        { "line": 1,   "match": "// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker. See" },
+        { "line": 631, "match": "// LAYER A - BASE REQUIRED COMMIT" },
+        { "line": 672, "match": "// LAYER B - OPTIONAL INTELLIGENCE ENRICHMENT (fail-open)" }
+      ]
+    },
+    {
+      "path": "docs/build-sync/omega-19-delivery-proof.md",
+      "fingerprints": [
+        { "line": 3, "match": "OMEGA-19-DELIVERY-PROOF-MARKER" }
+      ]
+    }
+  ],
+  "verificationCommandsForUser": [
+    "grep -nR \"OMEGA-19-DELIVERY-PROOF-MARKER\" docs/build-sync/",
+    "grep -cR \"LIVE_LOG_CORRIDOR_LANDING_V1\" components/workout/ lib/workout/",
+    "grep -n  \"Last Set Snapshot\" components/workout/ActiveWorkoutStartCorridor.tsx",
+    "grep -n  \"Hold to adjust faster\" components/workout/ActiveWorkoutStartCorridor.tsx",
+    "grep -n  \"LOAD-PRESS-AND-HOLD\" components/workout/ActiveWorkoutStartCorridor.tsx",
+    "grep -n  \"LAYER A - BASE REQUIRED COMMIT\" lib/workout/live-workout-machine.ts"
+  ],
+  "expectedHitCounts": {
+    "OMEGA-19-DELIVERY-PROOF-MARKER": ">= 1",
+    "LIVE_LOG_CORRIDOR_LANDING_V1 (across components/workout + lib/workout)": "3",
+    "Last Set Snapshot (in corridor file)": "2",
+    "Hold to adjust faster (in corridor file)": "1",
+    "LOAD-PRESS-AND-HOLD (in corridor file)": "2",
+    "LAYER A - BASE REQUIRED COMMIT (in live-workout-machine)": "1"
+  },
+  "buildCheck": {
+    "tscNoEmit": "NOT_RUN_NO_SHELL_ACCESS",
+    "pnpmBuild": "NOT_RUN_NO_SHELL_ACCESS",
+    "userActionToVerify": [
+      "pnpm install",
+      "pnpm exec tsc --noEmit --pretty false",
+      "pnpm run build"
+    ]
+  }
+}

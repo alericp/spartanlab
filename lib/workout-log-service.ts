@@ -83,14 +83,6 @@ export interface WorkoutLog {
     flags: string[]
     freeText: string
   }[]
-  // [PHASE-L] Optional per-set ledger preserved at log time so future
-  // performance-feedback adaptation has actualReps/actualHold/actualRPE/note
-  // per set rather than only the per-exercise summary. The shape is the
-  // canonical CompletedSetEvidence contract from
-  // lib/program/performance-feedback-adaptation-contract.ts. Always optional
-  // — older logs that pre-date Phase L simply do not carry this field, and
-  // the contract falls back to per-exercise summary in that case.
-  completedSetEvidence?: import('./program/performance-feedback-adaptation-contract').CompletedSetEvidence[]
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -153,69 +145,7 @@ export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): Worko
   } catch {
     // Non-blocking - don't fail the save if feedback capture fails
   }
-
-  // [PHASE-N] Fire-and-forget durable persistence of per-set evidence to
-  // Neon. The local save above is the canonical record that the existing
-  // app reads; this network call only adds server-readable durability so
-  // future authoritative-program-generation runs (especially server-
-  // initiated ones, or sessions where the client doesn't supply
-  // recentWorkoutLogs) can read recent evidence directly from the DB.
-  //
-  // Strict non-blocking: any error here logs but never throws to the
-  // caller, so the live workout UI cannot break because of network/DB.
-  // Untrusted / demo logs are filtered server-side by the writer.
-  if (
-    newLog.trusted !== false &&
-    newLog.sourceRoute !== 'demo' &&
-    Array.isArray(newLog.completedSetEvidence) &&
-    newLog.completedSetEvidence.length > 0
-  ) {
-    try {
-      void fetch('/api/workout-log/save-evidence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workoutLog: newLog,
-          // generatedWorkoutId is "<programId>_session_day-N" by convention;
-          // we leave programId derivation to the server (it has the
-          // canonical user→program map), passing through only when the
-          // route caller already knows the id. Future enhancement: thread
-          // the active programId from the workout-session page.
-          programId: null,
-        }),
-      })
-        .then(async (res) => {
-          if (!res.ok) {
-            console.log('[phase-n-save-evidence-non-ok]', {
-              status: res.status,
-              workoutLogId: newLog.id,
-            })
-            return
-          }
-          try {
-            const data = (await res.json()) as { ok?: boolean; result?: unknown }
-            console.log('[phase-n-save-evidence-ok]', {
-              workoutLogId: newLog.id,
-              result: data?.result,
-            })
-          } catch {
-            // Body parsing failure is non-blocking.
-          }
-        })
-        .catch((err) => {
-          console.log('[phase-n-save-evidence-fetch-failed]', {
-            workoutLogId: newLog.id,
-            error: String(err),
-          })
-        })
-    } catch (err) {
-      console.log('[phase-n-save-evidence-dispatch-failed]', {
-        workoutLogId: newLog.id,
-        error: String(err),
-      })
-    }
-  }
-
+  
   return newLog
 }
 
@@ -296,8 +226,6 @@ interface QuickLogInput {
   sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
   // [EXECUTION-TRUTH-FIX] Exercise-level notes and flags
   exerciseNotes?: WorkoutLog['exerciseNotes']
-  // [PHASE-L] Optional per-set evidence ledger — preserved verbatim if provided.
-  completedSetEvidence?: WorkoutLog['completedSetEvidence']
 }
 
 /**
@@ -337,8 +265,6 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     exercises: input.exercises || [], // Include exercise-level outcomes
     // [EXECUTION-TRUTH-FIX] Include exercise-level notes
     exerciseNotes: input.exerciseNotes,
-    // [PHASE-L] Pass through per-set evidence ledger when caller supplies it.
-    completedSetEvidence: input.completedSetEvidence,
     // FEEDBACK LOOP fields
     completionStatus: input.completionStatus || 'completed',
     trusted,

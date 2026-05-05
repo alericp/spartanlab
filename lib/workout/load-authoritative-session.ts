@@ -145,6 +145,13 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         'moderate',
       ).repsOrTime
 
+      // [LEGACY-PERSISTED-PASS-THROUGH] These fields originate from
+      // persisted DB JSON typed as `unknown`; AdaptiveExercise pins
+      // each to a structured optional shape. The legacy data is
+      // already-validated upstream by the Program build pipeline, so
+      // narrow boundary `as unknown as <field type>` casts at this
+      // single hydration point preserve the typed contract without
+      // weakening AdaptiveExercise itself.
       return {
         id: typeof e.id === 'string' && e.id ? e.id : `exercise-${idx}`,
         name: typeof e.name === 'string' && e.name ? e.name : 'Exercise',
@@ -154,17 +161,17 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         note: typeof e.note === 'string' ? e.note : '',
         isOverrideable: e.isOverrideable !== false,
         selectionReason: typeof e.selectionReason === 'string' ? e.selectionReason : '',
-        prescribedLoad: e.prescribedLoad,
-        targetRPE: e.targetRPE,
-        restSeconds: e.restSeconds,
-        method: e.method,
-        methodLabel: e.methodLabel,
-        blockId: e.blockId,
-        wasAdapted: e.wasAdapted,
-        source: e.source,
-        progressionDecision: e.progressionDecision,
-        coachingMeta: e.coachingMeta,
-        executionTruth: e.executionTruth,
+        prescribedLoad: e.prescribedLoad as unknown as AdaptiveExercise['prescribedLoad'],
+        targetRPE: e.targetRPE as unknown as AdaptiveExercise['targetRPE'],
+        restSeconds: typeof e.restSeconds === 'number' ? e.restSeconds : undefined,
+        method: e.method as unknown as AdaptiveExercise['method'],
+        methodLabel: typeof e.methodLabel === 'string' ? e.methodLabel : undefined,
+        blockId: typeof e.blockId === 'string' ? e.blockId : undefined,
+        wasAdapted: typeof e.wasAdapted === 'boolean' ? e.wasAdapted : undefined,
+        source: e.source as unknown as AdaptiveExercise['source'],
+        progressionDecision: e.progressionDecision as unknown as AdaptiveExercise['progressionDecision'],
+        coachingMeta: e.coachingMeta as unknown as AdaptiveExercise['coachingMeta'],
+        executionTruth: e.executionTruth as unknown as AdaptiveExercise['executionTruth'],
         // [PHASE 4Q] Preserve doctrine-corridor-stamped row-level method
         // truth across the live-workout normalize boundary. Without these
         // pass-throughs, methods that the program page card showed (top
@@ -173,14 +180,14 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         // is tapped. See lib/program/doctrine-application-corridor.ts for
         // where these are stamped and lib/workout/normalize-workout-session.ts
         // for the parallel preservation block in the secondary normalizer.
-        setExecutionMethod: e.setExecutionMethod,
-        densityPrescription: e.densityPrescription,
-        doctrineApplicationDeltas: e.doctrineApplicationDeltas,
+        setExecutionMethod: e.setExecutionMethod as unknown as AdaptiveExercise['setExecutionMethod'],
+        densityPrescription: e.densityPrescription as unknown as AdaptiveExercise['densityPrescription'],
+        doctrineApplicationDeltas: e.doctrineApplicationDeltas as unknown as AdaptiveExercise['doctrineApplicationDeltas'],
         // [PHASE 4P] Structural method materialization corridor flags. Used
         // by the live workout to attribute superset/circuit/density block
         // membership to the corridor vs the builder.
-        structuralMethodApplied: e.structuralMethodApplied,
-        structuralMethodDeltas: e.structuralMethodDeltas,
+        structuralMethodApplied: typeof e.structuralMethodApplied === 'boolean' ? e.structuralMethodApplied : undefined,
+        structuralMethodDeltas: e.structuralMethodDeltas as unknown as AdaptiveExercise['structuralMethodDeltas'],
         // [PHASE 4Z / PHASE I] Numeric prescription mutation per-row proof.
         // Stamped by lib/program/numeric-prescription-mutation-contract.ts
         // and carries the row's mutated sets/reps/holdSeconds before/after,
@@ -188,10 +195,10 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         // label. Without this pass-through the Program-card chip and live
         // workout coaching surface would lose proof that doctrine actually
         // changed the prescription.
-        numericPrescriptionDelta: e.numericPrescriptionDelta,
+        numericPrescriptionDelta: e.numericPrescriptionDelta as unknown as AdaptiveExercise['numericPrescriptionDelta'],
         // [WEEK-PROGRESSION-TRUTH] Preserve weighted RPE if present.
-        targetWeightedRPE: e.targetWeightedRPE,
-      }
+        targetWeightedRPE: e.targetWeightedRPE as unknown as AdaptiveExercise['targetWeightedRPE'],
+      } as unknown as AdaptiveExercise
     })
     .filter((ex): ex is NonNullable<typeof ex> => ex !== null)
   

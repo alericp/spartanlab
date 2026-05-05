@@ -22,7 +22,11 @@ import {
   type ReadinessComponentScores,
   LIMITING_FACTOR_LABELS,
 } from './readiness/canonical-readiness-engine'
-import type { AthleteProfile } from './athlete-profile'
+// [ATHLETE-PROFILE-CANONICAL-OWNER] `./athlete-profile` does not
+// export `AthleteProfile`; the canonical interface lives in
+// `./data-service`. Pull from the real owner so this integration stays
+// aligned with the shared profile shape.
+import type { AthleteProfile } from './data-service'
 import type { AthleteCalibration } from './athlete-calibration'
 
 // =============================================================================

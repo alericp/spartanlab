@@ -374,7 +374,9 @@ function inferGoalType(
     if (classification.intents.includes('power')) return 'power'
     if (classification.intents.includes('endurance')) return 'endurance'
     if (classification.intents.includes('mobility')) return 'mobility'
-    if (classification.intents.includes('conditioning')) return 'conditioning'
+    // [CONDITIONING-DROPPED] Neither TrainingIntent nor
+    // TrainingGoalType include `'conditioning'`; the canonical
+    // endurance check above already covers conditioning-style work.
   }
   
   // Infer from exercise name

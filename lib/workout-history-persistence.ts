@@ -450,6 +450,32 @@ export async function persistWorkoutSession(
     }
 
     // Build exercise results snapshot
+    // [SNAPSHOT-CATEGORY-NARROW] ExerciseResultSnapshot.category uses
+    // the narrow base union (no hybrid `barbell_hinge`/`weighted_calisthenics`
+    // entries). Fold the hybrid categories down to their closest base
+    // literal so the snapshot stays valid without weakening the type.
+    const normalizeSnapshotCategory = (
+      category: ExerciseCategory,
+    ): ExerciseResultSnapshot['category'] => {
+      switch (category) {
+        case 'skill':
+        case 'strength':
+        case 'weighted':
+        case 'bodyweight':
+        case 'mobility':
+        case 'conditioning':
+          return category
+        case 'barbell_hinge':
+        case 'barbell_squat':
+        case 'barbell_press':
+          return 'strength'
+        case 'weighted_calisthenics':
+          return 'weighted'
+        default:
+          return 'bodyweight'
+      }
+    }
+
     const exerciseResults: ExerciseResultSnapshot[] = data.exercises.map(exercise => {
       const sets = data.completedSets.filter(s => s.exerciseId === exercise.id)
       const wasCompleted = sets.length > 0
@@ -458,7 +484,7 @@ export async function persistWorkoutSession(
       return {
         exerciseId: exercise.id,
         exerciseName: exercise.name,
-        category: mapToExerciseCategory(exercise.category),
+        category: normalizeSnapshotCategory(mapToExerciseCategory(exercise.category)),
         prescribed: {
           sets: exercise.sets,
           reps: exercise.targetReps?.toString(),

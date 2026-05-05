@@ -1179,12 +1179,20 @@ export async function generateIntelligentWarmup(
                 ? 60
                 : 75
 
+    // [WEIGHTED-EXERCISE-NAME-DETECT] ExerciseCategory does not include
+    // a `'weighted'` literal; legacy comparisons against it are dead.
+    // Detect weighted/loaded work by id/name keywords instead.
+    const isWeightedExercise = (ex: { id?: string; name?: string; category?: string }): boolean => {
+      const text = `${ex.id ?? ''} ${ex.name ?? ''}`.toLowerCase()
+      return text.includes('weighted') || text.includes('barbell') || text.includes('load')
+    }
+
     const prehabContext: IntelligentPrehabContext = {
       plannedExercises: context.mainExercises.map(ex => ({
         id: ex.id,
         name: ex.name,
         isSkillWork: ex.category === 'skill',
-        isWeighted: ex.category === 'strength' || ex.category === 'weighted',
+        isWeighted: ex.category === 'strength' || isWeightedExercise(ex),
         isExplosive: ex.movementPattern?.includes('explosive') ?? false,
       })),
       sessionDuration,
@@ -1193,9 +1201,7 @@ export async function generateIntelligentWarmup(
         ex.name.toLowerCase().includes('ring')
       ),
       hasWeights: context.mainExercises.some(ex =>
-        ex.category === 'weighted' ||
-        ex.category === 'strength' ||
-        ex.name.toLowerCase().includes('weighted')
+        ex.category === 'strength' || isWeightedExercise(ex)
       ),
       hasBands: context.mainExercises.some(ex =>
         ex.name.toLowerCase().includes('band')
@@ -1240,9 +1246,12 @@ export async function generateIntelligentWarmup(
       focusLabel: 'Session-Specific Preparation',
     }
   } catch (error) {
-    // Fallback to standard warmup if prehab fails
+    // [STANDARD-WARMUP-FALLBACK-RENAME] `generateStandardWarmup` was
+    // removed; the canonical generic warm-up generator is
+    // `generateWarmUp` (capital U), which returns `GeneratedWarmUp`
+    // matching this function's return type.
     console.warn('[warmup-engine] Falling back to standard warmup:', error)
-    return generateStandardWarmup(context)
+    return generateWarmUp(context)
   }
 }
 

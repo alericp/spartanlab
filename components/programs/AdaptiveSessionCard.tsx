@@ -27,6 +27,14 @@ import {
   buildSelectedVariantMain,
   buildSessionFingerprint,
   stampLaunchFingerprint,
+  // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Diagnostic launch proof
+  // companion. Sits beside the authoritative fingerprint stamp and lets
+  // the live workout (and post-workout surfaces) read back what the
+  // Program card promised at launch, keyed on (dayNumber, variantIndex).
+  // Never used for boot decisions — the fingerprint payload remains the
+  // sole source of truth for the booted body.
+  stampAB10LaunchProof,
+  AB10_RUNTIME_PARITY_VERSION,
 } from '@/lib/workout/selected-variant-session-contract'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
@@ -973,6 +981,74 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             : null,
       },
     })
+
+    // =====================================================================
+    // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Companion launch proof.
+    //
+    // Sibling sessionStorage key, NOT a replacement for `stampLaunchFingerprint`.
+    // This payload exists so the live workout's AB10 runtime proof can
+    // surface "what did the card promise at launch?" independently of the
+    // fingerprint payload, keyed on (dayNumber, variantIndex). Diagnostic
+    // only — never read for boot decisions. If sessionStorage fails, the
+    // helper logs a single warning and the existing fallback behavior is
+    // unaffected.
+    // =====================================================================
+    {
+      const ab10GroupedMethodCount =
+        variantPrunedStyleMetadata &&
+        Array.isArray(variantPrunedStyleMetadata.styledGroups)
+          ? variantPrunedStyleMetadata.styledGroups.filter(
+              g => g && g.groupType !== 'straight'
+            ).length
+          : 0
+      let ab10RowLevelMethodCount = 0
+      for (const ex of visibleLaunchBody) {
+        const row = ex as unknown as {
+          method?: string | null
+          methodLabel?: string | null
+          blockId?: string | null
+          setExecutionMethod?: string | null
+        }
+        if (
+          (typeof row?.method === 'string' && row.method.length > 0) ||
+          (typeof row?.methodLabel === 'string' && row.methodLabel.length > 0) ||
+          (typeof row?.blockId === 'string' && row.blockId.length > 0) ||
+          (typeof row?.setExecutionMethod === 'string' && row.setExecutionMethod.length > 0)
+        ) {
+          ab10RowLevelMethodCount += 1
+        }
+      }
+      const ab10HasPrunedStyleMetadata =
+        !!variantPrunedStyleMetadata &&
+        Array.isArray(variantPrunedStyleMetadata.styledGroups) &&
+        variantPrunedStyleMetadata.styledGroups.length > 0
+      stampAB10LaunchProof({
+        version: AB10_RUNTIME_PARITY_VERSION,
+        dayNumber: session.dayNumber || 1,
+        variantIndex: selectedCanonicalIdx,
+        executionMode: selectedSessionContract.selectedExecutionMode,
+        weekNumber:
+          typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
+        selectedBodyExerciseCount: visibleLaunchBody.length,
+        selectedBodyExerciseIds: visibleLaunchBody.map(e => e.id),
+        selectedBodyFirstName: visibleLaunchBody[0]?.name ?? null,
+        selectedBodyLastName:
+          visibleLaunchBody.length > 0
+            ? (visibleLaunchBody[visibleLaunchBody.length - 1]?.name ?? null)
+            : null,
+        selectedBodyEstimatedMinutes:
+          typeof cardResolvedBody.estimatedMinutes === 'number'
+            ? cardResolvedBody.estimatedMinutes
+            : typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
+              ? selectedSessionContract.selectedEstimatedMinutes
+              : null,
+        hasSelectedBodySnapshot: visibleLaunchBody.length > 0,
+        hasPrunedStyleMetadata: ab10HasPrunedStyleMetadata,
+        groupedMethodCount: ab10GroupedMethodCount,
+        rowLevelMethodCount: ab10RowLevelMethodCount,
+        stampedAt: new Date().toISOString(),
+      })
+    }
 
     console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] Start Workout launch stamp', {
       dayNumber: session.dayNumber,

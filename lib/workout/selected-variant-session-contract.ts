@@ -639,3 +639,275 @@ export function readLaunchFingerprint(
     return null
   }
 }
+
+// ============================================================================
+// [AB10 — START WORKOUT RUNTIME PARITY LOCK]
+// ============================================================================
+//
+// AB10 sits on top of the existing PROGRAM-TO-LIVE MIRROR CONTRACT (snapshot
+// boot + fingerprint diff) and converts it from "logs-only" into an explicit,
+// JSON-safe runtime proof object that survives into the live workout UI/DOM
+// surface. AB9 proves Program-card rule population. AB10 proves that the
+// EXACT body the Program card stamped is the body Start Workout actually
+// executes -- or, if it can't, that the fallback is honest and visible.
+//
+// AB10 owns three new artefacts:
+//
+//   1. `AB10RuntimeParityProof` (this contract)
+//        Built by the workout route AFTER snapshot validation + parity
+//        comparison. Forwarded to StreamlinedWorkoutSession as a prop so the
+//        live workout can render a compact visible chip and stamp DOM
+//        proof attributes (`data-ab10-runtime-parity`, `data-ab10-boot-source`,
+//        etc.) on a stable wrapper. JSON-safe so future surfaces (post-
+//        workout summary, telemetry) can consume it without re-deriving.
+//
+//   2. `AB10LaunchProof` (this contract)
+//        Sibling sessionStorage payload stamped by AdaptiveSessionCard right
+//        before `router.push(selectedLaunchUrl)`. PURELY DIAGNOSTIC -- the
+//        authoritative launch body is still `LaunchFingerprintPayload.selectedBody`.
+//
+//   3. `data-ab10-*` DOM proof attributes (see StreamlinedWorkoutSession)
+//        Stamped on the live workout wrapper. Visible to the user (via the
+//        Runtime parity chip), to QA (via DOM inspection), and to future
+//        regression scans without coupling to any UI string.
+//
+// Non-negotiables:
+//   - AB10 NEVER becomes the source of truth.
+//   - AB10 NEVER silently rescues a mismatch.
+//   - AB10 NEVER requires the proof on legacy saved sessions.
+// ============================================================================
+
+export const AB10_RUNTIME_PARITY_VERSION = 'ab10-start-workout-runtime-parity-v1' as const
+
+export interface AB10RuntimeParityProof {
+  version: typeof AB10_RUNTIME_PARITY_VERSION
+  bootSource: 'visible_snapshot' | 'fallback_loaded_session' | 'unknown'
+  snapshotValid: boolean
+  snapshotValidationReason: string
+  dayNumber: number | null
+  variantIndex: number | null
+  executionMode: string | null
+  weekNumber: number | null
+  expectedExerciseCount: number
+  actualExerciseCount: number
+  expectedFirstExerciseId: string | null
+  actualFirstExerciseId: string | null
+  expectedLastExerciseId: string | null
+  actualLastExerciseId: string | null
+  parityOk: boolean
+  parityMismatches: string[]
+  groupedRuntimeExpected: boolean
+  groupedRuntimeBuilt: boolean
+  rowLevelMethodCount: number
+  styleMetadataSource:
+    | 'selected_body_object'
+    | 'selected_body_cleared'
+    | 'loader_fallback'
+    | 'absent'
+    | 'unknown'
+  createdAt: string
+}
+
+export interface BuildAB10RuntimeParityProofInput {
+  bootSource: AB10RuntimeParityProof['bootSource']
+  snapshotValid: boolean
+  snapshotValidationReason: string
+  dayNumber: number | null
+  variantIndex: number | null
+  executionMode: string | null
+  weekNumber: number | null
+  expectedExercises: ReadonlyArray<{ id?: string | null }>
+  actualExercises: ReadonlyArray<{
+    id?: string | null
+    method?: string | null
+    methodLabel?: string | null
+    blockId?: string | null
+    setExecutionMethod?: string | null
+  }>
+  parityComparison: FingerprintComparison | null
+  groupedRuntimeExpected: boolean
+  groupedRuntimeBuilt: boolean
+  styleMetadataSource: AB10RuntimeParityProof['styleMetadataSource']
+}
+
+/**
+ * Builds the JSON-safe runtime parity proof. `parityOk` is true ONLY when the
+ * snapshot path won AND every observable shape matches. Fallback boot is
+ * NEVER reported as parityOk, even if it happens to coincide with the
+ * expected body, because there is no proof surface guaranteeing that.
+ */
+export function buildAB10RuntimeParityProof(
+  input: BuildAB10RuntimeParityProofInput
+): AB10RuntimeParityProof {
+  const expected = Array.isArray(input.expectedExercises) ? input.expectedExercises : []
+  const actual = Array.isArray(input.actualExercises) ? input.actualExercises : []
+  const expectedFirst = expected[0]?.id ?? null
+  const expectedLast = expected.length > 0 ? (expected[expected.length - 1]?.id ?? null) : null
+  const actualFirst = actual[0]?.id ?? null
+  const actualLast = actual.length > 0 ? (actual[actual.length - 1]?.id ?? null) : null
+
+  const fingerprintOk =
+    input.parityComparison === null ? true : input.parityComparison.ok
+  const parityOk =
+    input.bootSource === 'visible_snapshot' &&
+    input.snapshotValid &&
+    expected.length > 0 &&
+    expected.length === actual.length &&
+    expectedFirst !== null &&
+    expectedFirst === actualFirst &&
+    expectedLast !== null &&
+    expectedLast === actualLast &&
+    fingerprintOk
+
+  const parityMismatches = Array.isArray(input.parityComparison?.mismatches)
+    ? [...input.parityComparison!.mismatches]
+    : []
+
+  let rowLevelMethodCount = 0
+  for (const ex of actual) {
+    if (
+      (typeof ex?.method === 'string' && ex.method.length > 0) ||
+      (typeof ex?.methodLabel === 'string' && ex.methodLabel.length > 0) ||
+      (typeof ex?.blockId === 'string' && ex.blockId.length > 0) ||
+      (typeof ex?.setExecutionMethod === 'string' && ex.setExecutionMethod.length > 0)
+    ) {
+      rowLevelMethodCount += 1
+    }
+  }
+
+  return {
+    version: AB10_RUNTIME_PARITY_VERSION,
+    bootSource: input.bootSource,
+    snapshotValid: input.snapshotValid,
+    snapshotValidationReason: input.snapshotValidationReason,
+    dayNumber: input.dayNumber,
+    variantIndex: input.variantIndex,
+    executionMode: input.executionMode,
+    weekNumber: input.weekNumber,
+    expectedExerciseCount: expected.length,
+    actualExerciseCount: actual.length,
+    expectedFirstExerciseId: expectedFirst,
+    actualFirstExerciseId: actualFirst,
+    expectedLastExerciseId: expectedLast,
+    actualLastExerciseId: actualLast,
+    parityOk,
+    parityMismatches,
+    groupedRuntimeExpected: !!input.groupedRuntimeExpected,
+    groupedRuntimeBuilt: !!input.groupedRuntimeBuilt,
+    rowLevelMethodCount,
+    styleMetadataSource: input.styleMetadataSource,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+/**
+ * Defensive reader for downstream consumers. Returns the proof unchanged if
+ * structurally valid; otherwise returns a safe "unknown" proof so the UI
+ * never crashes on legacy saved sessions that predate AB10.
+ */
+export function safeAB10RuntimeParityProof(
+  proof: AB10RuntimeParityProof | null | undefined
+): AB10RuntimeParityProof {
+  if (
+    proof &&
+    typeof proof === 'object' &&
+    (proof as AB10RuntimeParityProof).version === AB10_RUNTIME_PARITY_VERSION
+  ) {
+    return proof
+  }
+  return {
+    version: AB10_RUNTIME_PARITY_VERSION,
+    bootSource: 'unknown',
+    snapshotValid: false,
+    snapshotValidationReason: 'no_proof',
+    dayNumber: null,
+    variantIndex: null,
+    executionMode: null,
+    weekNumber: null,
+    expectedExerciseCount: 0,
+    actualExerciseCount: 0,
+    expectedFirstExerciseId: null,
+    actualFirstExerciseId: null,
+    expectedLastExerciseId: null,
+    actualLastExerciseId: null,
+    parityOk: false,
+    parityMismatches: [],
+    groupedRuntimeExpected: false,
+    groupedRuntimeBuilt: false,
+    rowLevelMethodCount: 0,
+    styleMetadataSource: 'unknown',
+    createdAt: new Date(0).toISOString(),
+  }
+}
+
+export function getAB10ProofFromSession(source: unknown): AB10RuntimeParityProof | null {
+  if (!source || typeof source !== 'object') return null
+  const candidate = (source as { ab10RuntimeParityProof?: unknown }).ab10RuntimeParityProof
+  if (
+    candidate &&
+    typeof candidate === 'object' &&
+    (candidate as AB10RuntimeParityProof).version === AB10_RUNTIME_PARITY_VERSION
+  ) {
+    return candidate as AB10RuntimeParityProof
+  }
+  return null
+}
+
+// ============================================================================
+// [AB10] LAUNCH PROOF (sessionStorage diagnostic only)
+// ============================================================================
+
+const AB10_LAUNCH_PROOF_PREFIX = 'spartanlab:ab10_launch_proof'
+
+function ab10LaunchProofKey(dayNumber: number | string, variantIndex: number): string {
+  return `${AB10_LAUNCH_PROOF_PREFIX}:${dayNumber}:${variantIndex}`
+}
+
+export interface AB10LaunchProof {
+  version: typeof AB10_RUNTIME_PARITY_VERSION
+  dayNumber: number | string
+  variantIndex: number
+  executionMode: 'full' | '45_min' | '30_min'
+  weekNumber: number | null
+  selectedBodyExerciseCount: number
+  selectedBodyExerciseIds: string[]
+  selectedBodyFirstName: string | null
+  selectedBodyLastName: string | null
+  selectedBodyEstimatedMinutes: number | null
+  hasSelectedBodySnapshot: boolean
+  hasPrunedStyleMetadata: boolean
+  groupedMethodCount: number
+  rowLevelMethodCount: number
+  stampedAt: string
+}
+
+export function stampAB10LaunchProof(proof: AB10LaunchProof): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(
+      ab10LaunchProofKey(proof.dayNumber, proof.variantIndex),
+      JSON.stringify(proof)
+    )
+  } catch {
+    if (typeof console !== 'undefined') {
+      console.warn('[AB10] launch_proof_stamp_failed sessionStorage_unavailable')
+    }
+  }
+}
+
+export function readAB10LaunchProof(
+  dayNumber: number | string,
+  variantIndex: number
+): AB10LaunchProof | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(ab10LaunchProofKey(dayNumber, variantIndex))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AB10LaunchProof
+    if (!parsed || typeof parsed !== 'object') return null
+    if (parsed.version !== AB10_RUNTIME_PARITY_VERSION) return null
+    return parsed
+  } catch {
+    return null
+  }
+}

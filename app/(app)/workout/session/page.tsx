@@ -103,6 +103,12 @@ import {
   compareFingerprints,
   readLaunchFingerprint,
   validateSelectedBodySnapshot,
+  // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Build the JSON-safe runtime
+  // proof object the live workout will surface as a compact chip + DOM
+  // proof attributes. Sits on top of the existing snapshot/fingerprint
+  // diagnostics — does not replace any owner.
+  buildAB10RuntimeParityProof,
+  type AB10RuntimeParityProof,
   type SessionFingerprint,
   type FingerprintComparison,
   type LaunchFingerprintPayload,
@@ -764,6 +770,13 @@ function WorkoutSessionContent() {
   >(null)
   const [snapshotValidation, setSnapshotValidation] =
     useState<SnapshotValidation | null>(null)
+  // [AB10 — START WORKOUT RUNTIME PARITY LOCK] JSON-safe runtime proof of
+  // whether Start Workout booted the EXACT body the Program card promised.
+  // Forwarded into StreamlinedWorkoutSession so the live workout can render
+  // a compact visible chip and stamp `data-ab10-*` DOM proof attributes.
+  // Built once per session boot, after the snapshot/fallback decision.
+  const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
+    useState<AB10RuntimeParityProof | null>(null)
   // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
@@ -1380,6 +1393,81 @@ function WorkoutSessionContent() {
         )
       }
 
+      // =======================================================================
+      // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Build the runtime proof.
+      //
+      // Compares the Program-card-stamped body (expected) against the body
+      // the live workout will ACTUALLY execute (actual = finalSession after
+      // snapshot overlay, or loader fallback). The proof is JSON-safe and
+      // forwarded into StreamlinedWorkoutSession as a prop so the live UI
+      // can render a compact visible chip + stamp DOM proof attributes.
+      //
+      // Authority rules:
+      //   - parity is reported true ONLY when the snapshot path won AND the
+      //     count/first/last ids match. Fallback boot is NEVER reported as
+      //     parityOk, even if it happens to land on the same body.
+      //   - the proof OBSERVES; it never replaces the snapshot or loader as
+      //     a source of truth. If the snapshot was missing/invalid, the
+      //     proof says so and the visible chip surfaces fallback honestly.
+      // =======================================================================
+      const ab10BootSource: AB10RuntimeParityProof['bootSource'] =
+        validation.valid && expectedPayload?.selectedBody
+          ? 'visible_snapshot'
+          : 'fallback_loaded_session'
+      const ab10SnapshotValidationReason: string =
+        validation.reason === null ? 'ok' : validation.reason
+      const expectedExercisesForProof = expectedPayload?.selectedBody?.exercises ?? []
+      const actualExercisesForProof = finalSession.exercises ?? []
+      const ab10WeekNumber: number | null =
+        typeof expectedPayload?.selectedBody?.weekNumber === 'number'
+          ? expectedPayload.selectedBody.weekNumber
+          : typeof weekOverride === 'number'
+            ? weekOverride
+            : null
+      const snapshotMetaForProof = expectedPayload?.selectedBody as
+        | { styleMetadata?: unknown }
+        | undefined
+      const ab10StyleMetadataSource: AB10RuntimeParityProof['styleMetadataSource'] =
+        snapshotMetaForProof && 'styleMetadata' in snapshotMetaForProof
+          ? snapshotMetaForProof.styleMetadata &&
+            typeof snapshotMetaForProof.styleMetadata === 'object'
+            ? 'selected_body_object'
+            : 'selected_body_cleared'
+          : ab10BootSource === 'fallback_loaded_session'
+            ? 'loader_fallback'
+            : 'absent'
+      const ab10GroupedRuntimeExpected =
+        ab10StyleMetadataSource === 'selected_body_object'
+      const finalStyledGroups = (finalSession as unknown as {
+        styleMetadata?: { styledGroups?: unknown[] }
+      }).styleMetadata?.styledGroups
+      const ab10GroupedRuntimeBuilt =
+        Array.isArray(finalStyledGroups) &&
+        finalStyledGroups.some(
+          g =>
+            g &&
+            typeof g === 'object' &&
+            (g as { groupType?: string }).groupType !== 'straight'
+        )
+      const ab10Proof = buildAB10RuntimeParityProof({
+        bootSource: ab10BootSource,
+        snapshotValid: validation.valid,
+        snapshotValidationReason: ab10SnapshotValidationReason,
+        dayNumber:
+          typeof finalSession.dayNumber === 'number' ? finalSession.dayNumber : null,
+        variantIndex: typeof variantIndex === 'number' ? variantIndex : null,
+        executionMode: executionMode ?? null,
+        weekNumber: ab10WeekNumber,
+        expectedExercises: expectedExercisesForProof,
+        actualExercises: actualExercisesForProof,
+        parityComparison: report,
+        groupedRuntimeExpected: ab10GroupedRuntimeExpected,
+        groupedRuntimeBuilt: ab10GroupedRuntimeBuilt,
+        styleMetadataSource: ab10StyleMetadataSource,
+      })
+      setAB10RuntimeParityProof(ab10Proof)
+      console.log('[AB10] runtime_parity_proof', ab10Proof)
+
       // [workout-init] Log normalized session data for debugging
       console.log('[workout-init] session ready:', {
         dayLabel: result.session.dayLabel,
@@ -1703,6 +1791,12 @@ function WorkoutSessionContent() {
         // three-part fingerprint. If the chip does not reach the user's screen,
         // the build pipeline is stale.
         routeBuildChip={WORKOUT_ROUTE_BUILD_CHIP}
+        // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Forward the runtime
+        // proof so the live workout can render the compact visible chip
+        // and stamp `data-ab10-*` DOM proof attributes on the live wrapper.
+        // Optional — legacy saved sessions may receive `null`, and the
+        // live UI uses `safeAB10RuntimeParityProof` so it never crashes.
+        ab10RuntimeParityProof={ab10RuntimeParityProof}
       />
       {/* [PHASE-X+1] Dev badge for session source - only in development */}
       {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (

@@ -21000,8 +21000,14 @@ fatigueDecision: fatigueDecision ? {
       summary: summaryParts.length > 0 ? summaryParts.join('; ') : 'No weighted benchmark data',
     } : undefined
   })(),
-  // Constraint improvement tracking (populated async - may be undefined initially)
-  constraintImprovementData,
+    // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-CONSTRAINT-IMPROVEMENT-DATA]
+    // Same pattern as `intensityDistribution` / `flexibilityInsertions` /
+    // `weightedSkillAllocation` removed earlier: canonical
+    // `AdaptiveProgram` does not own a top-level `constraintImprovementData`
+    // raw field. The owned/structured output for this data is the
+    // `constraintImprovement: constraintImprovementData || undefined`
+    // assignment further below; the upstream `let constraintImprovementData`
+    // computation is preserved and continues to feed that owned field.
     // Training Principles Engine emphasis
     trainingEmphasis,
     // [post-validation-step] Step 8: Skill intelligence

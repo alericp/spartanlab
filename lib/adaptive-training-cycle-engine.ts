@@ -745,7 +745,18 @@ export function getCycleBuilderModifications(
   // `priorityExercises: string[]` lives directly on the assessment.
   // The legacy nested `.primary.priorityExercises` shape was removed.
   if (weakPoint?.priorityExercises?.length) {
-    priorityFamilies = weakPoint.priorityExercises.slice(0, 3)
+    // [PRIORITY-EXERCISES-FAMILY-MAP] weakPoint.priorityExercises is now
+    // an object array ({exerciseId, exerciseName, reason, targetedLimiter})
+    // and priorityFamilies is string[] keyed on the family limiter.
+    // Project to targetedLimiter and dedupe so the same family doesn't
+    // appear multiple times in the priority list.
+    priorityFamilies = Array.from(
+      new Set(
+        weakPoint.priorityExercises
+          .slice(0, 3)
+          .map((exercise) => exercise.targetedLimiter),
+      ),
+    )
   }
   
   // Phase-specific adjustments

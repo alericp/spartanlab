@@ -21685,7 +21685,10 @@ fatigueDecision: fatigueDecision ? {
       selectedSkills: canonicalProfile.selectedSkills || [],
       // [PROFILE-SNAPSHOT-NO-GOAL-CATEGORIES] ProfileSnapshot does not
       // own `goalCategories`; canonical taxonomy lives elsewhere.
-      selectedFlexibility: canonicalProfile.selectedFlexibility || [],
+      // [PROFILE-SNAPSHOT-NO-SELECTED-FLEXIBILITY] ProfileSnapshot also
+      // does not own `selectedFlexibility`. Flexibility selections live
+      // on canonicalProfile and surface through other contracts; do not
+      // re-emit them here just to satisfy a stale snapshot field.
       strengthBenchmarks: {
         pullUpMax: canonicalProfile.pullUpMax,
         dipMax: canonicalProfile.dipMax,
@@ -31832,7 +31835,14 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   
   // DATABASE ENFORCEMENT: Validate program before save
   console.log('[program-build] SAVE: Running database validation...')
-  const validation = validateProgramFromDatabase(program)
+  // [PROGRAM-TO-VALIDATE-BOUNDARY-CAST] validateProgramFromDatabase
+  // operates on the broader ProgramToValidate contract used by
+  // multiple persistence sources (raw DB rows + builder output).
+  // Project the AdaptiveProgram through unknown so the validator sees
+  // the same structural shape without altering either type.
+  const validation = validateProgramFromDatabase(
+    program as unknown as Parameters<typeof validateProgramFromDatabase>[0],
+  )
   
   if (!validation.isValid) {
     console.warn('[program-build] SAVE: Database validation issues (non-blocking):', validation.diagnostics)

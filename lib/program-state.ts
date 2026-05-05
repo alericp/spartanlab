@@ -30,6 +30,11 @@
 
 import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode, type AdaptiveSession, type AdaptiveExercise } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
+// [TRAINING-METHOD-PREFERENCE-IMPORT] styleMetadata.appliedMethods is
+// TrainingMethodPreference[]; pull the canonical union from
+// canonical-profile-service so local normalization stays aligned with
+// the contract type instead of bridging through `unknown`.
+import type { TrainingMethodPreference } from './canonical-profile-service'
 import { 
   assertProgramStateUsable, 
   markCanonicalPathUsed,
@@ -81,13 +86,45 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // here so the in-block `.styledGroups`/`.hasSupersetsApplied`/
   // `.appliedMethods` reads are type-safe without widening the
   // canonical session contract.
+  // [STYLE-METADATA-LOCAL-TYPE] Pin the structural fields the target
+  // styleMetadata contract owns (primaryStyle, rejectedMethods, the
+  // applied/circuits/density flags) so spread + read sites are
+  // type-safe without widening the canonical session contract.
   const existingMeta = (session.styleMetadata || {}) as {
     styledGroups?: Array<{ groupType: string }>
     hasSupersetsApplied?: boolean
     hasCircuitsApplied?: boolean
     hasDensityApplied?: boolean
     structureDescription?: string
-    appliedMethods?: string[]
+    appliedMethods?: TrainingMethodPreference[] | string[]
+    primaryStyle?: TrainingMethodPreference
+    rejectedMethods?: TrainingMethodPreference[]
+  }
+
+  // [APPLIED-METHODS-NORMALIZER] Filter unknown method strings down
+  // to the TrainingMethodPreference union, defaulting to a single
+  // straight-set lane when the legacy field is absent or all values
+  // were dropped.
+  const normalizeTrainingMethods = (
+    methods: string[] | TrainingMethodPreference[] | undefined
+  ): TrainingMethodPreference[] => {
+    if (!Array.isArray(methods) || methods.length === 0) {
+      return ['straight_sets']
+    }
+    const allowed = new Set<TrainingMethodPreference>([
+      'straight_sets',
+      'supersets',
+      'circuits',
+      'drop_sets',
+      'density_blocks',
+      'ladder_sets',
+      'cluster_sets',
+      'rest_pause',
+    ])
+    const filtered = methods.filter((method): method is TrainingMethodPreference =>
+      allowed.has(method as TrainingMethodPreference),
+    )
+    return filtered.length > 0 ? filtered : ['straight_sets']
   }
   
   // --------------------------------------------------------------------------
@@ -102,9 +139,10 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         ...existingMeta,
         // Ensure these fields exist but don't overwrite builder values
         hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
-        // [APPLIED-METHODS-PREFERENCE-CAST] appliedMethods is
-        // TrainingMethodPreference[]; cast string[] fallback at boundary.
-        appliedMethods: existingMeta.appliedMethods ?? (['straight_sets'] as unknown as typeof existingMeta.appliedMethods),
+        // [APPLIED-METHODS-PREFERENCE-NORMALIZE] appliedMethods is
+        // TrainingMethodPreference[]; normalize legacy string[] data
+        // through the local guard rather than casting through unknown.
+        appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
       },
     }
   }
@@ -212,9 +250,10 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       ...existingMeta,
       hasSupersetsApplied: false,
       styledGroups: fallbackStyledGroups,
-      // [APPLIED-METHODS-PREFERENCE-CAST] mirror the cast above for the
-      // straight-fallback path.
-      appliedMethods: (['straight_sets'] as unknown as typeof existingMeta.appliedMethods),
+      // [APPLIED-METHODS-PREFERENCE-NORMALIZE] straight-set fallback
+      // — type the literal as TrainingMethodPreference[] so the
+      // styleMetadata contract is satisfied without unknown casts.
+      appliedMethods: ['straight_sets'] as TrainingMethodPreference[],
       structureDescription: existingMeta.structureDescription || '',
       // [STYLE-METADATA-CONTRACT-FIELDS] same contract fields for the
       // no-truth straight fallback.
@@ -1451,17 +1490,25 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       // These fields may be missing on older programs - provide safe defaults
       
       // selectedSkillTrace - Required for skill coverage display
-      selectedSkillTrace: program.selectedSkillTrace 
+      // [SELECTED-SKILL-TRACE-CONTRACT-CAST] `getSafeSkillTrace` returns
+      // SafeSkillTrace; the AdaptiveProgram contract owns the canonical
+      // SelectedSkillTraceContract. Project at this boundary only —
+      // shared types stay untouched.
+      selectedSkillTrace: (program.selectedSkillTrace
         ? getSafeSkillTrace(program.selectedSkillTrace)
-        : EMPTY_SKILL_TRACE,
+        : EMPTY_SKILL_TRACE) as unknown as NonNullable<AdaptiveProgram['selectedSkillTrace']>,
       
-      // weeklyRepresentation - Required for schedule display  
-      weeklyRepresentation: program.weeklyRepresentation ?? {
+      // weeklyRepresentation - Required for schedule display
+      // [WEEKLY-REPRESENTATION-CONTRACT-CAST] Two structurally similar
+      // weeklyRepresentation types exist; project to the AdaptiveProgram
+      // property type at this boundary so duplicate-unrelated-types
+      // (TS2719) goes away without changing either source type.
+      weeklyRepresentation: (program.weeklyRepresentation ?? {
         sessions: [],
         frequency: program.trainingDaysPerWeek ?? program.currentWeekFrequency ?? 4,
         distribution: 'unknown',
         weekNumber: 1,
-      },
+      }) as unknown as NonNullable<AdaptiveProgram['weeklyRepresentation']>,
       
       // [PROGRAM-STATE-MATERIAL-SKILL-INTENT-OWNER] Canonical
       // `AdaptiveProgram` (lib/adaptive-program-builder.ts L2053) does
@@ -1485,7 +1532,12 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
     // [CURRENT-WORKING-PROGRESSIONS-NESTED-SHAPE] target type expects
     // nested objects per skill, not raw `null` slots. Default to a
     // safe empty entry shape so this fallback satisfies the contract.
-    currentWorkingProgressions: program.currentWorkingProgressions ?? (() => {
+    // [CURRENT-WORKING-PROGRESSIONS-CONTRACT-CAST] Two structurally
+    // similar shapes exist for currentWorkingProgressions; project to
+    // the AdaptiveProgram property type at this boundary so
+    // duplicate-unrelated-types (TS2719) goes away without changing
+    // either source type.
+    currentWorkingProgressions: (program.currentWorkingProgressions ?? (() => {
       const emptyWorkingProgression = {
         currentWorkingProgression: null,
         historicalCeiling: null,
@@ -1503,7 +1555,7 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
         resolvedAt: null,
         anyConservativeStart: false,
       }
-    })(),
+    })()) as unknown as AdaptiveProgram['currentWorkingProgressions'],
   }
     
     // [CONTRACT NORMALIZATION] Log when missing fields were normalized

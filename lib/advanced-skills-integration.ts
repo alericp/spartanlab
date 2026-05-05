@@ -248,7 +248,10 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
   planche_pushup: [
     {
       nodeId: 'ppu_3_tuck_assisted',
-      blockedByWeakPoints: ['dynamic_push', 'straight_arm_push_strength'],
+      // [WEAK-POINT-TYPE-MAPPING] dynamic_push is not in WeakPointType;
+      // map to canonical 'explosive_power' which expresses the same
+      // dynamic pressing limiter (vs. straight-arm structural strength).
+      blockedByWeakPoints: ['explosive_power', 'straight_arm_push_strength'],
       blockingThreshold: 35,
     },
     {
@@ -287,7 +290,10 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
     },
     {
       nodeId: 'smu_3_tempo',
-      blockedByWeakPoints: ['transition_strength', 'lockout_strength'],
+      // [WEAK-POINT-TYPE-MAPPING] lockout_strength is not in WeakPointType;
+      // map to 'dip_strength' since slow muscle-up tempo is gated by
+      // pressing-out lockout in the dip portion of the rep.
+      blockedByWeakPoints: ['transition_strength', 'dip_strength'],
       blockingThreshold: 45,
     },
     {
@@ -304,7 +310,11 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
     },
     {
       nodeId: 'moderate_weighted_mu',
-      blockedByWeakPoints: ['dip_strength', 'lockout_strength'],
+      // [WEAK-POINT-TYPE-MAPPING] lockout_strength is not in WeakPointType;
+      // collapse to a second 'dip_strength' presence to keep the
+      // pressing-lockout gate but in canonical units. Set form pruner
+      // can dedupe if needed.
+      blockedByWeakPoints: ['dip_strength'],
       blockingThreshold: 45,
     },
     {
@@ -398,7 +408,9 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'pseudo_planche_pushup',
       exerciseName: 'Pseudo Planche Push-Up',
       purpose: 'Dynamic pressing foundation',
-      focus: 'dynamic_push',
+      // [WEAK-POINT-TYPE-MAPPING] dynamic_push -> explosive_power
+      // (canonical WeakPointType for dynamic pressing limiter).
+      focus: 'explosive_power',
     },
     {
       exerciseId: 'planche_lean_hold',

@@ -28,6 +28,12 @@ import {
   calculateVSitReadiness,
   calculateIronCrossReadiness,
   calculateDragonFlagReadiness,
+  // [READINESS-EXTREME-SKILL-IMPORTS] one-arm pull/push and planche
+  // push-up calculators are exported from skill-readiness; import
+  // them so the dispatch switch resolves rather than failing TS2304.
+  calculateOneArmPullUpReadiness,
+  calculateOneArmPushUpReadiness,
+  calculatePlanchePushUpReadiness,
   type ReadinessResult,
   type ReadinessLevel,
   type ScoreBreakdown,
@@ -35,6 +41,20 @@ import {
   type VSitInputs,
   type DragonFlagInputs,
 } from './skill-readiness'
+
+// =============================================================================
+// SHARED INPUT NORMALIZERS
+// =============================================================================
+// [READINESS-STRENGTH-BAND-NORMALIZER] CanonicalReadinessInput accepts
+// the broader 'very_strong' band for fields like hipFlexorStrength,
+// but per-skill calculators (calculateLSitReadiness, calculateVSitReadiness)
+// only consume 'weak' | 'moderate' | 'strong'. Collapse the survey-side
+// extra so the calculator contract stays narrow.
+const normalizeReadinessStrengthBand = (
+  value: 'weak' | 'moderate' | 'strong' | 'very_strong',
+): 'weak' | 'moderate' | 'strong' => {
+  return value === 'very_strong' ? 'strong' : value
+}
 
 // =============================================================================
 // UNIFIED READINESS OUTPUT TYPES
@@ -546,7 +566,12 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
   maxDips: input.maxDips ?? 0,
   hollowHoldTime: input.hollowHoldTime ?? 0,
   toePointQuality: input.toePointQuality ?? 'moderate',
-  hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
+  // [HIP-FLEXOR-STRENGTH-BAND-NORMALIZE] CanonicalReadinessInput allows
+  // 'very_strong' but the per-skill calculator unions only accept
+  // 'weak' | 'moderate' | 'strong'. Collapse 'very_strong' to 'strong'
+  // at the boundary so the wider survey input doesn't widen the
+  // calculator contract.
+  hipFlexorStrength: normalizeReadinessStrengthBand(input.hipFlexorStrength ?? 'moderate'),
   hasParallettes: input.hasParallettes ?? false,
   hasFloor: input.hasFloor ?? true,
   })
@@ -559,7 +584,7 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
   hollowHoldTime: input.hollowHoldTime ?? 0,
   pikeCompressionQuality: input.pikeCompressionQuality ?? 'moderate',
   hamstringFlexibility: input.hamstringFlexibility ?? 'moderate',
-  hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
+  hipFlexorStrength: normalizeReadinessStrengthBand(input.hipFlexorStrength ?? 'moderate'),
   hasParallettes: input.hasParallettes ?? false,
   hasFloor: input.hasFloor ?? true,
   })
@@ -666,6 +691,10 @@ function buildComponentScores(skill: SkillType, breakdown: ScoreBreakdown[]): Re
     mobility: 50,
     explosivePower: 50,
     skillSpecific: 50,
+    // [TENDON-TOLERANCE-DEFAULT] required by ReadinessComponentScores
+    // (Iron Cross + planche tendon load gating). Initialize to the
+    // shared 50 baseline so accumulation can adjust upward/downward.
+    tendonTolerance: 50,
   }
   
   // Accumulate scores from breakdown factors
@@ -1216,7 +1245,11 @@ export function buildWorkoutReasoningSummary(
     skillReadiness: {
       primarySkill,
       readinessScore: readinessResult?.overallScore || 0,
-      readinessLevel: readinessResult?.level || 'Building',
+      // [READINESS-LEVEL-FALLBACK] ReadinessLevel union does not include
+      // a free-form 'Building' literal; fall back to 'not-ready' which
+      // is the canonical introductory band for an athlete without a
+      // computed result yet.
+      readinessLevel: readinessResult?.level || 'not-ready',
       trend: 'unknown', // Would come from skill state service
     },
     primaryLimiter: {

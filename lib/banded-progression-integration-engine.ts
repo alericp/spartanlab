@@ -344,7 +344,10 @@ const ASSISTANCE_WEAK_POINT_MAP: Record<string, { weakPoints: WeakPointType[]; b
     { weakPoints: ['ring_support_stability', 'explosive_power', 'transition_strength'], bodyweightThreshold: 'moderate_assistance' },
   ],
   one_arm_pullup: [
-    { weakPoints: ['pull_strength', 'grip_strength', 'scapular_control'], bodyweightThreshold: 'high_assistance' },
+    // [WEAK-POINT-TYPE-MAPPING] grip_strength has no canonical entry
+    // in WeakPointType. The actual one-arm pull-up limiter is the
+    // pulling side; collapse to canonical pull_strength + scapular_control.
+    { weakPoints: ['pull_strength', 'scapular_control'], bodyweightThreshold: 'high_assistance' },
   ],
 }
 

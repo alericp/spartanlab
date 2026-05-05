@@ -707,7 +707,14 @@ export async function executeAuthoritativeGeneration(
     // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Use ingestion's canonical profile as the authoritative source
     const authoritativeProfile = truthIngestion.profileTruth.canonicalProfile
     
-    const athleteCalibration = calibrateAthleteProfile(authoritativeProfile as unknown as CalibrationProfile)
+    // [CALIBRATION-PROFILE-PARAMETER-LOOKUP] `CalibrationProfile` is
+    // declared module-private inside `athlete-calibration.ts` and is
+    // not exported. Use `Parameters<typeof calibrateAthleteProfile>[0]`
+    // so the cast remains structurally accurate without re-exporting
+    // an internal alias.
+    const athleteCalibration = calibrateAthleteProfile(
+      authoritativeProfile as unknown as Parameters<typeof calibrateAthleteProfile>[0],
+    )
     const resolvedProgressions = resolveCurrentWorkingProgressions(authoritativeProfile, athleteCalibration)
     
     // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Log whether skill calibration was built successfully
@@ -3247,7 +3254,13 @@ export async function executeAuthoritativeGeneration(
         goalLabel: program.goalLabel,
       },
       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
-      rebuildFailureSummary: program.rebuildFailureSummary,
+      // [REBUILD-FAILURE-SUMMARY-LEGACY-BRIDGE] AdaptiveProgram does
+      // not formally own rebuildFailureSummary; legacy programs may
+      // still carry it. Read at the boundary through unknown so a
+      // missing field reads as null rather than a TS2339.
+      rebuildFailureSummary:
+        (program as unknown as { rebuildFailureSummary?: string | null })
+          .rebuildFailureSummary ?? null,
       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
       generationIngressProof,
     }
@@ -3351,7 +3364,10 @@ function createFallbackIngestion(
   
   return {
     ingestedAt: new Date().toISOString(),
-    ingestionVersion: '1.0.0',
+    // [INGESTION-VERSION-LITERAL-MATCH] AuthoritativeGenerationTruthIngestion
+    // pins ingestionVersion to '1.1.0' (Neon-integration revision); align
+    // the fallback path with the canonical literal so the contract holds.
+    ingestionVersion: '1.1.0',
     profileTruth: {
       source: 'canonical_profile_service',
       quality: 'weak',

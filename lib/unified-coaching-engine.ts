@@ -15,8 +15,11 @@ import { detectConstraintsSync, type GlobalConstraintResult } from './constraint
 import { getAthleteEnvelopes, getEnvelopeBasedRecommendations, type PerformanceEnvelope } from './performance-envelope-service'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type DeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
-  // [EQUIPMENT-TYPE-IMPORT] EquipmentType is the union analyzeEquipmentProfile expects.
-  import { analyzeEquipmentProfile, type EquipmentProfile, type EquipmentType } from './equipment-adaptation-engine'
+// [EQUIPMENT-TYPE-CANONICAL-IMPORT] `equipment-adaptation-engine`
+// declares `EquipmentType` locally but does not export it; pull
+// the canonical type from `adaptive-exercise-pool` instead.
+import { analyzeEquipmentProfile, type EquipmentProfile } from './equipment-adaptation-engine'
+import type { EquipmentType } from './adaptive-exercise-pool'
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { recommendProtocolsForSession, type ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'

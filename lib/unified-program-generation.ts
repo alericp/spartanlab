@@ -281,7 +281,10 @@ function generateSession(
   const methodProfileContext: MethodProfileContext = {
     primaryGoal: context.athlete.primaryGoal as Parameters<typeof selectMethodProfile>[0]['primaryGoal'],
     experienceLevel: context.athlete.trainingAge > 3 ? 'advanced' : context.athlete.trainingAge > 1 ? 'intermediate' : 'beginner',
-    scheduleMode: 'fixed', // Could be dynamic based on athlete preferences
+    // [SCHEDULE-MODE-CANONICAL-LITERAL] ScheduleMode is `'static' |
+    // 'flexible'`; the legacy `'fixed'` literal is gone, with `'static'`
+    // representing the same fixed-days identity.
+    scheduleMode: 'static',
     sessionMinutes: context.athlete.sessionDurationMinutes,
     fatigueState: context.fatigue.fatigueLevel === 'fatigued' ? 'high' : 
                   context.fatigue.fatigueLevel === 'normal' ? 'moderate' : 'low',

@@ -515,7 +515,10 @@ export const METHOD_PROFILES: Record<MethodProfileId, MethodProfile> = {
       setRangeMax: 3, // Always 3 rounds
       holdDurationMin: 15,
       holdDurationMax: 15, // Always 15 seconds
-      targetRPE: [4, 6],
+      // [RPE-VALUE-MIN-FLOOR] RPEValue union starts at 5; promote the
+      // legacy floor of 4 to 5 (the lowest valid literal) rather than
+      // widening the union for one entry.
+      targetRPE: [5, 6],
       restTimeMin: 5,
       restTimeMax: 15,
       maxTotalSets: 12,

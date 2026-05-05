@@ -16,7 +16,11 @@
 import { getWorkoutLogs, type WorkoutLog, type PerceivedDifficulty } from './workout-log-service'
 import { getRecentSessionFeedback, type SessionFeedback, computeFatigueStateFromFeedback } from './session-feedback'
 import { getStrengthRecords, type StrengthRecord } from './strength-service'
-import { getSkillSessions, type SkillSession } from './skill-session-service'
+// [SKILL-SESSION-DERIVED-FROM-FN] `skill-session-service` no longer
+// re-exports `SkillSession`. Derive it from the function return so
+// type usage stays aligned with the actual persisted shape.
+import { getSkillSessions } from './skill-session-service'
+type SkillSession = Awaited<ReturnType<typeof getSkillSessions>>[number]
 import { recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================

@@ -610,7 +610,10 @@ export async function updateSkillStateFromBenchmarks(
       if (state && avgAdjustment !== 0) {
         // Update readiness score
         const newReadiness = Math.min(100, Math.max(0, state.readinessScore + avgAdjustment))
-        await updateSkillState(userId, skill as SkillKey, {
+        // [SAVE-SKILL-STATE-CANONICAL] `updateSkillState` is no longer
+        // exported; `saveSkillState` is the canonical upsert with the
+        // same `(userId, skill, data)` signature.
+        await saveSkillState(userId, skill as SkillKey, {
           currentLevel: state.currentLevel,
           readinessScore: newReadiness,
         })

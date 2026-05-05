@@ -2582,7 +2582,11 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
         id: e.id,
         name: e.name,
         prefix: `${i + 1}`,
-        trainingMethod: 'circuit',
+        // [TRAINING-METHOD-CIRCUIT-MAP] TrainingMethod union does not
+        // include `'circuit'`; `density_block` is the closest existing
+        // literal for round-based, minimal-rest conditioning work and
+        // matches the rationale below.
+        trainingMethod: 'density_block',
         methodRationale: 'Circuit for conditioning and efficiency',
       })),
       instruction: 'Move through exercises with minimal rest, rest after completing round',

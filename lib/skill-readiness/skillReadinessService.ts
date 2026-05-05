@@ -269,6 +269,72 @@ export const SKILL_PREREQUISITES: Record<SkillType, SkillPrerequisites> = {
     compressionIndicators: ['Core tension'],
     tendonIndicators: ['Bicep tendon tolerance', 'Elbow tolerance', 'Shoulder tolerance'],
   },
+
+  // [SKILL-PREREQUISITES-CANONICAL-COVERAGE] SkillType also includes
+  // these advanced unilateral and lever variants. Each entry mirrors
+  // the existing structure with conservative intermediate thresholds.
+  one_arm_pull_up: {
+    skill: 'one_arm_pull_up',
+    displayName: 'One-Arm Pull-Up',
+    description: 'Single-arm vertical pulling demanding extreme unilateral strength and lat control.',
+    requiredMetrics: [
+      { name: 'Pull-ups', baselineTarget: 20, unit: 'reps', importance: 'critical' },
+      { name: 'Weighted Pull-up', baselineTarget: 50, unit: 'kg added', importance: 'critical' },
+      { name: 'Archer Pull-up', baselineTarget: 5, unit: 'reps each side', importance: 'high' },
+      { name: 'One-Arm Hang', baselineTarget: 20, unit: 'seconds', importance: 'high' },
+    ],
+    strengthIndicators: ['Unilateral pulling strength', 'Lat strength', 'Grip strength'],
+    mobilityIndicators: ['Shoulder mobility'],
+    compressionIndicators: ['Anti-rotation core control'],
+    tendonIndicators: ['Elbow tolerance', 'Shoulder tolerance'],
+  },
+
+  one_arm_push_up: {
+    skill: 'one_arm_push_up',
+    displayName: 'One-Arm Push-Up',
+    description: 'Single-arm pressing requiring unilateral pushing strength and anti-rotation core stability.',
+    requiredMetrics: [
+      { name: 'Push-ups', baselineTarget: 40, unit: 'reps', importance: 'critical' },
+      { name: 'Archer Push-ups', baselineTarget: 6, unit: 'reps each side', importance: 'critical' },
+      { name: 'Anti-Rotation Hold', baselineTarget: 30, unit: 'seconds', importance: 'high' },
+      { name: 'Pseudo Planche Push-up', baselineTarget: 8, unit: 'reps', importance: 'medium' },
+    ],
+    strengthIndicators: ['Unilateral pushing strength', 'Tricep strength', 'Shoulder stability'],
+    mobilityIndicators: ['Wrist extension', 'Shoulder mobility'],
+    compressionIndicators: ['Anti-rotation core', 'Hip stability'],
+    tendonIndicators: ['Wrist tolerance', 'Shoulder tolerance'],
+  },
+
+  dragon_flag: {
+    skill: 'dragon_flag',
+    displayName: 'Dragon Flag',
+    description: 'Inverted full-body lever with the body held rigid above the shoulders, demanding extreme anti-extension core strength.',
+    requiredMetrics: [
+      { name: 'Hollow Hold', baselineTarget: 60, unit: 'seconds', importance: 'critical' },
+      { name: 'Hanging Leg Raise', baselineTarget: 12, unit: 'reps', importance: 'critical' },
+      { name: 'Tuck Dragon Flag', baselineTarget: 15, unit: 'seconds', importance: 'high' },
+      { name: 'Lat Strength', baselineTarget: 'strong', unit: '', importance: 'high' },
+    ],
+    strengthIndicators: ['Anti-extension core strength', 'Lat strength', 'Posterior chain control'],
+    mobilityIndicators: ['Thoracic extension'],
+    compressionIndicators: ['Full-body tension', 'Anti-extension core'],
+  },
+
+  planche_push_up: {
+    skill: 'planche_push_up',
+    displayName: 'Planche Push-Up',
+    description: 'Dynamic pressing in a planche position, combining planche static strength with pushing endurance.',
+    requiredMetrics: [
+      { name: 'Planche Lean', baselineTarget: 45, unit: 'seconds', importance: 'critical' },
+      { name: 'Pseudo Planche Push-up', baselineTarget: 12, unit: 'reps', importance: 'critical' },
+      { name: 'Weighted Dip', baselineTarget: 30, unit: 'kg added', importance: 'high' },
+      { name: 'Tuck Planche', baselineTarget: 20, unit: 'seconds', importance: 'high' },
+    ],
+    strengthIndicators: ['Shoulder protraction', 'Tricep strength', 'Wrist strength'],
+    mobilityIndicators: ['Wrist extension', 'Shoulder mobility'],
+    compressionIndicators: ['Core compression', 'Posterior pelvic tilt'],
+    tendonIndicators: ['Wrist tolerance', 'Elbow tolerance'],
+  },
 }
 
 // =============================================================================

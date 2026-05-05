@@ -48,7 +48,11 @@ export type {
  * Calculator page configuration
  */
 export interface CalculatorPageConfig {
-  skill: import('./skillReadinessService').SkillType
+  // [SKILL-TYPE-CANONICAL-OWNER] SkillType is owned by
+  // canonical-readiness-engine; use the local re-exported `SkillType`
+  // rather than reaching back through skillReadinessService which no
+  // longer re-exports it.
+  skill: SkillType
   title: string
   description: string
   metaTitle: string
@@ -120,7 +124,11 @@ export interface ValidationError {
  */
 export function validateCalculatorInput(
   input: import('./skillReadinessService').SkillReadinessInput,
-  skill: import('./skillReadinessService').SkillType
+  // [SKILL-TYPE-CANONICAL-OWNER] SkillType is owned by
+  // canonical-readiness-engine; use the local re-exported `SkillType`
+  // rather than reaching back through skillReadinessService which no
+  // longer re-exports it.
+  skill: SkillType
 ): ValidationResult {
   const errors: ValidationError[] = []
   

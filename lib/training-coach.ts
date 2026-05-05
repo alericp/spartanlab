@@ -8,7 +8,11 @@ import { getOnboardingProfile } from './athlete-profile'
 import { getDailyReadiness, type DailyReadinessResult } from './daily-readiness'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getCompressionReadiness, type CompressionReadinessResult } from './compression-readiness'
-import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
+// [CONSTRAINT-RESULT-DERIVED] `constraint-engine` no longer re-exports
+// the `ConstraintResult` type. Derive it from the function return so
+// downstream callers stay aligned with the actual shape.
+import { analyzeConstraints } from './constraint-engine'
+type ConstraintResult = Awaited<ReturnType<typeof analyzeConstraints>>
 import { analyzeProgression as analyzeBandProgression, getBandRecommendation, type ProgressionAnalysis as BandProgressionAnalysis } from './band-progression-engine'
 import { getWorkoutLogs } from './workout-log-service'
 import { getSkillSessions } from './skill-session-service'

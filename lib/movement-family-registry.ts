@@ -55,6 +55,8 @@ export type MovementFamily =
   | 'grip_strength'           // Hangs, grip work
   // Hypertrophy/General
   | 'hypertrophy_accessory'   // General hypertrophy work
+  // Skill-specific isometric work (front lever, planche, l-sit holds, etc.)
+  | 'skill_isometric'         // Skill-position isometric holds
 
 // =============================================================================
 // TRAINING INTENT DEFINITIONS
@@ -876,15 +878,28 @@ export const MOVEMENT_FAMILY_METADATA: Record<MovementFamily, MovementFamilyMeta
     skillTransfers: ['muscle_up', 'iron_cross', 'front_lever', 'back_lever'],
   },
   hypertrophy_accessory: {
-    id: 'hypertrophy_accessory',
-    name: 'Hypertrophy Accessory',
-    description: 'Accessory work used to build muscle, address weak points, and support primary skills.',
-    primaryMuscles: ['arms', 'shoulders', 'chest', 'back', 'legs'],
-    relatedFamilies: ['arm_isolation', 'shoulder_isolation', 'joint_integrity'],
-    typicalIntents: ['hypertrophy', 'strength'],
-    skillTransfers: [],
+  id: 'hypertrophy_accessory',
+  name: 'Hypertrophy Accessory',
+  description: 'Accessory work used to build muscle, address weak points, and support primary skills.',
+  primaryMuscles: ['arms', 'shoulders', 'chest', 'back', 'legs'],
+  relatedFamilies: ['arm_isolation', 'shoulder_isolation', 'joint_integrity'],
+  typicalIntents: ['hypertrophy', 'strength'],
+  skillTransfers: [],
   },
-}
+  // [SKILL-ISOMETRIC-REGISTRY] Many engines (unified-program-generation,
+  // session-structure-engine, etc.) tag exercises with `skill_isometric`
+  // for skill-position holds. Register the family here so the literal
+  // is part of the canonical Record<MovementFamily, ...> contract.
+  skill_isometric: {
+    id: 'skill_isometric',
+    name: 'Skill Isometric',
+    description: 'Skill-position isometric holds (front lever, planche, l-sit, etc.).',
+    primaryMuscles: ['core', 'shoulders', 'lats'],
+    relatedFamilies: ['straight_arm_pull', 'straight_arm_push', 'compression_core', 'scapular_control'],
+    typicalIntents: ['skill', 'strength'],
+    skillTransfers: ['front_lever', 'back_lever', 'planche', 'l_sit', 'v_sit', 'iron_cross'],
+  },
+  }
 
 // =============================================================================
 // SKILL CARRYOVER METADATA

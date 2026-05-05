@@ -585,8 +585,14 @@ export function getUnifiedSkillIntelligence(
   }
   
   for (const skillKey of selectedSkills) {
-    // Get skill-specific sessions
-    const skillSessions = sessions.filter(s => s.skillKey === skillKey)
+    // [SKILL-SESSION-LEGACY-KEY-BRIDGE] Canonical SkillSession dropped
+    // `skillKey`; legacy persisted sessions still carry it alongside
+    // `skillName`. Bridge through a structural slice so the filter
+    // works against both shapes without widening SkillSession.
+    const skillSessions = sessions.filter(s => {
+      const legacy = s as unknown as { skillKey?: string; skillName?: string }
+      return (legacy.skillKey ?? legacy.skillName) === skillKey
+    })
     
     // Get current level from onboarding if available
     let currentLevel = 0

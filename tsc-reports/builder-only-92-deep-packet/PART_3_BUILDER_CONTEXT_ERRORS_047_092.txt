@@ -1,0 +1,1429 @@
+===== PART 3 — BUILDER CONTEXT ERRORS 047-092 =====
+Purpose: exact local source context for each current builder error. Use symbol anchors; if line drifted, search only ±80 lines.
+
+--- BUILDER ERROR 047 | line 23245, col 35 | TS2304 ---
+lib/adaptive-program-builder.ts(23245,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+Suggested search anchors: phase4iSessionsInjected, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 23233-23257:
+   23233:     // through normalisation.
+   23234:     //
+   23235:     // Fail-soft: a derivation error never breaks generation.
+   23236:     // ===================================================================
+   23237:     try {
+   23238:       const { buildRulePopulationLedger } = await import(
+   23239:         '@/lib/program/rule-population-ledger-contract'
+   23240:       )
+   23241:       const phaseAB1Ledger = buildRulePopulationLedger({
+   23242:         matrix: phase4hMatrix,
+   23243:         cooldownFlexBridge: {
+   23244:           bridgeBlocksInjected: phase4iBlocksInjected,
+>> 23245:           bridgeSessionsInjected: phase4iSessionsInjected,
+   23246:         },
+   23247:       })
+   23248:       ;(finalProgram as unknown as { rulePopulationLedger?: unknown }).rulePopulationLedger =
+   23249:         phaseAB1Ledger
+   23250:       console.log('[PHASE-AB1-RULE-POPULATION-LEDGER]', {
+   23251:         verdict: phaseAB1Ledger.verdict,
+   23252:         headline: phaseAB1Ledger.headline,
+   23253:         categoriesExecutable: phaseAB1Ledger.totals.categoriesExecutable,
+   23254:         categoriesVisible: phaseAB1Ledger.totals.categoriesVisible,
+   23255:         categoriesMutated: phaseAB1Ledger.totals.categoriesMutated,
+   23256:         categoriesScoringOnly: phaseAB1Ledger.totals.categoriesScoringOnly,
+   23257:         categoriesAuditOnly: phaseAB1Ledger.totals.categoriesAuditOnly,
+
+--- BUILDER ERROR 048 | line 23456, col 5 | TS2741 ---
+lib/adaptive-program-builder.ts(23456,5): error TS2741: Property 'generatedAt' is missing in type 'SessionArchitectureTruthContract' but required in type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Suggested search anchors: generatedAt, SessionArchitectureTruthContract, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., TS2741, missing, but, required, sourceVerdict
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 23444-23468:
+   23444:       integrationMode: unifiedDoctrineDecision.integrationConstraints.mode,
+   23445:       intensityBias: unifiedDoctrineDecision.dosageRules.intensityBias,
+   23446:       volumeBias: unifiedDoctrineDecision.dosageRules.volumeBias,
+   23447:       antiFlatteningEnabled: unifiedDoctrineDecision.antiFlatteningRules.preventGenericSplits,
+   23448:       minimumSpineVisibility: unifiedDoctrineDecision.antiFlatteningRules.minimumSpineVisibility,
+   23449:       primaryDoctrineId: unifiedDoctrineDecision.sourceAttribution.primaryDoctrineId,
+   23450:       verdict: 'UNIFIED_DOCTRINE_DECISION_ATTACHED',
+   23451:     })
+   23452:   }
+   23453:   
+   23454:   // [SESSION ARCHITECTURE TRUTH] Store architecture truth on the program for UI access
+   23455:   if (sessionArchitectureTruth) {
+>> 23456:     finalProgram.sessionArchitectureTruth = sessionArchitectureTruth
+   23457:     
+   23458:     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   23459:     // Run weekly materiality validation. Canonical shape uses
+   23460:     // `finalProgram.sessions` (flat AdaptiveSession[]); legacy shape
+   23461:     // had `weeks[0].days`. `getProgramSessions` reconciles both.
+   23462:     const sessionsForValidation = getProgramSessions(finalProgram).map(d => {
+   23463:       const day = (d ?? {}) as { dayType?: unknown; focus?: unknown }
+   23464:       return {
+   23465:         exercises: getSessionExercisesArray(d),
+   23466:         dayType: day.dayType,
+   23467:         focus: day.focus,
+   23468:       }
+
+--- BUILDER ERROR 049 | line 23471, col 61 | TS2345 ---
+lib/adaptive-program-builder.ts(23471,61): error TS2345: Argument of type '{ exercises: unknown[]; dayType: unknown; focus: unknown; }[]' is not assignable to parameter of type '{ exercises: { id: string; category?: string | undefined; }[]; dayType?: string | undefined; focus?: string | undefined; }[]'.
+Suggested search anchors: { exercises: unknown[]; dayType: unknown; focus: unknown; }[], { exercises: { id: string; category?: string | undefined; }[]; dayType?: string | undefined; focus?: string | undefined; }[], TS2345, exercises, unknown, dayType, focus, not
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 23459-23483:
+   23459:     // Run weekly materiality validation. Canonical shape uses
+   23460:     // `finalProgram.sessions` (flat AdaptiveSession[]); legacy shape
+   23461:     // had `weeks[0].days`. `getProgramSessions` reconciles both.
+   23462:     const sessionsForValidation = getProgramSessions(finalProgram).map(d => {
+   23463:       const day = (d ?? {}) as { dayType?: unknown; focus?: unknown }
+   23464:       return {
+   23465:         exercises: getSessionExercisesArray(d),
+   23466:         dayType: day.dayType,
+   23467:         focus: day.focus,
+   23468:       }
+   23469:     })
+   23470:     
+>> 23471:     const materialityValidation = validateWeeklyMateriality(sessionsForValidation, sessionArchitectureTruth)
+   23472:     
+   23473:     finalProgram.weeklyMaterialityVerdict = {
+   23474:       verdict: materialityValidation.verdict,
+   23475:       metrics: materialityValidation.metrics,
+   23476:       needsRefinement: materialityValidation.needsRefinement,
+   23477:       refinementSuggestions: materialityValidation.refinementSuggestions,
+   23478:     }
+   23479:     
+   23480:     console.log('[SESSION-ARCHITECTURE-TRUTH-PROGRAM-ATTACHED]', {
+   23481:       sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+   23482:       complexity: sessionArchitectureTruth.generationContext.complexity,
+   23483:       weeklyMaterialityVerdict: materialityValidation.verdict,
+
+--- BUILDER ERROR 050 | line 23475, col 7 | TS2739 ---
+lib/adaptive-program-builder.ts(23475,7): error TS2739: Type '{ avgExercisesPerSession: number; distinctSessionRoles: number; supportSkillTouches: number; nonPrimaryAppearances: number; methodPackagedBlockCount: number; currentWorkingConstrainedCount: number; }' is missing the following properties from type '{ skillClassificationUniqueness: number; progressionDifferentiation: number; structuralPersonalization: number; overallMaterialityScore: number; }': skillClassificationUniqueness, progressionDifferentiation, structuralPersonalization, overallMaterialityScore
+Suggested search anchors: { avgExercisesPerSession: number; distinctSessionRoles: number; supportSkillTouches: number; nonPrimaryAppearances: number; methodPackagedBlockCount: number; currentWorkingConstrainedCount: number; }, { skillClassificationUniqueness: number; progressionDifferentiation: number; structuralPersonalization: number; overallMaterialityScore: number; }, TS2739, avgExercisesPerSession, number, distinctSessionRoles, supportSkillTouches, nonPrimaryAppearances
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 23463-23487:
+   23463:       const day = (d ?? {}) as { dayType?: unknown; focus?: unknown }
+   23464:       return {
+   23465:         exercises: getSessionExercisesArray(d),
+   23466:         dayType: day.dayType,
+   23467:         focus: day.focus,
+   23468:       }
+   23469:     })
+   23470:     
+   23471:     const materialityValidation = validateWeeklyMateriality(sessionsForValidation, sessionArchitectureTruth)
+   23472:     
+   23473:     finalProgram.weeklyMaterialityVerdict = {
+   23474:       verdict: materialityValidation.verdict,
+>> 23475:       metrics: materialityValidation.metrics,
+   23476:       needsRefinement: materialityValidation.needsRefinement,
+   23477:       refinementSuggestions: materialityValidation.refinementSuggestions,
+   23478:     }
+   23479:     
+   23480:     console.log('[SESSION-ARCHITECTURE-TRUTH-PROGRAM-ATTACHED]', {
+   23481:       sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+   23482:       complexity: sessionArchitectureTruth.generationContext.complexity,
+   23483:       weeklyMaterialityVerdict: materialityValidation.verdict,
+   23484:       needsRefinement: materialityValidation.needsRefinement,
+   23485:       metrics: materialityValidation.metrics,
+   23486:       refinementSuggestions: materialityValidation.refinementSuggestions,
+   23487:       verdict: 'SESSION_ARCHITECTURE_UI_TRUTH_ALIGNED',
+
+--- BUILDER ERROR 051 | line 23859, col 29 | TS2345 ---
+lib/adaptive-program-builder.ts(23859,29): error TS2345: Argument of type 'DeferredSkillEntry' is not assignable to parameter of type 'string'.
+Suggested search anchors: DeferredSkillEntry, string, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 23847-23871:
+   23847:       for (const skill of sessionArchitectureTruth.primarySpineSkills) {
+   23848:         directlyExpressed.push(skill)
+   23849:       }
+   23850:       for (const skill of sessionArchitectureTruth.secondaryAnchorSkills) {
+   23851:         if (!directlyExpressed.includes(skill)) {
+   23852:           directlyExpressed.push(skill)
+   23853:         }
+   23854:       }
+   23855:       for (const skill of sessionArchitectureTruth.supportRotationSkills) {
+   23856:         supportExpressed.push(skill)
+   23857:       }
+   23858:       for (const skill of sessionArchitectureTruth.deferredSkills) {
+>> 23859:         deferredSkills.push(skill)
+   23860:       }
+   23861:     }
+   23862:     // LEGACY FALLBACK: exercise-id matching (for old programs only)
+   23863:     else {
+   23864:       truthSourceUsed = 'legacyFallback'
+   23865:       
+   23866:       // Use old brittle matching as last resort
+   23867:       const totalSkillTouchesLegacy = new Map<string, number>()
+   23868:       for (const day of sessionsForAudit) {
+   23869:         for (const ex of (day.exercises || [])) {
+   23870:           const exIdLower = ex.id?.toLowerCase() || ''
+   23871:           for (const skill of selectedSkillsFromProfile) {
+
+--- BUILDER ERROR 052 | line 23870, col 32 | TS2339 ---
+lib/adaptive-program-builder.ts(23870,32): error TS2339: Property 'id' does not exist on type '{ selectionContext?: { doctrineSource?: unknown; } | undefined; }'.
+Suggested search anchors: id, { selectionContext?: { doctrineSource?: unknown; } | undefined; }, TS2339, does, not, exist, selectionContext, doctrineSource
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 23858-23882:
+   23858:       for (const skill of sessionArchitectureTruth.deferredSkills) {
+   23859:         deferredSkills.push(skill)
+   23860:       }
+   23861:     }
+   23862:     // LEGACY FALLBACK: exercise-id matching (for old programs only)
+   23863:     else {
+   23864:       truthSourceUsed = 'legacyFallback'
+   23865:       
+   23866:       // Use old brittle matching as last resort
+   23867:       const totalSkillTouchesLegacy = new Map<string, number>()
+   23868:       for (const day of sessionsForAudit) {
+   23869:         for (const ex of (day.exercises || [])) {
+>> 23870:           const exIdLower = ex.id?.toLowerCase() || ''
+   23871:           for (const skill of selectedSkillsFromProfile) {
+   23872:             const skillKey = skill.toLowerCase().replace(/_/g, '')
+   23873:             if (exIdLower.includes(skillKey)) {
+   23874:               totalSkillTouchesLegacy.set(skill, (totalSkillTouchesLegacy.get(skill) || 0) + 1)
+   23875:               break
+   23876:             }
+   23877:           }
+   23878:         }
+   23879:       }
+   23880:       
+   23881:       for (const skill of totalSkillTouchesLegacy.keys()) {
+   23882:         supportExpressed.push(skill) // Conservative: legacy only proves support-level expression
+
+--- BUILDER ERROR 053 | line 24623, col 33 | TS18048 ---
+lib/adaptive-program-builder.ts(24623,33): error TS18048: 'sessionArchitectureTruth.methodPackaging.actualMethodsApplied.length' is possibly 'undefined'.
+Suggested search anchors: sessionArchitectureTruth.methodPackaging.actualMethodsApplied.length, undefined, TS18048, sessionArchitectureTruth, methodPackaging, actualMethodsApplied, length, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 24611-24635:
+   24611:   // ==========================================================================
+   24612:   // [PHASE 1 AI-TRUTH-ESCALATION] TASK G: VISIBLE DIFFERENCE VALIDATION
+   24613:   // Validates that the generated week is materially different from a baseline template
+   24614:   // when the athlete truth justifies differentiation.
+   24615:   // ==========================================================================
+   24616:   const visibleDifferenceTargets = sessionArchitectureTruth?.visibleDifferenceTargets
+   24617:   const templateEscapeRequired = visibleDifferenceTargets?.templateEscapeRequired ?? false
+   24618:   const differenceScore = visibleDifferenceTargets?.differenceFromBaselineScore ?? 0
+   24619:   
+   24620:   // Calculate actual differentiation achieved
+   24621:   const distinctSessionRoles = new Set(sessions.map(s => s.focus || 'generic')).size
+   24622:   const nonPrimarySkillsExpressed = skillsWithDedicatedSupport.length + skillsRotational.length
+>> 24623:   const methodVarietyAchieved = sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied?.length > 1
+   24624:   const flexibilityIntegrated = sessionArchitectureTruth?.flexibilityIntegration?.hasFlexibilityGoals ?? false
+   24625:   
+   24626:   // Compute actual difference score
+   24627:   let actualDifferenceScore = 0
+   24628:   if (distinctSessionRoles >= 2) actualDifferenceScore += 15
+   24629:   if (distinctSessionRoles >= 3) actualDifferenceScore += 10
+   24630:   if (nonPrimarySkillsExpressed >= 1) actualDifferenceScore += 15
+   24631:   if (nonPrimarySkillsExpressed >= 2) actualDifferenceScore += 10
+   24632:   if (methodVarietyAchieved) actualDifferenceScore += 15
+   24633:   if (flexibilityIntegrated) actualDifferenceScore += 10
+   24634:   if (Object.keys(currentWorkingCaps).length > 0) actualDifferenceScore += 10
+   24635:   if (doctrineActivelyChangedArchitecture) actualDifferenceScore += 15
+
+--- BUILDER ERROR 054 | line 24686, col 51 | TS2339 ---
+lib/adaptive-program-builder.ts(24686,51): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'ExpandedAthleteContextLocal'.
+Suggested search anchors: trainingMethodPreferences, ExpandedAthleteContextLocal, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 24674-24698:
+   24674:     classifiedCause: sessions.length > 0 ? 'none' : 'other_generation_issue',
+   24675:     finalVerdict: sessions.length > 0 
+   24676:       ? 'root_scope_bug_fixed'
+   24677:       : 'root_scope_bug_fixed_but_other_generation_issue_exposed',
+   24678:   })
+   24679:   
+   24680:   // ==========================================================================
+   24681:   // [PHASE 11 TASK 1] STYLE SOURCE CHAIN AUDIT
+   24682:   // Trace the full path of style/method preferences from canonical to weekly output
+   24683:   // ==========================================================================
+   24684:   const rawCanonicalTrainingStyle = canonicalProfile.trainingStyle
+   24685:   const rawCanonicalMethodPrefs = canonicalProfile.trainingMethodPreferences || []
+>> 24686:   const builderInputMethodPrefs = expandedContext.trainingMethodPreferences || ['straight_sets']
+   24687:   
+   24688:   // Analyze each session's style expression
+   24689:   const sessionStyleAnalysis = sessions.map((s: any) => {
+   24690:     const styleMetadata = s.styleMetadata || {}
+   24691:     const styledGroups = styleMetadata.styledGroups || []
+   24692:     const nonStraightGroups = styledGroups.filter((g: any) => g.groupType !== 'straight')
+   24693:     const groupedExCount = nonStraightGroups.reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0)
+   24694:     
+   24695:     type Materiality = 'none' | 'metadata_only' | 'lightly_expressed' | 'materially_expressed'
+   24696:     const materiality: Materiality = (() => {
+   24697:       if (!styleMetadata.primaryStyle || styleMetadata.primaryStyle === 'straight_sets') {
+   24698:         if (nonStraightGroups.length === 0) return 'none'
+
+--- BUILDER ERROR 055 | line 25281, col 10 | TS2304 ---
+lib/adaptive-program-builder.ts(25281,10): error TS2304: Cannot find name 'finalProgram'.
+Suggested search anchors: finalProgram, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 25269-25293:
+   25269:       acc[cat] = (acc[cat] || 0) + 1
+   25270:       return acc
+   25271:     }, {} as Record<string, number>),
+   25272:       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   25273:       weightedExercises: s.exercises.filter(ex => getExerciseId(ex)?.includes('weighted')).length,
+   25274:       skillExercises: s.exercises.filter(ex => getExerciseCategory(ex) === 'skill').length,
+   25275:   })))
+   25276:   
+   25277:   // [BUILDER-RETURN-RENAMED] The legacy return target was `tempProgram`,
+   25278:   // a name confined to two earlier validator IIFE scopes (L21259, L21305).
+   25279:   // The actual function-body program owner is `finalProgram` declared at
+   25280:   // L20355 — that is the value this top-level function must surface.
+>> 25281:   return finalProgram
+   25282: }
+   25283: 
+   25284: /**
+   25285:  * Get override signal feedback for program generation
+   25286:  */
+   25287: function getOverrideSignalFeedback() {
+   25288:   const signalFeedback = analyzeSignalsForAdaptive(14) // Last 14 days
+   25289:   
+   25290:   if (!signalFeedback.hasSignificantPatterns) {
+   25291:     return undefined
+   25292:   }
+   25293:   
+
+--- BUILDER ERROR 056 | line 25727, col 27 | TS18048 ---
+lib/adaptive-program-builder.ts(25727,27): error TS18048: 'advancedFamily.technicalSlotWeight' is possibly 'undefined'.
+Suggested search anchors: advancedFamily.technicalSlotWeight, undefined, TS18048, advancedFamily, technicalSlotWeight, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 25715-25739:
+   25715:         : secondaryConstraint === 'moderate' ? 0.55 : 0.7
+   25716:       
+   25717:       const minSessionsForSecondary = Math.max(Math.ceil(totalSessions * constraintMultiplier), exposureSessions)
+   25718:       const shouldInclude = sessionIndex < minSessionsForSecondary || 
+   25719:         exposureSessions >= totalSessions ||
+   25720:         (secondaryConstraint !== 'strict' && sessionIndex % 2 === 0) // Skip even session rule for strict constraint
+   25721:       
+   25722:       if (shouldInclude) {
+   25723:         // [selection-compression-fix] TASK 4: Session role affects secondary skill expression mode
+   25724:         // Different day types should produce different expression modes
+   25725:         let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'technical'
+   25726:         
+>> 25727:         if (isAdvanced && advancedFamily?.technicalSlotWeight > 0.3) {
+   25728:           expressionMode = 'technical'
+   25729:         } else if (dayFocus.includes('support') || dayFocus.includes('recovery')) {
+   25730:           expressionMode = 'support'
+   25731:         } else if (dayFocus.includes('skill') && sessionIndex % 2 === 1) {
+   25732:           // Alternate sessions give secondary skill primary-ish expression
+   25733:           expressionMode = 'technical'
+   25734:         } else if (dayFocus.includes('strength')) {
+   25735:           // Strength days: secondary skills get support work
+   25736:           expressionMode = 'support'
+   25737:         } else {
+   25738:           expressionMode = 'technical'
+   25739:         }
+
+--- BUILDER ERROR 057 | line 26856, col 7 | TS2322 ---
+lib/adaptive-program-builder.ts(26856,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+Suggested search anchors: number | undefined, number, TS2322, undefined, not, assignable
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 26844-26868:
+   26844:   //
+   26845:   // Pre-Phase-4E: this data was created inside selectMainExercises and
+   26846:   // discarded on its return. The builder had no way to ever see it.
+   26847:   // ==========================================================================
+   26848:   const harvestedDoctrineCausalAudit = (selection as { doctrineCausalAudit?: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null }).doctrineCausalAudit ?? null
+   26849:   if ((context as any).doctrineCausalAuditAccumulator && Array.isArray((context as any).doctrineCausalAuditAccumulator)) {
+   26850:     ;((context as any).doctrineCausalAuditAccumulator as Array<{
+   26851:       sessionIndex: number
+   26852:       dayNumber: number
+   26853:       dayFocus: string
+   26854:       audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
+   26855:     }>).push({
+>> 26856:       sessionIndex: sessionIndex,
+   26857:       dayNumber: day.dayNumber,
+   26858:       dayFocus: day.focus,
+   26859:       audit: harvestedDoctrineCausalAudit,
+   26860:     })
+   26861:     console.log('[PHASE4E-DOCTRINE-CAUSAL-AUDIT-HARVEST]', {
+   26862:       sessionIndex,
+   26863:       dayNumber: day.dayNumber,
+   26864:       dayFocus: day.focus,
+   26865:       auditPresent: !!harvestedDoctrineCausalAudit,
+   26866:       doctrineApplied: harvestedDoctrineCausalAudit?.doctrineApplied ?? false,
+   26867:       topCandidateChanged: harvestedDoctrineCausalAudit?.topCandidateChanged ?? false,
+   26868:       top3Changed: harvestedDoctrineCausalAudit?.top3Changed ?? false,
+
+--- BUILDER ERROR 058 | line 26935, col 76 | TS2339 ---
+lib/adaptive-program-builder.ts(26935,76): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+Suggested search anchors: requiredEquipment, Exercise, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 26923-26947:
+   26923:   
+   26924:   // ==========================================================================
+   26925:   // [TASK 1] SESSION ASSEMBLY PHASE AUDIT - Post Selection
+   26926:   // ==========================================================================
+   26927:   const postSelectionValidation = validateSessionCandidate(safeMain, equipment, primaryGoal, 'post_selection')
+   26928:   console.log('[session-assembly-phase-audit]', {
+   26929:     phaseName: 'post_selection',
+   26930:     candidateCount: safeMain.length,
+   26931:     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   26932:         selectedExerciseNames: safeMain.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
+   26933:     selectedMovementPatterns: safeMain.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
+   26934:     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
+>> 26935:     selectedEquipmentNeeds: [...new Set(safeMain.flatMap(e => e?.exercise?.requiredEquipment || []))],
+   26936:     selectedEstimatedMinutes: selection.totalEstimatedTime,
+   26937:     validationStatus: postSelectionValidation.isValid ? 'valid' : 'invalid',
+   26938:     rejectReason: postSelectionValidation.failureReasons.join(', ') || null,
+   26939:   })
+   26940:   
+   26941:   // ==========================================================================
+   26942:   // SESSION TRACE - Track exercise counts through every transformation
+   26943:   // ==========================================================================
+   26944:   sessionStep = 'session_trace_starting'
+   26945:   const sessionTrace = {
+   26946:     dayNumber: day.dayNumber,
+   26947:     dayFocus: day.focus,
+
+--- BUILDER ERROR 059 | line 27256, col 87 | TS2339 ---
+lib/adaptive-program-builder.ts(27256,87): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+Suggested search anchors: requiredEquipment, Exercise, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 27244-27268:
+   27244:   
+   27245:   // ==========================================================================
+   27246:   // [TASK 1] SESSION ASSEMBLY PHASE AUDIT - Post Equipment Adaptation
+   27247:   // ==========================================================================
+   27248:   const postEquipmentValidation = validateSessionCandidate(adaptedMain.adapted, equipment, primaryGoal, 'post_equipment_adaptation')
+   27249:   console.log('[session-assembly-phase-audit]', {
+   27250:     phaseName: 'post_equipment_adaptation',
+   27251:     candidateCount: adaptedMain.adapted.length,
+   27252:     // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   27253:         selectedExerciseNames: adaptedMain.adapted.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
+   27254:     selectedMovementPatterns: adaptedMain.adapted.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
+   27255:     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
+>> 27256:     selectedEquipmentNeeds: [...new Set(adaptedMain.adapted.flatMap(e => e?.exercise?.requiredEquipment || []))],
+   27257:     selectedEstimatedMinutes: (adaptedMain.adapted.length * 5) + 10,
+   27258:     validationStatus: postEquipmentValidation.isValid ? 'valid' : 'invalid',
+   27259:     rejectReason: postEquipmentValidation.failureReasons.join(', ') || null,
+   27260:     adaptationCount: adaptedMain.adaptationCount,
+   27261:     significantLimitations: adaptedMain.significantLimitations,
+   27262:   })
+   27263:   
+   27264:   // [TASK 4] Log constraint resolution for equipment filtering
+   27265:   logConstraintResolution(rescuedMain.length, adaptedMain.adapted.length, 'equipment_adaptation', {
+   27266:     primaryGoalPreserved: adaptedMain.adapted.length > 0,
+   27267:     equipmentTruthPreserved: true, // By definition - we filtered FOR equipment
+   27268:     secondaryGoalPreserved: adaptedMain.adapted.length >= Math.floor(rescuedMain.length * 0.5),
+
+--- BUILDER ERROR 060 | line 27730, col 151 | TS2352 ---
+lib/adaptive-program-builder.ts(27730,151): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: SelectedExercise, { category: string; }, unknown, TS2352, Conversion, category, string, may
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 27718-27742:
+   27718:         
+   27719:         // Derive composite fields from normalized base
+   27720:         normalized.movementPattern = normalized.movementPattern !== '' 
+   27721:           ? normalized.movementPattern
+   27722:           : normalized.exerciseCategory !== ''
+   27723:             ? normalized.exerciseCategory
+   27724:             : normalized.category !== ''
+   27725:               ? normalized.category
+   27726:               : 'unknown'
+   27727:         
+   27728:         // Safe skill hint extraction (probe accessors first, then fall back to category)
+   27729:         // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+>> 27730:         normalized.skillHint = getExerciseSkill(ex) || getExerciseSkillFamily(ex) || (typeof (ex as { category?: unknown })?.category === 'string' ? (ex as { category: string }).category : '')
+   27731:         
+   27732:         // [CHECKPOINT] inside_score_map_after_normalization
+   27733:         if (exIndex < 3) {
+   27734:           console.log('[db-truth-main-ranking-checkpoint]', { 
+   27735:             checkpoint: 'inside_score_map_after_normalization', 
+   27736:             sessionIndex,
+   27737:             exerciseIndex: exIndex,
+   27738:             normalizedFields: normalized,
+   27739:           })
+   27740:         }
+   27741:         
+   27742:         const isAdvanced = normalized.prescriptionStyle === 'primary' || 
+
+--- BUILDER ERROR 061 | line 27758, col 98 | TS2352 ---
+lib/adaptive-program-builder.ts(27758,98): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: SelectedExercise, { category: string; }, unknown, TS2352, Conversion, category, string, may
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 27746-27770:
+   27746:         
+   27747:         const fatigueLevel: 'low' | 'medium' | 'high' = 
+   27748:           normalized.prescriptionStyle === 'primary' ? 'high' :
+   27749:           normalized.exerciseRole === 'primary' ? 'high' :
+   27750:           normalized.category === 'accessory' ? 'low' : 'medium'
+   27751:         
+   27752:         // Log safe normalization for first few
+   27753:         if (exIndex < 3) {
+   27754:           console.log('[db-truth-main-ranking-safe-normalization]', {
+   27755:             exerciseName: normalized.name,
+   27756:             // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   27757:             // [BUILDER-EX-CATEGORY-FLAT-RUNTIME-READ] runtime-shape narrow.
+>> 27758:             rawCategoryPreview: typeof (ex as { category?: unknown })?.category === 'string' ? ((ex as { category: string }).category).slice(0, 20) : String(typeof (ex as { category?: unknown })?.category),
+   27759:             rawExerciseCategoryPreview: getExerciseCategory(ex).slice(0, 20),
+   27760:             rawMovementPatternPreview: getExerciseMovementPattern(ex).slice(0, 20),
+   27761:             normalizedMovementPattern: normalized.movementPattern,
+   27762:             normalizedSkillHint: normalized.skillHint,
+   27763:             usedFallback: normalized.movementPattern === 'unknown' || normalized.skillHint === '',
+   27764:             verdict: 'SAFE_NORMALIZATION_COMPLETE',
+   27765:           })
+   27766:         }
+   27767:         
+   27768:         // [CHECKPOINT] inside_score_map_before_modifier
+   27769:         if (exIndex < 3) {
+   27770:           console.log('[db-truth-main-ranking-checkpoint]', { 
+
+--- BUILDER ERROR 062 | line 27807, col 13 | TS2345 ---
+lib/adaptive-program-builder.ts(27807,13): error TS2345: Argument of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...' is not assignable to parameter of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...'.
+Suggested search anchors: { byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb..., TS2345, byFamily, Map, import, workspaces, spartanlab, skill
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 27795-27819:
+   27795:         try {
+   27796:           result = applySkillSpecificRankingModifier(
+   27797:             normalized.baseScore,
+   27798:             {
+   27799:               name: normalized.name,
+   27800:               category: normalized.category,
+   27801:               skill: normalized.skillHint,
+   27802:               skillFamily: normalized.skillFamily,
+   27803:               movementPattern: normalized.movementPattern,
+   27804:               isAdvanced,
+   27805:               fatigueLevel,
+   27806:             },
+>> 27807:             skillSpecificModifiers,
+   27808:             dbTruthRankingModifiers
+   27809:           )
+   27810:         } catch (modifierErr) {
+   27811:           // ==========================================================================
+   27812:           // [FAIL-OPEN] Modifier failure is NON-FATAL - use safe fallback result
+   27813:           // DO NOT RETHROW - this is an enhancement corridor, not authoritative
+   27814:           // ==========================================================================
+   27815:           console.log('[db-truth-main-ranking-modifier-failure]', {
+   27816:             exerciseName: normalized.name,
+   27817:             exerciseIndex: exIndex,
+   27818:             normalizedFields: normalized,
+   27819:             isAdvanced,
+
+--- BUILDER ERROR 063 | line 27831, col 34 | TS2353 ---
+lib/adaptive-program-builder.ts(27831,34): error TS2353: Object literal may only specify known properties, and 'fallbackUsed' does not exist in type 'string[]'.
+Suggested search anchors: fallbackUsed, string[], TS2353, Object, literal, may, only, specify
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 27819-27843:
+   27819:             isAdvanced,
+   27820:             fatigueLevel,
+   27821:             errorName: modifierErr instanceof Error ? modifierErr.name : 'unknown',
+   27822:             errorMessage: modifierErr instanceof Error ? modifierErr.message : String(modifierErr),
+   27823:             stack: modifierErr instanceof Error ? modifierErr.stack?.split('\n').slice(0, 5).join('\n') : '',
+   27824:             verdict: 'MODIFIER_FAILED_USING_SAFE_FALLBACK',
+   27825:           })
+   27826:           
+   27827:           // Return safe fallback result - keep original score, no modification
+   27828:           result = {
+   27829:             adjustedScore: normalized.baseScore,
+   27830:             totalModifier: 0,
+>> 27831:             modifierBreakdown: { fallbackUsed: true, reason: 'modifier_call_failed' },
+   27832:             changed: false,
+   27833:             skillFamilyUsed: null,
+   27834:             precedenceUsed: 'none',
+   27835:           }
+   27836:         }
+   27837:         
+   27838:         // [CHECKPOINT] inside_score_map_after_modifier
+   27839:         if (exIndex < 3) {
+   27840:           console.log('[db-truth-main-ranking-checkpoint]', { 
+   27841:             checkpoint: 'inside_score_map_after_modifier', 
+   27842:             sessionIndex,
+   27843:             exerciseIndex: exIndex,
+
+--- BUILDER ERROR 064 | line 27896, col 13 | TS18047 ---
+lib/adaptive-program-builder.ts(27896,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27884-27908:
+   27884:         // No fake variant depth is invented.
+   27885:         // ==========================================================================
+   27886:         let depthDelta = 0
+   27887:         let depthBiasUsed: number | null = null
+   27888:         let depthSkillKeyUsed: string | null = null
+   27889:         try {
+   27890:           // Match by skill key with both raw and underscore-stripped form
+   27891:           // (the bias map uses `intent.skill` which can be either form
+   27892:           // depending on canonicalProfile shape — see L3268-3269).
+   27893:           const skillKey = normalized.skillHint || ''
+   27894:           const skillKeyAlt = skillKey.replace(/_/g, '')
+   27895:           const adj =
+>> 27896:             progressionDepthAdjustments[skillKey] ||
+   27897:             progressionDepthAdjustments[skillKeyAlt] ||
+   27898:             null
+   27899:           if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
+   27900:             depthBiasUsed = adj.adjustedBias
+   27901:             depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
+   27902:             if (adj.adjustedBias < 0) {
+   27903:               // Conservative skill
+   27904:               depthDelta = isAdvanced ? -10 : 4
+   27905:             } else if (adj.adjustedBias > 0) {
+   27906:               // Progressive skill
+   27907:               depthDelta = isAdvanced ? 6 : -2
+   27908:             }
+
+--- BUILDER ERROR 065 | line 27897, col 13 | TS18047 ---
+lib/adaptive-program-builder.ts(27897,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27885-27909:
+   27885:         // ==========================================================================
+   27886:         let depthDelta = 0
+   27887:         let depthBiasUsed: number | null = null
+   27888:         let depthSkillKeyUsed: string | null = null
+   27889:         try {
+   27890:           // Match by skill key with both raw and underscore-stripped form
+   27891:           // (the bias map uses `intent.skill` which can be either form
+   27892:           // depending on canonicalProfile shape — see L3268-3269).
+   27893:           const skillKey = normalized.skillHint || ''
+   27894:           const skillKeyAlt = skillKey.replace(/_/g, '')
+   27895:           const adj =
+   27896:             progressionDepthAdjustments[skillKey] ||
+>> 27897:             progressionDepthAdjustments[skillKeyAlt] ||
+   27898:             null
+   27899:           if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
+   27900:             depthBiasUsed = adj.adjustedBias
+   27901:             depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
+   27902:             if (adj.adjustedBias < 0) {
+   27903:               // Conservative skill
+   27904:               depthDelta = isAdvanced ? -10 : 4
+   27905:             } else if (adj.adjustedBias > 0) {
+   27906:               // Progressive skill
+   27907:               depthDelta = isAdvanced ? 6 : -2
+   27908:             }
+   27909:           }
+
+--- BUILDER ERROR 066 | line 27901, col 41 | TS18047 ---
+lib/adaptive-program-builder.ts(27901,41): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27889-27913:
+   27889:         try {
+   27890:           // Match by skill key with both raw and underscore-stripped form
+   27891:           // (the bias map uses `intent.skill` which can be either form
+   27892:           // depending on canonicalProfile shape — see L3268-3269).
+   27893:           const skillKey = normalized.skillHint || ''
+   27894:           const skillKeyAlt = skillKey.replace(/_/g, '')
+   27895:           const adj =
+   27896:             progressionDepthAdjustments[skillKey] ||
+   27897:             progressionDepthAdjustments[skillKeyAlt] ||
+   27898:             null
+   27899:           if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
+   27900:             depthBiasUsed = adj.adjustedBias
+>> 27901:             depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
+   27902:             if (adj.adjustedBias < 0) {
+   27903:               // Conservative skill
+   27904:               depthDelta = isAdvanced ? -10 : 4
+   27905:             } else if (adj.adjustedBias > 0) {
+   27906:               // Progressive skill
+   27907:               depthDelta = isAdvanced ? 6 : -2
+   27908:             }
+   27909:           }
+   27910:         } catch (depthErr) {
+   27911:           // Observer-only failure: never collapse a healthy session
+   27912:           // because depth-bias lookup threw. Reset to zero and continue.
+   27913:           depthDelta = 0
+
+--- BUILDER ERROR 067 | line 27956, col 33 | TS18047 ---
+lib/adaptive-program-builder.ts(27956,33): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27944-27968:
+   27944:         // here is *materialized* truth: it represents what actually happened to
+   27945:         // THIS exercise during the final winner stage. We do NOT stamp
+   27946:         // eligibility-only ideas, raw preferences, or theoretical modifiers
+   27947:         // that did not survive into the rerank result.
+   27948:         //
+   27949:         // The rerank stage is where we have BOTH inputs simultaneously:
+   27950:         //   - the per-exercise rerank result (`result.*` + `depthDelta`)
+   27951:         //   - the per-skill adjustments map (`progressionDepthAdjustments`)
+   27952:         // After this stage, only the candidate flows downstream and the map
+   27953:         // is no longer consulted, so this is the canonical join site.
+   27954:         // ==========================================================================
+   27955:         const matchedAdjForProvenance =
+>> 27956:           (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
+   27957:           progressionDepthAdjustments[normalized.skillHint] ||
+   27958:           progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
+   27959:           null
+   27960:         const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
+   27961:           rankingApplied: true,
+   27962:           rankingChanged: result.changed || depthDelta !== 0,
+   27963:           precedenceUsed: (matchedAdjForProvenance?.precedenceUsed as
+   27964:             'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
+   27965:           ) ?? (result.precedenceUsed as 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null) ?? null,
+   27966:           skillFamilyUsed: result.skillFamilyUsed ?? null,
+   27967:           depthBias: depthBiasUsed,
+   27968:           depthDelta,
+
+--- BUILDER ERROR 068 | line 27957, col 11 | TS18047 ---
+lib/adaptive-program-builder.ts(27957,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27945-27969:
+   27945:         // THIS exercise during the final winner stage. We do NOT stamp
+   27946:         // eligibility-only ideas, raw preferences, or theoretical modifiers
+   27947:         // that did not survive into the rerank result.
+   27948:         //
+   27949:         // The rerank stage is where we have BOTH inputs simultaneously:
+   27950:         //   - the per-exercise rerank result (`result.*` + `depthDelta`)
+   27951:         //   - the per-skill adjustments map (`progressionDepthAdjustments`)
+   27952:         // After this stage, only the candidate flows downstream and the map
+   27953:         // is no longer consulted, so this is the canonical join site.
+   27954:         // ==========================================================================
+   27955:         const matchedAdjForProvenance =
+   27956:           (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
+>> 27957:           progressionDepthAdjustments[normalized.skillHint] ||
+   27958:           progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
+   27959:           null
+   27960:         const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
+   27961:           rankingApplied: true,
+   27962:           rankingChanged: result.changed || depthDelta !== 0,
+   27963:           precedenceUsed: (matchedAdjForProvenance?.precedenceUsed as
+   27964:             'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
+   27965:           ) ?? (result.precedenceUsed as 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null) ?? null,
+   27966:           skillFamilyUsed: result.skillFamilyUsed ?? null,
+   27967:           depthBias: depthBiasUsed,
+   27968:           depthDelta,
+   27969:           adjustedScoreFinal: depthAdjustedScore,
+
+--- BUILDER ERROR 069 | line 27958, col 11 | TS18047 ---
+lib/adaptive-program-builder.ts(27958,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Suggested search anchors: progressionDepthAdjustments, null, TS18047, possibly
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+Local context lines 27946-27970:
+   27946:         // eligibility-only ideas, raw preferences, or theoretical modifiers
+   27947:         // that did not survive into the rerank result.
+   27948:         //
+   27949:         // The rerank stage is where we have BOTH inputs simultaneously:
+   27950:         //   - the per-exercise rerank result (`result.*` + `depthDelta`)
+   27951:         //   - the per-skill adjustments map (`progressionDepthAdjustments`)
+   27952:         // After this stage, only the candidate flows downstream and the map
+   27953:         // is no longer consulted, so this is the canonical join site.
+   27954:         // ==========================================================================
+   27955:         const matchedAdjForProvenance =
+   27956:           (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
+   27957:           progressionDepthAdjustments[normalized.skillHint] ||
+>> 27958:           progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
+   27959:           null
+   27960:         const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
+   27961:           rankingApplied: true,
+   27962:           rankingChanged: result.changed || depthDelta !== 0,
+   27963:           precedenceUsed: (matchedAdjForProvenance?.precedenceUsed as
+   27964:             'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
+   27965:           ) ?? (result.precedenceUsed as 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null) ?? null,
+   27966:           skillFamilyUsed: result.skillFamilyUsed ?? null,
+   27967:           depthBias: depthBiasUsed,
+   27968:           depthDelta,
+   27969:           adjustedScoreFinal: depthAdjustedScore,
+   27970:           currentBeatsHistorical: matchedAdjForProvenance?.currentBeatsHistorical ?? null,
+
+--- BUILDER ERROR 070 | line 28029, col 44 | TS2769 ---
+lib/adaptive-program-builder.ts(28029,44): error TS2769: No overload matches this call.
+Suggested search anchors: TS2769, overload, matches, this, call
+Likely fix guidance: Overload mismatch. Fix the local nullable/shape issue causing overload failure; do not cast broadly.
+Local context lines 28017-28041:
+   28017:       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   28018:       const postRankingOrder = resortedExercises.map(e => getExerciseName(e) || 'unknown')
+   28019:       const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
+   28020:       
+   28021:       // Count skill-family-specific vs global modifications
+   28022:       const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
+   28023:       const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
+   28024:       
+   28025:       // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Variant-depth winner-lock
+   28026:       // session-level rollup. Counts how many exercises had a non-zero
+   28027:       // depth delta and whether any of those flipped order.
+   28028:       const depthShiftedCount = scoredExercises.filter(e => (e.dbTruthDepthDelta || 0) !== 0).length
+>> 28029:       const depthBiasMapSize = Object.keys(progressionDepthAdjustments).length
+   28030:       const depthBiasNonZeroCount = Object.values(progressionDepthAdjustments).filter(
+   28031:         (a) => a && typeof a.adjustedBias === 'number' && a.adjustedBias !== 0
+   28032:       ).length
+   28033:       
+   28034:       console.log('[db-truth-main-ranking]', {
+   28035:         sessionIndex,
+   28036:         dayFocus: day.focus,
+   28037:         preRankingOrder: preRankingOrder.slice(0, 5),
+   28038:         postRankingOrder: postRankingOrder.slice(0, 5),
+   28039:         rankingChanged,
+   28040:         exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
+   28041:         skillFamilySpecificMods: skillFamilyModCount,
+
+--- BUILDER ERROR 071 | line 28030, col 51 | TS2769 ---
+lib/adaptive-program-builder.ts(28030,51): error TS2769: No overload matches this call.
+Suggested search anchors: TS2769, overload, matches, this, call
+Likely fix guidance: Overload mismatch. Fix the local nullable/shape issue causing overload failure; do not cast broadly.
+Local context lines 28018-28042:
+   28018:       const postRankingOrder = resortedExercises.map(e => getExerciseName(e) || 'unknown')
+   28019:       const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
+   28020:       
+   28021:       // Count skill-family-specific vs global modifications
+   28022:       const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
+   28023:       const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
+   28024:       
+   28025:       // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Variant-depth winner-lock
+   28026:       // session-level rollup. Counts how many exercises had a non-zero
+   28027:       // depth delta and whether any of those flipped order.
+   28028:       const depthShiftedCount = scoredExercises.filter(e => (e.dbTruthDepthDelta || 0) !== 0).length
+   28029:       const depthBiasMapSize = Object.keys(progressionDepthAdjustments).length
+>> 28030:       const depthBiasNonZeroCount = Object.values(progressionDepthAdjustments).filter(
+   28031:         (a) => a && typeof a.adjustedBias === 'number' && a.adjustedBias !== 0
+   28032:       ).length
+   28033:       
+   28034:       console.log('[db-truth-main-ranking]', {
+   28035:         sessionIndex,
+   28036:         dayFocus: day.focus,
+   28037:         preRankingOrder: preRankingOrder.slice(0, 5),
+   28038:         postRankingOrder: postRankingOrder.slice(0, 5),
+   28039:         rankingChanged,
+   28040:         exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
+   28041:         skillFamilySpecificMods: skillFamilyModCount,
+   28042:         globalFallbackMods: globalFallbackCount,
+
+--- BUILDER ERROR 072 | line 28593, col 38 | TS2304 ---
+lib/adaptive-program-builder.ts(28593,38): error TS2304: Cannot find name 'sessionContext'.
+Suggested search anchors: sessionContext, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 28581-28605:
+   28581:         // [TRUTH-PRESERVING PROTECTION] NEW RULE: Preserve family composition
+   28582:         // Keep at least ONE representative from each non-empty family
+   28583:         // Priority order: strength > support > accessory > core > mobility > finisher > other
+   28584:         // ==========================================================================
+   28585:         const familyPriority = ['strength', 'support', 'accessory', 'core', 'mobility', 'finisher', 'other']
+   28586:         const preservedSecondary: typeof effectiveMainForSession = []
+   28587:         const removedExercises: string[] = []
+   28588:         
+   28589:         // ==========================================================================
+   28590:         // [BUNDLE-CONSUMED-DOSAGE] Max exercises per family - now bundle-informed
+   28591:         // If bundle has high dosage confidence from benchmarks/envelopes, allow more
+   28592:         // ==========================================================================
+>> 28593:         const bundleDosageDecision = sessionContext?.bundleDecisions?.dosage
+   28594:         const bundleDosageAdjustment = bundleDosageDecision?.adjustment ?? 0
+   28595:         const bundleDosageConfidenceLevel = bundleDosageDecision?.confidence ?? 'low'
+   28596:         
+   28597:         // Base maxPerFamily from first-week protection
+   28598:         let baseMaxPerFamily = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+   28599:         
+   28600:         // Bundle-informed adjustment: if high confidence from benchmarks/envelopes, allow +1
+   28601:         let maxPerFamily = baseMaxPerFamily
+   28602:         let dosageAdjustmentApplied = false
+   28603:         let dosageAdjustmentReason = 'none'
+   28604:         
+   28605:         if (bundleDosageConfidenceLevel === 'high' && bundleDosageAdjustment > 0) {
+
+--- BUILDER ERROR 073 | line 28944, col 50 | TS2339 ---
+lib/adaptive-program-builder.ts(28944,50): error TS2339: Property 'constructor' does not exist on type 'never'.
+Suggested search anchors: constructor, never, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 28932-28956:
+   28932:           // [RUNTIME-HARDENING] Safely extract exercise skill with type checking
+   28933:           const rawExerciseSkill = getExerciseSkill(ex) || undefined
+   28934:           
+   28935:           // Skip if no skill or not a string
+   28936:           if (rawExerciseSkill === null || rawExerciseSkill === undefined) return ex
+   28937:           if (typeof rawExerciseSkill !== 'string') {
+   28938:             // Log malformed skill shape but don't throw
+   28939:             console.log('[effective-selection-shape-audit]', {
+   28940:               // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+   28941:           exerciseName: getExerciseName(ex) || 'unknown',
+   28942:               rawSkillType: typeof rawExerciseSkill,
+   28943:               isArray: Array.isArray(rawExerciseSkill),
+>> 28944:               constructorName: rawExerciseSkill?.constructor?.name || 'unknown',
+   28945:               fallbackApplied: true,
+   28946:               verdict: 'MALFORMED_EXERCISE_SKILL_SKIPPED',
+   28947:             })
+   28948:             return ex
+   28949:           }
+   28950:           
+   28951:           const exerciseSkill = rawExerciseSkill.trim()
+   28952:           if (!exerciseSkill) return ex
+   28953:           
+   28954:           const family = mapSkillToFamily(exerciseSkill)
+   28955:           const readiness = getReadinessForFamily(exposureReadinessMap, family)
+   28956:           if (!readiness) return ex
+
+--- BUILDER ERROR 074 | line 28955, col 51 | TS2345 ---
+lib/adaptive-program-builder.ts(28955,51): error TS2345: Argument of type 'Map<SkillFamily, FamilyReadinessContract> | null' is not assignable to parameter of type 'Map<SkillFamily, FamilyReadinessContract>'.
+Suggested search anchors: Map<SkillFamily, FamilyReadinessContract> | null, Map<SkillFamily, FamilyReadinessContract>, TS2345, Map, SkillFamily, FamilyReadinessContract, null, not
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 28943-28967:
+   28943:               isArray: Array.isArray(rawExerciseSkill),
+   28944:               constructorName: rawExerciseSkill?.constructor?.name || 'unknown',
+   28945:               fallbackApplied: true,
+   28946:               verdict: 'MALFORMED_EXERCISE_SKILL_SKIPPED',
+   28947:             })
+   28948:             return ex
+   28949:           }
+   28950:           
+   28951:           const exerciseSkill = rawExerciseSkill.trim()
+   28952:           if (!exerciseSkill) return ex
+   28953:           
+   28954:           const family = mapSkillToFamily(exerciseSkill)
+>> 28955:           const readiness = getReadinessForFamily(exposureReadinessMap, family)
+   28956:           if (!readiness) return ex
+   28957:           
+   28958:           let wasGated = false
+   28959:           const modifiedEx = { ...ex }
+   28960:           
+   28961:           // Gate density (sets)
+   28962:           if (readiness.densityPermission === 'reduce' && typeof modifiedEx.sets === 'number') {
+   28963:             const currentSets = modifiedEx.sets
+   28964:             if (currentSets > 3) {
+   28965:               const gatedSets = Math.max(2, currentSets - 1)
+   28966:               readinessGatedPrescriptions.push({
+   28967:                 // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+
+--- BUILDER ERROR 075 | line 29558, col 27 | TS2367 ---
+lib/adaptive-program-builder.ts(29558,27): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+Suggested search anchors: RecoveryLevel, "red", TS2367, This, comparison, appears, unintentional, because
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 29546-29570:
+   29546:     middleStep = 'time_fit_resolved'
+   29547:     
+   29548:     // Calculate session neural demand from main exercises
+   29549:     const safeEffectiveMain = Array.isArray(effectiveSelection?.main) ? effectiveSelection.main : []
+   29550:     const sessionNeuralDemand = safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 4) 
+   29551:       ? 'high' as const
+   29552:       : safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 3)
+   29553:         ? 'moderate' as const
+   29554:         : 'low' as const
+   29555:     middleStep = 'neural_demand_resolved'
+   29556: 
+   29557:     // Select endurance block
+>> 29558:     currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
+   29559:     middleStep = 'endurance_block_selecting'
+   29560:     enduranceResult = selectEnduranceBlock({
+   29561:       primaryGoal,
+   29562:       sessionLength,
+   29563:       sessionCapacity,
+   29564:       enduranceCompatibility,
+   29565:       fatigueSensitivity,
+   29566:       currentFatigueScore,
+   29567:       sessionNeuralDemand,
+   29568:       timeRemainingMinutes: sessionTimeFit.recommendedDuration,
+   29569:       availableEquipment: equipment,
+   29570:     })
+
+--- BUILDER ERROR 076 | line 29558, col 66 | TS2367 ---
+lib/adaptive-program-builder.ts(29558,66): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"yellow"' have no overlap.
+Suggested search anchors: RecoveryLevel, "yellow", TS2367, This, comparison, appears, unintentional, because
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 29546-29570:
+   29546:     middleStep = 'time_fit_resolved'
+   29547:     
+   29548:     // Calculate session neural demand from main exercises
+   29549:     const safeEffectiveMain = Array.isArray(effectiveSelection?.main) ? effectiveSelection.main : []
+   29550:     const sessionNeuralDemand = safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 4) 
+   29551:       ? 'high' as const
+   29552:       : safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 3)
+   29553:         ? 'moderate' as const
+   29554:         : 'low' as const
+   29555:     middleStep = 'neural_demand_resolved'
+   29556: 
+   29557:     // Select endurance block
+>> 29558:     currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
+   29559:     middleStep = 'endurance_block_selecting'
+   29560:     enduranceResult = selectEnduranceBlock({
+   29561:       primaryGoal,
+   29562:       sessionLength,
+   29563:       sessionCapacity,
+   29564:       enduranceCompatibility,
+   29565:       fatigueSensitivity,
+   29566:       currentFatigueScore,
+   29567:       sessionNeuralDemand,
+   29568:       timeRemainingMinutes: sessionTimeFit.recommendedDuration,
+   29569:       availableEquipment: equipment,
+   29570:     })
+
+--- BUILDER ERROR 077 | line 29657, col 14 | TS2454 ---
+lib/adaptive-program-builder.ts(29657,14): error TS2454: Variable 'variants' is used before being assigned.
+Suggested search anchors: variants, TS2454, Variable, used, before, being, assigned
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+Local context lines 29645-29669:
+   29645:       helperStep: middleStep,
+   29646:       errorName: middleError instanceof Error ? middleError.name : 'unknown',
+   29647:       errorMessage: middleError instanceof Error ? middleError.message : String(middleError),
+   29648:       stack: middleError instanceof Error ? middleError.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+   29649:       hasValidCoreSession,
+   29650:     })
+   29651:     
+   29652:     if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
+   29653:       // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
+   29654:       // [TASK 2] Use actual built session time for fallback, not target preference
+   29655:       const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
+   29656:       console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
+>> 29657:   variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+   29658:   adaptationNotes = adaptationNotes || []
+   29659:   // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
+   29660:   // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+   29661:   rationale = rationale || sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+   29662:       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
+   29663:       currentFatigueScore = currentFatigueScore ?? 50
+   29664:       finisher = undefined
+   29665:     } else {
+   29666:       // Core failure - cannot continue
+   29667:       throw new Error(
+   29668:         `session_middle_helper_failed: step=${middleStep} day=${day.dayNumber} focus=${day.focus} ` +
+   29669:         `goal=${primaryGoal} reason=${middleError instanceof Error ? middleError.message.slice(0, 100) : 'unknown'}`
+
+--- BUILDER ERROR 078 | line 29661, col 15 | TS2454 ---
+lib/adaptive-program-builder.ts(29661,15): error TS2454: Variable 'rationale' is used before being assigned.
+Suggested search anchors: rationale, TS2454, Variable, used, before, being, assigned
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+Local context lines 29649-29673:
+   29649:       hasValidCoreSession,
+   29650:     })
+   29651:     
+   29652:     if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
+   29653:       // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
+   29654:       // [TASK 2] Use actual built session time for fallback, not target preference
+   29655:       const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
+   29656:       console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
+   29657:   variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+   29658:   adaptationNotes = adaptationNotes || []
+   29659:   // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
+   29660:   // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+>> 29661:   rationale = rationale || sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+   29662:       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
+   29663:       currentFatigueScore = currentFatigueScore ?? 50
+   29664:       finisher = undefined
+   29665:     } else {
+   29666:       // Core failure - cannot continue
+   29667:       throw new Error(
+   29668:         `session_middle_helper_failed: step=${middleStep} day=${day.dayNumber} focus=${day.focus} ` +
+   29669:         `goal=${primaryGoal} reason=${middleError instanceof Error ? middleError.message.slice(0, 100) : 'unknown'}`
+   29670:       )
+   29671:     }
+   29672:   }
+   29673:   
+
+--- BUILDER ERROR 079 | line 29662, col 25 | TS2454 ---
+lib/adaptive-program-builder.ts(29662,25): error TS2454: Variable 'enduranceResult' is used before being assigned.
+Suggested search anchors: enduranceResult, TS2454, Variable, used, before, being, assigned
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+Local context lines 29650-29674:
+   29650:     })
+   29651:     
+   29652:     if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
+   29653:       // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
+   29654:       // [TASK 2] Use actual built session time for fallback, not target preference
+   29655:       const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
+   29656:       console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
+   29657:   variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+   29658:   adaptationNotes = adaptationNotes || []
+   29659:   // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
+   29660:   // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+   29661:   rationale = rationale || sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+>> 29662:       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
+   29663:       currentFatigueScore = currentFatigueScore ?? 50
+   29664:       finisher = undefined
+   29665:     } else {
+   29666:       // Core failure - cannot continue
+   29667:       throw new Error(
+   29668:         `session_middle_helper_failed: step=${middleStep} day=${day.dayNumber} focus=${day.focus} ` +
+   29669:         `goal=${primaryGoal} reason=${middleError instanceof Error ? middleError.message.slice(0, 100) : 'unknown'}`
+   29670:       )
+   29671:     }
+   29672:   }
+   29673:   
+   29674:   sessionStep = 'middle_helpers_completed'
+
+--- BUILDER ERROR 080 | line 29663, col 29 | TS2454 ---
+lib/adaptive-program-builder.ts(29663,29): error TS2454: Variable 'currentFatigueScore' is used before being assigned.
+Suggested search anchors: currentFatigueScore, TS2454, Variable, used, before, being, assigned
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+Local context lines 29651-29675:
+   29651:     
+   29652:     if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
+   29653:       // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
+   29654:       // [TASK 2] Use actual built session time for fallback, not target preference
+   29655:       const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
+   29656:       console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
+   29657:   variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+   29658:   adaptationNotes = adaptationNotes || []
+   29659:   // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
+   29660:   // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+   29661:   rationale = rationale || sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+   29662:       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
+>> 29663:       currentFatigueScore = currentFatigueScore ?? 50
+   29664:       finisher = undefined
+   29665:     } else {
+   29666:       // Core failure - cannot continue
+   29667:       throw new Error(
+   29668:         `session_middle_helper_failed: step=${middleStep} day=${day.dayNumber} focus=${day.focus} ` +
+   29669:         `goal=${primaryGoal} reason=${middleError instanceof Error ? middleError.message.slice(0, 100) : 'unknown'}`
+   29670:       )
+   29671:     }
+   29672:   }
+   29673:   
+   29674:   sessionStep = 'middle_helpers_completed'
+   29675:     // [STYLE-PHASE DEGRADE CARD ROOT FIX] BREADCRUMB ACCURACY GUARD
+
+--- BUILDER ERROR 081 | line 29904, col 15 | TS2322 ---
+lib/adaptive-program-builder.ts(29904,15): error TS2322: Type '{ id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[]' is not assignable to type 'AdaptiveExercise[]'.
+Suggested search anchors: { id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[], AdaptiveExercise[], TS2322, string, exerciseId, name, sets, number
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 29892-29916:
+   29892:         // Emergency rescue succeeded - build a minimal valid session
+   29893:         console.log('[constraint-session-downgrade] Emergency fallback succeeded:', {
+   29894:           dayNumber: day.dayNumber,
+   29895:           dayFocus: day.focus,
+   29896:           primaryGoal,
+   29897:           rescuePath: emergencyRescue.rescuePath,
+   29898:           exerciseCount: emergencyRescue.main.length,
+   29899:           originalExpression: 'direct',
+   29900:           downgradedExpression: 'emergency_support',
+   29901:         })
+   29902:         
+   29903:         // Build emergency session from rescue result
+>> 29904:         const emergencyExercises: AdaptiveExercise[] = emergencyRescue.main.map((selected, idx) => ({
+   29905:           id: `${selected.exercise.id}_d${day.dayNumber}_emergency`,
+   29906:           exerciseId: selected.exercise.id,
+   29907:           name: selected.exercise.name,
+   29908:           sets: selected.sets,
+   29909:           repsOrTime: selected.repsOrTime,
+   29910:           restPeriod: '60-90s',
+   29911:           category: (selected.exercise.category || 'strength') as AdaptiveExercise['category'],
+   29912:           movementPattern: selected.exercise.movementPattern || 'compound',
+   29913:           sessionRole: 'support' as const,
+   29914:           selectionReason: `[Emergency Fallback] ${selected.selectionReason}`,
+   29915:           neuralDemand: selected.exercise.neuralDemand ?? 2,
+   29916:           fatigueCost: selected.exercise.fatigueCost ?? 2,
+
+--- BUILDER ERROR 082 | line 29936, col 11 | TS2353 ---
+lib/adaptive-program-builder.ts(29936,11): error TS2353: Object literal may only specify known properties, and 'estimatedMinutes' does not exist in type 'ValidatedSession'.
+Suggested search anchors: estimatedMinutes, ValidatedSession, TS2353, Object, literal, may, only, specify
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 29924-29948:
+   29924:           isCore: selected.exercise.category === 'core',
+   29925:           isAccessory: selected.exercise.category === 'accessory',
+   29926:           expectedTimeMinutes: 5,
+   29927:         }))
+   29928:         
+   29929:         // Replace empty validatedSession with emergency exercises
+   29930:         validatedSession = {
+   29931:           ...validatedSession,
+   29932:           exercises: emergencyExercises,
+   29933:           // [BUILDER-VALIDATED-SESSION-DURATION-OWNER] ValidatedSession's
+   29934:           // canonical duration field is `estimatedMinutes`. Legacy
+   29935:           // `estimatedDurationMinutes` was never on the contract.
+>> 29936:           estimatedMinutes: emergencyExercises.length * 5 + 10,
+   29937:           sessionCharacter: {
+   29938:             neuralDemandLevel: 'moderate' as const,
+   29939:             fatigueProfile: 'standard' as const,
+   29940:             volumeCategory: 'minimal' as const,
+   29941:             sessionType: 'support_recovery' as const,
+   29942:           },
+   29943:         }
+   29944:         
+   29945:         console.log('[constraint-session-final] Emergency session built:', {
+   29946:           dayNumber: day.dayNumber,
+   29947:           primaryGoal,
+   29948:           constraintType: constraintType || 'unknown',
+
+--- BUILDER ERROR 083 | line 30580, col 7 | TS2322 ---
+lib/adaptive-program-builder.ts(30580,7): error TS2322: Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+Suggested search anchors: { adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_..., { adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B..., TS2322, adaptationPhase, string, firstWeekProtectionActive, boolean, appliedReductions
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 30568-30592:
+   30568:         compositionReasons: sessionCompositionBlueprint.compositionReasons.map(r => ({
+   30569:           code: r.code,
+   30570:           description: r.description,
+   30571:         })),
+   30572:         audit: sessionCompositionBlueprint.audit,
+   30573:         // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role summary.
+   30574:         // This is what makes the Program page card visibly differentiate
+   30575:         // days by role label, intensity class, breadth target, progression
+   30576:         // character, and the "why this day looks like this" rationale.
+   30577:         weeklyRole: sessionCompositionBlueprint.weeklyRoleSummary || null,
+   30578:       } : undefined,
+   30579:       // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
+>> 30580:       prescriptionPropagationAudit: weekAdaptation ? {
+   30581:         adaptationPhase: weekAdaptation.adaptationPhase || 'normal_progression',
+   30582:         firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active || false,
+   30583:         appliedReductions: {
+   30584:           setsReduced: setsReducedByWeekAdaptation,
+   30585:           rpeReduced: !!(weekAdaptation.firstWeekProtection?.reduceRPE || weekAdaptation.loadStrategy?.intensityBias === 'reduced'),
+   30586:           finisherSuppressed: finisherSuppressedByWeekAdaptation,
+   30587:           densityReduced: weekAdaptation.loadStrategy?.densityBias === 'reduced',
+   30588:           secondaryTrimmed: secondaryExercisesTrimmed,
+   30589:         },
+   30590:         reductionReason: weekAdaptationSetReductionReason !== 'none' ? weekAdaptationSetReductionReason : null,
+   30591:         loadStrategyApplied: {
+   30592:           volumeBias: weekAdaptation.loadStrategy?.volumeBias || 'normal',
+
+--- BUILDER ERROR 084 | line 30627, col 9 | TS2304 ---
+lib/adaptive-program-builder.ts(30627,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+Suggested search anchors: phase15eSubstepDegraded, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 30615-30639:
+   30615:     // not in this session-level builder. The legacy log copied the
+   30616:     // shorthand identifiers across function boundaries; reflecting that
+   30617:     // would require threading those state vars through the session
+   30618:     // context (out of scope for this pass). Gate to safe defaults so
+   30619:     // the log still emits a complete record.
+   30620:     phase15eSubstepDegraded: false,
+   30621:     phase15eSubstepDegradedReason: 'none',
+   30622:     phase15eExactStep: 'session_scope_no_outer_state',
+   30623:     phase15eLastSafeStep: 'session_scope_no_outer_state',
+   30624:     postAuditStepsReached: 'all_steps_complete',
+   30625:     verdict: phase15eBoundaryFailed 
+   30626:       ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_ROLLBACK'
+>> 30627:       : phase15eSubstepDegraded
+   30628:         ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_SUBSTEP_DEGRADATION'
+   30629:         : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
+   30630:   })
+   30631: 
+   30632:   // ==========================================================================
+   30633:   // STEP B/D: Outer catch for entire generateAdaptiveSession lifecycle
+   30634:   // ==========================================================================
+   30635:   } catch (lifecycleErr) {
+   30636:     const errorMessage = lifecycleErr instanceof Error ? lifecycleErr.message : String(lifecycleErr)
+   30637:     
+   30638:     // Known classified patterns - if already classified, rethrow unchanged
+   30639:     const alreadyClassifiedPatterns = [
+
+--- BUILDER ERROR 085 | line 30729, col 3 | TS2322 ---
+lib/adaptive-program-builder.ts(30729,3): error TS2322: Type '({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[]' is not assignable to type 'AdaptiveExercise[]'.
+Suggested search anchors: ({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[], AdaptiveExercise[], TS2322, string, name, category, ExerciseCategory, sets
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 30717-30741:
+   30717:       ? 'moderate' as const
+   30718:       : 'low' as const
+   30719:   
+   30720:   // Calculate failure budget for the session
+   30721:   const failureBudget = calculateFailureBudget({
+   30722:     sessionType,
+   30723:     primaryGoal,
+   30724:     fatigueSensitivity,
+   30725:     currentFatigueScore,
+   30726:     sessionNeuralDemand,
+   30727:   })
+   30728:   
+>> 30729:   return safeSelected.map((s, index) => {
+   30730:     // SAFETY: Skip malformed entries
+   30731:     if (!s?.exercise) {
+   30732:       console.log('[mapToAdaptiveExercises] Skipping malformed entry at index', index)
+   30733:       return null
+   30734:     }
+   30735:     
+   30736:     // Get method compatibility for exercise
+   30737:     const compatibility = s.exercise.methodCompatibility || 
+   30738:       getDefaultMethodCompatibility(s.exercise.category, s.exercise.movementPattern, s.exercise.neuralDemand)
+   30739:     
+   30740:     // Get failure risk for this exercise
+   30741:     const failureRisk = s.exercise.failureRisk || 
+
+--- BUILDER ERROR 086 | line 30793, col 8 | TS2345 ---
+lib/adaptive-program-builder.ts(30793,8): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility'.
+Suggested search anchors: import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility, import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility, TS2345, import, workspaces, spartanlab, exercise, pool
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 30781-30805:
+   30781:       primaryGoal,
+   30782:       sessionLength,
+   30783:       exerciseCategory: s.exercise.category,
+   30784:       movementPattern: s.exercise.movementPattern,
+   30785:       neuralDemand: s.exercise.neuralDemand,
+   30786:       fatigueBudgetRemaining,
+   30787:       isEndOfSession,
+   30788:       athleteFatigueSensitivity: fatigueSensitivity,
+   30789:       failureBudget,
+   30790:       exerciseFailureRisk: failureRisk,
+   30791:       hasMatchingExerciseForSuperset,
+   30792:       supersetCandidate,
+>> 30793:     }, compatibility)
+   30794:     
+   30795:     const method = methodResult.recommendedMethod
+   30796:     
+   30797:     // Update fatigue budget
+   30798:     const methodDef = TRAINING_METHODS[method]
+   30799:     fatigueBudgetRemaining -= s.exercise.fatigueCost * 5 * (methodDef?.fatigueCostMultiplier || 1)
+   30800:     
+   30801:     // Update failure budget tracking
+   30802:     if (method === 'drop_set' || method === 'rest_pause') {
+   30803:       failureBudget.currentNearFailureSets += 2
+   30804:     } else if (method === 'density_block') {
+   30805:       failureBudget.currentNearFailureSets += 1
+
+--- BUILDER ERROR 087 | line 30877, col 23 | TS2677 ---
+lib/adaptive-program-builder.ts(30877,23): error TS2677: A type predicate's type must be assignable to its parameter's type.
+Suggested search anchors: s type must be assignable to its parameter, TS2677, predicate, must, assignable, its, parameter
+Likely fix guidance: Type predicate invalid. Make predicate return type assignable to the input parameter type.
+Local context lines 30865-30889:
+   30865:     restSeconds: s.restSeconds,
+   30866:     // [coach-layer] TASK 2: Build coaching metadata from selection trace
+   30867:     coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
+   30868:     // [LIVE-EXECUTION-TRUTH] Pass through execution truth contract from selection
+   30869:     executionTruth: s.executionTruth,
+   30870:     // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Durable canonical winner-rationale.
+   30871:     // Stamped during the rerank stage (~L24711) and explicitly preserved
+   30872:     // here at the only field-whitelist boundary in the build path. Without
+   30873:     // this line the stamp would be silently dropped exactly the way the
+   30874:     // transient `dbTruth*` rerank fields were before this lock.
+   30875:     dbTruthWinnerProvenance: candidateWithProvenance.dbTruthWinnerProvenance,
+   30876:     }
+>> 30877:   }).filter((e): e is AdaptiveExercise => e !== null)
+   30878: }
+   30879: 
+   30880: /**
+   30881:  * [coach-layer] TASK 2: Map selection data to coaching metadata
+   30882:  * This converts raw selection trace into user-meaningful coaching info
+   30883:  */
+   30884: function buildExerciseCoachingMetaFromSelection(
+   30885:   selection: SelectedExercise,
+   30886:   primaryGoal: PrimaryGoal
+   30887: ): AdaptiveExercise['coachingMeta'] {
+   30888:   const category = selection.exercise?.category || 'accessory'
+   30889:   const isWeighted = !!(selection.prescribedLoad?.load && selection.prescribedLoad.load > 0)
+
+--- BUILDER ERROR 088 | line 30935, col 5 | TS2353 ---
+lib/adaptive-program-builder.ts(30935,5): error TS2353: Object literal may only specify known properties, and 'roleInSession' does not exist in type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+Suggested search anchors: roleInSession, { expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }, TS2353, Object, literal, may, only, specify
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 30923-30947:
+   30923:   
+   30924:   console.log('[coach-meta-survival] Built coaching meta for:', {
+   30925:     exercise: selection.exercise?.name,
+   30926:     expressionMode: meta.expressionMode,
+   30927:     progressionIntent: meta.progressionIntent,
+   30928:     loadDecision: meta.loadDecision.summary,
+   30929:   })
+   30930:   
+   30931:   return {
+   30932:     expressionMode: meta.expressionMode,
+   30933:     progressionIntent: meta.progressionIntent,
+   30934:     // [EXPLAIN-OWNER-LOCK] Pass roleInSession for explanation engine
+>> 30935:     roleInSession: meta.roleInSession,
+   30936:     skillSupportTargets: meta.skillSupportTargets,
+   30937:     loadDecisionSummary: meta.loadDecision.summary,
+   30938:     restLabel,
+   30939:   }
+   30940: }
+   30941: 
+   30942: // =============================================================================
+   30943: // PROGRAM RATIONALE
+   30944: // =============================================================================
+   30945: 
+   30946: function generateProgramRationale(
+   30947:   primaryGoal: PrimaryGoal,
+
+--- BUILDER ERROR 089 | line 31311, col 50 | TS2345 ---
+lib/adaptive-program-builder.ts(31311,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Suggested search anchors: AdaptiveProgram, ProgramToValidate, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 31299-31323:
+   31299:       sessionCount: sessions.length,
+   31300:       sessionExerciseCounts,
+   31301:       programId: program?.id,
+   31302:       preservedLastGoodProgram: true,
+   31303:     })
+   31304:     // [program-rebuild-fallback] This preserves the last good program in storage
+   31305:     console.log('[program-rebuild-fallback] Last good program preserved - malformed program rejected')
+   31306:     throw new Error(`session_save_blocked: ${criticalIssues.join(', ')}`)
+   31307:   }
+   31308:   
+   31309:   // DATABASE ENFORCEMENT: Validate program before save
+   31310:   console.log('[program-build] SAVE: Running database validation...')
+>> 31311:   const validation = validateProgramFromDatabase(program)
+   31312:   
+   31313:   if (!validation.isValid) {
+   31314:     console.warn('[program-build] SAVE: Database validation issues (non-blocking):', validation.diagnostics)
+   31315:     // Log specific issues but don't block save - allow graceful degradation
+   31316:     if (validation.exerciseValidation.missingDbSource.length > 0) {
+   31317:       console.warn('[program-build] SAVE: Exercises missing DB source:', 
+   31318:         validation.exerciseValidation.missingDbSource.slice(0, 5))
+   31319:     }
+   31320:   } else {
+   31321:     console.log('[program-build] SAVE: Database validation passed')
+   31322:   }
+   31323:   
+
+--- BUILDER ERROR 090 | line 32250, col 97 | TS2345 ---
+lib/adaptive-program-builder.ts(32250,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+Suggested search anchors: string, PrimaryGoal | undefined, TS2345, not, assignable, parameter, PrimaryGoal, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 32238-32262:
+   32238:     verdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_preserved' : 'recovery_missing',
+   32239:   })
+   32240:   
+   32241:   console.log('[phase14a-recovery-builder-entry-verdict]', {
+   32242:     rawRecoveryPresent: hasRawRecovery,
+   32243:     derivedSummaryPresent: hasDerivedRecovery,
+   32244:     finalVerdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_truth_locked' : 'recovery_needs_attention',
+   32245:   })
+   32246:   
+   32247:   // [PHASE 14A TASK 6] Selected skills entry audit
+   32248:   const canonicalSkillsSet = new Set(canonicalProfile.selectedSkills || [])
+   32249:   const entrySkillsSet = new Set([primaryGoal, secondaryGoal].filter(Boolean))
+>> 32250:   const missingSkills = (canonicalProfile.selectedSkills || []).filter(s => !entrySkillsSet.has(s) && s !== primaryGoal && s !== secondaryGoal)
+   32251:   
+   32252:   console.log('[phase14a-selected-skills-entry-audit]', {
+   32253:     selectedSkills: canonicalProfile.selectedSkills || [],
+   32254:     primaryGoal: primaryGoal,
+   32255:     secondaryGoal: secondaryGoal,
+   32256:     totalCount: (canonicalProfile.selectedSkills || []).length,
+   32257:     missingFromCanonical: missingSkills,
+   32258:     verdict: 'selected_skills_truth_preserved',
+   32259:   })
+   32260:   
+   32261:   console.log('[phase14a-selected-skills-no-loss-verdict]', {
+   32262:     canonicalSkillsCount: (canonicalProfile.selectedSkills || []).length,
+
+--- BUILDER ERROR 091 | line 32343, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(32343,5): error TS2322: Type 'string' is not assignable to type 'TrainingPathType | undefined'.
+Suggested search anchors: string, TrainingPathType | undefined, TS2322, not, assignable, TrainingPathType, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 32331-32355:
+   32331:   return {
+   32332:     primaryGoal,
+   32333:     secondaryGoal, // TASK 3: Now included in generation inputs
+   32334:     // [entry-contract-fix] TASK 3: Add fallback to prevent undefined experienceLevel
+   32335:     experienceLevel: canonicalProfile.experienceLevel || 'intermediate',
+   32336:     trainingDaysPerWeek,
+   32337:     sessionLength,
+   32338:     equipment: mappedEquipment,
+   32339:     scheduleMode,
+   32340:     // TASK 7: Pass selected skills array for multi-goal awareness
+   32341:     selectedSkills: canonicalProfile.selectedSkills || [],
+   32342:     // TASK 3C: Pass training path and goal categories for richer planner context
+>> 32343:     trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+   32344:     goalCategories: canonicalProfile.goalCategories || [],
+   32345:     // TASK 3C: Pass session duration mode for adaptive time awareness
+   32346:     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+   32347:     // TASK 3C: Pass flexibility targets when selected
+   32348:     selectedFlexibility: canonicalProfile.selectedFlexibility || [],
+   32349:   }
+   32350: }
+   32351: 
+   32352: // =============================================================================
+   32353: // TIME OPTIMIZATION
+   32354: // =============================================================================
+   32355: 
+
+--- BUILDER ERROR 092 | line 32517, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(32517,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+Suggested search anchors: string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }, string, TS2322, primaryGoal, null, secondaryGoal, scheduleMode, trainingDaysPerWeek
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 32505-32529:
+   32505:       .filter(e => e.equipmentDecision?.weightedChosen === false || !e.equipmentDecision)
+   32506:       .length,
+   32507:     doctrineHitCount: sessionTraces.flatMap(s => s.exerciseTraces)
+   32508:       .filter(e => e.doctrineSource !== null)
+   32509:       .length,
+   32510:     rejectedAlternativeCount: sessionTraces.flatMap(s => s.exerciseTraces)
+   32511:       .reduce((sum, e) => sum + (e.rejectedAlternatives?.length || 0), 0),
+   32512:   }
+   32513: 
+   32514:   return {
+   32515:     programId: program.id,
+   32516:     generatedAt: program.createdAt,
+>> 32517:     profileSignature: program.profileSignature || '',
+   32518:     sessionTraces,
+   32519:     aggregateStats,
+   32520:   }
+   32521: }
+   32522: 
+   32523: /**
+   32524:  * Compare current program with previous one and log differences.
+   32525:  * [exercise-trace] TASK 8: Explains why plans are similar or different.
+   32526:  */
+   32527: export function logProgramComparison(
+   32528:   previousProgram: AdaptiveProgram | null,
+   32529:   newProgram: AdaptiveProgram
+

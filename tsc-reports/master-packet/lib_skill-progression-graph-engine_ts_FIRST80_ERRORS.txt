@@ -1,0 +1,21 @@
+lib/skill-progression-graph-engine.ts(1041,17): error TS2323: Cannot redeclare exported variable 'getSkillGraph'.
+lib/skill-progression-graph-engine.ts(1048,17): error TS2323: Cannot redeclare exported variable 'getGraphNode'.
+lib/skill-progression-graph-engine.ts(1060,17): error TS2323: Cannot redeclare exported variable 'getNextNodes'.
+lib/skill-progression-graph-engine.ts(1076,17): error TS2323: Cannot redeclare exported variable 'canProgressToNode'.
+lib/skill-progression-graph-engine.ts(1145,17): error TS2323: Cannot redeclare exported variable 'determineGraphPosition'.
+lib/skill-progression-graph-engine.ts(1242,17): error TS2323: Cannot redeclare exported variable 'getOrderedNodes'.
+lib/skill-progression-graph-engine.ts(1251,17): error TS2323: Cannot redeclare exported variable 'validateGraph'.
+lib/skill-progression-graph-engine.ts(1297,3): error TS2323: Cannot redeclare exported variable 'getSkillGraph'.
+lib/skill-progression-graph-engine.ts(1297,3): error TS2484: Export declaration conflicts with exported declaration of 'getSkillGraph'.
+lib/skill-progression-graph-engine.ts(1298,3): error TS2323: Cannot redeclare exported variable 'getGraphNode'.
+lib/skill-progression-graph-engine.ts(1298,3): error TS2484: Export declaration conflicts with exported declaration of 'getGraphNode'.
+lib/skill-progression-graph-engine.ts(1299,3): error TS2323: Cannot redeclare exported variable 'getNextNodes'.
+lib/skill-progression-graph-engine.ts(1299,3): error TS2484: Export declaration conflicts with exported declaration of 'getNextNodes'.
+lib/skill-progression-graph-engine.ts(1300,3): error TS2323: Cannot redeclare exported variable 'canProgressToNode'.
+lib/skill-progression-graph-engine.ts(1300,3): error TS2484: Export declaration conflicts with exported declaration of 'canProgressToNode'.
+lib/skill-progression-graph-engine.ts(1301,3): error TS2323: Cannot redeclare exported variable 'determineGraphPosition'.
+lib/skill-progression-graph-engine.ts(1301,3): error TS2484: Export declaration conflicts with exported declaration of 'determineGraphPosition'.
+lib/skill-progression-graph-engine.ts(1302,3): error TS2323: Cannot redeclare exported variable 'getOrderedNodes'.
+lib/skill-progression-graph-engine.ts(1302,3): error TS2484: Export declaration conflicts with exported declaration of 'getOrderedNodes'.
+lib/skill-progression-graph-engine.ts(1303,3): error TS2323: Cannot redeclare exported variable 'validateGraph'.
+lib/skill-progression-graph-engine.ts(1303,3): error TS2484: Export declaration conflicts with exported declaration of 'validateGraph'.

@@ -1,0 +1,192 @@
+===== PART 2 — SELECTOR EXACT ERRORS ONLY =====
+===== SCOREBOARD — CURRENT VERIFIED STATE =====
+Previous total diagnostics: 1150
+Current total diagnostics: 1150
+Total diagnostic delta: 0
+Current files with errors: 149
+
+Previous builder diagnostics: 249
+Current builder diagnostics: 249
+Builder diagnostic delta: 0
+
+Key file counts:
+lib/adaptive-program-builder.ts: 249
+lib/program-exercise-selector.ts: 111
+lib/canonical-profile-service.ts: 38
+lib/prediction/prediction-service.ts: 36
+lib/server/authoritative-program-generation.ts: 32
+
+===== TOP 60 ERROR FILES =====
+    249 lib/adaptive-program-builder.ts
+    111 lib/program-exercise-selector.ts
+     38 lib/canonical-profile-service.ts
+     36 lib/prediction/prediction-service.ts
+     32 lib/server/authoritative-program-generation.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     18 lib/weak-point-engine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/repositories/profile-repository.ts
+     14 lib/performance-envelope-integration.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/program-generation/exercise-selection-materiality.ts
+      9 lib/engine/index.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/program-service.ts
+      8 lib/planner-truth-audit.ts
+      8 lib/doctrine-to-output-verification.ts
+      8 lib/constraint-detection-engine.ts
+      8 lib/coaching-explanation-contract.ts
+      8 lib/athlete-calibration.ts
+      8 lib/active-week-mutation-service.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      7 lib/dashboard-service.ts
+      7 lib/athlete-profile.ts
+      6 lib/training-coach.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/metrics-update-service.ts
+      6 lib/adaptive-progression-engine.ts
+      5 lib/pr-vault-engine.ts
+      5 lib/engine-quality-contract.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      5 lib/consistency-momentum-engine.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-readiness-integration.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/recovery-fatigue-engine.ts
+      4 lib/program-version-service.ts
+      4 lib/program-generation/week-adaptation-decision-contract.ts
+      4 lib/program-generation/session-composition-intelligence.ts
+      4 lib/prescription-contract.ts
+      4 lib/milestone-engine.ts
+
+===== lib/program-exercise-selector.ts EXACT ERRORS =====
+lib/program-exercise-selector.ts(1620,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1621,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"strength"' have no overlap.
+lib/program-exercise-selector.ts(1622,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"flexibility"' have no overlap.
+lib/program-exercise-selector.ts(1757,24): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1825,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1828,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1831,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1832,39): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1837,7): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1850,9): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(1877,39): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1880,42): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1883,40): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1887,39): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1909,35): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1912,35): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1912,79): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1920,37): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1937,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(2016,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"direct_skill"' have no overlap.
+lib/program-exercise-selector.ts(2017,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"strength_foundation"' have no overlap.
+lib/program-exercise-selector.ts(2020,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"secondary_skill"' have no overlap.
+lib/program-exercise-selector.ts(2021,5): error TS2367: This comparison appears to be unintentional because the types 'TraceExpressionMode | undefined' and '"technical"' have no overlap.
+lib/program-exercise-selector.ts(2130,25): error TS2304: Cannot find name 'usedIds'.
+lib/program-exercise-selector.ts(2131,9): error TS2304: Cannot find name 'addExercise'.
+lib/program-exercise-selector.ts(2187,5): error TS2353: Object literal may only specify known properties, and 'sessionDifferentiationSignature' does not exist in type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(2193,57): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(2195,42): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"direct_skill"' have no overlap.
+lib/program-exercise-selector.ts(2970,12): error TS2551: Property 'primarySkills' does not exist on type 'Exercise'. Did you mean 'primarySkill'?
+lib/program-exercise-selector.ts(2970,38): error TS7006: Parameter 'p' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(3455,13): error TS2322: Type 'string' is not assignable to type 'number'.
+lib/program-exercise-selector.ts(3517,66): error TS2367: This comparison appears to be unintentional because the types '"pull_strength" | "push_strength" | "push_skill" | "pull_skill" | "mixed_upper" | "skill_density" | "transition_work" | "flexibility_focus" | "vertical_push_skill" | "mixed_skill"' and '"support_conditioning"' have no overlap.
+lib/program-exercise-selector.ts(3518,28): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(3620,33): error TS2345: Argument of type '"weight_belt"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3620,72): error TS2345: Argument of type '"weight_vest"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3705,9): error TS2345: Argument of type 'boolean | ""' is not assignable to parameter of type 'boolean | undefined'.
+lib/program-exercise-selector.ts(3821,11): error TS2367: This comparison appears to be unintentional because the types 'ExerciseCategory' and '"hold"' have no overlap.
+lib/program-exercise-selector.ts(4226,41): error TS2339: Property 'difficulty' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(4536,21): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4550,8): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4551,8): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4575,45): error TS2339: Property 'preferredExercises' does not exist on type 'CachedDoctrineRules'.
+lib/program-exercise-selector.ts(4575,69): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(4576,41): error TS2339: Property 'avoidExercises' does not exist on type 'CachedDoctrineRules'.
+lib/program-exercise-selector.ts(4576,61): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(4578,22): error TS2339: Property 'sourceSkill' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4578,39): error TS2551: Property 'source' does not exist on type 'CarryoverRule'. Did you mean 'sourceId'?
+lib/program-exercise-selector.ts(4579,22): error TS2551: Property 'targetSkill' does not exist on type 'CarryoverRule'. Did you mean 'targetSkillKey'?
+lib/program-exercise-selector.ts(4579,39): error TS2339: Property 'target' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4580,44): error TS2339: Property 'type' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4581,29): error TS2339: Property 'preferredExercises' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4581,53): error TS2339: Property 'exercises' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4672,9): error TS2367: This comparison appears to be unintentional because the types 'ExerciseCategory' and '"hold"' have no overlap.
+lib/program-exercise-selector.ts(4759,18): error TS18048: 'breakdown.doctrineBoost' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4759,51): error TS18048: 'breakdown.currentProgressionFit' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4759,93): error TS18048: 'breakdown.additionalSkillsSupport' is possibly 'undefined'.
+lib/program-exercise-selector.ts(5376,51): error TS2304: Cannot find name 'context'.
+lib/program-exercise-selector.ts(5382,94): error TS2345: Argument of type 'EquipmentType[] | undefined' is not assignable to parameter of type 'EquipmentType[]'.
+lib/program-exercise-selector.ts(5701,13): error TS2322: Type '"support_skill_materialization"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(5702,13): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5703,13): error TS2322: Type '"support"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5806,11): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5807,11): error TS2322: Type '"prehab_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5827,11): error TS2322: Type '"core_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6021,15): error TS2322: Type '"selected_skill_tertiary"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6029,31): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6073,15): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6075,17): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6084,13): error TS2322: Type '"selected_skill_tertiary"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6104,13): error TS2322: Type 'DoctrineSourceTrace | null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+lib/program-exercise-selector.ts(6259,15): error TS2322: Type '"skill_accessory"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6265,31): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6303,15): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6305,17): error TS2352: Conversion of type '{ type: string; ruleId: string; }' to type 'DoctrineSourceTrace' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(6316,13): error TS2322: Type '"skill_accessory"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6322,13): error TS2322: Type 'DoctrineSourceTrace | null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+lib/program-exercise-selector.ts(6393,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoal' and '"l_sit"' have no overlap.
+lib/program-exercise-selector.ts(6393,34): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoal' and '"v_sit"' have no overlap.
+lib/program-exercise-selector.ts(6397,40): error TS2367: This comparison appears to be unintentional because the types '"skill" | "strength" | "flexibility" | "planche" | "handstand_pushup" | "back_lever" | "muscle_up" | "toe_touch" | "pancake" | "side_splits" | "front_splits" | "iron_cross" | "endurance" | "weighted_strength" | "general" | "abs"' and '"dragon_flag"' have no overlap.
+lib/program-exercise-selector.ts(6505,11): error TS2322: Type '"core_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6574,9): error TS2322: Type '"skill_floor_enforcement"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6667,13): error TS2322: Type '"selected_skill_direct_expression"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(7105,9): error TS2322: Type 'string | number' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7313,5): error TS2322: Type '(string | null)[]' is not assignable to type 'string[]'.
+lib/program-exercise-selector.ts(7314,40): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+lib/program-exercise-selector.ts(7314,80): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+lib/program-exercise-selector.ts(7641,7): error TS2322: Type 'number | "10-20s"' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7644,7): error TS2322: Type 'number | "30s"' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7647,7): error TS2322: Type 'number | "30-60s"' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7650,7): error TS2322: Type 'string | number' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7653,7): error TS2322: Type 'string | number' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7673,7): error TS2322: Type 'string | number' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7680,9): error TS2322: Type '"support"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(7681,9): error TS2322: Type '"support_heavy"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(7966,5): error TS2353: Object literal may only specify known properties, and 'v_sit' does not exist in type 'Record<PrimaryGoal, string[]>'.
+lib/program-exercise-selector.ts(8589,71): error TS2345: Argument of type 'DifficultyLevel | undefined' is not assignable to parameter of type 'DifficultyLevel'.
+lib/program-exercise-selector.ts(8597,70): error TS2345: Argument of type 'DifficultyLevel | undefined' is not assignable to parameter of type 'DifficultyLevel'.
+lib/program-exercise-selector.ts(9038,5): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+lib/program-exercise-selector.ts(9039,5): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+lib/program-exercise-selector.ts(9460,29): error TS2352: Conversion of type '{ id: string; name: string; category: "accessory"; difficulty: string; movementPattern: "compound"; equipment: never[]; targetMuscles: never[]; fatigueCost: 2; }' to type 'Exercise' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/program-exercise-selector.ts(9530,5): error TS2353: Object literal may only specify known properties, and 'reason' does not exist in type 'SelectedExercise'.
+lib/program-exercise-selector.ts(9541,7): error TS2353: Object literal may only specify known properties, and 'reason' does not exist in type 'SelectedExercise'.
+lib/program-exercise-selector.ts(9553,7): error TS2353: Object literal may only specify known properties, and 'reason' does not exist in type 'SelectedExercise'.
+lib/program-exercise-selector.ts(9577,7): error TS2353: Object literal may only specify known properties, and 'exercises' does not exist in type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9592,28): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9592,48): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9597,32): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9601,9): error TS2353: Object literal may only specify known properties, and 'exercises' does not exist in type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9606,41): error TS2339: Property 'sessionSkillExpression' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9607,38): error TS2339: Property 'materialSkillIntent' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9628,7): error TS2353: Object literal may only specify known properties, and 'exercises' does not exist in type 'ExerciseSelection'.

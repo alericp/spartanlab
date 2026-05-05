@@ -1,0 +1,12 @@
+lib/unified-program-generation.ts(284,5): error TS2322: Type '"fixed"' is not assignable to type 'ScheduleMode'.
+lib/unified-program-generation.ts(379,7): error TS2322: Type '"skill_isometric"' is not assignable to type 'MovementFamily'.
+lib/unified-program-generation.ts(387,20): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(388,22): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(390,22): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(392,24): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(425,7): error TS2322: Type '"skill_isometric"' is not assignable to type 'MovementFamily'.
+lib/unified-program-generation.ts(653,22): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(654,24): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(656,24): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(658,26): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(822,5): error TS2353: Object literal may only specify known properties, and 'skill_isometric' does not exist in type 'Record<MovementFamily, { name: string; id: string; }>'.

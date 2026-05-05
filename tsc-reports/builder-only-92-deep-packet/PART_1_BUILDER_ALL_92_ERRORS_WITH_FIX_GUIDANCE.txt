@@ -1,0 +1,372 @@
+===== PART 1 — BUILDER ALL CURRENT ERRORS WITH FIX GUIDANCE =====
+Purpose: every current lib/adaptive-program-builder.ts diagnostic with likely local fix strategy.
+Rules for VO: exact diagnostics only, builder file only, no repo scan, no other files.
+
+--- BUILDER ERROR 001 ---
+lib/adaptive-program-builder.ts(9519,7): error TS2345: Argument of type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]' is not assignable to parameter of type 'MaterialSkillIntentEntry[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 002 ---
+lib/adaptive-program-builder.ts(10757,29): error TS2352: Conversion of type 'TrainingMethodPreference[]' to type 'TrainingStyleMode[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 003 ---
+lib/adaptive-program-builder.ts(10978,5): error TS2739: Type '{ minExercises: number; maxExercises: number; }' is missing the following properties from type '{ minExercises: number; maxExercises: number; warmupMinutes: number; warmupExerciseCount: number; cooldownMinutes: number; cooldownExercises: number; accessorySlots?: number | undefined; }': warmupMinutes, warmupExerciseCount, cooldownMinutes, cooldownExercises
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 004 ---
+lib/adaptive-program-builder.ts(11102,5): error TS2740: Type '{ includeEnduranceWork: false; includeDensityBlocks: false; }' is missing the following properties from type 'OutcomeTrainingStyle': preferHighReps, preferLowReps, skillFocused, useWeightedProgressions, and 4 more.
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 005 ---
+lib/adaptive-program-builder.ts(11675,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 006 ---
+lib/adaptive-program-builder.ts(11691,5): error TS2322: Type 'string | undefined' is not assignable to type 'RangeTrainingMode | undefined'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 007 ---
+lib/adaptive-program-builder.ts(11721,5): error TS2741: Property 'shortSummary' is missing in type '{ primary: ReturnType<typeof selectMethodProfiles>["primary"]; secondary: undefined; explanation: string; }' but required in type 'SelectedMethods'.
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 008 ---
+lib/adaptive-program-builder.ts(12154,9): error TS2322: Type 'string' is not assignable to type 'WeekPhaseTag'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 009 ---
+lib/adaptive-program-builder.ts(12347,5): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 010 ---
+lib/adaptive-program-builder.ts(12622,7): error TS2322: Type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "reduced" | "expanded"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "incr...' is not assignable to type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 011 ---
+lib/adaptive-program-builder.ts(12682,7): error TS2345: Argument of type 'SessionWeekAdaptation' is not assignable to parameter of type 'WeekAdaptationInput'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 012 ---
+lib/adaptive-program-builder.ts(12984,17): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 013 ---
+lib/adaptive-program-builder.ts(13159,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 014 ---
+lib/adaptive-program-builder.ts(13167,15): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<WeakPointType, string>'.
+Likely fix guidance: Unsafe Record index. Validate/guard the key before indexing.
+
+--- BUILDER ERROR 015 ---
+lib/adaptive-program-builder.ts(13219,11): error TS2345: Argument of type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[]' is not assignable to parameter of type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 016 ---
+lib/adaptive-program-builder.ts(13795,41): error TS2345: Argument of type '"top_sets"' is not assignable to parameter of type 'TrainingMethodPreference'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 017 ---
+lib/adaptive-program-builder.ts(15710,7): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 018 ---
+lib/adaptive-program-builder.ts(16597,48): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 019 ---
+lib/adaptive-program-builder.ts(16795,46): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 020 ---
+lib/adaptive-program-builder.ts(17674,52): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'ConstraintCategory'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 021 ---
+lib/adaptive-program-builder.ts(18330,9): error TS2339: Property 'movementEmphasis' does not exist on type 'AdaptiveSession'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 022 ---
+lib/adaptive-program-builder.ts(18471,90): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 023 ---
+lib/adaptive-program-builder.ts(18472,86): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 024 ---
+lib/adaptive-program-builder.ts(18525,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 025 ---
+lib/adaptive-program-builder.ts(18740,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 026 ---
+lib/adaptive-program-builder.ts(18848,9): error TS2353: Object literal may only specify known properties, and 'recoveryLevel' does not exist in type '{ exercises: SessionExerciseForIdentity[]; templateFocus?: string | undefined; templateLabel?: string | undefined; primaryGoal: string; secondaryGoal?: string | ... 1 more ... | undefined; recoveryState?: "good" | ... 3 more ... | undefined; isDeloadSession?: boolean | undefined; dayNumber: number; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 027 ---
+lib/adaptive-program-builder.ts(19736,7): error TS2345: Argument of type '{ supersets: boolean; circuits: boolean; densityBlocks: boolean; clusterSets: boolean; dropSets: boolean; ladderSets: boolean; restPause: boolean; }' is not assignable to parameter of type '{ supersets?: string | undefined; circuits?: string | undefined; densityBlocks?: string | undefined; clusterSets?: string | undefined; }'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 028 ---
+lib/adaptive-program-builder.ts(20510,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 029 ---
+lib/adaptive-program-builder.ts(20604,7): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | null'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 030 ---
+lib/adaptive-program-builder.ts(20661,3): error TS2739: Type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; }' is missing the following properties from type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; fatigueLevel: string; coachingMessage: string; volumeReductionPercent: number; recommendedProtocols: string[]; }': fatigueLevel, coachingMessage, volumeReductionPercent, recommendedProtocols
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 031 ---
+lib/adaptive-program-builder.ts(20778,5): error TS2322: Type '{ prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: TrainingAdjustment[]; } | { ...; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: { ...; }[];...'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 032 ---
+lib/adaptive-program-builder.ts(20938,13): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "endurance" | "back_lever" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength"' and '"hspu"' have no overlap.
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+
+--- BUILDER ERROR 033 ---
+lib/adaptive-program-builder.ts(20940,13): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "endurance" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength"' and '"l_sit"' have no overlap.
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+
+--- BUILDER ERROR 034 ---
+lib/adaptive-program-builder.ts(20968,11): error TS2345: Argument of type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null' is not assignable to parameter of type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 035 ---
+lib/adaptive-program-builder.ts(21023,15): error TS2739: Type '{ targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }' is missing the following properties from type 'ConstraintAwareInput': trainingStyle, styleProgrammingRules, missingCriticalEquipment
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 036 ---
+lib/adaptive-program-builder.ts(21084,15): error TS2739: Type '{ targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }' is missing the following properties from type 'ConstraintAwareInput': trainingStyle, styleProgrammingRules, missingCriticalEquipment
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 037 ---
+lib/adaptive-program-builder.ts(21117,45): error TS2554: Expected 1 arguments, but got 2.
+Likely fix guidance: Argument count mismatch. Match the local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+
+--- BUILDER ERROR 038 ---
+lib/adaptive-program-builder.ts(21140,49): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 039 ---
+lib/adaptive-program-builder.ts(21147,30): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 040 ---
+lib/adaptive-program-builder.ts(21163,52): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 041 ---
+lib/adaptive-program-builder.ts(21228,34): error TS2339: Property 'weakPoints' does not exist on type 'ProgramConstraintContext'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 042 ---
+lib/adaptive-program-builder.ts(21228,50): error TS7006: Parameter 'wp' implicitly has an 'any' type.
+Likely fix guidance: Implicit any. Type the callback parameter from the immediate local array/object shape.
+
+--- BUILDER ERROR 043 ---
+lib/adaptive-program-builder.ts(21366,7): error TS2353: Object literal may only specify known properties, and 'sessionDurationMode' does not exist in type 'ProfileSnapshot'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 044 ---
+lib/adaptive-program-builder.ts(21887,36): error TS2339: Property 'sessionLength' does not exist on type 'ComposedPlannerInput'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 045 ---
+lib/adaptive-program-builder.ts(22684,16): error TS2339: Property 'doctrineRuntimeContract' does not exist on type 'AdaptiveProgram'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 046 ---
+lib/adaptive-program-builder.ts(23244,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+
+--- BUILDER ERROR 047 ---
+lib/adaptive-program-builder.ts(23245,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+
+--- BUILDER ERROR 048 ---
+lib/adaptive-program-builder.ts(23456,5): error TS2741: Property 'generatedAt' is missing in type 'SessionArchitectureTruthContract' but required in type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 049 ---
+lib/adaptive-program-builder.ts(23471,61): error TS2345: Argument of type '{ exercises: unknown[]; dayType: unknown; focus: unknown; }[]' is not assignable to parameter of type '{ exercises: { id: string; category?: string | undefined; }[]; dayType?: string | undefined; focus?: string | undefined; }[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 050 ---
+lib/adaptive-program-builder.ts(23475,7): error TS2739: Type '{ avgExercisesPerSession: number; distinctSessionRoles: number; supportSkillTouches: number; nonPrimaryAppearances: number; methodPackagedBlockCount: number; currentWorkingConstrainedCount: number; }' is missing the following properties from type '{ skillClassificationUniqueness: number; progressionDifferentiation: number; structuralPersonalization: number; overallMaterialityScore: number; }': skillClassificationUniqueness, progressionDifferentiation, structuralPersonalization, overallMaterialityScore
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+
+--- BUILDER ERROR 051 ---
+lib/adaptive-program-builder.ts(23859,29): error TS2345: Argument of type 'DeferredSkillEntry' is not assignable to parameter of type 'string'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 052 ---
+lib/adaptive-program-builder.ts(23870,32): error TS2339: Property 'id' does not exist on type '{ selectionContext?: { doctrineSource?: unknown; } | undefined; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 053 ---
+lib/adaptive-program-builder.ts(24623,33): error TS18048: 'sessionArchitectureTruth.methodPackaging.actualMethodsApplied.length' is possibly 'undefined'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 054 ---
+lib/adaptive-program-builder.ts(24686,51): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'ExpandedAthleteContextLocal'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 055 ---
+lib/adaptive-program-builder.ts(25281,10): error TS2304: Cannot find name 'finalProgram'.
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+
+--- BUILDER ERROR 056 ---
+lib/adaptive-program-builder.ts(25727,27): error TS18048: 'advancedFamily.technicalSlotWeight' is possibly 'undefined'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 057 ---
+lib/adaptive-program-builder.ts(26856,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 058 ---
+lib/adaptive-program-builder.ts(26935,76): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 059 ---
+lib/adaptive-program-builder.ts(27256,87): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 060 ---
+lib/adaptive-program-builder.ts(27730,151): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 061 ---
+lib/adaptive-program-builder.ts(27758,98): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+
+--- BUILDER ERROR 062 ---
+lib/adaptive-program-builder.ts(27807,13): error TS2345: Argument of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...' is not assignable to parameter of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 063 ---
+lib/adaptive-program-builder.ts(27831,34): error TS2353: Object literal may only specify known properties, and 'fallbackUsed' does not exist in type 'string[]'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 064 ---
+lib/adaptive-program-builder.ts(27896,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 065 ---
+lib/adaptive-program-builder.ts(27897,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 066 ---
+lib/adaptive-program-builder.ts(27901,41): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 067 ---
+lib/adaptive-program-builder.ts(27956,33): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 068 ---
+lib/adaptive-program-builder.ts(27957,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 069 ---
+lib/adaptive-program-builder.ts(27958,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or `??` fallback only for scoring/metadata.
+
+--- BUILDER ERROR 070 ---
+lib/adaptive-program-builder.ts(28029,44): error TS2769: No overload matches this call.
+Likely fix guidance: Overload mismatch. Fix the local nullable/shape issue causing overload failure; do not cast broadly.
+
+--- BUILDER ERROR 071 ---
+lib/adaptive-program-builder.ts(28030,51): error TS2769: No overload matches this call.
+Likely fix guidance: Overload mismatch. Fix the local nullable/shape issue causing overload failure; do not cast broadly.
+
+--- BUILDER ERROR 072 ---
+lib/adaptive-program-builder.ts(28593,38): error TS2304: Cannot find name 'sessionContext'.
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+
+--- BUILDER ERROR 073 ---
+lib/adaptive-program-builder.ts(28944,50): error TS2339: Property 'constructor' does not exist on type 'never'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 074 ---
+lib/adaptive-program-builder.ts(28955,51): error TS2345: Argument of type 'Map<SkillFamily, FamilyReadinessContract> | null' is not assignable to parameter of type 'Map<SkillFamily, FamilyReadinessContract>'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 075 ---
+lib/adaptive-program-builder.ts(29558,27): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+
+--- BUILDER ERROR 076 ---
+lib/adaptive-program-builder.ts(29558,66): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"yellow"' have no overlap.
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+
+--- BUILDER ERROR 077 ---
+lib/adaptive-program-builder.ts(29657,14): error TS2454: Variable 'variants' is used before being assigned.
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+
+--- BUILDER ERROR 078 ---
+lib/adaptive-program-builder.ts(29661,15): error TS2454: Variable 'rationale' is used before being assigned.
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+
+--- BUILDER ERROR 079 ---
+lib/adaptive-program-builder.ts(29662,25): error TS2454: Variable 'enduranceResult' is used before being assigned.
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+
+--- BUILDER ERROR 080 ---
+lib/adaptive-program-builder.ts(29663,29): error TS2454: Variable 'currentFatigueScore' is used before being assigned.
+Likely fix guidance: Used before assignment/declaration. Move assignment before read or initialize truthful fallback only for debug/fallback output.
+
+--- BUILDER ERROR 081 ---
+lib/adaptive-program-builder.ts(29904,15): error TS2322: Type '{ id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[]' is not assignable to type 'AdaptiveExercise[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 082 ---
+lib/adaptive-program-builder.ts(29936,11): error TS2353: Object literal may only specify known properties, and 'estimatedMinutes' does not exist in type 'ValidatedSession'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 083 ---
+lib/adaptive-program-builder.ts(30580,7): error TS2322: Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 084 ---
+lib/adaptive-program-builder.ts(30627,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+
+--- BUILDER ERROR 085 ---
+lib/adaptive-program-builder.ts(30729,3): error TS2322: Type '({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[]' is not assignable to type 'AdaptiveExercise[]'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 086 ---
+lib/adaptive-program-builder.ts(30793,8): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 087 ---
+lib/adaptive-program-builder.ts(30877,23): error TS2677: A type predicate's type must be assignable to its parameter's type.
+Likely fix guidance: Type predicate invalid. Make predicate return type assignable to the input parameter type.
+
+--- BUILDER ERROR 088 ---
+lib/adaptive-program-builder.ts(30935,5): error TS2353: Object literal may only specify known properties, and 'roleInSession' does not exist in type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+
+--- BUILDER ERROR 089 ---
+lib/adaptive-program-builder.ts(31311,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 090 ---
+lib/adaptive-program-builder.ts(32250,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 091 ---
+lib/adaptive-program-builder.ts(32343,5): error TS2322: Type 'string' is not assignable to type 'TrainingPathType | undefined'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+
+--- BUILDER ERROR 092 ---
+lib/adaptive-program-builder.ts(32517,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+

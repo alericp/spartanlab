@@ -1,0 +1,72 @@
+===== WEAKPOINTTYPE REMAINING ERRORS =====
+lib/adaptive-program-builder.ts(12236,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+  Type 'string' is not assignable to type 'WeakPointType'.
+lib/adaptive-program-builder.ts(12244,15): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<WeakPointType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<WeakPointType, string>'.
+lib/advanced-skills-integration.ts(217,51): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(222,29): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(222,48): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(227,29): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(227,48): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(234,29): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(234,45): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(239,29): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(244,29): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(251,49): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(256,29): error TS2322: Type '"dynamic_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(261,29): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(261,50): error TS2322: Type '"compression"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(268,29): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(268,51): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(273,29): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(273,51): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(285,29): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(290,45): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(302,29): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(307,49): error TS2322: Type '"core_stability"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(312,29): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(350,7): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(362,7): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(376,7): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(382,7): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(402,7): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(414,7): error TS2322: Type '"compression"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(420,7): error TS2322: Type '"lat_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(428,7): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(440,7): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(294,20): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(294,38): error TS2820: Type '"high_pull_strength"' is not assignable to type 'WeakPointType'. Did you mean '"pull_strength"'?
+lib/banded-progression-integration-engine.ts(295,20): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(295,42): error TS2322: Type '"straight_bar_dip"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(298,20): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(298,42): error TS2322: Type '"straight_bar_dip"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(301,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(304,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(307,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(307,41): error TS2322: Type '"lat_strength"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(310,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(310,41): error TS2322: Type '"lat_strength"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(313,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(316,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(319,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,20): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,36): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,57): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,20): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,36): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,54): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(328,20): error TS2820: Type '"pulling_strength"' is not assignable to type 'WeakPointType'. Did you mean '"pull_strength"'?
+lib/banded-progression-integration-engine.ts(328,40): error TS2820: Type '"grip_strength"' is not assignable to type 'WeakPointType'. Did you mean '"dip_strength"'?
+lib/banded-progression-integration-engine.ts(389,5): error TS2353: Object literal may only specify known properties, and 'explosive_pull' does not exist in type 'Partial<Record<WeakPointType, string>>'.
+lib/cooldown-recovery-intelligence-engine.ts(558,3): error TS2353: Object literal may only specify known properties, and 'elbow_tolerance' does not exist in type 'Partial<Record<WeakPointType, TargetRegion[]>>'.
+lib/warmup-intelligence-engine.ts(617,7): error TS2739: Type '{ scapular_control: { extraExercises: string[]; rationale: string; priorityBoost: number; }; shoulder_stability: { extraExercises: string[]; rationale: string; priorityBoost: number; }; wrist_tolerance: { ...; }; ... 18 more ...; none: { ...; }; }' is missing the following properties from type 'Record<WeakPointType, { extraExercises: string[]; rationale: string; priorityBoost: number; }>': core_compression, bent_arm_pull, bent_arm_push, core_anti_extension, general_fatigue
+lib/weak-point-engine.ts(842,9): error TS2739: Type '{ pull_strength: string; push_strength: string; straight_arm_pull_strength: string; straight_arm_push_strength: string; compression_strength: string; explosive_power: string; transition_strength: string; ... 14 more ...; none: string; }' is missing the following properties from type 'Record<WeakPointType, string>': core_compression, bent_arm_pull, bent_arm_push, core_anti_extension, general_fatigue
+lib/weak-point-engine.ts(909,3): error TS2322: Type '{ targetedLimiter: WeakPointType; id: string; name: string; reason: string; }[]' is not assignable to type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]'.
+  Type '{ targetedLimiter: WeakPointType; id: string; name: string; reason: string; }' is missing the following properties from type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }': exerciseId, exerciseName
+lib/weighted-skill-systems-engine.ts(1117,5): error TS2367: This comparison appears to be unintentional because the types 'WeakPointType | undefined' and '"transition_control"' have no overlap.
+lib/weighted-skill-systems-engine.ts(1121,9): error TS2367: This comparison appears to be unintentional because the types 'WeakPointType | undefined' and '"transition_control"' have no overlap.
+lib/weighted-skill-systems-engine.ts(1307,7): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1314,7): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1328,7): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1335,7): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1349,7): error TS2322: Type '"compression"' is not assignable to type 'WeakPointType'.

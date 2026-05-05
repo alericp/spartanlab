@@ -1,0 +1,9 @@
+lib/program-generation/exercise-selection-materiality.ts(703,68): error TS2345: Argument of type '"none"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-generation/exercise-selection-materiality.ts(856,9): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(856,34): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(860,16): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(860,42): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(865,9): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(865,35): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(877,42): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-generation/exercise-selection-materiality.ts(1067,60): error TS2345: Argument of type '"weighted_belt"' is not assignable to parameter of type 'EquipmentType'.

@@ -1,0 +1,5 @@
+===== SCOREBOARD QUICK CHECK =====
+Current TypeScript error lines:
+1964
+Current files with TypeScript errors:
+151

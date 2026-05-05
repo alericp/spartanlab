@@ -1,0 +1,11 @@
+lib/roadmap/skill-roadmap-service.ts(567,7): error TS2353: Object literal may only specify known properties, and 'phase' does not exist in type 'AthleteRoadmapPosition'.
+lib/roadmap/skill-roadmap-service.ts(567,22): error TS2339: Property 'phases' does not exist on type 'SkillRoadmap'.
+lib/roadmap/skill-roadmap-service.ts(587,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(588,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(589,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(590,57): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(591,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+lib/roadmap/skill-roadmap-service.ts(631,9): error TS2353: Object literal may only specify known properties, and 'leanHoldTime' does not exist in type 'PlancheInputs'.
+lib/roadmap/skill-roadmap-service.ts(644,9): error TS2353: Object literal may only specify known properties, and 'straightBarDipReps' does not exist in type 'MuscleUpInputs'.

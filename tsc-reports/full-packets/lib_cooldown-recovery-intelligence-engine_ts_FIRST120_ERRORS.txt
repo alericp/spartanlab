@@ -1,0 +1,23 @@
+lib/cooldown-recovery-intelligence-engine.ts(530,3): error TS2353: Object literal may only specify known properties, and 'support_hold' does not exist in type 'Record<SkillStressFocus, TargetRegion[]>'.
+lib/cooldown-recovery-intelligence-engine.ts(558,3): error TS2353: Object literal may only specify known properties, and 'elbow_tolerance' does not exist in type 'Partial<Record<WeakPointType, TargetRegion[]>>'.
+lib/cooldown-recovery-intelligence-engine.ts(572,17): error TS2323: Cannot redeclare exported variable 'analyzeSessionForRecovery'.
+lib/cooldown-recovery-intelligence-engine.ts(686,17): error TS2323: Cannot redeclare exported variable 'selectRecoveryExercises'.
+lib/cooldown-recovery-intelligence-engine.ts(747,17): error TS2323: Cannot redeclare exported variable 'generateIntelligentCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(819,17): error TS2323: Cannot redeclare exported variable 'generateCompressedCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(885,17): error TS2323: Cannot redeclare exported variable 'getRecoveryKnowledgeBubble'.
+lib/cooldown-recovery-intelligence-engine.ts(943,17): error TS2323: Cannot redeclare exported variable 'generateCooldownExplanation'.
+lib/cooldown-recovery-intelligence-engine.ts(962,17): error TS2323: Cannot redeclare exported variable 'createCooldownLogEntry'.
+lib/cooldown-recovery-intelligence-engine.ts(992,3): error TS2323: Cannot redeclare exported variable 'analyzeSessionForRecovery'.
+lib/cooldown-recovery-intelligence-engine.ts(992,3): error TS2484: Export declaration conflicts with exported declaration of 'analyzeSessionForRecovery'.
+lib/cooldown-recovery-intelligence-engine.ts(993,3): error TS2323: Cannot redeclare exported variable 'selectRecoveryExercises'.
+lib/cooldown-recovery-intelligence-engine.ts(993,3): error TS2484: Export declaration conflicts with exported declaration of 'selectRecoveryExercises'.
+lib/cooldown-recovery-intelligence-engine.ts(994,3): error TS2323: Cannot redeclare exported variable 'generateIntelligentCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(994,3): error TS2484: Export declaration conflicts with exported declaration of 'generateIntelligentCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(995,3): error TS2323: Cannot redeclare exported variable 'generateCompressedCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(995,3): error TS2484: Export declaration conflicts with exported declaration of 'generateCompressedCooldown'.
+lib/cooldown-recovery-intelligence-engine.ts(996,3): error TS2323: Cannot redeclare exported variable 'getRecoveryKnowledgeBubble'.
+lib/cooldown-recovery-intelligence-engine.ts(996,3): error TS2484: Export declaration conflicts with exported declaration of 'getRecoveryKnowledgeBubble'.
+lib/cooldown-recovery-intelligence-engine.ts(997,3): error TS2323: Cannot redeclare exported variable 'generateCooldownExplanation'.
+lib/cooldown-recovery-intelligence-engine.ts(997,3): error TS2484: Export declaration conflicts with exported declaration of 'generateCooldownExplanation'.
+lib/cooldown-recovery-intelligence-engine.ts(998,3): error TS2323: Cannot redeclare exported variable 'createCooldownLogEntry'.
+lib/cooldown-recovery-intelligence-engine.ts(998,3): error TS2484: Export declaration conflicts with exported declaration of 'createCooldownLogEntry'.

@@ -1,0 +1,501 @@
+===== HUGE FAMILY: ASSIGNABILITY / ARGUMENT MISMATCH =====
+components/workout/StreamlinedWorkoutSession.tsx(2876,17): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3281,50): error TS2322: Type 'Partial<LiveSessionState>' is not assignable to type 'WorkoutSessionState'.
+    Type '"active" | "completed" | "ready" | "resting" | "inter_exercise_rest" | undefined' is not assignable to type '"active" | "completed" | "ready" | "resting"'.
+      Type 'undefined' is not assignable to type '"active" | "completed" | "ready" | "resting"'.
+components/workout/StreamlinedWorkoutSession.tsx(3372,84): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3466,44): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(3939,58): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(3995,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4150,44): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(4243,88): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(4421,7): error TS2345: Argument of type '{ status: "active" | "completed" | "ready" | "resting"; currentExerciseIndex: number; currentSetNumber: number; completedSets: { exerciseIndex: number; setNumber: number; actualReps: number; holdSeconds: number | undefined; actualRPE: RPEValue; bandUsed: "none" | ResistanceBandColor; timestamp: number; }[]; ... 11 m...' is not assignable to parameter of type '{ currentSetNumber: number; repsValue: number; holdValue: number; bandUsed: "none" | ResistanceBandColor; selectedRPE: RPEValue | null; }'.
+  Type '{ status: "ready"; currentExerciseIndex: number; currentSetNumber: number; completedSets: never[]; startTime: null; elapsedSeconds: number; lastSetRPE: null; workoutNotes: string; exerciseOverrides: {}; ... 6 more ...; transitionRepairIssue: null; }' is not assignable to type '{ currentSetNumber: number; repsValue: number; holdValue: number; bandUsed: "none" | ResistanceBandColor; selectedRPE: RPEValue | null; }'.
+      Type 'number' is not assignable to type 'RPEValue | null'.
+components/workout/StreamlinedWorkoutSession.tsx(4761,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4964,13): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(5292,7): error TS2322: Type '"ADD_EXERCISE_OVERRIDE"' is not assignable to type '"START_WORKOUT_ACTIVE" | "RESUME_WORKOUT" | "START_FRESH_WORKOUT" | "FINISH_WORKOUT" | "RESET_TO_READY" | "SET_STATUS" | "TICK_TIMER" | "SET_RPE" | "SET_REPS" | "SET_HOLD" | ... 12 more ... | "CLEAR_TRANSITION_ERROR"'.
+components/workout/StreamlinedWorkoutSession.tsx(5330,7): error TS2322: Type '"MARK_EXERCISE_SKIPPED"' is not assignable to type '"START_WORKOUT_ACTIVE" | "RESUME_WORKOUT" | "START_FRESH_WORKOUT" | "FINISH_WORKOUT" | "RESET_TO_READY" | "SET_STATUS" | "TICK_TIMER" | "SET_RPE" | "SET_REPS" | "SET_HOLD" | ... 12 more ... | "CLEAR_TRANSITION_ERROR"'.
+components/workout/StreamlinedWorkoutSession.tsx(5367,7): error TS2322: Type '"ADJUST_PROGRESSION"' is not assignable to type '"START_WORKOUT_ACTIVE" | "RESUME_WORKOUT" | "START_FRESH_WORKOUT" | "FINISH_WORKOUT" | "RESET_TO_READY" | "SET_STATUS" | "TICK_TIMER" | "SET_RPE" | "SET_REPS" | "SET_HOLD" | ... 12 more ... | "CLEAR_TRANSITION_ERROR"'.
+components/workout/StreamlinedWorkoutSession.tsx(5661,73): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5671,38): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5744,9): error TS2322: Type '{ id: string; name: string; category: "skill" | "mobility" | "pull" | "push" | "core" | "legs"; sets: number; reps: number | undefined; holdSeconds: number | undefined; completed: boolean; band: { ...; } | undefined; }[]' is not assignable to type 'WorkoutExercise[]'.
+  Type '{ id: string; name: string; category: "skill" | "push" | "pull" | "core" | "legs" | "mobility"; sets: number; reps: number | undefined; holdSeconds: number | undefined; completed: boolean; band: { ...; } | undefined; }' is not assignable to type 'WorkoutExercise'.
+      Type '{ bandColor: "none" | ResistanceBandColor; assisted: boolean; } | undefined' is not assignable to type 'BandUsage | undefined'.
+        Type '{ bandColor: "none" | ResistanceBandColor; assisted: boolean; }' is not assignable to type 'BandUsage'.
+            Type '"none" | ResistanceBandColor' is not assignable to type 'ResistanceBandColor | undefined'.
+              Type '"none"' is not assignable to type 'ResistanceBandColor | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(5790,7): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(6256,64): error TS2345: Argument of type 'MachineExercise | undefined' is not assignable to parameter of type 'AdaptiveExercise | null | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6287,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6334,64): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6361,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6383,52): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6464,50): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7181,7): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(7387,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7461,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7532,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(7581,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(7697,11): error TS2322: Type '{ load: number; unit: string; confidenceLevel: string | undefined; } | undefined' is not assignable to type '{ load: number; unit: string; confidenceLevel?: "low" | "high" | "medium" | undefined; } | undefined'.
+  Type '{ load: number; unit: string; confidenceLevel: string | undefined; }' is not assignable to type '{ load: number; unit: string; confidenceLevel?: "low" | "high" | "medium" | undefined; }'.
+      Type 'string | undefined' is not assignable to type '"low" | "high" | "medium" | undefined'.
+        Type 'string' is not assignable to type '"low" | "high" | "medium" | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(7752,11): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+components/workout/WorkoutSessionSummary.tsx(112,5): error TS2345: Argument of type 'SessionStats' is not assignable to parameter of type '{ completedSets: number; totalSets: number; elapsedSeconds: number; averageRPE?: number | undefined; }'.
+    Type 'number | null' is not assignable to type 'number | undefined'.
+      Type 'null' is not assignable to type 'number | undefined'.
+hooks/useEntitlement.ts(184,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+hooks/useEntitlement.ts(193,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+lib/adaptive-athlete-engine.ts(613,7): error TS2322: Type '"insufficient_data"' is not assignable to type 'PlateauStatus'.
+lib/adaptive-program-builder.ts(5563,7): error TS2322: Type 'SessionLength' is not assignable to type 'number | undefined'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(5919,51): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(5920,44): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(6166,54): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(6208,42): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(6733,5): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(6859,62): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/program-generation/session-composition-intelligence").WeekAdaptationInput' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/program-generation/week-adaptation-decision-contract").WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(7604,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7606,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7617,5): error TS2322: Type 'string' is not assignable to type '"beginner" | "intermediate" | "advanced"'.
+lib/adaptive-program-builder.ts(7722,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(7725,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(8147,9): error TS2322: Type '{ blocked: boolean; reason: string; }' is not assignable to type 'boolean'.
+lib/adaptive-program-builder.ts(8406,7): error TS2322: Type 'MaterialSkillIntentEntry[]' is not assignable to type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]'.
+lib/adaptive-program-builder.ts(8410,7): error TS2322: Type 'Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean; }>' is not assignable to type 'Record<string, { progressionId: string; currentLevel: number; }>'.
+lib/adaptive-program-builder.ts(8414,7): error TS2322: Type '{ skill: string; reasonCode: DeferralReasonCode; reasonLabel: string; }[]' is not assignable to type '{ skill: string; reason: string; }[]'.
+lib/adaptive-program-builder.ts(8415,7): error TS2322: Type 'MultiSkillSessionAllocationEntry[]' is not assignable to type '{ skill: string; allocated: boolean; }[]'.
+lib/adaptive-program-builder.ts(8787,7): error TS2345: Argument of type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]' is not assignable to parameter of type 'MaterialSkillIntentEntry[]'.
+lib/adaptive-program-builder.ts(9059,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9062,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9991,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10157,5): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10191,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10196,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10250,7): error TS2345: Argument of type 'PrimaryGoalType | null' is not assignable to parameter of type 'OnboardingGoal | null'.
+  Type '"front_lever"' is not assignable to type 'OnboardingGoal | null'.
+lib/adaptive-program-builder.ts(10883,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10922,7): error TS2322: Type 'null' is not assignable to type 'MethodProfile | undefined'.
+lib/adaptive-program-builder.ts(11267,5): error TS2322: Type '"weighted_strength" | "front_lever" | "planche" | "muscle_up" | "hspu" | "l_sit" | "back_lever" | "iron_cross" | "general"' is not assignable to type 'SkillType'.
+  Type '"weighted_strength"' is not assignable to type 'SkillType'.
+lib/adaptive-program-builder.ts(11299,9): error TS2322: Type 'string' is not assignable to type 'WeekPhaseTag'.
+lib/adaptive-program-builder.ts(11562,7): error TS2345: Argument of type '"day_contract_mismatch"' is not assignable to parameter of type 'GenerationErrorCode'.
+lib/adaptive-program-builder.ts(11750,7): error TS2322: Type '{ volumeBias: BiasLevel; intensityBias: BiasLevel; densityBias: BiasLevel; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "increased"; } | null' is not assignable to type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+  Type '{ volumeBias: BiasLevel; intensityBias: BiasLevel; densityBias: BiasLevel; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "increased"; }' is not assignable to type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+      Type 'BiasLevel' is not assignable to type '"normal" | "reduced" | "expanded"'.
+        Type '"elevated"' is not assignable to type '"normal" | "reduced" | "expanded"'.
+lib/adaptive-program-builder.ts(11797,7): error TS2345: Argument of type 'SessionWeekAdaptation' is not assignable to parameter of type 'WeekAdaptationInput'.
+    Type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...' is not assignable to type 'WeeklyLoadStrategy | null | undefined'.
+      Type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...' is not assignable to type 'WeeklyLoadStrategy'.
+          Type '"normal" | "reduced" | "expanded"' is not assignable to type '"normal" | "elevated" | "reduced"'.
+            Type '"expanded"' is not assignable to type '"normal" | "elevated" | "reduced"'.
+lib/adaptive-program-builder.ts(12236,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+  Type 'string' is not assignable to type 'WeakPointType'.
+lib/adaptive-program-builder.ts(12295,11): error TS2345: Argument of type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[]' is not assignable to parameter of type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[]'.
+  Type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }' is not assignable to type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }'.
+      Type 'string' is not assignable to type 'ExerciseCategory'.
+lib/adaptive-program-builder.ts(13471,13): error TS2322: Type '"density_block" | "circuit"' is not assignable to type 'TrainingMethod | undefined'.
+  Type '"circuit"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(13541,15): error TS2322: Type '"density_block" | "circuit"' is not assignable to type 'TrainingMethod | undefined'.
+  Type '"circuit"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(13857,9): error TS2322: Type '"cluster"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14101,13): error TS2322: Type '"top_set"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14738,7): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+  Type 'string' is not assignable to type 'TrainingMethodPreference'.
+lib/adaptive-program-builder.ts(16682,52): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'ConstraintCategory'.
+lib/adaptive-program-builder.ts(17453,90): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17454,86): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17504,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17719,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17867,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(17964,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(18630,7): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(19666,5): error TS2322: Type '{ prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: TrainingAdjustment[]; } | { ...; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: { ...; }[];...'.
+  Type '{ prioritization: never[]; globalLimiters: never[]; dataQuality: "insufficient"; adjustments: never[]; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: { ...; }[]; }'.
+lib/adaptive-program-builder.ts(19852,11): error TS2345: Argument of type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null' is not assignable to parameter of type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null'.
+  Type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; }' is not assignable to type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; }'.
+      Type 'ConstraintCategory | null' is not assignable to type 'string | undefined'.
+        Type 'null' is not assignable to type 'string | undefined'.
+lib/adaptive-program-builder.ts(19895,11): error TS2345: Argument of type 'AthleteProfile' is not assignable to parameter of type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(19949,11): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; } | null' is not assignable to type 'TrainingDecision | null'.
+  Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision | null'.
+lib/adaptive-program-builder.ts(19952,53): error TS2345: Argument of type '"wrist"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19953,56): error TS2345: Argument of type '"shoulder"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19954,53): error TS2345: Argument of type '"elbow"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19991,11): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; } | null' is not assignable to type 'TrainingDecision | null'.
+  Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision | null'.
+lib/adaptive-program-builder.ts(19994,53): error TS2345: Argument of type '"wrist"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19995,56): error TS2345: Argument of type '"shoulder"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19996,53): error TS2345: Argument of type '"elbow"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(20457,64): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(20498,63): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(22858,29): error TS2345: Argument of type 'DeferredSkillEntry' is not assignable to parameter of type 'string'.
+lib/adaptive-program-builder.ts(25818,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(25876,100): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(25877,93): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+    Argument of type 'Record<string, { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }> | null' is not assignable to parameter of type '{}'.
+      Type 'null' is not assignable to type '{}'.
+    Argument of type 'Record<string, { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }> | null' is not assignable to parameter of type 'object'.
+      Type 'null' is not assignable to type 'object'.
+    Argument of type 'Record<string, { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }> | null' is not assignable to parameter of type '{ [s: string]: { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }; } | ArrayLike<...>'.
+      Type 'null' is not assignable to type '{ [s: string]: { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }; } | ArrayLike<...>'.
+    Argument of type 'Record<string, { originalDepth: string | null; adjustedBias: number; reason: string; precedenceUsed: string; currentScore: number | null; historicalLevel: number | null; currentBeatsHistorical: boolean; readinessGated: boolean; readinessPermission: string; preGateBias: number; }> | null' is not assignable to parameter of type '{}'.
+      Type 'null' is not assignable to type '{}'.
+lib/adaptive-program-builder.ts(28773,15): error TS2322: Type '{ id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[]' is not assignable to type 'AdaptiveExercise[]'.
+lib/adaptive-program-builder.ts(29433,7): error TS2322: Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+  Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+      Type '"normal" | "reduced" | "expanded"' is not assignable to type '"normal" | "elevated" | "reduced"'.
+        Type '"expanded"' is not assignable to type '"normal" | "elevated" | "reduced"'.
+lib/adaptive-program-builder.ts(29576,3): error TS2322: Type '({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[]' is not assignable to type 'AdaptiveExercise[]'.
+  Type '{ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null' is not assignable to type 'AdaptiveExercise'.
+    Type 'null' is not assignable to type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(29640,8): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility'.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+  Type 'AdaptiveExercise' is not assignable to type '{ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; source: "database"; ... 8 more ...; dbTruthWinnerProvenance: { ...; } | undefined; }'.
+      Type 'string' is not assignable to type 'ExerciseCategory'.
+lib/adaptive-program-builder.ts(30158,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+    Type 'AdaptiveSession[]' is not assignable to type 'ProgramSession[]'.
+      Type 'AdaptiveSession' is not assignable to type 'ProgramSession'.
+          Type 'AdaptiveExercise[]' is not assignable to type 'SessionExercise[]'.
+            Type 'AdaptiveExercise' is not assignable to type 'SessionExercise'.
+lib/adaptive-program-builder.ts(31088,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+lib/adaptive-program-builder.ts(31346,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+  Type '{ primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+lib/advanced-skills-integration.ts(251,29): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(290,52): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(307,45): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(401,7): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/ai-truth-audit.ts(813,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/athlete-calibration.ts(938,5): error TS2345: Argument of type 'string | null | undefined' is not assignable to parameter of type 'PrimaryGoalType | OnboardingGoal | null'.
+  Type 'undefined' is not assignable to type 'PrimaryGoalType | OnboardingGoal | null'.
+lib/athlete-profile.ts(1518,65): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SkillGoal'.
+lib/athlete-profile.ts(1521,60): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EquipmentType'.
+lib/banded-progression-integration-engine.ts(347,37): error TS2820: Type '"grip_strength"' is not assignable to type 'WeakPointType'. Did you mean '"dip_strength"'?
+lib/canonical-profile-service.ts(704,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/canonical-profile-service.ts(1218,9): error TS2322: Type 'TrainingDaysPerWeek | null' is not assignable to type 'number | null'.
+  Type 'string' is not assignable to type 'number'.
+lib/canonical-profile-service.ts(1313,50): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/canonical-profile-service.ts(1344,44): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+  Type 'string' is not assignable to type 'PrimaryGoalType | null | undefined'.
+lib/canonical-profile-service.ts(1345,46): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+  Type 'string' is not assignable to type 'PrimaryGoalType | null | undefined'.
+lib/canonical-profile-service.ts(1346,47): error TS2322: Type 'string[]' is not assignable to type 'SkillGoal[]'.
+  Type 'string' is not assignable to type 'SkillGoal'.
+lib/canonical-profile-service.ts(1347,52): error TS2322: Type 'string[]' is not assignable to type 'FlexibilityGoal[]'.
+  Type 'string' is not assignable to type 'FlexibilityGoal'.
+lib/canonical-profile-service.ts(1355,52): error TS2322: Type 'number | null' is not assignable to type 'TrainingDaysPerWeek | null | undefined'.
+  Type 'number' is not assignable to type 'TrainingDaysPerWeek | null | undefined'.
+lib/canonical-profile-service.ts(1360,53): error TS2322: Type 'number' is not assignable to type 'SessionLengthPreference | null | undefined'.
+lib/canonical-profile-service.ts(1373,47): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+lib/canonical-profile-service.ts(1374,44): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+lib/canonical-profile-service.ts(1680,5): error TS2322: Type 'null' is not assignable to type '"skill_focused" | "strength_focused" | "power_focused" | "endurance_focused" | "hypertrophy_supported" | "balanced_hybrid" | undefined'.
+lib/coaching-explanation-contract.ts(310,7): error TS2322: Type 'ScheduleMode | undefined' is not assignable to type '"static" | "flexible"'.
+  Type 'undefined' is not assignable to type '"static" | "flexible"'.
+lib/coaching-explanation-contract.ts(905,5): error TS2345: Argument of type '"accessory" | "support" | "primary_skill" | "strength_output"' is not assignable to parameter of type '"primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined'.
+  Type '"accessory"' is not assignable to type '"primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined'.
+lib/coaching-framework-engine.ts(287,63): error TS2322: Type '"elite"' is not assignable to type 'ExperienceLevel'.
+lib/coaching-framework-engine.ts(478,47): error TS2322: Type '"elite"' is not assignable to type 'ExperienceLevel'.
+lib/consistency-momentum-engine.ts(271,5): error TS2322: Type '"increasing" | "stable" | "decreasing"' is not assignable to type '"stable" | "improving" | "declining"'.
+  Type '"increasing"' is not assignable to type '"stable" | "improving" | "declining"'.
+lib/constraint-detection-engine.ts(1032,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+  Type 'null' is not assignable to type 'AthleteProfile'.
+lib/constraint-integration.ts(197,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+  Type 'null' is not assignable to type 'AthleteProfile'.
+lib/constraint-integration.ts(294,46): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+  Type 'null' is not assignable to type 'AthleteProfile'.
+lib/constraint-integration.ts(307,58): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+  Type 'null' is not assignable to type 'AthleteProfile'.
+lib/dashboard-service.ts(127,3): error TS2322: Type '0' is not assignable to type 'SessionLengthMinutes'.
+lib/dashboard-service.ts(144,5): error TS2322: Type 'Partial<Record<ExerciseType, StrengthRecord | null>>' is not assignable to type 'Record<ExerciseType, StrengthRecord | null>'.
+    Type 'StrengthRecord | null | undefined' is not assignable to type 'StrengthRecord | null'.
+      Type 'undefined' is not assignable to type 'StrengthRecord | null'.
+lib/dashboard-service.ts(326,7): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/dashboard-service.ts(367,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/doctrine-runtime-contract.ts(257,22): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+lib/doctrine-runtime-contract.ts(259,25): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+lib/doctrine-runtime-contract.ts(310,27): error TS2345: Argument of type 'DoctrinePrinciple[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(311,27): error TS2345: Argument of type 'ProgressionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(312,27): error TS2345: Argument of type 'MethodRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(313,27): error TS2345: Argument of type 'PrescriptionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(314,27): error TS2345: Argument of type 'ExerciseSelectionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(315,27): error TS2345: Argument of type 'CarryoverRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(343,39): error TS2345: Argument of type 'DoctrinePrinciple[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(344,45): error TS2345: Argument of type 'ProgressionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(345,40): error TS2345: Argument of type 'MethodRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(346,46): error TS2345: Argument of type 'PrescriptionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(347,43): error TS2345: Argument of type 'CarryoverRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(348,51): error TS2345: Argument of type 'ExerciseSelectionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(379,7): error TS2322: Type 'DoctrinePrinciple[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(380,7): error TS2322: Type 'ProgressionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(381,7): error TS2322: Type 'MethodRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(382,7): error TS2322: Type 'PrescriptionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(383,7): error TS2322: Type 'CarryoverRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(384,7): error TS2322: Type 'ExerciseSelectionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(415,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'ProgressionRule[]'.
+lib/doctrine-runtime-contract.ts(424,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'MethodRule[]'.
+lib/doctrine-runtime-contract.ts(432,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'PrescriptionRule[]'.
+lib/doctrine-runtime-contract.ts(439,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'CarryoverRule[]'.
+lib/doctrine-runtime-contract.ts(447,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'ExerciseSelectionRule[]'.
+lib/doctrine-runtime-contract.ts(453,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'DoctrinePrinciple[]'.
+lib/doctrine/doctrine-influence-contract.ts(509,33): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+  Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(511,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+  Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(512,31): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+  Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(513,34): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+  Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(515,39): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+  Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/method-profile-registry.ts(563,44): error TS2322: Type '"handstand"' is not assignable to type 'PrimaryGoal'.
+lib/doctrine/method-profile-registry.ts(563,57): error TS2322: Type '"l_sit"' is not assignable to type 'PrimaryGoal'.
+lib/doctrine/method-profile-registry.ts(563,66): error TS2322: Type '"general_strength"' is not assignable to type 'PrimaryGoal'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(76,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(77,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(88,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(89,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(100,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(101,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(112,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(113,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(124,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(125,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(136,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(137,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(148,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(149,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(160,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(161,5): error TS2322: Type 'string' is not assignable to type 'Date'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(1295,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(1299,5): error TS2322: Type 'number' is not assignable to type '"caution" | "warning" | "blocked"'.
+lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts(1991,5): error TS2322: Type 'string' is not assignable to type '"accessory" | "direct" | "indirect" | "prerequisite"'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(445,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 7 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(542,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 6 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(690,25): error TS2322: Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(707,25): error TS2322: Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(759,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 4 more ...; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(777,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 4 more ...; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(894,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 6 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(914,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceL...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(931,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1031,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "hard_constraint"; intelligenceTier: "base_week_intelligence"; computationFriendlyRule: { ...; }; userVi...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1048,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1072,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 5 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1092,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 5 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1111,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1127,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1143,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1159,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1177,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: s...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1194,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1251,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1290,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 4 more ...; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1308,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1436,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; confl...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1453,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1563,25): error TS2322: Type 'number' is not assignable to type 'boolean'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1574,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1592,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1675,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1706,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1730,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1748,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1765,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1784,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 6 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1855,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1871,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; ... 5 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1922,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1946,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1966,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; conflictGroup:...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(1984,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2002,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; goalScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: str...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2019,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2035,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2070,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "phase_week_modulation"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2104,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2120,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "cross_cutting"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2191,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "strong_preference"; intelligenceTier: "phase_week_modulation"; computationFriendlyRule: { ...; }; userV...' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2208,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2226,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; priorityType: "soft_preference"; intelligenceTier: "base_week_intelligence"; userVisibleEvidenceLabel: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(2242,14): error TS2345: Argument of type '{ n: number; sourceId: string; sourceKey: string; doctrineFamily: string; principleKey: string; principleTitle: string; principleSummary: string; athleteLevelScope: string[]; priorityWeight: number; ... 4 more ...; conflictGroup: string; }' is not assignable to parameter of type 'PrincipleArgs'.
+lib/doctrine/source-batches/index.ts(738,3): error TS2322: Type 'Batch01Provenance | { batch: "batch_04"; sourceId: string | null; } | { batch: "batch_05"; sourceId: string | null; } | { batch: "batch_06"; sourceId: string | null; } | ... 4 more ... | null' is not assignable to type 'Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | ... 5 more ... | null'.
+  Type '{ batch: "batch_04"; sourceId: string | null; }' is not assignable to type 'Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | ... 5 more ... | null'.
+lib/equipment-adaptation-engine.ts(152,43): error TS2345: Argument of type '"pullup_bar"' is not assignable to parameter of type 'EquipmentType'.
+lib/history-snapshot-engine.ts(262,61): error TS2322: Type '"declining"' is not assignable to type 'TrendDirection'.
+lib/metrics-update-service.ts(401,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+lib/metrics-update-service.ts(402,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+lib/movement-bias-detection-engine.ts(720,50): error TS2322: Type '"compression"' is not assignable to type 'MovementFamily'.
+lib/movement-bias-detection-engine.ts(720,65): error TS2322: Type '"hip_flexion"' is not assignable to type 'MovementFamily'.
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"profile" | "fallback" | "engine"'.
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+    Type 'AdaptiveSession[]' is not assignable to type 'ProgramSession[]'.
+      Type 'AdaptiveSession' is not assignable to type 'ProgramSession'.
+          Type 'AdaptiveExercise[]' is not assignable to type 'SessionExercise[]'.
+            Type 'AdaptiveExercise' is not assignable to type 'SessionExercise'.
+lib/onboarding-service.ts(661,7): error TS2322: Type 'number' is not assignable to type 'TrainingDays'.
+lib/performance-envelope-integration.ts(431,5): error TS2322: Type '{ movementFamily: MovementFamily; repRange: { min: number; max: number; display: string; }; weeklyVolume: { min: number; max: number; tolerated: number; display: string; }; sessionDensity: { ...; }; fatigueWarning: any; }[]' is not assignable to type '{ movementFamily: MovementFamily; repRange: string; weeklyVolume: string; sessionDensity: string; fatigueWarning?: string | undefined; }[]'.
+  Type '{ movementFamily: MovementFamily; repRange: { min: number; max: number; display: string; }; weeklyVolume: { min: number; max: number; tolerated: number; display: string; }; sessionDensity: { ...; }; fatigueWarning: any; }' is not assignable to type '{ movementFamily: MovementFamily; repRange: string; weeklyVolume: string; sessionDensity: string; fatigueWarning?: string | undefined; }'.
+      Type '{ min: number; max: number; display: string; }' is not assignable to type 'string'.
+lib/performance-envelope-integration.ts(455,14): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+lib/performance-envelope-integration.ts(455,23): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+lib/performance-envelope-integration.ts(524,5): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+lib/planner-truth-audit.ts(499,9): error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+  Type 'undefined' is not assignable to type 'boolean'.
+lib/pr-vault-engine.ts(268,45): error TS2345: Argument of type 'number | null' is not assignable to parameter of type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/prediction/prediction-service.ts(180,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/prediction/prediction-service.ts(182,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/prescription-contract.ts(168,7): error TS2322: Type '"add_reps"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+lib/prescription-contract.ts(252,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+lib/prescription-contract.ts(280,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+lib/profile-normalizer.ts(334,17): error TS2322: Type 'T' is not assignable to type 'object'.
+  Type 'string | { id: string; } | { name: string; }' is not assignable to type 'object'.
+    Type 'string' is not assignable to type 'object'.
+lib/profile-sync-service.ts(87,5): error TS2322: Type 'WeakestArea | null' is not assignable to type '"pulling_strength" | "pushing_strength" | "core_strength" | "shoulder_stability" | "hip_mobility" | "hamstring_flexibility" | null | undefined'.
+  Type '"not_sure"' is not assignable to type '"pulling_strength" | "pushing_strength" | "core_strength" | "shoulder_stability" | "hip_mobility" | "hamstring_flexibility" | null | undefined'.
+lib/profile-sync-service.ts(272,5): error TS2322: Type 'AthleteProfile | null' is not assignable to type 'AthleteProfile'.
+  Type 'null' is not assignable to type 'AthleteProfile'.
+lib/program-adjustment-engine.ts(466,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/program-adjustment-engine.ts(470,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Exercise'.
+lib/program-adjustment-engine.ts(616,13): error TS2322: Type '"dip_station"' is not assignable to type 'EquipmentType'.
+lib/program-exercise-selector.ts(1849,9): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(1936,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(3454,13): error TS2322: Type 'string' is not assignable to type 'number'.
+lib/program-exercise-selector.ts(3619,33): error TS2345: Argument of type '"weight_belt"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3619,72): error TS2345: Argument of type '"weight_vest"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3704,9): error TS2345: Argument of type 'boolean | ""' is not assignable to parameter of type 'boolean | undefined'.
+  Type '""' is not assignable to type 'boolean | undefined'.
+lib/program-exercise-selector.ts(5381,94): error TS2345: Argument of type 'EquipmentType[] | undefined' is not assignable to parameter of type 'EquipmentType[]'.
+  Type 'undefined' is not assignable to type 'EquipmentType[]'.
+lib/program-exercise-selector.ts(5700,13): error TS2322: Type '"support_skill_materialization"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(5701,13): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5702,13): error TS2322: Type '"support"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5805,11): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5806,11): error TS2322: Type '"prehab_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5826,11): error TS2322: Type '"core_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6020,15): error TS2322: Type '"selected_skill_tertiary"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6083,13): error TS2322: Type '"selected_skill_tertiary"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6103,13): error TS2322: Type 'DoctrineSourceTrace | null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+  Type 'null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+lib/program-exercise-selector.ts(6258,15): error TS2322: Type '"skill_accessory"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6315,13): error TS2322: Type '"skill_accessory"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6321,13): error TS2322: Type 'DoctrineSourceTrace | null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+  Type 'null' is not assignable to type 'DoctrineSourceTrace | undefined'.
+lib/program-exercise-selector.ts(6504,11): error TS2322: Type '"core_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(6573,9): error TS2322: Type '"skill_floor_enforcement"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(6666,13): error TS2322: Type '"selected_skill_direct_expression"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(7312,5): error TS2322: Type '(string | null)[]' is not assignable to type 'string[]'.
+  Type 'string | null' is not assignable to type 'string'.
+    Type 'null' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7313,40): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7313,80): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+lib/program-exercise-selector.ts(7675,9): error TS2322: Type '"support"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(7676,9): error TS2322: Type '"support_heavy"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(8584,71): error TS2345: Argument of type 'DifficultyLevel | undefined' is not assignable to parameter of type 'DifficultyLevel'.
+  Type 'undefined' is not assignable to type 'DifficultyLevel'.
+lib/program-exercise-selector.ts(8592,70): error TS2345: Argument of type 'DifficultyLevel | undefined' is not assignable to parameter of type 'DifficultyLevel'.
+  Type 'undefined' is not assignable to type 'DifficultyLevel'.
+lib/program-exercise-selector.ts(9033,5): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+lib/program-exercise-selector.ts(9034,5): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+lib/program-generation/exercise-selection-materiality.ts(703,68): error TS2345: Argument of type '"none"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-generation/exercise-selection-materiality.ts(1067,60): error TS2345: Argument of type '"weighted_belt"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-history-versioning.ts(369,5): error TS2322: Type 'PullUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(370,5): error TS2322: Type 'PushUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(371,5): error TS2322: Type 'DipCapacity | null | undefined' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+lib/program-state.ts(180,7): error TS2322: Type '{ id: string; groupType: "straight"; exercises: { id: string; name: string; }[]; }[]' is not assignable to type '{ id: string; groupType: "density_block" | "superset" | "circuit" | "cluster" | "straight"; exercises: { id: string; name: string; prefix?: string | undefined; trainingMethod: string; methodRationale: string; }[]; instruction: string; restProtocol: string; }[]'.
+lib/program-state.ts(1262,7): error TS2322: Type '{ adaptationNotes: string[]; available: EquipmentType[]; hasFullSetup: boolean; missingCritical: EquipmentType[]; missing: never[]; } | undefined' is not assignable to type 'EquipmentProfile'.
+  Type 'undefined' is not assignable to type 'EquipmentProfile'.
+lib/program-state.ts(1407,9): error TS2719: Type '{ policies: { skill: string; selectedRank: "secondary" | "optional" | "headline" | "tertiary"; targetExposure: number; eligibleSessionTypes: string[]; actualExposure: { direct: number; technical: number; support: number; warmupOnly: number; total: number; }; representationVerdict: "headline_represented" | ... 4 more...' is not assignable to type '{ policies: { skill: string; selectedRank: "secondary" | "optional" | "headline" | "tertiary"; targetExposure: number; eligibleSessionTypes: string[]; actualExposure: { direct: number; technical: number; support: number; warmupOnly: number; total: number; }; representationVerdict: "headline_represented" | ... 4 more...'. Two different types with this name exist, but they are unrelated.
+lib/program-state.ts(1426,9): error TS2719: Type '{ planche: { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; truthNote: string | null; isConservative: boolean; }; frontLever: { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; truthNote: string | null; isConservative: ...' is not assignable to type '{ planche: { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; truthNote: string | null; isConservative: boolean; }; frontLever: { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; truthNote: string | null; isConservative: ...'. Two different types with this name exist, but they are unrelated.
+lib/program-truth-extractor.ts(246,48): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'Record<string, unknown>'.
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+  Type 'string' is not assignable to type 'PrimaryGoal | undefined'.
+lib/program-truth-extractor.ts(330,5): error TS2322: Type 'string' is not assignable to type 'ExperienceLevel'.
+lib/program-truth-extractor.ts(332,5): error TS2322: Type 'number' is not assignable to type '"flexible" | TrainingDays'.
+lib/program-truth-extractor.ts(334,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+  Type 'string' is not assignable to type 'EquipmentType'.
+lib/program-version-service.ts(339,7): error TS2322: Type '{ skill: SkillKey; currentLevel: number; readinessScore: number; limitingFactor: string | null; }[]' is not assignable to type '{ skill: string; currentLevel: string; readinessScore: number; limitingFactor: string | null; }[]'.
+  Type '{ skill: SkillKey; currentLevel: number; readinessScore: number; limitingFactor: string | null; }' is not assignable to type '{ skill: string; currentLevel: string; readinessScore: number; limitingFactor: string | null; }'.
+      Type 'number' is not assignable to type 'string'.
+lib/program-version-service.ts(650,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal | undefined'.
+lib/program-version-service.ts(652,5): error TS2322: Type 'number' is not assignable to type 'TrainingDays | undefined'.
+lib/program-version-service.ts(654,5): error TS2322: Type 'number' is not assignable to type 'SessionLength | undefined'.
+lib/program/doctrine-causality-audit-contract.ts(483,46): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string | undefined'.
+lib/program/doctrine-causality-audit-contract.ts(484,46): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string | undefined'.
+lib/program/program-display-contract.ts(6593,5): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'boolean'.
+  Type 'undefined' is not assignable to type 'boolean'.
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+  Type 'undefined' is not assignable to type 'number | null'.
+lib/readiness/canonical-readiness-engine.ts(549,3): error TS2322: Type '"moderate" | "weak" | "strong" | "very_strong"' is not assignable to type '"moderate" | "weak" | "strong"'.
+  Type '"very_strong"' is not assignable to type '"moderate" | "weak" | "strong"'.
+lib/readiness/canonical-readiness-engine.ts(1219,7): error TS2322: Type 'ReadinessLevel | "Building"' is not assignable to type 'ReadinessLevel'.
+  Type '"Building"' is not assignable to type 'ReadinessLevel'.
+lib/repositories/profile-repository.ts(65,11): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+lib/repositories/profile-repository.ts(257,9): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+  Type 'string' is not assignable to type 'PrimaryGoalType | null'.
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+  Type 'string' is not assignable to type 'PrimaryGoalType | null'.

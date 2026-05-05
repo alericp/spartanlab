@@ -1,0 +1,43 @@
+components/workout/StreamlinedWorkoutSession.tsx(2876,17): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3281,50): error TS2322: Type 'Partial<LiveSessionState>' is not assignable to type 'WorkoutSessionState'.
+components/workout/StreamlinedWorkoutSession.tsx(3299,11): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3310,9): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3372,84): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3466,44): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3939,58): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3995,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4156,48): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(4249,88): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(4427,7): error TS2345: Argument of type '{ status: "ready" | "active" | "resting" | "completed"; currentExerciseIndex: number; currentSetNumber: number; completedSets: { exerciseIndex: number; setNumber: number; actualReps: number; holdSeconds: number | undefined; actualRPE: RPEValue; bandUsed: ResistanceBandColor | "none"; timestamp: number; }[]; ... 11 m...' is not assignable to parameter of type '{ currentSetNumber: number; repsValue: number; holdValue: number; bandUsed: ResistanceBandColor | "none"; selectedRPE: RPEValue | null; }'.
+components/workout/StreamlinedWorkoutSession.tsx(4468,9): error TS2353: Object literal may only specify known properties, and 'lastRPE' does not exist in type '{ type: "COMPLETE_WORKOUT"; newCompletedSets: CompletedSet[]; }'.
+components/workout/StreamlinedWorkoutSession.tsx(4767,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4953,73): error TS2339: Property 'recommendedBand' does not exist on type '{}'.
+components/workout/StreamlinedWorkoutSession.tsx(4970,13): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5564,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"between_exercise_rest"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5565,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"block_round_rest"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5566,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"transitioning"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5684,73): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5694,38): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5767,9): error TS2322: Type '{ id: string; name: string; category: "push" | "skill" | "mobility" | "core" | "pull" | "legs"; sets: number; reps: number | undefined; holdSeconds: number | undefined; completed: boolean; band: { ...; } | undefined; }[]' is not assignable to type 'WorkoutExercise[]'.
+components/workout/StreamlinedWorkoutSession.tsx(5813,7): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5861,9): error TS2353: Object literal may only specify known properties, and 'currentSetNumber' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(6279,64): error TS2345: Argument of type 'MachineExercise | undefined' is not assignable to parameter of type 'AdaptiveExercise | null | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6290,52): error TS18048: 'fullEx.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6310,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6319,43): error TS18048: 'fullEx.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6357,64): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6368,45): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6384,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6393,39): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6406,52): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6415,33): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6487,50): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7197,74): error TS2339: Property 'recommendedBand' does not exist on type '{}'.
+components/workout/StreamlinedWorkoutSession.tsx(7204,7): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(7410,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7484,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7555,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7604,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7720,11): error TS2322: Type '{ load: number; unit: string; confidenceLevel: string | undefined; } | undefined' is not assignable to type '{ load: number; unit: string; confidenceLevel?: "medium" | "low" | "high" | undefined; } | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(7775,11): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(8163,75): error TS2339: Property 'isProtected' does not exist on type 'AdaptiveExercise'.

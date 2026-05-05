@@ -1,0 +1,77 @@
+===== PART 4 — NON-VO CONTEXT TARGETS 041-080 =====
+
+--- CONTEXT 001 | lib/roadmap/skill-roadmap-service.ts:634:9 | TS2353 ---
+lib/roadmap/skill-roadmap-service.ts(634,9): error TS2353: Object literal may only specify known properties, and 'leanHoldTime' does not exist in type 'PlancheInputs'.
+Hint: Remove/gate stale `leanHoldTime` or map to obvious local current field. Do not add shared type fields.
+   624:         hasRings: profile.equipmentAvailable?.includes('rings') || false,
+   625:         hasBar: profile.equipmentAvailable?.includes('pullup_bar') || true,
+   626:       }
+   627:       readinessResult = calculateBackLeverReadiness(inputs)
+   628:       break
+   629:     }
+   630:     case 'planche': {
+   631:       const inputs: PlancheInputs = {
+   632:         maxDips,
+   633:         maxPushUps,
+>> 634:         leanHoldTime: 15,
+   635:         bodyweightLbs: profile.bodyweight || 160,
+   636:         hasParallettes: profile.equipmentAvailable?.includes('parallettes') || false,
+   637:         hasFloor: true,
+   638:       }
+   639:       readinessResult = calculatePlancheReadiness(inputs)
+   640:       break
+   641:     }
+   642:     case 'muscle-up': {
+   643:       const inputs: MuscleUpInputs = {
+   644:         maxPullUps,
+
+--- CONTEXT 002 | lib/roadmap/skill-roadmap-service.ts:647:9 | TS2353 ---
+lib/roadmap/skill-roadmap-service.ts(647,9): error TS2353: Object literal may only specify known properties, and 'straightBarDipReps' does not exist in type 'MuscleUpInputs'.
+Hint: Remove/gate stale `straightBarDipReps` or map to obvious local current field. Do not add shared type fields.
+   637:         hasFloor: true,
+   638:       }
+   639:       readinessResult = calculatePlancheReadiness(inputs)
+   640:       break
+   641:     }
+   642:     case 'muscle-up': {
+   643:       const inputs: MuscleUpInputs = {
+   644:         maxPullUps,
+   645:         maxDips,
+   646:         chestToBarReps: Math.floor(maxPullUps * 0.4),
+>> 647:         straightBarDipReps: Math.floor(maxDips * 0.5),
+   648:         hasBar: true,
+   649:         hasRings: profile.equipmentAvailable?.includes('rings') || false,
+   650:       }
+   651:       readinessResult = calculateMuscleUpReadiness(inputs)
+   652:       break
+   653:     }
+   654:     case 'hspu': {
+   655:       const inputs: HSPUInputs = {
+   656:         wallHSPUReps: 0,
+   657:         pikeHSPUReps: Math.floor(maxPushUps * 0.3),
+
+--- CONTEXT 003 | lib/unified-program-generation.ts:826:5 | TS2353 ---
+lib/unified-program-generation.ts(826,5): error TS2353: Object literal may only specify known properties, and 'skill_isometric' does not exist in type 'Record<MovementFamily, { name: string; id: string; }>'.
+Hint: Remove/gate stale `skill_isometric` or map to obvious local current field. Do not add shared type fields.
+   816:     explosive_pull: { name: 'Explosive Pull-Up', id: 'explosive_pull_up' },
+   817:     explosive_push: { name: 'Clap Push-Up', id: 'clap_push_up' },
+   818:     squat_pattern: { name: 'Pistol Squat', id: 'pistol_squat' },
+   819:     hinge_pattern: { name: 'Nordic Curl', id: 'nordic_curl' },
+   820:     unilateral_leg: { name: 'Bulgarian Split Squat', id: 'bss' },
+   821:     scapular_control: { name: 'Scapular Pull-Up', id: 'scap_pull_up' },
+   822:     anti_extension_core: { name: 'Ab Wheel', id: 'ab_wheel' },
+   823:     anti_rotation_core: { name: 'Pallof Press', id: 'pallof_press' },
+   824:     joint_integrity: { name: 'Joint Prep', id: 'joint_prep' },
+   825:     mobility: { name: 'Mobility Work', id: 'mobility' },
+>> 826:     skill_isometric: { name: 'Skill Hold', id: 'skill_hold' },
+   827:     hypertrophy_accessory: { name: 'Accessory', id: 'accessory' },
+   828:   }
+   829:   
+   830:   const exercise = familyExercises[family]
+   831:   if (!exercise) return null
+   832:   
+   833:   // Adjust rest based on style
+   834:   const rest = context.athlete.trainingStyle === 'strength_focused' ? '2-3 min' :
+   835:                context.athlete.trainingStyle === 'endurance_focused' ? '60-90s' : '90-120s'
+   836:   
+

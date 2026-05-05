@@ -1,0 +1,58 @@
+lib/ai/skill-materiality-score.ts(154,3): error TS1117: An object literal cannot have multiple properties with the same name.
+lib/history-service.ts(98,20): error TS2352: Conversion of type 'Record<string, unknown>' to type 'GoalsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/history-service.ts(99,28): error TS2352: Conversion of type 'Record<string, unknown>' to type 'AthleteInputsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/history-service.ts(100,31): error TS2352: Conversion of type 'Record<string, unknown>' to type 'ProgramStructureSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/knowledge-bubble-content.ts(299,3): error TS1117: An object literal cannot have multiple properties with the same name.
+lib/movement-family-registry.ts(344,3): error TS1117: An object literal cannot have multiple properties with the same name.
+lib/movement-family-registry.ts(633,14): error TS2739: Type '{ vertical_pull: { id: "vertical_pull"; name: string; description: string; primaryMuscles: string[]; relatedFamilies: ("scapular_control" | "horizontal_pull" | "straight_arm_pull")[]; typicalIntents: ("skill" | ... 1 more ... | "hypertrophy")[]; skillTransfers: ("front_lever" | ... 1 more ... | "one_arm_pull_up")[];...' is missing the following properties from type 'Record<MovementFamily, MovementFamilyMetadata>': rings_strength, rings_stability, hypertrophy_accessory
+lib/movement-family-registry.ts(870,14): error TS2739: Type '{ front_lever: { id: "front_lever"; name: string; primaryFamilies: ("horizontal_pull" | "straight_arm_pull")[]; supportFamilies: ("scapular_control" | "vertical_pull" | "compression_core")[]; keyIntents: ("skill" | "strength")[]; }; ... 11 more ...; dragon_flag: { ...; }; }' is missing the following properties from type 'Record<SkillCarryover, SkillCarryoverMetadata>': planche_push_up, i_sit
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(367,9): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(368,36): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(571,34): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(571,73): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/roadmap/skill-roadmap-service.ts(587,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(588,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(589,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(590,57): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/roadmap/skill-roadmap-service.ts(591,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/server/authoritative-generation-truth-ingestion.ts(362,25): error TS2352: Conversion of type '{ primaryGoal: string; scheduleMode: "weekly"; trainingDaysPerWeek: number; experienceLevel: "intermediate"; }' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1123,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1131,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1153,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1396,15): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1437,44): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1438,39): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1439,35): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(2579,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/session-assembly-engine.ts(745,37): error TS2339: Property 'estimatedDuration' does not exist on type 'IntelligentPrehabResult'.
+lib/session-assembly-engine.ts(746,31): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/session-assembly-engine.ts(750,37): error TS2339: Property 'primaryJointsFocused' does not exist on type 'IntelligentPrehabResult'.
+lib/session-assembly-engine.ts(751,25): error TS2339: Property 'weakPointAdaptations' does not exist on type 'IntelligentPrehabResult'.
+lib/session-assembly-engine.ts(752,22): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/session-variety-engine.ts(396,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(410,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(417,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/session-variety-engine.ts(434,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(472,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(482,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/session-variety-engine.ts(514,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(525,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/training-coach.ts(580,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/training-coach.ts(581,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/training-coach.ts(582,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/training-coach.ts(583,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/training-cycle-engine.ts(1416,45): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "max_reps" | "military" | "skills" | "endurance" | "general_fitness" | "back_lever" | "muscle_up" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | ... 4 more ... | "weighted_strength"' and '"handstand"' have no overlap.
+lib/training-methods.ts(730,34): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "accessory" | "core" | "warmup" | "cooldown"' and '"skill"' have no overlap.
+lib/unified-coaching-engine.ts(646,8): error TS2352: Conversion of type 'ReadinessBreakdown' to type 'Record<string, number>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/warmup-engine.ts(1187,33): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1199,39): error TS2339: Property 'estimatedDuration' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1200,70): error TS2339: Property 'primaryJointsFocused' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1200,119): error TS2339: Property 'weakPointAdaptations' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1202,31): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1207,34): error TS2339: Property 'estimatedDuration' does not exist on type 'IntelligentPrehabResult'.
+lib/weekly-stimulus-allocation.ts(167,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/weekly-stimulus-allocation.ts(172,14): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+      Type 'ExerciseCategory' is not assignable to type '"skill" | "strength" | "conditioning" | "mobility" | "bodyweight" | "weighted"'.
+        Type '"weighted_calisthenics"' is not assignable to type '"skill" | "strength" | "conditioning" | "mobility" | "bodyweight" | "weighted"'.

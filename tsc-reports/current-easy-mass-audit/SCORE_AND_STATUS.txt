@@ -1,0 +1,47 @@
+===== STEP 1 — CURRENT GIT + SCORE AUDIT =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD before fetch: 6a2c1366
+Remote HEAD before fetch: 6a2c1366
+
+Tracked local changes before fetch:
+ M lib/server/authoritative-program-generation.ts
+
+===== STEP 2 — FETCH REMOTE WITHOUT OVERWRITING LOCAL WORK =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+
+Local HEAD after fetch: 6a2c1366
+Remote HEAD after fetch: 6a2c1366
+Local vs remote, format local-only remote-only:
+0	0
+
+===== STEP 3 — LOCAL DIFF SUMMARY IF ANY =====
+Tracked local changes exist. Not pulling or overwriting.
+ lib/server/authoritative-program-generation.ts | 32 ++------------------------
+ 1 file changed, 2 insertions(+), 30 deletions(-)
+
+Changed files:
+lib/server/authoritative-program-generation.ts
+
+===== STEP 4 — RUN REAL TSC =====
+===== VERIFIED SCOREBOARD =====
+Previous known total diagnostics: 523
+Current total diagnostics: 11
+Total delta from previous known: 512
+Current files with errors: 1
+
+Previous known builder diagnostics: 48
+Current builder diagnostics: 0
+Builder delta from previous known: 48
+
+Current authgen diagnostics: 11
+Current non-builder diagnostics: 11
+
+===== TOP 40 FILES =====
+     11 lib/server/authoritative-program-generation.ts
+
+===== ERROR CODE COUNTS =====
+      5 error TS1005
+      3 error TS1128
+      2 error TS1109
+      1 error TS1472

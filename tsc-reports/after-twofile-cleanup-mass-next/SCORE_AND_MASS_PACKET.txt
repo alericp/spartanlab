@@ -1,0 +1,164 @@
+===== STEP 1 — VERIFY COMMIT / SYNC STATE AFTER TWO-FILE CLEANUP =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD: 525f6e9e
+
+Latest local commits:
+525f6e9e feat: extensive fixes for exercise selector trace literals and types
+c91734ca fix: resolve high-impact TypeScript type issues in parallel
+34ea9330 refactor: optimize TypeScript triage across multiple modules
+2b7760f6 feat: apply targeted fixes to SelectedExercise and debug blocks
+1fd93806 fix: resolve dbTruth scope-leak and related name errors
+5a0156c3 feat: apply inline fixes to adaptive-program-builder
+cf28ac05 fix: resolve silent tsc failures and path issues
+905500b2 chore: rename run-tsc.mjs to run-tsc.js
+7caa2bee feat: add TypeScript diagnostics summary script
+5c642eb1 refactor: update canonical profile service and program exercise selector
+
+Tracked local changes before fetch:
+
+===== STEP 2 — FETCH REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+   525f6e9e..7013456c  v0/alericpetsch836-6923-6213db1c-2 -> origin/v0/alericpetsch836-6923-6213db1c-2
+
+Remote HEAD: 7013456c
+
+Latest remote commits:
+7013456c feat: fix selector and builder targets with estimated reductions
+525f6e9e feat: extensive fixes for exercise selector trace literals and types
+c91734ca fix: resolve high-impact TypeScript type issues in parallel
+34ea9330 refactor: optimize TypeScript triage across multiple modules
+2b7760f6 feat: apply targeted fixes to SelectedExercise and debug blocks
+1fd93806 fix: resolve dbTruth scope-leak and related name errors
+5a0156c3 feat: apply inline fixes to adaptive-program-builder
+cf28ac05 fix: resolve silent tsc failures and path issues
+905500b2 chore: rename run-tsc.mjs to run-tsc.js
+7caa2bee feat: add TypeScript diagnostics summary script
+
+Local vs remote before pull, format local-only remote-only:
+0	1
+
+===== STEP 3 — FAST-FORWARD PULL IF CLEAN =====
+Tracked files clean. Pulling --ff-only...
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Updating 525f6e9e..7013456c
+Fast-forward
+ lib/adaptive-program-builder.ts  |  45 +++++-
+ lib/program-exercise-selector.ts | 291 +++++++++++++++++++++++++--------------
+ 2 files changed, 223 insertions(+), 113 deletions(-)
+
+===== STEP 4 — POST-PULL COMMIT STATE =====
+Current HEAD: 7013456c
+Remote HEAD: 7013456c
+Local vs remote after pull, format local-only remote-only:
+0	0
+
+Latest commits after pull attempt:
+7013456c feat: fix selector and builder targets with estimated reductions
+525f6e9e feat: extensive fixes for exercise selector trace literals and types
+c91734ca fix: resolve high-impact TypeScript type issues in parallel
+34ea9330 refactor: optimize TypeScript triage across multiple modules
+2b7760f6 feat: apply targeted fixes to SelectedExercise and debug blocks
+1fd93806 fix: resolve dbTruth scope-leak and related name errors
+5a0156c3 feat: apply inline fixes to adaptive-program-builder
+cf28ac05 fix: resolve silent tsc failures and path issues
+905500b2 chore: rename run-tsc.mjs to run-tsc.js
+7caa2bee feat: add TypeScript diagnostics summary script
+
+===== STEP 5 — REAL TYPESCRIPT SCORE =====
+===== VERIFIED SCOREBOARD =====
+Previous total diagnostics: 806
+Current total diagnostics: 765
+Total delta: 41
+Current files with errors: 137
+
+Previous builder diagnostics: 97
+Current builder diagnostics: 92
+Builder delta: 5
+
+Previous selector diagnostics: 39
+Current selector diagnostics: 3
+Selector delta: 36
+
+===== TOP 40 ERROR FILES =====
+     92 lib/adaptive-program-builder.ts
+     36 lib/prediction/prediction-service.ts
+     32 lib/server/authoritative-program-generation.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     18 lib/weak-point-engine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/canonical-profile-service.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/performance-envelope-integration.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/program-state.ts
+      9 lib/engine/index.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/planner-truth-audit.ts
+      8 lib/doctrine-to-output-verification.ts
+      8 lib/constraint-detection-engine.ts
+      7 lib/training-coach.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      7 lib/dashboard-service.ts
+      7 lib/athlete-profile.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/metrics-update-service.ts
+      6 lib/adaptive-progression-engine.ts
+
+===== APP-WIDE ERROR CODE COUNTS =====
+    234 error TS2339
+    164 error TS2322
+     57 error TS2367
+     50 error TS2345
+     35 error TS18047
+     26 error TS2353
+     20 error TS2352
+     19 error TS2304
+     17 error TS2740
+     17 error TS2739
+     15 error TS2551
+     14 error TS2305
+     12 error TS2454
+     11 error TS2365
+     10 error TS2741
+      9 error TS18048
+      8 error TS7006
+      8 error TS2724
+      6 error TS2554
+      5 error TS2459
+      4 error TS2300
+      3 error TS7053
+      3 error TS1117
+      2 error TS2769
+      2 error TS2719
+      2 error TS2694
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2677
+      1 error TS2561
+      1 error TS2552
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+
+===== STEP 6 — GENERATE NEXT MASS EXACT PACKETS =====

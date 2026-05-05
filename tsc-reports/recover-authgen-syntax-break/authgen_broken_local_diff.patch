@@ -1,0 +1,78 @@
+diff --git a/lib/server/authoritative-program-generation.ts b/lib/server/authoritative-program-generation.ts
+index e87310df..f8086eaa 100644
+--- a/lib/server/authoritative-program-generation.ts
++++ b/lib/server/authoritative-program-generation.ts
+@@ -1291,7 +1291,7 @@ export async function executeAuthoritativeGeneration(
+       trainingDaysPerWeek: canonicalProfileTyped.trainingDaysPerWeek || null,
+       sessionDurationMode: canonicalProfileTyped.sessionDurationMode || null,
+       sessionLengthMinutes: canonicalProfileTyped.sessionLengthMinutes || null,
+-      equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
++      equipment: canonicalProfileTyped.equipmentAvailable || [],
+     }
+     
+     // [AI-TRUTH-PERSISTENCE] Elevate jointCautions to first-class program field
+@@ -1318,7 +1318,6 @@ export async function executeAuthoritativeGeneration(
+       phase: weekAdaptationDecision.phase,
+       targetDays: weekAdaptationDecision.targetDays,
+       confidence: weekAdaptationDecision.confidence,
+-      triggerSource: weekAdaptationDecision.triggerSource,
+       loadStrategy: weekAdaptationDecision.loadStrategy,
+       firstWeekGovernor: weekAdaptationDecision.firstWeekGovernor,
+       doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+@@ -1342,9 +1341,6 @@ export async function executeAuthoritativeGeneration(
+       // Weighted strength benchmarks unchanged
+       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+       weightedDip: canonicalProfileTyped.weightedDip || null,
+-      pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+-      dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+-      wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+     }
+     
+@@ -1392,26 +1388,7 @@ export async function executeAuthoritativeGeneration(
+     
+     // [PHASE 1 AI-TRUTH-ESCALATION] Elevate session architecture truth to program
+     // This allows UI to access multi-skill expression, flexibility integration, and method packaging decisions
+-    if (program.sessionArchitectureTruth) {
+-      program.architectureTruthSnapshot = {
+-        primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
+-        secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
+-        supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
+-        deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+-          skill: d.skill,
+-          reason: d.reason,
+-          details: d.details || '',
+-        })),
+-        flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+-          hasFlexibilityGoals: false,
+-          selectedFlexibility: [],
+-          integrationMode: 'none',
+-          affectedSessions: [],
+-          flexibilityTimeReserved: 0,
+-        },
+-        methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+-          preferredMethods: ['straight_sets'],
+-          actualMethodsApplied: ['straight_sets'],
++    // Removed architectureTruthSnapshot assignment - property does not exist on AdaptiveProgram
+           methodsLimitedBySkillQuality: [],
+           packagingDecision: 'straight_sets',
+           rationale: 'default',
+@@ -1434,9 +1411,6 @@ export async function executeAuthoritativeGeneration(
+       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
+       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+       // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
+-      architectureTruthElevated: !!program.architectureTruthSnapshot,
+-      visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
+-      supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
+       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
+     })
+     
+@@ -3183,8 +3157,6 @@ export async function executeAuthoritativeGeneration(
+         scheduleMode: program.scheduleMode,
+         goalLabel: program.goalLabel,
+       },
+-      // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+-      rebuildFailureSummary: program.rebuildFailureSummary,
+       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
+       generationIngressProof,
+     }

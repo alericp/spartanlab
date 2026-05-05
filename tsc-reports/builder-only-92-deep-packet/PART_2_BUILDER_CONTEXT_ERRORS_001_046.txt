@@ -1,0 +1,1429 @@
+===== PART 2 — BUILDER CONTEXT ERRORS 001-046 =====
+Purpose: exact local source context for each current builder error. Use symbol anchors; if line drifted, search only ±80 lines.
+
+--- BUILDER ERROR 001 | line 9519, col 7 | TS2345 ---
+lib/adaptive-program-builder.ts(9519,7): error TS2345: Argument of type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]' is not assignable to parameter of type 'MaterialSkillIntentEntry[]'.
+Suggested search anchors: { skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[], MaterialSkillIntentEntry[], TS2345, skill, string, weeklyTargetMinutes, number, minimumViableMinutes
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 9507-9531:
+   9507:     effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+   9508:     primaryGoal: postAllocationOwnerBridge.primaryGoal || 'MISSING',
+   9509:     bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+   9510:     verdict: 'ENTERING_VISIBLE_WEEK_VIA_HANDOFF',
+   9511:   })
+   9512:   
+   9513:   let visibleWeekExpressionContract: ReturnType<typeof buildVisibleWeekSkillExpressionContract>
+   9514:   try {
+   9515:     // ==========================================================================
+   9516:     // VISIBLE WEEK NOW READS FROM AUTHORITATIVE HANDOFF BRIDGE
+   9517:     // ==========================================================================
+   9518:     visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
+>> 9519:       postAllocationOwnerBridge.materialSkillIntent,
+   9520:       multiSkillAllocationContract, // This is still needed for full structure - but bridge validates it exists
+   9521:       postAllocationOwnerBridge.effectiveTrainingDays,
+   9522:       postAllocationOwnerBridge.experienceLevel,
+   9523:       postAllocationOwnerBridge.primaryGoal,
+   9524:       postAllocationOwnerBridge.secondaryGoal
+   9525:     )
+   9526:     
+   9527:     // [POST_ALLOCATION_VISIBLE_WEEK_SUCCESS] Verify structural completeness
+   9528:     const visibleWeekStructurallyComplete = 
+   9529:       Array.isArray(visibleWeekExpressionContract.skillExpressionPlan) &&
+   9530:       Array.isArray(visibleWeekExpressionContract.selectedSkills) &&
+   9531:       typeof visibleWeekExpressionContract.visibleWeekSkillCount === 'number'
+
+--- BUILDER ERROR 002 | line 10757, col 29 | TS2352 ---
+lib/adaptive-program-builder.ts(10757,29): error TS2352: Conversion of type 'TrainingMethodPreference[]' to type 'TrainingStyleMode[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: TrainingMethodPreference[], TrainingStyleMode[], unknown, TS2352, Conversion, TrainingMethodPreference, TrainingStyleMode, may
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 10745-10769:
+   10745:   // resolver already treats null as "no constraint".
+   10746:   const dominantSpineResolution: DominantSpineResolution = resolveDominantWeeklySpine({
+   10747:     primaryGoal: primaryGoal ?? null,
+   10748:     secondaryGoal: secondaryGoal ?? null,
+   10749:     selectedSkillsCount: expandedContext.selectedSkills.length,
+   10750:     experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+   10751:     // [BUILDER-CANONICAL-RECOVERY-OWNER] CanonicalProgrammingProfile owns
+   10752:     // `recoveryQuality` (string | null) — `recoveryLevel` was never on
+   10753:     // the canonical contract. Cast through unknown so the legacy enum
+   10754:     // shape consumers expect ('poor'|'fair'|'normal'|'good') still works
+   10755:     // while the value is sourced from the canonical owner.
+   10756:     recoveryLevel: (canonicalProfile.recoveryQuality ?? undefined) as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+>> 10757:     selectedTrainingStyles: normalizedStyles as TrainingStyleMode[],
+   10758:     trainingMethodPreferences: normalizedStyles,
+   10759:     // [BUILDER-EQUIPMENT-WIDER-RUNTIME-VALUES] The static `EquipmentType`
+   10760:     // union does not include 'dumbbells', 'weighted_vest', 'kettlebell' —
+   10761:     // but those values exist in real persisted profiles (the runtime
+   10762:     // catalog is wider than the typed union). Iterating as `string`
+   10763:     // expresses that runtime reality without widening the union.
+   10764:     hasWeightedEquipment: (equipment as readonly string[]).some(e =>
+   10765:       e === 'weights' || e === 'dumbbells' || e === 'weighted_vest' || e === 'kettlebell'
+   10766:     ),
+   10767:     sessionLength: sessionLength <= 30 ? 'short' : sessionLength <= 45 ? 'medium' : sessionLength <= 60 ? 'long' : 'extended',
+   10768:   })
+   10769:   
+
+--- BUILDER ERROR 003 | line 10978, col 5 | TS2739 ---
+lib/adaptive-program-builder.ts(10978,5): error TS2739: Type '{ minExercises: number; maxExercises: number; }' is missing the following properties from type '{ minExercises: number; maxExercises: number; warmupMinutes: number; warmupExerciseCount: number; cooldownMinutes: number; cooldownExercises: number; accessorySlots?: number | undefined; }': warmupMinutes, warmupExerciseCount, cooldownMinutes, cooldownExercises
+Suggested search anchors: { minExercises: number; maxExercises: number; }, { minExercises: number; maxExercises: number; warmupMinutes: number; warmupExerciseCount: number; cooldownMinutes: number; cooldownExercises: number; accessorySlots?: number | undefined; }, TS2739, minExercises, number, maxExercises, missing, the
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 10966-10990:
+   10966:     recoveryLevel: canonicalProfile.recoveryQuality ?? undefined,
+   10967:     // [BUILDER-PRIMARY-GOAL-NULLISH-COERCION] same coercion as above —
+   10968:     // post-audit slot is `string | null`, source is `PrimaryGoal | undefined`.
+   10969:     primaryGoal: primaryGoal ?? null,
+   10970:     secondaryGoal: secondaryGoal ?? null,
+   10971:     selectedSkills: expandedContext.selectedSkills,
+   10972:     // [BUILDER-DURATION-CONFIG-OWNER] Current DurationConfig only owns
+   10973:     // `minExercises` / `maxExercises` / `includeAccessories`. The legacy
+   10974:     // warmup/cooldown/accessorySlot scalar fields were removed when
+   10975:     // session warmup/cooldown moved to the structure-engine. The pre-loop
+   10976:     // post-audit only needs the exercise-count band �� pass that and omit
+   10977:     // the stale fields rather than re-introducing them on DurationConfig.
+>> 10978:     durationConfig: {
+   10979:       minExercises: durationConfig.minExercises,
+   10980:       maxExercises: durationConfig.maxExercises,
+   10981:     },
+   10982:   })
+   10983:   
+   10984:   // Extract values from helper result - all guaranteed to be valid
+   10985:   const { advancedAthleteCalibration, calibratedVolumeConfig, isAdvanced, isLongSession, hasMultiSkills } = phase15ePostAudit
+   10986:   
+   10987:   // ==========================================================================
+   10988:   // [PHASE 15E] POST-AUDIT SUBSTEP TRACKING
+   10989:   // Track exact failing substep for diagnostic precision
+   10990:   // ==========================================================================
+
+--- BUILDER ERROR 004 | line 11102, col 5 | TS2740 ---
+lib/adaptive-program-builder.ts(11102,5): error TS2740: Type '{ includeEnduranceWork: false; includeDensityBlocks: false; }' is missing the following properties from type 'OutcomeTrainingStyle': preferHighReps, preferLowReps, skillFocused, useWeightedProgressions, and 4 more.
+Suggested search anchors: { includeEnduranceWork: false; includeDensityBlocks: false; }, OutcomeTrainingStyle, TS2740, includeEnduranceWork, false, includeDensityBlocks, missing, the
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 11090-11114:
+   11090:     })
+   11091:     phase15eSubstepDegraded = true
+   11092:     phase15eSubstepDegradedReason = 'outcome_training_style_failed'
+   11093:     // Safe fallback: neutral training style
+   11094:     // [BUILDER-OUTCOME-STYLE-FIELD-OWNER] OutcomeTrainingStyle no longer
+   11095:     // exposes `preferredRepRange`; rep targeting is now resolved by the
+   11096:     // structure engine downstream. Drop the stale field from the
+   11097:     // fallback object.
+   11098:     // [BUILDER-OUTCOME-STYLE-FIELD-OWNER-CONT] OutcomeTrainingStyle no
+   11099:     // longer exposes `restPeriodMultiplier` either — rest spacing moved
+   11100:     // to the structure engine alongside rep targeting. Drop the stale
+   11101:     // field; the fallback is now a minimal neutral style object.
+>> 11102:     outcomeTrainingStyle = {
+   11103:       includeEnduranceWork: false,
+   11104:       includeDensityBlocks: false,
+   11105:     }
+   11106:   }
+   11107:   
+   11108:   // ==========================================================================
+   11109:   // [PHASE 15E SUBSTEP] getCompressionReadiness - with safe fallback
+   11110:   // ==========================================================================
+   11111:   phase15eExactStep = 'compression_readiness_start'
+   11112:   let compressionReadiness: ReturnType<typeof getCompressionReadiness>
+   11113:   try {
+   11114:     compressionReadiness = getCompressionReadiness(onboardingProfile, athleteCalibration)
+
+--- BUILDER ERROR 005 | line 11675, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(11675,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Suggested search anchors: string | number, number, TS2322, string, not, assignable
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 11663-11687:
+   11663:     experienceLevel,
+   11664:     // [BUILDER-RECOVERY-LEVEL-RENAME] `RecoveryLevel` is the union
+   11665:     // 'HIGH' | 'MODERATE' | 'LOW' (see lib/recovery-engine.ts).
+   11666:     // The legacy labels 'optimal' | 'good' | 'suboptimal' never existed
+   11667:     // on this union and produced TS2367 impossible-comparison errors.
+   11668:     // Mapping preserves prior intent: optimal→HIGH, good→MODERATE,
+   11669:     // suboptimal→LOW. Same downstream behavior.
+   11670:     recoveryCapacity: recoverySignal.level === 'HIGH' ? 'moderate' : 
+   11671:                       recoverySignal.level === 'MODERATE' ? 'moderate' :
+   11672:                       recoverySignal.level === 'LOW' ? 'light' : 'minimal',
+   11673:     sorenessToleranceHigh: false,
+   11674:     sessionMinutes: typeof sessionLength === 'number' ? sessionLength : 60,
+>> 11675:     trainingDaysPerWeek,
+   11676:     // [BUILDER-TRAINING-DECISION-RENAME] `TrainingDecision` is now the
+   11677:     // union TRAIN_AS_PLANNED | PRESERVE_QUALITY | LIGHTEN_SESSION |
+   11678:     // COMPRESS_WEEKLY_LOAD | DELOAD_RECOMMENDED (see fatigue-decision-engine.ts).
+   11679:     // Legacy labels SKIP_TODAY / REDUCE_INTENSITY / REDUCE_VOLUME never
+   11680:     // existed on this union (TS2367). Map: SKIP_TODAY→DELOAD_RECOMMENDED,
+   11681:     // REDUCE_INTENSITY→PRESERVE_QUALITY, REDUCE_VOLUME→LIGHTEN_SESSION.
+   11682:     currentFatigueLevel: fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'high' :
+   11683:                          fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' : 'low',
+   11684:     recentSorenessLevel: 'mild',
+   11685:     // [BUILDER-ATHLETE-PROFILE-LEGACY-SLICE] AthleteProfile no longer
+   11686:     // owns `rangeTrainingMode` / `goalCategory` — those moved off the
+   11687:     // canonical type when programming truth migrated to the bundle.
+
+--- BUILDER ERROR 006 | line 11691, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(11691,5): error TS2322: Type 'string | undefined' is not assignable to type 'RangeTrainingMode | undefined'.
+Suggested search anchors: string | undefined, RangeTrainingMode | undefined, TS2322, string, undefined, not, assignable, RangeTrainingMode
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 11679-11703:
+   11679:     // Legacy labels SKIP_TODAY / REDUCE_INTENSITY / REDUCE_VOLUME never
+   11680:     // existed on this union (TS2367). Map: SKIP_TODAY→DELOAD_RECOMMENDED,
+   11681:     // REDUCE_INTENSITY→PRESERVE_QUALITY, REDUCE_VOLUME→LIGHTEN_SESSION.
+   11682:     currentFatigueLevel: fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'high' :
+   11683:                          fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' : 'low',
+   11684:     recentSorenessLevel: 'mild',
+   11685:     // [BUILDER-ATHLETE-PROFILE-LEGACY-SLICE] AthleteProfile no longer
+   11686:     // owns `rangeTrainingMode` / `goalCategory` — those moved off the
+   11687:     // canonical type when programming truth migrated to the bundle.
+   11688:     // Read through a typed legacy slice so persisted profiles that
+   11689:     // still carry the old fields continue to feed the selection
+   11690:     // context, without re-introducing the fields on AthleteProfile.
+>> 11691:     rangeTrainingMode: (profile as { rangeTrainingMode?: string } | null)?.rangeTrainingMode || undefined,
+   11692:     wantsHypertrophy: trainingOutcome === 'strength' || (profile as { goalCategory?: string } | null)?.goalCategory === 'strength',
+   11693:     tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
+   11694:   }
+   11695:   
+   11696:   // [CURRENT-LIVE-REGENERATE-THROW-SITE] selectMethodProfiles can throw if context is malformed
+   11697:   // Wrap in try/catch to contain and continue with safe defaults
+   11698:   let selectedMethods: ReturnType<typeof selectMethodProfiles>
+   11699:   try {
+   11700:     selectedMethods = selectMethodProfiles(selectionContext)
+   11701:   } catch (methodSelectionError) {
+   11702:     console.error('[current-live-throw-contained]', {
+   11703:       stage: stageTracker.current,
+
+--- BUILDER ERROR 007 | line 11721, col 5 | TS2741 ---
+lib/adaptive-program-builder.ts(11721,5): error TS2741: Property 'shortSummary' is missing in type '{ primary: ReturnType<typeof selectMethodProfiles>["primary"]; secondary: undefined; explanation: string; }' but required in type 'SelectedMethods'.
+Suggested search anchors: shortSummary, { primary: ReturnType<typeof selectMethodProfiles>["primary"]; secondary: undefined; explanation: string; }, SelectedMethods, TS2741, missing, primary, ReturnType, typeof
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 11709-11733:
+   11709:       errorMessage: methodSelectionError instanceof Error ? methodSelectionError.message : String(methodSelectionError),
+   11710:       verdict: 'post_helper_method_selection_contained',
+   11711:     })
+   11712:     // Provide safe default method profiles - use 'hybrid_skill_strength' as it exists in getCoachingMessage
+   11713:     // [BUILDER-METHOD-PROFILE-OWNER] MethodProfile no longer carries the
+   11714:     // `internalLabel` field (display labelling moved to publicLabel /
+   11715:     // description). The `secondary` slot is `MethodProfile | undefined`,
+   11716:     // not `MethodProfile | null` — use `undefined` for "no secondary".
+   11717:     // [BUILDER-METHOD-PROFILE-FIELD-OWNER] MethodProfile owns
+   11718:     // `shortDescription` (not `description`), and the canonical interface
+   11719:     // also requires `name` alongside `publicLabel`. Use the canonical
+   11720:     // field names so the safe fallback satisfies the contract.
+>> 11721:     selectedMethods = {
+   11722:       primary: {
+   11723:         id: 'hybrid_skill_strength',
+   11724:         name: 'Hybrid Skill Strength',
+   11725:         publicLabel: 'Hybrid Skill Strength',
+   11726:         shortDescription: 'Balanced skill and strength work',
+   11727:         applicableGoals: ['general_fitness'],
+   11728:         fatigueImpact: 'moderate',
+   11729:         recoveryDemand: 'moderate',
+   11730:         timeEfficiency: 'moderate',
+   11731:         skillTransfer: 'high',
+   11732:         bestFor: ['strength', 'skill'],
+   11733:       } as unknown as ReturnType<typeof selectMethodProfiles>['primary'],
+
+--- BUILDER ERROR 008 | line 12154, col 9 | TS2322 ---
+lib/adaptive-program-builder.ts(12154,9): error TS2322: Type 'string' is not assignable to type 'WeekPhaseTag'.
+Suggested search anchors: string, WeekPhaseTag, TS2322, not, assignable
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 12142-12166:
+   12142:   //
+   12143:   // This is the layer that makes a 6-day flexible week visibly differentiate
+   12144:   // by role (heavier strength / skill quality / broad mixed / secondary /
+   12145:   // density / supportive) instead of producing six structurally identical
+   12146:   // sessions.
+   12147:   //
+   12148:   // Honest about week phase: builder always materializes week-1 dosage, so
+   12149:   // we tag weekPhase as 'acclimation' here. Week-dosage-scaling later
+   12150:   // re-derives display dosage for week 2/3/4 — the ROLE distribution stays
+   12151:   // stable across the cycle (each role's intensity caps stay protected for
+   12152:   // week-1 build, but the role labels persist regardless).
+   12153:   // ==========================================================================
+>> 12154:   const weeklyRoleWeekPhase: WeekPhaseTag = (() => {
+   12155:     // Builder is currently always producing week-1 dosage for the saved
+   12156:     // program object. We do NOT lie about this — even when the user is
+   12157:     // viewing later weeks, the saved generation is week-1.
+   12158:     return 'acclimation'
+   12159:   })()
+   12160: 
+   12161:   const weeklyRoleComplexityScore = (() => {
+   12162:     // Lightweight proxy of the same complexity inputs that
+   12163:     // calculate-content-complexity uses, so we don't have to thread the
+   12164:     // full complexity audit through this code path. This is a HINT that
+   12165:     // only widens breadth bands for broad-mixed / secondary / density days.
+   12166:     const skillsCount = (canonicalProfile.selectedSkills || []).length
+
+--- BUILDER ERROR 009 | line 12347, col 5 | TS2345 ---
+lib/adaptive-program-builder.ts(12347,5): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+Suggested search anchors: string | null, string | undefined, TS2345, string, null, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 12335-12359:
+   12335:   
+   12336:   console.log('[root-truth-chain-audit] Starting session assembly:', {
+   12337:     ...rootTruthChainAudit,
+   12338:     phase: 'pre_assembly',
+   12339:   })
+   12340:   
+   12341:   // ==========================================================================
+   12342:   // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 3: Build canonical session spine
+   12343:   // This spine controls how sessions are typed based on resolved training mode.
+   12344:   // It must be built BEFORE session assembly and passed to each session context.
+   12345:   // ==========================================================================
+   12346:   const canonicalSessionSpine = buildCanonicalSessionSpine(
+>> 12347:     canonicalProfile.trainingStyle,
+   12348:     trainingOutcome,
+   12349:     primaryGoal,
+   12350:     secondaryGoal || canonicalProfile.secondaryGoal || null,
+   12351:     effectiveTrainingDays
+   12352:   )
+   12353:   
+   12354:   console.log('[SESSION-ARCHITECTURE-SPINE-BUILT]', {
+   12355:     mode: canonicalSessionSpine.mode,
+   12356:     totalSessions: effectiveTrainingDays,
+   12357:     primaryGoal,
+   12358:     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+   12359:     trainingStyle: canonicalProfile.trainingStyle,
+
+--- BUILDER ERROR 010 | line 12622, col 7 | TS2322 ---
+lib/adaptive-program-builder.ts(12622,7): error TS2322: Type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "reduced" | "expanded"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "incr...' is not assignable to type '{ volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+Suggested search anchors: { volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "reduced" | "expanded"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "incr..., { volumeBias: "normal" | "reduced" | "expanded"; intensityBias: "normal" | "reduced" | "expanded"; densityBias: "normal" | "reduced" | "expanded"; finisherBias: "normal" | "limited" | "expanded"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef..., TS2322, volumeBias, normal, reduced, expanded, intensityBias
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 12610-12634:
+   12610:     // This connects week-level load strategy and first-week protection to session
+   12611:     // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation
+   12612:     // ==========================================================================
+   12613:     // [BUILDER-LOAD-STRATEGY-BIAS-NARROW] SessionWeekAdaptation accepts
+   12614:     // a narrow bias literal ('normal' | 'reduced' | 'expanded' for
+   12615:     // volume/intensity/density/finisher; protection levels for the
+   12616:     // others). The week-adaptation decision is typed wider. Normalize
+   12617:     // each bias to the accepted literal at the boundary; unknown
+   12618:     // values collapse to 'normal'.
+   12619:     const normalizeBias = (b: unknown): 'normal' | 'reduced' | 'expanded' =>
+   12620:       b === 'reduced' || b === 'expanded' ? b : 'normal'
+   12621:     const weekAdaptationInputForSession: SessionWeekAdaptation = {
+>> 12622:       loadStrategy: weekAdaptationDecision ? {
+   12623:         volumeBias: normalizeBias(weekAdaptationDecision.loadStrategy.volumeBias),
+   12624:         intensityBias: normalizeBias(weekAdaptationDecision.loadStrategy.intensityBias),
+   12625:         densityBias: normalizeBias(weekAdaptationDecision.loadStrategy.densityBias),
+   12626:         finisherBias: normalizeBias(weekAdaptationDecision.loadStrategy.finisherBias),
+   12627:         straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
+   12628:         connectiveTissueBias: weekAdaptationDecision.loadStrategy.connectiveTissueBias,
+   12629:         restSpacingBias: weekAdaptationDecision.loadStrategy.restSpacingBias,
+   12630:       } : null,
+   12631:       firstWeekProtection: weekAdaptationDecision?.firstWeekGovernor ? {
+   12632:         active: weekAdaptationDecision.firstWeekGovernor.active,
+   12633:         reduceSets: weekAdaptationDecision.firstWeekGovernor.reduceSets,
+   12634:         reduceRPE: weekAdaptationDecision.firstWeekGovernor.reduceRPE,
+
+--- BUILDER ERROR 011 | line 12682, col 7 | TS2345 ---
+lib/adaptive-program-builder.ts(12682,7): error TS2345: Argument of type 'SessionWeekAdaptation' is not assignable to parameter of type 'WeekAdaptationInput'.
+Suggested search anchors: SessionWeekAdaptation, WeekAdaptationInput, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 12670-12694:
+   12670:       secondaryGoal || null,
+   12671:       canonicalProfile.selectedSkills || [],
+   12672:       experienceLevel,
+   12673:       equipment,
+   12674:       canonicalProfile.jointCautions || [],
+   12675:       sessionLengthBucket,
+   12676:       sessionMinutesForComposition,
+   12677:       multiSkillMaterialityContract?.currentWorkingProgressions || null,
+   12678:       sessionArchitectureTruth || null,
+   12679:       doctrineRuntimeContract || null,
+   12680:       fatigueStateForComposition,
+   12681:       undefined, // recentSessionShapes
+>> 12682:       weekAdaptationInputForSession, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+   12683:       weeklyRoleForThisSession // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day authoritative role
+   12684:     )
+   12685:     
+   12686:     // Build the authoritative composition blueprint
+   12687:     const sessionCompositionBlueprint = buildSessionCompositionBlueprint(compositionContext)
+   12688:     
+   12689:     // Validate composition
+   12690:     const compositionValidation = validateSessionComposition(sessionCompositionBlueprint, compositionContext)
+   12691:     if (!compositionValidation.valid) {
+   12692:       console.warn('[SESSION-COMPOSITION-VALIDATION-WARNING]', {
+   12693:         dayNumber: day.dayNumber,
+   12694:         issues: compositionValidation.issues,
+
+--- BUILDER ERROR 012 | line 12984, col 17 | TS2352 ---
+lib/adaptive-program-builder.ts(12984,17): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: { dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }, AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }, unknown, TS2352, Conversion, dayNumber, number, focus
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 12972-12996:
+   12972:         errorMessage: errorMessage.slice(0, 200),
+   12973:         verdict: 'CREATING_FALLBACK_SESSION_GENERATION_CONTINUES',
+   12974:       })
+   12975:       
+   12976:       // Track in corridor
+   12977:       postTruthCorridorTracker.degraded = true
+   12978:       postTruthCorridorTracker.degradedReason = `session_${index}_generation_failed: ${matchedPattern}`
+   12979:       postTruthCorridorTracker.fallbackApplied = true
+   12980:       postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session_generation_failed'
+   12981:       postTruthCorridorTracker.stepsFailed.push(`session_${index}_generation`)
+   12982:       
+   12983:       // Create fallback session
+>> 12984:       session = {
+   12985:         dayNumber: day.dayNumber,
+   12986:         focus: day.focus,
+   12987:         warmup: [],
+   12988:         exercises: [{
+   12989:           name: 'Rest & Recovery',
+   12990:           targetMuscles: ['recovery'] as any,
+   12991:           skillTargets: [],
+   12992:           sets: 1,
+   12993:           reps: '1',
+   12994:           restSeconds: 0,
+   12995:           notes: `Session generation failed. Take a rest day. (${matchedPattern})`,
+   12996:           rationale: 'Fallback due to session generation error',
+
+--- BUILDER ERROR 013 | line 13159, col 64 | TS2345 ---
+lib/adaptive-program-builder.ts(13159,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+Suggested search anchors: string[], WeakPointType[], TS2345, string, not, assignable, parameter, WeakPointType
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 13147-13171:
+   13147:     postSessionStep = 'weak_point_accessories_selecting'
+   13148:     try {
+   13149:       // Check if fatigue is the primary weak point - skip accessories if so
+   13150:       const isFatigued = detectedWeakPoints.primary.includes('general_fatigue')
+   13151:       
+   13152:       if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
+   13153:           (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
+   13154:         // Combine primary and secondary weak points, primary first
+   13155:         const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+   13156:         
+   13157:         // Get recommended accessories (max 2)
+   13158:         const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
+>> 13159:         const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
+   13160:         
+   13161:         // Add accessories to session if found
+   13162:         if (recommendedAccessories.length > 0) {
+   13163:           session.adaptationNotes = session.adaptationNotes || []
+   13164:           
+   13165:           // Build coaching note based on detected weak points
+   13166:           const primaryLabel = detectedWeakPoints.primary[0] 
+   13167:             ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+   13168:             : null
+   13169:           
+   13170:           if (primaryLabel) {
+   13171:             session.adaptationNotes.push(
+
+--- BUILDER ERROR 014 | line 13167, col 15 | TS7053 ---
+lib/adaptive-program-builder.ts(13167,15): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<WeakPointType, string>'.
+Suggested search anchors: any, string, t be used to index type , TS7053, Element, implicitly, has, because
+Likely fix guidance: Unsafe Record index. Validate/guard the key before indexing.
+Local context lines 13155-13179:
+   13155:         const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+   13156:         
+   13157:         // Get recommended accessories (max 2)
+   13158:         const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
+   13159:         const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
+   13160:         
+   13161:         // Add accessories to session if found
+   13162:         if (recommendedAccessories.length > 0) {
+   13163:           session.adaptationNotes = session.adaptationNotes || []
+   13164:           
+   13165:           // Build coaching note based on detected weak points
+   13166:           const primaryLabel = detectedWeakPoints.primary[0] 
+>> 13167:             ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+   13168:             : null
+   13169:           
+   13170:           if (primaryLabel) {
+   13171:             session.adaptationNotes.push(
+   13172:               `Support work added for ${primaryLabel.toLowerCase()}`
+   13173:             )
+   13174:           }
+   13175:           
+   13176:           // Mark session as having weak-point-based additions
+   13177:           session.weakPointAccessories = recommendedAccessories
+   13178:         }
+   13179:         postSessionStep = 'weak_point_accessories_attached'
+
+--- BUILDER ERROR 015 | line 13219, col 11 | TS2345 ---
+lib/adaptive-program-builder.ts(13219,11): error TS2345: Argument of type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[]' is not assignable to parameter of type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[]'.
+Suggested search anchors: { id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[], { id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[], TS2345, string, name, category, neuralDemand, number
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 13207-13231:
+   13207:           primaryGoal === 'skill' ? 'skill' : 
+   13208:             primaryGoal === 'strength' ? 'strength' : 'mixed',
+   13209:           undefined,
+   13210:                                        // [BUILDER-TRAINING-DECISION-RENAME] REDUCE_INTENSITY → PRESERVE_QUALITY
+   13211:                                        fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'very_low' : undefined
+   13212:         )
+   13213:         postSessionStep = 'session_style_resolved'
+   13214:         
+   13215:         // Build metadata for load calculation
+   13216:         // STEP I: Guard each exercise has required fields before building metadata
+   13217:         const safeExercises = session.exercises.filter(ex => ex?.id && ex?.name)
+   13218:         const exercisesWithMeta = buildSessionMetadata(
+>> 13219:           safeExercises.map(ex => ({
+   13220:             id: ex.id,
+   13221:             name: ex.name,
+   13222:             category: ex.category || 'strength',
+   13223:             neuralDemand: ex.category === 'skill' ? 4 : 3,
+   13224:             fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
+   13225:             movementPattern: undefined,
+   13226:             isIsometric: ex.repsOrTime?.includes('s') ?? false,
+   13227:           }))
+   13228:         )
+   13229:         postSessionStep = 'session_metadata_built'
+   13230:         
+   13231:         // Optimize if over budget
+
+--- BUILDER ERROR 016 | line 13795, col 41 | TS2345 ---
+lib/adaptive-program-builder.ts(13795,41): error TS2345: Argument of type '"top_sets"' is not assignable to parameter of type 'TrainingMethodPreference'.
+Suggested search anchors: "top_sets", TrainingMethodPreference, TS2345, top_sets, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 13783-13807:
+   13783:       // user had explicitly selected them.
+   13784:       // [BUILDER-METHOD-PREF-LEGACY-LITERAL] TrainingMethodPreference no
+   13785:       // longer accepts the singular legacy labels ('drop_set', 'top_set').
+   13786:       // Persisted onboarding documents may still carry them, so the
+   13787:       // runtime check has to recognize both. Cast the array to
+   13788:       // `readonly string[]` so `.includes()` accepts the legacy strings
+   13789:       // without widening the union.
+   13790:       userWantsDropSets:
+   13791:         methodPrefsForGrouping.includes('drop_sets') ||
+   13792:         (methodPrefsForGrouping as readonly string[]).includes('drop_set'),
+   13793:       userWantsRestPause: methodPrefsForGrouping.includes('rest_pause'),
+   13794:       userWantsTopSets:
+>> 13795:         methodPrefsForGrouping.includes('top_sets') ||
+   13796:         (methodPrefsForGrouping as readonly string[]).includes('top_set'),
+   13797:       
+   13798:       // Session composition analysis
+   13799:       skillExerciseCount,
+   13800:       strengthExerciseCount,
+   13801:       accessoryTailSize,
+   13802:       primaryExerciseCount,
+   13803:       isSkillDominated: isSkillPrimarySession,
+   13804:       
+   13805:       // [STRENGTHENED] Method eligibility decisions - more permissive for accessory tails
+   13806:       // [PHASE 3A] Blueprint 'blocked' is a HARD VETO at the *allowed* layer so
+   13807:       // downstream materializers cannot accidentally revive a method doctrine
+
+--- BUILDER ERROR 017 | line 15710, col 7 | TS2322 ---
+lib/adaptive-program-builder.ts(15710,7): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+Suggested search anchors: string[], TrainingMethodPreference[], TS2322, string, not, assignable, TrainingMethodPreference
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 15698-15722:
+   15698:       // instead of trusting the upstream materializer's truth in the first
+   15699:       // place. By locking ownership here, every consumer of
+   15700:       // `styleMetadata.appliedMethods` (Method decisions surface, scanner
+   15701:       // strip, audit logs, save/route/page) reads the same materialization-
+   15702:       // truth the visible body renders.
+   15703:       //
+   15704:       // The late-corridor's per-decision evidence (drivers, blockers, bundle
+   15705:       // signals consumed) is NOT discarded — it remains preserved on
+   15706:       // `styleMetadata.methodDecisionEvidence` via `...existingStyleMeta`
+   15707:       // above, so the audit trail proving "why each preferred method was
+   15708:       // applied/rejected/deferred" survives intact. Only the *binary*
+   15709:       // applied/rejected verdict now defers to the upstream owner.
+>> 15710:       appliedMethods: (() => {
+   15711:         const result: string[] = []
+   15712:         const hasSupersetGroup = finalStyledGroups.some(g => g.groupType === 'superset')
+   15713:         const hasCircuitGroup = finalStyledGroups.some(g => g.groupType === 'circuit')
+   15714:         const hasDensityGroup = finalStyledGroups.some(g => g.groupType === 'density_block')
+   15715:         // Supersets: trust the upstream superset writer's flag OR the rebuilt
+   15716:         // grouped truth. Both sources are written by the materialization owner.
+   15717:         if (currentSupersetsApplied || hasSupersetGroup) result.push('supersets')
+   15718:         // Circuits / density: trust the materialization pass's appliedMethods
+   15719:         // signal cross-checked against rebuilt grouped truth, so a method
+   15720:         // that materialized as a structural block is reported applied even
+   15721:         // if a downstream rename of the materialization signal drifts.
+   15722:         if (hasCircuitsApplied || hasCircuitGroup) result.push('circuits')
+
+--- BUILDER ERROR 018 | line 16597, col 48 | TS2352 ---
+lib/adaptive-program-builder.ts(16597,48): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: { dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }, AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }, unknown, TS2352, Conversion, dayNumber, number, focus
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 16585-16609:
+   16585:         errorName,
+   16586:         errorMessage: errorMessage.slice(0, 300),
+   16587:         matchedPattern,
+   16588:         verdict: 'POST_SESSION_FALLBACK_WILL_BE_CREATED',
+   16589:       })
+   16590:       
+   16591:       postTruthCorridorTracker.degraded = true
+   16592:       postTruthCorridorTracker.degradedReason = `session_${index}_post_mutation_failed: ${matchedPattern}`
+   16593:       postTruthCorridorTracker.fallbackApplied = true
+   16594:       postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session_post_mutation'
+   16595:       postTruthCorridorTracker.stepsFailed.push(`session_${index}_post_mutation`)
+   16596:       
+>> 16597:       const fallbackSession: AdaptiveSession = {
+   16598:         dayNumber: day.dayNumber,
+   16599:         focus: day.focus,
+   16600:         warmup: [],
+   16601:         exercises: [{
+   16602:           name: 'Recovery Activity',
+   16603:           targetMuscles: ['recovery'] as any,
+   16604:           skillTargets: [],
+   16605:           sets: 1,
+   16606:           reps: '1',
+   16607:           restSeconds: 0,
+   16608:           notes: `Session post-processing failed. Take a rest day or do light activity. (${matchedPattern})`,
+   16609:           rationale: 'Fallback session due to post-processing error',
+
+--- BUILDER ERROR 019 | line 16795, col 46 | TS2352 ---
+lib/adaptive-program-builder.ts(16795,46): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: { dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }, AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }, unknown, TS2352, Conversion, dayNumber, number, focus
+Likely fix guidance: Use `as unknown as TargetType` only if this is an intentional local bridge; otherwise map shape locally. Never use `as any`.
+Local context lines 16783-16807:
+   16783:       matchedPattern,
+   16784:       verdict: 'OUTER_FALLBACK_WILL_BE_CREATED',
+   16785:     })
+   16786:     
+   16787:     // Track in corridor
+   16788:     postTruthCorridorTracker.degraded = true
+   16789:     postTruthCorridorTracker.degradedReason = `session_${sessionLoopIndex}_failed: ${matchedPattern}`
+   16790:     postTruthCorridorTracker.fallbackApplied = true
+   16791:     postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session'
+   16792:     postTruthCorridorTracker.stepsFailed.push(`session_${sessionLoopIndex}`)
+   16793:     
+   16794:     // Create minimal fallback session so generation can continue
+>> 16795:     const fallbackSession: AdaptiveSession = {
+   16796:       dayNumber: failedDayInfo?.dayNumber || sessionLoopIndex + 1,
+   16797:       focus: failedDayInfo?.focus || 'foundation',
+   16798:       warmup: [],
+   16799:       exercises: [
+   16800:         // Single safe fallback exercise 
+   16801:         {
+   16802:           name: 'Foundation Rest Day',
+   16803:           targetMuscles: ['recovery'] as any,
+   16804:           skillTargets: [],
+   16805:           sets: 1,
+   16806:           reps: '1',
+   16807:           restSeconds: 0,
+
+--- BUILDER ERROR 020 | line 17674, col 52 | TS2345 ---
+lib/adaptive-program-builder.ts(17674,52): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'ConstraintCategory'.
+Suggested search anchors: string[], ConstraintCategory, TS2345, string, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 17662-17686:
+   17662:     sessions.forEach((session, index) => {
+   17663:       if (dayLoadProfiles[index].neuralLoad === 'high' && 
+   17664:           weeklyLoadBalance.balanceIssues.some(i => i.includes('consecutive'))) {
+   17665:         session.adaptationNotes = session.adaptationNotes || []
+   17666:             session.adaptationNotes.push('This session focuses on skill work — prioritize quality and rest')
+   17667:       }
+   17668:     })
+   17669:   }
+   17670:   
+   17671:   // Get constraint interventions for primary constraint
+   17672:   let constraintInterventions: ConstraintIntervention[] = []
+   17673:   if (constraintInsight.hasInsight && constraintInsight.focus) {
+>> 17674:     const intervention = getConstraintIntervention(constraintInsight.focus, 65) // Mid-range severity
+   17675:     constraintInterventions = [intervention]
+   17676:   }
+   17677:   
+   17678:   // Record constraint detection in history (async, non-blocking, best-effort)
+   17679:   // Uses resolvedAthleteId - skipped if no valid athlete ID exists
+   17680:   if (resolvedAthleteId && constraintInsight.hasInsight) {
+   17681:     console.log('[program-generate] recording constraint history for athlete')
+   17682:     recordConstraintHistory(
+   17683:       resolvedAthleteId,
+   17684:       primaryGoal,
+   17685:       {
+   17686:         category: constraintInsight.focus || 'none',
+
+--- BUILDER ERROR 021 | line 18330, col 9 | TS2339 ---
+lib/adaptive-program-builder.ts(18330,9): error TS2339: Property 'movementEmphasis' does not exist on type 'AdaptiveSession'.
+Suggested search anchors: movementEmphasis, AdaptiveSession, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 18318-18342:
+   18318:     
+   18319:     // ==========================================================================
+   18320:     // [session-assembly-truth] TASK 5: HYBRID/MIXED SESSION COMPOSITION AUDIT
+   18321:     // Track if hybrid days are actually using broader selected profile
+   18322:     // ==========================================================================
+   18323:     const hybridDays = sessions.filter(s => 
+   18324:       s.focus?.toLowerCase().includes('mixed') || 
+   18325:       s.focus?.toLowerCase().includes('hybrid') ||
+   18326:       s.focus?.toLowerCase().includes('density')
+   18327:     )
+   18328:     const mixedDays = sessions.filter(s =>
+   18329:       s.focus?.toLowerCase().includes('mixed') ||
+>> 18330:       s.movementEmphasis === 'mixed'
+   18331:     )
+   18332:     
+   18333:     // Analyze which skills are represented on mixed/hybrid days
+   18334:     const skillsOnMixedDays = new Set<string>()
+   18335:     const skillsDeferredFromMixedDays = new Set<string>()
+   18336:     
+   18337:     hybridDays.concat(mixedDays).forEach(session => {
+   18338:       // Check which skills are represented via exercises in this session
+   18339:       // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] e is AdaptiveExercise after mapping.
+   18340:       const sessionExerciseNames = session.exercises?.map(e => getExerciseName(e).toLowerCase()) || []
+   18341:       
+   18342:       profileSelectedSkills.forEach(skill => {
+
+--- BUILDER ERROR 022 | line 18471, col 90 | TS2345 ---
+lib/adaptive-program-builder.ts(18471,90): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Suggested search anchors: string, PrimaryGoal, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 18459-18483:
+   18459:     builtAroundSkillsFinal.includes(skill)
+   18460:   )
+   18461:   
+   18462:   // 4. Headline focus skills - small ordered subset for priority display (primary + secondary)
+   18463:   const headlineFocusSkillsCanonical = [primaryGoal]
+   18464:   if (secondaryGoal && secondaryGoal !== primaryGoal) {
+   18465:     headlineFocusSkillsCanonical.push(secondaryGoal)
+   18466:   }
+   18467:   
+   18468:   // 5. Summary renderable skills - skills that can be mentioned because they're actually in the week
+   18469:   const summaryRenderableSkillsCanonical = [
+   18470:     ...headlineFocusSkillsCanonical,
+>> 18471:     ...weekRepresentedSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s)),
+   18472:     ...weekSupportSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s) && !weekRepresentedSkillsCanonical.includes(s)),
+   18473:   ]
+   18474:   
+   18475:   console.log('[summary-truth-contract-audit]', {
+   18476:     profileSelectedSkillsCanonical,
+   18477:     weekRepresentedSkillsCanonical,
+   18478:     weekSupportSkillsCanonical,
+   18479:     headlineFocusSkillsCanonical,
+   18480:     summaryRenderableSkillsCanonical,
+   18481:     profileBroadness: profileSelectedSkillsCanonical.length,
+   18482:     weekBroadness: summaryRenderableSkillsCanonical.length,
+   18483:     underreportingRisk: summaryRenderableSkillsCanonical.length > headlineFocusSkillsCanonical.length,
+
+--- BUILDER ERROR 023 | line 18472, col 86 | TS2345 ---
+lib/adaptive-program-builder.ts(18472,86): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Suggested search anchors: string, PrimaryGoal, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 18460-18484:
+   18460:   )
+   18461:   
+   18462:   // 4. Headline focus skills - small ordered subset for priority display (primary + secondary)
+   18463:   const headlineFocusSkillsCanonical = [primaryGoal]
+   18464:   if (secondaryGoal && secondaryGoal !== primaryGoal) {
+   18465:     headlineFocusSkillsCanonical.push(secondaryGoal)
+   18466:   }
+   18467:   
+   18468:   // 5. Summary renderable skills - skills that can be mentioned because they're actually in the week
+   18469:   const summaryRenderableSkillsCanonical = [
+   18470:     ...headlineFocusSkillsCanonical,
+   18471:     ...weekRepresentedSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s)),
+>> 18472:     ...weekSupportSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s) && !weekRepresentedSkillsCanonical.includes(s)),
+   18473:   ]
+   18474:   
+   18475:   console.log('[summary-truth-contract-audit]', {
+   18476:     profileSelectedSkillsCanonical,
+   18477:     weekRepresentedSkillsCanonical,
+   18478:     weekSupportSkillsCanonical,
+   18479:     headlineFocusSkillsCanonical,
+   18480:     summaryRenderableSkillsCanonical,
+   18481:     profileBroadness: profileSelectedSkillsCanonical.length,
+   18482:     weekBroadness: summaryRenderableSkillsCanonical.length,
+   18483:     underreportingRisk: summaryRenderableSkillsCanonical.length > headlineFocusSkillsCanonical.length,
+   18484:     finalVerdict: summaryRenderableSkillsCanonical.length >= profileSelectedSkillsCanonical.length * 0.7
+
+--- BUILDER ERROR 024 | line 18525, col 46 | TS2345 ---
+lib/adaptive-program-builder.ts(18525,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Suggested search anchors: string, PrimaryGoal, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 18513-18537:
+   18513:     const backLeverExpressionCount = allExerciseNames.filter(n => 
+   18514:       n.includes('back lever') || n.includes('german hang')
+   18515:     ).length
+   18516:     const frontLeverExpressionCount = allExerciseNames.filter(n => 
+   18517:       n.includes('front lever') || n.includes('tuck lever')
+   18518:     ).length
+   18519:     
+   18520:     // ==========================================================================
+   18521:     // [SUMMARY-TRUTH] TASK 4: GENERATE TRUTHFUL HYBRID SUMMARY TEXT
+   18522:     // This replaces the narrow programRationale with week-truth-aware summary
+   18523:     // ==========================================================================
+   18524:     const broaderRepresentedSkills = summaryRenderableSkillsCanonical.filter(s => 
+>> 18525:       !headlineFocusSkillsCanonical.includes(s)
+   18526:     )
+   18527:     const hasBroaderSkillExpression = broaderRepresentedSkills.length > 0
+   18528:     const isHybridWeek = mixedSessionCount > 0 || hasBroaderSkillExpression
+   18529:     
+   18530:     // Build truthful hybrid summary based on actual week structure
+   18531:     // (variable already declared above try block)
+   18532:     
+   18533:     // [SUMMARY-TRUTH] TASK 4: Enhance summary if broader skills are represented
+   18534:     if (hasBroaderSkillExpression && !truthfulHybridSummary.toLowerCase().includes('broader') &&
+   18535:         !truthfulHybridSummary.toLowerCase().includes('additional')) {
+   18536:       const broaderSkillNames = broaderRepresentedSkills.slice(0, 3).map(s => s.replace(/_/g, ' '))
+   18537:       const broaderClause = broaderSkillNames.length === 1
+
+--- BUILDER ERROR 025 | line 18740, col 48 | TS2345 ---
+lib/adaptive-program-builder.ts(18740,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+Suggested search anchors: string, PrimaryGoal, TS2345, not, assignable, parameter
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 18728-18752:
+   18728:     const underreportingDetected = 
+   18729:       summaryRenderableSkillsCanonical.length > headlineFocusSkillsCanonical.length &&
+   18730:       (renderedSummaryReferencedSkills.length <= headlineFocusSkillsCanonical.length ||
+   18731:        renderedWhyThisPlanReferencedSkills.length <= headlineFocusSkillsCanonical.length)
+   18732:     
+   18733:     console.log('[summary-underreporting-final-check]', {
+   18734:       profileSelectedSkillsCanonical,
+   18735:       summaryRenderableSkillsCanonical,
+   18736:       renderedSummaryReferencedSkills,
+   18737:       renderedWhyThisPlanReferencedSkills,
+   18738:       underreportingDetected,
+   18739:       broaderSkillsMentionedInSummary: renderedSummaryReferencedSkills.filter(s => 
+>> 18740:         !headlineFocusSkillsCanonical.includes(s)
+   18741:       ),
+   18742:       finalVerdict: underreportingDetected 
+   18743:         ? 'summary_underreports_broader_skills'
+   18744:         : summaryRenderableSkillsCanonical.length === headlineFocusSkillsCanonical.length
+   18745:           ? 'no_broader_skills_to_mention'
+   18746:           : 'summary_mentions_broader_skills',
+   18747:     })
+   18748:     
+   18749:     console.log('[day-focus-truth-audit-continued]', {
+   18750:       dayAudits: dayFocusTruthAudit,
+   18751:     })
+   18752:     
+
+--- BUILDER ERROR 026 | line 18848, col 9 | TS2353 ---
+lib/adaptive-program-builder.ts(18848,9): error TS2353: Object literal may only specify known properties, and 'recoveryLevel' does not exist in type '{ exercises: SessionExerciseForIdentity[]; templateFocus?: string | undefined; templateLabel?: string | undefined; primaryGoal: string; secondaryGoal?: string | ... 1 more ... | undefined; recoveryState?: "good" | ... 3 more ... | undefined; isDeloadSession?: boolean | undefined; dayNumber: number; }'.
+Suggested search anchors: recoveryLevel, { exercises: SessionExerciseForIdentity[]; templateFocus?: string | undefined; templateLabel?: string | undefined; primaryGoal: string; secondaryGoal?: string | ... 1 more ... | undefined; recoveryState?: "good" | ... 3 more ... | undefined; isDeloadSession?: boolean | undefined; dayNumber: number; }, TS2353, Object, literal, may, only, specify
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 18836-18860:
+   18836:         // [AI-TRUTH-MATERIALIZATION] Selection context for multi-skill visibility
+   18837:         selectionReason: e.selectionReason,
+   18838:         influencingSkills: undefined as Array<{ skillId: string; influence: 'primary' | 'secondary' | 'selected' | 'limiter_related'; expressionMode: string }> | undefined,
+   18839:       }))
+   18840:       
+   18841:       return resolveSessionIdentityFromContent({
+   18842:         exercises: exercisesForIdentity,
+   18843:         templateFocus: session.focus,
+   18844:         templateLabel: session.focusLabel || session.dayLabel,
+   18845:         primaryGoal,
+   18846:         secondaryGoal,
+   18847:         // [BUILDER-CANONICAL-RECOVERY-OWNER]
+>> 18848:         recoveryLevel: canonicalProfile.recoveryQuality as any,
+   18849:         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession does not own
+   18850:         // `isDeload`. Deload state is communicated through `focus` /
+   18851:         // `weekAdaptationDecision` on the parent program. The legacy
+   18852:         // fallback `session.focus?.includes('recovery')` already captures
+   18853:         // the recovery/deload signal at the session level — the redundant
+   18854:         // `session.isDeload ||` was dead code.
+   18855:         isDeloadSession: session.focus?.includes('recovery'),
+   18856:         dayNumber: session.dayNumber,
+   18857:       })
+   18858:     })
+   18859:     
+   18860:     // [PHASE 15F TASK 1] Apply resolved identities to sessions
+
+--- BUILDER ERROR 027 | line 19736, col 7 | TS2345 ---
+lib/adaptive-program-builder.ts(19736,7): error TS2345: Argument of type '{ supersets: boolean; circuits: boolean; densityBlocks: boolean; clusterSets: boolean; dropSets: boolean; ladderSets: boolean; restPause: boolean; }' is not assignable to parameter of type '{ supersets?: string | undefined; circuits?: string | undefined; densityBlocks?: string | undefined; clusterSets?: string | undefined; }'.
+Suggested search anchors: { supersets: boolean; circuits: boolean; densityBlocks: boolean; clusterSets: boolean; dropSets: boolean; ladderSets: boolean; restPause: boolean; }, { supersets?: string | undefined; circuits?: string | undefined; densityBlocks?: string | undefined; clusterSets?: string | undefined; }, TS2345, supersets, boolean, circuits, densityBlocks, clusterSets
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 19724-19748:
+   19724:       hasSupersetsApplied: s.styleMetadata?.hasSupersetsApplied || false,
+   19725:       hasCircuitsApplied: s.styleMetadata?.hasCircuitsApplied || false,
+   19726:       hasDensityApplied: s.styleMetadata?.hasDensityApplied || false,
+   19727:       appliedMethods: s.styleMetadata?.appliedMethods || ['straight_sets'],
+   19728:     }))
+   19729:     
+   19730:     // Build the audit
+   19731:     const onboardingTruthAudit = buildOnboardingTruthExpressionAudit(
+   19732:       canonicalProfile,
+   19733:       multiSkillMaterialityContract.materialSkillIntent,
+   19734:       visibleWeekExpressionContract || null,
+   19735:       allSessionExercises,
+>> 19736:       materialityContract?.levers?.methodEligibility || null,
+   19737:       sessionStyleMetadatas,
+   19738:       methodReadinessGating || null
+   19739:     )
+   19740:     
+   19741:     // Log the comprehensive audit
+   19742:     logOnboardingTruthExpressionAudit(onboardingTruthAudit)
+   19743:     
+   19744:     // [BUILDER-STALE-PROGRAM-REF-GATED] The original mutation targeted a
+   19745:     // `program` local that was renamed to `finalProgram` (declared later
+   19746:     // in this scope, so a forward reference would TDZ-throw). The audit
+   19747:     // was already emitted via `logOnboardingTruthExpressionAudit` above;
+   19748:     // the "store on program" branch was an additional debug echo.
+
+--- BUILDER ERROR 028 | line 20510, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(20510,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Suggested search anchors: number, SessionLength, TS2322, not, assignable
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 20498-20522:
+   20498:     })),
+   20499:     verdict: 'PHASE_K_STRESS_DISTRIBUTION_AUTHORITATIVE',
+   20500:   })
+   20501: 
+   20502:   const finalProgram: AdaptiveProgram = {
+   20503:     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+   20504:     createdAt: new Date().toISOString(),
+   20505:     primaryGoal,
+   20506:     secondaryGoal, // TASK 3: Store canonical secondary goal
+   20507:     goalLabel: GOAL_LABELS[primaryGoal],
+   20508:     experienceLevel,
+   20509:     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
+>> 20510:     sessionLength,
+   20511:     // TASK 3C: Store training path and selected skills for summary display
+   20512:     trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+   20513:     // [TASK 1 FIX] Store FULL canonical selectedSkills, not just represented subset
+   20514:     // This preserves the user's full onboarding intent for display truthfulness
+   20515:     selectedSkills: canonicalProfile.selectedSkills || [],
+   20516:     // [TASK 1 FIX] Also store the represented skills subset for accurate display distinction
+   20517:     representedSkills: builtAroundSkillsFinal,
+   20518:     goalCategories: canonicalProfile.goalCategories || [],
+   20519:     // TASK 5: Session duration mode - preserve adaptive time identity
+   20520:     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+   20521:     // TASK 1-4: Store expanded planner context for display and traceability
+   20522:     weightedSkillAllocation: weightedSkillAllocation.map(a => ({
+
+--- BUILDER ERROR 029 | line 20604, col 7 | TS2322 ---
+lib/adaptive-program-builder.ts(20604,7): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | null'.
+Suggested search anchors: string | null | undefined, string | null, TS2322, string, null, undefined, not, assignable
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 20592-20616:
+   20592:       focus: constraintInsight.focus,
+   20593:       explanation: constraintContext.explanation || constraintInsight.explanation,
+   20594:       // Enhanced constraint detection data
+   20595:       primaryConstraint: constraintContext.primaryConstraint,
+   20596:       secondaryConstraint: constraintContext.secondaryConstraint,
+   20597:       strongQualities: constraintContext.strongQualities,
+   20598:       volumeAdjustments: constraintContext.volumeAdjustments,
+   20599:     },
+   20600:     recoveryLevel: recoverySignal.level,
+   20601:     programRationale,
+   20602:     // [SESSION-STYLE-MATERIALITY] Store how session style materially affected generation
+   20603:     sessionStyleMateriality: {
+>> 20604:       styleRequested: expandedContext.sessionStylePreference,
+   20605:       styleMateriallyApplied: !!styleAdjustmentApplied,
+   20606:       adjustmentReason: styleAdjustmentReason,
+   20607:       exerciseCountAdjustment: styleAdjustmentApplied 
+   20608:         ? (durationConfig.maxExercises - baseDurationConfig.maxExercises) 
+   20609:         : 0,
+   20610:       accessoryInclusionAdjusted: styleAdjustmentApplied 
+   20611:         ? (durationConfig.includeAccessories !== baseDurationConfig.includeAccessories)
+   20612:         : false,
+   20613:     },
+   20614:     // [SUMMARY-TRUTH] Store enhanced summary truth data for display
+   20615:     summaryTruth: {
+   20616:       profileSelectedSkills: profileSelectedSkillsCanonical,
+
+--- BUILDER ERROR 030 | line 20661, col 3 | TS2739 ---
+lib/adaptive-program-builder.ts(20661,3): error TS2739: Type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; }' is missing the following properties from type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; fatigueLevel: string; coachingMessage: string; volumeReductionPercent: number; recommendedProtocols: string[]; }': fatigueLevel, coachingMessage, volumeReductionPercent, recommendedProtocols
+Suggested search anchors: { sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; }, { sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; fatigueLevel: string; coachingMessage: string; volumeReductionPercent: number; recommendedProtocols: string[]; }, TS2739, sessionIntents, SessionIntent, repetitionJustifications, RepetitionJustification, varietyScore
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 20649-20673:
+   20649:     recentCompletionRate: trainingFeedback.recentCompletionRate,
+   20650:     difficultyTrend: trainingFeedback.recentDifficultyTrend,
+   20651:     fatigueTrend: trainingFeedback.recentFatigueTrend,
+   20652:     adherenceQuality: trainingFeedback.adherenceQuality,
+   20653:     trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+   20654:     dataConfidence: trainingFeedback.dataConfidence,
+   20655:     progressionSuccessRate: trainingFeedback.progressionSuccessRate,
+   20656:     daysSinceLastWorkout: trainingFeedback.daysSinceLastWorkout,
+   20657:   } : undefined,
+   20658:   // Deload recommendation
+   20659:   deloadRecommendation,
+   20660:   // Session variety analysis
+>> 20661:   varietyAnalysis: {
+   20662:     sessionIntents,
+   20663:     repetitionJustifications,
+   20664:     varietyScore,
+   20665:   },
+   20666:   // TASK 4 & 6: Weekly progression and load balancing
+   20667:   // [post-validation-step] Step 6: Weekly progression context
+   20668:   weeklyProgressionContext: (() => {
+   20669:     postValidationStep = 'finalize_weekly_progression_context'
+   20670:     try {
+   20671:       // Determine current phase based on week number
+   20672:       const weekNumber = 1 // First generated week
+   20673:       const cycleLength = 4 // Standard 4-week mesocycle
+
+--- BUILDER ERROR 031 | line 20778, col 5 | TS2322 ---
+lib/adaptive-program-builder.ts(20778,5): error TS2322: Type '{ prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: TrainingAdjustment[]; } | { ...; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: { ...; }[];...'.
+Suggested search anchors: { prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: TrainingAdjustment[]; } | { ...; }, { prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "good" | ... 2 more ... | "insufficient"; adjustments: { ...; }[];..., TS2322, prioritization, primaryEmphasis, SkillKey, null, secondaryEmphasis
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 20766-20790:
+   20766:         `+${dip?.current?.addedWeight ?? Math.round((dip?.pr?.load ?? 0) * 0.7)} ${dip?.current?.unit || dip?.pr?.unit || 'lbs'}` : undefined,
+   20767:       dataSource,
+   20768:       summary: summaryParts.length > 0 ? summaryParts.join('; ') : 'No weighted benchmark data',
+   20769:     } : undefined
+   20770:   })(),
+   20771:   // Constraint improvement tracking (populated async - may be undefined initially)
+   20772:   constraintImprovementData,
+   20773:     // Training Principles Engine emphasis
+   20774:     trainingEmphasis,
+   20775:     // [post-validation-step] Step 8: Skill intelligence
+   20776:     // Unified Skill Intelligence Layer
+   20777:     // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Guard against null skillIntelligence
+>> 20778:     skillIntelligence: (() => {
+   20779:       postValidationStep = 'finalize_skill_intelligence'
+   20780:       return skillIntelligence ? {
+   20781:       prioritization: skillIntelligence.prioritization,
+   20782:       globalLimiters: skillIntelligence.globalLimiters,
+   20783:       dataQuality: skillIntelligence.dataQuality,
+   20784:       adjustments: intelligenceAdjustments?.slice(0, 3) || [], // Top 3 adjustments
+   20785:       } : {
+   20786:       prioritization: [],
+   20787:       globalLimiters: [],
+   20788:       dataQuality: 'insufficient' as const,
+   20789:       adjustments: [],
+   20790:       }
+
+--- BUILDER ERROR 032 | line 20938, col 13 | TS2367 ---
+lib/adaptive-program-builder.ts(20938,13): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "endurance" | "back_lever" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength"' and '"hspu"' have no overlap.
+Suggested search anchors: "strength" | "flexibility" | "endurance" | "back_lever" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength", "hspu", TS2367, This, comparison, appears, unintentional, because
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 20926-20950:
+   20926:         ? `${constraintInsight.label} is currently limiting your ${GOAL_LABELS[primaryGoal]} progress. SpartanLab is adjusting your program to prioritize this area.`
+   20927:         : 'No significant constraints detected. Continue your current approach.',
+   20928:     },
+   20929:     // Constraint Improvement Tracking - showing progress over time
+   20930:     constraintImprovement: constraintImprovementData || undefined,
+   20931:     // Unified Workout Reasoning Summary - explains WHY this workout was generated
+   20932:     workoutReasoningSummary: (() => {
+   20933:       try {
+   20934:         // Calculate skill readiness for primary goal
+   20935:         const skillType = primaryGoal === 'front_lever' ? 'front_lever'
+   20936:           : primaryGoal === 'planche' ? 'planche'
+   20937:           : primaryGoal === 'muscle_up' ? 'muscle_up'
+>> 20938:           : primaryGoal === 'hspu' ? 'hspu'
+   20939:           : primaryGoal === 'back_lever' ? 'back_lever'
+   20940:           : primaryGoal === 'l_sit' ? 'l_sit'
+   20941:           : null
+   20942: 
+   20943:         let readinessResult: CanonicalReadinessResult | null = null
+   20944:         if (skillType && profile) {
+   20945:           readinessResult = calculateReadinessFromProfile(skillType, profile)
+   20946:         }
+   20947: 
+   20948:         // Determine session type based on goal and calibration
+   20949:         const sessionType: WorkoutReasoningSummary['sessionType'] = 
+   20950:           deloadRecommendation?.shouldDeload ? 'deload'
+
+--- BUILDER ERROR 033 | line 20940, col 13 | TS2367 ---
+lib/adaptive-program-builder.ts(20940,13): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "endurance" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength"' and '"l_sit"' have no overlap.
+Suggested search anchors: "strength" | "flexibility" | "endurance" | "handstand_pushup" | "iron_cross" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "skill" | "abs" | "general" | "weighted_strength", "l_sit", TS2367, This, comparison, appears, unintentional, because
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 20928-20952:
+   20928:     },
+   20929:     // Constraint Improvement Tracking - showing progress over time
+   20930:     constraintImprovement: constraintImprovementData || undefined,
+   20931:     // Unified Workout Reasoning Summary - explains WHY this workout was generated
+   20932:     workoutReasoningSummary: (() => {
+   20933:       try {
+   20934:         // Calculate skill readiness for primary goal
+   20935:         const skillType = primaryGoal === 'front_lever' ? 'front_lever'
+   20936:           : primaryGoal === 'planche' ? 'planche'
+   20937:           : primaryGoal === 'muscle_up' ? 'muscle_up'
+   20938:           : primaryGoal === 'hspu' ? 'hspu'
+   20939:           : primaryGoal === 'back_lever' ? 'back_lever'
+>> 20940:           : primaryGoal === 'l_sit' ? 'l_sit'
+   20941:           : null
+   20942: 
+   20943:         let readinessResult: CanonicalReadinessResult | null = null
+   20944:         if (skillType && profile) {
+   20945:           readinessResult = calculateReadinessFromProfile(skillType, profile)
+   20946:         }
+   20947: 
+   20948:         // Determine session type based on goal and calibration
+   20949:         const sessionType: WorkoutReasoningSummary['sessionType'] = 
+   20950:           deloadRecommendation?.shouldDeload ? 'deload'
+   20951:           : fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'recovery'
+   20952:           : shouldPrioritizeSkills ? 'skill'
+
+--- BUILDER ERROR 034 | line 20968, col 11 | TS2345 ---
+lib/adaptive-program-builder.ts(20968,11): error TS2345: Argument of type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null' is not assignable to parameter of type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null'.
+Suggested search anchors: { primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null, { primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null, TS2345, primaryConstraint, string, secondaryConstraint, ConstraintCategory, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value shape, validate union strings before passing, convert null/undefined correctly, or map object fields locally. Do not widen public unions.
+Local context lines 20956-20980:
+   20956:         // Get first session exercises for exercise reasons
+   20957:         // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] `sessions[0].exercises`
+   20958:         // is `AdaptiveExercise[]` (flat) — `e.exercise` does not exist on
+   20959:         // that type and produced TS2339. Use the polymorphic id accessor
+   20960:         // already defined for SelectedExercise/AdaptiveExercise.
+   20961:         const firstSessionExercises = sessions[0]?.exercises?.slice(0, 5).map(e => ({
+   20962:           id: getExerciseId(e),
+   20963:           name: getExerciseName(e),
+   20964:         })) || []
+   20965: 
+   20966:         return buildWorkoutReasoningSummary(
+   20967:           readinessResult,
+>> 20968:           constraintInsight.hasInsight ? {
+   20969:             primaryConstraint: constraintInsight.label,
+   20970:             secondaryConstraint: constraintContext.secondaryConstraint || null,
+   20971:             protocolsAdded: deloadRecommendation?.recommendedProtocols || [],
+   20972:           } : null,
+   20973:           trainingEmphasis ? {
+   20974:             frameworkId: trainingEmphasis.primaryMethod,
+   20975:             frameworkName: trainingEmphasis.primaryMethod,
+   20976:           } : null,
+   20977:           skillIntelligence && skillIntelligence.dataQuality !== 'insufficient' ? {
+   20978:             confidence: skillIntelligence.dataQuality === 'excellent' ? 0.9
+   20979:               : skillIntelligence.dataQuality === 'good' ? 0.7
+   20980:               : 0.4,
+
+--- BUILDER ERROR 035 | line 21023, col 15 | TS2739 ---
+lib/adaptive-program-builder.ts(21023,15): error TS2739: Type '{ targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }' is missing the following properties from type 'ConstraintAwareInput': trainingStyle, styleProgrammingRules, missingCriticalEquipment
+Suggested search anchors: { targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }, ConstraintAwareInput, TS2739, targetMinutes, number, preferredMinutes, fatigueLevel, normal
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 21011-21035:
+   21011:         //   string literals no longer exist on `SessionLength`; map via
+   21012:         //   the boundary normalizer instead.
+   21013:         // - `fatigueDecision.decision` is the canonical field; the
+   21014:         //   legacy `overallDecision` was renamed and `straightArmFatigue`
+   21015:         //   / `overallFatigue` were never on the wrapper.
+   21016:         // - jointCautions canonical literals are 'wrists' / 'shoulders'
+   21017:         //   / 'elbows' (plural). Use plural reads.
+   21018:         const _availableMinutesForConstraint = isShortSession(sessionLength)
+   21019:           ? 30
+   21020:           : isMediumSession(sessionLength)
+   21021:             ? 45
+   21022:             : 60
+>> 21023:         const constraintInput: ConstraintAwareInput = {
+   21024:           targetMinutes: _availableMinutesForConstraint,
+   21025:           preferredMinutes: _availableMinutesForConstraint,
+   21026:           fatigueLevel: isReduceTrainingDecision(fatigueDecision)
+   21027:             ? 'fatigued'
+   21028:             : isDeloadTrainingDecision(fatigueDecision)
+   21029:               ? 'overtrained'
+   21030:               : 'normal',
+   21031:           straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
+   21032:           overallFatigue: getOverallFatigueSignal(fatigueDecision),
+   21033:           // [BUILDER-FATIGUE-DECISION-UNWRAP] `ConstraintAwareInput.fatigueDecision`
+   21034:           // expects `TrainingDecision | null`, but the local `fatigueDecision` is
+   21035:           // the wrapper `{ decision; shortGuidance; needsAttention } | null` —
+
+--- BUILDER ERROR 036 | line 21084, col 15 | TS2739 ---
+lib/adaptive-program-builder.ts(21084,15): error TS2739: Type '{ targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }' is missing the following properties from type 'ConstraintAwareInput': trainingStyle, styleProgrammingRules, missingCriticalEquipment
+Suggested search anchors: { targetMinutes: number; preferredMinutes: number; fatigueLevel: "normal" | "fatigued" | "overtrained"; straightArmFatigue: number; overallFatigue: number; fatigueDecision: TrainingDecision | null; ... 11 more ...; availableEquipment: EquipmentType[]; }, ConstraintAwareInput, TS2739, targetMinutes, number, preferredMinutes, fatigueLevel, normal
+Likely fix guidance: Missing required object fields. Add truthful local fallback fields only if this is a fallback/summary object, or use an existing complete object nearby.
+Local context lines 21072-21096:
+   21072:         return undefined
+   21073:       }
+   21074:     })(),
+   21075:     // Formatted Builder Reasoning - coach-style explanations
+   21076:     builderReasoning: (() => {
+   21077:       try {
+   21078:         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See note above.
+   21079:         const _availableMinutesForReasoning = isShortSession(sessionLength)
+   21080:           ? 30
+   21081:           : isMediumSession(sessionLength)
+   21082:             ? 45
+   21083:             : 60
+>> 21084:         const constraintInput: ConstraintAwareInput = {
+   21085:           targetMinutes: _availableMinutesForReasoning,
+   21086:           preferredMinutes: _availableMinutesForReasoning,
+   21087:           fatigueLevel: isReduceTrainingDecision(fatigueDecision)
+   21088:             ? 'fatigued'
+   21089:             : isDeloadTrainingDecision(fatigueDecision)
+   21090:               ? 'overtrained'
+   21091:               : 'normal',
+   21092:           straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
+   21093:           overallFatigue: getOverallFatigueSignal(fatigueDecision),
+   21094:           // [BUILDER-FATIGUE-DECISION-UNWRAP] same wrapper→inner-decision projection.
+   21095:           fatigueDecision: fatigueDecision?.decision ?? null,
+   21096:           jointCautions: profile?.jointCautions || [],
+
+--- BUILDER ERROR 037 | line 21117, col 45 | TS2554 ---
+lib/adaptive-program-builder.ts(21117,45): error TS2554: Expected 1 arguments, but got 2.
+Suggested search anchors: TS2554, Expected, arguments, but, got
+Likely fix guidance: Argument count mismatch. Match the local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+Local context lines 21105-21129:
+   21105:           secondaryLimiter: null,
+   21106:           limiterSeverity: profile?.weakestArea ? 60 : 0,
+   21107:           frameworkId: trainingEmphasis?.primaryMethod || null,
+   21108:           frameworkRules: null,
+   21109:           envelopeConfidence: 0.5,
+   21110:           envelopeLimits: null,
+   21111:           // [BUILDER-CONSTRAINT-INPUT-STYLE-FIELDS-DROPPED] same as above.
+   21112:           // [BUILDER-CONSTRAINT-INPUT-REQUIRED-EQUIPMENT-DROPPED] same as above.
+   21113:           availableEquipment: equipment,
+   21114:         }
+   21115:         
+   21116:     const analysis = analyzeConstraints(constraintInput)
+>> 21117:     return formatBuilderReasoning(analysis, primaryGoal)
+   21118:     } catch {
+   21119:     return undefined
+   21120:     }
+   21121:     })(),
+   21122:     // Skill Progression Graph position - current node in progression graph
+   21123:     // [BUILDER-STALE-DEBUG-IIFE-GATED] Referenced `canonicalReadiness`
+   21124:     // (un-declared local) and several stale profile fields. Catch arm
+   21125:     // already returned undefined, so gate to undefined.
+   21126:     skillGraphPosition: undefined,
+   21127:     // Exercise intelligence explanations - "why this exercise" for main movements
+   21128:     // [BUILDER-STALE-DEBUG-IIFE-GATED] Inner IIFE referenced the
+   21129:     // un-imported `SkillTarget` type alias. Catch arm returned undefined.
+
+--- BUILDER ERROR 038 | line 21140, col 49 | TS2339 ---
+lib/adaptive-program-builder.ts(21140,49): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Suggested search anchors: styleMode, { primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }, TS2339, does, not, exist, primaryMethod, string
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21128-21152:
+   21128:     // [BUILDER-STALE-DEBUG-IIFE-GATED] Inner IIFE referenced the
+   21129:     // un-imported `SkillTarget` type alias. Catch arm returned undefined.
+   21130:     exerciseExplanations: undefined,
+   21131:     // Session Structure - intelligent workout format selection
+   21132:     sessionStructure: (() => {
+   21133:       try {
+   21134:         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See top-of-file note.
+   21135:         const availableMinutes = isShortSession(sessionLength)
+   21136:           ? 30
+   21137:           : isMediumSession(sessionLength)
+   21138:             ? 45
+   21139:             : 60
+>> 21140:         const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
+   21141:         const frameworkId = trainingEmphasis?.primaryMethod || undefined
+   21142:         
+   21143:         // Determine if we should use a structured format
+   21144:         const shouldUseStructure = 
+   21145:           availableMinutes <= 30 || // Time-constrained
+   21146:           trainingStyle === 'endurance_focused' || // Density preference
+   21147:           (trainingEmphasis?.styleRules?.densityPreference === 'high') // High density preference
+   21148:         
+   21149:         if (!shouldUseStructure) {
+   21150:           return undefined // Use standard structure
+   21151:         }
+   21152:         
+
+--- BUILDER ERROR 039 | line 21147, col 30 | TS2339 ---
+lib/adaptive-program-builder.ts(21147,30): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Suggested search anchors: styleRules, { primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }, TS2339, does, not, exist, primaryMethod, string
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21135-21159:
+   21135:         const availableMinutes = isShortSession(sessionLength)
+   21136:           ? 30
+   21137:           : isMediumSession(sessionLength)
+   21138:             ? 45
+   21139:             : 60
+   21140:         const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
+   21141:         const frameworkId = trainingEmphasis?.primaryMethod || undefined
+   21142:         
+   21143:         // Determine if we should use a structured format
+   21144:         const shouldUseStructure = 
+   21145:           availableMinutes <= 30 || // Time-constrained
+   21146:           trainingStyle === 'endurance_focused' || // Density preference
+>> 21147:           (trainingEmphasis?.styleRules?.densityPreference === 'high') // High density preference
+   21148:         
+   21149:         if (!shouldUseStructure) {
+   21150:           return undefined // Use standard structure
+   21151:         }
+   21152:         
+   21153:         const structureInput = {
+   21154:           availableMinutes,
+   21155:           trainingStyle: trainingStyle as any,
+   21156:           frameworkId: frameworkId as any,
+   21157:           primaryGoal,
+   21158:           primaryWeakPoint: profile?.weakestArea as any,
+   21159:           fatigueLevel: isReduceTrainingDecision(fatigueDecision) || isDeloadTrainingDecision(fatigueDecision)
+
+--- BUILDER ERROR 040 | line 21163, col 52 | TS2339 ---
+lib/adaptive-program-builder.ts(21163,52): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+Suggested search anchors: styleRules, { primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }, TS2339, does, not, exist, primaryMethod, string
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21151-21175:
+   21151:         }
+   21152:         
+   21153:         const structureInput = {
+   21154:           availableMinutes,
+   21155:           trainingStyle: trainingStyle as any,
+   21156:           frameworkId: frameworkId as any,
+   21157:           primaryGoal,
+   21158:           primaryWeakPoint: profile?.weakestArea as any,
+   21159:           fatigueLevel: isReduceTrainingDecision(fatigueDecision) || isDeloadTrainingDecision(fatigueDecision)
+   21160:             ? 'fatigued'
+   21161:             : 'normal',
+   21162:           experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+>> 21163:           preferDensityTraining: trainingEmphasis?.styleRules?.densityPreference === 'high',
+   21164:           isDeloadWeek: isDeloadTrainingDecision(fatigueDecision),
+   21165:         }
+   21166:         
+   21167:         const result = selectSessionStructure(structureInput as any)
+   21168:         
+   21169:         // Apply envelope adjustments if needed
+   21170:         let adjustments: string[] = []
+   21171:         if (result.selectedStructure.structureType !== 'standard') {
+   21172:           const envelopeAdjusted = adjustStructureForEnvelope(
+   21173:             result.selectedStructure,
+   21174:             {
+   21175:               // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] `straightArmFatigue` no
+
+--- BUILDER ERROR 041 | line 21228, col 34 | TS2339 ---
+lib/adaptive-program-builder.ts(21228,34): error TS2339: Property 'weakPoints' does not exist on type 'ProgramConstraintContext'.
+Suggested search anchors: weakPoints, ProgramConstraintContext, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21216-21240:
+   21216:           secondaryGoalLabel: secondaryGoal ? (GOAL_LABELS[secondaryGoal as PrimaryGoal] || secondaryGoal) : undefined,  // TASK 6
+   21217:           scheduleMode: inputScheduleMode,
+   21218:           currentWeekFrequency: effectiveTrainingDays,
+   21219:           previousWeekFrequency: undefined, // Would come from previous program comparison
+   21220:           experienceLevel,
+   21221:           fatigueState: feedbackState.needsDeload ? 'high' : 
+   21222:                        feedbackState.fatigueScore >= 70 ? 'moderate' : 'low',
+   21223:           dataConfidence: trainingFeedback.dataConfidence,
+   21224:           trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+   21225:           adjustmentReasons: trainingFeedback.adjustmentReasons,
+   21226:           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
+   21227:   limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+>> 21228:   weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+   21229:   // TASK 6: Pass engine-grounded session distribution for truthful explanation
+   21230:   sessionDistribution,
+   21231:   durationLabel: resolveSessionBudget(
+   21232:     typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+   21233:   ).label,
+   21234:   }
+   21235:         
+   21236:         // Build session contexts from generated sessions
+   21237:         const sessionContexts: SessionContext[] = sessions.map((session, idx) => ({
+   21238:           dayNumber: idx + 1,
+   21239:           sessionTitle: session.dayLabel || `Day ${idx + 1}`,
+   21240:           primaryIntent: session.focusLabel || session.focus || 'Mixed',
+
+--- BUILDER ERROR 042 | line 21228, col 50 | TS7006 ---
+lib/adaptive-program-builder.ts(21228,50): error TS7006: Parameter 'wp' implicitly has an 'any' type.
+Suggested search anchors: wp, any, TS7006, Parameter, implicitly, has
+Likely fix guidance: Implicit any. Type the callback parameter from the immediate local array/object shape.
+Local context lines 21216-21240:
+   21216:           secondaryGoalLabel: secondaryGoal ? (GOAL_LABELS[secondaryGoal as PrimaryGoal] || secondaryGoal) : undefined,  // TASK 6
+   21217:           scheduleMode: inputScheduleMode,
+   21218:           currentWeekFrequency: effectiveTrainingDays,
+   21219:           previousWeekFrequency: undefined, // Would come from previous program comparison
+   21220:           experienceLevel,
+   21221:           fatigueState: feedbackState.needsDeload ? 'high' : 
+   21222:                        feedbackState.fatigueScore >= 70 ? 'moderate' : 'low',
+   21223:           dataConfidence: trainingFeedback.dataConfidence,
+   21224:           trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+   21225:           adjustmentReasons: trainingFeedback.adjustmentReasons,
+   21226:           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
+   21227:   limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+>> 21228:   weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+   21229:   // TASK 6: Pass engine-grounded session distribution for truthful explanation
+   21230:   sessionDistribution,
+   21231:   durationLabel: resolveSessionBudget(
+   21232:     typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+   21233:   ).label,
+   21234:   }
+   21235:         
+   21236:         // Build session contexts from generated sessions
+   21237:         const sessionContexts: SessionContext[] = sessions.map((session, idx) => ({
+   21238:           dayNumber: idx + 1,
+   21239:           sessionTitle: session.dayLabel || `Day ${idx + 1}`,
+   21240:           primaryIntent: session.focusLabel || session.focus || 'Mixed',
+
+--- BUILDER ERROR 043 | line 21366, col 7 | TS2353 ---
+lib/adaptive-program-builder.ts(21366,7): error TS2353: Object literal may only specify known properties, and 'sessionDurationMode' does not exist in type 'ProfileSnapshot'.
+Suggested search anchors: sessionDurationMode, ProfileSnapshot, TS2353, Object, literal, may, only, specify
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21354-21378:
+   21354:       
+   21355:       return diagnostics
+   21356:     })(),
+   21357:     // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
+   21358:     profileSnapshot: {
+   21359:       snapshotId: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+   21360:       createdAt: new Date().toISOString(),
+   21361:       primaryGoal: canonicalProfile.primaryGoal,
+   21362:       secondaryGoal: canonicalProfile.secondaryGoal,
+   21363:       experienceLevel: canonicalProfile.experienceLevel,
+   21364:       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+   21365:       sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+>> 21366:       sessionDurationMode: canonicalProfile.sessionDurationMode,
+   21367:       scheduleMode: canonicalProfile.scheduleMode,
+   21368:       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
+   21369:       jointCautions: canonicalProfile.jointCautions || [],
+   21370:       selectedSkills: canonicalProfile.selectedSkills || [],
+   21371:       // TASK 3C: Include training path and goal categories in snapshot
+   21372:       trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+   21373:       goalCategories: canonicalProfile.goalCategories || [],
+   21374:       selectedFlexibility: canonicalProfile.selectedFlexibility || [],
+   21375:       strengthBenchmarks: {
+   21376:         pullUpMax: canonicalProfile.pullUpMax,
+   21377:         dipMax: canonicalProfile.dipMax,
+   21378:         pushUpMax: canonicalProfile.pushUpMax,
+
+--- BUILDER ERROR 044 | line 21887, col 36 | TS2339 ---
+lib/adaptive-program-builder.ts(21887,36): error TS2339: Property 'sessionLength' does not exist on type 'ComposedPlannerInput'.
+Suggested search anchors: sessionLength, ComposedPlannerInput, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 21875-21899:
+   21875:   // ==========================================================================
+   21876:   // [PHASE 15B] TASK 5: DETERMINISTIC CORE BUILD AUDIT
+   21877:   // Same inputs should produce the same core weekly plan structure
+   21878:   // ==========================================================================
+   21879:   try {
+   21880:     // Build a deterministic signature from the core inputs
+   21881:     const coreInputSignature = {
+   21882:       primaryGoal,
+   21883:       secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+   21884:       experienceLevel,
+   21885:       trainingDays: effectiveTrainingDays,
+   21886:       scheduleMode: finalScheduleMode,
+>> 21887:       sessionLength: composedInput.sessionLength,
+   21888:       selectedSkillCount: expandedContext.selectedSkills.length,
+   21889:       equipmentHash: equipment.sort().join(',').slice(0, 50),
+   21890:     }
+   21891:     
+   21892:     // Extract core weekly structure (day identities, not accessory details)
+   21893:     const coreWeeklyStructure = sessions.map(s => ({
+   21894:       dayNumber: s.dayNumber,
+   21895:       focus: s.focus,
+   21896:       primarySkillExpressed: (s.exercises || []).some(e => 
+   21897:         e.name?.toLowerCase().includes(primaryGoal.replace(/_/g, ' ').split(' ')[0])
+   21898:       ),
+   21899:       exerciseCount: (s.exercises || []).length,
+
+--- BUILDER ERROR 045 | line 22684, col 16 | TS2339 ---
+lib/adaptive-program-builder.ts(22684,16): error TS2339: Property 'doctrineRuntimeContract' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: doctrineRuntimeContract, AdaptiveProgram, TS2339, does, not, exist
+Likely fix guidance: Stale property/object key. Remove/gate the stale field or map to the current nearby field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 22672-22696:
+   22672:     deferredSkillsCount: authoritativeMultiSkillIntentContract.deferredSkills.length,
+   22673:     skillsLostInPipeline: authoritativeMultiSkillIntentContract.auditTrail.skillsLostInPipeline,
+   22674:     skillsNarrowedReason: authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason,
+   22675:     verdict: authoritativeMultiSkillIntentContract.coverageVerdict === 'strong'
+   22676:       ? 'MULTI_SKILL_INTENT_STRONG'
+   22677:       : authoritativeMultiSkillIntentContract.coverageVerdict === 'adequate'
+   22678:         ? 'MULTI_SKILL_INTENT_ADEQUATE'
+   22679:         : 'MULTI_SKILL_INTENT_WEAK_REVIEW_NEEDED',
+   22680:   })
+   22681:   
+   22682:   // [DOCTRINE RUNTIME CONTRACT] Store doctrine contract on the program for UI access
+   22683:   if (doctrineRuntimeContract) {
+>> 22684:   finalProgram.doctrineRuntimeContract = doctrineRuntimeContract
+   22685:   console.log('[DOCTRINE-PROGRAM-ATTACHED]', {
+   22686:   available: doctrineRuntimeContract.available,
+   22687:   source: doctrineRuntimeContract.source,
+   22688:   influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+   22689:   hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+   22690:   verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
+   22691:   })
+   22692:   }
+   22693: 
+   22694:   // ==========================================================================
+   22695:   // [PHASE 4D — CAUSAL VERSION STAMP]
+   22696:   // ==========================================================================
+
+--- BUILDER ERROR 046 | line 23244, col 33 | TS2304 ---
+lib/adaptive-program-builder.ts(23244,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+Suggested search anchors: phase4iBlocksInjected, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 23232-23256:
+   23232:     // `executable` even on saved programs whose matrix proof fields drop
+   23233:     // through normalisation.
+   23234:     //
+   23235:     // Fail-soft: a derivation error never breaks generation.
+   23236:     // ===================================================================
+   23237:     try {
+   23238:       const { buildRulePopulationLedger } = await import(
+   23239:         '@/lib/program/rule-population-ledger-contract'
+   23240:       )
+   23241:       const phaseAB1Ledger = buildRulePopulationLedger({
+   23242:         matrix: phase4hMatrix,
+   23243:         cooldownFlexBridge: {
+>> 23244:           bridgeBlocksInjected: phase4iBlocksInjected,
+   23245:           bridgeSessionsInjected: phase4iSessionsInjected,
+   23246:         },
+   23247:       })
+   23248:       ;(finalProgram as unknown as { rulePopulationLedger?: unknown }).rulePopulationLedger =
+   23249:         phaseAB1Ledger
+   23250:       console.log('[PHASE-AB1-RULE-POPULATION-LEDGER]', {
+   23251:         verdict: phaseAB1Ledger.verdict,
+   23252:         headline: phaseAB1Ledger.headline,
+   23253:         categoriesExecutable: phaseAB1Ledger.totals.categoriesExecutable,
+   23254:         categoriesVisible: phaseAB1Ledger.totals.categoriesVisible,
+   23255:         categoriesMutated: phaseAB1Ledger.totals.categoriesMutated,
+   23256:         categoriesScoringOnly: phaseAB1Ledger.totals.categoriesScoringOnly,
+

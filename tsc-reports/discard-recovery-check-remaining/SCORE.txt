@@ -1,0 +1,88 @@
+===== DISCARD BAD RECOVERY LEFTOVER + CHECK REMAINING LOCAL FILES =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+HEAD: 58b85024
+Remote HEAD: 58b85024
+
+===== STATUS BEFORE DISCARD =====
+ M lib/back-lever-training-system.ts
+ M lib/program-exercise-selector.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== DISCARD RECOVERY-FATIGUE LOCAL CHANGE ONLY =====
+
+===== STATUS AFTER DISCARDING RECOVERY ONLY =====
+ M lib/back-lever-training-system.ts
+ M lib/program-exercise-selector.ts
+
+===== DIFF STAT FOR REMAINING LOCAL FILES =====
+ lib/back-lever-training-system.ts | 1 +
+ lib/program-exercise-selector.ts  | 6 +++---
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+===== DIFF FOR REMAINING LOCAL FILES =====
+diff --git a/lib/back-lever-training-system.ts b/lib/back-lever-training-system.ts
+index 6baac7da..b1560a71 100644
+--- a/lib/back-lever-training-system.ts
++++ b/lib/back-lever-training-system.ts
+@@ -890,6 +890,7 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
+     minimumFrequency: 2,
+     maximumFrequency: 4,
+     restBetweenSessions: 1,
++    rationale: 'Reduce session frequency only when fatigue warrants it',
+   },
+ 
+   sessionPlacement: {
+diff --git a/lib/program-exercise-selector.ts b/lib/program-exercise-selector.ts
+index 37428b07..c195abd3 100644
+--- a/lib/program-exercise-selector.ts
++++ b/lib/program-exercise-selector.ts
+@@ -5518,14 +5518,14 @@ function applyMaterialityScoreAdjustments(
+     // declared in `selectMainExercises`'s scope — this was a stale ref
+     // to an outer-builder context object. The canonical fallback is the
+     // existing local default: 'flexibility'.
+-    const rangeTrainingMode: RangeTrainingMode = 'flexibility'
++const rangeTrainingMode = 'flexibility' as RangeTrainingMode
+     const isRangeSkill = ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(primaryGoal)
+     const rangeSkill = isRangeSkill ? primaryGoal as RangeSkill : 'toe_touch'
+     
+     const includeFlexibilityRange =
+-      rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid'
++      ['flexibility', 'hybrid'].includes(rangeTrainingMode)
+     const includeMobilityRange =
+-      rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid'
++      ['mobility', 'hybrid'].includes(rangeTrainingMode)
+ 
+     if (includeFlexibilityRange) {
+       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
+
+===== SCORE WITH REMAINING LOCAL FILES =====
+Total with remaining local files: 297
+
+===== TEMPORARILY CHECK SCORE WITHOUT REMAINING LOCAL FILES =====
+Saved working directory and index state On v0/alericpetsch836-6923-6213db1c-2: temp-check-backlever-selector-leftovers
+Total without remaining local files: 299
+
+===== RESTORE REMAINING LOCAL FILES =====
+On branch v0/alericpetsch836-6923-6213db1c-2
+Your branch is up to date with 'origin/v0/alericpetsch836-6923-6213db1c-2'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   lib/back-lever-training-system.ts
+	modified:   lib/program-exercise-selector.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	TSC_CURRENT_OUTPUT.txt
+	backups/
+	tsc-reports/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (e49622df881459a59389045ae943d1e0f95882cd)
+
+===== DECISION SUMMARY =====
+With remaining local files: 297
+Without remaining local files: 299
+Delta if keeping remaining local files: 2 fewer diagnostics
+Recommendation: KEEP and commit remaining local files because they lower diagnostics.

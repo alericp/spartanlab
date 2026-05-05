@@ -1,0 +1,7 @@
+===== PART 5 — GUARDRAIL SEED =====
+VO should not diagnose. VO should execute.
+Use only selected mechanical clusters where exact patch recipe is provided.
+No broad repo scan. No scripts. No reports. No as any. No ts-ignore. No union widening. No adding shared type fields.
+If target needs type-owner investigation, block it and move on.
+Line drift: same file only, ±80 lines, exact anchor. If not found, block.
+Stop after listed targets, commit, and report diagnostics if tsc can run.

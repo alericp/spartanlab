@@ -1,0 +1,16 @@
+lib/program/skill-specific-truth-resolution.ts(269,62): error TS2538: Type 'unknown' cannot be used as an index type.
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(367,9): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(368,36): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(571,34): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(571,73): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.

@@ -1,0 +1,1500 @@
+===== PART 3 — CONTEXT TARGETS 001-060 =====
+
+--- CONTEXT 001 | lib/onboarding-service.ts:1355:31 | TS2339 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   1345:     // Safety: Use exercises array if blocks don't exist (correct property is trainingBlocks, not blocks)
+   1346:     const blocks = Array.isArray(session.trainingBlocks) ? session.trainingBlocks : []
+   1347:     const exercisesCount = Array.isArray(session.exercises) ? session.exercises.length : 0
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+>> 1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+
+--- CONTEXT 002 | lib/onboarding-service.ts:1356:48 | TS2339 ---
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   1346:     const blocks = Array.isArray(session.trainingBlocks) ? session.trainingBlocks : []
+   1347:     const exercisesCount = Array.isArray(session.exercises) ? session.exercises.length : 0
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+>> 1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+
+--- CONTEXT 003 | lib/onboarding-service.ts:1357:36 | TS2339 ---
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   1347:     const exercisesCount = Array.isArray(session.exercises) ? session.exercises.length : 0
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+>> 1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+   1367:     firstSession = {
+
+--- CONTEXT 004 | lib/onboarding-service.ts:1358:38 | TS2339 ---
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+>> 1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+   1367:     firstSession = {
+   1368:       title: session.focusLabel || session.dayLabel || 'Day 1',
+
+--- CONTEXT 005 | lib/onboarding-service.ts:1360:38 | TS2339 ---
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+>> 1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+   1367:     firstSession = {
+   1368:       title: session.focusLabel || session.dayLabel || 'Day 1',
+   1369:       estimatedMinutes: typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45,
+   1370:       primaryFocus,
+
+--- CONTEXT 006 | lib/unified-program-generation.ts:388:22 | TS2339 ---
+lib/unified-program-generation.ts(388,22): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   378:       notes: ['Focus on activation and position quality'],
+   379:       movementFamily: 'skill_isometric',
+   380:       isSubstitutable: false,
+   381:     })
+   382:   }
+   383:   
+   384:   // Add protocol exercises
+   385:   protocols.slice(0, 2).forEach(protocol => {
+   386:     exercises.push({
+   387:       id: protocol.id,
+>> 388:       name: protocol.name,
+   389:       sets: 2,
+   390:       reps: protocol.prescription || '8-12 reps',
+   391:       rest: '30s',
+   392:       notes: [protocol.rationale || ''],
+   393:       movementFamily: 'joint_integrity',
+   394:       isSubstitutable: true,
+   395:     })
+   396:   })
+   397:   
+   398:   return {
+
+--- CONTEXT 007 | lib/unified-program-generation.ts:654:24 | TS2339 ---
+lib/unified-program-generation.ts(654,24): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+   644:     notes: ['Hold each stretch 30-60 seconds', 'Focus on worked muscle groups'],
+   645:     movementFamily: 'mobility',
+   646:     isSubstitutable: false,
+   647:   })
+   648:   
+   649:   // Add recovery protocols
+   650:   if (includeExtra) {
+   651:     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
+   652:       exercises.push({
+   653:         id: protocol.id,
+>> 654:         name: protocol.name,
+   655:         sets: 1,
+   656:         reps: protocol.prescription || '2 minutes',
+   657:         rest: '-',
+   658:         notes: [protocol.rationale || 'Recovery support'],
+   659:         movementFamily: 'mobility',
+   660:         isSubstitutable: true,
+   661:       })
+   662:     })
+   663:   }
+   664:   
+
+--- CONTEXT 008 | lib/readiness/skill-readiness.ts:2672:33 | TS2454 ---
+lib/readiness/skill-readiness.ts(2672,33): error TS2454: Variable 'result' is used before being assigned.
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+   2662:     case 'muscle-up':
+   2663:       result = calculateMuscleUpReadiness(inputs as MuscleUpInputs)
+   2664:       skillName = 'Muscle-Up'
+   2665:       break
+   2666:     case 'hspu':
+   2667:       result = calculateHSPUReadiness(inputs as HSPUInputs)
+   2668:       skillName = 'Handstand Push-Up'
+   2669:       break
+   2670:   }
+   2671:   
+>> 2672:   const tier = getReadinessTier(result.score)
+   2673:   const weakPoints = extractWeakPoints(result.breakdown)
+   2674:   
+   2675:   return {
+   2676:     skillType,
+   2677:     skillName,
+   2678:     score: result.score,
+   2679:     tier,
+   2680:     primaryWeakPoint: weakPoints[0] || null,
+   2681:     topWeakPoints: weakPoints.slice(0, 3),
+   2682:     suggestion: result.recommendation,
+
+--- CONTEXT 009 | lib/readiness/skill-readiness.ts:2673:40 | TS2454 ---
+lib/readiness/skill-readiness.ts(2673,40): error TS2454: Variable 'result' is used before being assigned.
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+   2663:       result = calculateMuscleUpReadiness(inputs as MuscleUpInputs)
+   2664:       skillName = 'Muscle-Up'
+   2665:       break
+   2666:     case 'hspu':
+   2667:       result = calculateHSPUReadiness(inputs as HSPUInputs)
+   2668:       skillName = 'Handstand Push-Up'
+   2669:       break
+   2670:   }
+   2671:   
+   2672:   const tier = getReadinessTier(result.score)
+>> 2673:   const weakPoints = extractWeakPoints(result.breakdown)
+   2674:   
+   2675:   return {
+   2676:     skillType,
+   2677:     skillName,
+   2678:     score: result.score,
+   2679:     tier,
+   2680:     primaryWeakPoint: weakPoints[0] || null,
+   2681:     topWeakPoints: weakPoints.slice(0, 3),
+   2682:     suggestion: result.recommendation,
+   2683:     breakdown: result.breakdown,
+
+--- CONTEXT 010 | lib/readiness/skill-readiness.ts:2678:12 | TS2454 ---
+lib/readiness/skill-readiness.ts(2678,12): error TS2454: Variable 'result' is used before being assigned.
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+   2668:       skillName = 'Handstand Push-Up'
+   2669:       break
+   2670:   }
+   2671:   
+   2672:   const tier = getReadinessTier(result.score)
+   2673:   const weakPoints = extractWeakPoints(result.breakdown)
+   2674:   
+   2675:   return {
+   2676:     skillType,
+   2677:     skillName,
+>> 2678:     score: result.score,
+   2679:     tier,
+   2680:     primaryWeakPoint: weakPoints[0] || null,
+   2681:     topWeakPoints: weakPoints.slice(0, 3),
+   2682:     suggestion: result.recommendation,
+   2683:     breakdown: result.breakdown,
+   2684:   }
+   2685: }
+   2686: 
+   2687: // =============================================================================
+   2688: // UTILITY FUNCTIONS
+
+--- CONTEXT 011 | lib/readiness/skill-readiness.ts:2682:17 | TS2454 ---
+lib/readiness/skill-readiness.ts(2682,17): error TS2454: Variable 'result' is used before being assigned.
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+   2672:   const tier = getReadinessTier(result.score)
+   2673:   const weakPoints = extractWeakPoints(result.breakdown)
+   2674:   
+   2675:   return {
+   2676:     skillType,
+   2677:     skillName,
+   2678:     score: result.score,
+   2679:     tier,
+   2680:     primaryWeakPoint: weakPoints[0] || null,
+   2681:     topWeakPoints: weakPoints.slice(0, 3),
+>> 2682:     suggestion: result.recommendation,
+   2683:     breakdown: result.breakdown,
+   2684:   }
+   2685: }
+   2686: 
+   2687: // =============================================================================
+   2688: // UTILITY FUNCTIONS
+   2689: // =============================================================================
+   2690: 
+   2691: /**
+   2692:  * Get color class for readiness score
+
+--- CONTEXT 012 | lib/readiness/skill-readiness.ts:2683:16 | TS2454 ---
+lib/readiness/skill-readiness.ts(2683,16): error TS2454: Variable 'result' is used before being assigned.
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+   2673:   const weakPoints = extractWeakPoints(result.breakdown)
+   2674:   
+   2675:   return {
+   2676:     skillType,
+   2677:     skillName,
+   2678:     score: result.score,
+   2679:     tier,
+   2680:     primaryWeakPoint: weakPoints[0] || null,
+   2681:     topWeakPoints: weakPoints.slice(0, 3),
+   2682:     suggestion: result.recommendation,
+>> 2683:     breakdown: result.breakdown,
+   2684:   }
+   2685: }
+   2686: 
+   2687: // =============================================================================
+   2688: // UTILITY FUNCTIONS
+   2689: // =============================================================================
+   2690: 
+   2691: /**
+   2692:  * Get color class for readiness score
+   2693:  */
+
+--- CONTEXT 013 | lib/strength-score-engine.ts:576:50 | TS2554 ---
+lib/strength-score-engine.ts(576,50): error TS2554: Expected 6 arguments, but got 5.
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+   566:       weighted: Math.round(challengeResult.score * WEIGHTS.challenges * 10),
+   567:       weight: WEIGHTS.challenges,
+   568:       label: 'Challenges',
+   569:       description: challengeResult.totalBoost > 0 
+   570:         ? `+${challengeResult.totalBoost} bonus points`
+   571:         : 'Complete challenges for bonus'
+   572:     }
+   573:   ]
+   574:   
+   575:   // Generate explanation and focus areas
+>> 576:   const { explanation, focusAreas, strengths } = generateScoreExplanation(
+   577:     skillResult, strengthResult, readinessResult, consistencyResult, level
+   578:   )
+   579:   
+   580:   // [baseline-vs-earned] ISSUE C: Track baseline vs earned contributions
+   581:   const truthSummary = getBaselineVsEarnedSummary()
+   582:   const earnedWorkouts = getTrustedWorkoutLogs()
+   583:   
+   584:   // Estimate baseline contribution (skill/strength scores without earned workouts)
+   585:   const hasOnlyBaseline = truthSummary.hasBaselineOnly
+   586:   const baselineContribution = hasOnlyBaseline ? Math.round((skillResult.score + strengthResult.score) / 2) : 0
+
+--- CONTEXT 014 | lib/unified-coaching-engine.ts:437:43 | TS2554 ---
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+   427: // =============================================================================
+   428: // STEP 1: ATHLETE CONTEXT
+   429: // =============================================================================
+   430: 
+   431: async function loadAthleteContext(userId: string): Promise<AthleteContext> {
+   432:   // CANONICAL FIX: Use unified canonical profile as primary truth
+   433:   const canonical = getCanonicalProfile()
+   434:   logCanonicalProfileState('loadAthleteContext')
+   435:   
+   436:   // Legacy reads for backward compatibility (async sources)
+>> 437:   const profile = await getAthleteProfile(userId)
+   438:   const onboarding = await getOnboardingProfile(userId)
+   439:   
+   440:   // Load training style profile from DB (if exists)
+   441:   const styleProfileFromDb = await getTrainingStyleProfile(userId)
+   442:   
+   443:   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
+   444:   const equipment = canonical.equipmentAvailable.length > 0 
+   445:     ? canonical.equipmentAvailable 
+   446:     : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
+   447:   const equipmentProfile = analyzeEquipmentProfile(equipment)
+
+--- CONTEXT 015 | lib/unified-coaching-engine.ts:438:49 | TS2554 ---
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+   428: // STEP 1: ATHLETE CONTEXT
+   429: // =============================================================================
+   430: 
+   431: async function loadAthleteContext(userId: string): Promise<AthleteContext> {
+   432:   // CANONICAL FIX: Use unified canonical profile as primary truth
+   433:   const canonical = getCanonicalProfile()
+   434:   logCanonicalProfileState('loadAthleteContext')
+   435:   
+   436:   // Legacy reads for backward compatibility (async sources)
+   437:   const profile = await getAthleteProfile(userId)
+>> 438:   const onboarding = await getOnboardingProfile(userId)
+   439:   
+   440:   // Load training style profile from DB (if exists)
+   441:   const styleProfileFromDb = await getTrainingStyleProfile(userId)
+   442:   
+   443:   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
+   444:   const equipment = canonical.equipmentAvailable.length > 0 
+   445:     ? canonical.equipmentAvailable 
+   446:     : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
+   447:   const equipmentProfile = analyzeEquipmentProfile(equipment)
+   448:   
+
+--- CONTEXT 016 | lib/unified-coaching-engine.ts:733:50 | TS2554 ---
+lib/unified-coaching-engine.ts(733,50): error TS2554: Expected 0 arguments, but got 1.
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+   723: // =============================================================================
+   724: 
+   725: async function buildFatigueContext(
+   726:   userId: string,
+   727:   athleteContext: AthleteContext
+   728: ): Promise<FatigueContext> {
+   729:   // Get fatigue decision
+   730:   const trainingDecision = getQuickFatigueDecision()
+   731:   
+   732:   // Get recovery signal
+>> 733:   const recoverySignal = calculateRecoverySignal(userId)
+   734:   
+   735:   // Get deload recommendation
+   736:   const deloadRecommendation = await getDeloadRecommendation(userId)
+   737:   
+   738:   // Determine fatigue level
+   739:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   740:   
+   741:   // Calculate session adjustments
+   742:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   743:   
+
+--- CONTEXT 017 | lib/unified-coaching-engine.ts:736:38 | TS2554 ---
+lib/unified-coaching-engine.ts(736,38): error TS2554: Expected 4-5 arguments, but got 1.
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+   726:   userId: string,
+   727:   athleteContext: AthleteContext
+   728: ): Promise<FatigueContext> {
+   729:   // Get fatigue decision
+   730:   const trainingDecision = getQuickFatigueDecision()
+   731:   
+   732:   // Get recovery signal
+   733:   const recoverySignal = calculateRecoverySignal(userId)
+   734:   
+   735:   // Get deload recommendation
+>> 736:   const deloadRecommendation = await getDeloadRecommendation(userId)
+   737:   
+   738:   // Determine fatigue level
+   739:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   740:   
+   741:   // Calculate session adjustments
+   742:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   743:   
+   744:   return {
+   745:     fatigueLevel,
+   746:     recoveryLevel: recoverySignal.level,
+
+--- CONTEXT 018 | lib/engine/index.ts:354:3 | TS2305 ---
+lib/engine/index.ts(354,3): error TS2305: Module '"../skill-readiness"' has no exported member 'quickReadinessCheck'.
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+   344:   calculateAllSkillReadiness,
+   345:   analyzeSkillProfile,
+   346:   getSkillPrerequisites,
+   347:   getSupportedSkills,
+   348:   interpretReadinessScore,
+   349:   getRecommendedFocus,
+   350:   SKILL_PREREQUISITES,
+   351:   
+   352:   // Engine API
+   353:   SkillReadinessEngine,
+>> 354:   quickReadinessCheck,
+   355:   getPrimaryLimiter,
+   356:   meetsBaselineRequirements,
+   357:   getTrainingRecommendations,
+   358:   
+   359:   // Prerequisite Data
+   360:   SKILL_PREREQUISITE_PROFILES,
+   361:   getPrerequisiteProfile,
+   362:   getAllPrerequisiteProfiles,
+   363:   getSkillsByDifficulty,
+   364:   getCoachingNotes,
+
+--- CONTEXT 019 | lib/engine/index.ts:355:3 | TS2305 ---
+lib/engine/index.ts(355,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getPrimaryLimiter'.
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+   345:   analyzeSkillProfile,
+   346:   getSkillPrerequisites,
+   347:   getSupportedSkills,
+   348:   interpretReadinessScore,
+   349:   getRecommendedFocus,
+   350:   SKILL_PREREQUISITES,
+   351:   
+   352:   // Engine API
+   353:   SkillReadinessEngine,
+   354:   quickReadinessCheck,
+>> 355:   getPrimaryLimiter,
+   356:   meetsBaselineRequirements,
+   357:   getTrainingRecommendations,
+   358:   
+   359:   // Prerequisite Data
+   360:   SKILL_PREREQUISITE_PROFILES,
+   361:   getPrerequisiteProfile,
+   362:   getAllPrerequisiteProfiles,
+   363:   getSkillsByDifficulty,
+   364:   getCoachingNotes,
+   365:   getInjuryPreventionTips,
+
+--- CONTEXT 020 | lib/engine/index.ts:356:3 | TS2305 ---
+lib/engine/index.ts(356,3): error TS2305: Module '"../skill-readiness"' has no exported member 'meetsBaselineRequirements'.
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+   346:   getSkillPrerequisites,
+   347:   getSupportedSkills,
+   348:   interpretReadinessScore,
+   349:   getRecommendedFocus,
+   350:   SKILL_PREREQUISITES,
+   351:   
+   352:   // Engine API
+   353:   SkillReadinessEngine,
+   354:   quickReadinessCheck,
+   355:   getPrimaryLimiter,
+>> 356:   meetsBaselineRequirements,
+   357:   getTrainingRecommendations,
+   358:   
+   359:   // Prerequisite Data
+   360:   SKILL_PREREQUISITE_PROFILES,
+   361:   getPrerequisiteProfile,
+   362:   getAllPrerequisiteProfiles,
+   363:   getSkillsByDifficulty,
+   364:   getCoachingNotes,
+   365:   getInjuryPreventionTips,
+   366:   
+
+--- CONTEXT 021 | lib/engine/index.ts:357:3 | TS2305 ---
+lib/engine/index.ts(357,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getTrainingRecommendations'.
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+   347:   getSupportedSkills,
+   348:   interpretReadinessScore,
+   349:   getRecommendedFocus,
+   350:   SKILL_PREREQUISITES,
+   351:   
+   352:   // Engine API
+   353:   SkillReadinessEngine,
+   354:   quickReadinessCheck,
+   355:   getPrimaryLimiter,
+   356:   meetsBaselineRequirements,
+>> 357:   getTrainingRecommendations,
+   358:   
+   359:   // Prerequisite Data
+   360:   SKILL_PREREQUISITE_PROFILES,
+   361:   getPrerequisiteProfile,
+   362:   getAllPrerequisiteProfiles,
+   363:   getSkillsByDifficulty,
+   364:   getCoachingNotes,
+   365:   getInjuryPreventionTips,
+   366:   
+   367:   // Validation
+
+--- CONTEXT 022 | lib/program/db-truth-scoring-bridge.ts:253:37 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+   243:   
+   244:   // 4. TRAINING RESPONSE MODIFIERS
+   245:   if (bundle.trainingResponse.meta.available) {
+   246:     sourceSections.push('training_response')
+   247:     
+   248:     if (bundle.trainingResponse.hasEarnedHistory) {
+   249:       // Adherence pattern affects exercise complexity tolerance
+   250:       const adherence = bundle.trainingResponse.recentAdherencePattern
+   251:       modifiers.adherenceModifier = adherence === 'consistent' ? 5 :
+   252:                                     adherence === 'improving' ? 3 :
+>> 253:                                     adherence === 'declining' ? -5 :
+   254:                                     adherence === 'sporadic' ? -8 : 0
+   255:       
+   256:       // Consistency signal affects fatigue-sensitive selections
+   257:       const consistency = bundle.trainingResponse.consistencySignal
+   258:       modifiers.fatigueRiskModifier = consistency === 'high' ? 5 :
+   259:                                        consistency === 'medium' ? 0 :
+   260:                                        consistency === 'low' ? -10 : 0
+   261:     }
+   262:   }
+   263:   
+
+--- CONTEXT 023 | lib/program/db-truth-scoring-bridge.ts:470:9 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+   460:       calibration.setsReason = 'reduced_sets_for_developing_strength'
+   461:     }
+   462:   }
+   463:   
+   464:   // 3. TRAINING RESPONSE CALIBRATION
+   465:   if (bundle.trainingResponse.meta.available && bundle.trainingResponse.hasEarnedHistory) {
+   466:     sourceSections.push('training_response')
+   467:     
+   468:     const adherence = bundle.trainingResponse.recentAdherencePattern
+   469:     
+>> 470:     if (adherence === 'declining' || adherence === 'sporadic') {
+   471:       // Poor adherence = reduce volume to improve completion
+   472:       calibration.setsModifier = Math.min(calibration.setsModifier, -1)
+   473:       calibration.setsConfidence = 'medium'
+   474:       calibration.setsReason = 'reduced_volume_for_adherence_recovery'
+   475:     } else if (adherence === 'consistent') {
+   476:       // Good adherence = can handle normal or slightly higher volume
+   477:       calibration.setsModifier = Math.max(calibration.setsModifier, 0)
+   478:       if (calibration.setsReason === 'no_db_truth') {
+   479:         calibration.setsReason = 'consistent_adherence_maintains_volume'
+   480:         calibration.setsConfidence = 'low'
+
+--- CONTEXT 024 | lib/program/skill-specific-truth-resolution.ts:380:9 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+   370:     
+   371:     if (hasPatternConstraint) {
+   372:       response.painOrDiscomfortReported = true
+   373:       response.recentTolerance = 'poor'
+   374:     }
+   375:   }
+   376:   
+   377:   // Check training response for completion/adherence signals
+   378:   if (bundle.trainingResponse?.meta?.available) {
+   379:     const adherence = bundle.trainingResponse.recentAdherencePattern
+>> 380:     if (adherence === 'declining' || adherence === 'sporadic') {
+   381:       response.lastSessionQuality = 'partial'
+   382:       response.recoveryAdequate = false
+   383:     } else if (adherence === 'consistent') {
+   384:       response.lastSessionQuality = 'completed'
+   385:     }
+   386:   }
+   387:   
+   388:   // Determine recommended action based on signals
+   389:   response.recommendedAction = determinePatternAction(response)
+   390:   
+
+--- CONTEXT 025 | lib/program/skill-specific-truth-resolution.ts:552:7 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+   542:     const envelope = envelopes[pattern]
+   543:     if (envelope?.performanceTrend) {
+   544:       if (envelope.performanceTrend === 'declining') return 'poor'
+   545:       if (envelope.performanceTrend === 'improving') return 'good'
+   546:       if (envelope.performanceTrend === 'stable') return 'moderate'
+   547:     }
+   548:   }
+   549:   
+   550:   // Fall back to adherence pattern
+   551:   const adherence = bundle.trainingResponse?.recentAdherencePattern
+>> 552:   if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+   553:   if (adherence === 'consistent') return 'good'
+   554:   if (adherence === 'improving') return 'moderate'
+   555:   
+   556:   return 'unknown'
+   557: }
+   558: 
+   559: function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
+   560:   // Infer from consistency signal
+   561:   const consistency = bundle.trainingResponse?.consistencySignal
+   562:   if (consistency === 'high') return 0.9
+
+--- CONTEXT 026 | lib/doctrine-to-output-verification.ts:531:23 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+   521:     const reps = ex.reps || 0
+   522:     const holdTime = ex.holdTime || 0
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+   540:   const totalChecked = wellDosedCount + oddDosageCount
+   541:   const dosageRatio = totalChecked > 0 ? wellDosedCount / totalChecked : 1
+
+--- CONTEXT 027 | lib/doctrine-to-output-verification.ts:531:47 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,47): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+   521:     const reps = ex.reps || 0
+   522:     const holdTime = ex.holdTime || 0
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+   540:   const totalChecked = wellDosedCount + oddDosageCount
+   541:   const dosageRatio = totalChecked > 0 ? wellDosedCount / totalChecked : 1
+
+--- CONTEXT 028 | lib/doctrine-to-output-verification.ts:531:62 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,62): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+   521:     const reps = ex.reps || 0
+   522:     const holdTime = ex.holdTime || 0
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+   540:   const totalChecked = wellDosedCount + oddDosageCount
+   541:   const dosageRatio = totalChecked > 0 ? wellDosedCount / totalChecked : 1
+
+--- CONTEXT 029 | lib/flexible-schedule-engine.ts:62:3 | TS2305 ---
+lib/flexible-schedule-engine.ts(62,3): error TS2305: Module '"./athlete-profile"' has no exported member 'PrimaryGoal'.
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+   52:  * 3. Intensity / RPE / density / method adjustment
+   53:  * 4. Progression difficulty regression or advancement
+   54:  * 5. Recovery emphasis changes / spacing changes
+   55:  * 6. Weekly frequency contraction/expansion (ONLY when evidence justifies)
+   56:  * 
+   57:  * Do NOT make frequency the first/only adjustment lever.
+   58:  * Holistic workload architecture should adapt before session count changes.
+   59:  */
+   60: 
+   61: import type { 
+>> 62:   PrimaryGoal, 
+   63:   ExperienceLevel,
+   64:   JointCaution,
+   65:   RecoveryProfile,
+   66: } from './athlete-profile'
+   67: import { recordIntegrationProof } from './engine-integration-proof'
+   68: 
+   69: // =============================================================================
+   70: // TYPES
+   71: // =============================================================================
+   72: 
+
+--- CONTEXT 030 | lib/flexible-schedule-engine.ts:63:3 | TS2305 ---
+lib/flexible-schedule-engine.ts(63,3): error TS2305: Module '"./athlete-profile"' has no exported member 'ExperienceLevel'.
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+   53:  * 4. Progression difficulty regression or advancement
+   54:  * 5. Recovery emphasis changes / spacing changes
+   55:  * 6. Weekly frequency contraction/expansion (ONLY when evidence justifies)
+   56:  * 
+   57:  * Do NOT make frequency the first/only adjustment lever.
+   58:  * Holistic workload architecture should adapt before session count changes.
+   59:  */
+   60: 
+   61: import type { 
+   62:   PrimaryGoal, 
+>> 63:   ExperienceLevel,
+   64:   JointCaution,
+   65:   RecoveryProfile,
+   66: } from './athlete-profile'
+   67: import { recordIntegrationProof } from './engine-integration-proof'
+   68: 
+   69: // =============================================================================
+   70: // TYPES
+   71: // =============================================================================
+   72: 
+   73: export type ScheduleMode = 'static' | 'flexible'
+
+--- CONTEXT 031 | lib/unified-readiness-integration.ts:25:15 | TS2305 ---
+lib/unified-readiness-integration.ts(25,15): error TS2305: Module '"./athlete-profile"' has no exported member 'AthleteProfile'.
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+   15: import {
+   16:   calculateCanonicalReadiness,
+   17:   calculateReadinessFromProfile,
+   18:   calculateAllSkillReadiness,
+   19:   type CanonicalReadinessResult,
+   20:   type SkillType,
+   21:   type LimitingFactor,
+   22:   type ReadinessComponentScores,
+   23:   LIMITING_FACTOR_LABELS,
+   24: } from './readiness/canonical-readiness-engine'
+>> 25: import type { AthleteProfile } from './athlete-profile'
+   26: import type { AthleteCalibration } from './athlete-calibration'
+   27: 
+   28: // =============================================================================
+   29: // UNIFIED SKILL READINESS SCORE - Canonical output for all consumers
+   30: // =============================================================================
+   31: 
+   32: /**
+   33:  * Unified SkillReadinessScore - the canonical readiness output
+   34:  * This is the shared structure that ALL AI engines should consume
+   35:  */
+
+--- CONTEXT 032 | lib/performance-envelope-engine.ts:16:31 | TS2305 ---
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+   6:  * weekly volume, and fatigue tolerance by movement family and goal type.
+   7:  * 
+   8:  * KEY DESIGN PRINCIPLES:
+   9:  * - Movement-family specific (not one global envelope)
+   10:  * - Goal-type aware (skill vs strength vs hypertrophy responses differ)
+   11:  * - Confidence-tracked (low data = conservative recommendations)
+   12:  * - Deterministic and explainable (no random AI outputs)
+   13:  * - Learns gradually (doesn't overreact to single workouts)
+   14:  */
+   15: 
+>> 16: import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
+   17: 
+   18: export type DensityLevel = 'low_density' | 'moderate_density' | 'high_density'
+   19: 
+   20: /**
+   21:  * Granular rep zone classification for better inference
+   22:  */
+   23: export type RepZone = 
+   24:   | 'strength_low'    // 1-3 reps
+   25:   | 'strength_mid'    // 4-6 reps  
+   26:   | 'hypertrophy'     // 7-10 reps
+
+--- CONTEXT 033 | lib/performance-envelope-service.ts:21:31 | TS2305 ---
+lib/performance-envelope-service.ts(21,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+   11:   TrainingResponseSignal, 
+   12:   DensityLevel,
+   13:   RepZone,
+   14: } from './performance-envelope-engine'
+   15: import { 
+   16:   analyzePerformanceEnvelope, 
+   17:   updateEnvelopeWithSignals,
+   18:   applyFatigueFeedbackToEnvelope,
+   19:   MOVEMENT_FAMILY_FATIGUE_DEFAULTS,
+   20: } from './performance-envelope-engine'
+>> 21: import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
+   22: 
+   23: // [PERFORMANCE-ENVELOPE-SERVICE-RE-EXPORT]
+   24: // `getEnvelopeBasedRecommendations` is the canonical envelope→recommendation
+   25: // derivation function and is implemented in `performance-envelope-engine.ts`
+   26: // (the pure-logic engine that owns rep-zone / volume / density inference).
+   27: // Multiple callers (`lib/unified-coaching-engine.ts:15`,
+   28: // `lib/adaptive-program-builder.ts:416`) historically import it through
+   29: // this *service* module — which is the public API surface for envelope
+   30: // integration — alongside `getAthleteEnvelopes` and `PerformanceEnvelope`.
+   31: // That split caused TS2305 ("no exported member") because the import
+
+--- CONTEXT 034 | lib/workout-feedback-integration.ts:9:31 | TS2305 ---
+lib/workout-feedback-integration.ts(9,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+   1: // Workout Feedback Integration
+   2: // Closes the loop by processing workout logs and updating all relevant engine systems
+   3: // Ensures the AI learns from actual athlete behavior
+   4: 
+   5: import { recordSignal, type TrainingResponseSignal } from './performance-envelope-service'
+   6: import { type RepZone, type DensityLevel } from './performance-envelope-engine'
+   7: import { saveSkillState, type SkillKey, type SkillStateInput } from './skill-state-service'
+   8: import { getExerciseClassification } from './exercise-classification-registry'
+>> 9: import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
+   10: import { 
+   11:   getActiveProgramVersion, 
+   12:   type ProgramVersion 
+   13: } from './program-version-service'
+   14: import { 
+   15:   getWeeklyVolumeForFamily, 
+   16:   getWeeklySessionCountForFamily 
+   17: } from './volume-analyzer'
+   18: 
+   19: // =============================================================================
+
+--- CONTEXT 035 | lib/program-state-contract.ts:195:97 | TS2339 ---
+lib/program-state-contract.ts(195,97): error TS2339: Property 'equipment' does not exist on type 'AdaptiveProgram'.
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+   185: ): boolean {
+   186:   if (!activeProgram) return true
+   187:   
+   188:   // Check key fields that affect program structure
+   189:   const keyFieldsChanged = [
+   190:     currentProfile.primaryGoal !== activeProgram.primaryGoal,
+   191:     currentProfile.secondaryGoal !== (activeProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
+   192:     currentProfile.trainingDaysPerWeek !== activeProgram.trainingDaysPerWeek,
+   193:     currentProfile.sessionLengthMinutes !== activeProgram.sessionLength,
+   194:     currentProfile.scheduleMode !== (activeProgram as unknown as { scheduleMode?: string }).scheduleMode,
+>> 195:     JSON.stringify(currentProfile.equipmentAvailable?.sort()) !== JSON.stringify((activeProgram.equipment || []).sort()),
+   196:     JSON.stringify(currentProfile.jointCautions?.sort()) !== JSON.stringify((activeProgram.jointCautions || []).sort()),
+   197:   ]
+   198:   
+   199:   return keyFieldsChanged.some(changed => changed)
+   200: }
+   201: 
+   202: // =============================================================================
+   203: // GENERATION INPUT BUILDER
+   204: // =============================================================================
+   205: 
+
+--- CONTEXT 036 | lib/server/authoritative-program-generation.ts:1294:40 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1294,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+   1284:       // Identity fields
+   1285:       primaryGoal: canonicalProfileTyped.primaryGoal || null,
+   1286:       secondaryGoal: canonicalProfileTyped.secondaryGoal || null,
+   1287:       selectedSkills: canonicalProfileTyped.selectedSkills || [],
+   1288:       selectedStrength: canonicalProfileTyped.selectedStrength || [],
+   1289:       experienceLevel: canonicalProfileTyped.experienceLevel || null,
+   1290:       scheduleMode: canonicalProfileTyped.scheduleMode || null,
+   1291:       trainingDaysPerWeek: canonicalProfileTyped.trainingDaysPerWeek || null,
+   1292:       sessionDurationMode: canonicalProfileTyped.sessionDurationMode || null,
+   1293:       sessionLengthMinutes: canonicalProfileTyped.sessionLengthMinutes || null,
+>> 1294:       equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
+   1295:     }
+   1296:     
+   1297:     // [AI-TRUTH-PERSISTENCE] Elevate jointCautions to first-class program field
+   1298:     // This ensures joint safety truth is durably accessible without digging into snapshot
+   1299:     program.jointCautions = canonicalProfileTyped.jointCautions || []
+   1300:     
+   1301:     // [SESSION-STYLE-TRUTH] Elevate sessionStylePreference to first-class program field
+   1302:     // This ensures user's session style preference survives save/read/rebuild/restart
+   1303:     program.sessionStylePreference = canonicalProfileTyped.sessionStylePreference || null
+   1304:     
+
+--- CONTEXT 037 | lib/unified-coaching-engine.ts:446:17 | TS2339 ---
+lib/unified-coaching-engine.ts(446,17): error TS2339: Property 'equipment' does not exist on type 'AthleteProfile'.
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+   436:   // Legacy reads for backward compatibility (async sources)
+   437:   const profile = await getAthleteProfile(userId)
+   438:   const onboarding = await getOnboardingProfile(userId)
+   439:   
+   440:   // Load training style profile from DB (if exists)
+   441:   const styleProfileFromDb = await getTrainingStyleProfile(userId)
+   442:   
+   443:   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
+   444:   const equipment = canonical.equipmentAvailable.length > 0 
+   445:     ? canonical.equipmentAvailable 
+>> 446:     : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
+   447:   const equipmentProfile = analyzeEquipmentProfile(equipment)
+   448:   
+   449:   // Determine training style - prefer DB, then infer from onboarding
+   450:   const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboarding || {})
+   451:   const stylePriorities = styleProfileFromDb 
+   452:     ? {
+   453:         skill: styleProfileFromDb.skillPriority,
+   454:         strength: styleProfileFromDb.strengthPriority,
+   455:         power: styleProfileFromDb.powerPriority,
+   456:         endurance: styleProfileFromDb.endurancePriority,
+
+--- CONTEXT 038 | lib/progress-streak-engine.ts:449:28 | TS2339 ---
+lib/progress-streak-engine.ts(449,28): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+   439:         improvement: 0,
+   440:         unit: exercise.unit,
+   441:         trend: 'stable',
+   442:         lastRecordDate: null,
+   443:       })
+   444:       continue
+   445:     }
+   446:     
+   447:     // Sort by date
+   448:     const sorted = [...exerciseRecords].sort(
+>> 449:       (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+   450:     )
+   451:     
+   452:     const currentBest = sorted[0]?.addedWeight || sorted[0]?.reps || 0
+   453:     const previousRecords = sorted.slice(1)
+   454:     const previousBest = previousRecords.length > 0 
+   455:       ? Math.max(...previousRecords.map(r => r.addedWeight || r.reps || 0))
+   456:       : currentBest
+   457:     
+   458:     const improvement = currentBest - previousBest
+   459:     let trend: 'improving' | 'stable' | 'declining' = 'stable'
+
+--- CONTEXT 039 | lib/progress-streak-engine.ts:449:63 | TS2339 ---
+lib/progress-streak-engine.ts(449,63): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+   439:         improvement: 0,
+   440:         unit: exercise.unit,
+   441:         trend: 'stable',
+   442:         lastRecordDate: null,
+   443:       })
+   444:       continue
+   445:     }
+   446:     
+   447:     // Sort by date
+   448:     const sorted = [...exerciseRecords].sort(
+>> 449:       (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+   450:     )
+   451:     
+   452:     const currentBest = sorted[0]?.addedWeight || sorted[0]?.reps || 0
+   453:     const previousRecords = sorted.slice(1)
+   454:     const previousBest = previousRecords.length > 0 
+   455:       ? Math.max(...previousRecords.map(r => r.addedWeight || r.reps || 0))
+   456:       : currentBest
+   457:     
+   458:     const improvement = currentBest - previousBest
+   459:     let trend: 'improving' | 'stable' | 'declining' = 'stable'
+
+--- CONTEXT 040 | lib/progress-streak-engine.ts:471:34 | TS2339 ---
+lib/progress-streak-engine.ts(471,34): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+   461:     else if (improvement < 0) trend = 'declining'
+   462:     
+   463:     results.push({
+   464:       exerciseName: exercise.key,
+   465:       displayName: exercise.displayName,
+   466:       previousBest,
+   467:       currentBest,
+   468:       improvement,
+   469:       unit: exercise.unit,
+   470:       trend,
+>> 471:       lastRecordDate: sorted[0]?.recordedAt || null,
+   472:     })
+   473:   }
+   474:   
+   475:   return results
+   476: }
+   477: 
+   478: // =============================================================================
+   479: // MILESTONES
+   480: // =============================================================================
+   481: 
+
+--- CONTEXT 041 | lib/recovery-fatigue-engine.ts:611:9 | TS2339 ---
+lib/recovery-fatigue-engine.ts(611,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+   601:   if (recoverySignal.level === 'LOW') {
+   602:     triggerScore += 25
+   603:     reasons.push('Low recovery signal')
+   604:   }
+   605:   
+   606:   // 3. Check for repeated failures
+   607:   const recentLogs = logs.slice(0, 5)
+   608:   let failedSessions = 0
+   609:   for (const log of recentLogs) {
+   610:     const hasFailures = log.exercises.some(e => 
+>> 611:       e.notes?.toLowerCase().includes('fail') || 
+   612:       e.notes?.toLowerCase().includes('missed')
+   613:     )
+   614:     if (hasFailures) failedSessions++
+   615:   }
+   616:   if (failedSessions >= 2) {
+   617:     triggerScore += 20
+   618:     reasons.push('Multiple recent failed sessions')
+   619:   }
+   620:   
+   621:   // 4. Check RPE trend
+
+--- CONTEXT 042 | lib/recovery-fatigue-engine.ts:612:9 | TS2339 ---
+lib/recovery-fatigue-engine.ts(612,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+   602:     triggerScore += 25
+   603:     reasons.push('Low recovery signal')
+   604:   }
+   605:   
+   606:   // 3. Check for repeated failures
+   607:   const recentLogs = logs.slice(0, 5)
+   608:   let failedSessions = 0
+   609:   for (const log of recentLogs) {
+   610:     const hasFailures = log.exercises.some(e => 
+   611:       e.notes?.toLowerCase().includes('fail') || 
+>> 612:       e.notes?.toLowerCase().includes('missed')
+   613:     )
+   614:     if (hasFailures) failedSessions++
+   615:   }
+   616:   if (failedSessions >= 2) {
+   617:     triggerScore += 20
+   618:     reasons.push('Multiple recent failed sessions')
+   619:   }
+   620:   
+   621:   // 4. Check RPE trend
+   622:   const recentRPE = rpeSessions.slice(0, 5)
+
+--- CONTEXT 043 | lib/recovery-fatigue-engine.ts:771:35 | TS2339 ---
+lib/recovery-fatigue-engine.ts(771,35): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+   761:     new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()
+   762:   )
+   763:   for (const log of sortedLogs.slice(0, 7)) {
+   764:     if (log.durationMinutes > 45) consecutiveHardDays++
+   765:     else break
+   766:   }
+   767:   
+   768:   // Count recent failures
+   769:   let failuresRecent = 0
+   770:   for (const log of sortedLogs.slice(0, 5)) {
+>> 771:     if (log.exercises.some(e => e.notes?.toLowerCase().includes('fail'))) {
+   772:       failuresRecent++
+   773:     }
+   774:   }
+   775:   
+   776:   // Calculate overall score
+   777:   let score = recoverySignal.score
+   778:   
+   779:   // Adjust for fatigue contributions
+   780:   const totalFatigue = contributions.reduce((sum, c) => sum + c.level, 0) / Math.max(1, contributions.length)
+   781:   score = Math.round(score - (totalFatigue * 0.3))
+
+--- CONTEXT 044 | lib/repositories/profile-repository.ts:311:32 | TS2339 ---
+lib/repositories/profile-repository.ts(311,32): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+>> 311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+   319:   } catch (err) {
+   320:     console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+   321:   }
+
+--- CONTEXT 045 | lib/repositories/profile-repository.ts:311:67 | TS2339 ---
+lib/repositories/profile-repository.ts(311,67): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+>> 311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+   319:   } catch (err) {
+   320:     console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+   321:   }
+
+--- CONTEXT 046 | lib/repositories/profile-repository.ts:336:30 | TS2339 ---
+lib/repositories/profile-repository.ts(336,30): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+   326:       primaryGoal: updated.primaryGoal ?? undefined,
+   327:       secondaryGoal: updated.secondaryGoal ?? undefined,
+   328:       goalCategory: updated.goalCategory ?? undefined,
+   329:       selectedSkills: updated.selectedSkills ?? undefined,
+   330:       selectedFlexibility: updated.selectedFlexibility ?? undefined,
+   331:       selectedStrength: updated.selectedStrength ?? undefined,
+   332:       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
+   333:       scheduleMode: updated.scheduleMode ?? undefined,
+   334:       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
+   335:       equipmentAvailable: updated.equipmentAvailable ?? undefined,
+>> 336:       trainingStyle: updated.trainingStyle ?? undefined,
+   337:       onboardingComplete: updated.onboardingComplete ?? undefined,
+   338:     })
+   339:     logCanonicalProfileState('After saveAthleteProfile sync')
+   340:   } catch (err) {
+   341:     console.warn('[ProfileRepository] Failed to sync to canonical profile:', err)
+   342:   }
+   343:   
+   344:   // Check for newly unlocked achievements (strength milestones, etc.)
+   345:   // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] onTrainingEvent now requires a
+   346:   // TrainingEventType. Use 'strength_record' since this fires after a
+
+--- CONTEXT 047 | lib/roadmap/skill-roadmap-service.ts:594:48 | TS2339 ---
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+>> 594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+   600:   let readinessResult: ReadinessResult
+   601:   
+   602:   switch (skillKey) {
+   603:     case 'front-lever': {
+   604:       const inputs: FrontLeverInputs = {
+
+--- CONTEXT 048 | lib/roadmap/skill-roadmap-service.ts:596:43 | TS2339 ---
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+>> 596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+   600:   let readinessResult: ReadinessResult
+   601:   
+   602:   switch (skillKey) {
+   603:     case 'front-lever': {
+   604:       const inputs: FrontLeverInputs = {
+   605:         maxPullUps,
+   606:         weightedPullUpLoad: weightedPullUp,
+
+--- CONTEXT 049 | lib/training-coach.ts:586:48 | TS2339 ---
+lib/training-coach.ts(586,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+   576:   // Get strength records to calculate readiness
+   577:   const strengthRecords = getStrengthRecords()
+   578:   
+   579:   // Find relevant metrics
+   580:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   581:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   582:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   583:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   584:   
+   585:   const maxPullUps = pullUpRecord?.reps || 0
+>> 586:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   587:   const maxDips = dipRecord?.reps || 0
+   588:   const maxPushUps = pushUpRecord?.reps || 0
+   589: 
+   590:   // Build unified input for canonical engine
+   591:   const input: AthleteReadinessInput = {
+   592:     maxPullUps,
+   593:     weightedPullUpLoad: weightedPullUp,
+   594:     maxDips,
+   595:     maxPushUps,
+   596:     hollowHoldTime: 30, // Default assumption
+
+--- CONTEXT 050 | lib/session-variety-engine.ts:706:58 | TS2339 ---
+lib/session-variety-engine.ts(706,58): error TS2339: Property 'general' does not exist on type 'Record<SkillType, string[][]>'.
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+   696:       ['accessory_arm', 'core'],
+   697:     ],
+   698:     general: [
+   699:       ['pull', 'push'],
+   700:       ['core', 'mobility'],
+   701:       ['accessory', 'conditioning'],
+   702:     ],
+   703:   }
+   704:   
+   705:   const variantIndex = variant === 'primary' ? 0 : variant === 'secondary' ? 1 : 2
+>> 706:   const skillSupport = baseSupport[skill] || baseSupport.general
+   707:   const focus = [...(skillSupport[variantIndex] || skillSupport[0])]
+   708:   
+   709:   // Add constraint-specific focus if relevant
+   710:   if (constraint) {
+   711:     focus.push(constraint.replace(/_/g, ' '))
+   712:   }
+   713:   
+   714:   return focus
+   715: }
+   716: 
+
+--- CONTEXT 051 | lib/session-variety-engine.ts:835:50 | TS2339 ---
+lib/session-variety-engine.ts(835,50): error TS2339: Property 'general' does not exist on type 'Record<SkillType, MovementFamily[]>'.
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+   825:     planche: ['straight_arm_push', 'horizontal_push', 'compression_core'],
+   826:     muscle_up: ['vertical_pull', 'vertical_push', 'horizontal_pull'],
+   827:     hspu: ['vertical_push', 'compression_core'],
+   828:     back_lever: ['straight_arm_pull', 'compression_core'],
+   829:     iron_cross: ['straight_arm_pull', 'straight_arm_push'],
+   830:     l_sit: ['compression_core', 'hip_hinge'],
+   831:     weighted_strength: ['vertical_pull', 'vertical_push', 'horizontal_pull', 'horizontal_push'],
+   832:     general: ['vertical_pull', 'vertical_push', 'compression_core'],
+   833:   }
+   834:   
+>> 835:   return skillFamilyMap[skill] || skillFamilyMap.general
+   836: }
+   837: 
+   838: // =============================================================================
+   839: // EXERCISE VARIATION HELPERS
+   840: // =============================================================================
+   841: 
+   842: export interface ExerciseVariationSet {
+   843:   variantA: string[]
+   844:   variantB: string[]
+   845:   variantC: string[]
+
+--- CONTEXT 052 | lib/session-variety-engine.ts:900:38 | TS2339 ---
+lib/session-variety-engine.ts(900,38): error TS2339: Property 'general' does not exist on type 'Record<SkillType, ExerciseVariationSet>'.
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+   890:       variantB: ['weighted_chin_up', 'ring_dip', 'push_up'],
+   891:       variantC: ['one_arm_row', 'close_grip_dip', 'archer_pull'],
+   892:     },
+   893:     general: {
+   894:       variantA: ['pull_up', 'push_up', 'hollow_hold'],
+   895:       variantB: ['row', 'dip', 'plank'],
+   896:       variantC: ['chin_up', 'pike_push', 'dead_bug'],
+   897:     },
+   898:   }
+   899:   
+>> 900:   return variants[skill] || variants.general
+   901: }
+   902: 
+   903: // =============================================================================
+   904: // REPETITION JUSTIFICATION TRACKING
+   905: // =============================================================================
+   906: 
+   907: export interface RepetitionJustification {
+   908:   dayA: number
+   909:   dayB: number
+   910:   reason: string
+
+--- CONTEXT 053 | lib/unified-coaching-engine.ts:883:54 | TS2339 ---
+lib/unified-coaching-engine.ts(883,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+   873:     jointCautions: athleteContext.jointCautions as JointCaution[],
+   874:     sessionFocus: skillContext.primarySkillState?.skill 
+   875:       ? [skillContext.primarySkillState.skill as string]
+   876:       : [],
+   877:     experienceLevel: 'intermediate',
+   878:     sessionLength: athleteContext.sessionDurationMinutes,
+   879:     includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
+   880:   })
+   881:   
+   882:   // Categorize protocols by timing
+>> 883:   const warmupProtocols = allProtocols.filter(p => p.timing === 'warmup')
+   884:   const recoveryProtocols = allProtocols.filter(p => p.timing === 'cooldown')
+   885:   const prehabProtocols = allProtocols.filter(p => p.timing === 'standalone')
+   886:   
+   887:   return {
+   888:     recommendations: allProtocols,
+   889:     warmupProtocols,
+   890:     recoveryProtocols,
+   891:     prehabProtocols,
+   892:   }
+   893: }
+
+--- CONTEXT 054 | lib/unified-coaching-engine.ts:884:56 | TS2339 ---
+lib/unified-coaching-engine.ts(884,56): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+   874:     sessionFocus: skillContext.primarySkillState?.skill 
+   875:       ? [skillContext.primarySkillState.skill as string]
+   876:       : [],
+   877:     experienceLevel: 'intermediate',
+   878:     sessionLength: athleteContext.sessionDurationMinutes,
+   879:     includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
+   880:   })
+   881:   
+   882:   // Categorize protocols by timing
+   883:   const warmupProtocols = allProtocols.filter(p => p.timing === 'warmup')
+>> 884:   const recoveryProtocols = allProtocols.filter(p => p.timing === 'cooldown')
+   885:   const prehabProtocols = allProtocols.filter(p => p.timing === 'standalone')
+   886:   
+   887:   return {
+   888:     recommendations: allProtocols,
+   889:     warmupProtocols,
+   890:     recoveryProtocols,
+   891:     prehabProtocols,
+   892:   }
+   893: }
+   894: 
+
+--- CONTEXT 055 | lib/unified-coaching-engine.ts:885:54 | TS2339 ---
+lib/unified-coaching-engine.ts(885,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+   875:       ? [skillContext.primarySkillState.skill as string]
+   876:       : [],
+   877:     experienceLevel: 'intermediate',
+   878:     sessionLength: athleteContext.sessionDurationMinutes,
+   879:     includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
+   880:   })
+   881:   
+   882:   // Categorize protocols by timing
+   883:   const warmupProtocols = allProtocols.filter(p => p.timing === 'warmup')
+   884:   const recoveryProtocols = allProtocols.filter(p => p.timing === 'cooldown')
+>> 885:   const prehabProtocols = allProtocols.filter(p => p.timing === 'standalone')
+   886:   
+   887:   return {
+   888:     recommendations: allProtocols,
+   889:     warmupProtocols,
+   890:     recoveryProtocols,
+   891:     prehabProtocols,
+   892:   }
+   893: }
+   894: 
+   895: // =============================================================================
+
+--- CONTEXT 056 | lib/unified-program-generation.ts:387:20 | TS2339 ---
+lib/unified-program-generation.ts(387,20): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+   377:       rest: '30s',
+   378:       notes: ['Focus on activation and position quality'],
+   379:       movementFamily: 'skill_isometric',
+   380:       isSubstitutable: false,
+   381:     })
+   382:   }
+   383:   
+   384:   // Add protocol exercises
+   385:   protocols.slice(0, 2).forEach(protocol => {
+   386:     exercises.push({
+>> 387:       id: protocol.id,
+   388:       name: protocol.name,
+   389:       sets: 2,
+   390:       reps: protocol.prescription || '8-12 reps',
+   391:       rest: '30s',
+   392:       notes: [protocol.rationale || ''],
+   393:       movementFamily: 'joint_integrity',
+   394:       isSubstitutable: true,
+   395:     })
+   396:   })
+   397:   
+
+--- CONTEXT 057 | lib/unified-program-generation.ts:653:22 | TS2339 ---
+lib/unified-program-generation.ts(653,22): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+   643:     rest: '-',
+   644:     notes: ['Hold each stretch 30-60 seconds', 'Focus on worked muscle groups'],
+   645:     movementFamily: 'mobility',
+   646:     isSubstitutable: false,
+   647:   })
+   648:   
+   649:   // Add recovery protocols
+   650:   if (includeExtra) {
+   651:     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
+   652:       exercises.push({
+>> 653:         id: protocol.id,
+   654:         name: protocol.name,
+   655:         sets: 1,
+   656:         reps: protocol.prescription || '2 minutes',
+   657:         rest: '-',
+   658:         notes: [protocol.rationale || 'Recovery support'],
+   659:         movementFamily: 'mobility',
+   660:         isSubstitutable: true,
+   661:       })
+   662:     })
+   663:   }
+
+--- CONTEXT 058 | lib/workout-execution-truth.ts:216:25 | TS2339 ---
+lib/workout-execution-truth.ts(216,25): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+   206:   
+   207:   // First workouts calibration mode (first 2 workouts)
+   208:   const firstWorkoutsCalibrationMode = workoutsCompleted < 2
+   209:   
+   210:   // [AI-RUNTIME-CONTRACT] Determine if session has grouped blocks (superset/circuit)
+   211:   const hasGroupedBlocks = exercises.some(ex => 
+   212:     ex?.blockId && exercises.filter(e => e?.blockId === ex.blockId).length > 1
+   213:   )
+   214:   
+   215:   return {
+>> 216:     sessionId: session?.id || `session-${Date.now()}`,
+   217:     programId,
+   218:     dayNumber,
+   219:     dayLabel,
+   220:     currentExerciseCount: 0,
+   221:     totalExerciseCount: exercises.length,
+   222:     totalSetCount,
+   223:     adaptationConfidence,
+   224:     firstWorkoutsCalibrationMode,
+   225:     workoutsCompletedInProgram: workoutsCompleted,
+   226:     supportsBackNavigation: true,
+
+--- CONTEXT 059 | lib/warmup-intelligence-engine.ts:1213:43 | TS2339 ---
+lib/warmup-intelligence-engine.ts(1213,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+   1203:     for (const tendonPrep of warmupNeeds.additionalTendonPrep) {
+   1204:       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+   1205:       if (!existingIds.includes(tendonPrep)) {
+   1206:         const tendonExercise = WARMUP_EXERCISE_DATABASE.find(e => e.id === tendonPrep)
+   1207:         if (tendonExercise) {
+   1208:           enhancedWarmup.exercises.push({
+   1209:             exerciseId: tendonExercise.id,
+   1210:             exerciseName: tendonExercise.name,
+   1211:             instruction: tendonExercise.defaultPrescription,
+   1212:             rationale: `Added for tendon preparation based on session stress analysis.`,
+>> 1213:             jointCategory: tendonExercise.primaryJoint,
+   1214:             priority: tendonExercise.priority,
+   1215:             knowledgeBubble: tendonExercise.knowledgeBubble,
+   1216:           })
+   1217:         }
+   1218:       }
+   1219:     }
+   1220:     
+   1221:     // Add joint prep for high-stress joints
+   1222:     for (const joint of warmupNeeds.additionalJointPrep) {
+   1223:       const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+
+--- CONTEXT 060 | lib/warmup-intelligence-engine.ts:1223:69 | TS2339 ---
+lib/warmup-intelligence-engine.ts(1223,69): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+   1213:             jointCategory: tendonExercise.primaryJoint,
+   1214:             priority: tendonExercise.priority,
+   1215:             knowledgeBubble: tendonExercise.knowledgeBubble,
+   1216:           })
+   1217:         }
+   1218:       }
+   1219:     }
+   1220:     
+   1221:     // Add joint prep for high-stress joints
+   1222:     for (const joint of warmupNeeds.additionalJointPrep) {
+>> 1223:       const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+   1224:       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+   1225:       const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
+   1226:       
+   1227:       if (newJointExercise) {
+   1228:         enhancedWarmup.exercises.push({
+   1229:           exerciseId: newJointExercise.id,
+   1230:           exerciseName: newJointExercise.name,
+   1231:           instruction: newJointExercise.defaultPrescription,
+   1232:           rationale: `Added for ${joint} preparation due to elevated stress.`,
+   1233:           jointCategory: newJointExercise.primaryJoint,
+

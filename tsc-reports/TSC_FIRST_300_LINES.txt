@@ -1,0 +1,301 @@
+===== FIRST 300 CURRENT COMPILER LINES =====
+components/workout/StreamlinedWorkoutSession.tsx(2645,117): error TS2339: Property 'completedSets' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2712,41): error TS2304: Cannot find name 'LiveSessionAction'.
+components/workout/StreamlinedWorkoutSession.tsx(2723,49): error TS2339: Property 'currentExerciseIndex' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2724,45): error TS2339: Property 'currentSetNumber' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2725,42): error TS2339: Property 'completedSets' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2726,43): error TS2339: Property 'elapsedSeconds' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2727,41): error TS2339: Property 'notes' does not exist on type 'SavedSessionInfo'.
+components/workout/StreamlinedWorkoutSession.tsx(2801,17): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3170,9): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3208,11): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3222,11): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3233,9): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(3295,84): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(3389,44): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(3862,58): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(3918,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4028,7): error TS2561: Object literal may only specify known properties, but 'totalExerciseCount' does not exist in type 'Partial<BootLedgerState>'. Did you mean to write 'exerciseCount'?
+components/workout/StreamlinedWorkoutSession.tsx(4031,7): error TS2353: Object literal may only specify known properties, and 'exerciseId' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(4034,50): error TS2353: Object literal may only specify known properties, and 'hasMessage' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(4055,30): error TS2339: Property 'currentSet' does not exist on type 'WorkoutMachineState'.
+components/workout/StreamlinedWorkoutSession.tsx(4058,44): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(4071,18): error TS2339: Property 'currentSet' does not exist on type 'WorkoutMachineState'.
+components/workout/StreamlinedWorkoutSession.tsx(4151,88): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(4329,7): error TS2345: Argument of type '{ status: "ready" | "active" | "resting" | "completed"; currentExerciseIndex: number; currentSetNumber: number; completedSets: { exerciseIndex: number; setNumber: number; actualReps: number; holdSeconds: number | undefined; actualRPE: RPEValue; bandUsed: "none" | ResistanceBandColor; timestamp: number; }[]; ... 11 m...' is not assignable to parameter of type '{ currentSetNumber: number; repsValue: number; holdValue: number; bandUsed: "none" | ResistanceBandColor; selectedRPE: RPEValue | null; }'.
+  Type '{ status: "ready"; currentExerciseIndex: number; currentSetNumber: number; completedSets: never[]; startTime: null; elapsedSeconds: number; lastSetRPE: null; workoutNotes: string; exerciseOverrides: {}; ... 6 more ...; transitionRepairIssue: null; }' is not assignable to type '{ currentSetNumber: number; repsValue: number; holdValue: number; bandUsed: "none" | ResistanceBandColor; selectedRPE: RPEValue | null; }'.
+    Types of property 'selectedRPE' are incompatible.
+      Type 'number' is not assignable to type 'RPEValue | null'.
+components/workout/StreamlinedWorkoutSession.tsx(4669,9): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(4855,73): error TS2339: Property 'recommendedBand' does not exist on type '{}'.
+components/workout/StreamlinedWorkoutSession.tsx(4872,13): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(5449,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"between_exercise_rest"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5450,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"block_round_rest"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5451,5): error TS2367: This comparison appears to be unintentional because the types '"ready" | "completed"' and '"transitioning"' have no overlap.
+components/workout/StreamlinedWorkoutSession.tsx(5569,73): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5579,38): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(5652,9): error TS2322: Type '{ id: string; name: string; category: "push" | "skill" | "mobility" | "pull" | "core" | "legs"; sets: number; reps: number | undefined; holdSeconds: number | undefined; completed: boolean; band: { ...; } | undefined; }[]' is not assignable to type 'WorkoutExercise[]'.
+  Type '{ id: string; name: string; category: "skill" | "push" | "pull" | "core" | "legs" | "mobility"; sets: number; reps: number | undefined; holdSeconds: number | undefined; completed: boolean; band: { ...; } | undefined; }' is not assignable to type 'WorkoutExercise'.
+    Types of property 'band' are incompatible.
+      Type '{ bandColor: "none" | ResistanceBandColor; assisted: boolean; } | undefined' is not assignable to type 'BandUsage | undefined'.
+        Type '{ bandColor: "none" | ResistanceBandColor; assisted: boolean; }' is not assignable to type 'BandUsage'.
+          Types of property 'bandColor' are incompatible.
+            Type '"none" | ResistanceBandColor' is not assignable to type 'ResistanceBandColor | undefined'.
+              Type '"none"' is not assignable to type 'ResistanceBandColor | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(5698,7): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(5746,9): error TS2353: Object literal may only specify known properties, and 'currentSetNumber' does not exist in type 'Partial<BootLedgerState>'.
+components/workout/StreamlinedWorkoutSession.tsx(6164,64): error TS2345: Argument of type 'MachineExercise | undefined' is not assignable to parameter of type 'AdaptiveExercise | null | undefined'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6175,52): error TS18048: 'fullEx.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6195,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6204,43): error TS18048: 'fullEx.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6242,64): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6253,45): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6269,56): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6278,39): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6291,52): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(6300,33): error TS18048: 'ex.prescribedLoad.load' is possibly 'undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(6372,50): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7082,74): error TS2339: Property 'recommendedBand' does not exist on type '{}'.
+components/workout/StreamlinedWorkoutSession.tsx(7089,7): error TS2322: Type 'unknown' is not assignable to type '{ bandSelectable?: boolean | undefined; isWeighted?: boolean | undefined; isTimedHold?: boolean | undefined; isUnilateral?: boolean | undefined; assistedAllowed?: boolean | undefined; supportsBandAdjustment?: boolean | undefined; recommendedBand?: ResistanceBandColor | ... 1 more ... | undefined; recommendedBandColo...'.
+components/workout/StreamlinedWorkoutSession.tsx(7295,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7369,53): error TS2345: Argument of type 'MachineExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Property 'selectionReason' is missing in type 'MachineExercise' but required in type 'AdaptiveExercise'.
+components/workout/StreamlinedWorkoutSession.tsx(7440,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(7489,15): error TS2345: Argument of type 'NormalizedExercise' is not assignable to parameter of type 'AdaptiveExercise'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+components/workout/StreamlinedWorkoutSession.tsx(7605,11): error TS2322: Type '{ load: number; unit: string; confidenceLevel: string | undefined; } | undefined' is not assignable to type '{ load: number; unit: string; confidenceLevel?: "low" | "high" | "medium" | undefined; } | undefined'.
+  Type '{ load: number; unit: string; confidenceLevel: string | undefined; }' is not assignable to type '{ load: number; unit: string; confidenceLevel?: "low" | "high" | "medium" | undefined; }'.
+    Types of property 'confidenceLevel' are incompatible.
+      Type 'string | undefined' is not assignable to type '"low" | "high" | "medium" | undefined'.
+        Type 'string' is not assignable to type '"low" | "high" | "medium" | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(7660,11): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+components/workout/StreamlinedWorkoutSession.tsx(8048,75): error TS2339: Property 'isProtected' does not exist on type 'AdaptiveExercise'.
+components/workout/WhyThisWorkout.tsx(66,37): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(67,39): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(68,41): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(69,40): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(72,32): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(73,30): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(74,37): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WhyThisWorkout.tsx(75,29): error TS2352: Conversion of type 'WorkoutReasoningSummary | WorkoutReasoningDisplayContract' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'WorkoutReasoningDisplayContract' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'WorkoutReasoningDisplayContract'.
+components/workout/WorkoutSessionSummary.tsx(112,5): error TS2345: Argument of type 'SessionStats' is not assignable to parameter of type '{ completedSets: number; totalSets: number; elapsedSeconds: number; averageRPE?: number | undefined; }'.
+  Types of property 'averageRPE' are incompatible.
+    Type 'number | null' is not assignable to type 'number | undefined'.
+      Type 'null' is not assignable to type 'number | undefined'.
+components/workout/WorkoutSessionSummary.tsx(250,77): error TS2339: Property 'prsHit' does not exist on type 'SessionStats'.
+components/workout/WorkoutSessionSummary.tsx(250,100): error TS2339: Property 'prsHit' does not exist on type 'SessionStats'.
+components/workout/WorkoutSessionSummary.tsx(250,122): error TS2339: Property 'prsHit' does not exist on type 'SessionStats'.
+components/workouts/QuickLogModal.tsx(78,31): error TS2554: Expected 1 arguments, but got 0.
+components/workouts/WorkoutLogForm.tsx(90,31): error TS2554: Expected 1 arguments, but got 0.
+hooks/useEntitlement.ts(184,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+hooks/useEntitlement.ts(193,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+hooks/useWorkoutSession.ts(341,35): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+hooks/useWorkoutSession.ts(341,58): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+hooks/useWorkoutSession.ts(341,77): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+hooks/useWorkoutSession.ts(342,28): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+hooks/useWorkoutSession.ts(343,24): error TS2339: Property 'weight' does not exist on type 'AdaptiveExercise'.
+hooks/useWorkoutSession.ts(381,31): error TS2554: Expected 1 arguments, but got 0.
+lib/achievements/achievement-engine.ts(169,26): error TS2339: Property 'maxReps' does not exist on type 'StrengthRecord'.
+lib/achievements/achievement-engine.ts(171,32): error TS2339: Property 'maxReps' does not exist on type 'StrengthRecord'.
+lib/achievements/index.ts(3,1): error TS2308: Module './achievement-definitions' has already exported a member named 'getUnlockedAchievements'. Consider explicitly re-exporting to resolve the ambiguity.
+lib/achievements/index.ts(3,1): error TS2308: Module './achievement-definitions' has already exported a member named 'markAchievementSeen'. Consider explicitly re-exporting to resolve the ambiguity.
+lib/active-week-mutation-service.ts(149,18): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(229,55): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(230,58): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(399,24): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(422,24): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(436,22): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(453,22): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(468,20): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/adaptive-athlete-engine.ts(5,90): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,43): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessDecision' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,67): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessStatus' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(613,7): error TS2322: Type '"insufficient_data"' is not assignable to type 'PlateauStatus'.
+lib/adaptive-deload-recovery-engine.ts(471,17): error TS2323: Cannot redeclare exported variable 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(599,17): error TS2323: Cannot redeclare exported variable 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(706,17): error TS2323: Cannot redeclare exported variable 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(753,17): error TS2323: Cannot redeclare exported variable 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(876,17): error TS2323: Cannot redeclare exported variable 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(965,17): error TS2323: Cannot redeclare exported variable 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1004,17): error TS2323: Cannot redeclare exported variable 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1062,17): error TS2323: Cannot redeclare exported variable 'assessCycleCompatibility'.
+lib/adaptive-deload-recovery-engine.ts(1109,3): error TS2323: Cannot redeclare exported variable 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(1109,3): error TS2484: Export declaration conflicts with exported declaration of 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(1110,3): error TS2323: Cannot redeclare exported variable 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(1110,3): error TS2484: Export declaration conflicts with exported declaration of 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(1111,3): error TS2323: Cannot redeclare exported variable 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(1111,3): error TS2484: Export declaration conflicts with exported declaration of 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(1112,3): error TS2323: Cannot redeclare exported variable 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(1112,3): error TS2484: Export declaration conflicts with exported declaration of 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(1113,3): error TS2323: Cannot redeclare exported variable 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(1113,3): error TS2484: Export declaration conflicts with exported declaration of 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(1114,3): error TS2323: Cannot redeclare exported variable 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1114,3): error TS2484: Export declaration conflicts with exported declaration of 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1115,3): error TS2323: Cannot redeclare exported variable 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1115,3): error TS2484: Export declaration conflicts with exported declaration of 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1116,3): error TS2323: Cannot redeclare exported variable 'assessCycleCompatibility'.
+lib/adaptive-deload-recovery-engine.ts(1116,3): error TS2484: Export declaration conflicts with exported declaration of 'assessCycleCompatibility'.
+lib/adaptive-program-builder.ts(62,15): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/adaptive-program-builder.ts(180,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(339,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(416,3): error TS2305: Module '"./performance-envelope-service"' has no exported member 'getEnvelopeBasedRecommendations'.
+lib/adaptive-program-builder.ts(422,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(449,8): error TS2724: '"./program/programming-truth-bundle"' has no exported member named 'ProgrammingTruthBundle'. Did you mean 'buildProgrammingTruthBundle'?
+lib/adaptive-program-builder.ts(604,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(1736,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2031,25): error TS2304: Cannot find name 'WeakPointAssessment'.
+lib/adaptive-program-builder.ts(2474,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2474,3): error TS2717: Subsequent property declarations must have the same type.  Property 'weekAdaptationDecision' must be of type '{ phase: "initial_acclimation" | "normal_progression" | "recovery_constrained" | "rebuild_after_disruption"; targetDays: number; confidence: "low" | "moderate" | "high"; triggerSource: "first_week_initial_generation" | ... 2 more ... | "mid_week_adjustment"; ... 4 more ...; decidedAt: string; } | undefined', but here has type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "reduced" | "normal" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+lib/adaptive-program-builder.ts(3548,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3558,58): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3588,61): error TS7006: Parameter 's' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(3673,63): error TS7006: Parameter 's' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(3775,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3840,78): error TS7006: Parameter 'skill' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(3993,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(4079,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(5145,30): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"rebuild"' have no overlap.
+lib/adaptive-program-builder.ts(5147,9): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"adapt"' have no overlap.
+lib/adaptive-program-builder.ts(5563,7): error TS2322: Type 'SessionLength' is not assignable to type 'number | undefined'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(5714,30): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(5796,44): error TS2339: Property 'onboardingComplete' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5798,40): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5803,7): error TS2739: Type 'CanonicalProgrammingProfile' is missing the following properties from type 'ProfileSnapshot': snapshotId, createdAt
+lib/adaptive-program-builder.ts(5809,46): error TS2339: Property 'onboardingComplete' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5826,42): error TS2339: Property 'onboardingComplete' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5828,60): error TS2339: Property 'selectedFlexibility' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5828,101): error TS2339: Property 'selectedFlexibility' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5829,57): error TS2339: Property 'selectedStrength' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5829,95): error TS2339: Property 'selectedStrength' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5830,37): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5868,45): error TS2339: Property 'userId' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5910,41): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(5919,51): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+  Type 'ProfileSnapshot' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 50 more.
+lib/adaptive-program-builder.ts(5920,44): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+  Type 'ProfileSnapshot' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 50 more.
+lib/adaptive-program-builder.ts(6059,59): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6068,43): error TS2339: Property 'weightedBenchmarks' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6069,40): error TS2339: Property 'weightedBenchmarks' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6070,33): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6078,43): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6137,52): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6140,52): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6141,41): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6142,32): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6149,56): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6166,54): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+  Type 'ProfileSnapshot' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 50 more.
+lib/adaptive-program-builder.ts(6174,51): error TS2339: Property 'onboardingComplete' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6192,46): error TS2339: Property 'onboardingComplete' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6194,42): error TS2339: Property 'equipment' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6208,42): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+  Type 'ProfileSnapshot' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 50 more.
+lib/adaptive-program-builder.ts(6235,22): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6314,82): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(6328,34): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6336,44): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6337,47): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6494,40): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6494,67): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6498,43): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6509,38): error TS2339: Property 'goalCategories' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6509,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6510,43): error TS2339: Property 'selectedFlexibility' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6510,73): error TS2339: Property 'selectedFlexibility' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6517,48): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6517,88): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6531,45): error TS2339: Property 'trainingStyle' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6546,40): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6568,32): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6568,78): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6578,32): error TS2339: Property 'trainingStyle' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6591,47): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6697,59): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6702,41): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6703,40): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6705,42): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6705,99): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6707,31): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6733,5): error TS2345: Argument of type 'ProfileSnapshot' is not assignable to parameter of type 'CanonicalProgrammingProfile'.
+  Type 'ProfileSnapshot' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 50 more.
+lib/adaptive-program-builder.ts(6784,12): error TS2339: Property 'generationIntent' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6796,57): error TS2554: Expected 0 arguments, but got 1.
+lib/adaptive-program-builder.ts(6798,43): error TS2339: Property 'averageRecentRPE' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(6817,5): error TS2353: Object literal may only specify known properties, and 'generationIntent' does not exist in type 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(6824,40): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6824,67): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6836,38): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6846,87): error TS2339: Property 'expectedSessionsPerWeek' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(6847,27): error TS2339: Property 'expectedSessionsPerWeek' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(6859,62): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/program-generation/session-composition-intelligence").WeekAdaptationInput' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/program-generation/week-adaptation-decision-contract").WeekAdaptationInput'.
+  Type 'WeekAdaptationInput' is missing the following properties from type 'WeekAdaptationInput': generationIntent, isFreshBaselineBuild
+lib/adaptive-program-builder.ts(6953,45): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(6997,33): error TS2339: Property 'recoveryProfile' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(6998,34): error TS2304: Cannot find name 'AthleteProfile'.
+lib/adaptive-program-builder.ts(7007,45): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7258,45): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7414,24): error TS2367: This comparison appears to be unintentional because the types '"baseline_4_days" | "conservative_first_week_4_days" | "insufficient_data_4_days" | "adapted_to_4_days_after_feedback" | "hidden_modifier_collision_4_days" | "non_4_days_adaptive"' and '"stale_feedback_false_4_days"' have no overlap.
+lib/adaptive-program-builder.ts(7574,39): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(7575,40): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(7586,22): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7601,38): error TS2339: Property 'goalCategories' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7601,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7602,41): error TS2339: Property 'trainingPathType' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7604,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7605,44): error TS2339: Property 'sessionDurationMode' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7606,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7607,43): error TS2339: Property 'selectedFlexibility' does not exist on type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(7607,73): error TS2339: Property 'selectedFlexibility' does not exist on type 'AdaptiveProgramInputs'.

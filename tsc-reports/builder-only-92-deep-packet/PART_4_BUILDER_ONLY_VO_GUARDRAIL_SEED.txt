@@ -1,0 +1,27 @@
+===== PART 4 — BUILDER-ONLY VO GUARDRAIL SEED =====
+Use this to build the VO prompt. Target only lib/adaptive-program-builder.ts.
+Current builder diagnostics: 92
+Do not edit any other file. Do not scan repo. Do not create scripts. Do not use as any. Do not widen unions. Do not add stale fields to shared types.
+Success metric: builder diagnostics must drop materially. Minimum target: 92 -> under 55. Strong target: under 40.
+Line drift rule: use line + exact compiler message + search anchors + local context. If not found within ±80 lines, block and move.
+Stop and commit after builder pass. Do not continue into authgen or any other file.
+
+Error count by code:
+- TS2345: 20
+- TS2322: 14
+- TS2339: 12
+- TS2352: 6
+- TS18047: 6
+- TS2739: 5
+- TS2353: 5
+- TS2304: 5
+- TS2367: 4
+- TS2454: 4
+- TS2741: 2
+- TS18048: 2
+- TS2769: 2
+- TS2740: 1
+- TS7053: 1
+- TS2554: 1
+- TS7006: 1
+- TS2677: 1

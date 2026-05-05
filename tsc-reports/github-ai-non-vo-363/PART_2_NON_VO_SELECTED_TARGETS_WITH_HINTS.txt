@@ -1,0 +1,244 @@
+===== PART 2 — NON-VO SELECTED TARGETS WITH HINTS =====
+Use this to build a small GitHub AI Chat prompt. Do not send raw if too broad.
+
+Selected file counts:
+- lib/program/program-display-contract.ts: 8
+- lib/doctrine/doctrine-consumption-audit.ts: 6
+- lib/planner-truth-audit.ts: 4
+- lib/roadmap/skill-roadmap-service.ts: 4
+- lib/recovery-fatigue-engine.ts: 3
+- lib/canonical-profile-service.ts: 3
+- lib/program-adjustment-engine.ts: 3
+- lib/elite-insight-engine.ts: 2
+- lib/program-exercise-selector.ts: 2
+- lib/onboarding-service.ts: 2
+- lib/coaching-explanation-contract.ts: 1
+- lib/program-generation/session-composition-intelligence.ts: 1
+- lib/program/onboarding-truth-expression-audit.ts: 1
+- lib/program-history-versioning.ts: 1
+- lib/program-truth-extractor.ts: 1
+- lib/unified-program-generation.ts: 1
+
+Selected code counts:
+- TS2339: 19
+- TS2367: 13
+- TS2353: 5
+- TS2448: 2
+- TS2454: 2
+- TS7006: 2
+
+--- TARGET 001 ---
+lib/recovery-fatigue-engine.ts(611,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 002 ---
+lib/recovery-fatigue-engine.ts(612,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 003 ---
+lib/recovery-fatigue-engine.ts(771,35): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 004 ---
+lib/coaching-explanation-contract.ts(413,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+Pattern: TS2339: stale/suggested property `roleInSession`
+Hint: Remove/gate stale `roleInSession` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 005 ---
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+Pattern: TS2339: stale/suggested property `roleInSession`
+Hint: Remove/gate stale `roleInSession` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 006 ---
+lib/doctrine/doctrine-consumption-audit.ts(202,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Pattern: TS2367: impossible comparison `"STRICT_SPINE"`
+Hint: Remove impossible comparison to `"STRICT_SPINE"` or map only if current literal truth is obvious.
+
+--- TARGET 007 ---
+lib/doctrine/doctrine-consumption-audit.ts(229,33): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Pattern: TS2367: impossible comparison `"STRICT_SPINE"`
+Hint: Remove impossible comparison to `"STRICT_SPINE"` or map only if current literal truth is obvious.
+
+--- TARGET 008 ---
+lib/elite-insight-engine.ts(88,28): error TS2339: Property 'area' does not exist on type 'never'.
+Pattern: TS2339: stale/suggested property `area`
+Hint: Remove/gate stale `area` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 009 ---
+lib/elite-insight-engine.ts(89,37): error TS2339: Property 'area' does not exist on type 'never'.
+Pattern: TS2339: stale/suggested property `area`
+Hint: Remove/gate stale `area` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 010 ---
+lib/planner-truth-audit.ts(985,14): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Pattern: TS2448: used before assigned `weekSummary`
+Hint: Move declaration before use or add safe default branch for `weekSummary`.
+
+--- TARGET 011 ---
+lib/planner-truth-audit.ts(988,63): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Pattern: TS2448: used before assigned `weekSummary`
+Hint: Move declaration before use or add safe default branch for `weekSummary`.
+
+--- TARGET 012 ---
+lib/planner-truth-audit.ts(985,14): error TS2454: Variable 'weekSummary' is used before being assigned.
+Pattern: TS2454: used before assigned `weekSummary`
+Hint: Move declaration before use or add safe default branch for `weekSummary`.
+
+--- TARGET 013 ---
+lib/planner-truth-audit.ts(988,63): error TS2454: Variable 'weekSummary' is used before being assigned.
+Pattern: TS2454: used before assigned `weekSummary`
+Hint: Move declaration before use or add safe default branch for `weekSummary`.
+
+--- TARGET 014 ---
+lib/program-exercise-selector.ts(5551,25): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Pattern: TS2367: impossible comparison `"hybrid"`
+Hint: Remove impossible comparison to `"hybrid"` or map only if current literal truth is obvious.
+
+--- TARGET 015 ---
+lib/program-exercise-selector.ts(5564,45): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Pattern: TS2367: impossible comparison `"hybrid"`
+Hint: Remove impossible comparison to `"hybrid"` or map only if current literal truth is obvious.
+
+--- TARGET 016 ---
+lib/program-generation/session-composition-intelligence.ts(846,45): error TS2367: This comparison appears to be unintentional because the types '"discouraged"' and '"blocked"' have no overlap.
+Pattern: TS2367: impossible comparison `"blocked"`
+Hint: Remove impossible comparison to `"blocked"` or map only if current literal truth is obvious.
+
+--- TARGET 017 ---
+lib/program/onboarding-truth-expression-audit.ts(281,14): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"blocked"' have no overlap.
+Pattern: TS2367: impossible comparison `"blocked"`
+Hint: Remove impossible comparison to `"blocked"` or map only if current literal truth is obvious.
+
+--- TARGET 018 ---
+lib/canonical-profile-service.ts(1536,129): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+Pattern: TS2339: stale/suggested property `level`
+Hint: Remove/gate stale `level` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 019 ---
+lib/canonical-profile-service.ts(1537,142): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+Pattern: TS2339: stale/suggested property `rangeIntent`
+Hint: Remove/gate stale `rangeIntent` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 020 ---
+lib/canonical-profile-service.ts(1560,86): error TS2339: Property 'recoveryConfidence' does not exist on type 'RecoveryProfile | null'.
+Pattern: TS2339: stale/suggested property `recoveryConfidence`
+Hint: Remove/gate stale `recoveryConfidence` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 021 ---
+lib/doctrine/doctrine-consumption-audit.ts(156,31): error TS2339: Property 'intendedIntensity' does not exist on type 'AdaptiveSession'.
+Pattern: TS2339: stale/suggested property `intendedIntensity`
+Hint: Remove/gate stale `intendedIntensity` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 022 ---
+lib/doctrine/doctrine-consumption-audit.ts(162,30): error TS2339: Property 'exerciseName' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `exerciseName`
+Hint: Remove/gate stale `exerciseName` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 023 ---
+lib/doctrine/doctrine-consumption-audit.ts(231,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"BALANCED"' have no overlap.
+Pattern: TS2367: impossible comparison `"BALANCED"`
+Hint: Remove impossible comparison to `"BALANCED"` or map only if current literal truth is obvious.
+
+--- TARGET 024 ---
+lib/doctrine/doctrine-consumption-audit.ts(301,117): error TS2339: Property 'maxSessionTypes' does not exist on type '{ mode: IntegrationMode; allowedSecondaryMethods: string[]; blockedMethods: string[]; maxSecondaryExercisesPerSession: number; secondaryMustCarryover: boolean; rationale: string; }'.
+Pattern: TS2339: stale/suggested property `maxSessionTypes`
+Hint: Remove/gate stale `maxSessionTypes` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 025 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Hint: Remove impossible comparison to `"skill"` or map only if current literal truth is obvious.
+
+--- TARGET 026 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Hint: Remove impossible comparison to `"strength"` or map only if current literal truth is obvious.
+
+--- TARGET 027 ---
+lib/program-adjustment-engine.ts(460,32): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+Pattern: TS2339: stale/suggested property `experienceLevel`
+Hint: Remove/gate stale `experienceLevel` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 028 ---
+lib/program-adjustment-engine.ts(486,38): error TS2339: Property 'alternatives' does not exist on type 'ExerciseScore'.
+Pattern: TS2339: stale/suggested property `alternatives`
+Hint: Remove/gate stale `alternatives` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 029 ---
+lib/program-adjustment-engine.ts(486,56): error TS7006: Parameter 'a' implicitly has an 'any' type.
+Pattern: TS7006: implicit any parameter `a`
+Hint: Type callback parameter `a` from immediate local object/list shape.
+
+--- TARGET 030 ---
+lib/program-history-versioning.ts(600,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+Pattern: TS2339: stale/suggested property `pattern`
+Hint: Remove/gate stale `pattern` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 031 ---
+lib/program-truth-extractor.ts(487,7): error TS2353: Object literal may only specify known properties, and 'authoritativeMultiSkillIntentContract' does not exist in type '{ identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }'.
+Pattern: TS2353: stale object key `authoritativeMultiSkillIntentContract`
+Hint: Remove/gate stale `authoritativeMultiSkillIntentContract` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 032 ---
+lib/program/program-display-contract.ts(261,37): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "low" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Pattern: TS2339: stale/suggested property `doctrineConstraints`
+Hint: Remove/gate stale `doctrineConstraints` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 033 ---
+lib/program/program-display-contract.ts(263,26): error TS2339: Property 'evidence' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "low" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Pattern: TS2339: stale/suggested property `evidence`
+Hint: Remove/gate stale `evidence` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 034 ---
+lib/program/program-display-contract.ts(544,54): error TS2367: This comparison appears to be unintentional because the types '"headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected"' and '"carryover_only"' have no overlap.
+Pattern: TS2367: impossible comparison `"carryover_only"`
+Hint: Remove impossible comparison to `"carryover_only"` or map only if current literal truth is obvious.
+
+--- TARGET 035 ---
+lib/program/program-display-contract.ts(2154,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+Pattern: TS7006: implicit any parameter `id`
+Hint: Type callback parameter `id` from immediate local object/list shape.
+
+--- TARGET 036 ---
+lib/program/program-display-contract.ts(3682,24): error TS2367: This comparison appears to be unintentional because the types 'PrescriptionIntent' and '"protection"' have no overlap.
+Pattern: TS2367: impossible comparison `"protection"`
+Hint: Remove impossible comparison to `"protection"` or map only if current literal truth is obvious.
+
+--- TARGET 037 ---
+lib/program/program-display-contract.ts(5711,9): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"pull"' have no overlap.
+Pattern: TS2367: impossible comparison `"pull"`
+Hint: Remove impossible comparison to `"pull"` or map only if current literal truth is obvious.
+
+--- TARGET 038 ---
+lib/program/program-display-contract.ts(5713,16): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"push"' have no overlap.
+Pattern: TS2367: impossible comparison `"push"`
+Hint: Remove impossible comparison to `"push"` or map only if current literal truth is obvious.
+
+--- TARGET 039 ---
+lib/roadmap/skill-roadmap-service.ts(567,7): error TS2353: Object literal may only specify known properties, and 'phase' does not exist in type 'AthleteRoadmapPosition'.
+Pattern: TS2353: stale object key `phase`
+Hint: Remove/gate stale `phase` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 040 ---
+lib/roadmap/skill-roadmap-service.ts(567,22): error TS2339: Property 'phases' does not exist on type 'SkillRoadmap'.
+Pattern: TS2339: stale/suggested property `phases`
+Hint: Remove/gate stale `phases` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 041 ---
+lib/roadmap/skill-roadmap-service.ts(634,9): error TS2353: Object literal may only specify known properties, and 'leanHoldTime' does not exist in type 'PlancheInputs'.
+Pattern: TS2353: stale object key `leanHoldTime`
+Hint: Remove/gate stale `leanHoldTime` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 042 ---
+lib/roadmap/skill-roadmap-service.ts(647,9): error TS2353: Object literal may only specify known properties, and 'straightBarDipReps' does not exist in type 'MuscleUpInputs'.
+Pattern: TS2353: stale object key `straightBarDipReps`
+Hint: Remove/gate stale `straightBarDipReps` or map to obvious local current field. Do not add shared type fields.
+
+--- TARGET 043 ---
+lib/unified-program-generation.ts(826,5): error TS2353: Object literal may only specify known properties, and 'skill_isometric' does not exist in type 'Record<MovementFamily, { name: string; id: string; }>'.
+Pattern: TS2353: stale object key `skill_isometric`
+Hint: Remove/gate stale `skill_isometric` or map to obvious local current field. Do not add shared type fields.
+

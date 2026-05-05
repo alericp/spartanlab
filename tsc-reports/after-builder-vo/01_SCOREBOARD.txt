@@ -1,0 +1,6 @@
+===== SCOREBOARD AFTER BUILDER VO =====
+Previous known TypeScript diagnostics: 1776
+Current TypeScript diagnostics: 1571
+Diagnostic delta from previous known: 205
+Current files with TypeScript errors: 150
+adaptive-program-builder.ts diagnostics: 557

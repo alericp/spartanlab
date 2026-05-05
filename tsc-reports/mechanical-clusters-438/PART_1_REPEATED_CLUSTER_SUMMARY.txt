@@ -1,0 +1,456 @@
+===== PART 1 — REPEATED CLUSTER SUMMARY FROM CURRENT 438 STATE =====
+
+--- TS2322: local shape mismatch | count 85 ---
+lib/adaptive-athlete-engine.ts(636,7): error TS2322: Type '"insufficient_data"' is not assignable to type 'MomentumState'.
+lib/adaptive-athlete-engine.ts(639,7): error TS2322: Type '"optimal"' is not assignable to type 'FatigueState'.
+lib/adaptive-athlete-engine.ts(640,7): error TS2322: Type '"green"' is not assignable to type 'RecoveryLevel'.
+lib/adaptive-athlete-engine.ts(647,7): error TS2322: Type '"not_needed"' is not assignable to type 'DeloadStatus'.
+lib/adaptive-program-builder.ts(33053,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+lib/adaptive-progression-engine.ts(1049,9): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+lib/adaptive-progression-engine.ts(1063,9): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+lib/adaptive-progression-engine.ts(1070,7): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+lib/ai-truth-audit.ts(813,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/canonical-profile-service.ts(1451,131): error TS2322: Type '"lbs" | "kg" | undefined' is not assignable to type '"lbs" | "kg"'.
+lib/canonical-profile-service.ts(1454,122): error TS2322: Type '"lbs" | "kg" | undefined' is not assignable to type '"lbs" | "kg"'.
+lib/dashboard-service.ts(144,5): error TS2322: Type 'Partial<Record<ExerciseType, StrengthRecord | null>>' is not assignable to type 'Record<ExerciseType, StrengthRecord | null>'.
+lib/dashboard-service.ts(330,7): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/dashboard-service.ts(372,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(375,5): error TS2322: Type 'Record<string, unknown> | null' is not assignable to type 'Record<string, boolean> | null'.
+lib/doctrine/source-batches/index.ts(738,3): error TS2322: Type 'Batch01Provenance | { batch: "batch_04"; sourceId: string | null; } | { batch: "batch_05"; sourceId: string | null; } | { batch: "batch_06"; sourceId: string | null; } | ... 4 more ... | null' is not assignable to type 'Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | ... 5 more ... | null'.
+lib/history-snapshot-engine.ts(262,61): error TS2322: Type '"declining"' is not assignable to type 'TrendDirection'.
+lib/metrics-update-service.ts(403,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+lib/metrics-update-service.ts(404,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+lib/movement-bias-detection-engine.ts(720,50): error TS2322: Type '"compression"' is not assignable to type 'MovementFamily'.
+... plus 65 more
+
+--- TS2345: local shape mismatch | count 30 ---
+lib/adaptive-program-builder.ts(28227,13): error TS2345: Argument of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...' is not assignable to parameter of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...'.
+lib/adaptive-program-builder.ts(31836,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+lib/adaptive-program-builder.ts(32775,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+lib/athlete-profile.ts(1535,65): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SkillGoal'.
+lib/athlete-profile.ts(1538,60): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EquipmentType'.
+lib/coaching-explanation-contract.ts(927,5): error TS2345: Argument of type '"accessory" | "support" | "primary_skill" | "strength_output"' is not assignable to parameter of type '"primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined'.
+lib/constraint-detection-engine.ts(1045,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-integration.ts(197,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-integration.ts(294,46): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-integration.ts(307,58): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/doctrine/doctrine-influence-contract.ts(509,33): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(511,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(512,31): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(513,34): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+lib/doctrine/doctrine-influence-contract.ts(515,39): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+lib/equipment-adaptation-engine.ts(152,43): error TS2345: Argument of type '"pullup_bar"' is not assignable to parameter of type 'EquipmentType'.
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"profile" | "fallback" | "engine"'.
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+lib/program-adjustment-engine.ts(470,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Exercise'.
+lib/program-generation/exercise-selection-materiality.ts(703,68): error TS2345: Argument of type '"none"' is not assignable to parameter of type 'EquipmentType'.
+... plus 10 more
+
+--- TS2322: scalar-to-union validation | count 12 ---
+lib/dashboard-service.ts(127,3): error TS2322: Type '0' is not assignable to type 'SessionLengthMinutes'.
+lib/doctrine/method-profile-registry.ts(563,44): error TS2322: Type '"handstand"' is not assignable to type 'PrimaryGoal'.
+lib/doctrine/method-profile-registry.ts(563,57): error TS2322: Type '"l_sit"' is not assignable to type 'PrimaryGoal'.
+lib/doctrine/method-profile-registry.ts(563,66): error TS2322: Type '"general_strength"' is not assignable to type 'PrimaryGoal'.
+lib/program-adjustment-engine.ts(616,13): error TS2322: Type '"dip_station"' is not assignable to type 'EquipmentType'.
+lib/program-state.ts(1282,7): error TS2322: Type '{ adaptationNotes: string[]; available: EquipmentType[]; hasFullSetup: boolean; missingCritical: EquipmentType[]; missing: never[]; } | undefined' is not assignable to type 'EquipmentProfile'.
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+lib/program-version-service.ts(650,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal | undefined'.
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+
+--- TS2322: number undefined fallback | count 9 ---
+lib/adaptive-program-builder.ts(27234,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+lib/canonical-profile-service.ts(1374,50): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(397,5): error TS2322: Type 'PullUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(398,5): error TS2322: Type 'PushUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(399,5): error TS2322: Type 'DipCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(485,5): error TS2322: Type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets: number; reps: string; hold: string | undefined; rest: string | number | undefined; notes: string | undefined; }[]; }[]' is not assignable to type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets?: number | undefined; reps?: string | undefined; hold?: string | undefined; rest?: string | undefined; notes?: string | undefined; }[]; }[]'.
+lib/weak-point-detection.ts(475,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ load: number | null; reps?: number | undefined; } | null | undefined'.
+lib/weak-point-detection.ts(480,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ load: number | null; reps?: number | undefined; } | null | undefined'.
+lib/workout-history-persistence.ts(453,11): error TS2322: Type '{ exerciseId: string; exerciseName: string; category: ExerciseCategory; prescribed: { sets: number; reps: string | undefined; hold: string | undefined; weight: number | undefined; }; ... 4 more ...; prType: PRType | undefined; }[]' is not assignable to type 'ExerciseResultSnapshot[]'.
+
+--- TS2339: stale/suggested property `name` | count 7 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/unified-program-generation.ts(388,22): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(654,24): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+
+--- TS2304: import/export or missing symbol `feedback` | count 7 ---
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+
+--- TS2322: WeakPointType literal mismatch | count 6 ---
+lib/adaptive-training-cycle-engine.ts(748,5): error TS2322: Type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]' is not assignable to type 'string[]'.
+lib/advanced-skills-integration.ts(251,29): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(290,52): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(307,45): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(401,7): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/weak-point-engine.ts(994,3): error TS2322: Type '{ targetedLimiter: WeakPointType; id: string; name: string; reason: string; }[]' is not assignable to type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]'.
+
+--- TS2454: used before assigned `result` | count 5 ---
+lib/readiness/skill-readiness.ts(2672,33): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2673,40): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2678,12): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2682,17): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2683,16): error TS2454: Variable 'result' is used before being assigned.
+
+--- TS2554: wrong argument count | count 5 ---
+lib/strength-score-engine.ts(576,50): error TS2554: Expected 6 arguments, but got 5.
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(733,50): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(736,38): error TS2554: Expected 4-5 arguments, but got 1.
+
+--- TS2305: missing export `"../skill-readiness"` | count 4 ---
+lib/engine/index.ts(354,3): error TS2305: Module '"../skill-readiness"' has no exported member 'quickReadinessCheck'.
+lib/engine/index.ts(355,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getPrimaryLimiter'.
+lib/engine/index.ts(356,3): error TS2305: Module '"../skill-readiness"' has no exported member 'meetsBaselineRequirements'.
+lib/engine/index.ts(357,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getTrainingRecommendations'.
+
+--- TS2367: impossible comparison `"declining"` | count 4 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+
+--- TS2339: stale/suggested property `rpe` | count 3 ---
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,47): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,62): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+
+--- TS2305: missing export `"./athlete-profile"` | count 3 ---
+lib/flexible-schedule-engine.ts(62,3): error TS2305: Module '"./athlete-profile"' has no exported member 'PrimaryGoal'.
+lib/flexible-schedule-engine.ts(63,3): error TS2305: Module '"./athlete-profile"' has no exported member 'ExperienceLevel'.
+lib/unified-readiness-integration.ts(25,15): error TS2305: Module '"./athlete-profile"' has no exported member 'AthleteProfile'.
+
+--- TS2305: missing export `"./movement-family-registry"` | count 3 ---
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+lib/performance-envelope-service.ts(21,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+lib/workout-feedback-integration.ts(9,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+
+--- TS2339: stale/suggested property `equipment` | count 3 ---
+lib/program-state-contract.ts(195,97): error TS2339: Property 'equipment' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1294,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+lib/unified-coaching-engine.ts(446,17): error TS2339: Property 'equipment' does not exist on type 'AthleteProfile'.
+
+--- TS2724: import/export or missing symbol `"./skill-session-service"` | count 3 ---
+lib/progress-data-service.ts(6,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+lib/training-feedback-loop.ts(19,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+lib/trusted-data-filter.ts(13,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+
+--- TS2339: stale/suggested property `recordedAt` | count 3 ---
+lib/progress-streak-engine.ts(449,28): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+lib/progress-streak-engine.ts(449,63): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+lib/progress-streak-engine.ts(471,34): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+
+--- TS2339: stale/suggested property `notes` | count 3 ---
+lib/recovery-fatigue-engine.ts(611,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+lib/recovery-fatigue-engine.ts(612,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+lib/recovery-fatigue-engine.ts(771,35): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+
+--- TS2339: stale/suggested property `trainingStyle` | count 3 ---
+lib/repositories/profile-repository.ts(311,32): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+lib/repositories/profile-repository.ts(311,67): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/repositories/profile-repository.ts(336,30): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+
+--- TS2339: stale/suggested property `weight` | count 3 ---
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+lib/training-coach.ts(586,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+
+--- TS2339: stale/suggested property `general` | count 3 ---
+lib/session-variety-engine.ts(706,58): error TS2339: Property 'general' does not exist on type 'Record<SkillType, string[][]>'.
+lib/session-variety-engine.ts(835,50): error TS2339: Property 'general' does not exist on type 'Record<SkillType, MovementFamily[]>'.
+lib/session-variety-engine.ts(900,38): error TS2339: Property 'general' does not exist on type 'Record<SkillType, ExerciseVariationSet>'.
+
+--- TS2339: stale/suggested property `timing` | count 3 ---
+lib/unified-coaching-engine.ts(883,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+lib/unified-coaching-engine.ts(884,56): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+lib/unified-coaching-engine.ts(885,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+
+--- TS2339: stale/suggested property `id` | count 3 ---
+lib/unified-program-generation.ts(387,20): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(653,22): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+lib/workout-execution-truth.ts(216,25): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+
+--- TS2339: stale/suggested property `primaryJoint` | count 3 ---
+lib/warmup-intelligence-engine.ts(1213,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1223,69): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1233,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+
+--- TS2305: missing export `"@/lib/achievements"` | count 2 ---
+components/achievements/AchievementNotification.tsx(8,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'popNextNotification'.
+components/achievements/AchievementNotification.tsx(10,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'hasUnseenAchievements'.
+
+--- TS2367: impossible comparison `"elevated"` | count 2 ---
+lib/adaptive-program-builder.ts(31072,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+lib/adaptive-program-builder.ts(31076,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+
+--- TS2339: stale/suggested property `roleInSession` | count 2 ---
+lib/coaching-explanation-contract.ts(413,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+
+--- TS2459: import/export or missing symbol `"./constraint-engine"` | count 2 ---
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/training-coach.ts(11,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+
+--- TS2367: impossible comparison `"STRICT_SPINE"` | count 2 ---
+lib/doctrine/doctrine-consumption-audit.ts(202,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+lib/doctrine/doctrine-consumption-audit.ts(229,33): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+
+--- TS2459: import/export or missing symbol `"./batch-02-uploaded-pdf-doctrine"` | count 2 ---
+lib/doctrine/source-batches/index.ts(57,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02PriorityType' locally, but it is not exported.
+lib/doctrine/source-batches/index.ts(58,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02IntelligenceTier' locally, but it is not exported.
+
+--- TS2339: stale/suggested property `area` | count 2 ---
+lib/elite-insight-engine.ts(88,28): error TS2339: Property 'area' does not exist on type 'never'.
+lib/elite-insight-engine.ts(89,37): error TS2339: Property 'area' does not exist on type 'never'.
+
+--- TS2724: import/export or missing symbol `"./exercise-classification-registry"` | count 2 ---
+lib/enhanced-exercise-intelligence.ts(17,15): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+lib/exercise-family-integration.ts(24,8): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+
+--- TS7053: other | count 2 ---
+lib/exercise-family-integration.ts(307,24): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'Record<TrainingIntent, TrainingIntentMetadata>'.
+lib/program/method-materialization-summary.ts(333,9): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ superset: number; circuit: number; density_block: number; cluster: number; }'.
+
+--- TS2448: used before assigned `weekSummary` | count 2 ---
+lib/planner-truth-audit.ts(985,14): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+lib/planner-truth-audit.ts(988,63): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+
+--- TS2454: used before assigned `weekSummary` | count 2 ---
+lib/planner-truth-audit.ts(985,14): error TS2454: Variable 'weekSummary' is used before being assigned.
+lib/planner-truth-audit.ts(988,63): error TS2454: Variable 'weekSummary' is used before being assigned.
+
+--- TS2304: import/export or missing symbol `selectedSkills` | count 2 ---
+lib/planner-truth-audit.ts(989,14): error TS2304: Cannot find name 'selectedSkills'.
+lib/planner-truth-audit.ts(992,39): error TS2304: Cannot find name 'selectedSkills'.
+
+--- TS2367: impossible comparison `"hybrid"` | count 2 ---
+lib/program-exercise-selector.ts(5551,25): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+lib/program-exercise-selector.ts(5564,45): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+
+--- TS2367: impossible comparison `"blocked"` | count 2 ---
+lib/program-generation/session-composition-intelligence.ts(846,45): error TS2367: This comparison appears to be unintentional because the types '"discouraged"' and '"blocked"' have no overlap.
+lib/program/onboarding-truth-expression-audit.ts(281,14): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"blocked"' have no overlap.
+
+--- TS2339: stale/suggested property `rest` | count 2 ---
+lib/program-profile-validator.ts(1273,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+lib/program-profile-validator.ts(1279,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+
+--- TS2367: impossible comparison `"improving"` | count 2 ---
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+
+--- TS18048: null/undefined guard `envelope.fatigueThreshold` | count 2 ---
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+
+--- TS2367: impossible comparison `false` | count 2 ---
+lib/program/performance-feedback-adaptation-contract.ts(546,16): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+lib/progression-decision-engine.ts(351,14): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+
+--- TS2367: impossible comparison `"none"` | count 2 ---
+lib/program/programming-truth-bundle.ts(672,50): error TS2367: This comparison appears to be unintentional because the types '"medium" | "low" | "high"' and '"none"' have no overlap.
+lib/weak-point-priority-engine.ts(387,16): error TS2367: This comparison appears to be unintentional because the types '"moderate" | "significant"' and '"none"' have no overlap.
+
+--- TS2551: stale/suggested property `exerciseType` | count 2 ---
+lib/progress-streak-engine.ts(429,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+lib/progress-streak-engine.ts(430,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+
+--- TS2339: stale/suggested property `addedWeight` | count 2 ---
+lib/progress-streak-engine.ts(452,36): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+lib/progress-streak-engine.ts(455,48): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+
+--- TS2339: stale/suggested property `scheduleMode` | count 2 ---
+lib/repositories/profile-repository.ts(310,31): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+lib/repositories/profile-repository.ts(333,29): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+
+--- TS2367: impossible comparison `"pull_ups"` | count 2 ---
+lib/roadmap/skill-roadmap-service.ts(587,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+lib/training-coach.ts(580,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+
+--- TS2367: impossible comparison `"weighted_pull_ups"` | count 2 ---
+lib/roadmap/skill-roadmap-service.ts(588,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+lib/training-coach.ts(581,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+
+--- TS2367: impossible comparison `"dips"` | count 2 ---
+lib/roadmap/skill-roadmap-service.ts(589,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+lib/training-coach.ts(582,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+
+--- TS2367: impossible comparison `"push_ups"` | count 2 ---
+lib/roadmap/skill-roadmap-service.ts(591,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+lib/training-coach.ts(583,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+
+--- TS2339: stale/suggested property `visibleDifferenceTargets` | count 2 ---
+lib/server/authoritative-program-generation.ts(1434,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/server/authoritative-program-generation.ts(1435,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+
+--- TS2353: stale object key `mainExercises` | count 2 ---
+lib/session-assembly-engine.ts(726,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+lib/warmup-engine.ts(1168,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+
+--- TS2353: stale object key `back_lever` | count 2 ---
+lib/session-variety-engine.ts(678,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, string[][]>'.
+lib/session-variety-engine.ts(873,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, ExerciseVariationSet>'.
+
+--- TS2339: stale/suggested property `completionRate` | count 2 ---
+lib/training-feedback-loop.ts(343,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+lib/training-feedback-loop.ts(344,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+
+--- TS2339: stale/suggested property `currentNode` | count 2 ---
+lib/unified-coaching-engine.ts(1036,84): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+lib/unified-coaching-engine.ts(1043,80): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+
+--- TS2339: stale/suggested property `prescription` | count 2 ---
+lib/unified-program-generation.ts(390,22): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(656,24): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+
+--- TS2339: stale/suggested property `rationale` | count 2 ---
+lib/unified-program-generation.ts(392,24): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+lib/unified-program-generation.ts(658,26): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+
+--- TS2339: stale/suggested property `skillLevels` | count 2 ---
+lib/unified-readiness-integration.ts(173,21): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+lib/unified-readiness-integration.ts(173,60): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+
+--- TS2353: stale object key `exerciseName` | count 2 ---
+lib/warmup-intelligence-engine.ts(1210,13): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+lib/warmup-intelligence-engine.ts(1230,11): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+
+--- TS2339: stale/suggested property `defaultPrescription` | count 2 ---
+lib/warmup-intelligence-engine.ts(1211,41): error TS2339: Property 'defaultPrescription' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1231,41): error TS2339: Property 'defaultPrescription' does not exist on type 'WarmUpExerciseDefinition'.
+
+--- TS2339: stale/suggested property `load` | count 2 ---
+lib/weak-point-detection.ts(447,48): error TS2339: Property 'load' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/weak-point-detection.ts(448,42): error TS2339: Property 'load' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+
+--- TS2339: stale/suggested property `userId` | count 2 ---
+lib/weak-point-engine.ts(870,24): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1159,23): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+
+--- TS2322: string null undefined to null | count 1 ---
+lib/adaptive-program-builder.ts(20825,7): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | null'.
+
+--- TS2353: stale object key `goalCategories` | count 1 ---
+lib/adaptive-program-builder.ts(21691,7): error TS2353: Object literal may only specify known properties, and 'goalCategories' does not exist in type 'ProfileSnapshot'.
+
+--- TS2345: string null undefined to null | count 1 ---
+lib/athlete-calibration.ts(944,5): error TS2345: Argument of type 'string | null | undefined' is not assignable to parameter of type 'OnboardingGoal | PrimaryGoalType | null'.
+
+--- TS2353: stale object key `deloadFrequency` | count 1 ---
+lib/back-lever-training-system.ts(893,5): error TS2353: Object literal may only specify known properties, and 'deloadFrequency' does not exist in type '{ optimalFrequency: number; minimumFrequency: number; maximumFrequency: number; restBetweenSessions: number; rationale: string; }'.
+
+--- TS2820: compiler-suggested literal/key `"grip_strength"` | count 1 ---
+lib/banded-progression-integration-engine.ts(347,37): error TS2820: Type '"grip_strength"' is not assignable to type 'WeakPointType'. Did you mean '"dip_strength"'?
+
+--- TS2339: stale/suggested property `level` | count 1 ---
+lib/canonical-profile-service.ts(1536,129): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+
+--- TS2339: stale/suggested property `rangeIntent` | count 1 ---
+lib/canonical-profile-service.ts(1537,142): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+
+--- TS2339: stale/suggested property `recoveryConfidence` | count 1 ---
+lib/canonical-profile-service.ts(1560,86): error TS2339: Property 'recoveryConfidence' does not exist on type 'RecoveryProfile | null'.
+
+--- TS2367: impossible comparison `"iron_cross"` | count 1 ---
+lib/coaching-framework-engine.ts(701,47): error TS2367: This comparison appears to be unintentional because the types 'SkillKey | null' and '"iron_cross"' have no overlap.
+
+--- TS2367: impossible comparison `"REDUCE_INTENSITY"` | count 1 ---
+lib/constraint-aware-assembly-engine.ts(410,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | null' and '"REDUCE_INTENSITY"' have no overlap.
+
+--- TS2724: import/export or missing symbol `"./constraint-detection-engine"` | count 1 ---
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+
+--- TS2305: missing export `"./doctrine-db"` | count 1 ---
+lib/doctrine-athlete-context-query.ts(40,10): error TS2305: Module '"./doctrine-db"' has no exported member 'sql'.
+
+--- TS2367: impossible comparison `SkillType` | count 1 ---
+lib/doctrine-coverage-validator.ts(68,13): error TS2367: This comparison appears to be unintentional because the types 'MovementFamily' and 'SkillType' have no overlap.
+
+--- TS2339: stale/suggested property `reps` | count 1 ---
+lib/doctrine-to-output-verification.ts(521,21): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+
+--- TS2339: stale/suggested property `holdTime` | count 1 ---
+lib/doctrine-to-output-verification.ts(522,25): error TS2339: Property 'holdTime' does not exist on type 'AdaptiveExercise'.
+
+--- TS2339: stale/suggested property `intendedIntensity` | count 1 ---
+lib/doctrine/doctrine-consumption-audit.ts(156,31): error TS2339: Property 'intendedIntensity' does not exist on type 'AdaptiveSession'.
+
+--- TS2339: stale/suggested property `exerciseName` | count 1 ---
+lib/doctrine/doctrine-consumption-audit.ts(162,30): error TS2339: Property 'exerciseName' does not exist on type 'AdaptiveExercise'.
+
+--- TS2367: impossible comparison `"BALANCED"` | count 1 ---
+lib/doctrine/doctrine-consumption-audit.ts(231,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"BALANCED"' have no overlap.
+
+--- TS2339: stale/suggested property `maxSessionTypes` | count 1 ---
+lib/doctrine/doctrine-consumption-audit.ts(301,117): error TS2339: Property 'maxSessionTypes' does not exist on type '{ mode: IntegrationMode; allowedSecondaryMethods: string[]; blockedMethods: string[]; maxSecondaryExercisesPerSession: number; secondaryMustCarryover: boolean; rationale: string; }'.
+
+--- TS2339: stale/suggested property `improvement` | count 1 ---
+lib/elite-insight-engine.ts(89,81): error TS2339: Property 'improvement' does not exist on type 'never'.
+
+--- TS2724: import/export or missing symbol `"../skill-readiness"` | count 1 ---
+lib/engine/index.ts(353,3): error TS2724: '"../skill-readiness"' has no exported member named 'SkillReadinessEngine'. Did you mean 'SkillReadinessInput'?
+
+--- TS7006: implicit any parameter `req` | count 1 ---
+lib/exercise-family-integration.ts(479,32): error TS7006: Parameter 'req' implicitly has an 'any' type.
+
+--- TS2367: impossible comparison `string` | count 1 ---
+lib/fatigue-engine.ts(289,7): error TS2367: This comparison appears to be unintentional because the types '{ level: "elevated" | "low" | "moderate" | "high"; message: string; }' and 'string' have no overlap.
+
+--- TS7006: implicit any parameter `row` | count 1 ---
+lib/history-service.ts(835,23): error TS7006: Parameter 'row' implicitly has an 'any' type.
+
+--- TS2367: impossible comparison `"skill"` | count 1 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+
+--- TS2367: impossible comparison `"strength"` | count 1 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+
+--- TS2339: stale/suggested property `fatigueWarning` | count 1 ---
+lib/performance-envelope-integration.ts(454,30): error TS2339: Property 'fatigueWarning' does not exist on type 'EnvelopeRecommendation'.
+
+--- TS2339: stale/suggested property `experienceLevel` | count 1 ---
+lib/program-adjustment-engine.ts(460,32): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+
+--- TS2339: stale/suggested property `alternatives` | count 1 ---
+lib/program-adjustment-engine.ts(486,38): error TS2339: Property 'alternatives' does not exist on type 'ExerciseScore'.
+
+--- TS7006: implicit any parameter `a` | count 1 ---
+lib/program-adjustment-engine.ts(486,56): error TS7006: Parameter 'a' implicitly has an 'any' type.
+
+--- TS2367: impossible comparison `"mobility"` | count 1 ---
+lib/program-exercise-selector.ts(5564,9): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"mobility"' have no overlap.
+
+--- TS2339: stale/suggested property `isInConsistentStreak` | count 1 ---
+lib/program-generation/week-adaptation-decision-contract.ts(384,21): error TS2339: Property 'isInConsistentStreak' does not exist on type 'ConsistencyStatus'.
+
+--- TS2339: stale/suggested property `currentStreak` | count 1 ---
+lib/program-generation/week-adaptation-decision-contract.ts(384,57): error TS2339: Property 'currentStreak' does not exist on type 'ConsistencyStatus'.
+
+--- TS2339: stale/suggested property `gapDays` | count 1 ---
+lib/program-generation/week-adaptation-decision-contract.ts(386,43): error TS2339: Property 'gapDays' does not exist on type 'ConsistencyStatus'.
+
+--- TS2339: stale/suggested property `pattern` | count 1 ---
+lib/program-history-versioning.ts(600,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+
+--- TS2353: stale object key `authoritativeMultiSkillIntentContract` | count 1 ---
+lib/program-truth-extractor.ts(487,7): error TS2353: Object literal may only specify known properties, and 'authoritativeMultiSkillIntentContract' does not exist in type '{ identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }'.
+
+--- TS18048: null/undefined guard `envelope.confidenceScore` | count 1 ---
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+
+--- TS18048: null/undefined guard `envelope.preferredRepRangeMin` | count 1 ---
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+

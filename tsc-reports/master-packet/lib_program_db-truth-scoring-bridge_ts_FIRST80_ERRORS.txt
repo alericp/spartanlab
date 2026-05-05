@@ -1,0 +1,10 @@
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(450,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(451,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.

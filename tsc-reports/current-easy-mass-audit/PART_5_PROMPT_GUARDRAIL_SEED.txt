@@ -1,0 +1,6 @@
+===== PART 5 — PROMPT GUARDRAIL SEED =====
+Use exact terminal packet only. No broad repo scan. No scripts. No reports. No helper-only work. No as any. No ts-ignore. No union widening. No adding stale fields to shared types.
+For VO builder lane: only lib/adaptive-program-builder.ts. Success is builder count reduction.
+For GitHub AI/non-builder lane: exclude lib/adaptive-program-builder.ts. Touch at most 8-12 files. Stop after likely 40+ diagnostics reduced.
+Line drift: exact line + symbol anchors + ±80 lines only. If not found, block and move.
+Do not let agent stop after easy group; it must attempt every target in the chosen packet unless blocked.

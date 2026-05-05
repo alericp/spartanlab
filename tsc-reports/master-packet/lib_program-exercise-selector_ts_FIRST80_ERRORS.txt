@@ -1,0 +1,80 @@
+lib/program-exercise-selector.ts(1619,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1620,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"strength"' have no overlap.
+lib/program-exercise-selector.ts(1621,19): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"flexibility"' have no overlap.
+lib/program-exercise-selector.ts(1756,24): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1824,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1827,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1830,36): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1831,39): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1836,7): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(1849,9): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(1876,39): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1879,42): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1882,40): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1886,39): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1908,35): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1911,35): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1911,79): error TS2532: Object is possibly 'undefined'.
+lib/program-exercise-selector.ts(1919,37): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(1936,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+lib/program-exercise-selector.ts(2015,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"direct_skill"' have no overlap.
+lib/program-exercise-selector.ts(2016,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"strength_foundation"' have no overlap.
+lib/program-exercise-selector.ts(2019,5): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"secondary_skill"' have no overlap.
+lib/program-exercise-selector.ts(2020,5): error TS2367: This comparison appears to be unintentional because the types 'TraceExpressionMode | undefined' and '"technical"' have no overlap.
+lib/program-exercise-selector.ts(2129,25): error TS2304: Cannot find name 'usedIds'.
+lib/program-exercise-selector.ts(2130,9): error TS2304: Cannot find name 'addExercise'.
+lib/program-exercise-selector.ts(2186,5): error TS2353: Object literal may only specify known properties, and 'sessionDifferentiationSignature' does not exist in type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(2192,57): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(2194,42): error TS2367: This comparison appears to be unintentional because the types 'TraceSessionRole | undefined' and '"direct_skill"' have no overlap.
+lib/program-exercise-selector.ts(2969,12): error TS2339: Property 'primarySkills' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(2969,38): error TS7006: Parameter 'p' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(3038,27): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3038,48): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3067,27): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3067,48): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3131,34): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3131,64): error TS2339: Property 'carryover' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3454,13): error TS2322: Type 'string' is not assignable to type 'number'.
+lib/program-exercise-selector.ts(3516,66): error TS2367: This comparison appears to be unintentional because the types '"pull_strength" | "push_strength" | "push_skill" | "pull_skill" | "mixed_upper" | "skill_density" | "transition_work" | "flexibility_focus" | "vertical_push_skill" | "mixed_skill"' and '"support_conditioning"' have no overlap.
+lib/program-exercise-selector.ts(3517,28): error TS2367: This comparison appears to be unintentional because the types 'DayFocus' and '"skill"' have no overlap.
+lib/program-exercise-selector.ts(3619,33): error TS2345: Argument of type '"weight_belt"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3619,72): error TS2345: Argument of type '"weight_vest"' is not assignable to parameter of type 'EquipmentType'.
+lib/program-exercise-selector.ts(3670,101): error TS2339: Property 'primarySkill' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3698,48): error TS2339: Property 'primarySkill' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(3704,9): error TS2345: Argument of type 'boolean | ""' is not assignable to parameter of type 'boolean | undefined'.
+lib/program-exercise-selector.ts(3820,11): error TS2367: This comparison appears to be unintentional because the types 'ExerciseCategory' and '"hold"' have no overlap.
+lib/program-exercise-selector.ts(4225,41): error TS2339: Property 'difficulty' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(4535,21): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4549,8): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4550,8): error TS18048: 'equipment' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4574,45): error TS2339: Property 'preferredExercises' does not exist on type 'CachedDoctrineRules'.
+lib/program-exercise-selector.ts(4574,69): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(4575,41): error TS2339: Property 'avoidExercises' does not exist on type 'CachedDoctrineRules'.
+lib/program-exercise-selector.ts(4575,61): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(4577,22): error TS2339: Property 'sourceSkill' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4577,39): error TS2551: Property 'source' does not exist on type 'CarryoverRule'. Did you mean 'sourceId'?
+lib/program-exercise-selector.ts(4578,22): error TS2551: Property 'targetSkill' does not exist on type 'CarryoverRule'. Did you mean 'targetSkillKey'?
+lib/program-exercise-selector.ts(4578,39): error TS2339: Property 'target' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4579,44): error TS2339: Property 'type' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4580,29): error TS2339: Property 'preferredExercises' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4580,53): error TS2339: Property 'exercises' does not exist on type 'CarryoverRule'.
+lib/program-exercise-selector.ts(4671,9): error TS2367: This comparison appears to be unintentional because the types 'ExerciseCategory' and '"hold"' have no overlap.
+lib/program-exercise-selector.ts(4758,18): error TS18048: 'breakdown.doctrineBoost' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4758,51): error TS18048: 'breakdown.currentProgressionFit' is possibly 'undefined'.
+lib/program-exercise-selector.ts(4758,93): error TS18048: 'breakdown.additionalSkillsSupport' is possibly 'undefined'.
+lib/program-exercise-selector.ts(5375,51): error TS2304: Cannot find name 'context'.
+lib/program-exercise-selector.ts(5381,94): error TS2345: Argument of type 'EquipmentType[] | undefined' is not assignable to parameter of type 'EquipmentType[]'.
+lib/program-exercise-selector.ts(5700,13): error TS2322: Type '"support_skill_materialization"' is not assignable to type 'ExerciseSelectionReason'.
+lib/program-exercise-selector.ts(5701,13): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5702,13): error TS2322: Type '"support"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5773,40): error TS2339: Property 'movementFamily' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5773,71): error TS2339: Property 'tags' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5774,44): error TS2339: Property 'movementFamily' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5774,75): error TS2339: Property 'tags' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5775,42): error TS2339: Property 'movementFamily' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5775,73): error TS2339: Property 'movementFamily' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5796,11): error TS2339: Property 'tags' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5797,11): error TS2339: Property 'tags' does not exist on type 'Exercise'.
+lib/program-exercise-selector.ts(5805,11): error TS2322: Type '"support_volume"' is not assignable to type 'TraceSessionRole'.
+lib/program-exercise-selector.ts(5806,11): error TS2322: Type '"prehab_focus"' is not assignable to type 'TraceExpressionMode'.
+lib/program-exercise-selector.ts(5817,41): error TS2339: Property 'tags' does not exist on type 'Exercise'.

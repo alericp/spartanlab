@@ -1,0 +1,1742 @@
+===== PART 4 — CONTEXT TARGETS 061-120 =====
+
+--- CONTEXT 001 | lib/program/db-truth-scoring-bridge.ts:203:30 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.confidenceScore`.
+   191:     // Check envelope data for tolerance signals
+   192:     const envelopes = bundle.performanceEnvelopes.byMovementFamily
+   193:     const families = Object.keys(envelopes)
+   194:     
+   195:     if (families.length > 0) {
+   196:       let totalConfidence = 0
+   197:       let avgDensity = 0
+   198:       let count = 0
+   199:       
+   200:       for (const family of families) {
+   201:         const envelope = envelopes[family]
+   202:         if (envelope.confidenceScore !== null) {
+>> 203:           totalConfidence += envelope.confidenceScore
+   204:           count++
+   205:         }
+   206:         if (envelope.preferredDensityLevel) {
+   207:           avgDensity += envelope.preferredDensityLevel === 'high' ? 3 : 
+   208:                         envelope.preferredDensityLevel === 'medium' ? 2 : 1
+   209:         }
+   210:       }
+   211:       
+   212:       if (count > 0) {
+   213:         const avgConfidence = totalConfidence / count
+   214:         // High confidence envelopes allow more aggressive selection
+   215:         modifiers.toleranceModifier = avgConfidence > 0.7 ? 10 : 
+
+--- CONTEXT 002 | lib/program/db-truth-scoring-bridge.ts:399:33 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.preferredRepRangeMin`.
+   387:   const sourceSections: string[] = []
+   388:   
+   389:   // 1. ENVELOPE-BASED CALIBRATION
+   390:   if (bundle.performanceEnvelopes.meta.available && movementFamily) {
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+   408:       
+   409:       // Density calibration
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+
+--- CONTEXT 003 | lib/program/db-truth-scoring-bridge.ts:399:65 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.preferredRepRangeMax`.
+   387:   const sourceSections: string[] = []
+   388:   
+   389:   // 1. ENVELOPE-BASED CALIBRATION
+   390:   if (bundle.performanceEnvelopes.meta.available && movementFamily) {
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+   408:       
+   409:       // Density calibration
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+
+--- CONTEXT 004 | lib/program/db-truth-scoring-bridge.ts:454:49 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(454,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `strengthBenchmarks.pullUpMax`.
+   442:       (strengthBenchmarks.pullUpMax && strengthBenchmarks.pullUpMax > 12) ||
+   443:       (strengthBenchmarks.dipMax && strengthBenchmarks.dipMax > 15) ||
+   444:       (strengthBenchmarks.weightedPullUpLoad && strengthBenchmarks.weightedPullUpLoad > 20)
+   445:     
+   446:     if (hasStrongBenchmarks) {
+   447:       // Strong benchmarks allow slightly higher intensity
+   448:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   449:       calibration.intensityConfidence = 'medium'
+   450:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   451:     }
+   452:     
+   453:     const hasWeakBenchmarks = 
+>> 454:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+   455:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   456:     
+   457:     if (hasWeakBenchmarks) {
+   458:       // Weak benchmarks = be conservative
+   459:       calibration.intensityModifier = -0.5
+   460:       calibration.intensityConfidence = 'medium'
+   461:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   462:       calibration.setsModifier = -1
+   463:       calibration.setsConfidence = 'low'
+   464:       calibration.setsReason = 'reduced_sets_for_developing_strength'
+   465:     }
+   466:   }
+
+--- CONTEXT 005 | lib/program/db-truth-scoring-bridge.ts:455:46 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(455,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `strengthBenchmarks.dipMax`.
+   443:       (strengthBenchmarks.dipMax && strengthBenchmarks.dipMax > 15) ||
+   444:       (strengthBenchmarks.weightedPullUpLoad && strengthBenchmarks.weightedPullUpLoad > 20)
+   445:     
+   446:     if (hasStrongBenchmarks) {
+   447:       // Strong benchmarks allow slightly higher intensity
+   448:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   449:       calibration.intensityConfidence = 'medium'
+   450:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   451:     }
+   452:     
+   453:     const hasWeakBenchmarks = 
+   454:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+>> 455:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   456:     
+   457:     if (hasWeakBenchmarks) {
+   458:       // Weak benchmarks = be conservative
+   459:       calibration.intensityModifier = -0.5
+   460:       calibration.intensityConfidence = 'medium'
+   461:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   462:       calibration.setsModifier = -1
+   463:       calibration.setsConfidence = 'low'
+   464:       calibration.setsReason = 'reduced_sets_for_developing_strength'
+   465:     }
+   466:   }
+   467:   
+
+--- CONTEXT 006 | lib/program/program-display-contract.ts:261:37 | TS2339 ---
+lib/program/program-display-contract.ts(261,37): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "low" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Hint: Map/remove stale `doctrineConstraints` using local code context. Do not add shared type fields.
+   249:     }
+   250:     
+   251:     return {
+   252:       phaseLabel: phaseLabels[decision.phase] || decision.phase,
+   253:       phaseDescription: phaseDescriptions[decision.phase] || '',
+   254:       isProtective: 
+   255:         decision.phase === 'initial_acclimation' ||
+   256:         decision.phase === 'recovery_constrained' ||
+   257:         decision.loadStrategy.volumeBias === 'reduced' ||
+   258:         decision.loadStrategy.intensityBias === 'reduced',
+   259:       targetDays: decision.targetDays,
+   260:       loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
+>> 261:       doctrineConstraints: decision.doctrineConstraints,
+   262:       isFirstWeekProtected: decision.firstWeekGovernor.active,
+   263:       evidence: decision.evidence,
+   264:       source: 'weekAdaptationDecision',
+   265:     }
+   266:   }
+   267:   
+   268:   // Fall back to snapshot audit
+   269:   if (snapshotAudit) {
+   270:     const phaseLabels: Record<string, string> = {
+   271:       'initial_acclimation': 'Acclimation Week',
+   272:       'normal_progression': 'Normal Progression',
+   273:       'recovery_constrained': 'Recovery Priority',
+
+--- CONTEXT 007 | lib/program/program-display-contract.ts:263:26 | TS2339 ---
+lib/program/program-display-contract.ts(263,26): error TS2339: Property 'evidence' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "low" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Hint: Map/remove stale `evidence` using local code context. Do not add shared type fields.
+   251:     return {
+   252:       phaseLabel: phaseLabels[decision.phase] || decision.phase,
+   253:       phaseDescription: phaseDescriptions[decision.phase] || '',
+   254:       isProtective: 
+   255:         decision.phase === 'initial_acclimation' ||
+   256:         decision.phase === 'recovery_constrained' ||
+   257:         decision.loadStrategy.volumeBias === 'reduced' ||
+   258:         decision.loadStrategy.intensityBias === 'reduced',
+   259:       targetDays: decision.targetDays,
+   260:       loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
+   261:       doctrineConstraints: decision.doctrineConstraints,
+   262:       isFirstWeekProtected: decision.firstWeekGovernor.active,
+>> 263:       evidence: decision.evidence,
+   264:       source: 'weekAdaptationDecision',
+   265:     }
+   266:   }
+   267:   
+   268:   // Fall back to snapshot audit
+   269:   if (snapshotAudit) {
+   270:     const phaseLabels: Record<string, string> = {
+   271:       'initial_acclimation': 'Acclimation Week',
+   272:       'normal_progression': 'Normal Progression',
+   273:       'recovery_constrained': 'Recovery Priority',
+   274:       'rebuild_after_disruption': 'Rebuilding Phase',
+   275:     }
+
+--- CONTEXT 008 | lib/program/program-display-contract.ts:544:54 | TS2367 ---
+lib/program/program-display-contract.ts(544,54): error TS2367: This comparison appears to be unintentional because the types '"headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected"' and '"carryover_only"' have no overlap.
+Hint: Remove/gate impossible comparison to `"carryover_only"`, or map to current literal only if type truth is obvious.
+   532:       omittedSkills: deferredSkills,
+   533:       reasonCategory: 'focus_priority',
+   534:       doctrineJustified: true,
+   535:       source: 'tradeoff_analysis',
+   536:     }
+   537:   }
+   538:   
+   539:   // PRIORITY 5: Indirect coverage through support work
+   540:   const weeklyRep = program.weeklyRepresentation
+   541:   if (weeklyRep?.policies) {
+   542:     const supportCoverage = weeklyRep.policies.filter(p => 
+   543:       deferredSkills.includes(p.skill) && 
+>> 544:       (p.representationVerdict === 'support_only' || p.representationVerdict === 'carryover_only')
+   545:     )
+   546:     if (supportCoverage.length > 0) {
+   547:       return {
+   548:         hasOmissions: true,
+   549:         explanationLine: `${skillList} covered indirectly through support work this week.`,
+   550:         omittedSkills: deferredSkills,
+   551:         reasonCategory: 'indirect_coverage',
+   552:         doctrineJustified: true,
+   553:         source: 'secondary_handling',
+   554:       }
+   555:     }
+   556:   }
+
+--- CONTEXT 009 | lib/program/program-display-contract.ts:2154:26 | TS7006 ---
+lib/program/program-display-contract.ts(2154,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+Hint: Type callback parameter `id` from immediate local object/list shape.
+   2142:   }
+   2143:   // Cross-check rendered blocks against canonical groups when supplied.
+   2144:   let bodyBlocksMatchCanonical: boolean | null = null
+   2145:   if (blocks.length > 0) {
+   2146:     if (renderedGroups.length === 0) {
+   2147:       bodyBlocksMatchCanonical = false
+   2148:     } else {
+   2149:       const canonicalIdSets = renderedGroups.map(g => new Set(g.matchedRowIds))
+   2150:       let allBlocksCorrelate = true
+   2151:       for (const b of blocks) {
+   2152:         const memberIds = Array.isArray(b.memberIds) ? b.memberIds : []
+   2153:         const overlaps = canonicalIdSets.some(set =>
+>> 2154:           memberIds.some(id => set.has(id)),
+   2155:         )
+   2156:         if (!overlaps) {
+   2157:           allBlocksCorrelate = false
+   2158:           break
+   2159:         }
+   2160:       }
+   2161:       bodyBlocksMatchCanonical = allBlocksCorrelate
+   2162:       debugReasons.push(
+   2163:         allBlocksCorrelate
+   2164:           ? 'BODY_BLOCKS_MATCH_CANONICAL'
+   2165:           : 'BODY_BLOCKS_DIVERGE_FROM_CANONICAL',
+   2166:       )
+
+--- CONTEXT 010 | lib/program/program-display-contract.ts:3682:24 | TS2367 ---
+lib/program/program-display-contract.ts(3682,24): error TS2367: This comparison appears to be unintentional because the types 'PrescriptionIntent' and '"protection"' have no overlap.
+Hint: Remove/gate impossible comparison to `"protection"`, or map to current literal only if type truth is obvious.
+   3670:   // 16 template strings below now consume `rpe` (rounded), not the raw value.
+   3671:   // Floor to keep the prescription on the conservative side of any half-step.
+   3672:   let intensityBadge: string | null = null
+   3673:   if (exercise.targetRPE) {
+   3674:     const rawRpe = exercise.targetRPE
+   3675:     const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
+   3676:     const catLower = categoryLower
+   3677:     const exprMode = expressionMode
+   3678:     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+   3679:     const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
+   3680:     
+   3681:     // PRIORITY 1: Protection / tissue management
+>> 3682:     if (isProtected || prescriptionIntent === 'protection') {
+   3683:       intensityBadge = rpe <= 7 
+   3684:         ? `RPE ${rpe} · tissue-safe load`
+   3685:         : `RPE ${rpe} · managed for longevity`
+   3686:     }
+   3687:     // PRIORITY 2: Skill / primary work - technique-gated
+   3688:     // [SEMANTIC-TRUTH-FIX] RPE 8 is demanding work (2-3 from failure) - wording must reflect that
+   3689:     else if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity' || catLower === 'skill' || exprMode.includes('direct') || exprMode.includes('primary')) {
+   3690:       if (rpe <= 6) {
+   3691:         intensityBadge = `RPE ${rpe} · controlled technique focus`
+   3692:       } else if (rpe === 7) {
+   3693:         intensityBadge = `RPE ${rpe} · clean reps, moderate effort`
+   3694:       } else if (rpe === 8) {
+
+--- CONTEXT 011 | lib/program/program-display-contract.ts:5711:9 | TS2367 ---
+lib/program/program-display-contract.ts(5711,9): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"pull"' have no overlap.
+Hint: Remove/gate impossible comparison to `"pull"`, or map to current literal only if type truth is obvious.
+   5699:   } else if (movementFamily === 'push' || categoryLower === 'push') {
+   5700:     // Push movement — always say pressing, regardless of session focus
+   5701:     if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5702:       intentLabel = 'Pressing overload'
+   5703:     } else if (sessionIntent.includes('volume')) {
+   5704:       intentLabel = 'Pressing volume'
+   5705:     } else {
+   5706:       intentLabel = 'Pressing strength'
+   5707:     }
+   5708:     source = 'authoritative'
+   5709:   } else if (categoryLower === 'strength') {
+   5710:     // Generic strength — use movement family if available
+>> 5711:     if (movementFamily === 'pull') {
+   5712:       intentLabel = 'Pulling strength'
+   5713:     } else if (movementFamily === 'push') {
+   5714:       intentLabel = 'Pressing strength'
+   5715:     } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5716:       intentLabel = 'Strength overload'
+   5717:     } else if (sessionIntent.includes('volume')) {
+   5718:       intentLabel = 'Strength volume'
+   5719:     } else {
+   5720:       intentLabel = 'Strength builder'
+   5721:     }
+   5722:     source = 'authoritative'
+   5723:   } else if (movementFamily === 'core' || categoryLower === 'core') {
+
+--- CONTEXT 012 | lib/program/program-display-contract.ts:5713:16 | TS2367 ---
+lib/program/program-display-contract.ts(5713,16): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"push"' have no overlap.
+Hint: Remove/gate impossible comparison to `"push"`, or map to current literal only if type truth is obvious.
+   5701:     if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5702:       intentLabel = 'Pressing overload'
+   5703:     } else if (sessionIntent.includes('volume')) {
+   5704:       intentLabel = 'Pressing volume'
+   5705:     } else {
+   5706:       intentLabel = 'Pressing strength'
+   5707:     }
+   5708:     source = 'authoritative'
+   5709:   } else if (categoryLower === 'strength') {
+   5710:     // Generic strength — use movement family if available
+   5711:     if (movementFamily === 'pull') {
+   5712:       intentLabel = 'Pulling strength'
+>> 5713:     } else if (movementFamily === 'push') {
+   5714:       intentLabel = 'Pressing strength'
+   5715:     } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5716:       intentLabel = 'Strength overload'
+   5717:     } else if (sessionIntent.includes('volume')) {
+   5718:       intentLabel = 'Strength volume'
+   5719:     } else {
+   5720:       intentLabel = 'Strength builder'
+   5721:     }
+   5722:     source = 'authoritative'
+   5723:   } else if (movementFamily === 'core' || categoryLower === 'core') {
+   5724:     // Core movement — state trunk function
+   5725:     intentLabel = 'Trunk stability'
+
+--- CONTEXT 013 | lib/program/program-display-contract.ts:6593:5 | TS2322 ---
+lib/program/program-display-contract.ts(6593,5): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'boolean'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   6581:   
+   6582:   // Secondary skill exposure limit
+   6583:   if (deferredSkills.length > 0) {
+   6584:     protectedAreas.push({
+   6585:       label: 'Secondary skill exposure',
+   6586:       reason: `${deferredSkills.map(formatSkillName).join(', ')} deferred for focus`,
+   6587:       isActive: true,
+   6588:     })
+   6589:   }
+   6590:   
+   6591:   const weeklyProtection: WeeklyProtectionDisplay = {
+   6592:     protectedAreas,
+>> 6593:     densityCapActive,
+   6594:     densityCapReason: densityCapActive 
+   6595:       ? (dominantSpine?.densityIntegration?.maxSessionsPerWeek
+   6596:           ? `Limited to ${dominantSpine.densityIntegration.maxSessionsPerWeek} sessions/week`
+   6597:           : 'Density work excluded for skill quality')
+   6598:       : null,
+   6599:     volumeLimited: recoveryLevel === 'low',
+   6600:     volumeLimitReason: recoveryLevel === 'low' 
+   6601:       ? 'Adjusted for current recovery capacity'
+   6602:       : null,
+   6603:     source: protectedAreas.length > 0 ? 'constraint_analysis' : 'inferred',
+   6604:   }
+   6605:   
+
+--- CONTEXT 014 | lib/program/skill-specific-truth-resolution.ts:347:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   335:   
+   336:   if (!bundle) {
+   337:     return defaultResponse
+   338:   }
+   339:   
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+>> 347:       response.volumeTolerance = envelope.confidenceScore
+   348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+   356:         response.recentTolerance = 'moderate'
+   357:       }
+   358:       
+   359:       response.confidence = bundle.performanceEnvelopes.meta.confidence
+
+--- CONTEXT 015 | lib/program/skill-specific-truth-resolution.ts:348:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   336:   if (!bundle) {
+   337:     return defaultResponse
+   338:   }
+   339:   
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+   347:       response.volumeTolerance = envelope.confidenceScore
+>> 348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+   356:         response.recentTolerance = 'moderate'
+   357:       }
+   358:       
+   359:       response.confidence = bundle.performanceEnvelopes.meta.confidence
+   360:     }
+
+--- CONTEXT 016 | lib/program/skill-specific-truth-resolution.ts:581:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   569:   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
+   570:   const familyStr = family.replace(/_/g, ' ')
+   571:   return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+>> 581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+
+--- CONTEXT 017 | lib/program/skill-specific-truth-resolution.ts:583:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   571:   return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+>> 583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+
+--- CONTEXT 018 | lib/program/skill-specific-truth-resolution.ts:585:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+>> 585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+
+--- CONTEXT 019 | lib/program/skill-specific-truth-resolution.ts:587:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+>> 587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+
+--- CONTEXT 020 | lib/program/skill-specific-truth-resolution.ts:589:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+>> 589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+   600:   // Check current earned state first (highest precedence)
+   601:   if (truth.currentEarnedState.progressScore !== null) {
+
+--- CONTEXT 021 | lib/program/skill-specific-truth-resolution.ts:591:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+>> 591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+   600:   // Check current earned state first (highest precedence)
+   601:   if (truth.currentEarnedState.progressScore !== null) {
+   602:     const score = truth.currentEarnedState.progressScore
+   603:     
+
+--- CONTEXT 022 | lib/repositories/profile-repository.ts:65:11 | TS2322 ---
+lib/repositories/profile-repository.ts(65,11): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   53:   async saveProfile(
+   54:     userId: string,
+   55:     data: Partial<AthleteProfile>
+   56:   ): Promise<AthleteProfile> {
+   57:     // TASK 1C: Throw error instead of returning fake data when not in browser
+   58:     if (!isBrowser()) {
+   59:       throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+   60:     }
+   61: 
+   62:     const current = (await this.getProfile(userId))
+   63:     
+   64:     // TASK 3: Handle null profile safely
+>> 65:     const baseProfile: AthleteProfile = current ?? {
+   66:       id: 'local-profile',
+   67:       userId: 'local-user',
+   68:       sex: null as any,
+   69:       height: null as any,
+   70:       heightUnit: 'inches',
+   71:       bodyweight: null as any,
+   72:       weightUnit: 'lbs',
+   73:       experienceLevel: 'beginner',
+   74:       trainingDaysPerWeek: 3,
+   75:       sessionLengthMinutes: 60,
+   76:       goalCategory: null as any,
+   77:       selectedSkills: [],
+
+--- CONTEXT 023 | lib/repositories/profile-repository.ts:257:9 | TS2322 ---
+lib/repositories/profile-repository.ts(257,9): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   245: 
+   246: export function saveAthleteProfile(
+   247:   profile: Partial<AthleteProfile>
+   248: ): AthleteProfile {
+   249:   // TASK 1C: Throw error instead of returning fake data when not in browser
+   250:   if (!isBrowser()) {
+   251:     throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+   252:   }
+   253: 
+   254:   const current = getAthleteProfile()
+   255:   
+   256:   // TASK 3: Handle null profile safely - create safe local-only base if needed
+>> 257:   const baseProfile: AthleteProfile = current ?? {
+   258:     id: 'local-profile',
+   259:     userId: 'local-user',
+   260:     sex: null as any,
+   261:     height: null as any,
+   262:     heightUnit: 'inches',
+   263:     bodyweight: null as any,
+   264:     weightUnit: 'lbs',
+   265:     experienceLevel: 'beginner',
+   266:     trainingDaysPerWeek: 3,
+   267:     sessionLengthMinutes: 60,
+   268:     goalCategory: null as any,
+   269:     selectedSkills: [],
+
+--- CONTEXT 024 | lib/repositories/profile-repository.ts:301:9 | TS2322 ---
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Hint: Validate into target union only if union truth is known; otherwise defer.
+   289:     updatedAt: new Date().toISOString(),
+   290:   }
+   291: 
+   292:   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+   293:   
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+>> 301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+
+--- CONTEXT 025 | lib/repositories/profile-repository.ts:302:9 | TS2322 ---
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Hint: Validate into target union only if union truth is known; otherwise defer.
+   290:   }
+   291: 
+   292:   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+   293:   
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+>> 302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+   314:         trainingStyle: currentOnboarding.trainingStyle,
+
+--- CONTEXT 026 | lib/repositories/profile-repository.ts:303:65 | TS2551 ---
+lib/repositories/profile-repository.ts(303,65): error TS2551: Property 'goalCategory' does not exist on type 'OnboardingProfile'. Did you mean 'goalCategories'?
+Hint: Use compiler-suggested/current key if semantically identical; otherwise remove/gate stale `goalCategory`. Do not add shared type fields.
+   291: 
+   292:   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+   293:   
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+>> 303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+   314:         trainingStyle: currentOnboarding.trainingStyle,
+   315:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+
+--- CONTEXT 027 | lib/repositories/profile-repository.ts:306:73 | TS2339 ---
+lib/repositories/profile-repository.ts(306,73): error TS2339: Property 'selectedStrength' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `selectedStrength` using local code context. Do not add shared type fields.
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+>> 306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+   314:         trainingStyle: currentOnboarding.trainingStyle,
+   315:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   316:         // Sync strength benchmarks if present
+   317:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   318:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+
+--- CONTEXT 028 | lib/repositories/profile-repository.ts:307:9 | TS2322 ---
+lib/repositories/profile-repository.ts(307,9): error TS2322: Type 'number' is not assignable to type 'TrainingDaysPerWeek | null'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+>> 307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+   314:         trainingStyle: currentOnboarding.trainingStyle,
+   315:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   316:         // Sync strength benchmarks if present
+   317:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   318:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   319:       })
+
+--- CONTEXT 029 | lib/repositories/profile-repository.ts:314:42 | TS2339 ---
+lib/repositories/profile-repository.ts(314,42): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `trainingStyle` using local code context. Do not add shared type fields.
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] AthleteProfile no longer
+   311:         // exposes `scheduleMode` / `trainingStyle`; preserve the
+   312:         // existing onboarding values verbatim.
+   313:         scheduleMode: currentOnboarding.scheduleMode,
+>> 314:         trainingStyle: currentOnboarding.trainingStyle,
+   315:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   316:         // Sync strength benchmarks if present
+   317:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   318:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   319:       })
+   320:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   321:     }
+   322:   } catch (err) {
+   323:     console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+   324:   }
+   325:   
+   326:   // CANONICAL PROFILE FIX: Also sync to canonical profile service for unified truth
+
+--- CONTEXT 030 | lib/server/authoritative-program-generation.ts:860:11 | TS2740 ---
+lib/server/authoritative-program-generation.ts(860,11): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 59 more.
+Hint: Usually hard unless missing fields are complete and obvious from context.
+   848:     markStage('builder_execution_start')
+   849:     
+   850:     const builderStageCallback = (stage: string) => {
+   851:       console.log(`[authoritative-generation-builder-stage] ${stage} at ${Date.now() - startTime}ms`)
+   852:     }
+   853:     
+   854:     let program: AdaptiveProgram
+   855:     try {
+   856:       program = await generateAdaptiveProgram(
+   857:         normalizedBuilderInput as AdaptiveProgramInputs,
+   858:         builderStageCallback,
+   859:         {
+>> 860:           canonicalProfileOverride,
+   861:           isFreshBaselineBuild: request.isFreshBaselineBuild,
+   862:           // [AUTHORITATIVE-INGRESS-UNIFICATION] Pass the ONE bundle - builder will reuse, not rebuild
+   863:           preBuiltProgrammingTruthBundle: authoritativeProgrammingTruthBundle,
+   864:         }
+   865:       )
+   866:     } catch (builderError) {
+   867:       // [PHASE15E_LIVE_PROOF] Service catch marker
+   868:       const errorString = String(builderError)
+   869:       console.error('[PHASE15E_LIVE_PROOF]', {
+   870:         marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+   871:         checkpoint: 'authoritative_service_catch',
+   872:         error: errorString.slice(0, 200),
+
+--- CONTEXT 031 | lib/server/authoritative-program-generation.ts:1125:7 | TS2345 ---
+lib/server/authoritative-program-generation.ts(1125,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   1113:     }
+   1114:     
+   1115:     markStage('builder_execution_done')
+   1116:     
+   1117:     // ==========================================================================
+   1118:     // STAGE: Extract and attach truth explanation
+   1119:     // ==========================================================================
+   1120:     markStage('truth_extraction_start')
+   1121:     
+   1122:     const truthExtraction = extractProgramTruth(
+   1123:       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
+   1124:       request.builderInputs,
+>> 1125:       request.triggerSource
+   1126:     )
+   1127:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1128:     
+   1129:     program = attachTruthExplanation(
+   1130:       program,
+   1131:       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
+   1132:       request.triggerSource
+   1133:     )
+   1134:     
+   1135:     console.log('[authoritative-generation-truth-attached]', {
+   1136:       generationIntent: request.generationIntent,
+   1137:       triggerSource: request.triggerSource,
+
+--- CONTEXT 032 | lib/server/authoritative-program-generation.ts:1132:7 | TS2345 ---
+lib/server/authoritative-program-generation.ts(1132,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   1120:     markStage('truth_extraction_start')
+   1121:     
+   1122:     const truthExtraction = extractProgramTruth(
+   1123:       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
+   1124:       request.builderInputs,
+   1125:       request.triggerSource
+   1126:     )
+   1127:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1128:     
+   1129:     program = attachTruthExplanation(
+   1130:       program,
+   1131:       canonicalProfileOverride as unknown as CanonicalProgrammingProfile,
+>> 1132:       request.triggerSource
+   1133:     )
+   1134:     
+   1135:     console.log('[authoritative-generation-truth-attached]', {
+   1136:       generationIntent: request.generationIntent,
+   1137:       triggerSource: request.triggerSource,
+   1138:       truthExtractionVerdict: truthExtraction.truthContext.verdict,
+   1139:       presentCount: truthExtraction.truthContext.presentCount,
+   1140:       defaultedCount: truthExtraction.truthContext.defaultedCount,
+   1141:       missingCount: truthExtraction.truthContext.missingCount,
+   1142:       explanationQuality: program.truthExplanation?.explanationQualityVerdict || 'unknown',
+   1143:     })
+   1144:     
+
+--- CONTEXT 033 | lib/server/authoritative-program-generation.ts:1323:7 | TS2353 ---
+lib/server/authoritative-program-generation.ts(1323,7): error TS2353: Object literal may only specify known properties, and 'triggerSource' does not exist in type '{ phase: AdaptationPhase; confidence: "moderate" | "low" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Hint: Map/remove stale `triggerSource` using local code context. Do not add shared type fields.
+   1311:     
+   1312:     // [FLEXIBILITY-TRUTH-CONTRACT] Elevate selectedFlexibility to first-class program field
+   1313:     // This ensures user's flexibility targets (e.g., hip_flexor, hamstring, shoulder)
+   1314:     // survive save/read/rebuild/restart and are accessible without digging into snapshot
+   1315:     program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
+   1316:     
+   1317:     // [WEEK-ADAPTATION-DECISION-CONTRACT] Elevate week adaptation decision to first-class program field
+   1318:     // This ensures the week-level dosage/adaptation decisions are accessible and traceable
+   1319:     program.weekAdaptationDecision = {
+   1320:       phase: weekAdaptationDecision.phase,
+   1321:       targetDays: weekAdaptationDecision.targetDays,
+   1322:       confidence: weekAdaptationDecision.confidence,
+>> 1323:       triggerSource: weekAdaptationDecision.triggerSource,
+   1324:       loadStrategy: weekAdaptationDecision.loadStrategy,
+   1325:       firstWeekGovernor: weekAdaptationDecision.firstWeekGovernor,
+   1326:       doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+   1327:       evidence: weekAdaptationDecision.evidence,
+   1328:       decidedAt: weekAdaptationDecision.decidedAt,
+   1329:     }
+   1330:     
+   1331:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Use the resolvedProgressions from earlier in the flow
+   1332:     // (resolved before building canonicalProfileOverride, so builder gets conservative progressions)
+   1333:     // Re-reference using the same variable name for clarity
+   1334:     const currentWorkingProgressions = resolvedProgressions
+   1335:     
+
+--- CONTEXT 034 | lib/server/authoritative-program-generation.ts:1345:7 | TS2322 ---
+lib/server/authoritative-program-generation.ts(1345,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   1333:     // Re-reference using the same variable name for clarity
+   1334:     const currentWorkingProgressions = resolvedProgressions
+   1335:     
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+>> 1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+
+--- CONTEXT 035 | lib/server/authoritative-program-generation.ts:1346:7 | TS2322 ---
+lib/server/authoritative-program-generation.ts(1346,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   1334:     const currentWorkingProgressions = resolvedProgressions
+   1335:     
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+>> 1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+
+--- CONTEXT 036 | lib/server/authoritative-program-generation.ts:1347:45 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1347,45): error TS2339: Property 'pullUpCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `pullUpCapacity` using local code context. Do not add shared type fields.
+   1335:     
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+>> 1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+
+--- CONTEXT 037 | lib/server/authoritative-program-generation.ts:1347:85 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1347,85): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `pullUps` using local code context. Do not add shared type fields.
+   1335:     
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+>> 1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+
+--- CONTEXT 038 | lib/server/authoritative-program-generation.ts:1348:42 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1348,42): error TS2339: Property 'dipCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `dipCapacity` using local code context. Do not add shared type fields.
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+>> 1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+   1360:         isConservative: currentWorkingProgressions.planche.isConservative,
+
+--- CONTEXT 039 | lib/server/authoritative-program-generation.ts:1348:79 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1348,79): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `dips` using local code context. Do not add shared type fields.
+   1336:     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+>> 1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+   1360:         isConservative: currentWorkingProgressions.planche.isConservative,
+
+--- CONTEXT 040 | lib/server/authoritative-program-generation.ts:1349:47 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1349,47): error TS2339: Property 'wallHspuCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `wallHspuCapacity` using local code context. Do not add shared type fields.
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+>> 1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+   1360:         isConservative: currentWorkingProgressions.planche.isConservative,
+   1361:       },
+
+--- CONTEXT 041 | lib/server/authoritative-program-generation.ts:1349:89 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1349,89): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+Hint: Map/remove stale `wallHSPU` using local code context. Do not add shared type fields.
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+>> 1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+   1358:         truthSource: currentWorkingProgressions.planche.truthSource,
+   1359:         truthNote: currentWorkingProgressions.planche.truthNote,
+   1360:         isConservative: currentWorkingProgressions.planche.isConservative,
+   1361:       },
+
+--- CONTEXT 042 | lib/server/authoritative-program-generation.ts:1422:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1422,66): error TS2339: Property 'flexibilityIntegration' does not exist on type '{ sourceVerdict: "PARTIAL_TRUTH_AVAILABLE" | "FULL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "low" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Hint: Map/remove stale `flexibilityIntegration` using local code context. Do not add shared type fields.
+   1410:       doctrineInfluenceLevel: string
+   1411:     } | null = null
+   1412:     if (program.sessionArchitectureTruth) {
+   1413:       architectureTruthSnapshot = {
+   1414:         primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
+   1415:         secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
+   1416:         supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
+   1417:         deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+   1418:           skill: d.skill,
+   1419:           reason: d.reason,
+   1420:           details: d.details || '',
+   1421:         })),
+>> 1422:         flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+   1423:           hasFlexibilityGoals: false,
+   1424:           selectedFlexibility: [],
+   1425:           integrationMode: 'none',
+   1426:           affectedSessions: [],
+   1427:           flexibilityTimeReserved: 0,
+   1428:         },
+   1429:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1430:           preferredMethods: ['straight_sets'],
+   1431:           actualMethodsApplied: ['straight_sets'],
+   1432:           methodsLimitedBySkillQuality: [],
+   1433:           packagingDecision: 'straight_sets',
+   1434:           rationale: 'default',
+
+--- CONTEXT 043 | lib/server/authoritative-program-generation.ts:1429:59 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1429,59): error TS2339: Property 'methodPackaging' does not exist on type '{ sourceVerdict: "PARTIAL_TRUTH_AVAILABLE" | "FULL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "low" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Hint: Map/remove stale `methodPackaging` using local code context. Do not add shared type fields.
+   1417:         deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+   1418:           skill: d.skill,
+   1419:           reason: d.reason,
+   1420:           details: d.details || '',
+   1421:         })),
+   1422:         flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+   1423:           hasFlexibilityGoals: false,
+   1424:           selectedFlexibility: [],
+   1425:           integrationMode: 'none',
+   1426:           affectedSessions: [],
+   1427:           flexibilityTimeReserved: 0,
+   1428:         },
+>> 1429:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1430:           preferredMethods: ['straight_sets'],
+   1431:           actualMethodsApplied: ['straight_sets'],
+   1432:           methodsLimitedBySkillQuality: [],
+   1433:           packagingDecision: 'straight_sets',
+   1434:           rationale: 'default',
+   1435:         },
+   1436:         // [VISIBLE-DIFFERENCE-TARGETS-DROPPED] sessionArchitectureTruth
+   1437:         // no longer exposes `visibleDifferenceTargets`; safe defaults
+   1438:         // for the snapshot keep the audit row intact.
+   1439:         visibleDifferenceScore: 0,
+   1440:         templateEscapeRequired: false,
+   1441:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+
+--- CONTEXT 044 | lib/server/authoritative-program-generation.ts:1441:73 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1441,73): error TS2339: Property 'doctrineInfluenceLevel' does not exist on type '{ currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }'.
+Hint: Map/remove stale `doctrineInfluenceLevel` using local code context. Do not add shared type fields.
+   1429:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1430:           preferredMethods: ['straight_sets'],
+   1431:           actualMethodsApplied: ['straight_sets'],
+   1432:           methodsLimitedBySkillQuality: [],
+   1433:           packagingDecision: 'straight_sets',
+   1434:           rationale: 'default',
+   1435:         },
+   1436:         // [VISIBLE-DIFFERENCE-TARGETS-DROPPED] sessionArchitectureTruth
+   1437:         // no longer exposes `visibleDifferenceTargets`; safe defaults
+   1438:         // for the snapshot keep the audit row intact.
+   1439:         visibleDifferenceScore: 0,
+   1440:         templateEscapeRequired: false,
+>> 1441:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1442:       }
+   1443:     }
+   1444:     
+   1445:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1446:       generationIntent: request.generationIntent,
+   1447:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+   1448:       trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
+   1449:       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+   1450:       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
+   1451:       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
+   1452:       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+   1453:       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
+
+--- CONTEXT 045 | lib/server/authoritative-program-generation.ts:2599:13 | TS2352 ---
+lib/server/authoritative-program-generation.ts(2599,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Hint: Bridge through unknown: `value as unknown as TargetType`. Never use `as any`.
+   2587:         // This is the single fix for the user-reported bug:
+   2588:         //   "Day 3 says Doctrine Materialization: Superset applied — 0
+   2589:         //    exercises changed, but the visible body has no real superset."
+   2590:         //
+   2591:         // Pure / surgical: never re-decides training, never invents methods,
+   2592:         // never weakens safety gates. Fail-soft.
+   2593:         // ====================================================================
+   2594:         try {
+   2595:           const { reconcileFinalMethodMaterializationTruth } = await import(
+   2596:             '@/lib/program/final-method-truth-reconciler'
+   2597:           )
+   2598:           const reconciliationRollup = reconcileFinalMethodMaterializationTruth(
+>> 2599:             program as Parameters<typeof reconcileFinalMethodMaterializationTruth>[0],
+   2600:           )
+   2601:           ;(program as unknown as { finalMethodTruthReconciliation?: unknown }).finalMethodTruthReconciliation =
+   2602:             reconciliationRollup
+   2603:           console.log('[FINAL-METHOD-TRUTH-RECONCILED]', {
+   2604:             generationIntent: request.generationIntent,
+   2605:             triggerSource: request.triggerSource,
+   2606:             sessionsProcessed: reconciliationRollup.sessionsProcessed,
+   2607:             sessionsWithSummaryRestamped: reconciliationRollup.sessionsWithSummaryRestamped,
+   2608:             sessionsWithMethodDecisionRefreshed: reconciliationRollup.sessionsWithMethodDecisionRefreshed,
+   2609:             sessionsWithAppliedMethodsTrimmed: reconciliationRollup.sessionsWithAppliedMethodsTrimmed,
+   2610:             sessionsForcedToFlat: reconciliationRollup.sessionsForcedToFlat,
+   2611:             sessionsWithIntegrityFail: reconciliationRollup.sessionsWithIntegrityFail,
+
+--- CONTEXT 046 | lib/server/authoritative-program-generation.ts:3203:9 | TS2322 ---
+lib/server/authoritative-program-generation.ts(3203,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   3191:         callerOverrides: truthIngestion.profileTruth.callerOverriddenFields,
+   3192:         recoveryRisk: truthIngestion.recoveryTruth.recoveryRisk,
+   3193:         consistencyStatus: truthIngestion.adherenceTruth.consistencyStatus,
+   3194:         doctrineInfluenceEligible: truthIngestion.doctrineTruth.influenceEligible,
+   3195:         isFirstWeek: truthIngestion.currentProgramContext.isFirstGeneratedWeek,
+   3196:         safeGenerationNotes: truthIngestion.safeGenerationNotes,
+   3197:       },
+   3198:       summary: {
+   3199:         sessionCount: program.sessions.length,
+   3200:         primaryGoal: program.primaryGoal,
+   3201:         secondaryGoal: program.secondaryGoal,
+   3202:         trainingDaysPerWeek: program.trainingDaysPerWeek,
+>> 3203:         scheduleMode: program.scheduleMode,
+   3204:         goalLabel: program.goalLabel,
+   3205:       },
+   3206:       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+   3207:       rebuildFailureSummary: program.rebuildFailureSummary,
+   3208:       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
+   3209:       generationIngressProof,
+   3210:     }
+   3211:     
+   3212:   } catch (error) {
+   3213:     const totalElapsed = Date.now() - startTime
+   3214:     console.log('[authoritative-generation-unexpected-error]', {
+   3215:       generationIntent: request.generationIntent,
+
+--- CONTEXT 047 | lib/server/authoritative-program-generation.ts:3207:38 | TS2339 ---
+lib/server/authoritative-program-generation.ts(3207,38): error TS2339: Property 'rebuildFailureSummary' does not exist on type 'AdaptiveProgram'.
+Hint: Map/remove stale `rebuildFailureSummary` using local code context. Do not add shared type fields.
+   3195:         isFirstWeek: truthIngestion.currentProgramContext.isFirstGeneratedWeek,
+   3196:         safeGenerationNotes: truthIngestion.safeGenerationNotes,
+   3197:       },
+   3198:       summary: {
+   3199:         sessionCount: program.sessions.length,
+   3200:         primaryGoal: program.primaryGoal,
+   3201:         secondaryGoal: program.secondaryGoal,
+   3202:         trainingDaysPerWeek: program.trainingDaysPerWeek,
+   3203:         scheduleMode: program.scheduleMode,
+   3204:         goalLabel: program.goalLabel,
+   3205:       },
+   3206:       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+>> 3207:       rebuildFailureSummary: program.rebuildFailureSummary,
+   3208:       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
+   3209:       generationIngressProof,
+   3210:     }
+   3211:     
+   3212:   } catch (error) {
+   3213:     const totalElapsed = Date.now() - startTime
+   3214:     console.log('[authoritative-generation-unexpected-error]', {
+   3215:       generationIntent: request.generationIntent,
+   3216:       triggerSource: request.triggerSource,
+   3217:       error: String(error),
+   3218:       failedStage: getCurrentStage(),
+   3219:       totalElapsedMs: totalElapsed,
+
+--- CONTEXT 048 | lib/server/authoritative-program-generation.ts:3311:5 | TS2322 ---
+lib/server/authoritative-program-generation.ts(3311,5): error TS2322: Type '"1.0.0"' is not assignable to type '"1.1.0"'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   3299: 
+   3300: function createFallbackIngestion(
+   3301:   request: AuthoritativeGenerationRequest
+   3302: ): AuthoritativeGenerationTruthIngestion {
+   3303:   // This fallback is used when ingestion fails unexpectedly
+   3304:   // It preserves the caller's profile to allow generation to proceed
+   3305:   console.log('[authoritative-generation-fallback-ingestion-created]', {
+   3306:     generationIntent: request.generationIntent,
+   3307:   })
+   3308:   
+   3309:   return {
+   3310:     ingestedAt: new Date().toISOString(),
+>> 3311:     ingestionVersion: '1.0.0',
+   3312:     profileTruth: {
+   3313:       source: 'canonical_profile_service',
+   3314:       quality: 'weak',
+   3315:       canonicalProfile: request.canonicalProfile as CanonicalProgrammingProfile,
+   3316:       fieldSources: {
+   3317:         primaryGoal: 'caller_override',
+   3318:         secondaryGoal: 'caller_override',
+   3319:         selectedSkills: 'caller_override',
+   3320:         scheduleMode: 'caller_override',
+   3321:         trainingDaysPerWeek: 'caller_override',
+   3322:         sessionLengthMinutes: 'caller_override',
+   3323:         experienceLevel: 'caller_override',
+
+--- CONTEXT 049 | lib/unified-coaching-engine.ts:454:83 | TS2345 ---
+lib/unified-coaching-engine.ts(454,83): error TS2345: Argument of type 'OnboardingProfile | {}' is not assignable to parameter of type '{ primaryOutcome?: string | undefined; workoutDuration?: string | undefined; trainingAge?: number | undefined; }'.
+Hint: Use local fallback only if scoring/metadata; otherwise guard.
+   442:   // Load training style profile from DB (if exists)
+   443:   const styleProfileFromDb = await getTrainingStyleProfile(userId)
+   444:   
+   445:   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
+   446:   // [ATHLETEPROFILE-NO-EQUIPMENT] AthleteProfile no longer exposes
+   447:   // `equipment`; canonical + onboarding remain the truthful sources.
+   448:   const equipment = canonical.equipmentAvailable.length > 0
+   449:     ? canonical.equipmentAvailable
+   450:     : (onboarding?.equipmentAvailable || ['pull_bar', 'dip_bars', 'floor'])
+   451:   const equipmentProfile = analyzeEquipmentProfile(equipment)
+   452:   
+   453:   // Determine training style - prefer DB, then infer from onboarding
+>> 454:   const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboarding || {})
+   455:   const stylePriorities = styleProfileFromDb 
+   456:     ? {
+   457:         skill: styleProfileFromDb.skillPriority,
+   458:         strength: styleProfileFromDb.strengthPriority,
+   459:         power: styleProfileFromDb.powerPriority,
+   460:         endurance: styleProfileFromDb.endurancePriority,
+   461:         hypertrophy: styleProfileFromDb.hypertrophyPriority,
+   462:       }
+   463:     : calculateStylePriorities(trainingStyle)
+   464:   
+   465:   // Get programming rules for the style
+   466:   const styleProgrammingRules = getStyleProgrammingRules(trainingStyle)
+
+--- CONTEXT 050 | lib/unified-coaching-engine.ts:478:24 | TS2339 ---
+lib/unified-coaching-engine.ts(478,24): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+Hint: Map/remove stale `username` using local code context. Do not add shared type fields.
+   466:   const styleProgrammingRules = getStyleProgrammingRules(trainingStyle)
+   467:   
+   468:   // REGRESSION GUARD: canonical profile IS the source of truth
+   469:   // Fallback to 'general' not 'front_lever' to avoid goal pollution for users without a goal
+   470:   const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'general'
+   471:   const secondaryGoal = canonical.secondaryGoal
+   472:   const secondaryGoals = secondaryGoal 
+   473:     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
+   474:     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
+   475:   
+   476:   return {
+   477:     userId,
+>> 478:     username: profile?.username || 'Athlete',
+   479:     sex: (onboarding?.sex as 'male' | 'female') || 'male',
+   480:     heightCm: canonical.height || onboarding?.heightCm || null,
+   481:     weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+   482:     bodyFatPercent: onboarding?.bodyFatPercent || null,
+   483:     trainingAge: onboarding?.trainingAge || 1,
+   484:     // CANONICAL FIX: Use canonical goals
+   485:     primaryGoal,
+   486:     primaryGoalLabel: getGoalLabel(primaryGoal),
+   487:     secondaryGoals,
+   488:     // ISSUE A FIX: Canonical schedule with explicit null checks
+   489:     // Only use fallback when canonical value is truly absent (null/undefined)
+   490:     trainingDaysPerWeek: (() => {
+
+--- CONTEXT 051 | lib/unified-coaching-engine.ts:480:47 | TS2339 ---
+lib/unified-coaching-engine.ts(480,47): error TS2339: Property 'heightCm' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `heightCm` using local code context. Do not add shared type fields.
+   468:   // REGRESSION GUARD: canonical profile IS the source of truth
+   469:   // Fallback to 'general' not 'front_lever' to avoid goal pollution for users without a goal
+   470:   const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'general'
+   471:   const secondaryGoal = canonical.secondaryGoal
+   472:   const secondaryGoals = secondaryGoal 
+   473:     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
+   474:     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
+   475:   
+   476:   return {
+   477:     userId,
+   478:     username: profile?.username || 'Athlete',
+   479:     sex: (onboarding?.sex as 'male' | 'female') || 'male',
+>> 480:     heightCm: canonical.height || onboarding?.heightCm || null,
+   481:     weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+   482:     bodyFatPercent: onboarding?.bodyFatPercent || null,
+   483:     trainingAge: onboarding?.trainingAge || 1,
+   484:     // CANONICAL FIX: Use canonical goals
+   485:     primaryGoal,
+   486:     primaryGoalLabel: getGoalLabel(primaryGoal),
+   487:     secondaryGoals,
+   488:     // ISSUE A FIX: Canonical schedule with explicit null checks
+   489:     // Only use fallback when canonical value is truly absent (null/undefined)
+   490:     trainingDaysPerWeek: (() => {
+   491:       if (canonical.scheduleMode === 'flexible') return 4  // Flexible mode uses runtime resolution
+   492:       if (canonical.trainingDaysPerWeek !== null && canonical.trainingDaysPerWeek !== undefined) {
+
+--- CONTEXT 052 | lib/unified-coaching-engine.ts:481:51 | TS2339 ---
+lib/unified-coaching-engine.ts(481,51): error TS2339: Property 'weightKg' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `weightKg` using local code context. Do not add shared type fields.
+   469:   // Fallback to 'general' not 'front_lever' to avoid goal pollution for users without a goal
+   470:   const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'general'
+   471:   const secondaryGoal = canonical.secondaryGoal
+   472:   const secondaryGoals = secondaryGoal 
+   473:     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
+   474:     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
+   475:   
+   476:   return {
+   477:     userId,
+   478:     username: profile?.username || 'Athlete',
+   479:     sex: (onboarding?.sex as 'male' | 'female') || 'male',
+   480:     heightCm: canonical.height || onboarding?.heightCm || null,
+>> 481:     weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+   482:     bodyFatPercent: onboarding?.bodyFatPercent || null,
+   483:     trainingAge: onboarding?.trainingAge || 1,
+   484:     // CANONICAL FIX: Use canonical goals
+   485:     primaryGoal,
+   486:     primaryGoalLabel: getGoalLabel(primaryGoal),
+   487:     secondaryGoals,
+   488:     // ISSUE A FIX: Canonical schedule with explicit null checks
+   489:     // Only use fallback when canonical value is truly absent (null/undefined)
+   490:     trainingDaysPerWeek: (() => {
+   491:       if (canonical.scheduleMode === 'flexible') return 4  // Flexible mode uses runtime resolution
+   492:       if (canonical.trainingDaysPerWeek !== null && canonical.trainingDaysPerWeek !== undefined) {
+   493:         return canonical.trainingDaysPerWeek
+
+--- CONTEXT 053 | lib/unified-coaching-engine.ts:483:30 | TS2339 ---
+lib/unified-coaching-engine.ts(483,30): error TS2339: Property 'trainingAge' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `trainingAge` using local code context. Do not add shared type fields.
+   471:   const secondaryGoal = canonical.secondaryGoal
+   472:   const secondaryGoals = secondaryGoal 
+   473:     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
+   474:     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
+   475:   
+   476:   return {
+   477:     userId,
+   478:     username: profile?.username || 'Athlete',
+   479:     sex: (onboarding?.sex as 'male' | 'female') || 'male',
+   480:     heightCm: canonical.height || onboarding?.heightCm || null,
+   481:     weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+   482:     bodyFatPercent: onboarding?.bodyFatPercent || null,
+>> 483:     trainingAge: onboarding?.trainingAge || 1,
+   484:     // CANONICAL FIX: Use canonical goals
+   485:     primaryGoal,
+   486:     primaryGoalLabel: getGoalLabel(primaryGoal),
+   487:     secondaryGoals,
+   488:     // ISSUE A FIX: Canonical schedule with explicit null checks
+   489:     // Only use fallback when canonical value is truly absent (null/undefined)
+   490:     trainingDaysPerWeek: (() => {
+   491:       if (canonical.scheduleMode === 'flexible') return 4  // Flexible mode uses runtime resolution
+   492:       if (canonical.trainingDaysPerWeek !== null && canonical.trainingDaysPerWeek !== undefined) {
+   493:         return canonical.trainingDaysPerWeek
+   494:       }
+   495:       // Only fallback for legacy users without canonical data
+
+--- CONTEXT 054 | lib/unified-coaching-engine.ts:490:5 | TS2322 ---
+lib/unified-coaching-engine.ts(490,5): error TS2322: Type 'number | "flexible"' is not assignable to type 'number'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   478:     username: profile?.username || 'Athlete',
+   479:     sex: (onboarding?.sex as 'male' | 'female') || 'male',
+   480:     heightCm: canonical.height || onboarding?.heightCm || null,
+   481:     weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+   482:     bodyFatPercent: onboarding?.bodyFatPercent || null,
+   483:     trainingAge: onboarding?.trainingAge || 1,
+   484:     // CANONICAL FIX: Use canonical goals
+   485:     primaryGoal,
+   486:     primaryGoalLabel: getGoalLabel(primaryGoal),
+   487:     secondaryGoals,
+   488:     // ISSUE A FIX: Canonical schedule with explicit null checks
+   489:     // Only use fallback when canonical value is truly absent (null/undefined)
+>> 490:     trainingDaysPerWeek: (() => {
+   491:       if (canonical.scheduleMode === 'flexible') return 4  // Flexible mode uses runtime resolution
+   492:       if (canonical.trainingDaysPerWeek !== null && canonical.trainingDaysPerWeek !== undefined) {
+   493:         return canonical.trainingDaysPerWeek
+   494:       }
+   495:       // Only fallback for legacy users without canonical data
+   496:       console.log('[UnifiedCoaching] FALLBACK: trainingDaysPerWeek using onboarding fallback')
+   497:       return onboarding?.trainingDaysPerWeek || 3
+   498:     })(),
+   499:     sessionDurationMinutes: (() => {
+   500:       // ISSUE A FIX: Prefer canonical, only fallback when truly absent
+   501:       if (canonical.sessionLengthMinutes !== null && canonical.sessionLengthMinutes !== undefined) {
+   502:         logDurationTruth('loadAthleteContext', {
+
+--- CONTEXT 055 | lib/unified-coaching-engine.ts:510:61 | TS2339 ---
+lib/unified-coaching-engine.ts(510,61): error TS2339: Property 'workoutDuration' does not exist on type 'OnboardingProfile'.
+Hint: Map/remove stale `workoutDuration` using local code context. Do not add shared type fields.
+   498:     })(),
+   499:     sessionDurationMinutes: (() => {
+   500:       // ISSUE A FIX: Prefer canonical, only fallback when truly absent
+   501:       if (canonical.sessionLengthMinutes !== null && canonical.sessionLengthMinutes !== undefined) {
+   502:         logDurationTruth('loadAthleteContext', {
+   503:           canonicalPreference: canonical.sessionLengthMinutes,
+   504:           source: 'canonical-profile',
+   505:           fallbackUsed: false,
+   506:         })
+   507:         return canonical.sessionLengthMinutes
+   508:       }
+   509:       // Only fallback for legacy users
+>> 510:       const durationMinutes = getSessionMinutes(onboarding?.workoutDuration || 'standard')
+   511:       console.log('[UnifiedCoaching] FALLBACK: sessionDurationMinutes using onboarding fallback')
+   512:       logDurationTruth('loadAthleteContext', {
+   513:         canonicalPreference: durationMinutes,
+   514:         source: 'onboarding-fallback',
+   515:         fallbackUsed: true,
+   516:       })
+   517:       return durationMinutes
+   518:     })(),
+   519:     equipment,
+   520:     equipmentProfile,
+   521:     // CANONICAL FIX: Use canonical joint cautions
+   522:     jointCautions: canonical.jointCautions.length > 0 ? canonical.jointCautions : (onboarding?.jointCautions || []),
+
+--- CONTEXT 056 | lib/unified-coaching-engine.ts:755:5 | TS2367 ---
+lib/unified-coaching-engine.ts(755,5): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+Hint: Remove/gate impossible comparison to `"red"`, or map to current literal only if type truth is obvious.
+   743:   // daysSinceLastDeload?). Build a minimal FatigueSignalSummary from
+   744:   // the canonical recovery + joint state we already have in context.
+   745:   const deloadSignals: FatigueSignalSummary = {
+   746:     performanceDrop: false,
+   747:     exerciseSkips: false,
+   748:     jointFlags: athleteContext.jointCautions.length > 0,
+   749:     volumeSpike: false,
+   750:     consecutiveTrainingDays: 0,
+   751:     missedReps: false,
+   752:     rpeElevated: false,
+   753:   }
+   754:   const deloadRecommendation = getDeloadRecommendation(
+>> 755:     recoverySignal.level === 'red' ? 'fatigued' : 'recovered',
+   756:     'stable',
+   757:     [],
+   758:     deloadSignals,
+   759:     30
+   760:   )
+   761:   
+   762:   // Determine fatigue level
+   763:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   764:   
+   765:   // Calculate session adjustments
+   766:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   767:   
+
+--- CONTEXT 057 | lib/unified-coaching-engine.ts:763:46 | TS2345 ---
+lib/unified-coaching-engine.ts(763,46): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   751:     missedReps: false,
+   752:     rpeElevated: false,
+   753:   }
+   754:   const deloadRecommendation = getDeloadRecommendation(
+   755:     recoverySignal.level === 'red' ? 'fatigued' : 'recovered',
+   756:     'stable',
+   757:     [],
+   758:     deloadSignals,
+   759:     30
+   760:   )
+   761:   
+   762:   // Determine fatigue level
+>> 763:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   764:   
+   765:   // Calculate session adjustments
+   766:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   767:   
+   768:   return {
+   769:     fatigueLevel,
+   770:     recoveryLevel: recoverySignal.level,
+   771:     recoveryScore: recoverySignal.score,
+   772:     deloadRecommendation,
+   773:     trainingDecision,
+   774:     requiresDeload: deloadRecommendation?.shouldDeload || false,
+   775:     sessionAdjustments,
+
+--- CONTEXT 058 | lib/unified-coaching-engine.ts:766:72 | TS2345 ---
+lib/unified-coaching-engine.ts(766,72): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   754:   const deloadRecommendation = getDeloadRecommendation(
+   755:     recoverySignal.level === 'red' ? 'fatigued' : 'recovered',
+   756:     'stable',
+   757:     [],
+   758:     deloadSignals,
+   759:     30
+   760:   )
+   761:   
+   762:   // Determine fatigue level
+   763:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   764:   
+   765:   // Calculate session adjustments
+>> 766:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   767:   
+   768:   return {
+   769:     fatigueLevel,
+   770:     recoveryLevel: recoverySignal.level,
+   771:     recoveryScore: recoverySignal.score,
+   772:     deloadRecommendation,
+   773:     trainingDecision,
+   774:     requiresDeload: deloadRecommendation?.shouldDeload || false,
+   775:     sessionAdjustments,
+   776:   }
+   777: }
+   778: 
+
+--- CONTEXT 059 | lib/unified-coaching-engine.ts:773:5 | TS2322 ---
+lib/unified-coaching-engine.ts(773,5): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   761:   
+   762:   // Determine fatigue level
+   763:   const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+   764:   
+   765:   // Calculate session adjustments
+   766:   const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+   767:   
+   768:   return {
+   769:     fatigueLevel,
+   770:     recoveryLevel: recoverySignal.level,
+   771:     recoveryScore: recoverySignal.score,
+   772:     deloadRecommendation,
+>> 773:     trainingDecision,
+   774:     requiresDeload: deloadRecommendation?.shouldDeload || false,
+   775:     sessionAdjustments,
+   776:   }
+   777: }
+   778: 
+   779: function determineFatigueLevel(
+   780:   decision: TrainingDecision,
+   781:   deload: DeloadRecommendation | null
+   782: ): FatigueContext['fatigueLevel'] {
+   783:   if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
+   784:   if (deload?.shouldDeload) return 'fatigued'
+   785:   
+
+--- CONTEXT 060 | lib/unified-coaching-engine.ts:783:38 | TS2339 ---
+lib/unified-coaching-engine.ts(783,38): error TS2339: Property 'severity' does not exist on type 'DeloadRecommendation'.
+Hint: Map/remove stale `severity` using local code context. Do not add shared type fields.
+   771:     recoveryScore: recoverySignal.score,
+   772:     deloadRecommendation,
+   773:     trainingDecision,
+   774:     requiresDeload: deloadRecommendation?.shouldDeload || false,
+   775:     sessionAdjustments,
+   776:   }
+   777: }
+   778: 
+   779: function determineFatigueLevel(
+   780:   decision: TrainingDecision,
+   781:   deload: DeloadRecommendation | null
+   782: ): FatigueContext['fatigueLevel'] {
+>> 783:   if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
+   784:   if (deload?.shouldDeload) return 'fatigued'
+   785:   
+   786:   switch (decision.recommendation) {
+   787:     case 'full_session':
+   788:       return 'fresh'
+   789:     case 'modified_session':
+   790:       return 'normal'
+   791:     case 'light_session':
+   792:       return 'fatigued'
+   793:     case 'rest_day':
+   794:       return 'overtrained'
+   795:     default:
+

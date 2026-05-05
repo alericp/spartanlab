@@ -1,0 +1,31 @@
+lib/back-lever-training-system.ts(63,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_EXERCISE_LIBRARY'.
+lib/back-lever-training-system.ts(449,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_READINESS_GATES'.
+lib/back-lever-training-system.ts(510,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_WEAK_POINTS'.
+lib/back-lever-training-system.ts(650,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_PROGRESSION_SYSTEM'.
+lib/back-lever-training-system.ts(892,5): error TS2561: Object literal may only specify known properties, but 'restDaysBetweenSessions' does not exist in type '{ optimalFrequency: number; minimumFrequency: number; maximumFrequency: number; restBetweenSessions: number; rationale: string; }'. Did you mean to write 'restBetweenSessions'?
+lib/back-lever-training-system.ts(908,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SKILL_RELATIONSHIPS'.
+lib/back-lever-training-system.ts(963,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SKILL_CYCLE'.
+lib/back-lever-training-system.ts(1012,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_GUIDE_STRUCTURE'.
+lib/back-lever-training-system.ts(1079,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SEO_PAGES'.
+lib/back-lever-training-system.ts(1114,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_MARKETING_CLAIMS'.
+lib/back-lever-training-system.ts(1144,14): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SESSION_TEMPLATE'.
+lib/back-lever-training-system.ts(1198,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_EXERCISE_LIBRARY'.
+lib/back-lever-training-system.ts(1198,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_EXERCISE_LIBRARY'.
+lib/back-lever-training-system.ts(1199,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_READINESS_GATES'.
+lib/back-lever-training-system.ts(1199,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_READINESS_GATES'.
+lib/back-lever-training-system.ts(1200,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_WEAK_POINTS'.
+lib/back-lever-training-system.ts(1200,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_WEAK_POINTS'.
+lib/back-lever-training-system.ts(1201,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_PROGRESSION_SYSTEM'.
+lib/back-lever-training-system.ts(1201,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_PROGRESSION_SYSTEM'.
+lib/back-lever-training-system.ts(1202,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SKILL_RELATIONSHIPS'.
+lib/back-lever-training-system.ts(1202,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_SKILL_RELATIONSHIPS'.
+lib/back-lever-training-system.ts(1203,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SKILL_CYCLE'.
+lib/back-lever-training-system.ts(1203,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_SKILL_CYCLE'.
+lib/back-lever-training-system.ts(1204,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_GUIDE_STRUCTURE'.
+lib/back-lever-training-system.ts(1204,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_GUIDE_STRUCTURE'.
+lib/back-lever-training-system.ts(1205,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SEO_PAGES'.
+lib/back-lever-training-system.ts(1205,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_SEO_PAGES'.
+lib/back-lever-training-system.ts(1206,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_MARKETING_CLAIMS'.
+lib/back-lever-training-system.ts(1206,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_MARKETING_CLAIMS'.
+lib/back-lever-training-system.ts(1207,3): error TS2323: Cannot redeclare exported variable 'BACK_LEVER_SESSION_TEMPLATE'.
+lib/back-lever-training-system.ts(1207,3): error TS2484: Export declaration conflicts with exported declaration of 'BACK_LEVER_SESSION_TEMPLATE'.

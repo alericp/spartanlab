@@ -1,0 +1,30 @@
+lib/warmup-intelligence-engine.ts(617,7): error TS2739: Type '{ scapular_control: { extraExercises: string[]; rationale: string; priorityBoost: number; }; shoulder_stability: { extraExercises: string[]; rationale: string; priorityBoost: number; }; wrist_tolerance: { ...; }; ... 18 more ...; none: { ...; }; }' is missing the following properties from type 'Record<WeakPointType, { extraExercises: string[]; rationale: string; priorityBoost: number; }>': core_compression, bent_arm_pull, bent_arm_push, core_anti_extension, general_fatigue
+lib/warmup-intelligence-engine.ts(741,17): error TS2323: Cannot redeclare exported variable 'analyzeSessionJointStress'.
+lib/warmup-intelligence-engine.ts(846,17): error TS2323: Cannot redeclare exported variable 'selectWarmupExercises'.
+lib/warmup-intelligence-engine.ts(955,17): error TS2323: Cannot redeclare exported variable 'generateIntelligentWarmup'.
+lib/warmup-intelligence-engine.ts(1085,17): error TS2323: Cannot redeclare exported variable 'generateCompressedWarmup'.
+lib/warmup-intelligence-engine.ts(1121,17): error TS2323: Cannot redeclare exported variable 'getWarmupKnowledgeBubble'.
+lib/warmup-intelligence-engine.ts(1132,17): error TS2323: Cannot redeclare exported variable 'generateWarmupExplanation'.
+lib/warmup-intelligence-engine.ts(1160,17): error TS2323: Cannot redeclare exported variable 'enhanceWarmupFromGovernor'.
+lib/warmup-intelligence-engine.ts(1178,13): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+lib/warmup-intelligence-engine.ts(1179,41): error TS2339: Property 'defaultPrescription' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1181,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1191,69): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1198,11): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+lib/warmup-intelligence-engine.ts(1199,41): error TS2339: Property 'defaultPrescription' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1201,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+lib/warmup-intelligence-engine.ts(1217,20): error TS2339: Property 'coachingNote' does not exist on type '{ exercises: WarmUpExerciseWithRationale[]; totalMinutes: number; focusSummary: string; jointPrepSummary: string[]; safetyNotes: string[]; weakPointAdjustments: string[]; tendonPrepIncluded: boolean; isCompressed: boolean; }'.
+lib/warmup-intelligence-engine.ts(1230,3): error TS2323: Cannot redeclare exported variable 'analyzeSessionJointStress'.
+lib/warmup-intelligence-engine.ts(1230,3): error TS2484: Export declaration conflicts with exported declaration of 'analyzeSessionJointStress'.
+lib/warmup-intelligence-engine.ts(1231,3): error TS2323: Cannot redeclare exported variable 'selectWarmupExercises'.
+lib/warmup-intelligence-engine.ts(1231,3): error TS2484: Export declaration conflicts with exported declaration of 'selectWarmupExercises'.
+lib/warmup-intelligence-engine.ts(1232,3): error TS2323: Cannot redeclare exported variable 'generateIntelligentWarmup'.
+lib/warmup-intelligence-engine.ts(1232,3): error TS2484: Export declaration conflicts with exported declaration of 'generateIntelligentWarmup'.
+lib/warmup-intelligence-engine.ts(1233,3): error TS2323: Cannot redeclare exported variable 'generateCompressedWarmup'.
+lib/warmup-intelligence-engine.ts(1233,3): error TS2484: Export declaration conflicts with exported declaration of 'generateCompressedWarmup'.
+lib/warmup-intelligence-engine.ts(1234,3): error TS2323: Cannot redeclare exported variable 'getWarmupKnowledgeBubble'.
+lib/warmup-intelligence-engine.ts(1234,3): error TS2484: Export declaration conflicts with exported declaration of 'getWarmupKnowledgeBubble'.
+lib/warmup-intelligence-engine.ts(1235,3): error TS2323: Cannot redeclare exported variable 'generateWarmupExplanation'.
+lib/warmup-intelligence-engine.ts(1235,3): error TS2484: Export declaration conflicts with exported declaration of 'generateWarmupExplanation'.
+lib/warmup-intelligence-engine.ts(1236,3): error TS2323: Cannot redeclare exported variable 'enhanceWarmupFromGovernor'.
+lib/warmup-intelligence-engine.ts(1236,3): error TS2484: Export declaration conflicts with exported declaration of 'enhanceWarmupFromGovernor'.

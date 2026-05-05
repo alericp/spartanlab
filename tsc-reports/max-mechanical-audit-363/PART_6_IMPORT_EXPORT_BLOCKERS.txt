@@ -1,0 +1,208 @@
+===== PART 6 — IMPORT/EXPORT BLOCKERS FROM CURRENT 363 STATE =====
+Do not auto-fix unless source/export truth is supplied.
+
+--- IMPORT TARGET 001 ---
+components/achievements/AchievementNotification.tsx(8,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'popNextNotification'.
+Pattern: TS2305: missing export `"@/lib/achievements"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 002 ---
+components/achievements/AchievementNotification.tsx(10,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'hasUnseenAchievements'.
+Pattern: TS2305: missing export `"@/lib/achievements"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 003 ---
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+Pattern: TS2459: import/export or missing symbol `"./constraint-engine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 004 ---
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+Pattern: TS2724: import/export or missing symbol `"./constraint-detection-engine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 005 ---
+lib/doctrine-athlete-context-query.ts(40,10): error TS2305: Module '"./doctrine-db"' has no exported member 'sql'.
+Pattern: TS2305: missing export `"./doctrine-db"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 006 ---
+lib/doctrine/source-batches/index.ts(57,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02PriorityType' locally, but it is not exported.
+Pattern: TS2459: import/export or missing symbol `"./batch-02-uploaded-pdf-doctrine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 007 ---
+lib/doctrine/source-batches/index.ts(58,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02IntelligenceTier' locally, but it is not exported.
+Pattern: TS2459: import/export or missing symbol `"./batch-02-uploaded-pdf-doctrine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 008 ---
+lib/engine/index.ts(353,3): error TS2724: '"../skill-readiness"' has no exported member named 'SkillReadinessEngine'. Did you mean 'SkillReadinessInput'?
+Pattern: TS2724: import/export or missing symbol `"../skill-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 009 ---
+lib/engine/index.ts(354,3): error TS2305: Module '"../skill-readiness"' has no exported member 'quickReadinessCheck'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 010 ---
+lib/engine/index.ts(355,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getPrimaryLimiter'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 011 ---
+lib/engine/index.ts(356,3): error TS2305: Module '"../skill-readiness"' has no exported member 'meetsBaselineRequirements'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 012 ---
+lib/engine/index.ts(357,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getTrainingRecommendations'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 013 ---
+lib/enhanced-exercise-intelligence.ts(17,15): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+Pattern: TS2724: import/export or missing symbol `"./exercise-classification-registry"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 014 ---
+lib/exercise-family-integration.ts(24,8): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+Pattern: TS2724: import/export or missing symbol `"./exercise-classification-registry"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 015 ---
+lib/flexible-schedule-engine.ts(62,3): error TS2305: Module '"./athlete-profile"' has no exported member 'PrimaryGoal'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 016 ---
+lib/flexible-schedule-engine.ts(63,3): error TS2305: Module '"./athlete-profile"' has no exported member 'ExperienceLevel'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 017 ---
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 018 ---
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 019 ---
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 020 ---
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 021 ---
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 022 ---
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 023 ---
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 024 ---
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: import/export or missing symbol `feedback`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 025 ---
+lib/performance-envelope-service.ts(21,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 026 ---
+lib/planner-truth-audit.ts(989,14): error TS2304: Cannot find name 'selectedSkills'.
+Pattern: TS2304: import/export or missing symbol `selectedSkills`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 027 ---
+lib/planner-truth-audit.ts(992,39): error TS2304: Cannot find name 'selectedSkills'.
+Pattern: TS2304: import/export or missing symbol `selectedSkills`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 028 ---
+lib/progress-data-service.ts(6,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+Pattern: TS2724: import/export or missing symbol `"./skill-session-service"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 029 ---
+lib/readiness/canonical-readiness-engine.ts(591,14): error TS2304: Cannot find name 'calculateOneArmPullUpReadiness'.
+Pattern: TS2304: import/export or missing symbol `calculateOneArmPullUpReadiness`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 030 ---
+lib/readiness/canonical-readiness-engine.ts(600,14): error TS2304: Cannot find name 'calculateOneArmPushUpReadiness'.
+Pattern: TS2304: import/export or missing symbol `calculateOneArmPushUpReadiness`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 031 ---
+lib/readiness/canonical-readiness-engine.ts(608,14): error TS2304: Cannot find name 'calculatePlanchePushUpReadiness'.
+Pattern: TS2304: import/export or missing symbol `calculatePlanchePushUpReadiness`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 032 ---
+lib/recovery-fatigue-engine.ts(12,10): error TS2305: Module '"./daily-readiness"' has no exported member 'calculateDailyReadiness'.
+Pattern: TS2305: missing export `"./daily-readiness"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 033 ---
+lib/server/authoritative-program-generation.ts(710,91): error TS2304: Cannot find name 'CalibrationProfile'.
+Pattern: TS2304: import/export or missing symbol `CalibrationProfile`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 034 ---
+lib/session-architecture-truth.ts(19,15): error TS2724: '"./adaptive-program-builder"' has no exported member named 'MaterialityContract'. Did you mean 'buildMaterialityContract'?
+Pattern: TS2724: import/export or missing symbol `"./adaptive-program-builder"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 035 ---
+lib/session-structure-engine.ts(20,36): error TS2459: Module '"./performance-envelope-engine"' declares 'MovementFamily' locally, but it is not exported.
+Pattern: TS2459: import/export or missing symbol `"./performance-envelope-engine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 036 ---
+lib/training-coach.ts(11,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+Pattern: TS2459: import/export or missing symbol `"./constraint-engine"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 037 ---
+lib/training-feedback-loop.ts(19,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+Pattern: TS2724: import/export or missing symbol `"./skill-session-service"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 038 ---
+lib/trusted-data-filter.ts(13,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+Pattern: TS2724: import/export or missing symbol `"./skill-session-service"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 039 ---
+lib/unified-readiness-integration.ts(25,15): error TS2305: Module '"./athlete-profile"' has no exported member 'AthleteProfile'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 040 ---
+lib/warmup-engine.ts(1220,12): error TS2304: Cannot find name 'generateStandardWarmup'.
+Pattern: TS2304: import/export or missing symbol `generateStandardWarmup`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+
+--- IMPORT TARGET 041 ---
+lib/workout-feedback-integration.ts(9,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Import/export/missing symbol: include only if current source/export truth is included; otherwise defer.
+

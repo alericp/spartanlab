@@ -1,0 +1,69 @@
+===== BUILDER ASSIGNABILITY / ARGUMENT MISMATCH =====
+lib/adaptive-program-builder.ts(5591,7): error TS2322: Type 'SessionLength' is not assignable to type 'number | undefined'.
+lib/adaptive-program-builder.ts(6764,5): error TS2345: Argument of type 'LimiterDrivenProgramMods | null' is not assignable to parameter of type 'LimiterDrivenProgramMods | undefined'.
+lib/adaptive-program-builder.ts(6852,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+lib/adaptive-program-builder.ts(6867,5): error TS2322: Type 'string[]' is not assignable to type 'JointCaution[]'.
+lib/adaptive-program-builder.ts(7632,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(7634,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7636,5): error TS2322: Type 'string | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(7637,5): error TS2322: Type 'string | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(7750,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(8175,9): error TS2322: Type '{ blocked: boolean; reason: string; }' is not assignable to type 'boolean'.
+lib/adaptive-program-builder.ts(8434,7): error TS2322: Type 'MaterialSkillIntentEntry[]' is not assignable to type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]'.
+lib/adaptive-program-builder.ts(8438,7): error TS2322: Type 'Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean; }>' is not assignable to type 'Record<string, { progressionId: string; currentLevel: number; }>'.
+lib/adaptive-program-builder.ts(8442,7): error TS2322: Type '{ skill: string; reasonCode: DeferralReasonCode; reasonLabel: string; }[]' is not assignable to type '{ skill: string; reason: string; }[]'.
+lib/adaptive-program-builder.ts(8443,7): error TS2322: Type 'MultiSkillSessionAllocationEntry[]' is not assignable to type '{ skill: string; allocated: boolean; }[]'.
+lib/adaptive-program-builder.ts(8815,7): error TS2345: Argument of type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]' is not assignable to parameter of type 'MaterialSkillIntentEntry[]'.
+lib/adaptive-program-builder.ts(9087,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9090,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9255,7): error TS2322: Type 'string[] | null' is not assignable to type '{ id: string; name: string; }[] | null'.
+lib/adaptive-program-builder.ts(10019,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10185,5): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(10219,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10224,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10278,7): error TS2345: Argument of type 'PrimaryGoalType | null' is not assignable to parameter of type 'OnboardingGoal | null'.
+lib/adaptive-program-builder.ts(10911,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10950,7): error TS2322: Type 'null' is not assignable to type 'MethodProfile | undefined'.
+lib/adaptive-program-builder.ts(11295,5): error TS2322: Type '"planche" | "front_lever" | "back_lever" | "muscle_up" | "iron_cross" | "weighted_strength" | "general" | "hspu" | "l_sit"' is not assignable to type 'SkillType'.
+lib/adaptive-program-builder.ts(11327,9): error TS2322: Type 'string' is not assignable to type 'WeekPhaseTag'.
+lib/adaptive-program-builder.ts(11520,5): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+lib/adaptive-program-builder.ts(11590,7): error TS2345: Argument of type '"day_contract_mismatch"' is not assignable to parameter of type 'GenerationErrorCode'.
+lib/adaptive-program-builder.ts(11778,7): error TS2322: Type '{ volumeBias: BiasLevel; intensityBias: BiasLevel; densityBias: BiasLevel; finisherBias: "normal" | "expanded" | "limited"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "increased"; } | null' is not assignable to type '{ volumeBias: "reduced" | "normal" | "expanded"; intensityBias: "reduced" | "normal" | "expanded"; densityBias: "reduced" | "normal" | "expanded"; finisherBias: "normal" | "expanded" | "limited"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+lib/adaptive-program-builder.ts(11825,7): error TS2345: Argument of type 'SessionWeekAdaptation' is not assignable to parameter of type 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(12264,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+lib/adaptive-program-builder.ts(12323,11): error TS2345: Argument of type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[]' is not assignable to parameter of type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[]'.
+lib/adaptive-program-builder.ts(13499,13): error TS2322: Type '"circuit" | "density_block"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(13569,15): error TS2322: Type '"circuit" | "density_block"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(13885,9): error TS2322: Type '"cluster"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14129,13): error TS2322: Type '"top_set"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14766,7): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+lib/adaptive-program-builder.ts(16710,52): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'ConstraintCategory'.
+lib/adaptive-program-builder.ts(17481,90): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17482,86): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17532,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17747,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(17895,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(17992,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(18662,7): error TS2345: Argument of type '{ supersets: boolean; circuits: boolean; densityBlocks: boolean; clusterSets: boolean; dropSets: boolean; ladderSets: boolean; restPause: boolean; }' is not assignable to parameter of type '{ supersets?: string | undefined; circuits?: string | undefined; densityBlocks?: string | undefined; clusterSets?: string | undefined; }'.
+lib/adaptive-program-builder.ts(19694,5): error TS2322: Type '{ prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "excellent" | ... 2 more ... | "partial"; adjustments: TrainingAdjustment[]; } | { ...; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "excellent" | ... 2 more ... | "partial"; adjustments: { ...; }[];...'.
+lib/adaptive-program-builder.ts(19880,11): error TS2345: Argument of type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null' is not assignable to parameter of type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null'.
+lib/adaptive-program-builder.ts(19923,11): error TS2345: Argument of type 'AthleteProfile' is not assignable to parameter of type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(19977,11): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; } | null' is not assignable to type 'TrainingDecision | null'.
+lib/adaptive-program-builder.ts(19980,53): error TS2345: Argument of type '"wrist"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19981,56): error TS2345: Argument of type '"shoulder"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(19982,53): error TS2345: Argument of type '"elbow"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(20019,11): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; } | null' is not assignable to type 'TrainingDecision | null'.
+lib/adaptive-program-builder.ts(20022,53): error TS2345: Argument of type '"wrist"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(20023,56): error TS2345: Argument of type '"shoulder"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(20024,53): error TS2345: Argument of type '"elbow"' is not assignable to parameter of type '"shoulders" | "elbows" | "wrists" | "lower_back" | "knees"'.
+lib/adaptive-program-builder.ts(22886,29): error TS2345: Argument of type 'DeferredSkillEntry' is not assignable to parameter of type 'string'.
+lib/adaptive-program-builder.ts(25846,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(25904,100): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(25905,93): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(28801,15): error TS2322: Type '{ id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[]' is not assignable to type 'AdaptiveExercise[]'.
+lib/adaptive-program-builder.ts(29461,7): error TS2322: Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+lib/adaptive-program-builder.ts(29604,3): error TS2322: Type '({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[]' is not assignable to type 'AdaptiveExercise[]'.
+lib/adaptive-program-builder.ts(29668,8): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility'.
+lib/adaptive-program-builder.ts(30186,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+lib/adaptive-program-builder.ts(31116,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+lib/adaptive-program-builder.ts(31374,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.

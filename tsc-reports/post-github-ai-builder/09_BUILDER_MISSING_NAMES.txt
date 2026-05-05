@@ -1,0 +1,44 @@
+===== BUILDER CANNOT FIND NAME / MISSING EXPORT =====
+lib/adaptive-program-builder.ts(62,15): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-program-builder.ts(2059,25): error TS2304: Cannot find name 'WeakPointAssessment'.
+lib/adaptive-program-builder.ts(7283,34): error TS2304: Cannot find name 'AthleteProfile'.
+lib/adaptive-program-builder.ts(16029,28): error TS2552: Cannot find name 'sessionAssemblyErr'. Did you mean 'getSessionAssemblyError'?
+lib/adaptive-program-builder.ts(16029,66): error TS2552: Cannot find name 'sessionAssemblyErr'. Did you mean 'getSessionAssemblyError'?
+lib/adaptive-program-builder.ts(18568,29): error TS2552: Cannot find name 'finalScheduleMode'. Did you mean 'inputScheduleMode'?
+lib/adaptive-program-builder.ts(18827,29): error TS2552: Cannot find name 'finalScheduleMode'. Did you mean 'inputScheduleMode'?
+lib/adaptive-program-builder.ts(18928,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(19161,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(20163,46): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20181,11): error TS2304: Cannot find name 'calibration'.
+lib/adaptive-program-builder.ts(20202,31): error TS2304: Cannot find name 'getCycleBuilderModifications'.
+lib/adaptive-program-builder.ts(20335,32): error TS2304: Cannot find name 'canonicalReadiness'.
+lib/adaptive-program-builder.ts(20365,44): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20460,54): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(20476,26): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(22542,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+lib/adaptive-program-builder.ts(22543,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+lib/adaptive-program-builder.ts(24537,10): error TS2304: Cannot find name 'tempProgram'.
+lib/adaptive-program-builder.ts(26719,21): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26720,23): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26803,7): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26804,5): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26813,12): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27009,43): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27010,39): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(27030,13): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(27031,13): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27794,38): error TS2304: Cannot find name 'sessionContext'.
+lib/adaptive-program-builder.ts(27968,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27969,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27989,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27992,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27995,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28135,51): error TS2304: Cannot find name 'exposureReadinessMap'.
+lib/adaptive-program-builder.ts(28238,32): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28240,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28241,22): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28242,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28247,25): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(29161,54): error TS2304: Cannot find name 'effectiveMainSource'.
+lib/adaptive-program-builder.ts(29753,36): error TS2304: Cannot find name 'phase15eSubstepDegradedReason'.
+lib/adaptive-program-builder.ts(29759,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.

@@ -1,0 +1,78 @@
+===== SCOREBOARD — CURRENT VERIFIED STATE =====
+Previous total diagnostics: 1150
+Current total diagnostics: 1150
+Total diagnostic delta: 0
+Current files with errors: 149
+
+Previous builder diagnostics: 249
+Current builder diagnostics: 249
+Builder diagnostic delta: 0
+
+Key file counts:
+lib/adaptive-program-builder.ts: 249
+lib/program-exercise-selector.ts: 111
+lib/canonical-profile-service.ts: 38
+lib/prediction/prediction-service.ts: 36
+lib/server/authoritative-program-generation.ts: 32
+
+===== TOP 60 ERROR FILES =====
+    249 lib/adaptive-program-builder.ts
+    111 lib/program-exercise-selector.ts
+     38 lib/canonical-profile-service.ts
+     36 lib/prediction/prediction-service.ts
+     32 lib/server/authoritative-program-generation.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     18 lib/weak-point-engine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/repositories/profile-repository.ts
+     14 lib/performance-envelope-integration.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/program-generation/exercise-selection-materiality.ts
+      9 lib/engine/index.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/program-service.ts
+      8 lib/planner-truth-audit.ts
+      8 lib/doctrine-to-output-verification.ts
+      8 lib/constraint-detection-engine.ts
+      8 lib/coaching-explanation-contract.ts
+      8 lib/athlete-calibration.ts
+      8 lib/active-week-mutation-service.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      7 lib/dashboard-service.ts
+      7 lib/athlete-profile.ts
+      6 lib/training-coach.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/metrics-update-service.ts
+      6 lib/adaptive-progression-engine.ts
+      5 lib/pr-vault-engine.ts
+      5 lib/engine-quality-contract.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      5 lib/consistency-momentum-engine.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-readiness-integration.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/recovery-fatigue-engine.ts
+      4 lib/program-version-service.ts
+      4 lib/program-generation/week-adaptation-decision-contract.ts
+      4 lib/program-generation/session-composition-intelligence.ts
+      4 lib/prescription-contract.ts
+      4 lib/milestone-engine.ts

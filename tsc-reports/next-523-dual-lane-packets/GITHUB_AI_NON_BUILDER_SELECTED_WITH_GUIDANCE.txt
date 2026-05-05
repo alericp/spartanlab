@@ -1,0 +1,819 @@
+===== GITHUB AI NON-BUILDER PARALLEL PACKET =====
+VO is working builder. Do not touch lib/adaptive-program-builder.ts.
+Work only exact listed non-builder files. No repo scan. No scripts. No helper-only work.
+Stop after 8-12 files or likely 40+ diagnostics reduced.
+
+Selected file counts:
+- lib/server/authoritative-program-generation.ts: 32
+- lib/unified-coaching-engine.ts: 25
+- lib/program/skill-specific-truth-resolution.ts: 15
+- lib/session-variety-engine.ts: 14
+- lib/repositories/profile-repository.ts: 13
+- lib/roadmap/skill-roadmap-service.ts: 11
+- lib/onboarding-service.ts: 10
+- lib/program/db-truth-scoring-bridge.ts: 10
+- lib/performance-envelope-engine.ts: 9
+- lib/program-truth-extractor.ts: 9
+- lib/program/program-display-contract.ts: 9
+- lib/unified-program-generation.ts: 3
+
+--- NON-BUILDER ERROR 001 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: PrimaryGoalType | null, "skill", lib, onboarding, service, TS2367, This, comparison
+
+--- NON-BUILDER ERROR 002 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: PrimaryGoalType | null, "strength", lib, onboarding, service, TS2367, This, comparison
+
+--- NON-BUILDER ERROR 003 ---
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"fallback" | "engine" | "profile"'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "canonical_profile", "fallback" | "engine" | "profile", lib, onboarding, service, TS2345, type, canonical_profile
+
+--- NON-BUILDER ERROR 004 ---
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: AdaptiveProgram, ProgramToValidate, lib, onboarding, service, TS2345, type
+
+--- NON-BUILDER ERROR 005 ---
+lib/onboarding-service.ts(661,7): error TS2322: Type 'number' is not assignable to type 'TrainingDays'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number, TrainingDays, lib, onboarding, service, TS2322, type
+
+--- NON-BUILDER ERROR 006 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: name, TrainingBlock, lib, onboarding, service, TS2339, type
+
+--- NON-BUILDER ERROR 007 ---
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: name, TrainingBlock, lib, onboarding, service, TS2339, type
+
+--- NON-BUILDER ERROR 008 ---
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: name, TrainingBlock, lib, onboarding, service, TS2339, type
+
+--- NON-BUILDER ERROR 009 ---
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: name, TrainingBlock, lib, onboarding, service, TS2339, type
+
+--- NON-BUILDER ERROR 010 ---
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: name, TrainingBlock, lib, onboarding, service, TS2339, type
+
+--- NON-BUILDER ERROR 011 ---
+lib/performance-envelope-engine.ts(152,14): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }' but required in type 'Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>'.
+Likely fix: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Anchors: barbell_hinge, { vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }, Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>, lib, performance, envelope, engine, TS2741
+
+--- NON-BUILDER ERROR 012 ---
+lib/performance-envelope-engine.ts(1393,9): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }' but required in type 'Record<MovementFamily, string>'.
+Likely fix: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Anchors: barbell_hinge, { vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }, Record<MovementFamily, string>, lib, performance, envelope, engine, TS2741
+
+--- NON-BUILDER ERROR 013 ---
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 014 ---
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 015 ---
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 016 ---
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 017 ---
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 018 ---
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 019 ---
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+Likely fix: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Anchors: feedback, lib, performance, envelope, engine, TS2304, Cannot, find
+
+--- NON-BUILDER ERROR 020 ---
+lib/program-truth-extractor.ts(246,48): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'Record<string, unknown>'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: CanonicalProgrammingProfile, Record<string, unknown>, lib, program, truth, extractor, TS2345, type
+
+--- NON-BUILDER ERROR 021 ---
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string, PrimaryGoal, lib, program, truth, extractor, TS2322, type
+
+--- NON-BUILDER ERROR 022 ---
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string | undefined, PrimaryGoal | undefined, lib, program, truth, extractor, TS2322, string
+
+--- NON-BUILDER ERROR 023 ---
+lib/program-truth-extractor.ts(328,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string | undefined, TrainingPathType | undefined, lib, program, truth, extractor, TS2322, string
+
+--- NON-BUILDER ERROR 024 ---
+lib/program-truth-extractor.ts(330,5): error TS2322: Type 'string' is not assignable to type 'ExperienceLevel'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string, ExperienceLevel, lib, program, truth, extractor, TS2322, type
+
+--- NON-BUILDER ERROR 025 ---
+lib/program-truth-extractor.ts(332,5): error TS2322: Type 'number' is not assignable to type '"flexible" | TrainingDays'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number, "flexible" | TrainingDays, lib, program, truth, extractor, TS2322, type
+
+--- NON-BUILDER ERROR 026 ---
+lib/program-truth-extractor.ts(334,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number, SessionLength, lib, program, truth, extractor, TS2322, type
+
+--- NON-BUILDER ERROR 027 ---
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string[], EquipmentType[], lib, program, truth, extractor, TS2322, string
+
+--- NON-BUILDER ERROR 028 ---
+lib/program-truth-extractor.ts(487,7): error TS2353: Object literal may only specify known properties, and 'authoritativeMultiSkillIntentContract' does not exist in type '{ identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: authoritativeMultiSkillIntentContract, { identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }, lib, program, truth, extractor, TS2353, may
+
+--- NON-BUILDER ERROR 029 ---
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: envelope.confidenceScore, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 030 ---
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | "sporadic" | null | undefined, "improving", lib, program, truth, scoring, bridge, TS2367
+
+--- NON-BUILDER ERROR 031 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | "sporadic" | null | undefined, "declining", lib, program, truth, scoring, bridge, TS2367
+
+--- NON-BUILDER ERROR 032 ---
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: envelope.preferredRepRangeMin, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 033 ---
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: envelope.preferredRepRangeMax, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 034 ---
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: envelope.fatigueThreshold, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 035 ---
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: envelope.fatigueThreshold, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 036 ---
+lib/program/db-truth-scoring-bridge.ts(450,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: strengthBenchmarks.pullUpMax, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 037 ---
+lib/program/db-truth-scoring-bridge.ts(451,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+Likely fix: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Anchors: strengthBenchmarks.dipMax, undefined, lib, program, truth, scoring, bridge, TS18048
+
+--- NON-BUILDER ERROR 038 ---
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", lib, program, truth, scoring, bridge, TS2367
+
+--- NON-BUILDER ERROR 039 ---
+lib/program/program-display-contract.ts(261,37): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: doctrineConstraints, { phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., lib, program, display, contract, TS2339, type
+
+--- NON-BUILDER ERROR 040 ---
+lib/program/program-display-contract.ts(263,26): error TS2339: Property 'evidence' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: evidence, { phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., lib, program, display, contract, TS2339, type
+
+--- NON-BUILDER ERROR 041 ---
+lib/program/program-display-contract.ts(544,54): error TS2367: This comparison appears to be unintentional because the types '"headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected"' and '"carryover_only"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected", "carryover_only", lib, program, display, contract, TS2367, This
+
+--- NON-BUILDER ERROR 042 ---
+lib/program/program-display-contract.ts(2154,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+Likely fix: Implicit any. Type callback parameter from immediate local array/object shape.
+Anchors: id, any, lib, program, display, contract, TS7006, Parameter
+
+--- NON-BUILDER ERROR 043 ---
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: roleInSession, { expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }, lib, program, display, contract, TS2339, type
+
+--- NON-BUILDER ERROR 044 ---
+lib/program/program-display-contract.ts(3682,24): error TS2367: This comparison appears to be unintentional because the types 'PrescriptionIntent' and '"protection"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: PrescriptionIntent, "protection", lib, program, display, contract, TS2367, This
+
+--- NON-BUILDER ERROR 045 ---
+lib/program/program-display-contract.ts(5711,9): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"pull"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "core" | "unknown" | "scap", "pull", lib, program, display, contract, TS2367, This
+
+--- NON-BUILDER ERROR 046 ---
+lib/program/program-display-contract.ts(5713,16): error TS2367: This comparison appears to be unintentional because the types '"core" | "unknown" | "scap"' and '"push"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "core" | "unknown" | "scap", "push", lib, program, display, contract, TS2367, This
+
+--- NON-BUILDER ERROR 047 ---
+lib/program/program-display-contract.ts(6593,5): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'boolean'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | boolean | undefined, boolean, lib, program, display, contract, TS2322, number
+
+--- NON-BUILDER ERROR 048 ---
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 049 ---
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 050 ---
+lib/program/skill-specific-truth-resolution.ts(367,9): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 051 ---
+lib/program/skill-specific-truth-resolution.ts(368,36): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 052 ---
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 053 ---
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 054 ---
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: "unknown" | null | undefined, "improving", lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 055 ---
+lib/program/skill-specific-truth-resolution.ts(571,34): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 056 ---
+lib/program/skill-specific-truth-resolution.ts(571,73): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 057 ---
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 058 ---
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 059 ---
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 060 ---
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 061 ---
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 062 ---
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | null | undefined, number | null, lib, program, skill, specific, truth, resolution
+
+--- NON-BUILDER ERROR 063 ---
+lib/repositories/profile-repository.ts(65,11): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, lib, repositories, profile, repository, TS2322, string
+
+--- NON-BUILDER ERROR 064 ---
+lib/repositories/profile-repository.ts(257,9): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, lib, repositories, profile, repository, TS2322, string
+
+--- NON-BUILDER ERROR 065 ---
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string | null, PrimaryGoalType | null, lib, repositories, profile, repository, TS2322, string
+
+--- NON-BUILDER ERROR 066 ---
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string | null, PrimaryGoalType | null, lib, repositories, profile, repository, TS2322, string
+
+--- NON-BUILDER ERROR 067 ---
+lib/repositories/profile-repository.ts(303,65): error TS2551: Property 'goalCategory' does not exist on type 'OnboardingProfile'. Did you mean 'goalCategories'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: goalCategory, OnboardingProfile, goalCategories, lib, repositories, profile, repository, TS2551
+
+--- NON-BUILDER ERROR 068 ---
+lib/repositories/profile-repository.ts(306,73): error TS2339: Property 'selectedStrength' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: selectedStrength, OnboardingProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 069 ---
+lib/repositories/profile-repository.ts(307,9): error TS2322: Type 'number' is not assignable to type 'TrainingDaysPerWeek | null'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number, TrainingDaysPerWeek | null, lib, repositories, profile, repository, TS2322, type
+
+--- NON-BUILDER ERROR 070 ---
+lib/repositories/profile-repository.ts(309,77): error TS2339: Property 'equipmentAvailable' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: equipmentAvailable, OnboardingProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 071 ---
+lib/repositories/profile-repository.ts(310,31): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: scheduleMode, AthleteProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 072 ---
+lib/repositories/profile-repository.ts(311,32): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: trainingStyle, AthleteProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 073 ---
+lib/repositories/profile-repository.ts(311,67): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: trainingStyle, OnboardingProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 074 ---
+lib/repositories/profile-repository.ts(333,29): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: scheduleMode, AthleteProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 075 ---
+lib/repositories/profile-repository.ts(336,30): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: trainingStyle, AthleteProfile, lib, repositories, profile, repository, TS2339, type
+
+--- NON-BUILDER ERROR 076 ---
+lib/roadmap/skill-roadmap-service.ts(567,7): error TS2353: Object literal may only specify known properties, and 'phase' does not exist in type 'AthleteRoadmapPosition'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: phase, AthleteRoadmapPosition, lib, roadmap, skill, service, TS2353, may
+
+--- NON-BUILDER ERROR 077 ---
+lib/roadmap/skill-roadmap-service.ts(567,22): error TS2339: Property 'phases' does not exist on type 'SkillRoadmap'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: phases, SkillRoadmap, lib, roadmap, skill, service, TS2339, type
+
+--- NON-BUILDER ERROR 078 ---
+lib/roadmap/skill-roadmap-service.ts(587,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, lib, roadmap, skill, service, TS2551
+
+--- NON-BUILDER ERROR 079 ---
+lib/roadmap/skill-roadmap-service.ts(588,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, lib, roadmap, skill, service, TS2551
+
+--- NON-BUILDER ERROR 080 ---
+lib/roadmap/skill-roadmap-service.ts(589,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, lib, roadmap, skill, service, TS2551
+
+--- NON-BUILDER ERROR 081 ---
+lib/roadmap/skill-roadmap-service.ts(590,57): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, lib, roadmap, skill, service, TS2551
+
+--- NON-BUILDER ERROR 082 ---
+lib/roadmap/skill-roadmap-service.ts(591,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, lib, roadmap, skill, service, TS2551
+
+--- NON-BUILDER ERROR 083 ---
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: weight, StrengthRecord, lib, roadmap, skill, service, TS2339, type
+
+--- NON-BUILDER ERROR 084 ---
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: weight, StrengthRecord, lib, roadmap, skill, service, TS2339, type
+
+--- NON-BUILDER ERROR 085 ---
+lib/roadmap/skill-roadmap-service.ts(631,9): error TS2353: Object literal may only specify known properties, and 'leanHoldTime' does not exist in type 'PlancheInputs'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: leanHoldTime, PlancheInputs, lib, roadmap, skill, service, TS2353, may
+
+--- NON-BUILDER ERROR 086 ---
+lib/roadmap/skill-roadmap-service.ts(644,9): error TS2353: Object literal may only specify known properties, and 'straightBarDipReps' does not exist in type 'MuscleUpInputs'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: straightBarDipReps, MuscleUpInputs, lib, roadmap, skill, service, TS2353, may
+
+--- NON-BUILDER ERROR 087 ---
+lib/server/authoritative-program-generation.ts(351,37): error TS2339: Property 'selectedStrength' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: selectedStrength, Partial<AdaptiveProgramInputs>, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 088 ---
+lib/server/authoritative-program-generation.ts(369,31): error TS2339: Property 'bodyweight' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: bodyweight, Partial<AdaptiveProgramInputs>, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 089 ---
+lib/server/authoritative-program-generation.ts(712,56): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'CalibrationProfile'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: CanonicalProgrammingProfile, CalibrationProfile, lib, server, authoritative, program, generation, TS2345
+
+--- NON-BUILDER ERROR 090 ---
+lib/server/authoritative-program-generation.ts(862,11): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 59 more.
+Likely fix: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2740
+
+--- NON-BUILDER ERROR 091 ---
+lib/server/authoritative-program-generation.ts(1125,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, lib, server, authoritative, program, generation
+
+--- NON-BUILDER ERROR 092 ---
+lib/server/authoritative-program-generation.ts(1127,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: TriggerSource, TruthTriggerSource, lib, server, authoritative, program, generation, TS2345
+
+--- NON-BUILDER ERROR 093 ---
+lib/server/authoritative-program-generation.ts(1133,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, lib, server, authoritative, program, generation
+
+--- NON-BUILDER ERROR 094 ---
+lib/server/authoritative-program-generation.ts(1134,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: TriggerSource, TruthTriggerSource, lib, server, authoritative, program, generation, TS2345
+
+--- NON-BUILDER ERROR 095 ---
+lib/server/authoritative-program-generation.ts(1155,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, lib, server, authoritative, program, generation
+
+--- NON-BUILDER ERROR 096 ---
+lib/server/authoritative-program-generation.ts(1296,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: equipment, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 097 ---
+lib/server/authoritative-program-generation.ts(1323,7): error TS2353: Object literal may only specify known properties, and 'triggerSource' does not exist in type '{ phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: triggerSource, { phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., lib, server, authoritative, program, generation, TS2353
+
+--- NON-BUILDER ERROR 098 ---
+lib/server/authoritative-program-generation.ts(1345,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, lib, server, authoritative, program, generation, TS2322
+
+--- NON-BUILDER ERROR 099 ---
+lib/server/authoritative-program-generation.ts(1346,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, lib, server, authoritative, program, generation, TS2322
+
+--- NON-BUILDER ERROR 100 ---
+lib/server/authoritative-program-generation.ts(1347,45): error TS2339: Property 'pullUpCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: pullUpCapacity, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 101 ---
+lib/server/authoritative-program-generation.ts(1347,85): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: pullUps, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 102 ---
+lib/server/authoritative-program-generation.ts(1348,42): error TS2339: Property 'dipCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: dipCapacity, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 103 ---
+lib/server/authoritative-program-generation.ts(1348,79): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: dips, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 104 ---
+lib/server/authoritative-program-generation.ts(1349,47): error TS2339: Property 'wallHspuCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: wallHspuCapacity, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 105 ---
+lib/server/authoritative-program-generation.ts(1349,89): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: wallHSPU, CanonicalProgrammingProfile, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 106 ---
+lib/server/authoritative-program-generation.ts(1398,15): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 107 ---
+lib/server/authoritative-program-generation.ts(1407,66): error TS2339: Property 'flexibilityIntegration' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: flexibilityIntegration, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 108 ---
+lib/server/authoritative-program-generation.ts(1414,59): error TS2339: Property 'methodPackaging' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: methodPackaging, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 109 ---
+lib/server/authoritative-program-generation.ts(1421,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: visibleDifferenceTargets, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 110 ---
+lib/server/authoritative-program-generation.ts(1422,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: visibleDifferenceTargets, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "moderate" | "high" | "low"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 111 ---
+lib/server/authoritative-program-generation.ts(1423,73): error TS2339: Property 'doctrineInfluenceLevel' does not exist on type '{ currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: doctrineInfluenceLevel, { currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 112 ---
+lib/server/authoritative-program-generation.ts(1439,44): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 113 ---
+lib/server/authoritative-program-generation.ts(1440,39): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 114 ---
+lib/server/authoritative-program-generation.ts(1441,35): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 115 ---
+lib/server/authoritative-program-generation.ts(2581,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Anchors: AdaptiveProgram, ReconcilableProgram, unknown, lib, server, authoritative, program, generation
+
+--- NON-BUILDER ERROR 116 ---
+lib/server/authoritative-program-generation.ts(3185,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: string | undefined, string, lib, server, authoritative, program, generation, TS2322
+
+--- NON-BUILDER ERROR 117 ---
+lib/server/authoritative-program-generation.ts(3189,38): error TS2339: Property 'rebuildFailureSummary' does not exist on type 'AdaptiveProgram'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: rebuildFailureSummary, AdaptiveProgram, lib, server, authoritative, program, generation, TS2339
+
+--- NON-BUILDER ERROR 118 ---
+lib/server/authoritative-program-generation.ts(3293,5): error TS2322: Type '"1.0.0"' is not assignable to type '"1.1.0"'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "1.0.0", "1.1.0", lib, server, authoritative, program, generation, TS2322
+
+--- NON-BUILDER ERROR 119 ---
+lib/session-variety-engine.ts(396,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "skill", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 120 ---
+lib/session-variety-engine.ts(410,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "skill", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 121 ---
+lib/session-variety-engine.ts(417,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "strength", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 122 ---
+lib/session-variety-engine.ts(434,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "skill", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 123 ---
+lib/session-variety-engine.ts(472,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "skill", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 124 ---
+lib/session-variety-engine.ts(482,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "strength", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 125 ---
+lib/session-variety-engine.ts(514,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "skill", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 126 ---
+lib/session-variety-engine.ts(525,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Likely fix: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Anchors: TrainingStyleMode, "strength", lib, session, variety, engine, TS2367, This
+
+--- NON-BUILDER ERROR 127 ---
+lib/session-variety-engine.ts(678,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, string[][]>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: back_lever, Record<SkillType, string[][]>, lib, session, variety, engine, TS2353, may
+
+--- NON-BUILDER ERROR 128 ---
+lib/session-variety-engine.ts(706,58): error TS2339: Property 'general' does not exist on type 'Record<SkillType, string[][]>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: general, Record<SkillType, string[][]>, lib, session, variety, engine, TS2339, type
+
+--- NON-BUILDER ERROR 129 ---
+lib/session-variety-engine.ts(830,33): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "hip_hinge", MovementFamily, lib, session, variety, engine, TS2322, hip_hinge
+
+--- NON-BUILDER ERROR 130 ---
+lib/session-variety-engine.ts(835,50): error TS2339: Property 'general' does not exist on type 'Record<SkillType, MovementFamily[]>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: general, Record<SkillType, MovementFamily[]>, lib, session, variety, engine, TS2339, type
+
+--- NON-BUILDER ERROR 131 ---
+lib/session-variety-engine.ts(873,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, ExerciseVariationSet>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: back_lever, Record<SkillType, ExerciseVariationSet>, lib, session, variety, engine, TS2353, may
+
+--- NON-BUILDER ERROR 132 ---
+lib/session-variety-engine.ts(900,38): error TS2339: Property 'general' does not exist on type 'Record<SkillType, ExerciseVariationSet>'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: general, Record<SkillType, ExerciseVariationSet>, lib, session, variety, engine, TS2339, type
+
+--- NON-BUILDER ERROR 133 ---
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+Likely fix: Argument count mismatch. Match local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+Anchors: lib, unified, coaching, engine, TS2554, Expected, arguments, but
+
+--- NON-BUILDER ERROR 134 ---
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+Likely fix: Argument count mismatch. Match local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+Anchors: lib, unified, coaching, engine, TS2554, Expected, arguments, but
+
+--- NON-BUILDER ERROR 135 ---
+lib/unified-coaching-engine.ts(446,17): error TS2339: Property 'equipment' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: equipment, AthleteProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 136 ---
+lib/unified-coaching-engine.ts(450,83): error TS2345: Argument of type 'OnboardingProfile | {}' is not assignable to parameter of type '{ primaryOutcome?: string | undefined; workoutDuration?: string | undefined; trainingAge?: number | undefined; }'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: OnboardingProfile | {}, { primaryOutcome?: string | undefined; workoutDuration?: string | undefined; trainingAge?: number | undefined; }, lib, unified, coaching, engine, TS2345, type
+
+--- NON-BUILDER ERROR 137 ---
+lib/unified-coaching-engine.ts(474,24): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: username, AthleteProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 138 ---
+lib/unified-coaching-engine.ts(476,47): error TS2339: Property 'heightCm' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: heightCm, OnboardingProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 139 ---
+lib/unified-coaching-engine.ts(477,51): error TS2339: Property 'weightKg' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: weightKg, OnboardingProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 140 ---
+lib/unified-coaching-engine.ts(479,30): error TS2339: Property 'trainingAge' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: trainingAge, OnboardingProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 141 ---
+lib/unified-coaching-engine.ts(486,5): error TS2322: Type 'number | "flexible"' is not assignable to type 'number'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: number | "flexible", number, lib, unified, coaching, engine, TS2322, flexible
+
+--- NON-BUILDER ERROR 142 ---
+lib/unified-coaching-engine.ts(506,61): error TS2339: Property 'workoutDuration' does not exist on type 'OnboardingProfile'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: workoutDuration, OnboardingProfile, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 143 ---
+lib/unified-coaching-engine.ts(646,8): error TS2352: Conversion of type 'ReadinessBreakdown' to type 'Record<string, number>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Likely fix: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Anchors: ReadinessBreakdown, Record<string, number>, unknown, lib, unified, coaching, engine, TS2352
+
+--- NON-BUILDER ERROR 144 ---
+lib/unified-coaching-engine.ts(733,50): error TS2554: Expected 0 arguments, but got 1.
+Likely fix: Argument count mismatch. Match local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+Anchors: lib, unified, coaching, engine, TS2554, Expected, arguments, but
+
+--- NON-BUILDER ERROR 145 ---
+lib/unified-coaching-engine.ts(736,38): error TS2554: Expected 4-5 arguments, but got 1.
+Likely fix: Argument count mismatch. Match local callee signature; remove extra arg or provide missing arg only if obvious nearby.
+Anchors: lib, unified, coaching, engine, TS2554, Expected, arguments, but
+
+--- NON-BUILDER ERROR 146 ---
+lib/unified-coaching-engine.ts(739,46): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, lib, unified, coaching, engine, TS2345, type
+
+--- NON-BUILDER ERROR 147 ---
+lib/unified-coaching-engine.ts(742,72): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, lib, unified, coaching, engine, TS2345, type
+
+--- NON-BUILDER ERROR 148 ---
+lib/unified-coaching-engine.ts(749,5): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, lib, unified, coaching, engine, TS2322, decision
+
+--- NON-BUILDER ERROR 149 ---
+lib/unified-coaching-engine.ts(759,38): error TS2339: Property 'severity' does not exist on type 'DeloadRecommendation'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: severity, DeloadRecommendation, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 150 ---
+lib/unified-coaching-engine.ts(762,20): error TS2339: Property 'recommendation' does not exist on type 'TrainingDecision'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: recommendation, TrainingDecision, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 151 ---
+lib/unified-coaching-engine.ts(871,53): error TS2345: Argument of type '{ primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }' is not assignable to parameter of type 'string'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: { primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }, string, lib, unified, coaching, engine, TS2345, type
+
+--- NON-BUILDER ERROR 152 ---
+lib/unified-coaching-engine.ts(883,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: timing, ProtocolRecommendation, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 153 ---
+lib/unified-coaching-engine.ts(884,56): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: timing, ProtocolRecommendation, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 154 ---
+lib/unified-coaching-engine.ts(885,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: timing, ProtocolRecommendation, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 155 ---
+lib/unified-coaching-engine.ts(930,5): error TS2322: Type '"beginner" | "intermediate" | "advanced" | "elite"' is not assignable to type 'ExperienceLevel'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "beginner" | "intermediate" | "advanced" | "elite", ExperienceLevel, lib, unified, coaching, engine, TS2322, beginner
+
+--- NON-BUILDER ERROR 156 ---
+lib/unified-coaching-engine.ts(1036,84): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: currentNode, SkillState, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 157 ---
+lib/unified-coaching-engine.ts(1043,80): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: currentNode, SkillState, lib, unified, coaching, engine, TS2339, type
+
+--- NON-BUILDER ERROR 158 ---
+lib/unified-program-generation.ts(284,5): error TS2322: Type '"fixed"' is not assignable to type 'ScheduleMode'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "fixed", ScheduleMode, lib, unified, program, generation, TS2322, fixed
+
+--- NON-BUILDER ERROR 159 ---
+lib/unified-program-generation.ts(379,7): error TS2322: Type '"skill_isometric"' is not assignable to type 'MovementFamily'.
+Likely fix: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, or map object shape locally. Do not widen unions.
+Anchors: "skill_isometric", MovementFamily, lib, unified, program, generation, TS2322, skill_isometric
+
+--- NON-BUILDER ERROR 160 ---
+lib/unified-program-generation.ts(387,20): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+Likely fix: Stale/missing property or object key. Remove/gate stale field or map to current local field only if clearly equivalent. Do not add stale fields to shared types.
+Anchors: id, ProtocolRecommendation, lib, unified, program, generation, TS2339, type
+

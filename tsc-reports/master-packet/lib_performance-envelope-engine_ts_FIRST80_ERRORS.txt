@@ -1,0 +1,11 @@
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+lib/performance-envelope-engine.ts(152,14): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }' but required in type 'Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>'.
+lib/performance-envelope-engine.ts(1393,9): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }' but required in type 'Record<MovementFamily, string>'.
+lib/performance-envelope-engine.ts(1783,4): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.

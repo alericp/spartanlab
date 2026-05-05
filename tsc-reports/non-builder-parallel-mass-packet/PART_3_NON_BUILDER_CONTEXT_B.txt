@@ -1,0 +1,1705 @@
+===== PART 3 — NON-BUILDER CONTEXT B =====
+Purpose: local code windows for exact non-builder errors. Use anchors and ±80-line drift rule. Do not touch builder.
+
+--- NON-BUILDER ERROR 075 | lib/program/skill-specific-truth-resolution.ts:348:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 340-356:
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+   347:       response.volumeTolerance = envelope.confidenceScore
+>> 348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+   356:         response.recentTolerance = 'moderate'
+
+--- NON-BUILDER ERROR 076 | lib/program/skill-specific-truth-resolution.ts:367:9 | TS2339 ---
+lib/program/skill-specific-truth-resolution.ts(367,9): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Suggested search anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 359-375:
+   359:       response.confidence = bundle.performanceEnvelopes.meta.confidence
+   360:     }
+   361:   }
+   362:   
+   363:   // Check constraint history for pattern-specific issues
+   364:   if (bundle.constraintHistory?.meta?.available) {
+   365:     const constraints = bundle.constraintHistory.recentConstraintPatterns || []
+   366:     const hasPatternConstraint = constraints.some(c => 
+>> 367:       c.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
+   368:       affectedFamilies.some(f => c.toLowerCase().includes(f.replace(/_/g, ' ')))
+   369:     )
+   370:     
+   371:     if (hasPatternConstraint) {
+   372:       response.painOrDiscomfortReported = true
+   373:       response.recentTolerance = 'poor'
+   374:     }
+   375:   }
+
+--- NON-BUILDER ERROR 077 | lib/program/skill-specific-truth-resolution.ts:368:36 | TS2339 ---
+lib/program/skill-specific-truth-resolution.ts(368,36): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Suggested search anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 360-376:
+   360:     }
+   361:   }
+   362:   
+   363:   // Check constraint history for pattern-specific issues
+   364:   if (bundle.constraintHistory?.meta?.available) {
+   365:     const constraints = bundle.constraintHistory.recentConstraintPatterns || []
+   366:     const hasPatternConstraint = constraints.some(c => 
+   367:       c.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
+>> 368:       affectedFamilies.some(f => c.toLowerCase().includes(f.replace(/_/g, ' ')))
+   369:     )
+   370:     
+   371:     if (hasPatternConstraint) {
+   372:       response.painOrDiscomfortReported = true
+   373:       response.recentTolerance = 'poor'
+   374:     }
+   375:   }
+   376:   
+
+--- NON-BUILDER ERROR 078 | lib/program/skill-specific-truth-resolution.ts:380:9 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Suggested search anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, skill, specific, truth, resolution, TS2367
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 372-388:
+   372:       response.painOrDiscomfortReported = true
+   373:       response.recentTolerance = 'poor'
+   374:     }
+   375:   }
+   376:   
+   377:   // Check training response for completion/adherence signals
+   378:   if (bundle.trainingResponse?.meta?.available) {
+   379:     const adherence = bundle.trainingResponse.recentAdherencePattern
+>> 380:     if (adherence === 'declining' || adherence === 'sporadic') {
+   381:       response.lastSessionQuality = 'partial'
+   382:       response.recoveryAdequate = false
+   383:     } else if (adherence === 'consistent') {
+   384:       response.lastSessionQuality = 'completed'
+   385:     }
+   386:   }
+   387:   
+   388:   // Determine recommended action based on signals
+
+--- NON-BUILDER ERROR 079 | lib/program/skill-specific-truth-resolution.ts:552:7 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Suggested search anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, skill, specific, truth, resolution, TS2367
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 544-560:
+   544:       if (envelope.performanceTrend === 'declining') return 'poor'
+   545:       if (envelope.performanceTrend === 'improving') return 'good'
+   546:       if (envelope.performanceTrend === 'stable') return 'moderate'
+   547:     }
+   548:   }
+   549:   
+   550:   // Fall back to adherence pattern
+   551:   const adherence = bundle.trainingResponse?.recentAdherencePattern
+>> 552:   if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+   553:   if (adherence === 'consistent') return 'good'
+   554:   if (adherence === 'improving') return 'moderate'
+   555:   
+   556:   return 'unknown'
+   557: }
+   558: 
+   559: function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
+   560:   // Infer from consistency signal
+
+--- NON-BUILDER ERROR 080 | lib/program/skill-specific-truth-resolution.ts:554:7 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+Suggested search anchors: "unknown" | null | undefined, "improving", program, skill, specific, truth, resolution, TS2367
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 546-562:
+   546:       if (envelope.performanceTrend === 'stable') return 'moderate'
+   547:     }
+   548:   }
+   549:   
+   550:   // Fall back to adherence pattern
+   551:   const adherence = bundle.trainingResponse?.recentAdherencePattern
+   552:   if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+   553:   if (adherence === 'consistent') return 'good'
+>> 554:   if (adherence === 'improving') return 'moderate'
+   555:   
+   556:   return 'unknown'
+   557: }
+   558: 
+   559: function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
+   560:   // Infer from consistency signal
+   561:   const consistency = bundle.trainingResponse?.consistencySignal
+   562:   if (consistency === 'high') return 0.9
+
+--- NON-BUILDER ERROR 081 | lib/program/skill-specific-truth-resolution.ts:571:34 | TS2339 ---
+lib/program/skill-specific-truth-resolution.ts(571,34): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Suggested search anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 563-579:
+   563:   if (consistency === 'medium') return 0.7
+   564:   if (consistency === 'low') return 0.5
+   565:   return null
+   566: }
+   567: 
+   568: function hasRecentPainMarkers(bundle: ProgrammingTruthBundle, family: SkillFamily): boolean {
+   569:   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
+   570:   const familyStr = family.replace(/_/g, ' ')
+>> 571:   return constraints.some(c => c.toLowerCase().includes(familyStr) || c.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+
+--- NON-BUILDER ERROR 082 | lib/program/skill-specific-truth-resolution.ts:571:73 | TS2339 ---
+lib/program/skill-specific-truth-resolution.ts(571,73): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Suggested search anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 563-579:
+   563:   if (consistency === 'medium') return 0.7
+   564:   if (consistency === 'low') return 0.5
+   565:   return null
+   566: }
+   567: 
+   568: function hasRecentPainMarkers(bundle: ProgrammingTruthBundle, family: SkillFamily): boolean {
+   569:   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
+   570:   const familyStr = family.replace(/_/g, ' ')
+>> 571:   return constraints.some(c => c.toLowerCase().includes(familyStr) || c.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+
+--- NON-BUILDER ERROR 083 | lib/program/skill-specific-truth-resolution.ts:581:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 573-589:
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+>> 581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+
+--- NON-BUILDER ERROR 084 | lib/program/skill-specific-truth-resolution.ts:583:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 575-591:
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+>> 583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+
+--- NON-BUILDER ERROR 085 | lib/program/skill-specific-truth-resolution.ts:585:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 577-593:
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+>> 585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+
+--- NON-BUILDER ERROR 086 | lib/program/skill-specific-truth-resolution.ts:587:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 579-595:
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+>> 587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+
+--- NON-BUILDER ERROR 087 | lib/program/skill-specific-truth-resolution.ts:589:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 581-597:
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+>> 589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+
+--- NON-BUILDER ERROR 088 | lib/program/skill-specific-truth-resolution.ts:591:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 583-599:
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+>> 591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+
+--- NON-BUILDER ERROR 089 | lib/repositories/profile-repository.ts:65:11 | TS2322 ---
+lib/repositories/profile-repository.ts(65,11): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Suggested search anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, repositories, profile, repository, TS2322, string, userId
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 57-73:
+   57:     // TASK 1C: Throw error instead of returning fake data when not in browser
+   58:     if (!isBrowser()) {
+   59:       throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+   60:     }
+   61: 
+   62:     const current = (await this.getProfile(userId))
+   63:     
+   64:     // TASK 3: Handle null profile safely
+>> 65:     const baseProfile: AthleteProfile = current ?? {
+   66:       id: 'local-profile',
+   67:       userId: 'local-user',
+   68:       sex: null as any,
+   69:       height: null as any,
+   70:       heightUnit: 'inches',
+   71:       bodyweight: null as any,
+   72:       weightUnit: 'lbs',
+   73:       experienceLevel: 'beginner',
+
+--- NON-BUILDER ERROR 090 | lib/repositories/profile-repository.ts:257:9 | TS2322 ---
+lib/repositories/profile-repository.ts(257,9): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Suggested search anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, repositories, profile, repository, TS2322, string, userId
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 249-265:
+   249:   // TASK 1C: Throw error instead of returning fake data when not in browser
+   250:   if (!isBrowser()) {
+   251:     throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+   252:   }
+   253: 
+   254:   const current = getAthleteProfile()
+   255:   
+   256:   // TASK 3: Handle null profile safely - create safe local-only base if needed
+>> 257:   const baseProfile: AthleteProfile = current ?? {
+   258:     id: 'local-profile',
+   259:     userId: 'local-user',
+   260:     sex: null as any,
+   261:     height: null as any,
+   262:     heightUnit: 'inches',
+   263:     bodyweight: null as any,
+   264:     weightUnit: 'lbs',
+   265:     experienceLevel: 'beginner',
+
+--- NON-BUILDER ERROR 091 | lib/repositories/profile-repository.ts:301:9 | TS2322 ---
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Suggested search anchors: string | null, PrimaryGoalType | null, repositories, profile, repository, TS2322, string, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 293-309:
+   293:   
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+>> 301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+
+--- NON-BUILDER ERROR 092 | lib/repositories/profile-repository.ts:302:9 | TS2322 ---
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Suggested search anchors: string | null, PrimaryGoalType | null, repositories, profile, repository, TS2322, string, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 294-310:
+   294:   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+>> 302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+
+--- NON-BUILDER ERROR 093 | lib/repositories/profile-repository.ts:303:65 | TS2551 ---
+lib/repositories/profile-repository.ts(303,65): error TS2551: Property 'goalCategory' does not exist on type 'OnboardingProfile'. Did you mean 'goalCategories'?
+Suggested search anchors: goalCategory, OnboardingProfile, goalCategories, repositories, profile, repository, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 295-311:
+   295:   // This ensures metrics and generation use the same truth
+   296:   try {
+   297:     const currentOnboarding = getOnboardingProfile()
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+>> 303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+
+--- NON-BUILDER ERROR 094 | lib/repositories/profile-repository.ts:306:73 | TS2339 ---
+lib/repositories/profile-repository.ts(306,73): error TS2339: Property 'selectedStrength' does not exist on type 'OnboardingProfile'.
+Suggested search anchors: selectedStrength, OnboardingProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 298-314:
+   298:     if (currentOnboarding) {
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+>> 306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+
+--- NON-BUILDER ERROR 095 | lib/repositories/profile-repository.ts:307:9 | TS2322 ---
+lib/repositories/profile-repository.ts(307,9): error TS2322: Type 'number' is not assignable to type 'TrainingDaysPerWeek | null'.
+Suggested search anchors: number, TrainingDaysPerWeek | null, repositories, profile, repository, TS2322, TrainingDaysPerWeek, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 299-315:
+   299:       saveOnboardingProfile({
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+>> 307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+
+--- NON-BUILDER ERROR 096 | lib/repositories/profile-repository.ts:309:77 | TS2339 ---
+lib/repositories/profile-repository.ts(309,77): error TS2339: Property 'equipmentAvailable' does not exist on type 'OnboardingProfile'.
+Suggested search anchors: equipmentAvailable, OnboardingProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 301-317:
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+>> 309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+
+--- NON-BUILDER ERROR 097 | lib/repositories/profile-repository.ts:310:31 | TS2339 ---
+lib/repositories/profile-repository.ts(310,31): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Suggested search anchors: scheduleMode, AthleteProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 302-318:
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+>> 310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+
+--- NON-BUILDER ERROR 098 | lib/repositories/profile-repository.ts:311:32 | TS2339 ---
+lib/repositories/profile-repository.ts(311,32): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Suggested search anchors: trainingStyle, AthleteProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 303-319:
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+>> 311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+   319:   } catch (err) {
+
+--- NON-BUILDER ERROR 099 | lib/repositories/profile-repository.ts:311:67 | TS2339 ---
+lib/repositories/profile-repository.ts(311,67): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Suggested search anchors: trainingStyle, OnboardingProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 303-319:
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+   310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+>> 311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+   319:   } catch (err) {
+
+--- NON-BUILDER ERROR 100 | lib/repositories/profile-repository.ts:333:29 | TS2339 ---
+lib/repositories/profile-repository.ts(333,29): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Suggested search anchors: scheduleMode, AthleteProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 325-341:
+   325:     saveCanonicalProfile({
+   326:       primaryGoal: updated.primaryGoal ?? undefined,
+   327:       secondaryGoal: updated.secondaryGoal ?? undefined,
+   328:       goalCategory: updated.goalCategory ?? undefined,
+   329:       selectedSkills: updated.selectedSkills ?? undefined,
+   330:       selectedFlexibility: updated.selectedFlexibility ?? undefined,
+   331:       selectedStrength: updated.selectedStrength ?? undefined,
+   332:       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
+>> 333:       scheduleMode: updated.scheduleMode ?? undefined,
+   334:       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
+   335:       equipmentAvailable: updated.equipmentAvailable ?? undefined,
+   336:       trainingStyle: updated.trainingStyle ?? undefined,
+   337:       onboardingComplete: updated.onboardingComplete ?? undefined,
+   338:     })
+   339:     logCanonicalProfileState('After saveAthleteProfile sync')
+   340:   } catch (err) {
+   341:     console.warn('[ProfileRepository] Failed to sync to canonical profile:', err)
+
+--- NON-BUILDER ERROR 101 | lib/repositories/profile-repository.ts:336:30 | TS2339 ---
+lib/repositories/profile-repository.ts(336,30): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Suggested search anchors: trainingStyle, AthleteProfile, repositories, profile, repository, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 328-344:
+   328:       goalCategory: updated.goalCategory ?? undefined,
+   329:       selectedSkills: updated.selectedSkills ?? undefined,
+   330:       selectedFlexibility: updated.selectedFlexibility ?? undefined,
+   331:       selectedStrength: updated.selectedStrength ?? undefined,
+   332:       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
+   333:       scheduleMode: updated.scheduleMode ?? undefined,
+   334:       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
+   335:       equipmentAvailable: updated.equipmentAvailable ?? undefined,
+>> 336:       trainingStyle: updated.trainingStyle ?? undefined,
+   337:       onboardingComplete: updated.onboardingComplete ?? undefined,
+   338:     })
+   339:     logCanonicalProfileState('After saveAthleteProfile sync')
+   340:   } catch (err) {
+   341:     console.warn('[ProfileRepository] Failed to sync to canonical profile:', err)
+   342:   }
+   343:   
+   344:   // Check for newly unlocked achievements (strength milestones, etc.)
+
+--- NON-BUILDER ERROR 102 | lib/roadmap/skill-roadmap-service.ts:567:7 | TS2353 ---
+lib/roadmap/skill-roadmap-service.ts(567,7): error TS2353: Object literal may only specify known properties, and 'phase' does not exist in type 'AthleteRoadmapPosition'.
+Suggested search anchors: phase, AthleteRoadmapPosition, roadmap, skill, service, TS2353, may, properties
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 559-575:
+   559:   skillKey: SkillRoadmapType
+   560: ): AthleteRoadmapPosition {
+   561:   const roadmap = SKILL_ROADMAPS[skillKey]
+   562:   const profile = getAthleteProfile()
+   563:   
+   564:   // [PHASE 16L] FIX: Handle null profile in server context
+   565:   if (!profile) {
+   566:     return {
+>> 567:       phase: roadmap.phases[0],
+   568:       phaseIndex: 0,
+   569:       progressPercent: 0,
+   570:       readinessScore: 0,
+   571:       readinessLevel: 'not_ready' as const,
+   572:       constraintsBlocking: [],
+   573:       nextMilestone: null,
+   574:       estimatedWeeksToNext: null,
+   575:     }
+
+--- NON-BUILDER ERROR 103 | lib/roadmap/skill-roadmap-service.ts:567:22 | TS2339 ---
+lib/roadmap/skill-roadmap-service.ts(567,22): error TS2339: Property 'phases' does not exist on type 'SkillRoadmap'.
+Suggested search anchors: phases, SkillRoadmap, roadmap, skill, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 559-575:
+   559:   skillKey: SkillRoadmapType
+   560: ): AthleteRoadmapPosition {
+   561:   const roadmap = SKILL_ROADMAPS[skillKey]
+   562:   const profile = getAthleteProfile()
+   563:   
+   564:   // [PHASE 16L] FIX: Handle null profile in server context
+   565:   if (!profile) {
+   566:     return {
+>> 567:       phase: roadmap.phases[0],
+   568:       phaseIndex: 0,
+   569:       progressPercent: 0,
+   570:       readinessScore: 0,
+   571:       readinessLevel: 'not_ready' as const,
+   572:       constraintsBlocking: [],
+   573:       nextMilestone: null,
+   574:       estimatedWeeksToNext: null,
+   575:     }
+
+--- NON-BUILDER ERROR 104 | lib/roadmap/skill-roadmap-service.ts:587:52 | TS2551 ---
+lib/roadmap/skill-roadmap-service.ts(587,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Suggested search anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 579-595:
+   579:   const skillProgressions = getSkillProgressions()
+   580:   
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+>> 587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+
+--- NON-BUILDER ERROR 105 | lib/roadmap/skill-roadmap-service.ts:588:60 | TS2551 ---
+lib/roadmap/skill-roadmap-service.ts(588,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Suggested search anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 580-596:
+   580:   
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+>> 588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+
+--- NON-BUILDER ERROR 106 | lib/roadmap/skill-roadmap-service.ts:589:49 | TS2551 ---
+lib/roadmap/skill-roadmap-service.ts(589,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Suggested search anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 581-597:
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+>> 589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+
+--- NON-BUILDER ERROR 107 | lib/roadmap/skill-roadmap-service.ts:590:57 | TS2551 ---
+lib/roadmap/skill-roadmap-service.ts(590,57): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Suggested search anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 582-598:
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+>> 590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+
+--- NON-BUILDER ERROR 108 | lib/roadmap/skill-roadmap-service.ts:591:52 | TS2551 ---
+lib/roadmap/skill-roadmap-service.ts(591,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Suggested search anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 583-599:
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+>> 591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+
+--- NON-BUILDER ERROR 109 | lib/roadmap/skill-roadmap-service.ts:594:48 | TS2339 ---
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Suggested search anchors: weight, StrengthRecord, roadmap, skill, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 586-602:
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+>> 594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+   600:   let readinessResult: ReadinessResult
+   601:   
+   602:   switch (skillKey) {
+
+--- NON-BUILDER ERROR 110 | lib/roadmap/skill-roadmap-service.ts:596:43 | TS2339 ---
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Suggested search anchors: weight, StrengthRecord, roadmap, skill, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 588-604:
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+>> 596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+   600:   let readinessResult: ReadinessResult
+   601:   
+   602:   switch (skillKey) {
+   603:     case 'front-lever': {
+   604:       const inputs: FrontLeverInputs = {
+
+--- NON-BUILDER ERROR 111 | lib/roadmap/skill-roadmap-service.ts:631:9 | TS2353 ---
+lib/roadmap/skill-roadmap-service.ts(631,9): error TS2353: Object literal may only specify known properties, and 'leanHoldTime' does not exist in type 'PlancheInputs'.
+Suggested search anchors: leanHoldTime, PlancheInputs, roadmap, skill, service, TS2353, may, properties
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 623-639:
+   623:       }
+   624:       readinessResult = calculateBackLeverReadiness(inputs)
+   625:       break
+   626:     }
+   627:     case 'planche': {
+   628:       const inputs: PlancheInputs = {
+   629:         maxDips,
+   630:         maxPushUps,
+>> 631:         leanHoldTime: 15,
+   632:         bodyweightLbs: profile.bodyweight || 160,
+   633:         hasParallettes: profile.equipmentAvailable?.includes('parallettes') || false,
+   634:         hasFloor: true,
+   635:       }
+   636:       readinessResult = calculatePlancheReadiness(inputs)
+   637:       break
+   638:     }
+   639:     case 'muscle-up': {
+
+--- NON-BUILDER ERROR 112 | lib/roadmap/skill-roadmap-service.ts:644:9 | TS2353 ---
+lib/roadmap/skill-roadmap-service.ts(644,9): error TS2353: Object literal may only specify known properties, and 'straightBarDipReps' does not exist in type 'MuscleUpInputs'.
+Suggested search anchors: straightBarDipReps, MuscleUpInputs, roadmap, skill, service, TS2353, may, properties
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 636-652:
+   636:       readinessResult = calculatePlancheReadiness(inputs)
+   637:       break
+   638:     }
+   639:     case 'muscle-up': {
+   640:       const inputs: MuscleUpInputs = {
+   641:         maxPullUps,
+   642:         maxDips,
+   643:         chestToBarReps: Math.floor(maxPullUps * 0.4),
+>> 644:         straightBarDipReps: Math.floor(maxDips * 0.5),
+   645:         hasBar: true,
+   646:         hasRings: profile.equipmentAvailable?.includes('rings') || false,
+   647:       }
+   648:       readinessResult = calculateMuscleUpReadiness(inputs)
+   649:       break
+   650:     }
+   651:     case 'hspu': {
+   652:       const inputs: HSPUInputs = {
+
+--- NON-BUILDER ERROR 113 | lib/server/authoritative-program-generation.ts:351:37 | TS2339 ---
+lib/server/authoritative-program-generation.ts(351,37): error TS2339: Property 'selectedStrength' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+Suggested search anchors: selectedStrength, Partial<AdaptiveProgramInputs>, server, authoritative, program, generation, TS2339, Partial
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 343-359:
+   343:     // Goals - builder inputs can override
+   344:     primaryGoal: builderInputs.primaryGoal || canonicalProfile.primaryGoal,
+   345:     secondaryGoal: builderInputs.secondaryGoal ?? canonicalProfile.secondaryGoal,
+   346:     goalCategories: builderInputs.goalCategories || canonicalProfile.goalCategories || [],
+   347:     trainingPathType: builderInputs.trainingPathType || canonicalProfile.trainingPathType || 'hybrid',
+   348:     
+   349:     // Skills - builder inputs can override
+   350:     selectedSkills: builderInputs.selectedSkills || canonicalProfile.selectedSkills || [],
+>> 351:     selectedStrength: builderInputs.selectedStrength || canonicalProfile.selectedStrength || [],
+   352:     selectedFlexibility: builderInputs.selectedFlexibility || canonicalProfile.selectedFlexibility || [],
+   353:     
+   354:     // Equipment - builder inputs can override
+   355:     // [AUTHORITATIVE-CANONICAL-EQUIPMENT-OWNER] CanonicalProgrammingProfile
+   356:     // exposes ONLY `equipmentAvailable` (the canonical owner). Reuse it
+   357:     // for both keys; the runtime semantics are identical.
+   358:     equipment: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
+   359:     equipmentAvailable: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
+
+--- NON-BUILDER ERROR 114 | lib/server/authoritative-program-generation.ts:369:31 | TS2339 ---
+lib/server/authoritative-program-generation.ts(369,31): error TS2339: Property 'bodyweight' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+Suggested search anchors: bodyweight, Partial<AdaptiveProgramInputs>, server, authoritative, program, generation, TS2339, Partial
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 361-377:
+   361:     // Schedule - builder inputs can override
+   362:     scheduleMode: builderInputs.scheduleMode || canonicalProfile.scheduleMode || 'flexible',
+   363:     sessionDurationMode: builderInputs.sessionDurationMode || canonicalProfile.sessionDurationMode || 'adaptive',
+   364:     trainingDaysPerWeek: builderInputs.trainingDaysPerWeek ?? canonicalProfile.trainingDaysPerWeek ?? 4,
+   365:     sessionLengthMinutes: builderInputs.sessionLength ?? canonicalProfile.sessionLengthMinutes ?? 45,
+   366:     
+   367:     // Profile data - builder inputs can override some
+   368:     experienceLevel: builderInputs.experienceLevel || canonicalProfile.experienceLevel || 'intermediate',
+>> 369:     bodyweight: builderInputs.bodyweight || canonicalProfile.bodyweight,
+   370:     sex: canonicalProfile.sex,
+   371:     
+   372:     // Optional fields from canonical
+   373:     trainingStyle: canonicalProfile.trainingStyle,
+   374:     jointCautions: canonicalProfile.jointCautions || [],
+   375:     weakestArea: canonicalProfile.weakestArea,
+   376:     
+   377:     // [AUTHORITATIVE-BENCHMARK-AGGREGATES-DROPPED] CanonicalProgrammingProfile
+
+--- NON-BUILDER ERROR 115 | lib/server/authoritative-program-generation.ts:712:56 | TS2345 ---
+lib/server/authoritative-program-generation.ts(712,56): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'CalibrationProfile'.
+Suggested search anchors: CanonicalProgrammingProfile, CalibrationProfile, server, authoritative, program, generation, TS2345
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 704-720:
+   704:     // This must happen BEFORE building the canonical override
+   705:     // NOW USES PROFILE TRUTH FROM INGESTION INSTEAD OF RAW CALLER INPUT
+   706:     // ==========================================================================
+   707:     markStage('progression_resolution_start')
+   708:     
+   709:     // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Use ingestion's canonical profile as the authoritative source
+   710:     const authoritativeProfile = truthIngestion.profileTruth.canonicalProfile
+   711:     
+>> 712:     const athleteCalibration = calibrateAthleteProfile(authoritativeProfile)
+   713:     const resolvedProgressions = resolveCurrentWorkingProgressions(authoritativeProfile, athleteCalibration)
+   714:     
+   715:     // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Log whether skill calibration was built successfully
+   716:     console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-AUDIT]', {
+   717:       skillCalibrationBuilt: !!athleteCalibration.skillCalibration,
+   718:       plancheCalibrated: !!athleteCalibration.skillCalibration?.planche,
+   719:       plancheIsAssisted: athleteCalibration.skillCalibration?.planche?.isAssisted,
+   720:       plancheUseConservativeStart: athleteCalibration.skillCalibration?.planche?.useConservativeStart,
+
+--- NON-BUILDER ERROR 116 | lib/server/authoritative-program-generation.ts:862:11 | TS2740 ---
+lib/server/authoritative-program-generation.ts(862,11): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 59 more.
+Suggested search anchors: Record<string, unknown>, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2740, Record
+Likely fix guidance: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Local context lines 854-870:
+   854:     }
+   855:     
+   856:     let program: AdaptiveProgram
+   857:     try {
+   858:       program = await generateAdaptiveProgram(
+   859:         normalizedBuilderInput as AdaptiveProgramInputs,
+   860:         builderStageCallback,
+   861:         {
+>> 862:           canonicalProfileOverride,
+   863:           isFreshBaselineBuild: request.isFreshBaselineBuild,
+   864:           // [AUTHORITATIVE-INGRESS-UNIFICATION] Pass the ONE bundle - builder will reuse, not rebuild
+   865:           preBuiltProgrammingTruthBundle: authoritativeProgrammingTruthBundle,
+   866:         }
+   867:       )
+   868:     } catch (builderError) {
+   869:       // [PHASE15E_LIVE_PROOF] Service catch marker
+   870:       const errorString = String(builderError)
+
+--- NON-BUILDER ERROR 117 | lib/server/authoritative-program-generation.ts:1125:7 | TS2352 ---
+lib/server/authoritative-program-generation.ts(1125,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+Likely fix guidance: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Local context lines 1117-1133:
+   1117:     markStage('builder_execution_done')
+   1118:     
+   1119:     // ==========================================================================
+   1120:     // STAGE: Extract and attach truth explanation
+   1121:     // ==========================================================================
+   1122:     markStage('truth_extraction_start')
+   1123:     
+   1124:     const truthExtraction = extractProgramTruth(
+>> 1125:       canonicalProfileOverride as CanonicalProgrammingProfile,
+   1126:       request.builderInputs,
+   1127:       request.triggerSource
+   1128:     )
+   1129:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1130:     
+   1131:     program = attachTruthExplanation(
+   1132:       program,
+   1133:       canonicalProfileOverride as CanonicalProgrammingProfile,
+
+--- NON-BUILDER ERROR 118 | lib/server/authoritative-program-generation.ts:1127:7 | TS2345 ---
+lib/server/authoritative-program-generation.ts(1127,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Suggested search anchors: TriggerSource, TruthTriggerSource, server, authoritative, program, generation, TS2345
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1119-1135:
+   1119:     // ==========================================================================
+   1120:     // STAGE: Extract and attach truth explanation
+   1121:     // ==========================================================================
+   1122:     markStage('truth_extraction_start')
+   1123:     
+   1124:     const truthExtraction = extractProgramTruth(
+   1125:       canonicalProfileOverride as CanonicalProgrammingProfile,
+   1126:       request.builderInputs,
+>> 1127:       request.triggerSource
+   1128:     )
+   1129:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1130:     
+   1131:     program = attachTruthExplanation(
+   1132:       program,
+   1133:       canonicalProfileOverride as CanonicalProgrammingProfile,
+   1134:       request.triggerSource
+   1135:     )
+
+--- NON-BUILDER ERROR 119 | lib/server/authoritative-program-generation.ts:1133:7 | TS2352 ---
+lib/server/authoritative-program-generation.ts(1133,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+Likely fix guidance: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Local context lines 1125-1141:
+   1125:       canonicalProfileOverride as CanonicalProgrammingProfile,
+   1126:       request.builderInputs,
+   1127:       request.triggerSource
+   1128:     )
+   1129:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1130:     
+   1131:     program = attachTruthExplanation(
+   1132:       program,
+>> 1133:       canonicalProfileOverride as CanonicalProgrammingProfile,
+   1134:       request.triggerSource
+   1135:     )
+   1136:     
+   1137:     console.log('[authoritative-generation-truth-attached]', {
+   1138:       generationIntent: request.generationIntent,
+   1139:       triggerSource: request.triggerSource,
+   1140:       truthExtractionVerdict: truthExtraction.truthContext.verdict,
+   1141:       presentCount: truthExtraction.truthContext.presentCount,
+
+--- NON-BUILDER ERROR 120 | lib/server/authoritative-program-generation.ts:1134:7 | TS2345 ---
+lib/server/authoritative-program-generation.ts(1134,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Suggested search anchors: TriggerSource, TruthTriggerSource, server, authoritative, program, generation, TS2345
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1126-1142:
+   1126:       request.builderInputs,
+   1127:       request.triggerSource
+   1128:     )
+   1129:     logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+   1130:     
+   1131:     program = attachTruthExplanation(
+   1132:       program,
+   1133:       canonicalProfileOverride as CanonicalProgrammingProfile,
+>> 1134:       request.triggerSource
+   1135:     )
+   1136:     
+   1137:     console.log('[authoritative-generation-truth-attached]', {
+   1138:       generationIntent: request.generationIntent,
+   1139:       triggerSource: request.triggerSource,
+   1140:       truthExtractionVerdict: truthExtraction.truthContext.verdict,
+   1141:       presentCount: truthExtraction.truthContext.presentCount,
+   1142:       defaultedCount: truthExtraction.truthContext.defaultedCount,
+
+--- NON-BUILDER ERROR 121 | lib/server/authoritative-program-generation.ts:1155:35 | TS2352 ---
+lib/server/authoritative-program-generation.ts(1155,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+Likely fix guidance: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Local context lines 1147-1163:
+   1147:     markStage('truth_extraction_done')
+   1148:     
+   1149:     // ==========================================================================
+   1150:     // STAGE: Attach Generation Truth Snapshot
+   1151:     // This persists the actual canonical truth used at generation time
+   1152:     // ==========================================================================
+   1153:     markStage('truth_snapshot_attachment')
+   1154:     
+>> 1155:     const canonicalProfileTyped = canonicalProfileOverride as CanonicalProgrammingProfile
+   1156:     
+   1157:     program.generationTruthSnapshot = {
+   1158:       // Generation metadata
+   1159:       generatedAt: new Date().toISOString(),
+   1160:       generationIntent: request.generationIntent,
+   1161:       triggerSource: request.triggerSource,
+   1162:       isFreshBaselineBuild: request.isFreshBaselineBuild,
+   1163:       
+
+--- NON-BUILDER ERROR 122 | lib/server/authoritative-program-generation.ts:1296:40 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1296,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: equipment, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1288-1304:
+   1288:       secondaryGoal: canonicalProfileTyped.secondaryGoal || null,
+   1289:       selectedSkills: canonicalProfileTyped.selectedSkills || [],
+   1290:       selectedStrength: canonicalProfileTyped.selectedStrength || [],
+   1291:       experienceLevel: canonicalProfileTyped.experienceLevel || null,
+   1292:       scheduleMode: canonicalProfileTyped.scheduleMode || null,
+   1293:       trainingDaysPerWeek: canonicalProfileTyped.trainingDaysPerWeek || null,
+   1294:       sessionDurationMode: canonicalProfileTyped.sessionDurationMode || null,
+   1295:       sessionLengthMinutes: canonicalProfileTyped.sessionLengthMinutes || null,
+>> 1296:       equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
+   1297:     }
+   1298:     
+   1299:     // [AI-TRUTH-PERSISTENCE] Elevate jointCautions to first-class program field
+   1300:     // This ensures joint safety truth is durably accessible without digging into snapshot
+   1301:     program.jointCautions = canonicalProfileTyped.jointCautions || []
+   1302:     
+   1303:     // [SESSION-STYLE-TRUTH] Elevate sessionStylePreference to first-class program field
+   1304:     // This ensures user's session style preference survives save/read/rebuild/restart
+
+--- NON-BUILDER ERROR 123 | lib/server/authoritative-program-generation.ts:1323:7 | TS2353 ---
+lib/server/authoritative-program-generation.ts(1323,7): error TS2353: Object literal may only specify known properties, and 'triggerSource' does not exist in type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Suggested search anchors: triggerSource, { phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., server, authoritative, program, generation, TS2353, may
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1315-1331:
+   1315:     program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
+   1316:     
+   1317:     // [WEEK-ADAPTATION-DECISION-CONTRACT] Elevate week adaptation decision to first-class program field
+   1318:     // This ensures the week-level dosage/adaptation decisions are accessible and traceable
+   1319:     program.weekAdaptationDecision = {
+   1320:       phase: weekAdaptationDecision.phase,
+   1321:       targetDays: weekAdaptationDecision.targetDays,
+   1322:       confidence: weekAdaptationDecision.confidence,
+>> 1323:       triggerSource: weekAdaptationDecision.triggerSource,
+   1324:       loadStrategy: weekAdaptationDecision.loadStrategy,
+   1325:       firstWeekGovernor: weekAdaptationDecision.firstWeekGovernor,
+   1326:       doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+   1327:       evidence: weekAdaptationDecision.evidence,
+   1328:       decidedAt: weekAdaptationDecision.decidedAt,
+   1329:     }
+   1330:     
+   1331:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Use the resolvedProgressions from earlier in the flow
+
+--- NON-BUILDER ERROR 124 | lib/server/authoritative-program-generation.ts:1345:7 | TS2322 ---
+lib/server/authoritative-program-generation.ts(1345,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Suggested search anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, server, authoritative, program, generation, TS2322, addedWeight
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1337-1353:
+   1337:     // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+>> 1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+
+--- NON-BUILDER ERROR 125 | lib/server/authoritative-program-generation.ts:1346:7 | TS2322 ---
+lib/server/authoritative-program-generation.ts(1346,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Suggested search anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, server, authoritative, program, generation, TS2322, addedWeight
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1338-1354:
+   1338:     // This ensures displayed progressions match actual current ability, not historical ceiling
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+>> 1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+
+--- NON-BUILDER ERROR 126 | lib/server/authoritative-program-generation.ts:1347:45 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1347,45): error TS2339: Property 'pullUpCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: pullUpCapacity, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1339-1355:
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+>> 1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+
+--- NON-BUILDER ERROR 127 | lib/server/authoritative-program-generation.ts:1347:85 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1347,85): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: pullUps, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1339-1355:
+   1339:     program.skillStrengthProfile = {
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+>> 1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+
+--- NON-BUILDER ERROR 128 | lib/server/authoritative-program-generation.ts:1348:42 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1348,42): error TS2339: Property 'dipCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: dipCapacity, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1340-1356:
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+>> 1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+
+--- NON-BUILDER ERROR 129 | lib/server/authoritative-program-generation.ts:1348:79 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1348,79): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: dips, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1340-1356:
+   1340:       // Use resolved current working progressions (respects conservative/reacquisition)
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+>> 1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+   1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+
+--- NON-BUILDER ERROR 130 | lib/server/authoritative-program-generation.ts:1349:47 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1349,47): error TS2339: Property 'wallHspuCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: wallHspuCapacity, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1341-1357:
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+>> 1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+
+--- NON-BUILDER ERROR 131 | lib/server/authoritative-program-generation.ts:1349:89 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1349,89): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: wallHSPU, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1341-1357:
+   1341:       plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+   1342:       frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+   1343:       hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+   1344:       // Weighted strength benchmarks unchanged
+   1345:       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+   1346:       weightedDip: canonicalProfileTyped.weightedDip || null,
+   1347:       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+   1348:       dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+>> 1349:       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+   1350:       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+   1351:     }
+   1352:     
+   1353:     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+   1354:     program.currentWorkingProgressions = {
+   1355:       planche: {
+   1356:         currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+   1357:         historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+
+--- NON-BUILDER ERROR 132 | lib/server/authoritative-program-generation.ts:1398:15 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1398,15): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1390-1406:
+   1390:       anyConservativeStart: currentWorkingProgressions.anyConservativeStart,
+   1391:       anyHistoricalCeiling: currentWorkingProgressions.anyHistoricalCeiling,
+   1392:       verdict: 'CURRENT_PROGRESSION_TRUTH_CONTRACT_FIXED',
+   1393:     })
+   1394:     
+   1395:     // [PHASE 1 AI-TRUTH-ESCALATION] Elevate session architecture truth to program
+   1396:     // This allows UI to access multi-skill expression, flexibility integration, and method packaging decisions
+   1397:     if (program.sessionArchitectureTruth) {
+>> 1398:       program.architectureTruthSnapshot = {
+   1399:         primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
+   1400:         secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
+   1401:         supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
+   1402:         deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+   1403:           skill: d.skill,
+   1404:           reason: d.reason,
+   1405:           details: d.details || '',
+   1406:         })),
+
+--- NON-BUILDER ERROR 133 | lib/server/authoritative-program-generation.ts:1407:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1407,66): error TS2339: Property 'flexibilityIntegration' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Suggested search anchors: flexibilityIntegration, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., server, authoritative, program, generation, TS2339, sourceVerdict
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1399-1415:
+   1399:         primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
+   1400:         secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
+   1401:         supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
+   1402:         deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+   1403:           skill: d.skill,
+   1404:           reason: d.reason,
+   1405:           details: d.details || '',
+   1406:         })),
+>> 1407:         flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+   1408:           hasFlexibilityGoals: false,
+   1409:           selectedFlexibility: [],
+   1410:           integrationMode: 'none',
+   1411:           affectedSessions: [],
+   1412:           flexibilityTimeReserved: 0,
+   1413:         },
+   1414:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1415:           preferredMethods: ['straight_sets'],
+
+--- NON-BUILDER ERROR 134 | lib/server/authoritative-program-generation.ts:1414:59 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1414,59): error TS2339: Property 'methodPackaging' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Suggested search anchors: methodPackaging, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., server, authoritative, program, generation, TS2339, sourceVerdict
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1406-1422:
+   1406:         })),
+   1407:         flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+   1408:           hasFlexibilityGoals: false,
+   1409:           selectedFlexibility: [],
+   1410:           integrationMode: 'none',
+   1411:           affectedSessions: [],
+   1412:           flexibilityTimeReserved: 0,
+   1413:         },
+>> 1414:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1415:           preferredMethods: ['straight_sets'],
+   1416:           actualMethodsApplied: ['straight_sets'],
+   1417:           methodsLimitedBySkillQuality: [],
+   1418:           packagingDecision: 'straight_sets',
+   1419:           rationale: 'default',
+   1420:         },
+   1421:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+   1422:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+
+--- NON-BUILDER ERROR 135 | lib/server/authoritative-program-generation.ts:1421:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1421,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Suggested search anchors: visibleDifferenceTargets, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., server, authoritative, program, generation, TS2339, sourceVerdict
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1413-1429:
+   1413:         },
+   1414:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1415:           preferredMethods: ['straight_sets'],
+   1416:           actualMethodsApplied: ['straight_sets'],
+   1417:           methodsLimitedBySkillQuality: [],
+   1418:           packagingDecision: 'straight_sets',
+   1419:           rationale: 'default',
+   1420:         },
+>> 1421:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+   1422:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+   1423:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1424:       }
+   1425:     }
+   1426:     
+   1427:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1428:       generationIntent: request.generationIntent,
+   1429:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+
+--- NON-BUILDER ERROR 136 | lib/server/authoritative-program-generation.ts:1422:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1422,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Suggested search anchors: visibleDifferenceTargets, { sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera..., server, authoritative, program, generation, TS2339, sourceVerdict
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1414-1430:
+   1414:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1415:           preferredMethods: ['straight_sets'],
+   1416:           actualMethodsApplied: ['straight_sets'],
+   1417:           methodsLimitedBySkillQuality: [],
+   1418:           packagingDecision: 'straight_sets',
+   1419:           rationale: 'default',
+   1420:         },
+   1421:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+>> 1422:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+   1423:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1424:       }
+   1425:     }
+   1426:     
+   1427:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1428:       generationIntent: request.generationIntent,
+   1429:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+   1430:       trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
+
+--- NON-BUILDER ERROR 137 | lib/server/authoritative-program-generation.ts:1423:73 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1423,73): error TS2339: Property 'doctrineInfluenceLevel' does not exist on type '{ currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }'.
+Suggested search anchors: doctrineInfluenceLevel, { currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }, server, authoritative, program, generation, TS2339, currentWorkingCapCount
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1415-1431:
+   1415:           preferredMethods: ['straight_sets'],
+   1416:           actualMethodsApplied: ['straight_sets'],
+   1417:           methodsLimitedBySkillQuality: [],
+   1418:           packagingDecision: 'straight_sets',
+   1419:           rationale: 'default',
+   1420:         },
+   1421:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+   1422:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+>> 1423:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1424:       }
+   1425:     }
+   1426:     
+   1427:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1428:       generationIntent: request.generationIntent,
+   1429:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+   1430:       trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
+   1431:       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+
+--- NON-BUILDER ERROR 138 | lib/server/authoritative-program-generation.ts:1439:44 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1439,44): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1431-1447:
+   1431:       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+   1432:       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
+   1433:       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
+   1434:       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+   1435:       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
+   1436:       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
+   1437:       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+   1438:       // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
+>> 1439:       architectureTruthElevated: !!program.architectureTruthSnapshot,
+   1440:       visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
+   1441:       supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
+   1442:       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
+   1443:     })
+   1444:     
+   1445:     markStage('truth_snapshot_attached')
+   1446: 
+   1447:     
+
+--- NON-BUILDER ERROR 139 | lib/server/authoritative-program-generation.ts:1440:39 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1440,39): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1432-1448:
+   1432:       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
+   1433:       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
+   1434:       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+   1435:       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
+   1436:       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
+   1437:       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+   1438:       // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
+   1439:       architectureTruthElevated: !!program.architectureTruthSnapshot,
+>> 1440:       visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
+   1441:       supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
+   1442:       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
+   1443:     })
+   1444:     
+   1445:     markStage('truth_snapshot_attached')
+   1446: 
+   1447:     
+   1448:     // ==========================================================================
+
+--- NON-BUILDER ERROR 140 | lib/server/authoritative-program-generation.ts:1441:35 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1441,35): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1433-1449:
+   1433:       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
+   1434:       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+   1435:       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
+   1436:       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
+   1437:       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+   1438:       // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
+   1439:       architectureTruthElevated: !!program.architectureTruthSnapshot,
+   1440:       visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
+>> 1441:       supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
+   1442:       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
+   1443:     })
+   1444:     
+   1445:     markStage('truth_snapshot_attached')
+   1446: 
+   1447:     
+   1448:     // ==========================================================================
+   1449:     // STAGE: Validate generated program
+
+--- NON-BUILDER ERROR 141 | lib/server/authoritative-program-generation.ts:2581:13 | TS2352 ---
+lib/server/authoritative-program-generation.ts(2581,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Suggested search anchors: AdaptiveProgram, ReconcilableProgram, unknown, server, authoritative, program, generation, TS2352
+Likely fix guidance: Conversion warning. If intentional, bridge through unknown exactly: value as unknown as TargetType. Never use as any.
+Local context lines 2573-2589:
+   2573:         // Pure / surgical: never re-decides training, never invents methods,
+   2574:         // never weakens safety gates. Fail-soft.
+   2575:         // ====================================================================
+   2576:         try {
+   2577:           const { reconcileFinalMethodMaterializationTruth } = await import(
+   2578:             '@/lib/program/final-method-truth-reconciler'
+   2579:           )
+   2580:           const reconciliationRollup = reconcileFinalMethodMaterializationTruth(
+>> 2581:             program as Parameters<typeof reconcileFinalMethodMaterializationTruth>[0],
+   2582:           )
+   2583:           ;(program as unknown as { finalMethodTruthReconciliation?: unknown }).finalMethodTruthReconciliation =
+   2584:             reconciliationRollup
+   2585:           console.log('[FINAL-METHOD-TRUTH-RECONCILED]', {
+   2586:             generationIntent: request.generationIntent,
+   2587:             triggerSource: request.triggerSource,
+   2588:             sessionsProcessed: reconciliationRollup.sessionsProcessed,
+   2589:             sessionsWithSummaryRestamped: reconciliationRollup.sessionsWithSummaryRestamped,
+
+--- NON-BUILDER ERROR 142 | lib/server/authoritative-program-generation.ts:3185:9 | TS2322 ---
+lib/server/authoritative-program-generation.ts(3185,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+Suggested search anchors: string | undefined, string, server, authoritative, program, generation, TS2322, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 3177-3193:
+   3177:         isFirstWeek: truthIngestion.currentProgramContext.isFirstGeneratedWeek,
+   3178:         safeGenerationNotes: truthIngestion.safeGenerationNotes,
+   3179:       },
+   3180:       summary: {
+   3181:         sessionCount: program.sessions.length,
+   3182:         primaryGoal: program.primaryGoal,
+   3183:         secondaryGoal: program.secondaryGoal,
+   3184:         trainingDaysPerWeek: program.trainingDaysPerWeek,
+>> 3185:         scheduleMode: program.scheduleMode,
+   3186:         goalLabel: program.goalLabel,
+   3187:       },
+   3188:       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+   3189:       rebuildFailureSummary: program.rebuildFailureSummary,
+   3190:       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
+   3191:       generationIngressProof,
+   3192:     }
+   3193:     
+
+--- NON-BUILDER ERROR 143 | lib/server/authoritative-program-generation.ts:3189:38 | TS2339 ---
+lib/server/authoritative-program-generation.ts(3189,38): error TS2339: Property 'rebuildFailureSummary' does not exist on type 'AdaptiveProgram'.
+Suggested search anchors: rebuildFailureSummary, AdaptiveProgram, server, authoritative, program, generation, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 3181-3197:
+   3181:         sessionCount: program.sessions.length,
+   3182:         primaryGoal: program.primaryGoal,
+   3183:         secondaryGoal: program.secondaryGoal,
+   3184:         trainingDaysPerWeek: program.trainingDaysPerWeek,
+   3185:         scheduleMode: program.scheduleMode,
+   3186:         goalLabel: program.goalLabel,
+   3187:       },
+   3188:       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+>> 3189:       rebuildFailureSummary: program.rebuildFailureSummary,
+   3190:       // [AUTHORITATIVE-INGRESS-UNIFICATION] Proof that one authoritative ingress was used
+   3191:       generationIngressProof,
+   3192:     }
+   3193:     
+   3194:   } catch (error) {
+   3195:     const totalElapsed = Date.now() - startTime
+   3196:     console.log('[authoritative-generation-unexpected-error]', {
+   3197:       generationIntent: request.generationIntent,
+
+--- NON-BUILDER ERROR 144 | lib/server/authoritative-program-generation.ts:3293:5 | TS2322 ---
+lib/server/authoritative-program-generation.ts(3293,5): error TS2322: Type '"1.0.0"' is not assignable to type '"1.1.0"'.
+Suggested search anchors: "1.0.0", "1.1.0", server, authoritative, program, generation, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 3285-3301:
+   3285:   // This fallback is used when ingestion fails unexpectedly
+   3286:   // It preserves the caller's profile to allow generation to proceed
+   3287:   console.log('[authoritative-generation-fallback-ingestion-created]', {
+   3288:     generationIntent: request.generationIntent,
+   3289:   })
+   3290:   
+   3291:   return {
+   3292:     ingestedAt: new Date().toISOString(),
+>> 3293:     ingestionVersion: '1.0.0',
+   3294:     profileTruth: {
+   3295:       source: 'canonical_profile_service',
+   3296:       quality: 'weak',
+   3297:       canonicalProfile: request.canonicalProfile as CanonicalProgrammingProfile,
+   3298:       fieldSources: {
+   3299:         primaryGoal: 'caller_override',
+   3300:         secondaryGoal: 'caller_override',
+   3301:         selectedSkills: 'caller_override',
+
+--- NON-BUILDER ERROR 145 | lib/session-variety-engine.ts:396:9 | TS2367 ---
+lib/session-variety-engine.ts(396,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Suggested search anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 388-404:
+   388: 
+   389: function getSessionDistribution(
+   390:   days: number,
+   391:   style: TrainingStyleMode,
+   392:   level: 'beginner' | 'intermediate' | 'advanced'
+   393: ): SessionDistribution[] {
+   394:   // 2-day distribution
+   395:   if (days === 2) {
+>> 396:     if (style === 'skill') {
+   397:       return [
+   398:         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   399:         { type: 'support_volume', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+   400:       ]
+   401:     }
+   402:     return [
+   403:       { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   404:       { type: 'skill_exposure', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+
+--- NON-BUILDER ERROR 146 | lib/session-variety-engine.ts:410:9 | TS2367 ---
+lib/session-variety-engine.ts(410,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Suggested search anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 402-418:
+   402:     return [
+   403:       { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   404:       { type: 'skill_exposure', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+   405:     ]
+   406:   }
+   407:   
+   408:   // 3-day distribution
+   409:   if (days === 3) {
+>> 410:     if (style === 'skill') {
+   411:       return [
+   412:         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   413:         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+   414:         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+   415:       ]
+   416:     }
+   417:     if (style === 'strength') {
+   418:       return [
+
+--- NON-BUILDER ERROR 147 | lib/session-variety-engine.ts:417:9 | TS2367 ---
+lib/session-variety-engine.ts(417,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Suggested search anchors: TrainingStyleMode, "strength", session, variety, engine, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 409-425:
+   409:   if (days === 3) {
+   410:     if (style === 'skill') {
+   411:       return [
+   412:         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   413:         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+   414:         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+   415:       ]
+   416:     }
+>> 417:     if (style === 'strength') {
+   418:       return [
+   419:         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   420:         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+   421:         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+   422:       ]
+   423:     }
+   424:     // Default mixed
+   425:     return [
+
+--- NON-BUILDER ERROR 148 | lib/session-variety-engine.ts:434:9 | TS2367 ---
+lib/session-variety-engine.ts(434,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Suggested search anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 426-442:
+   426:       { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   427:       { type: 'strength_emphasis', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+   428:       { type: 'density_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+   429:     ]
+   430:   }
+   431:   
+   432:   // 4-day distribution
+   433:   if (days === 4) {
+>> 434:     if (style === 'skill') {
+   435:       return [
+   436:         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+   437:         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+   438:         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'secondary' }, // Intentional repeat
+   439:         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+   440:       ]
+   441:     }
+   442:     return [
+

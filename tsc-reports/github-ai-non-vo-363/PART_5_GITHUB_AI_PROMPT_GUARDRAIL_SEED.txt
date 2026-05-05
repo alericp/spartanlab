@@ -1,0 +1,8 @@
+===== PART 5 — GITHUB AI CHAT GUARDRAIL SEED =====
+Target only non-VO files. Do not touch VO active files.
+GitHub AI should execute exact listed targets only.
+No broad repo scan. No scripts. No reports. No package/schema/env/auth/billing/Prisma files.
+No as any. No ts-ignore. No union widening. No adding stale shared fields.
+If target needs type-owner investigation, block it and move on.
+Line drift: same file only, ±60 lines. If not found, block.
+Stop after listed targets. Commit if it can. Do not touch VO files.

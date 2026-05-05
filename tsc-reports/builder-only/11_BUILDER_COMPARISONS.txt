@@ -1,0 +1,53 @@
+===== BUILDER IMPOSSIBLE COMPARISONS / OPERATORS =====
+lib/adaptive-program-builder.ts(5173,30): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"rebuild"' have no overlap.
+lib/adaptive-program-builder.ts(5175,9): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"adapt"' have no overlap.
+lib/adaptive-program-builder.ts(7442,24): error TS2367: This comparison appears to be unintentional because the types '"baseline_4_days" | "conservative_first_week_4_days" | "insufficient_data_4_days" | "adapted_to_4_days_after_feedback" | "hidden_modifier_collision_4_days" | "non_4_days_adaptive"' and '"stale_feedback_false_4_days"' have no overlap.
+lib/adaptive-program-builder.ts(7602,39): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(7603,40): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(10026,26): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"dumbbells"' have no overlap.
+lib/adaptive-program-builder.ts(10026,47): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"weighted_vest"' have no overlap.
+lib/adaptive-program-builder.ts(10026,72): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"kettlebell"' have no overlap.
+lib/adaptive-program-builder.ts(10028,20): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10028,52): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10028,85): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10906,23): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"optimal"' have no overlap.
+lib/adaptive-program-builder.ts(10907,23): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"good"' have no overlap.
+lib/adaptive-program-builder.ts(10908,23): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"suboptimal"' have no overlap.
+lib/adaptive-program-builder.ts(10912,26): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"SKIP_TODAY"' have no overlap.
+lib/adaptive-program-builder.ts(10913,26): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"REDUCE_INTENSITY"' have no overlap.
+lib/adaptive-program-builder.ts(11767,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"SKIP_TODAY"' have no overlap.
+lib/adaptive-program-builder.ts(11769,7): error TS2367: This comparison appears to be unintentional because the types '"TRAIN_AS_PLANNED" | "PRESERVE_QUALITY" | "LIGHTEN_SESSION" | "COMPRESS_WEEKLY_LOAD" | undefined' and '"REDUCE_INTENSITY"' have no overlap.
+lib/adaptive-program-builder.ts(11770,7): error TS2367: This comparison appears to be unintentional because the types '"TRAIN_AS_PLANNED" | "PRESERVE_QUALITY" | "LIGHTEN_SESSION" | "COMPRESS_WEEKLY_LOAD" | undefined' and '"REDUCE_VOLUME"' have no overlap.
+lib/adaptive-program-builder.ts(12223,38): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"<30"' have no overlap.
+lib/adaptive-program-builder.ts(12226,34): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"SKIP_TODAY"' have no overlap.
+lib/adaptive-program-builder.ts(12228,40): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"SKIP_TODAY"' have no overlap.
+lib/adaptive-program-builder.ts(12229,40): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"REDUCE_INTENSITY"' have no overlap.
+lib/adaptive-program-builder.ts(12315,11): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | undefined' and '"REDUCE_INTENSITY"' have no overlap.
+lib/adaptive-program-builder.ts(14084,15): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod' and '"straight"' have no overlap.
+lib/adaptive-program-builder.ts(14600,17): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod' and '"straight"' have no overlap.
+lib/adaptive-program-builder.ts(14602,11): error TS2367: This comparison appears to be unintentional because the types '"rest_pause" | "superset" | "density_block" | "drop_set" | "ladder" | "emom" | "cluster_set"' and '"cluster"' have no overlap.
+lib/adaptive-program-builder.ts(14607,12): error TS2367: This comparison appears to be unintentional because the types '"rest_pause" | "superset" | "density_block" | "drop_set" | "ladder" | "emom" | "cluster_set"' and '"top_set"' have no overlap.
+lib/adaptive-program-builder.ts(14615,12): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod | undefined' and '"cluster"' have no overlap.
+lib/adaptive-program-builder.ts(16418,32): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(16444,33): error TS2365: Operator '>' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(17945,22): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(17979,22): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(18130,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod | undefined' and '"circuit"' have no overlap.
+lib/adaptive-program-builder.ts(18411,38): error TS2367: This comparison appears to be unintentional because the types 'SessionLength | undefined' and '"long"' have no overlap.
+lib/adaptive-program-builder.ts(18412,7): error TS2367: This comparison appears to be unintentional because the types 'SessionLength | undefined' and '"extended"' have no overlap.
+lib/adaptive-program-builder.ts(19854,13): error TS2367: This comparison appears to be unintentional because the types '"back_lever" | "handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "skill" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"hspu"' have no overlap.
+lib/adaptive-program-builder.ts(19856,13): error TS2367: This comparison appears to be unintentional because the types '"handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "skill" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"l_sit"' have no overlap.
+lib/adaptive-program-builder.ts(19971,26): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(19971,59): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(19972,29): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(19972,62): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(20013,26): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(20013,59): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(20014,29): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(20014,62): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(20142,34): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(20142,67): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(20242,35): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"short"' have no overlap.
+lib/adaptive-program-builder.ts(20242,68): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"medium"' have no overlap.
+lib/adaptive-program-builder.ts(28456,27): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+lib/adaptive-program-builder.ts(28456,66): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"yellow"' have no overlap.

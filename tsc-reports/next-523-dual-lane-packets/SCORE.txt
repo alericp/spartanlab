@@ -1,0 +1,84 @@
+===== STEP 1 — FRESH TSC FOR NEXT DUAL-LANE PACKETS =====
+===== SCOREBOARD =====
+Previous total diagnostics: 523
+Current total diagnostics: 523
+Total delta: 0
+
+Previous builder diagnostics: 48
+Current builder diagnostics: 48
+Builder delta: 0
+
+Non-builder diagnostics available for GitHub AI lane: 475
+
+===== TOP 35 FILES =====
+     48 lib/adaptive-program-builder.ts
+     32 lib/server/authoritative-program-generation.ts
+     25 lib/unified-coaching-engine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     14 lib/session-variety-engine.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     10 lib/warmup-engine.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+     10 lib/onboarding-service.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      8 lib/weak-point-engine.ts
+      8 lib/warmup-intelligence-engine.ts
+      7 lib/training-coach.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/canonical-profile-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      5 lib/doctrine-to-output-verification.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-readiness-integration.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/recovery-fatigue-engine.ts
+
+===== ERROR CODE COUNTS =====
+    142 error TS2339
+    121 error TS2322
+     48 error TS2367
+     39 error TS2345
+     16 error TS2740
+     16 error TS2353
+     14 error TS2305
+     14 error TS2304
+     13 error TS2739
+     12 error TS2551
+     11 error TS2352
+      9 error TS18048
+      8 error TS7006
+      8 error TS2724
+      8 error TS2454
+      6 error TS2741
+      6 error TS2554
+      5 error TS2459
+      4 error TS2300
+      3 error TS1117
+      2 error TS7053
+      2 error TS2719
+      2 error TS2694
+      2 error TS2552
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2677
+      1 error TS2561
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365

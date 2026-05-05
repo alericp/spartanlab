@@ -1,0 +1,26 @@
+===== TOP 25 ERROR FILES =====
+    786 lib/adaptive-program-builder.ts
+    145 lib/program-exercise-selector.ts
+     55 components/workout/StreamlinedWorkoutSession.tsx
+     53 lib/server/authoritative-program-generation.ts
+     52 lib/canonical-profile-service.ts
+     51 lib/benchmark-testing-engine.ts
+     49 lib/weak-point-engine.ts
+     49 lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts
+     46 lib/advanced-skill-graphs.ts
+     40 lib/prediction/prediction-service.ts
+     37 lib/weighted-skill-systems-engine.ts
+     37 lib/session-structure-engine.ts
+     37 lib/enhanced-exercise-intelligence.ts
+     31 lib/back-lever-training-system.ts
+     31 lib/advanced-skills-integration.ts
+     30 lib/warmup-intelligence-engine.ts
+     29 lib/program-history-versioning.ts
+     27 lib/unified-coaching-engine.ts
+     26 lib/doctrine-runtime-contract.ts
+     25 lib/weak-point-detection.ts
+     24 lib/banded-progression-integration-engine.ts
+     24 lib/adaptive-deload-recovery-engine.ts
+     23 lib/cooldown-recovery-intelligence-engine.ts
+     22 lib/program-state.ts
+     21 lib/skill-progression-graph-engine.ts

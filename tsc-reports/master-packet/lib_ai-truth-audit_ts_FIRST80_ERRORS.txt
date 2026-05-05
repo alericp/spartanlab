@@ -1,0 +1,16 @@
+lib/ai-truth-audit.ts(813,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/ai-truth-audit.ts(855,60): error TS2339: Property 'plancheProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(856,63): error TS2339: Property 'frontLeverProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,56): error TS2339: Property 'hspuProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,84): error TS2339: Property 'hspu' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(858,56): error TS2339: Property 'weightedPullUp' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(859,53): error TS2339: Property 'weightedDip' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(860,32): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(861,29): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(862,34): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(1577,14): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,29): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,43): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,57): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1599,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1607,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.

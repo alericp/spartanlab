@@ -1,0 +1,24 @@
+lib/banded-progression-integration-engine.ts(294,20): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(294,38): error TS2820: Type '"high_pull_strength"' is not assignable to type 'WeakPointType'. Did you mean '"pull_strength"'?
+lib/banded-progression-integration-engine.ts(295,20): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(295,42): error TS2322: Type '"straight_bar_dip"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(298,20): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(298,42): error TS2322: Type '"straight_bar_dip"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(301,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(304,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(307,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(307,41): error TS2322: Type '"lat_strength"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(310,20): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(310,41): error TS2322: Type '"lat_strength"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(313,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(316,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(319,20): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,20): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,36): error TS2322: Type '"straight_arm_push"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(322,57): error TS2322: Type '"shoulder_tendon"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,20): error TS2322: Type '"ring_support"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,36): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(325,54): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/banded-progression-integration-engine.ts(328,20): error TS2820: Type '"pulling_strength"' is not assignable to type 'WeakPointType'. Did you mean '"pull_strength"'?
+lib/banded-progression-integration-engine.ts(328,40): error TS2820: Type '"grip_strength"' is not assignable to type 'WeakPointType'. Did you mean '"dip_strength"'?
+lib/banded-progression-integration-engine.ts(389,5): error TS2353: Object literal may only specify known properties, and 'explosive_pull' does not exist in type 'Partial<Record<WeakPointType, string>>'.

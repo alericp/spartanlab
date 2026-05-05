@@ -1,0 +1,115 @@
+===== INSPECT LEFTOVER RECOVERY-FATIGUE FILE =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+HEAD: 58b85024
+Remote HEAD: 58b85024
+
+===== STATUS =====
+ M lib/back-lever-training-system.ts
+ M lib/program-exercise-selector.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== CHECK FOR CONFLICT MARKERS =====
+No conflict markers found in recovery file.
+
+===== DIFF STAT FOR LEFTOVER FILE =====
+ lib/recovery-fatigue-engine.ts | 35 ++++++++++++-----------------------
+ 1 file changed, 12 insertions(+), 23 deletions(-)
+
+===== DIFF FOR LEFTOVER FILE =====
+diff --git a/lib/recovery-fatigue-engine.ts b/lib/recovery-fatigue-engine.ts
+index 5150679f..806fdd2a 100644
+--- a/lib/recovery-fatigue-engine.ts
++++ b/lib/recovery-fatigue-engine.ts
+@@ -573,6 +573,15 @@ export function getMobilityRecoveryStatus(): MobilityRecoveryStatus {
+ // DELOAD DETECTION
+ // =============================================================================
+ 
++const getWorkoutExerciseNotes = (exercise: WorkoutExercise): string => {
++  const maybeNotes = (exercise as { notes?: unknown }).notes
++  if (typeof maybeNotes === 'string') return maybeNotes.toLowerCase()
++  if (Array.isArray(maybeNotes)) {
++    return maybeNotes.filter((n): n is string => typeof n === 'string').join(' ').toLowerCase()
++  }
++  return ''
++}
++
+ /**
+  * Detect if a deload is needed based on multiple signals
+  */
+@@ -607,19 +616,9 @@ function detectDeloadNeed(
+   const recentLogs = logs.slice(0, 5)
+   let failedSessions = 0
+   for (const log of recentLogs) {
+-    // [WORKOUT-EXERCISE-NOTES-RUNTIME-ONLY] WorkoutExercise type does
+-    // not declare `notes`, but logged history may carry it. Read via
+-    // a guarded local cast; never `as any`.
+     const hasFailures = log.exercises.some(e => {
+-      const notes = (e as { notes?: unknown }).notes
+-      const noteText =
+-        typeof notes === 'string'
+-          ? notes
+-          : Array.isArray(notes)
+-            ? notes.filter((n): n is string => typeof n === 'string').join(' ')
+-            : ''
+-      return noteText.toLowerCase().includes('fail') ||
+-        noteText.toLowerCase().includes('missed')
++      const notes = getWorkoutExerciseNotes(e)
++      return notes.includes('fail') || notes.includes('missed')
+     })
+     if (hasFailures) failedSessions++
+   }
+@@ -778,17 +777,7 @@ export function getReadinessAssessment(): ReadinessAssessment {
+   // Count recent failures
+   let failuresRecent = 0
+   for (const log of sortedLogs.slice(0, 5)) {
+-    // [WORKOUT-EXERCISE-NOTES-RUNTIME-ONLY]
+-    if (log.exercises.some(e => {
+-      const notes = (e as { notes?: unknown }).notes
+-      const noteText =
+-        typeof notes === 'string'
+-          ? notes
+-          : Array.isArray(notes)
+-            ? notes.filter((n): n is string => typeof n === 'string').join(' ')
+-            : ''
+-      return noteText.toLowerCase().includes('fail')
+-    })) {
++    if (log.exercises.some(e => getWorkoutExerciseNotes(e).includes('fail'))) {
+       failuresRecent++
+     }
+   }
+
+===== CURRENT SCORE WITH LEFTOVER LOCAL FILE =====
+Total with local recovery file: 298
+Recovery errors with local file: 2
+
+===== TEMPORARILY CHECK SCORE WITHOUT LEFTOVER LOCAL FILE =====
+Saved working directory and index state On v0/alericpetsch836-6923-6213db1c-2: temp-check-recovery-leftover
+Total without local recovery file: 297
+Recovery errors without local file: 1
+
+===== RESTORE LEFTOVER LOCAL FILE =====
+On branch v0/alericpetsch836-6923-6213db1c-2
+Your branch is up to date with 'origin/v0/alericpetsch836-6923-6213db1c-2'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   lib/back-lever-training-system.ts
+	modified:   lib/program-exercise-selector.ts
+	modified:   lib/recovery-fatigue-engine.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	TSC_CURRENT_OUTPUT.txt
+	backups/
+	tsc-reports/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (0db2f7d3f2cb1c6447e479c1a4e842e0d5c08245)
+
+===== DECISION SUMMARY =====
+With local file total: 298
+Without local file total: 297
+Delta if keeping local file: -1 fewer diagnostics
+
+Recommendation: DISCARD recovery file because it increases diagnostics.

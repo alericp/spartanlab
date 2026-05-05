@@ -1,0 +1,80 @@
+===== SCOREBOARD =====
+Previous total diagnostics: 638
+Current total diagnostics: 638
+Total delta: 0
+Current files with errors: 133
+
+===== TOP 35 ERROR FILES =====
+     92 lib/adaptive-program-builder.ts
+     32 lib/server/authoritative-program-generation.ts
+     26 lib/unified-coaching-engine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     14 lib/weak-point-engine.ts
+     14 lib/session-variety-engine.ts
+     14 lib/canonical-profile-service.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/program-state.ts
+      9 lib/engine/index.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/planner-truth-audit.ts
+      8 lib/doctrine-to-output-verification.ts
+      7 lib/training-coach.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      7 lib/athlete-profile.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/metrics-update-service.ts
+      6 lib/adaptive-progression-engine.ts
+      5 lib/engine-quality-contract.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+
+===== ERROR CODE COUNTS =====
+    183 error TS2339
+    138 error TS2322
+     51 error TS2367
+     50 error TS2345
+     22 error TS2353
+     19 error TS2304
+     17 error TS2740
+     17 error TS2739
+     15 error TS2352
+     14 error TS2551
+     14 error TS2305
+     13 error TS18047
+     12 error TS2454
+      9 error TS18048
+      8 error TS7006
+      8 error TS2741
+      8 error TS2724
+      6 error TS2554
+      5 error TS2459
+      4 error TS2300
+      3 error TS7053
+      3 error TS1117
+      2 error TS2769
+      2 error TS2719
+      2 error TS2694
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2677
+      1 error TS2561
+      1 error TS2552
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365

@@ -1,0 +1,98 @@
+===== STEP 1 — CURRENT CLEAN SCORE + MECHANICAL CLUSTER AUDIT FROM 438 =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD: 542c9940
+Remote HEAD: 542c9940
+Local vs remote, format local-only remote-only:
+0	0
+Tracked changes:
+
+===== STEP 2 — RUN REAL TSC =====
+===== VERIFIED SCOREBOARD =====
+Previous total diagnostics: 438
+Current total diagnostics: 438
+Total delta: 0
+
+Current unified-coaching-engine diagnostics: 24
+Current authgen diagnostics: 23
+Current builder diagnostics: 9
+Current files with errors: 122
+
+===== TOP 45 ERROR FILES =====
+     24 lib/unified-coaching-engine.ts
+     23 lib/server/authoritative-program-generation.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     12 lib/program/skill-specific-truth-resolution.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+     10 lib/onboarding-service.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      9 lib/adaptive-program-builder.ts
+      8 lib/weak-point-engine.ts
+      8 lib/warmup-intelligence-engine.ts
+      7 lib/training-coach.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      6 lib/session-variety-engine.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/canonical-profile-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      5 lib/doctrine-to-output-verification.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-readiness-integration.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/recovery-fatigue-engine.ts
+      4 lib/program-version-service.ts
+      4 lib/prescription-contract.ts
+      4 lib/dashboard-service.ts
+      4 lib/constraint-detection-engine.ts
+      4 lib/advanced-skills-integration.ts
+      4 lib/adaptive-athlete-engine.ts
+      3 lib/training-feedback-loop.ts
+      3 lib/strength-score-engine.ts
+      3 lib/progression-decision-engine.ts
+      3 lib/program-generation/week-adaptation-decision-contract.ts
+      3 lib/program-exercise-selector.ts
+      3 lib/milestone-engine.ts
+
+===== ERROR CODE COUNTS =====
+    113 error TS2339
+    113 error TS2322
+     46 error TS2367
+     32 error TS2345
+     16 error TS2740
+     14 error TS2353
+     14 error TS2305
+     14 error TS2304
+      9 error TS2739
+      8 error TS2724
+      8 error TS2454
+      7 error TS18048
+      5 error TS2741
+      5 error TS2554
+      5 error TS2459
+      4 error TS7006
+      4 error TS2300
+      3 error TS2551
+      2 error TS7053
+      2 error TS2719
+      2 error TS2694
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2552
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365
+      1 error TS2352

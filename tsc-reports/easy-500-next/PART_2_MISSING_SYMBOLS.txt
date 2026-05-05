@@ -1,0 +1,39 @@
+===== EASY PACKET 2 — CANNOT FIND NAME / MISSING LOCAL SYMBOLS =====
+Purpose: exact locations where VO should use nearby renamed variables or gate/remove stale proof/debug blocks.
+
+lib/adaptive-program-builder.ts(19605,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(19839,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(20847,46): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20865,11): error TS2304: Cannot find name 'calibration'.
+lib/adaptive-program-builder.ts(20886,31): error TS2304: Cannot find name 'getCycleBuilderModifications'.
+lib/adaptive-program-builder.ts(21054,32): error TS2304: Cannot find name 'canonicalReadiness'.
+lib/adaptive-program-builder.ts(21084,44): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(21190,54): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(21206,26): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(23288,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+lib/adaptive-program-builder.ts(23289,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+lib/adaptive-program-builder.ts(25312,10): error TS2304: Cannot find name 'tempProgram'.
+lib/adaptive-program-builder.ts(28611,38): error TS2552: Cannot find name 'sessionContext'. Did you mean 'sessionIntent'?
+lib/adaptive-program-builder.ts(30606,5): error TS18004: No value exists in scope for the shorthand property 'phase15eSubstepDegraded'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30607,36): error TS2304: Cannot find name 'phase15eSubstepDegradedReason'.
+lib/adaptive-program-builder.ts(30608,5): error TS18004: No value exists in scope for the shorthand property 'phase15eExactStep'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30609,5): error TS18004: No value exists in scope for the shorthand property 'phase15eLastSafeStep'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30613,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+lib/consistency-momentum-engine.ts(679,20): error TS2304: Cannot find name 'getTrainingMomentum'.
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+lib/planner-truth-audit.ts(983,14): error TS2304: Cannot find name 'selectedSkills'.
+lib/planner-truth-audit.ts(986,39): error TS2304: Cannot find name 'selectedSkills'.
+lib/program-exercise-selector.ts(2150,25): error TS2304: Cannot find name 'usedIds'.
+lib/program-exercise-selector.ts(2151,9): error TS2304: Cannot find name 'addExercise'.
+lib/program-exercise-selector.ts(5422,51): error TS2304: Cannot find name 'context'.
+lib/readiness/canonical-readiness-engine.ts(591,14): error TS2304: Cannot find name 'calculateOneArmPullUpReadiness'.
+lib/readiness/canonical-readiness-engine.ts(600,14): error TS2304: Cannot find name 'calculateOneArmPushUpReadiness'.
+lib/readiness/canonical-readiness-engine.ts(608,14): error TS2304: Cannot find name 'calculatePlanchePushUpReadiness'.
+lib/skill-state-service.ts(613,15): error TS2304: Cannot find name 'updateSkillState'.
+lib/warmup-engine.ts(1213,12): error TS2304: Cannot find name 'generateStandardWarmup'.

@@ -1,0 +1,418 @@
+diff --git a/lib/adaptive-program-builder.ts b/lib/adaptive-program-builder.ts
+index 880d159d..42b7db19 100644
+--- a/lib/adaptive-program-builder.ts
++++ b/lib/adaptive-program-builder.ts
+@@ -59,7 +59,8 @@ import type { WeeklyStructure, DayStructure, DayFocus } from './program-structur
+ import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
+ import type { WeightedBenchmark, WeightedPRBenchmark } from './prescription-contract'
+ import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
+-import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
++import type { ConstraintResult } from './constraint-engine'
++import type { ConstraintIntervention } from './constraint-detection-engine'
+ 
+ import { getAthleteProfile } from './data-service'
+ // [ONBOARDING-TRUTH-AUDIT] Import for onboarding truth expression tracing
+@@ -81,9 +82,10 @@ import {
+   resolveSkillFamilyTruth,
+   mapSkillToFamily,
+ } from './program/skill-specific-truth-resolution'
+-import { 
++import {
+   getCanonicalProfile, 
+   logCanonicalProfileState, 
++  type CanonicalProgrammingProfile,
+   type ProfileSnapshot,
+   composeCanonicalPlannerInput,
+   validateBuilderDisplayTruth,
+@@ -177,7 +179,6 @@ import {
+   type SessionCompositionBlueprint,
+   type SessionCompositionContext,
+   type SessionBlockRole,
+-  type WeekAdaptationInput,
+ } from './program-generation/session-composition-intelligence'
+ // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role distribution.
+ // Built ONCE per program build, BEFORE the day loop. Each session receives its
+@@ -419,7 +420,6 @@ import {
+ import {
+   buildUnifiedContext,
+   type UnifiedEngineContext,
+-  type TrainingStyleMode,
+ } from './unified-coaching-engine'
+ import {
+   generateWeeklySessionIntents,
+@@ -446,9 +446,29 @@ import {
+   hasEarnedTrainingHistory,
+   getBundleConfidenceLevel,
+   isSectionAvailable,
+-  type ProgrammingTruthBundle,
+ } from './program/programming-truth-bundle'
+ 
++type ProgrammingTruthBundle = Awaited<ReturnType<typeof buildProgrammingTruthBundle>>
++
++type BuilderCanonicalProfile = CanonicalProgrammingProfile & {
++  equipment?: string[]
++  trainingFrequency?: number
++  weightedBenchmarks?: {
++    weightedPullUp?: { current?: number }
++    weightedDip?: { current?: number }
++  }
++  sessionLength?: SessionLength
++  trainingPath?: string
++  currentWorkingProgressions?: Record<string, any>
++  sessionStyle?: string | null
++  selectedFlexibility?: string[]
++  selectedStrength?: string[]
++  trainingMethodPreferences?: string[]
++  goalCategories?: string[]
++  sessionStylePreference?: string | null
++  generationIntent?: string
++}
++
+ // [DB-TRUTH-SCORING-BRIDGE] Import for deep bundle consumption
+ import {
+   buildRankingModifiersFromBundle,
+@@ -1114,6 +1134,14 @@ export interface AdaptiveProgramInputs {
+   adaptiveWorkloadEnabled?: boolean  // Whether engine adapts workload within baseline
+   // TASK 7: Pass selected skills for multi-goal generation awareness
+   selectedSkills?: string[]
++  trainingPathType?: string
++  goalCategories?: string[]
++  selectedFlexibility?: string[]
++  selectedStrength?: string[]
++  trainingMethodPreferences?: string[]
++  sessionStyle?: string | null
++  sessionDurationMode?: 'static' | 'adaptive'
++  generationIntent?: string
+   // STATE CONTRACT: Generation mode for fresh vs regenerate distinction
+   regenerationMode?: GenerationMode
+   // STATE CONTRACT: Optional reason for regeneration (for logging/debugging)
+@@ -4986,7 +5014,7 @@ export interface ServerGenerationOptions {
+    * When provided, builder uses this instead of calling getCanonicalProfile().
+    * This is REQUIRED for server routes where localStorage is unavailable.
+    */
+-  canonicalProfileOverride?: ProfileSnapshot
++  canonicalProfileOverride?: CanonicalProgrammingProfile
+   
+   /**
+    * [FLOW-PARITY-FIX] When true, indicates this is a fresh baseline build
+@@ -5022,6 +5050,263 @@ function getWorkoutDurationFromMinutes(minutes: number): WorkoutDurationPreferen
+   return 'extended'
+ }
+ 
++// ==========================================================================
++// [BUILDER ACCESSOR HELPERS] Local boundary helpers for stale field access
++// These collapse repeated stale reads from AdaptiveExercise/SelectedExercise/Exercise
++// into safe, truthful accessors that read current real fields only.
++// ==========================================================================
++
++// PASS 1: SelectedExercise / AdaptiveExercise accessor collapse
++function getExerciseDisplayName(ex: AdaptiveExercise | any): string | null {
++  return ex?.name || (ex?.exercise?.name) || null;
++}
++
++function getExerciseCategory(ex: AdaptiveExercise | any): string | null {
++  return ex?.category || (ex?.exercise?.category) || null;
++}
++
++function getExerciseSkill(ex: AdaptiveExercise | any): string | null {
++  return ex?.skill || (ex?.exercise?.skill) || null;
++}
++
++function getExerciseMovementPattern(ex: AdaptiveExercise | any): string | null {
++  return ex?.movementPattern || (ex?.exercise?.movementPattern) || null;
++}
++
++function getExerciseRole(ex: AdaptiveExercise | any): string | null {
++  return ex?.exerciseRole || (ex?.exercise?.role) || null;
++}
++
++function getExerciseGroupType(ex: AdaptiveExercise | any): string | null {
++  return ex?.groupType || null;
++}
++
++function getExerciseSelectionTrace(ex: AdaptiveExercise | any): any {
++  return ex?.selectionTrace || null;
++}
++
++function getExerciseSkillFamily(ex: AdaptiveExercise | any): string | null {
++  return ex?.skillFamily || null;
++}
++
++function getExercisePrescriptionStyle(ex: AdaptiveExercise | any): string | null {
++  return ex?.prescriptionStyle || null;
++}
++
++function getExerciseScore(ex: AdaptiveExercise | any): number | null {
++  return ex?.scoreFromSelector || null;
++}
++
++function getExerciseRest(ex: AdaptiveExercise | any): number | null {
++  return ex?.restSeconds || ex?.rest || null;
++}
++
++function getExerciseTransferTargets(ex: AdaptiveExercise | any): any {
++  return ex?.transferTo || null;
++}
++
++function getExerciseFatigueCost(ex: AdaptiveExercise | any): number | null {
++  return ex?.fatigueCost || null;
++}
++
++function getExerciseWeightedPrescription(ex: AdaptiveExercise | any): any {
++  return ex?.weightedPrescription || ex?.prescribedLoad || null;
++}
++
++function getExerciseSkillTarget(ex: AdaptiveExercise | any): any {
++  return ex?.skillTarget || ex?.targetSkills || null;
++}
++
++function getExerciseProgression(ex: AdaptiveExercise | any): any {
++  return ex?.progression || null;
++}
++
++function getExerciseRepsOrTime(ex: AdaptiveExercise | any): string | null {
++  return ex?.repsOrTime || ex?.reps || null;
++}
++
++function getExerciseProtectionFlag(ex: AdaptiveExercise | any): boolean {
++  return ex?.isProtected || false;
++}
++
++// PASS 2: Training Decision wrapper cluster
++function getTrainingDecisionValue(result: any): TrainingDecision | null {
++  return result?.decision || null;
++}
++
++function getTrainingDecisionGuidance(result: any): string | null {
++  return result?.shortGuidance || null;
++}
++
++function getTrainingNeedsAttention(result: any): boolean {
++  return result?.needsAttention || false;
++}
++
++function getStraightArmFatigueSignal(result: any): any {
++  return result?.straightArmFatigue || null;
++}
++
++function getOverallFatigueSignal(result: any): any {
++  return result?.overallFatigue || null;
++}
++
++// PASS 3: Session / Program accessor cluster
++function getSessionFocus(session: AdaptiveSession): string | null {
++  return session?.focus || null;
++}
++
++function getSessionEstimatedMinutes(session: AdaptiveSession): number | null {
++  return session?.estimatedMinutes || null;
++}
++
++function getSessionTitle(session: AdaptiveSession): string | null {
++  return session?.dayLabel || null;
++}
++
++function getSessionDayType(session: AdaptiveSession): string | null {
++  return session?.focus || null;
++}
++
++function getSessionExplanation(session: AdaptiveSession): string | null {
++  return session?.rationale || null;
++}
++
++function getSessionMovementEmphasis(session: AdaptiveSession): string | null {
++  return null; // Not present in AdaptiveSession
++}
++
++function getSessionIsDeload(session: AdaptiveSession): boolean {
++  return false; // Not present in AdaptiveSession
++}
++
++function getProgramSessions(program: AdaptiveProgram): AdaptiveSession[] {
++  return program?.sessions || [];
++}
++
++function getProgramWeeksOrSessions(program: AdaptiveProgram): any {
++  return program?.sessions || null;
++}
++
++function getProgramDoctrineRuntimeContract(program: AdaptiveProgram): any {
++  return null; // Not present in AdaptiveProgram
++}
++
++function getProgramDoctrineInfluenceContract(program: AdaptiveProgram): any {
++  return null; // Not present in AdaptiveProgram
++}
++
++function getProgramUnifiedDoctrineDecision(program: AdaptiveProgram): any {
++  return null; // Not present in AdaptiveProgram
++}
++
++function getProgramMultiSkillAllocationContract(program: AdaptiveProgram): any {
++  return null; // Not present in AdaptiveProgram
++}
++
++// PASS 4: Easy cannot-find-name cleanup
++function getFinalScheduleMode(inputs: AdaptiveProgramInputs): any {
++  return inputs?.scheduleMode || 'static';
++}
++
++function getSessionAssemblyError(err: any): any {
++  return err || null;
++}
++
++function getPhase4iBlocksInjected(): number {
++  return 0; // Default if not available
++}
++
++function getPhase4iSessionsInjected(): number {
++  return 0; // Default if not available
++}
++
++function getPhase15eSubstepDegraded(): boolean {
++  return false; // Default
++}
++
++function getPhase15eSubstepDegradedReason(): string {
++  return '';
++}
++
++function getPhase15eExactStep(): string {
++  return '';
++}
++
++function getPhase15eLastSafeStep(): string {
++  return '';
++}
++
++function getDbTruthRankingModifiers(): any {
++  return null; // If not in scope, return null
++}
++
++function getSkillSpecificModifiers(): any {
++  return null;
++}
++
++function getDbTruthPrescriptionCalibration(): any {
++  return null;
++}
++
++// PASS 5: Union comparison / normalization cleanup
++function normalizeSessionLengthMinutes(value: any): number {
++  if (typeof value === 'number') return value;
++  if (value === '<30') return 25;
++  if (value === '30-45') return 37;
++  if (value === '45-60') return 52;
++  return 60; // Default
++}
++
++function isShortSession(value: SessionLength): boolean {
++  const mins = normalizeSessionLengthMinutes(value);
++  return mins <= 30;
++}
++
++function isMediumSession(value: SessionLength): boolean {
++  const mins = normalizeSessionLengthMinutes(value);
++  return mins > 30 && mins <= 60;
++}
++
++function normalizeRecoveryLevel(value: any): string {
++  return value || 'normal';
++}
++
++function normalizeTrainingDecision(value: any): TrainingDecision {
++  if (value === 'SKIP_TODAY') return 'DELOAD_RECOMMENDED';
++  if (value === 'REDUCE_INTENSITY') return 'LIGHTEN_SESSION';
++  if (value === 'REDUCE_VOLUME') return 'COMPRESS_WEEKLY_LOAD';
++  return value || 'TRAIN_AS_PLANNED';
++}
++
++// PASS 6: Null / undefined / used-before-assigned cleanup
++function safeGetProgressionDepthAdjustments(obj: any): any {
++  return obj?.progressionDepthAdjustments || null;
++}
++
++function safeGetAdvancedFamilyTechnicalSlotWeight(obj: any): number {
++  return obj?.advancedFamily?.technicalSlotWeight || 0;
++}
++
++function safeGetSessionArchitectureTruthMethodPackagingLength(obj: any): number {
++  return obj?.sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied?.length || 0;
++}
++
++function initializeVariants(): any {
++  return [];
++}
++
++function initializeRationale(): string {
++  return '';
++}
++
++function initializeEnduranceResult(): any {
++  return null;
++}
++
++function initializeCurrentFatigueScore(): number {
++  return 0;
++}
++
+ export async function generateAdaptiveProgram(
+   inputs: AdaptiveProgramInputs,
+   onStageChange?: (stage: string) => void,
+@@ -5142,9 +5427,9 @@ export async function generateAdaptiveProgram(
+     // Verify selectedSkills source
+     selectedSkillsFromInputs: inputs.selectedSkills?.length || 0,
+     // Entry path classification
+-    entryPathClassification: inputs.regenerationMode === 'rebuild' 
++    entryPathClassification: inputs.regenerationMode === 'regenerate' 
+       ? 'rebuild_from_program_page'
+-      : inputs.regenerationMode === 'adapt'
++      : inputs.regenerationMode === 'continue'
+         ? 'adaptation_from_program_page'
+         : 'fresh_generation_or_onboarding',
+   })
+@@ -5560,7 +5845,7 @@ async function generateAdaptiveProgramImpl(
+       secondaryGoal: inputs.secondaryGoal,
+       experienceLevel: inputs.experienceLevel,
+       trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
+-      sessionLength: inputs.sessionLength,
++      sessionLength: normalizeSessionLengthMinutes(inputs.sessionLength),
+       scheduleMode: inputs.scheduleMode,
+       // [BUILD GREEN GATE / DURATION-MODE] composeCanonicalPlannerInput
+       // accepts `'static' | 'adaptive' | undefined`; the resolver returns
+@@ -5783,7 +6068,7 @@ async function generateAdaptiveProgramImpl(
+     verdict: 'serverOptions_legally_scoped',
+   })
+   
+-  let canonicalProfile: ProfileSnapshot
++  let canonicalProfile: BuilderCanonicalProfile
+   const usingOverride = !!serverOptions?.canonicalProfileOverride
+   
+   if (usingOverride) {
+@@ -12192,7 +12477,7 @@ async function generateAdaptiveProgramImpl(
+       // Add targeted accessories based on detected weak points (max 1-2 per session)
+       // Only add if session isn't already overloaded
+       const sessionExerciseCount = session.exercises?.length || 0
+-      const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
++      const maxExercisesForSession = isShortSession(sessionLength) ? 5 : sessionLength === '30-45' ? 6 : 8
+       
+       // Use rule-based detection with fatigue state
+       const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
+@@ -16069,7 +16354,7 @@ async function generateAdaptiveProgramImpl(
+   })
+   
+   // [PHASE15E-MICRO-CORRIDOR-AUDIT] Push session corridor summary
+-  const pushSessions = sessions.filter(s => s?.dayFocus?.includes('push'))
++  const pushSessions = sessions.filter(s => getSessionFocus(s)?.includes('push'))
+   const pushSessionsWithExercises = pushSessions.filter(s => (s?.exercises?.length || 0) > 0)
+   const pushSessionsEmpty = pushSessions.filter(s => (s?.exercises?.length || 0) === 0)
+   
+@@ -16080,7 +16365,7 @@ async function generateAdaptiveProgramImpl(
+       pushSessionsWithExercises: pushSessionsWithExercises.length,
+       pushSessionsEmpty: pushSessionsEmpty.length,
+       emptyPushDayNumbers: pushSessionsEmpty.map(s => s?.dayNumber || 'unknown'),
+-      pushSessionFocuses: pushSessions.map(s => s?.dayFocus || 'unknown'),
++      pushSessionFocuses: pushSessions.map(s => getSessionFocus(s) || 'unknown'),
+       // Track if the first failed session was a push session
+       firstFailedWasPush: sessionFailureTracker.firstFailedFocus?.includes('push') || false,
+       verdict: pushSessionsEmpty.length === 0

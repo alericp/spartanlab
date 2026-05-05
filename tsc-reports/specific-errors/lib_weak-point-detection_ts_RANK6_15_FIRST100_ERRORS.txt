@@ -1,0 +1,25 @@
+lib/weak-point-detection.ts(100,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(101,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(102,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(103,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(109,23): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; }'.
+lib/weak-point-detection.ts(110,18): error TS18047: 'weightedPullUp' is possibly 'null'.
+lib/weak-point-detection.ts(110,33): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; }'.
+lib/weak-point-detection.ts(136,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(137,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(138,14): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(144,9): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(145,14): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/weak-point-detection.ts(150,20): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; }'.
+lib/weak-point-detection.ts(151,18): error TS18047: 'weightedDip' is possibly 'null'.
+lib/weak-point-detection.ts(151,30): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; }'.
+lib/weak-point-detection.ts(325,49): error TS2365: Operator '>=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-detection.ts(391,72): error TS2339: Property 'frontLeverProgress' does not exist on type 'OnboardingProfile'.
+lib/weak-point-detection.ts(392,66): error TS2339: Property 'plancheProgress' does not exist on type 'OnboardingProfile'.
+lib/weak-point-detection.ts(408,48): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/weak-point-detection.ts(409,42): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/weak-point-detection.ts(435,5): error TS2322: Type 'number | PullUpCapacity | null' is not assignable to type 'number | null | undefined'.
+lib/weak-point-detection.ts(436,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ addedWeight: number; reps: number; } | null | undefined'.
+lib/weak-point-detection.ts(439,5): error TS2322: Type 'number | DipCapacity | null' is not assignable to type 'number | null | undefined'.
+lib/weak-point-detection.ts(440,5): error TS2322: Type 'number | PushUpCapacity | null' is not assignable to type 'number | null | undefined'.
+lib/weak-point-detection.ts(441,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ addedWeight: number; reps: number; } | null | undefined'.

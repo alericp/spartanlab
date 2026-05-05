@@ -1,0 +1,10 @@
+===== CURRENT SCOREBOARD =====
+Previous known TypeScript error lines: 1776
+Current TypeScript error lines: 1577
+Error-line delta since previous known count: 199
+Previous known files with TypeScript errors: 149
+Current files with TypeScript errors: 150
+Error-file delta since previous known count: -1
+adaptive-program-builder.ts error lines: 563
+program-exercise-selector.ts error lines: 145
+StreamlinedWorkoutSession.tsx error lines: 8

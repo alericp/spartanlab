@@ -1,0 +1,71 @@
+===== SYNC GITHUB AI LOCAL WORK WITH VO REMOTE WORK =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD start: 29f4bcf7
+Remote HEAD start: 60718e5e
+
+===== CURRENT TRACKED CHANGES =====
+ M lib/doctrine/doctrine-consumption-audit.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== COMMIT GITHUB AI LOCAL CHANGES IF PRESENT =====
+[v0/alericpetsch836-6923-6213db1c-2 d2f5c2a2] fix: reduce non-VO mechanical TypeScript diagnostics
+ 2 files changed, 17 insertions(+), 11 deletions(-)
+
+===== FETCH REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Local HEAD after local commit: d2f5c2a2
+Remote HEAD after fetch: 60718e5e
+Local vs remote before rebase, format local-only remote-only:
+1	1
+
+===== REBASE LOCAL GITHUB AI COMMIT ON TOP OF VO REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Rebasing (1/1)Auto-merging lib/recovery-fatigue-engine.ts
+CONFLICT (content): Merge conflict in lib/recovery-fatigue-engine.ts
+error: could not apply d2f5c2a2... fix: reduce non-VO mechanical TypeScript diagnostics
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+hint: Disable this message with "git config set advice.mergeConflict false"
+Could not apply d2f5c2a2... # fix: reduce non-VO mechanical TypeScript diagnostics
+
+===== POST-REBASE STATUS =====
+M  lib/doctrine/doctrine-consumption-audit.ts
+UU lib/recovery-fatigue-engine.ts
+Local HEAD after rebase: 60718e5e
+Remote HEAD: 60718e5e
+Local vs remote after rebase, format local-only remote-only:
+0	0
+
+===== PUSH COMBINED WORK =====
+To https://github.com/alericp/spartanlab
+ ! [rejected]          v0/alericpetsch836-6923-6213db1c-2 -> v0/alericpetsch836-6923-6213db1c-2 (non-fast-forward)
+error: failed to push some refs to 'https://github.com/alericp/spartanlab'
+hint: Updates were rejected because a pushed branch tip is behind its remote
+hint: counterpart. If you want to integrate the remote changes, use 'git pull'
+hint: before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+
+===== VERIFY TRUE COMBINED TYPESCRIPT SCORE =====
+===== VERIFIED COMBINED SCOREBOARD =====
+Previous known total diagnostics: 363
+Current combined total diagnostics: 6
+Total delta from previous known: 357
+Current files with errors: 1
+
+===== TOP 50 FILES AFTER COMBINED SYNC =====
+      6 lib/recovery-fatigue-engine.ts
+
+===== ERROR CODE COUNTS AFTER COMBINED SYNC =====
+      6 error TS1185
+
+===== FIRST 80 ERRORS AFTER COMBINED SYNC =====
+lib/recovery-fatigue-engine.ts(615,1): error TS1185: Merge conflict marker encountered.
+lib/recovery-fatigue-engine.ts(629,1): error TS1185: Merge conflict marker encountered.
+lib/recovery-fatigue-engine.ts(633,1): error TS1185: Merge conflict marker encountered.
+lib/recovery-fatigue-engine.ts(792,1): error TS1185: Merge conflict marker encountered.
+lib/recovery-fatigue-engine.ts(804,1): error TS1185: Merge conflict marker encountered.
+lib/recovery-fatigue-engine.ts(806,1): error TS1185: Merge conflict marker encountered.

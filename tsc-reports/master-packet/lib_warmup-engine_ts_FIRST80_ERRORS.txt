@@ -1,0 +1,10 @@
+lib/warmup-engine.ts(1168,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+lib/warmup-engine.ts(1187,33): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1187,53): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/warmup-engine.ts(1199,39): error TS2339: Property 'estimatedDuration' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1200,70): error TS2339: Property 'primaryJointsFocused' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1200,119): error TS2339: Property 'weakPointAdaptations' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1202,31): error TS2339: Property 'prehabExercises' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1202,51): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/warmup-engine.ts(1207,34): error TS2339: Property 'estimatedDuration' does not exist on type 'IntelligentPrehabResult'.
+lib/warmup-engine.ts(1213,12): error TS2304: Cannot find name 'generateStandardWarmup'.

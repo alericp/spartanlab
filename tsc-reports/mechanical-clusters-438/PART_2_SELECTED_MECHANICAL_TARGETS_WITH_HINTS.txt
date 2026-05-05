@@ -1,0 +1,658 @@
+===== PART 2 — SELECTED MECHANICAL TARGETS WITH HINTS =====
+These are candidates only. Assistant should filter out anything requiring investigation before writing VO prompt.
+
+Selected file counts:
+- lib/unified-coaching-engine.ts: 10
+- lib/unified-program-generation.ts: 8
+- lib/progress-streak-engine.ts: 7
+- lib/roadmap/skill-roadmap-service.ts: 6
+- lib/onboarding-service.ts: 5
+- lib/readiness/skill-readiness.ts: 5
+- lib/program/db-truth-scoring-bridge.ts: 5
+- lib/repositories/profile-repository.ts: 5
+- lib/training-coach.ts: 5
+- lib/session-variety-engine.ts: 5
+- lib/engine/index.ts: 4
+- lib/warmup-intelligence-engine.ts: 4
+- lib/planner-truth-audit.ts: 4
+- lib/program/skill-specific-truth-resolution.ts: 3
+- lib/doctrine-to-output-verification.ts: 3
+- lib/unified-readiness-integration.ts: 3
+- lib/server/authoritative-program-generation.ts: 3
+- lib/recovery-fatigue-engine.ts: 3
+- lib/flexible-schedule-engine.ts: 2
+- components/achievements/AchievementNotification.tsx: 2
+- lib/adaptive-program-builder.ts: 2
+- lib/doctrine/doctrine-consumption-audit.ts: 2
+- lib/elite-insight-engine.ts: 2
+- lib/program-exercise-selector.ts: 2
+- lib/program-profile-validator.ts: 2
+- lib/training-feedback-loop.ts: 2
+- lib/strength-score-engine.ts: 1
+- lib/performance-envelope-engine.ts: 1
+- lib/performance-envelope-service.ts: 1
+- lib/workout-feedback-integration.ts: 1
+- lib/program-state-contract.ts: 1
+- lib/workout-execution-truth.ts: 1
+- lib/coaching-explanation-contract.ts: 1
+- lib/program/program-display-contract.ts: 1
+- lib/program-generation/session-composition-intelligence.ts: 1
+- lib/program/onboarding-truth-expression-audit.ts: 1
+- lib/program/performance-feedback-adaptation-contract.ts: 1
+- lib/progression-decision-engine.ts: 1
+- lib/program/programming-truth-bundle.ts: 1
+- lib/weak-point-priority-engine.ts: 1
+- lib/session-assembly-engine.ts: 1
+- lib/warmup-engine.ts: 1
+
+Selected error-code counts:
+- TS2339: 59
+- TS2367: 26
+- TS2305: 12
+- TS2454: 7
+- TS2554: 5
+- TS2353: 5
+- TS2448: 2
+- TS18048: 2
+- TS2551: 2
+
+--- TARGET 001 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 002 ---
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 003 ---
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 004 ---
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 005 ---
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 006 ---
+lib/unified-program-generation.ts(388,22): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 007 ---
+lib/unified-program-generation.ts(654,24): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `name`
+Hint: Remove/gate stale `name` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 008 ---
+lib/readiness/skill-readiness.ts(2672,33): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned `result`
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 009 ---
+lib/readiness/skill-readiness.ts(2673,40): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned `result`
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 010 ---
+lib/readiness/skill-readiness.ts(2678,12): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned `result`
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 011 ---
+lib/readiness/skill-readiness.ts(2682,17): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned `result`
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 012 ---
+lib/readiness/skill-readiness.ts(2683,16): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned `result`
+Hint: Move `result` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 013 ---
+lib/strength-score-engine.ts(576,50): error TS2554: Expected 6 arguments, but got 5.
+Pattern: TS2554: wrong argument count
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+
+--- TARGET 014 ---
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+
+--- TARGET 015 ---
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+
+--- TARGET 016 ---
+lib/unified-coaching-engine.ts(733,50): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+
+--- TARGET 017 ---
+lib/unified-coaching-engine.ts(736,38): error TS2554: Expected 4-5 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Hint: Match local callee signature; remove extra argument or provide missing argument only if obvious nearby.
+
+--- TARGET 018 ---
+lib/engine/index.ts(354,3): error TS2305: Module '"../skill-readiness"' has no exported member 'quickReadinessCheck'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 019 ---
+lib/engine/index.ts(355,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getPrimaryLimiter'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 020 ---
+lib/engine/index.ts(356,3): error TS2305: Module '"../skill-readiness"' has no exported member 'meetsBaselineRequirements'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 021 ---
+lib/engine/index.ts(357,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getTrainingRecommendations'.
+Pattern: TS2305: missing export `"../skill-readiness"`
+Hint: Fix missing export/import for `"../skill-readiness"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 022 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 023 ---
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 024 ---
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 025 ---
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Hint: Remove/gate stale comparison to `"declining"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 026 ---
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `rpe`
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 027 ---
+lib/doctrine-to-output-verification.ts(531,47): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `rpe`
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 028 ---
+lib/doctrine-to-output-verification.ts(531,62): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `rpe`
+Hint: Remove/gate stale `rpe` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 029 ---
+lib/flexible-schedule-engine.ts(62,3): error TS2305: Module '"./athlete-profile"' has no exported member 'PrimaryGoal'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 030 ---
+lib/flexible-schedule-engine.ts(63,3): error TS2305: Module '"./athlete-profile"' has no exported member 'ExperienceLevel'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 031 ---
+lib/unified-readiness-integration.ts(25,15): error TS2305: Module '"./athlete-profile"' has no exported member 'AthleteProfile'.
+Pattern: TS2305: missing export `"./athlete-profile"`
+Hint: Fix missing export/import for `"./athlete-profile"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 032 ---
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 033 ---
+lib/performance-envelope-service.ts(21,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 034 ---
+lib/workout-feedback-integration.ts(9,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+Pattern: TS2305: missing export `"./movement-family-registry"`
+Hint: Fix missing export/import for `"./movement-family-registry"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 035 ---
+lib/program-state-contract.ts(195,97): error TS2339: Property 'equipment' does not exist on type 'AdaptiveProgram'.
+Pattern: TS2339: stale/suggested property `equipment`
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 036 ---
+lib/server/authoritative-program-generation.ts(1294,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+Pattern: TS2339: stale/suggested property `equipment`
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 037 ---
+lib/unified-coaching-engine.ts(446,17): error TS2339: Property 'equipment' does not exist on type 'AthleteProfile'.
+Pattern: TS2339: stale/suggested property `equipment`
+Hint: Remove/gate stale `equipment` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 038 ---
+lib/progress-streak-engine.ts(449,28): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `recordedAt`
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 039 ---
+lib/progress-streak-engine.ts(449,63): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `recordedAt`
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 040 ---
+lib/progress-streak-engine.ts(471,34): error TS2339: Property 'recordedAt' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `recordedAt`
+Hint: Remove/gate stale `recordedAt` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 041 ---
+lib/recovery-fatigue-engine.ts(611,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 042 ---
+lib/recovery-fatigue-engine.ts(612,9): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 043 ---
+lib/recovery-fatigue-engine.ts(771,35): error TS2339: Property 'notes' does not exist on type 'WorkoutExercise'.
+Pattern: TS2339: stale/suggested property `notes`
+Hint: Remove/gate stale `notes` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 044 ---
+lib/repositories/profile-repository.ts(311,32): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Pattern: TS2339: stale/suggested property `trainingStyle`
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 045 ---
+lib/repositories/profile-repository.ts(311,67): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Pattern: TS2339: stale/suggested property `trainingStyle`
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 046 ---
+lib/repositories/profile-repository.ts(336,30): error TS2339: Property 'trainingStyle' does not exist on type 'AthleteProfile'.
+Pattern: TS2339: stale/suggested property `trainingStyle`
+Hint: Remove/gate stale `trainingStyle` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 047 ---
+lib/roadmap/skill-roadmap-service.ts(594,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `weight`
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 048 ---
+lib/roadmap/skill-roadmap-service.ts(596,43): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `weight`
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 049 ---
+lib/training-coach.ts(586,48): error TS2339: Property 'weight' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `weight`
+Hint: Remove/gate stale `weight` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 050 ---
+lib/session-variety-engine.ts(706,58): error TS2339: Property 'general' does not exist on type 'Record<SkillType, string[][]>'.
+Pattern: TS2339: stale/suggested property `general`
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 051 ---
+lib/session-variety-engine.ts(835,50): error TS2339: Property 'general' does not exist on type 'Record<SkillType, MovementFamily[]>'.
+Pattern: TS2339: stale/suggested property `general`
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 052 ---
+lib/session-variety-engine.ts(900,38): error TS2339: Property 'general' does not exist on type 'Record<SkillType, ExerciseVariationSet>'.
+Pattern: TS2339: stale/suggested property `general`
+Hint: Remove/gate stale `general` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 053 ---
+lib/unified-coaching-engine.ts(883,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `timing`
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 054 ---
+lib/unified-coaching-engine.ts(884,56): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `timing`
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 055 ---
+lib/unified-coaching-engine.ts(885,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `timing`
+Hint: Remove/gate stale `timing` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 056 ---
+lib/unified-program-generation.ts(387,20): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `id`
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 057 ---
+lib/unified-program-generation.ts(653,22): error TS2339: Property 'id' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `id`
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 058 ---
+lib/workout-execution-truth.ts(216,25): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+Pattern: TS2339: stale/suggested property `id`
+Hint: Remove/gate stale `id` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 059 ---
+lib/warmup-intelligence-engine.ts(1213,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Pattern: TS2339: stale/suggested property `primaryJoint`
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 060 ---
+lib/warmup-intelligence-engine.ts(1223,69): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Pattern: TS2339: stale/suggested property `primaryJoint`
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 061 ---
+lib/warmup-intelligence-engine.ts(1233,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Pattern: TS2339: stale/suggested property `primaryJoint`
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 062 ---
+components/achievements/AchievementNotification.tsx(8,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'popNextNotification'.
+Pattern: TS2305: missing export `"@/lib/achievements"`
+Hint: Fix missing export/import for `"@/lib/achievements"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 063 ---
+components/achievements/AchievementNotification.tsx(10,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'hasUnseenAchievements'.
+Pattern: TS2305: missing export `"@/lib/achievements"`
+Hint: Fix missing export/import for `"@/lib/achievements"` only if local replacement is obvious. Otherwise block.
+
+--- TARGET 064 ---
+lib/adaptive-program-builder.ts(31072,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+Pattern: TS2367: impossible comparison `"elevated"`
+Hint: Remove/gate stale comparison to `"elevated"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 065 ---
+lib/adaptive-program-builder.ts(31076,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+Pattern: TS2367: impossible comparison `"elevated"`
+Hint: Remove/gate stale comparison to `"elevated"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 066 ---
+lib/coaching-explanation-contract.ts(413,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+Pattern: TS2339: stale/suggested property `roleInSession`
+Hint: Remove/gate stale `roleInSession` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 067 ---
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+Pattern: TS2339: stale/suggested property `roleInSession`
+Hint: Remove/gate stale `roleInSession` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 068 ---
+lib/doctrine/doctrine-consumption-audit.ts(202,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Pattern: TS2367: impossible comparison `"STRICT_SPINE"`
+Hint: Remove/gate stale comparison to `"STRICT_SPINE"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 069 ---
+lib/doctrine/doctrine-consumption-audit.ts(229,33): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Pattern: TS2367: impossible comparison `"STRICT_SPINE"`
+Hint: Remove/gate stale comparison to `"STRICT_SPINE"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 070 ---
+lib/elite-insight-engine.ts(88,28): error TS2339: Property 'area' does not exist on type 'never'.
+Pattern: TS2339: stale/suggested property `area`
+Hint: Remove/gate stale `area` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 071 ---
+lib/elite-insight-engine.ts(89,37): error TS2339: Property 'area' does not exist on type 'never'.
+Pattern: TS2339: stale/suggested property `area`
+Hint: Remove/gate stale `area` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 072 ---
+lib/planner-truth-audit.ts(985,14): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Pattern: TS2448: used before assigned `weekSummary`
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 073 ---
+lib/planner-truth-audit.ts(988,63): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Pattern: TS2448: used before assigned `weekSummary`
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 074 ---
+lib/planner-truth-audit.ts(985,14): error TS2454: Variable 'weekSummary' is used before being assigned.
+Pattern: TS2454: used before assigned `weekSummary`
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 075 ---
+lib/planner-truth-audit.ts(988,63): error TS2454: Variable 'weekSummary' is used before being assigned.
+Pattern: TS2454: used before assigned `weekSummary`
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+
+--- TARGET 076 ---
+lib/program-exercise-selector.ts(5551,25): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Pattern: TS2367: impossible comparison `"hybrid"`
+Hint: Remove/gate stale comparison to `"hybrid"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 077 ---
+lib/program-exercise-selector.ts(5564,45): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Pattern: TS2367: impossible comparison `"hybrid"`
+Hint: Remove/gate stale comparison to `"hybrid"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 078 ---
+lib/program-generation/session-composition-intelligence.ts(846,45): error TS2367: This comparison appears to be unintentional because the types '"discouraged"' and '"blocked"' have no overlap.
+Pattern: TS2367: impossible comparison `"blocked"`
+Hint: Remove/gate stale comparison to `"blocked"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 079 ---
+lib/program/onboarding-truth-expression-audit.ts(281,14): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"blocked"' have no overlap.
+Pattern: TS2367: impossible comparison `"blocked"`
+Hint: Remove/gate stale comparison to `"blocked"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 080 ---
+lib/program-profile-validator.ts(1273,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `rest`
+Hint: Remove/gate stale `rest` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 081 ---
+lib/program-profile-validator.ts(1279,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+Pattern: TS2339: stale/suggested property `rest`
+Hint: Remove/gate stale `rest` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 082 ---
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+Pattern: TS2367: impossible comparison `"improving"`
+Hint: Remove/gate stale comparison to `"improving"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 083 ---
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+Pattern: TS2367: impossible comparison `"improving"`
+Hint: Remove/gate stale comparison to `"improving"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 084 ---
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Pattern: TS18048: null/undefined guard `envelope.fatigueThreshold`
+Hint: Add guard/optional chaining/fallback for `envelope.fatigueThreshold`. Use fallback only for summary/debug/scoring values.
+
+--- TARGET 085 ---
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Pattern: TS18048: null/undefined guard `envelope.fatigueThreshold`
+Hint: Add guard/optional chaining/fallback for `envelope.fatigueThreshold`. Use fallback only for summary/debug/scoring values.
+
+--- TARGET 086 ---
+lib/program/performance-feedback-adaptation-contract.ts(546,16): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+Pattern: TS2367: impossible comparison `false`
+Hint: Remove/gate stale comparison to `false`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 087 ---
+lib/progression-decision-engine.ts(351,14): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+Pattern: TS2367: impossible comparison `false`
+Hint: Remove/gate stale comparison to `false`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 088 ---
+lib/program/programming-truth-bundle.ts(672,50): error TS2367: This comparison appears to be unintentional because the types '"medium" | "low" | "high"' and '"none"' have no overlap.
+Pattern: TS2367: impossible comparison `"none"`
+Hint: Remove/gate stale comparison to `"none"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 089 ---
+lib/weak-point-priority-engine.ts(387,16): error TS2367: This comparison appears to be unintentional because the types '"moderate" | "significant"' and '"none"' have no overlap.
+Pattern: TS2367: impossible comparison `"none"`
+Hint: Remove/gate stale comparison to `"none"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 090 ---
+lib/progress-streak-engine.ts(429,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseType`
+Hint: Use compiler-suggested/current key if semantically identical; otherwise remove/gate stale `exerciseType`. Do not add shared type fields.
+
+--- TARGET 091 ---
+lib/progress-streak-engine.ts(430,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseType`
+Hint: Use compiler-suggested/current key if semantically identical; otherwise remove/gate stale `exerciseType`. Do not add shared type fields.
+
+--- TARGET 092 ---
+lib/progress-streak-engine.ts(452,36): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `addedWeight`
+Hint: Remove/gate stale `addedWeight` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 093 ---
+lib/progress-streak-engine.ts(455,48): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+Pattern: TS2339: stale/suggested property `addedWeight`
+Hint: Remove/gate stale `addedWeight` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 094 ---
+lib/repositories/profile-repository.ts(310,31): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Pattern: TS2339: stale/suggested property `scheduleMode`
+Hint: Remove/gate stale `scheduleMode` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 095 ---
+lib/repositories/profile-repository.ts(333,29): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Pattern: TS2339: stale/suggested property `scheduleMode`
+Hint: Remove/gate stale `scheduleMode` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 096 ---
+lib/roadmap/skill-roadmap-service.ts(587,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"pull_ups"`
+Hint: Remove/gate stale comparison to `"pull_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 097 ---
+lib/training-coach.ts(580,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"pull_ups"`
+Hint: Remove/gate stale comparison to `"pull_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 098 ---
+lib/roadmap/skill-roadmap-service.ts(588,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"weighted_pull_ups"`
+Hint: Remove/gate stale comparison to `"weighted_pull_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 099 ---
+lib/training-coach.ts(581,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"weighted_pull_ups"`
+Hint: Remove/gate stale comparison to `"weighted_pull_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 100 ---
+lib/roadmap/skill-roadmap-service.ts(589,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+Pattern: TS2367: impossible comparison `"dips"`
+Hint: Remove/gate stale comparison to `"dips"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 101 ---
+lib/training-coach.ts(582,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+Pattern: TS2367: impossible comparison `"dips"`
+Hint: Remove/gate stale comparison to `"dips"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 102 ---
+lib/roadmap/skill-roadmap-service.ts(591,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"push_ups"`
+Hint: Remove/gate stale comparison to `"push_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 103 ---
+lib/training-coach.ts(583,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+Pattern: TS2367: impossible comparison `"push_ups"`
+Hint: Remove/gate stale comparison to `"push_ups"`, or map to current literal only if obvious. Do not widen union.
+
+--- TARGET 104 ---
+lib/server/authoritative-program-generation.ts(1434,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Pattern: TS2339: stale/suggested property `visibleDifferenceTargets`
+Hint: Remove/gate stale `visibleDifferenceTargets` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 105 ---
+lib/server/authoritative-program-generation.ts(1435,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Pattern: TS2339: stale/suggested property `visibleDifferenceTargets`
+Hint: Remove/gate stale `visibleDifferenceTargets` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 106 ---
+lib/session-assembly-engine.ts(726,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+Pattern: TS2353: stale object key `mainExercises`
+Hint: Remove/gate stale `mainExercises` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 107 ---
+lib/warmup-engine.ts(1168,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+Pattern: TS2353: stale object key `mainExercises`
+Hint: Remove/gate stale `mainExercises` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 108 ---
+lib/session-variety-engine.ts(678,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, string[][]>'.
+Pattern: TS2353: stale object key `back_lever`
+Hint: Remove/gate stale `back_lever` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 109 ---
+lib/session-variety-engine.ts(873,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, ExerciseVariationSet>'.
+Pattern: TS2353: stale object key `back_lever`
+Hint: Remove/gate stale `back_lever` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 110 ---
+lib/training-feedback-loop.ts(343,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+Pattern: TS2339: stale/suggested property `completionRate`
+Hint: Remove/gate stale `completionRate` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 111 ---
+lib/training-feedback-loop.ts(344,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+Pattern: TS2339: stale/suggested property `completionRate`
+Hint: Remove/gate stale `completionRate` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 112 ---
+lib/unified-coaching-engine.ts(1036,84): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Pattern: TS2339: stale/suggested property `currentNode`
+Hint: Remove/gate stale `currentNode` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 113 ---
+lib/unified-coaching-engine.ts(1043,80): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Pattern: TS2339: stale/suggested property `currentNode`
+Hint: Remove/gate stale `currentNode` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 114 ---
+lib/unified-program-generation.ts(390,22): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `prescription`
+Hint: Remove/gate stale `prescription` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 115 ---
+lib/unified-program-generation.ts(656,24): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `prescription`
+Hint: Remove/gate stale `prescription` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 116 ---
+lib/unified-program-generation.ts(392,24): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `rationale`
+Hint: Remove/gate stale `rationale` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 117 ---
+lib/unified-program-generation.ts(658,26): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `rationale`
+Hint: Remove/gate stale `rationale` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 118 ---
+lib/unified-readiness-integration.ts(173,21): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+Pattern: TS2339: stale/suggested property `skillLevels`
+Hint: Remove/gate stale `skillLevels` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 119 ---
+lib/unified-readiness-integration.ts(173,60): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+Pattern: TS2339: stale/suggested property `skillLevels`
+Hint: Remove/gate stale `skillLevels` read/key or map to obvious current local field. Do not add shared type fields.
+
+--- TARGET 120 ---
+lib/warmup-intelligence-engine.ts(1210,13): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+Pattern: TS2353: stale object key `exerciseName`
+Hint: Remove/gate stale `exerciseName` read/key or map to obvious current local field. Do not add shared type fields.
+

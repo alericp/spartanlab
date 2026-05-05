@@ -1,0 +1,1498 @@
+===== PART 4 — CONTEXT TARGETS 061-120 =====
+
+--- CONTEXT 001 | lib/warmup-intelligence-engine.ts:1233:43 | TS2339 ---
+lib/warmup-intelligence-engine.ts(1233,43): error TS2339: Property 'primaryJoint' does not exist on type 'WarmUpExerciseDefinition'.
+Hint: Remove/gate stale `primaryJoint` read/key or map to obvious current local field. Do not add shared type fields.
+   1223:       const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+   1224:       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+   1225:       const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
+   1226:       
+   1227:       if (newJointExercise) {
+   1228:         enhancedWarmup.exercises.push({
+   1229:           exerciseId: newJointExercise.id,
+   1230:           exerciseName: newJointExercise.name,
+   1231:           instruction: newJointExercise.defaultPrescription,
+   1232:           rationale: `Added for ${joint} preparation due to elevated stress.`,
+>> 1233:           jointCategory: newJointExercise.primaryJoint,
+   1234:           priority: newJointExercise.priority,
+   1235:           knowledgeBubble: newJointExercise.knowledgeBubble,
+   1236:         })
+   1237:       }
+   1238:     }
+   1239:     
+   1240:     // Recalculate total time
+   1241:     enhancedWarmup.totalMinutes = Math.ceil(
+   1242:       enhancedWarmup.exercises.reduce((sum, ex) => {
+   1243:         const def = WARMUP_EXERCISE_DATABASE.find(d => d.id === ex.exerciseId)
+
+--- CONTEXT 002 | components/achievements/AchievementNotification.tsx:8:3 | TS2305 ---
+components/achievements/AchievementNotification.tsx(8,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'popNextNotification'.
+Hint: Fix missing export/import for `"@/lib/achievements"` only if local replacement is obvious. Otherwise block.
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect, useCallback } from 'react'
+   4: import { X } from 'lucide-react'
+   5: import { cn } from '@/lib/utils'
+   6: import { AchievementBadge } from './AchievementBadge'
+   7: import { 
+>> 8:   popNextNotification, 
+   9:   markAchievementSeen,
+   10:   hasUnseenAchievements,
+   11: } from '@/lib/achievements'
+   12: import { type Achievement, TIER_COLORS } from '@/lib/achievements/achievement-definitions'
+   13: 
+   14: interface AchievementNotificationProps {
+   15:   onDismiss?: () => void
+   16: }
+   17: 
+   18: export function AchievementNotification({ onDismiss }: AchievementNotificationProps) {
+
+--- CONTEXT 003 | components/achievements/AchievementNotification.tsx:10:3 | TS2305 ---
+components/achievements/AchievementNotification.tsx(10,3): error TS2305: Module '"@/lib/achievements"' has no exported member 'hasUnseenAchievements'.
+Hint: Fix missing export/import for `"@/lib/achievements"` only if local replacement is obvious. Otherwise block.
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect, useCallback } from 'react'
+   4: import { X } from 'lucide-react'
+   5: import { cn } from '@/lib/utils'
+   6: import { AchievementBadge } from './AchievementBadge'
+   7: import { 
+   8:   popNextNotification, 
+   9:   markAchievementSeen,
+>> 10:   hasUnseenAchievements,
+   11: } from '@/lib/achievements'
+   12: import { type Achievement, TIER_COLORS } from '@/lib/achievements/achievement-definitions'
+   13: 
+   14: interface AchievementNotificationProps {
+   15:   onDismiss?: () => void
+   16: }
+   17: 
+   18: export function AchievementNotification({ onDismiss }: AchievementNotificationProps) {
+   19:   const [achievement, setAchievement] = useState<Achievement | null>(null)
+   20:   const [isVisible, setIsVisible] = useState(false)
+
+--- CONTEXT 004 | lib/adaptive-program-builder.ts:31072:39 | TS2367 ---
+lib/adaptive-program-builder.ts(31072,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+Hint: Remove/gate stale comparison to `"elevated"`, or map to current literal only if obvious. Do not widen union.
+   31062:         // [LOAD-STRATEGY-LITERAL-VALIDATE] The destructured weekAdaptation
+   31063:         // type (L1162) keeps `volumeBias`/`intensityBias`/`finisherBias`
+   31064:         // as plain `string`. The audit contract (L1850-L1852) declares
+   31065:         // them as the literal unions
+   31066:         // (`'reduced' | 'normal' | 'elevated'` and
+   31067:         // `'limited' | 'normal' | 'expanded'`). Validate at the
+   31068:         // boundary so any out-of-band value collapses to `'normal'`.
+   31069:         loadStrategyApplied: {
+   31070:           volumeBias: ((): 'reduced' | 'normal' | 'elevated' => {
+   31071:             const v = weekAdaptation.loadStrategy?.volumeBias
+>> 31072:             return v === 'reduced' || v === 'elevated' ? v : 'normal'
+   31073:           })(),
+   31074:           intensityBias: ((): 'reduced' | 'normal' | 'elevated' => {
+   31075:             const v = weekAdaptation.loadStrategy?.intensityBias
+   31076:             return v === 'reduced' || v === 'elevated' ? v : 'normal'
+   31077:           })(),
+   31078:           finisherBias: ((): 'limited' | 'normal' | 'expanded' => {
+   31079:             const v = weekAdaptation.loadStrategy?.finisherBias
+   31080:             return v === 'limited' || v === 'expanded' ? v : 'normal'
+   31081:           })(),
+   31082:         },
+
+--- CONTEXT 005 | lib/adaptive-program-builder.ts:31076:39 | TS2367 ---
+lib/adaptive-program-builder.ts(31076,39): error TS2367: This comparison appears to be unintentional because the types '"normal" | "expanded" | undefined' and '"elevated"' have no overlap.
+Hint: Remove/gate stale comparison to `"elevated"`, or map to current literal only if obvious. Do not widen union.
+   31066:         // (`'reduced' | 'normal' | 'elevated'` and
+   31067:         // `'limited' | 'normal' | 'expanded'`). Validate at the
+   31068:         // boundary so any out-of-band value collapses to `'normal'`.
+   31069:         loadStrategyApplied: {
+   31070:           volumeBias: ((): 'reduced' | 'normal' | 'elevated' => {
+   31071:             const v = weekAdaptation.loadStrategy?.volumeBias
+   31072:             return v === 'reduced' || v === 'elevated' ? v : 'normal'
+   31073:           })(),
+   31074:           intensityBias: ((): 'reduced' | 'normal' | 'elevated' => {
+   31075:             const v = weekAdaptation.loadStrategy?.intensityBias
+>> 31076:             return v === 'reduced' || v === 'elevated' ? v : 'normal'
+   31077:           })(),
+   31078:           finisherBias: ((): 'limited' | 'normal' | 'expanded' => {
+   31079:             const v = weekAdaptation.loadStrategy?.finisherBias
+   31080:             return v === 'limited' || v === 'expanded' ? v : 'normal'
+   31081:           })(),
+   31082:         },
+   31083:         verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation || secondaryExercisesTrimmed
+   31084:           ? 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION'
+   31085:           : 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION',
+   31086:       } : undefined,
+
+--- CONTEXT 006 | lib/coaching-explanation-contract.ts:413:30 | TS2339 ---
+lib/coaching-explanation-contract.ts(413,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+Hint: Remove/gate stale `roleInSession` read/key or map to obvious current local field. Do not add shared type fields.
+   403:     category: exercise.category || 'accessory',
+   404:     sets: exercise.sets || 3,
+   405:     repsOrTime: exercise.repsOrTime || '8-12',
+   406:     targetRPE: exercise.targetRPE ?? null,
+   407:     restSeconds: exercise.restSeconds ?? null,
+   408:     // [COACHING-EXPLAIN-EXERCISE-FIELDS-RUNTIME-NARROW] `roleInSession`,
+   409:     // `isPrimary`, and `isProtected` are not on the canonical
+   410:     // AdaptiveExercise type but are still present on legacy persisted
+   411:     // shapes; read through a runtime-shape narrow with a coaching-meta
+   412:     // fallback for `roleInSession`.
+>> 413:     roleInSession: coaching?.roleInSession || (exercise as { roleInSession?: string }).roleInSession || 'support',
+   414:     expressionMode: coaching?.expressionMode || 'support',
+   415:     progressionIntent: coaching?.progressionIntent || 'maintain',
+   416:     isPrimary: (exercise as { isPrimary?: boolean }).isPrimary ?? false,
+   417:     isProtected: (exercise as { isProtected?: boolean }).isProtected ?? false,
+   418:     skillSupportTargets: coaching?.skillSupportTargets || [],
+   419:     selectionReason: exercise.selectionReason || '',
+   420:     movementFamily,
+   421:     isWeighted: !!exercise.prescribedLoad?.load,
+   422:     loadDecisionSummary: coaching?.loadDecisionSummary || null,
+   423:   }
+
+--- CONTEXT 007 | lib/program/program-display-contract.ts:3678:49 | TS2339 ---
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+Hint: Remove/gate stale `roleInSession` read/key or map to obvious current local field. Do not add shared type fields.
+   3668:   // decimals would route to the FALLBACK and look incoherent ("RPE 7.7 ·
+   3669:   // sustainable challenge" beside a row that says "RPE 8 · hard set"). All
+   3670:   // 16 template strings below now consume `rpe` (rounded), not the raw value.
+   3671:   // Floor to keep the prescription on the conservative side of any half-step.
+   3672:   let intensityBadge: string | null = null
+   3673:   if (exercise.targetRPE) {
+   3674:     const rawRpe = exercise.targetRPE
+   3675:     const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
+   3676:     const catLower = categoryLower
+   3677:     const exprMode = expressionMode
+>> 3678:     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+   3679:     const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
+   3680:     
+   3681:     // PRIORITY 1: Protection / tissue management
+   3682:     if (isProtected || prescriptionIntent === 'protection') {
+   3683:       intensityBadge = rpe <= 7 
+   3684:         ? `RPE ${rpe} · tissue-safe load`
+   3685:         : `RPE ${rpe} · managed for longevity`
+   3686:     }
+   3687:     // PRIORITY 2: Skill / primary work - technique-gated
+   3688:     // [SEMANTIC-TRUTH-FIX] RPE 8 is demanding work (2-3 from failure) - wording must reflect that
+
+--- CONTEXT 008 | lib/doctrine/doctrine-consumption-audit.ts:202:7 | TS2367 ---
+lib/doctrine/doctrine-consumption-audit.ts(202,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Hint: Remove/gate stale comparison to `"STRICT_SPINE"`, or map to current literal only if obvious. Do not widen union.
+   192:   
+   193:   if (sessionsExceedingMax === 0) {
+   194:     alignmentScore += 15
+   195:     findings.push(`✓ All sessions respect max exercises per session (${maxExercises})`)
+   196:   } else {
+   197:     findings.push(`⚠ ${sessionsExceedingMax} sessions exceed max exercises (${maxExercises})`)
+   198:     recommendations.push(`Exercise selector should enforce doctrineEnforcement.maxExercises`)
+   199:   }
+   200:   
+   201:   // Check integration mode
+>> 202:   if (doctrineDecision.integrationConstraints.mode === 'STRICT_SPINE') {
+   203:     const spineOnlyScore = sessionFocuses.length
+   204:     if (spineOnlyScore <= 2) {
+   205:       alignmentScore += 10
+   206:       findings.push(`✓ Strict spine mode is reflected (only ${spineOnlyScore} session types)`)
+   207:     } else {
+   208:       findings.push(`⚠ Strict spine expected but found ${spineOnlyScore} session types`)
+   209:     }
+   210:   }
+   211:   
+   212:   // Check for generic filler prevention
+
+--- CONTEXT 009 | lib/doctrine/doctrine-consumption-audit.ts:229:33 | TS2367 ---
+lib/doctrine/doctrine-consumption-audit.ts(229,33): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+Hint: Remove/gate stale comparison to `"STRICT_SPINE"`, or map to current literal only if obvious. Do not widen union.
+   219:     }
+   220:   }
+   221:   
+   222:   alignmentScore = Math.min(100, alignmentScore)
+   223:   
+   224:   // Determine materialization verdicts
+   225:   const dominantSpineVisibility = dominantSpineMatchesOutput ? 'STRONG' : 
+   226:     sessionFocuses.length <= 2 ? 'MODERATE' :
+   227:     sessionFocuses.length <= 4 ? 'WEAK' : 'ABSENT'
+   228:   
+>> 229:   const purposefulIntegration = doctrineDecision.integrationConstraints.mode === 'STRICT_SPINE' 
+   230:     ? 'CONTROLLED' 
+   231:     : doctrineDecision.integrationConstraints.mode === 'BALANCED'
+   232:     ? 'MODERATE'
+   233:     : 'GENERIC'
+   234:   
+   235:   const antiGenericityVerdicht = doctrineDecision.antiFlatteningRules.preventGenericSplits 
+   236:     ? averageExercisesPerSession >= 4 ? 'ENFORCED' : 'PARTIAL'
+   237:     : 'ABSENT'
+   238:   
+   239:   const dosageBiasMateriality = doctrineDecision.dosageRules.intensityBias !== 'moderate'
+
+--- CONTEXT 010 | lib/elite-insight-engine.ts:88:28 | TS2339 ---
+lib/elite-insight-engine.ts(88,28): error TS2339: Property 'area' does not exist on type 'never'.
+Hint: Remove/gate stale `area` read/key or map to obvious current local field. Do not add shared type fields.
+   78:         }
+   79:       }
+   80:     }
+   81:   })
+   82:   
+   83:   if (!bestImprovement) return null
+   84:   
+   85:   return {
+   86:     type: 'biggest_improvement',
+   87:     title: 'Biggest Improvement',
+>> 88:     value: bestImprovement.area,
+   89:     explanation: `${bestImprovement.area} improved ${Math.round(bestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
+   90:     significance: 'positive',
+   91:   }
+   92: }
+   93: 
+   94: function detectPlateauWatch(): EliteInsight | null {
+   95:   const skillSnapshots = getSkillHistorySnapshots()
+   96:   const strengthSnapshots = getStrengthHistorySnapshots()
+   97:   
+   98:   const plateauedAreas: string[] = []
+
+--- CONTEXT 011 | lib/elite-insight-engine.ts:89:37 | TS2339 ---
+lib/elite-insight-engine.ts(89,37): error TS2339: Property 'area' does not exist on type 'never'.
+Hint: Remove/gate stale `area` read/key or map to obvious current local field. Do not add shared type fields.
+   79:       }
+   80:     }
+   81:   })
+   82:   
+   83:   if (!bestImprovement) return null
+   84:   
+   85:   return {
+   86:     type: 'biggest_improvement',
+   87:     title: 'Biggest Improvement',
+   88:     value: bestImprovement.area,
+>> 89:     explanation: `${bestImprovement.area} improved ${Math.round(bestImprovement.improvement)}% compared to your previous best - this is your strongest recent progress.`,
+   90:     significance: 'positive',
+   91:   }
+   92: }
+   93: 
+   94: function detectPlateauWatch(): EliteInsight | null {
+   95:   const skillSnapshots = getSkillHistorySnapshots()
+   96:   const strengthSnapshots = getStrengthHistorySnapshots()
+   97:   
+   98:   const plateauedAreas: string[] = []
+   99:   
+
+--- CONTEXT 012 | lib/planner-truth-audit.ts:985:14 | TS2448 ---
+lib/planner-truth-audit.ts(985,14): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+   975:   
+   976:   // Check in priority order - first match wins
+   977:   const primarySkillAudit = skillExpressionAudit.details.find(
+   978:     d => d.expectedExpressionLevel === 'primary'
+   979:   )
+   980:   
+   981:   if (primarySkillAudit && primarySkillAudit.isUnderExpressed) {
+   982:     // Primary goal not adequately represented - highest priority issue
+   983:     topIssueReason = 'primary_goal_under_expressed'
+   984:     topIssueDescription = `Primary goal "${primarySkillAudit.skillLabel}" is under-expressed (score: ${primarySkillAudit.expressionScore}/100). The week may not adequately train your main focus.`
+>> 985:   } else if (weekSummary.totalExercises < program.sessions.length * 3) {
+   986:     // Sessions are sparse - likely underbuilt
+   987:     topIssueReason = 'session_density_underbuilt'
+   988:     topIssueDescription = `Sessions average only ${Math.round(weekSummary.totalExercises / program.sessions.length)} exercises. Consider regenerating for fuller training days.`
+   989:   } else if (selectedSkills.length > 5 && skillExpressionAudit.skillsUnderExpressed > 2) {
+   990:     // Too many skills for weekly capacity
+   991:     topIssueReason = 'selected_skills_overloaded_for_week'
+   992:     topIssueDescription = `You have ${selectedSkills.length} selected skills but ${skillExpressionAudit.skillsUnderExpressed} are under-expressed this week. Consider focusing on fewer skills or extending your training cycle.`
+   993:   } else if (skillExpressionAudit.skillsUnderExpressed > 1) {
+   994:     // General skill under-expression
+   995:     topIssueReason = 'skills_under_expressed'
+
+--- CONTEXT 013 | lib/planner-truth-audit.ts:988:63 | TS2448 ---
+lib/planner-truth-audit.ts(988,63): error TS2448: Block-scoped variable 'weekSummary' used before its declaration.
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+   978:     d => d.expectedExpressionLevel === 'primary'
+   979:   )
+   980:   
+   981:   if (primarySkillAudit && primarySkillAudit.isUnderExpressed) {
+   982:     // Primary goal not adequately represented - highest priority issue
+   983:     topIssueReason = 'primary_goal_under_expressed'
+   984:     topIssueDescription = `Primary goal "${primarySkillAudit.skillLabel}" is under-expressed (score: ${primarySkillAudit.expressionScore}/100). The week may not adequately train your main focus.`
+   985:   } else if (weekSummary.totalExercises < program.sessions.length * 3) {
+   986:     // Sessions are sparse - likely underbuilt
+   987:     topIssueReason = 'session_density_underbuilt'
+>> 988:     topIssueDescription = `Sessions average only ${Math.round(weekSummary.totalExercises / program.sessions.length)} exercises. Consider regenerating for fuller training days.`
+   989:   } else if (selectedSkills.length > 5 && skillExpressionAudit.skillsUnderExpressed > 2) {
+   990:     // Too many skills for weekly capacity
+   991:     topIssueReason = 'selected_skills_overloaded_for_week'
+   992:     topIssueDescription = `You have ${selectedSkills.length} selected skills but ${skillExpressionAudit.skillsUnderExpressed} are under-expressed this week. Consider focusing on fewer skills or extending your training cycle.`
+   993:   } else if (skillExpressionAudit.skillsUnderExpressed > 1) {
+   994:     // General skill under-expression
+   995:     topIssueReason = 'skills_under_expressed'
+   996:     topIssueDescription = `${skillExpressionAudit.skillsUnderExpressed} selected skill(s) are not adequately trained this week.`
+   997:   } else if (limiterInfluenceAudit.isInfluenceMissing) {
+   998:     // Limiter claimed but not visible
+
+--- CONTEXT 014 | lib/planner-truth-audit.ts:985:14 | TS2454 ---
+lib/planner-truth-audit.ts(985,14): error TS2454: Variable 'weekSummary' is used before being assigned.
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+   975:   
+   976:   // Check in priority order - first match wins
+   977:   const primarySkillAudit = skillExpressionAudit.details.find(
+   978:     d => d.expectedExpressionLevel === 'primary'
+   979:   )
+   980:   
+   981:   if (primarySkillAudit && primarySkillAudit.isUnderExpressed) {
+   982:     // Primary goal not adequately represented - highest priority issue
+   983:     topIssueReason = 'primary_goal_under_expressed'
+   984:     topIssueDescription = `Primary goal "${primarySkillAudit.skillLabel}" is under-expressed (score: ${primarySkillAudit.expressionScore}/100). The week may not adequately train your main focus.`
+>> 985:   } else if (weekSummary.totalExercises < program.sessions.length * 3) {
+   986:     // Sessions are sparse - likely underbuilt
+   987:     topIssueReason = 'session_density_underbuilt'
+   988:     topIssueDescription = `Sessions average only ${Math.round(weekSummary.totalExercises / program.sessions.length)} exercises. Consider regenerating for fuller training days.`
+   989:   } else if (selectedSkills.length > 5 && skillExpressionAudit.skillsUnderExpressed > 2) {
+   990:     // Too many skills for weekly capacity
+   991:     topIssueReason = 'selected_skills_overloaded_for_week'
+   992:     topIssueDescription = `You have ${selectedSkills.length} selected skills but ${skillExpressionAudit.skillsUnderExpressed} are under-expressed this week. Consider focusing on fewer skills or extending your training cycle.`
+   993:   } else if (skillExpressionAudit.skillsUnderExpressed > 1) {
+   994:     // General skill under-expression
+   995:     topIssueReason = 'skills_under_expressed'
+
+--- CONTEXT 015 | lib/planner-truth-audit.ts:988:63 | TS2454 ---
+lib/planner-truth-audit.ts(988,63): error TS2454: Variable 'weekSummary' is used before being assigned.
+Hint: Move `weekSummary` declaration/assignment before use or initialize safe fallback.
+   978:     d => d.expectedExpressionLevel === 'primary'
+   979:   )
+   980:   
+   981:   if (primarySkillAudit && primarySkillAudit.isUnderExpressed) {
+   982:     // Primary goal not adequately represented - highest priority issue
+   983:     topIssueReason = 'primary_goal_under_expressed'
+   984:     topIssueDescription = `Primary goal "${primarySkillAudit.skillLabel}" is under-expressed (score: ${primarySkillAudit.expressionScore}/100). The week may not adequately train your main focus.`
+   985:   } else if (weekSummary.totalExercises < program.sessions.length * 3) {
+   986:     // Sessions are sparse - likely underbuilt
+   987:     topIssueReason = 'session_density_underbuilt'
+>> 988:     topIssueDescription = `Sessions average only ${Math.round(weekSummary.totalExercises / program.sessions.length)} exercises. Consider regenerating for fuller training days.`
+   989:   } else if (selectedSkills.length > 5 && skillExpressionAudit.skillsUnderExpressed > 2) {
+   990:     // Too many skills for weekly capacity
+   991:     topIssueReason = 'selected_skills_overloaded_for_week'
+   992:     topIssueDescription = `You have ${selectedSkills.length} selected skills but ${skillExpressionAudit.skillsUnderExpressed} are under-expressed this week. Consider focusing on fewer skills or extending your training cycle.`
+   993:   } else if (skillExpressionAudit.skillsUnderExpressed > 1) {
+   994:     // General skill under-expression
+   995:     topIssueReason = 'skills_under_expressed'
+   996:     topIssueDescription = `${skillExpressionAudit.skillsUnderExpressed} selected skill(s) are not adequately trained this week.`
+   997:   } else if (limiterInfluenceAudit.isInfluenceMissing) {
+   998:     // Limiter claimed but not visible
+
+--- CONTEXT 016 | lib/program-exercise-selector.ts:5551:25 | TS2367 ---
+lib/program-exercise-selector.ts(5551,25): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Hint: Remove/gate stale comparison to `"hybrid"`, or map to current literal only if obvious. Do not widen union.
+   5541:       const sortedFlexExercises = flexPool.sort((a, b) => {
+   5542:         const aTransfer = exerciseTransfersToSkill(a, primaryGoal) ? 1 : 0
+   5543:         const bTransfer = exerciseTransfersToSkill(b, primaryGoal) ? 1 : 0
+   5544:         if (aTransfer !== bTransfer) return bTransfer - aTransfer
+   5545:         const aLadder = (a as any).progressionLadder === primaryGoal ? 1 : 0
+   5546:         const bLadder = (b as any).progressionLadder === primaryGoal ? 1 : 0
+   5547:         return bLadder - aLadder
+   5548:       })
+   5549:       
+   5550:       // Flexibility: 15s holds, 3 rounds
+>> 5551:       const flexCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(4, maxExercises - 1)
+   5552:       sortedFlexExercises.slice(0, flexCount).forEach((exercise) => {
+   5553:         addExercise(
+   5554:           selectorCtx,
+   5555:           exercise,
+   5556:           `${primaryGoal} flexibility flow`,
+   5557:           3,
+   5558:           '15s',
+   5559:           '15s exposure, multiple angles, breathe steadily'
+   5560:         )
+   5561:       })
+
+--- CONTEXT 017 | lib/program-exercise-selector.ts:5564:45 | TS2367 ---
+lib/program-exercise-selector.ts(5564,45): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+Hint: Remove/gate stale comparison to `"hybrid"`, or map to current literal only if obvious. Do not widen union.
+   5554:           selectorCtx,
+   5555:           exercise,
+   5556:           `${primaryGoal} flexibility flow`,
+   5557:           3,
+   5558:           '15s',
+   5559:           '15s exposure, multiple angles, breathe steadily'
+   5560:         )
+   5561:       })
+   5562:     }
+   5563:     
+>> 5564:     if (rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid') {
+   5565:       // MOBILITY MODE: Loaded work, RPE-based, strength-style recovery
+   5566:       const mobilityExercises = MOBILITY_EXERCISES[rangeSkill] || []
+   5567:       const mobilityCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(3, maxExercises - selected.length)
+   5568:       
+   5569:       mobilityExercises.slice(0, mobilityCount).forEach((mobEx) => {
+   5570:         // Find matching exercise in pool or create reference
+   5571:         const matchingExercise = FLEXIBILITY_EXERCISES.find(e => e.id === mobEx.id) || {
+   5572:           id: mobEx.id,
+   5573:           name: mobEx.name,
+   5574:           category: 'flexibility' as const,
+
+--- CONTEXT 018 | lib/program-generation/session-composition-intelligence.ts:846:45 | TS2367 ---
+lib/program-generation/session-composition-intelligence.ts(846,45): error TS2367: This comparison appears to be unintentional because the types '"discouraged"' and '"blocked"' have no overlap.
+Hint: Remove/gate stale comparison to `"blocked"`, or map to current literal only if obvious. Do not widen union.
+   836:   // ==========================================================================
+   837:   const densityBias = ctx.weeklyLoadStrategy?.densityBias
+   838:   if (densityBias === 'reduced' && density !== 'blocked') {
+   839:     density = 'discouraged'
+   840:     reasons.push({ method: 'density', status: 'discouraged', reason: 'week_density_bias_reduced' })
+   841:   }
+   842:   
+   843:   // Check doctrine contract for method permissions (if not already blocked)
+   844:   const doctrineMethods = ctx.doctrineRuntimeContract?.methodDoctrine
+   845:   if (doctrineMethods) {
+>> 846:     if (doctrineMethods.supersetsAllowed && supersets !== 'blocked') supersets = 'allowed'
+   847:     if (doctrineMethods.circuitsAllowed && circuits !== 'blocked') circuits = 'allowed'
+   848:     if (doctrineMethods.densityAllowed && density !== 'blocked') density = 'allowed'
+   849:   }
+   850:   
+   851:   // Upgrade to "earned" based on context (only if not already blocked)
+   852:   
+   853:   // Supersets: earned if moderate+ recovery, standard+ complexity, 45+ min session
+   854:   // [SESSION-COMPOSITION-IMPOSSIBLE-COMPARE-DROPPED] By this branch the
+   855:   // method status union has been narrowed past `'blocked'` (default
+   856:   // upgrade arms above), and `recoveryCapacity` is narrowed past
+
+--- CONTEXT 019 | lib/program/onboarding-truth-expression-audit.ts:281:14 | TS2367 ---
+lib/program/onboarding-truth-expression-audit.ts(281,14): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"blocked"' have no overlap.
+Hint: Remove/gate stale comparison to `"blocked"`, or map to current literal only if obvious. Do not widen union.
+   271:   const actuallyApplied = sessionsWithMethod > 0
+   272:   
+   273:   // Determine final disposition
+   274:   let finalDisposition: MethodPreferenceDispositionEntry['finalDisposition'] = 'not_selected'
+   275:   let blockReason: string | null = null
+   276:   
+   277:   if (!selectedInProfile) {
+   278:     finalDisposition = 'not_selected'
+   279:   } else if (actuallyApplied) {
+   280:     finalDisposition = 'materially_applied'
+>> 281:   } else if (eligibilityStatus === 'blocked' || eligibilityStatus === 'discouraged') {
+   282:     finalDisposition = 'blocked_by_doctrine'
+   283:     blockReason = `method_eligibility_${eligibilityStatus}`
+   284:   } else if (methodReadinessGating?.some(g => g.gatedFromComplex)) {
+   285:     finalDisposition = 'blocked_by_readiness'
+   286:     blockReason = 'readiness_gating_restricts_complex_methods'
+   287:   } else {
+   288:     finalDisposition = 'silent_loss'
+   289:     blockReason = 'selected_but_not_applied_without_explicit_block'
+   290:   }
+   291:   
+
+--- CONTEXT 020 | lib/program-profile-validator.ts:1273:14 | TS2339 ---
+lib/program-profile-validator.ts(1273,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+Hint: Remove/gate stale `rest` read/key or map to obvious current local field. Do not add shared type fields.
+   1263:       category: 'exercise_metadata',
+   1264:     })
+   1265:   }
+   1266:   
+   1267:   // Check for dropped rest/RPE fields
+   1268:   let genExercisesWithRest = 0
+   1269:   let displayExercisesWithRest = 0
+   1270:   
+   1271:   for (const session of generatedProgram.sessions || []) {
+   1272:     for (const ex of session.exercises || []) {
+>> 1273:       if (ex.rest) genExercisesWithRest++
+   1274:     }
+   1275:   }
+   1276:   
+   1277:   for (const session of displayedProgram.sessions || []) {
+   1278:     for (const ex of session.exercises || []) {
+   1279:       if (ex.rest) displayExercisesWithRest++
+   1280:     }
+   1281:   }
+   1282:   
+   1283:   if (genExercisesWithRest > 0 && displayExercisesWithRest < genExercisesWithRest) {
+
+--- CONTEXT 021 | lib/program-profile-validator.ts:1279:14 | TS2339 ---
+lib/program-profile-validator.ts(1279,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+Hint: Remove/gate stale `rest` read/key or map to obvious current local field. Do not add shared type fields.
+   1269:   let displayExercisesWithRest = 0
+   1270:   
+   1271:   for (const session of generatedProgram.sessions || []) {
+   1272:     for (const ex of session.exercises || []) {
+   1273:       if (ex.rest) genExercisesWithRest++
+   1274:     }
+   1275:   }
+   1276:   
+   1277:   for (const session of displayedProgram.sessions || []) {
+   1278:     for (const ex of session.exercises || []) {
+>> 1279:       if (ex.rest) displayExercisesWithRest++
+   1280:     }
+   1281:   }
+   1282:   
+   1283:   if (genExercisesWithRest > 0 && displayExercisesWithRest < genExercisesWithRest) {
+   1284:     droppedFields.push('rest')
+   1285:     driftDetails.push({
+   1286:       field: 'rest',
+   1287:       generatedValue: `${genExercisesWithRest} exercises with rest`,
+   1288:       displayedValue: `${displayExercisesWithRest} exercises with rest`,
+   1289:       category: 'exercise_metadata',
+
+--- CONTEXT 022 | lib/program/db-truth-scoring-bridge.ts:252:37 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+Hint: Remove/gate stale comparison to `"improving"`, or map to current literal only if obvious. Do not widen union.
+   242:   }
+   243:   
+   244:   // 4. TRAINING RESPONSE MODIFIERS
+   245:   if (bundle.trainingResponse.meta.available) {
+   246:     sourceSections.push('training_response')
+   247:     
+   248:     if (bundle.trainingResponse.hasEarnedHistory) {
+   249:       // Adherence pattern affects exercise complexity tolerance
+   250:       const adherence = bundle.trainingResponse.recentAdherencePattern
+   251:       modifiers.adherenceModifier = adherence === 'consistent' ? 5 :
+>> 252:                                     adherence === 'improving' ? 3 :
+   253:                                     adherence === 'declining' ? -5 :
+   254:                                     adherence === 'sporadic' ? -8 : 0
+   255:       
+   256:       // Consistency signal affects fatigue-sensitive selections
+   257:       const consistency = bundle.trainingResponse.consistencySignal
+   258:       modifiers.fatigueRiskModifier = consistency === 'high' ? 5 :
+   259:                                        consistency === 'medium' ? 0 :
+   260:                                        consistency === 'low' ? -10 : 0
+   261:     }
+   262:   }
+
+--- CONTEXT 023 | lib/program/skill-specific-truth-resolution.ts:554:7 | TS2367 ---
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+Hint: Remove/gate stale comparison to `"improving"`, or map to current literal only if obvious. Do not widen union.
+   544:       if (envelope.performanceTrend === 'declining') return 'poor'
+   545:       if (envelope.performanceTrend === 'improving') return 'good'
+   546:       if (envelope.performanceTrend === 'stable') return 'moderate'
+   547:     }
+   548:   }
+   549:   
+   550:   // Fall back to adherence pattern
+   551:   const adherence = bundle.trainingResponse?.recentAdherencePattern
+   552:   if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+   553:   if (adherence === 'consistent') return 'good'
+>> 554:   if (adherence === 'improving') return 'moderate'
+   555:   
+   556:   return 'unknown'
+   557: }
+   558: 
+   559: function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
+   560:   // Infer from consistency signal
+   561:   const consistency = bundle.trainingResponse?.consistencySignal
+   562:   if (consistency === 'high') return 0.9
+   563:   if (consistency === 'medium') return 0.7
+   564:   if (consistency === 'low') return 0.5
+
+--- CONTEXT 024 | lib/program/db-truth-scoring-bridge.ts:418:13 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Hint: Add guard/optional chaining/fallback for `envelope.fatigueThreshold`. Use fallback only for summary/debug/scoring values.
+   408:       
+   409:       // Density calibration
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+   412:         calibration.densityConfidence = 'medium'
+   413:       }
+   414:       
+   415:       // Rest calibration based on fatigue threshold
+   416:       if (envelope.fatigueThreshold !== null) {
+   417:         // Lower fatigue threshold = need more rest
+>> 418:         if (envelope.fatigueThreshold < 0.4) {
+   419:           calibration.restModifier = 30  // Add 30s rest
+   420:           calibration.restConfidence = 'medium'
+   421:           calibration.restReason = 'low_fatigue_threshold_needs_more_rest'
+   422:         } else if (envelope.fatigueThreshold > 0.7) {
+   423:           calibration.restModifier = -15  // Reduce rest slightly
+   424:           calibration.restConfidence = 'low'
+   425:           calibration.restReason = 'high_fatigue_tolerance_allows_less_rest'
+   426:         }
+   427:       }
+   428:     }
+
+--- CONTEXT 025 | lib/program/db-truth-scoring-bridge.ts:422:20 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Hint: Add guard/optional chaining/fallback for `envelope.fatigueThreshold`. Use fallback only for summary/debug/scoring values.
+   412:         calibration.densityConfidence = 'medium'
+   413:       }
+   414:       
+   415:       // Rest calibration based on fatigue threshold
+   416:       if (envelope.fatigueThreshold !== null) {
+   417:         // Lower fatigue threshold = need more rest
+   418:         if (envelope.fatigueThreshold < 0.4) {
+   419:           calibration.restModifier = 30  // Add 30s rest
+   420:           calibration.restConfidence = 'medium'
+   421:           calibration.restReason = 'low_fatigue_threshold_needs_more_rest'
+>> 422:         } else if (envelope.fatigueThreshold > 0.7) {
+   423:           calibration.restModifier = -15  // Reduce rest slightly
+   424:           calibration.restConfidence = 'low'
+   425:           calibration.restReason = 'high_fatigue_tolerance_allows_less_rest'
+   426:         }
+   427:       }
+   428:     }
+   429:   }
+   430:   
+   431:   // 2. BENCHMARK-BASED CALIBRATION
+   432:   if (bundle.benchmarks.meta.available) {
+
+--- CONTEXT 026 | lib/program/performance-feedback-adaptation-contract.ts:546:16 | TS2367 ---
+lib/program/performance-feedback-adaptation-contract.ts(546,16): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+Hint: Remove/gate stale comparison to `false`, or map to current literal only if obvious. Do not widen union.
+   536:       prescribedHoldSeconds: parsed.holdSeconds,
+   537:       actualReps: typeof ex.reps === 'number' ? ex.reps : undefined,
+   538:       actualHoldSeconds: typeof ex.holdSeconds === 'number' ? ex.holdSeconds : undefined,
+   539:       prescribedRPE: prescribed?.targetRPE,
+   540:       actualRPE: rpeProxy,
+   541:       note: note?.freeText,
+   542:       noteFlags: note?.flags,
+   543:       timestamp: log.createdAt ?? log.sessionDate,
+   544:       exerciseClass: classifyExerciseFromName(ex.name),
+   545:       completed: ex.completed,
+>> 546:       trusted: log.trusted !== false,
+   547:     })
+   548:   }
+   549:   return evidence
+   550: }
+   551: 
+   552: // =============================================================================
+   553: // SIGNAL CLASSIFICATION
+   554: // =============================================================================
+   555: 
+   556: interface ClassificationContext {
+
+--- CONTEXT 027 | lib/progression-decision-engine.ts:351:14 | TS2367 ---
+lib/progression-decision-engine.ts(351,14): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+Hint: Remove/gate stale comparison to `false`, or map to current literal only if obvious. Do not widen union.
+   341:       new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()
+   342:     )
+   343:     
+   344:     // Filter for trusted logs only
+   345:     const trustedLogs = sortedLogs.filter(log => {
+   346:       // Explicit trusted field takes precedence
+   347:       if (log.trusted === false) return false
+   348:       // Demo sources are never trusted
+   349:       if (log.sourceRoute === 'demo') return false
+   350:       // Default to trusted for legacy logs
+>> 351:       return log.trusted !== false
+   352:     })
+   353:     
+   354:     console.log('[progression-loop] Getting recent performance:', {
+   355:       exerciseName,
+   356:       totalLogs: logs.length,
+   357:       trustedLogs: trustedLogs.length,
+   358:     })
+   359:     
+   360:     for (const log of trustedLogs) {
+   361:       const exercise = log.exercises.find(e => 
+
+--- CONTEXT 028 | lib/program/programming-truth-bundle.ts:672:50 | TS2367 ---
+lib/program/programming-truth-bundle.ts(672,50): error TS2367: This comparison appears to be unintentional because the types '"medium" | "low" | "high"' and '"none"' have no overlap.
+Hint: Remove/gate stale comparison to `"none"`, or map to current literal only if obvious. Do not widen union.
+   662:     pushingStrengthBias,
+   663:     skillSpecificityBias,
+   664:     dosageConfidence,
+   665:     densityConfidence,
+   666:     progressionConfidence,
+   667:     loadingConfidence,
+   668:     hasActiveConstraints,
+   669:     constraintInformedSelection,
+   670:     meta: {
+   671:       source: 'derived_from_available',
+>> 672:       confidence: dosageConfidence === 'none' && progressionConfidence === 'none' ? 'low' : 'medium',
+   673:       available: true,
+   674:     },
+   675:   }
+   676: }
+   677: 
+   678: // =============================================================================
+   679: // MAIN BUNDLE BUILDER
+   680: // =============================================================================
+   681: 
+   682: /**
+
+--- CONTEXT 029 | lib/weak-point-priority-engine.ts:387:16 | TS2367 ---
+lib/weak-point-priority-engine.ts(387,16): error TS2367: This comparison appears to be unintentional because the types '"moderate" | "significant"' and '"none"' have no overlap.
+Hint: Remove/gate stale comparison to `"none"`, or map to current literal only if obvious. Do not widen union.
+   377:     score = 35
+   378:     severity = 'significant'
+   379:     recommendations.push('Address shoulder mobility before back lever or overhead work')
+   380:     recommendations.push('Include daily shoulder mobility drills')
+   381:     priorityExercises.push('german_hang_passive', 'shoulder_dislocates', 'wall_slides')
+   382:   }
+   383:   
+   384:   // Experience level impacts assumed mobility development
+   385:   if (factors.experienceLevel === 'beginner') {
+   386:     score = Math.max(40, score - 15)
+>> 387:     severity = severity === 'none' ? 'moderate' : severity
+   388:     recommendations.push('Build shoulder extension mobility gradually')
+   389:     priorityExercises.push('skin_the_cat', 'german_hang_progressions')
+   390:   } else if (factors.experienceLevel === 'intermediate') {
+   391:     if (!factors.hasShoulderIssues) {
+   392:       score = 65
+   393:       severity = 'minor'
+   394:     }
+   395:     recommendations.push('Continue shoulder mobility maintenance')
+   396:     priorityExercises.push('german_hang', 'skin_the_cat')
+   397:   } else if (factors.experienceLevel === 'advanced' && !factors.hasShoulderIssues) {
+
+--- CONTEXT 030 | lib/progress-streak-engine.ts:429:9 | TS2551 ---
+lib/progress-streak-engine.ts(429,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Hint: Use compiler-suggested/current key if semantically identical; otherwise remove/gate stale `exerciseType`. Do not add shared type fields.
+   419:   { key: 'weighted_dip', displayName: 'Weighted Dip', unit: 'lb' },
+   420:   { key: 'front_lever_row', displayName: 'Front Lever Row', unit: 'reps' },
+   421: ]
+   422: 
+   423: export function calculateStrengthProgress(): StrengthProgressData[] {
+   424:   const records = getStrengthRecords()
+   425:   const results: StrengthProgressData[] = []
+   426:   
+   427:   for (const exercise of STRENGTH_EXERCISES) {
+   428:     const exerciseRecords = records.filter(r => 
+>> 429:       r.exerciseType.toLowerCase().replace(/\s+/g, '_') === exercise.key ||
+   430:       r.exerciseType.toLowerCase().includes(exercise.key.replace(/_/g, ' '))
+   431:     )
+   432:     
+   433:     if (exerciseRecords.length === 0) {
+   434:       results.push({
+   435:         exerciseName: exercise.key,
+   436:         displayName: exercise.displayName,
+   437:         previousBest: 0,
+   438:         currentBest: 0,
+   439:         improvement: 0,
+
+--- CONTEXT 031 | lib/progress-streak-engine.ts:430:9 | TS2551 ---
+lib/progress-streak-engine.ts(430,9): error TS2551: Property 'exerciseType' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Hint: Use compiler-suggested/current key if semantically identical; otherwise remove/gate stale `exerciseType`. Do not add shared type fields.
+   420:   { key: 'front_lever_row', displayName: 'Front Lever Row', unit: 'reps' },
+   421: ]
+   422: 
+   423: export function calculateStrengthProgress(): StrengthProgressData[] {
+   424:   const records = getStrengthRecords()
+   425:   const results: StrengthProgressData[] = []
+   426:   
+   427:   for (const exercise of STRENGTH_EXERCISES) {
+   428:     const exerciseRecords = records.filter(r => 
+   429:       r.exerciseType.toLowerCase().replace(/\s+/g, '_') === exercise.key ||
+>> 430:       r.exerciseType.toLowerCase().includes(exercise.key.replace(/_/g, ' '))
+   431:     )
+   432:     
+   433:     if (exerciseRecords.length === 0) {
+   434:       results.push({
+   435:         exerciseName: exercise.key,
+   436:         displayName: exercise.displayName,
+   437:         previousBest: 0,
+   438:         currentBest: 0,
+   439:         improvement: 0,
+   440:         unit: exercise.unit,
+
+--- CONTEXT 032 | lib/progress-streak-engine.ts:452:36 | TS2339 ---
+lib/progress-streak-engine.ts(452,36): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `addedWeight` read/key or map to obvious current local field. Do not add shared type fields.
+   442:         lastRecordDate: null,
+   443:       })
+   444:       continue
+   445:     }
+   446:     
+   447:     // Sort by date
+   448:     const sorted = [...exerciseRecords].sort(
+   449:       (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+   450:     )
+   451:     
+>> 452:     const currentBest = sorted[0]?.addedWeight || sorted[0]?.reps || 0
+   453:     const previousRecords = sorted.slice(1)
+   454:     const previousBest = previousRecords.length > 0 
+   455:       ? Math.max(...previousRecords.map(r => r.addedWeight || r.reps || 0))
+   456:       : currentBest
+   457:     
+   458:     const improvement = currentBest - previousBest
+   459:     let trend: 'improving' | 'stable' | 'declining' = 'stable'
+   460:     if (improvement > 0) trend = 'improving'
+   461:     else if (improvement < 0) trend = 'declining'
+   462:     
+
+--- CONTEXT 033 | lib/progress-streak-engine.ts:455:48 | TS2339 ---
+lib/progress-streak-engine.ts(455,48): error TS2339: Property 'addedWeight' does not exist on type 'StrengthRecord'.
+Hint: Remove/gate stale `addedWeight` read/key or map to obvious current local field. Do not add shared type fields.
+   445:     }
+   446:     
+   447:     // Sort by date
+   448:     const sorted = [...exerciseRecords].sort(
+   449:       (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+   450:     )
+   451:     
+   452:     const currentBest = sorted[0]?.addedWeight || sorted[0]?.reps || 0
+   453:     const previousRecords = sorted.slice(1)
+   454:     const previousBest = previousRecords.length > 0 
+>> 455:       ? Math.max(...previousRecords.map(r => r.addedWeight || r.reps || 0))
+   456:       : currentBest
+   457:     
+   458:     const improvement = currentBest - previousBest
+   459:     let trend: 'improving' | 'stable' | 'declining' = 'stable'
+   460:     if (improvement > 0) trend = 'improving'
+   461:     else if (improvement < 0) trend = 'declining'
+   462:     
+   463:     results.push({
+   464:       exerciseName: exercise.key,
+   465:       displayName: exercise.displayName,
+
+--- CONTEXT 034 | lib/repositories/profile-repository.ts:310:31 | TS2339 ---
+lib/repositories/profile-repository.ts(310,31): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Hint: Remove/gate stale `scheduleMode` read/key or map to obvious current local field. Do not add shared type fields.
+   300:         ...currentOnboarding,
+   301:         primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+   302:         secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+   303:         goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+   304:         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+   305:         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+   306:         selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+   307:         trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+   308:         sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+   309:         equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+>> 310:         scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+   311:         trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+   312:         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+   313:         // Sync strength benchmarks if present
+   314:         pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+   315:         dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+   316:       })
+   317:       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+   318:     }
+   319:   } catch (err) {
+   320:     console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+
+--- CONTEXT 035 | lib/repositories/profile-repository.ts:333:29 | TS2339 ---
+lib/repositories/profile-repository.ts(333,29): error TS2339: Property 'scheduleMode' does not exist on type 'AthleteProfile'.
+Hint: Remove/gate stale `scheduleMode` read/key or map to obvious current local field. Do not add shared type fields.
+   323:   // CANONICAL PROFILE FIX: Also sync to canonical profile service for unified truth
+   324:   try {
+   325:     saveCanonicalProfile({
+   326:       primaryGoal: updated.primaryGoal ?? undefined,
+   327:       secondaryGoal: updated.secondaryGoal ?? undefined,
+   328:       goalCategory: updated.goalCategory ?? undefined,
+   329:       selectedSkills: updated.selectedSkills ?? undefined,
+   330:       selectedFlexibility: updated.selectedFlexibility ?? undefined,
+   331:       selectedStrength: updated.selectedStrength ?? undefined,
+   332:       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
+>> 333:       scheduleMode: updated.scheduleMode ?? undefined,
+   334:       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
+   335:       equipmentAvailable: updated.equipmentAvailable ?? undefined,
+   336:       trainingStyle: updated.trainingStyle ?? undefined,
+   337:       onboardingComplete: updated.onboardingComplete ?? undefined,
+   338:     })
+   339:     logCanonicalProfileState('After saveAthleteProfile sync')
+   340:   } catch (err) {
+   341:     console.warn('[ProfileRepository] Failed to sync to canonical profile:', err)
+   342:   }
+   343:   
+
+--- CONTEXT 036 | lib/roadmap/skill-roadmap-service.ts:587:50 | TS2367 ---
+lib/roadmap/skill-roadmap-service.ts(587,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"pull_ups"`, or map to current literal only if obvious. Do not widen union.
+   577:   
+   578:   const strengthRecords = getStrengthRecords()
+   579:   const skillProgressions = getSkillProgressions()
+   580:   
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+>> 587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+
+--- CONTEXT 037 | lib/training-coach.ts:580:50 | TS2367 ---
+lib/training-coach.ts(580,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"pull_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"pull_ups"`, or map to current literal only if obvious. Do not widen union.
+   570:  * Get skill-specific coaching insights based on the user's current strength data
+   571:  * and skill goals. Uses the CANONICAL READINESS ENGINE for consistent calculations.
+   572:  */
+   573: export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
+   574:   const insights: SkillReadinessCoachingInsight[] = []
+   575:   
+   576:   // Get strength records to calculate readiness
+   577:   const strengthRecords = getStrengthRecords()
+   578:   
+   579:   // Find relevant metrics
+>> 580:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   581:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   582:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   583:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   584:   
+   585:   const maxPullUps = pullUpRecord?.reps || 0
+   586:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   587:   const maxDips = dipRecord?.reps || 0
+   588:   const maxPushUps = pushUpRecord?.reps || 0
+   589: 
+   590:   // Build unified input for canonical engine
+
+--- CONTEXT 038 | lib/roadmap/skill-roadmap-service.ts:588:58 | TS2367 ---
+lib/roadmap/skill-roadmap-service.ts(588,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"weighted_pull_ups"`, or map to current literal only if obvious. Do not widen union.
+   578:   const strengthRecords = getStrengthRecords()
+   579:   const skillProgressions = getSkillProgressions()
+   580:   
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+>> 588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+
+--- CONTEXT 039 | lib/training-coach.ts:581:58 | TS2367 ---
+lib/training-coach.ts(581,58): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"weighted_pull_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"weighted_pull_ups"`, or map to current literal only if obvious. Do not widen union.
+   571:  * and skill goals. Uses the CANONICAL READINESS ENGINE for consistent calculations.
+   572:  */
+   573: export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
+   574:   const insights: SkillReadinessCoachingInsight[] = []
+   575:   
+   576:   // Get strength records to calculate readiness
+   577:   const strengthRecords = getStrengthRecords()
+   578:   
+   579:   // Find relevant metrics
+   580:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+>> 581:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   582:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   583:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   584:   
+   585:   const maxPullUps = pullUpRecord?.reps || 0
+   586:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   587:   const maxDips = dipRecord?.reps || 0
+   588:   const maxPushUps = pushUpRecord?.reps || 0
+   589: 
+   590:   // Build unified input for canonical engine
+   591:   const input: AthleteReadinessInput = {
+
+--- CONTEXT 040 | lib/roadmap/skill-roadmap-service.ts:589:47 | TS2367 ---
+lib/roadmap/skill-roadmap-service.ts(589,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+Hint: Remove/gate stale comparison to `"dips"`, or map to current literal only if obvious. Do not widen union.
+   579:   const skillProgressions = getSkillProgressions()
+   580:   
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+>> 589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+   591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+
+--- CONTEXT 041 | lib/training-coach.ts:582:47 | TS2367 ---
+lib/training-coach.ts(582,47): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"dips"' have no overlap.
+Hint: Remove/gate stale comparison to `"dips"`, or map to current literal only if obvious. Do not widen union.
+   572:  */
+   573: export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
+   574:   const insights: SkillReadinessCoachingInsight[] = []
+   575:   
+   576:   // Get strength records to calculate readiness
+   577:   const strengthRecords = getStrengthRecords()
+   578:   
+   579:   // Find relevant metrics
+   580:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   581:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+>> 582:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   583:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   584:   
+   585:   const maxPullUps = pullUpRecord?.reps || 0
+   586:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   587:   const maxDips = dipRecord?.reps || 0
+   588:   const maxPushUps = pushUpRecord?.reps || 0
+   589: 
+   590:   // Build unified input for canonical engine
+   591:   const input: AthleteReadinessInput = {
+   592:     maxPullUps,
+
+--- CONTEXT 042 | lib/roadmap/skill-roadmap-service.ts:591:50 | TS2367 ---
+lib/roadmap/skill-roadmap-service.ts(591,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"push_ups"`, or map to current literal only if obvious. Do not widen union.
+   581:   // Get saved progression if exists
+   582:   const savedProgression = skillProgressions.find(
+   583:     p => p.skillName === skillKey || p.skillName === skillKey.replace('-', '_')
+   584:   )
+   585:   
+   586:   // Get strength data
+   587:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   588:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   589:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+   590:   const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dips')
+>> 591:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   592:   
+   593:   const maxPullUps = pullUpRecord?.reps || 0
+   594:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   595:   const maxDips = dipRecord?.reps || 0
+   596:   const weightedDips = weightedDipRecord?.weight || 0
+   597:   const maxPushUps = pushUpRecord?.reps || 0
+   598:   
+   599:   // Calculate readiness for the skill
+   600:   let readinessResult: ReadinessResult
+   601:   
+
+--- CONTEXT 043 | lib/training-coach.ts:583:50 | TS2367 ---
+lib/training-coach.ts(583,50): error TS2367: This comparison appears to be unintentional because the types 'ExerciseType' and '"push_ups"' have no overlap.
+Hint: Remove/gate stale comparison to `"push_ups"`, or map to current literal only if obvious. Do not widen union.
+   573: export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
+   574:   const insights: SkillReadinessCoachingInsight[] = []
+   575:   
+   576:   // Get strength records to calculate readiness
+   577:   const strengthRecords = getStrengthRecords()
+   578:   
+   579:   // Find relevant metrics
+   580:   const pullUpRecord = strengthRecords.find(r => r.exercise === 'pull_ups')
+   581:   const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_ups')
+   582:   const dipRecord = strengthRecords.find(r => r.exercise === 'dips')
+>> 583:   const pushUpRecord = strengthRecords.find(r => r.exercise === 'push_ups')
+   584:   
+   585:   const maxPullUps = pullUpRecord?.reps || 0
+   586:   const weightedPullUp = weightedPullUpRecord?.weight || 0
+   587:   const maxDips = dipRecord?.reps || 0
+   588:   const maxPushUps = pushUpRecord?.reps || 0
+   589: 
+   590:   // Build unified input for canonical engine
+   591:   const input: AthleteReadinessInput = {
+   592:     maxPullUps,
+   593:     weightedPullUpLoad: weightedPullUp,
+
+--- CONTEXT 044 | lib/server/authoritative-program-generation.ts:1434:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1434,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Hint: Remove/gate stale `visibleDifferenceTargets` read/key or map to obvious current local field. Do not add shared type fields.
+   1424:           affectedSessions: [],
+   1425:           flexibilityTimeReserved: 0,
+   1426:         },
+   1427:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1428:           preferredMethods: ['straight_sets'],
+   1429:           actualMethodsApplied: ['straight_sets'],
+   1430:           methodsLimitedBySkillQuality: [],
+   1431:           packagingDecision: 'straight_sets',
+   1432:           rationale: 'default',
+   1433:         },
+>> 1434:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+   1435:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+   1436:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1437:       }
+   1438:     }
+   1439:     
+   1440:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1441:       generationIntent: request.generationIntent,
+   1442:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+   1443:       trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
+   1444:       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+
+--- CONTEXT 045 | lib/server/authoritative-program-generation.ts:1435:66 | TS2339 ---
+lib/server/authoritative-program-generation.ts(1435,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+Hint: Remove/gate stale `visibleDifferenceTargets` read/key or map to obvious current local field. Do not add shared type fields.
+   1425:           flexibilityTimeReserved: 0,
+   1426:         },
+   1427:         methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+   1428:           preferredMethods: ['straight_sets'],
+   1429:           actualMethodsApplied: ['straight_sets'],
+   1430:           methodsLimitedBySkillQuality: [],
+   1431:           packagingDecision: 'straight_sets',
+   1432:           rationale: 'default',
+   1433:         },
+   1434:         visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+>> 1435:         templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+   1436:         doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+   1437:       }
+   1438:     }
+   1439:     
+   1440:     console.log('[authoritative-generation-truth-snapshot-attached]', {
+   1441:       generationIntent: request.generationIntent,
+   1442:       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+   1443:       trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
+   1444:       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+   1445:       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
+
+--- CONTEXT 046 | lib/session-assembly-engine.ts:726:7 | TS2353 ---
+lib/session-assembly-engine.ts(726,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+Hint: Remove/gate stale `mainExercises` read/key or map to obvious current local field. Do not add shared type fields.
+   716:     primaryMuscles: string[]
+   717:   }>
+   718:   sessionLength: SessionLength
+   719:   athleteWeakPoints?: Record<string, number>
+   720: }
+   721: 
+   722: export function generateIntelligentMobilityBlock(context: MobilityActivationContext): SessionBlock {
+   723:   try {
+   724:     // Convert to prehab context
+   725:     const prehabContext: IntelligentPrehabContext = {
+>> 726:       mainExercises: context.mainExercises.map((ex, idx) => ({
+   727:         id: `ex_${idx}`,
+   728:         name: ex.name,
+   729:         category: ex.category as any,
+   730:         movementPattern: ex.movementPattern as any,
+   731:         primaryMuscles: ex.primaryMuscles,
+   732:       })),
+   733:       sessionLength: context.sessionLength,
+   734:       athleteWeakPoints: context.athleteWeakPoints,
+   735:       sessionFocus: 'skill',
+   736:     }
+
+--- CONTEXT 047 | lib/warmup-engine.ts:1168:7 | TS2353 ---
+lib/warmup-engine.ts(1168,7): error TS2353: Object literal may only specify known properties, and 'mainExercises' does not exist in type 'IntelligentPrehabContext'.
+Hint: Remove/gate stale `mainExercises` read/key or map to obvious current local field. Do not add shared type fields.
+   1158:  * Use this for better session-specific preparation vs generic templates
+   1159:  */
+   1160: export async function generateIntelligentWarmup(
+   1161:   context: WarmUpGenerationContext,
+   1162:   athleteWeakPoints?: Record<string, number>,
+   1163:   sessionFocus?: 'skill' | 'strength' | 'hypertrophy' | 'endurance'
+   1164: ): Promise<GeneratedWarmUp> {
+   1165:   try {
+   1166:     // Build prehab context from warmup context
+   1167:     const prehabContext: IntelligentPrehabContext = {
+>> 1168:       mainExercises: context.mainExercises.map(ex => ({
+   1169:         id: ex.id,
+   1170:         name: ex.name,
+   1171:         category: ex.category,
+   1172:         movementPattern: ex.movementPattern,
+   1173:         primaryMuscles: ex.primaryMuscles,
+   1174:       })),
+   1175:       sessionLength: context.sessionLength,
+   1176:       athleteWeakPoints,
+   1177:       sessionFocus: sessionFocus || 'skill',
+   1178:     }
+
+--- CONTEXT 048 | lib/session-variety-engine.ts:678:5 | TS2353 ---
+lib/session-variety-engine.ts(678,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, string[][]>'.
+Hint: Remove/gate stale `back_lever` read/key or map to obvious current local field. Do not add shared type fields.
+   668:     muscle_up: [
+   669:       ['weighted_pull', 'explosive_pull'],
+   670:       ['straight_bar_dip', 'transition_drill'],
+   671:       ['ring_support', 'kipping_practice'],
+   672:     ],
+   673:     hspu: [
+   674:       ['pike_push', 'shoulder_press'],
+   675:       ['handstand_hold', 'wall_slides'],
+   676:       ['face_pull', 'rear_delt'],
+   677:     ],
+>> 678:     back_lever: [
+   679:       ['skin_the_cat', 'shoulder_extension'],
+   680:       ['german_hang', 'bicep_curl'],
+   681:       ['rear_delt', 'core_work'],
+   682:     ],
+   683:     iron_cross: [
+   684:       ['ring_support', 'cross_pull'],
+   685:       ['wide_ring_fly', 'bicep_curl'],
+   686:       ['shoulder_rehab', 'tendon_conditioning'],
+   687:     ],
+   688:     l_sit: [
+
+--- CONTEXT 049 | lib/session-variety-engine.ts:873:5 | TS2353 ---
+lib/session-variety-engine.ts(873,5): error TS2353: Object literal may only specify known properties, and 'back_lever' does not exist in type 'Record<SkillType, ExerciseVariationSet>'.
+Hint: Remove/gate stale `back_lever` read/key or map to obvious current local field. Do not add shared type fields.
+   863:     muscle_up: {
+   864:       variantA: ['high_pull', 'weighted_pull_up', 'straight_bar_dip'],
+   865:       variantB: ['muscle_up_negative', 'explosive_pull', 'transition_drill'],
+   866:       variantC: ['chest_to_bar', 'kipping_pull', 'ring_dip'],
+   867:     },
+   868:     hspu: {
+   869:       variantA: ['pike_push_up', 'handstand_hold', 'shoulder_press'],
+   870:       variantB: ['wall_hspu_negative', 'elevated_pike', 'face_pull'],
+   871:       variantC: ['box_hspu', 'wall_walk', 'rear_delt_fly'],
+   872:     },
+>> 873:     back_lever: {
+   874:       variantA: ['skin_the_cat', 'german_hang', 'bicep_curl'],
+   875:       variantB: ['back_lever_raise', 'shoulder_extension', 'rear_support'],
+   876:       variantC: ['back_lever_negative', 'ring_row_supinated', 'core_rotation'],
+   877:     },
+   878:     iron_cross: {
+   879:       variantA: ['ring_support', 'cross_pull', 'ring_fly'],
+   880:       variantB: ['rto_support', 'wide_pull', 'tendon_conditioning'],
+   881:       variantC: ['iron_cross_negative', 'band_cross', 'shoulder_stability'],
+   882:     },
+   883:     l_sit: {
+
+--- CONTEXT 050 | lib/training-feedback-loop.ts:343:14 | TS2339 ---
+lib/training-feedback-loop.ts(343,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+Hint: Remove/gate stale `completionRate` read/key or map to obvious current local field. Do not add shared type fields.
+   333:   }
+   334:   
+   335:   return Array.from(exerciseMap.entries()).map(([name, data]) => ({
+   336:     exerciseId: name,
+   337:     exerciseName: name,
+   338:     completionRate: data.total > 0 ? data.completed / data.total : 0,
+   339:     averageRPE: data.rpeCount > 0 ? data.rpeSum / data.rpeCount : null,
+   340:     targetsMet: data.targetsMet,
+   341:     targetsMissed: data.targetsMissed,
+   342:     progressionPotential: data.total < 2 ? 'insufficient_data' 
+>> 343:       : data.completionRate >= 0.9 ? 'ready'
+   344:       : data.completionRate >= 0.5 ? 'hold'
+   345:       : 'regress',
+   346:   }))
+   347: }
+   348: 
+   349: function calculateProgressionSuccessRate(outcomes: ExerciseOutcomeSummary[]): number {
+   350:   const totalTargets = outcomes.reduce((sum, o) => sum + o.targetsMet + o.targetsMissed, 0)
+   351:   const metTargets = outcomes.reduce((sum, o) => sum + o.targetsMet, 0)
+   352:   
+   353:   return totalTargets > 0 ? metTargets / totalTargets : 0
+
+--- CONTEXT 051 | lib/training-feedback-loop.ts:344:14 | TS2339 ---
+lib/training-feedback-loop.ts(344,14): error TS2339: Property 'completionRate' does not exist on type '{ completed: number; total: number; rpeSum: number; rpeCount: number; targetsMet: number; targetsMissed: number; }'.
+Hint: Remove/gate stale `completionRate` read/key or map to obvious current local field. Do not add shared type fields.
+   334:   
+   335:   return Array.from(exerciseMap.entries()).map(([name, data]) => ({
+   336:     exerciseId: name,
+   337:     exerciseName: name,
+   338:     completionRate: data.total > 0 ? data.completed / data.total : 0,
+   339:     averageRPE: data.rpeCount > 0 ? data.rpeSum / data.rpeCount : null,
+   340:     targetsMet: data.targetsMet,
+   341:     targetsMissed: data.targetsMissed,
+   342:     progressionPotential: data.total < 2 ? 'insufficient_data' 
+   343:       : data.completionRate >= 0.9 ? 'ready'
+>> 344:       : data.completionRate >= 0.5 ? 'hold'
+   345:       : 'regress',
+   346:   }))
+   347: }
+   348: 
+   349: function calculateProgressionSuccessRate(outcomes: ExerciseOutcomeSummary[]): number {
+   350:   const totalTargets = outcomes.reduce((sum, o) => sum + o.targetsMet + o.targetsMissed, 0)
+   351:   const metTargets = outcomes.reduce((sum, o) => sum + o.targetsMet, 0)
+   352:   
+   353:   return totalTargets > 0 ? metTargets / totalTargets : 0
+   354: }
+
+--- CONTEXT 052 | lib/unified-coaching-engine.ts:1036:84 | TS2339 ---
+lib/unified-coaching-engine.ts(1036,84): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Hint: Remove/gate stale `currentNode` read/key or map to obvious current local field. Do not add shared type fields.
+   1026:   }
+   1027:   
+   1028:   // Detect movement bias
+   1029:   const bias = detectMovementBias({
+   1030:     athleteId: userId,
+   1031:     benchmarks,
+   1032:     skillState: {
+   1033:       frontLever: skillContext.states.find(s => s.skill === 'front_lever')
+   1034:         ? {
+   1035:             readiness: readiness?.straightArmScore || 50,
+>> 1036:             currentNode: skillContext.states.find(s => s.skill === 'front_lever')?.currentNode || 'tuck',
+   1037:             confidence: 0.7,
+   1038:           }
+   1039:         : undefined,
+   1040:       planche: skillContext.states.find(s => s.skill === 'planche')
+   1041:         ? {
+   1042:             readiness: readiness?.straightArmScore ? readiness.straightArmScore * 0.8 : 40,
+   1043:             currentNode: skillContext.states.find(s => s.skill === 'planche')?.currentNode || 'lean',
+   1044:             confidence: 0.7,
+   1045:           }
+   1046:         : undefined,
+
+--- CONTEXT 053 | lib/unified-coaching-engine.ts:1043:80 | TS2339 ---
+lib/unified-coaching-engine.ts(1043,80): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+Hint: Remove/gate stale `currentNode` read/key or map to obvious current local field. Do not add shared type fields.
+   1033:       frontLever: skillContext.states.find(s => s.skill === 'front_lever')
+   1034:         ? {
+   1035:             readiness: readiness?.straightArmScore || 50,
+   1036:             currentNode: skillContext.states.find(s => s.skill === 'front_lever')?.currentNode || 'tuck',
+   1037:             confidence: 0.7,
+   1038:           }
+   1039:         : undefined,
+   1040:       planche: skillContext.states.find(s => s.skill === 'planche')
+   1041:         ? {
+   1042:             readiness: readiness?.straightArmScore ? readiness.straightArmScore * 0.8 : 40,
+>> 1043:             currentNode: skillContext.states.find(s => s.skill === 'planche')?.currentNode || 'lean',
+   1044:             confidence: 0.7,
+   1045:           }
+   1046:         : undefined,
+   1047:     },
+   1048:     weakPoints: constraintContext.primaryConstraint 
+   1049:       ? [constraintContext.primaryConstraint as any]
+   1050:       : [],
+   1051:   })
+   1052:   
+   1053:   // Generate coaching message
+
+--- CONTEXT 054 | lib/unified-program-generation.ts:390:22 | TS2339 ---
+lib/unified-program-generation.ts(390,22): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `prescription` read/key or map to obvious current local field. Do not add shared type fields.
+   380:       isSubstitutable: false,
+   381:     })
+   382:   }
+   383:   
+   384:   // Add protocol exercises
+   385:   protocols.slice(0, 2).forEach(protocol => {
+   386:     exercises.push({
+   387:       id: protocol.id,
+   388:       name: protocol.name,
+   389:       sets: 2,
+>> 390:       reps: protocol.prescription || '8-12 reps',
+   391:       rest: '30s',
+   392:       notes: [protocol.rationale || ''],
+   393:       movementFamily: 'joint_integrity',
+   394:       isSubstitutable: true,
+   395:     })
+   396:   })
+   397:   
+   398:   return {
+   399:     name: 'Warmup',
+   400:     exercises,
+
+--- CONTEXT 055 | lib/unified-program-generation.ts:656:24 | TS2339 ---
+lib/unified-program-generation.ts(656,24): error TS2339: Property 'prescription' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `prescription` read/key or map to obvious current local field. Do not add shared type fields.
+   646:     isSubstitutable: false,
+   647:   })
+   648:   
+   649:   // Add recovery protocols
+   650:   if (includeExtra) {
+   651:     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
+   652:       exercises.push({
+   653:         id: protocol.id,
+   654:         name: protocol.name,
+   655:         sets: 1,
+>> 656:         reps: protocol.prescription || '2 minutes',
+   657:         rest: '-',
+   658:         notes: [protocol.rationale || 'Recovery support'],
+   659:         movementFamily: 'mobility',
+   660:         isSubstitutable: true,
+   661:       })
+   662:     })
+   663:   }
+   664:   
+   665:   return {
+   666:     name: 'Cooldown',
+
+--- CONTEXT 056 | lib/unified-program-generation.ts:392:24 | TS2339 ---
+lib/unified-program-generation.ts(392,24): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `rationale` read/key or map to obvious current local field. Do not add shared type fields.
+   382:   }
+   383:   
+   384:   // Add protocol exercises
+   385:   protocols.slice(0, 2).forEach(protocol => {
+   386:     exercises.push({
+   387:       id: protocol.id,
+   388:       name: protocol.name,
+   389:       sets: 2,
+   390:       reps: protocol.prescription || '8-12 reps',
+   391:       rest: '30s',
+>> 392:       notes: [protocol.rationale || ''],
+   393:       movementFamily: 'joint_integrity',
+   394:       isSubstitutable: true,
+   395:     })
+   396:   })
+   397:   
+   398:   return {
+   399:     name: 'Warmup',
+   400:     exercises,
+   401:     estimatedMinutes: isPrimaryDay ? 10 : 7,
+   402:     priority: 'essential',
+
+--- CONTEXT 057 | lib/unified-program-generation.ts:658:26 | TS2339 ---
+lib/unified-program-generation.ts(658,26): error TS2339: Property 'rationale' does not exist on type 'ProtocolRecommendation'.
+Hint: Remove/gate stale `rationale` read/key or map to obvious current local field. Do not add shared type fields.
+   648:   
+   649:   // Add recovery protocols
+   650:   if (includeExtra) {
+   651:     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
+   652:       exercises.push({
+   653:         id: protocol.id,
+   654:         name: protocol.name,
+   655:         sets: 1,
+   656:         reps: protocol.prescription || '2 minutes',
+   657:         rest: '-',
+>> 658:         notes: [protocol.rationale || 'Recovery support'],
+   659:         movementFamily: 'mobility',
+   660:         isSubstitutable: true,
+   661:       })
+   662:     })
+   663:   }
+   664:   
+   665:   return {
+   666:     name: 'Cooldown',
+   667:     exercises,
+   668:     estimatedMinutes: includeExtra ? 10 : 5,
+
+--- CONTEXT 058 | lib/unified-readiness-integration.ts:173:21 | TS2339 ---
+lib/unified-readiness-integration.ts(173,21): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+Hint: Remove/gate stale `skillLevels` read/key or map to obvious current local field. Do not add shared type fields.
+   163:   
+   164:   // Add confidence for strength data
+   165:   if (profile.maxPullUps && profile.maxPullUps > 0) confidence += 0.1
+   166:   if (profile.maxDips && profile.maxDips > 0) confidence += 0.1
+   167:   if (profile.weightedPullUp) confidence += 0.1
+   168:   if (profile.weightedDip) confidence += 0.05
+   169:   if (profile.hollowHold && profile.hollowHold > 0) confidence += 0.05
+   170:   
+   171:   // Add confidence for calibration data
+   172:   if (calibration) {
+>> 173:     if (calibration.skillLevels && Object.keys(calibration.skillLevels).length > 0) {
+   174:       confidence += 0.1
+   175:     }
+   176:   }
+   177:   
+   178:   confidence = Math.min(1, confidence)
+   179:   
+   180:   return canonicalToSkillReadinessScore(canonicalResult, confidence)
+   181: }
+   182: 
+   183: /**
+
+--- CONTEXT 059 | lib/unified-readiness-integration.ts:173:60 | TS2339 ---
+lib/unified-readiness-integration.ts(173,60): error TS2339: Property 'skillLevels' does not exist on type 'AthleteCalibration'.
+Hint: Remove/gate stale `skillLevels` read/key or map to obvious current local field. Do not add shared type fields.
+   163:   
+   164:   // Add confidence for strength data
+   165:   if (profile.maxPullUps && profile.maxPullUps > 0) confidence += 0.1
+   166:   if (profile.maxDips && profile.maxDips > 0) confidence += 0.1
+   167:   if (profile.weightedPullUp) confidence += 0.1
+   168:   if (profile.weightedDip) confidence += 0.05
+   169:   if (profile.hollowHold && profile.hollowHold > 0) confidence += 0.05
+   170:   
+   171:   // Add confidence for calibration data
+   172:   if (calibration) {
+>> 173:     if (calibration.skillLevels && Object.keys(calibration.skillLevels).length > 0) {
+   174:       confidence += 0.1
+   175:     }
+   176:   }
+   177:   
+   178:   confidence = Math.min(1, confidence)
+   179:   
+   180:   return canonicalToSkillReadinessScore(canonicalResult, confidence)
+   181: }
+   182: 
+   183: /**
+
+--- CONTEXT 060 | lib/warmup-intelligence-engine.ts:1210:13 | TS2353 ---
+lib/warmup-intelligence-engine.ts(1210,13): error TS2353: Object literal may only specify known properties, and 'exerciseName' does not exist in type 'WarmUpExerciseWithRationale'.
+Hint: Remove/gate stale `exerciseName` read/key or map to obvious current local field. Do not add shared type fields.
+   1200:     const enhancedWarmup = { ...baseWarmup }
+   1201:     
+   1202:     // Add tendon prep exercises
+   1203:     for (const tendonPrep of warmupNeeds.additionalTendonPrep) {
+   1204:       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+   1205:       if (!existingIds.includes(tendonPrep)) {
+   1206:         const tendonExercise = WARMUP_EXERCISE_DATABASE.find(e => e.id === tendonPrep)
+   1207:         if (tendonExercise) {
+   1208:           enhancedWarmup.exercises.push({
+   1209:             exerciseId: tendonExercise.id,
+>> 1210:             exerciseName: tendonExercise.name,
+   1211:             instruction: tendonExercise.defaultPrescription,
+   1212:             rationale: `Added for tendon preparation based on session stress analysis.`,
+   1213:             jointCategory: tendonExercise.primaryJoint,
+   1214:             priority: tendonExercise.priority,
+   1215:             knowledgeBubble: tendonExercise.knowledgeBubble,
+   1216:           })
+   1217:         }
+   1218:       }
+   1219:     }
+   1220:     
+

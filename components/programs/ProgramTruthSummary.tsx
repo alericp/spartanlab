@@ -890,7 +890,52 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
             {rulePopulationLedger &&
               rulePopulationLedger.verdict !== 'RULES_NOT_AVAILABLE' &&
               rulePopulationLedger.categories.length > 0 && (
-                <section className="space-y-2">
+                <section
+                  className="space-y-2"
+                  // [PHASE AB9] Proof attributes. The Rule Population
+                  // section is the canonical user-facing surface for AB1
+                  // ledger truth. These attributes mirror the dominant-
+                  // state buckets in `RulePopulationLedgerTotals` so QA /
+                  // DOM-inspection / the AB9 proof scanner can verify
+                  // exact counts against the visible chips. Stamped on
+                  // the <section> root only — never on individual chips,
+                  // to keep the visible UI clean.
+                  data-ab9-rule-population="true"
+                  data-ab9-verdict={rulePopulationLedger.verdict}
+                  data-ab9-executable-count={String(
+                    rulePopulationLedger.totals.categoriesExecutable,
+                  )}
+                  data-ab9-visible-count={String(
+                    rulePopulationLedger.totals.categoriesVisible,
+                  )}
+                  data-ab9-mutated-count={String(
+                    rulePopulationLedger.totals.categoriesMutated,
+                  )}
+                  data-ab9-scoring-only-count={String(
+                    rulePopulationLedger.totals.categoriesScoringOnly,
+                  )}
+                  data-ab9-blocked-count={String(
+                    rulePopulationLedger.totals.categoriesBlocked,
+                  )}
+                  data-ab9-no-target-count={String(
+                    rulePopulationLedger.totals.categoriesNoTarget,
+                  )}
+                  data-ab9-audit-only-count={String(
+                    rulePopulationLedger.totals.categoriesAuditOnly,
+                  )}
+                  data-ab9-not-relevant-count={String(
+                    rulePopulationLedger.totals.categoriesNotRelevant,
+                  )}
+                  data-ab9-total-rules-read={String(
+                    rulePopulationLedger.totals.totalRulesRead,
+                  )}
+                  data-ab9-total-rules-materialized={String(
+                    rulePopulationLedger.totals.totalRulesMaterialized,
+                  )}
+                  data-ab9-doctrine-runtime-available={String(
+                    rulePopulationLedger.doctrineRuntimeAvailable,
+                  )}
+                >
                   <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
                     Rule Population
                   </h4>
@@ -983,20 +1028,79 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
                                     : c.state === 'no_target'
                                       ? 'no target this run'
                                       : 'influenced scoring'
+                          // [PHASE AB9] Per-category proof level + summary.
+                          // Defensive fallback for ledgers from older saved
+                          // programs that predate the proofLevel/proofSummary
+                          // contract addition: derive a sensible proofLevel
+                          // from `state` and use the existing `notes` /
+                          // `noChangeReason` as proofSummary. We intentionally
+                          // do NOT re-run the full proof derivation here —
+                          // the ProgramTruthSummary must stay a renderer,
+                          // not a shadow ledger builder.
+                          const fallbackProofLevel =
+                            c.state === 'executable'
+                              ? 'executable'
+                              : c.state === 'visible'
+                                ? 'visible'
+                                : c.state === 'mutated'
+                                  ? 'mutated'
+                                  : c.state === 'selected'
+                                    ? 'scoring_only'
+                                    : c.state === 'blocked'
+                                      ? 'blocked'
+                                      : c.state === 'no_target'
+                                        ? 'no_target'
+                                        : c.state === 'suppressed'
+                                          ? 'not_relevant'
+                                          : 'audit_only'
+                          const proofLevel =
+                            (c as { proofLevel?: string }).proofLevel ??
+                            fallbackProofLevel
+                          const proofSummary =
+                            (c as { proofSummary?: string }).proofSummary ??
+                            c.notes ??
+                            ''
+                          const proofFields =
+                            (c as { proofFields?: string[] }).proofFields ??
+                            c.changedProgramFields ??
+                            []
+                          const proofSurfaces =
+                            (c as { proofSurfaces?: string[] }).proofSurfaces ??
+                            c.visibleSurfaces ??
+                            []
                           return (
                             <div
                               key={c.category}
-                              className="flex items-start justify-between gap-3"
+                              className="flex flex-col gap-0.5"
+                              data-ab9-category={c.category}
+                              data-ab9-category-state={c.state}
+                              data-ab9-proof-level={proofLevel}
+                              data-ab9-proof-fields={proofFields.join('|')}
+                              data-ab9-proof-surfaces={proofSurfaces.join('|')}
                             >
-                              <span className="text-[#E8E4D9]">
-                                {RULE_LEDGER_CATEGORY_LABELS[c.category] ?? c.category}
-                              </span>
-                              <span className={cn('text-[11px] flex-shrink-0', tone)}>
-                                {stateText}
-                                {c.state === 'blocked' && c.noChangeReason
-                                  ? ` — ${c.noChangeReason}`
-                                  : ''}
-                              </span>
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="text-[#E8E4D9]">
+                                  {RULE_LEDGER_CATEGORY_LABELS[c.category] ?? c.category}
+                                </span>
+                                <span className={cn('text-[11px] flex-shrink-0', tone)}>
+                                  {stateText}
+                                  {c.state === 'blocked' && c.noChangeReason
+                                    ? ` — ${c.noChangeReason}`
+                                    : ''}
+                                </span>
+                              </div>
+                              {/* Optional muted secondary line carrying the
+                                  derived proof summary. Only renders when
+                                  the summary adds information beyond the
+                                  state phrase (i.e. it is not the same as
+                                  the chip label and is not empty). */}
+                              {proofSummary &&
+                                proofSummary.toLowerCase() !==
+                                  stateText.toLowerCase() && (
+                                  <p className="text-[10px] text-[#6A6A6A] leading-snug">
+                                    {proofSummary}
+                                  </p>
+                                )}
                             </div>
                           )
                         })}

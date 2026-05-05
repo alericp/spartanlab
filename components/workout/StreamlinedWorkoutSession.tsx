@@ -2001,6 +2001,17 @@ interface StreamlinedWorkoutSessionProps {
   // the full three-part fingerprint. Optional - corridor falls back to
   // '?' if absent.
   routeBuildChip?: string
+  // [AB10 — START WORKOUT RUNTIME PARITY LOCK]
+  // JSON-safe runtime parity proof built by the workout route AFTER
+  // snapshot validation + parity comparison. Forwarded here so the live
+  // workout can render the compact visible chip and stamp `data-ab10-*`
+  // DOM proof attributes on the stable wrapper. `null` is allowed for
+  // legacy saved sessions and direct callers that predate AB10; the
+  // component reads it through `safeAB10RuntimeParityProof`, which
+  // returns a defaulted "unknown" proof so the UI never crashes. The
+  // page-supplied proof is authoritative when present — the component
+  // never invents matched-parity values when the proof is absent.
+  ab10RuntimeParityProof?: AB10RuntimeParityProof | null
 }
 
 // [WEEK-TRUTH-CORRIDOR / OPTIONAL-FIELD-READER]
@@ -2063,6 +2074,12 @@ export function StreamlinedWorkoutSession({
   weekOverride = null,
   // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip (WS-R3)
   routeBuildChip = '?',
+  // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Default null preserves
+  // legacy callers that predate AB10. `safeAB10RuntimeParityProof` (used
+  // at the render site below) tolerates null and returns an "unknown"
+  // proof so the visible chip and DOM attributes degrade honestly
+  // without claiming matched parity.
+  ab10RuntimeParityProof = null,
 }: StreamlinedWorkoutSessionProps) {
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order

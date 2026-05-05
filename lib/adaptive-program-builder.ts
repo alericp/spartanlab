@@ -20739,13 +20739,6 @@ console.log('[program-generate] Generation complete:', {
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
-    // TASK 1-4: Store expanded planner context for display and traceability
-    weightedSkillAllocation: weightedSkillAllocation.map(a => ({
-      skill: a.skill,
-      weight: a.weight,
-      sessions: a.exposureSessions,
-      priority: a.priorityLevel,
-    })),
     intensityDistribution: {
       highDays: intensityDistribution.highIntensityDays,
       moderateDays: intensityDistribution.moderateIntensityDays,

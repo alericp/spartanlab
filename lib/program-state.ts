@@ -208,7 +208,7 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         hasDensityApplied: existingMeta.hasDensityApplied ?? false,
         hasClusterApplied: existingMeta.hasClusterApplied ?? false,
         methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-      } as any,
+      },
     }
   }
   
@@ -282,8 +282,8 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
         hasDensityApplied: existingMeta.hasDensityApplied ?? false,
         hasClusterApplied: existingMeta.hasClusterApplied ?? false,
         methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-        styledGroups: existingMeta.styledGroups as any,
-      } as any,
+        styledGroups: existingMeta.styledGroups,
+      },
     }
   }
   
@@ -332,7 +332,7 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
       hasDensityApplied: existingMeta.hasDensityApplied ?? false,
       hasClusterApplied: existingMeta.hasClusterApplied ?? false,
       methodMaterializationSummary: normalizeMethodMaterializationSummary(existingMeta.methodMaterializationSummary),
-    } as any,
+    },
   }
 }
 

@@ -2328,6 +2328,17 @@ export interface AdaptiveProgram {
     balanceIssues: string[]
     suggestions: string[]
   }
+  // ===========================================================================
+  // [GOAL-FAMILY-BALANCE-GUARD] POST-PHASE-P TISSUE-LOAD SATURATION AUDIT
+  // Authoritative weekly classification of tissue / goal-family load. Computed
+  // once after Phase P by `runGoalFamilyBalanceGuard` and stamped here. Pure
+  // additive, JSON-safe, optional — programs saved before this phase will not
+  // carry it. The Program card / ProgramTruthSummary reads `visibleSummary`
+  // (already null-guarded) to render exactly one compact line ONLY when the
+  // audit found something materially worth surfacing. Never overwritten on
+  // save/load. See `lib/program/goal-family-balance-guard.ts`.
+  // ===========================================================================
+  goalFamilyBalanceAudit?: import('./program/goal-family-balance-guard').GoalFamilyBalanceAudit
   // [prescription] ISSUE F: Weighted strength prescription summary
   weightedStrengthPrescription?: {
     hasWeightedData: boolean

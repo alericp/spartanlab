@@ -79,6 +79,15 @@ import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence
 // `prescribedLoad` / `estimatedMinutes`. Only `targetRPE` (bounded ≤1 step)
 // and an optional `note` decoration may change.
 import { runProgramQualityDoctrineAudit } from '@/lib/program/program-quality-doctrine-audit-contract'
+// [GOAL-FAMILY-BALANCE-GUARD] Post-Phase-P tissue-load saturation guard. Pure
+// deterministic resolver that classifies the final visible week into goal
+// families (vertical/horizontal/straight-arm push & pull, transition pull,
+// biceps/elbow tendon, compression core, mobility integrity), counts weekly
+// tissue-load, and stamps `program.goalFamilyBalanceAudit`. Bounded — never
+// mutates exercises, methods, RPE, sets, rest, or grouped-block membership.
+// Failure is non-blocking: the try/catch absorbs errors and Phase R proceeds
+// with the program object unstamped. See lib/program/goal-family-balance-guard.ts.
+import { runGoalFamilyBalanceGuard } from '@/lib/program/goal-family-balance-guard'
 // [PHASE-Q] Doctrine rule utilization / causal application contract. Pure
 // deterministic READER that runs AFTER Phase P on the final adapted program
 // object. Reads the artifacts already stamped by the builder + Phase 4L–4Q
@@ -3022,6 +3031,94 @@ export async function executeAuthoritativeGeneration(
       ...phasePAuditDiagnostic,
     })
     markStage('phase_p_quality_audit_done')
+
+    // ==========================================================================
+    // [GOAL-FAMILY-BALANCE-GUARD] POST-PHASE-P PROGRAM INTELLIGENCE CALIBRATION
+    // Runs AFTER Phase P on the final adapted program, BEFORE Phase R reads
+    // session-length truth. Pure deterministic resolver: classifies every
+    // visible-week working exercise into goal families using the canonical
+    // EXERCISE_CLASSIFICATIONS registry first, with a doctrine-true name
+    // fallback for rows the registry does not know. Counts weekly tissue load
+    // per family (push_vertical / push_horizontal / straight_arm_push /
+    // pull_vertical / pull_horizontal / straight_arm_pull / transition_pull /
+    // biceps_elbow_tendon / dip_pattern / compression_core / mobility_integrity),
+    // detects weak / saturated exposures relative to `program.selectedSkills`,
+    // and stamps `program.goalFamilyBalanceAudit` for the Program card to read.
+    //
+    // This guard NEVER:
+    //   - mutates exercises, sets, RPE, rest, methods, ordering
+    //   - touches grouped-method (superset / circuit / density / cluster) rows
+    //   - synthesizes non-database exercises (preserves AB10 live-runtime
+    //     DB-truth parity)
+    //   - overrides Phase L/M/O/P safety bounds
+    //
+    // Failure is non-blocking: the try/catch absorbs errors and Phase R
+    // proceeds with the program object unstamped.
+    // ==========================================================================
+    const goalFamilyBalanceDiagnostic: {
+      attempted: boolean
+      stamped: boolean
+      sessionsAudited: number
+      workingExercisesClassified: number
+      weakExposures: number
+      saturatedExposures: number
+      preserveNoChangeCount: number
+      visibleSummary: string | null
+      verdict: string
+      error?: string
+    } = {
+      attempted: false,
+      stamped: false,
+      sessionsAudited: 0,
+      workingExercisesClassified: 0,
+      weakExposures: 0,
+      saturatedExposures: 0,
+      preserveNoChangeCount: 0,
+      visibleSummary: null,
+      verdict: 'GOAL_FAMILY_BALANCE_GUARD_NOT_ATTEMPTED',
+    }
+    try {
+      goalFamilyBalanceDiagnostic.attempted = true
+      const balanceResult = runGoalFamilyBalanceGuard(program, {
+        // Mirror Phase P's completed-day source so we never recommend a
+        // change against a logged session.
+        completedDayNumbers: Array.isArray(
+          (program as unknown as { completedDayNumbers?: number[] }).completedDayNumbers,
+        )
+          ? (program as unknown as { completedDayNumbers?: number[] }).completedDayNumbers
+          : [],
+      })
+      program = balanceResult.program as AdaptiveProgram
+      goalFamilyBalanceDiagnostic.stamped = true
+      goalFamilyBalanceDiagnostic.sessionsAudited = balanceResult.audit.proof.sessionsAudited
+      goalFamilyBalanceDiagnostic.workingExercisesClassified =
+        balanceResult.audit.proof.workingExercisesClassified
+      goalFamilyBalanceDiagnostic.weakExposures = balanceResult.audit.weakExposures.length
+      goalFamilyBalanceDiagnostic.saturatedExposures = balanceResult.audit.saturatedExposures.length
+      goalFamilyBalanceDiagnostic.preserveNoChangeCount = balanceResult.audit.correctionsApplied.filter(
+        (c) => c.action === 'preserve_no_change',
+      ).length
+      goalFamilyBalanceDiagnostic.visibleSummary = balanceResult.audit.visibleSummary
+      goalFamilyBalanceDiagnostic.verdict =
+        balanceResult.audit.weakExposures.length === 0 &&
+        balanceResult.audit.saturatedExposures.length === 0
+          ? 'GOAL_FAMILY_BALANCE_GUARD_RAN_ALREADY_BALANCED'
+          : 'GOAL_FAMILY_BALANCE_GUARD_FOUND_FINDINGS'
+    } catch (balanceErr) {
+      goalFamilyBalanceDiagnostic.error = String(balanceErr)
+      goalFamilyBalanceDiagnostic.verdict = 'GOAL_FAMILY_BALANCE_GUARD_FAILED_NON_BLOCKING'
+      console.log('[goal-family-balance-guard-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(balanceErr),
+      })
+    }
+    console.log('[goal-family-balance-guard]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...goalFamilyBalanceDiagnostic,
+    })
+    markStage('goal_family_balance_guard_done')
 
     // ==========================================================================
     // [PHASE-R] SESSION-LENGTH TRUTH LOCK

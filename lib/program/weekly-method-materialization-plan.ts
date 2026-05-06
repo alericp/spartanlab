@@ -109,6 +109,18 @@ export interface WeeklyMethodMaterializationPlan {
    *  - "Method materialization gap"
    */
   oneLineExplanation: string
+  /**
+   * [AB16] Training style influence on method materialization. Tracks how the
+   * user's selected training style mode affected which methods were favored,
+   * blocked on skill work, or allowed on accessories. Optional for backward
+   * compatibility with older saved plans.
+   */
+  trainingStyleMaterializationInfluence?: {
+    resolvedStyleMode: string
+    methodsFavoredByStyle: string[]
+    methodsBlockedOnSkillWorkByStyle: string[]
+    visibleExplanation: string
+  }
 }
 
 // =============================================================================

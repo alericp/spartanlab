@@ -149,6 +149,53 @@ export interface EvidenceCalibrationShapingResult {
 }
 
 // ---------------------------------------------------------------------------
+// AB13-7 — Row-level RPE cap provenance
+// ---------------------------------------------------------------------------
+
+/**
+ * AB13-7 row-level mutation provenance stamp.
+ *
+ * Stamped on `AdaptiveExercise.evidenceCalibrationRpeCap` ONLY at the exact
+ * site in `applyConservativeProgressionShaping` where the helper actually
+ * reduces a numeric `targetRPE` from above the conservative ceiling down
+ * to the ceiling. The numeric mutation itself lives on `targetRPE` — this
+ * stamp is the audit + visible-proof surface for display layers, NOT a
+ * parallel cosmetic banner. It is NOT used as an input to any future
+ * structural logic; AB13-7 is provenance-only.
+ *
+ * Honesty rules (enforced by the producer in this file):
+ *   - Only present on rows whose `targetRPE` was ACTUALLY changed by the
+ *     AB13-4 shaping pass. Rows that were already at or below the ceiling
+ *     are NOT stamped.
+ *   - `rpeBefore` is captured from the row BEFORE the cap is applied and
+ *     is therefore always strictly greater than `rpeAfter` and `ceilingRpe`.
+ *   - `applied` is the literal `true` so that consumers cannot read the
+ *     stamp as a "would have applied" intent — its presence proves a real
+ *     mutation occurred.
+ *   - `reasonCode` is a stable machine identifier; user-facing surfaces
+ *     read `reasonCoachLine` instead and never expose the raw enum.
+ *
+ * Mirrors the existing per-row provenance precedent set by
+ * `stressAdjustmentDelta` (Phase K) on the same `AdaptiveExercise` type.
+ */
+export interface EvidenceCalibrationRpeCapStamp {
+  /** Provenance source — only one valid value in AB13-7. */
+  source: 'evidence_calibration_conservative_progression'
+  /** Literal `true` — presence of this stamp implies a real mutation. */
+  applied: true
+  /** RPE on the row BEFORE the cap. Strictly greater than `rpeAfter`. */
+  rpeBefore: number
+  /** RPE on the row AFTER the cap. Equal to `ceilingRpe`. */
+  rpeAfter: number
+  /** Conservative-progression ceiling used by AB13-4. */
+  ceilingRpe: number
+  /** Stable machine identifier; not for user-facing copy. */
+  reasonCode: 'progression_aggressiveness_conservative'
+  /** Short coaching line safe to render verbatim in tooltips/chips. */
+  reasonCoachLine: string
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -211,11 +258,30 @@ export function applyConservativeProgressionShaping(
     let sessionMutated = false
     const newExercises: AdaptiveExercise[] = session.exercises.map((ex) => {
       if (!isExerciseEligibleForCap(ex)) return ex
+      // [AB13-7] Capture `rpeBefore` BEFORE the cap. `isExerciseEligibleForCap`
+      // already guarantees `typeof ex.targetRPE === 'number'` and
+      // `ex.targetRPE > CONSERVATIVE_RPE_CEILING`, but TS does not carry that
+      // refinement through a function call — the explicit narrowing keeps the
+      // type system aligned with the runtime guarantee without any
+      // suppression. The narrowing CANNOT fail at runtime; the early return
+      // is belt-and-suspenders.
+      const rpeBefore = ex.targetRPE
+      if (typeof rpeBefore !== 'number') return ex
       cappedExerciseCount += 1
       sessionMutated = true
+      const rowStamp: EvidenceCalibrationRpeCapStamp = {
+        source: 'evidence_calibration_conservative_progression',
+        applied: true,
+        rpeBefore,
+        rpeAfter: CONSERVATIVE_RPE_CEILING,
+        ceilingRpe: CONSERVATIVE_RPE_CEILING,
+        reasonCode: 'progression_aggressiveness_conservative',
+        reasonCoachLine: `Evidence calibration capped this from RPE ${rpeBefore} to ${CONSERVATIVE_RPE_CEILING}.`,
+      }
       return {
         ...ex,
         targetRPE: CONSERVATIVE_RPE_CEILING,
+        evidenceCalibrationRpeCap: rowStamp,
       }
     })
     if (!sessionMutated) return session

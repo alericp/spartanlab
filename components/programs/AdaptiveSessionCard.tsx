@@ -7646,6 +7646,54 @@ function ExerciseRow({
             </span>
           )
         })()}
+        {/* [AB13-7] EVIDENCE CALIBRATION ROW-LEVEL RPE CAP PROOF CHIP.
+            Single compact chip surfacing the per-row provenance stamped by
+            `applyConservativeProgressionShaping` in
+            `lib/program/evidence-calibration-program-shaping.ts` when the
+            AB13-4 conservative-progression pass actually reduced this row's
+            `targetRPE` from a value strictly greater than the conservative
+            ceiling down to the ceiling. The chip is rendered ONLY from the
+            stamp — it is NEVER inferred from `targetRPE === 7`, because
+            many exercises are naturally prescribed at RPE 7 and inferring
+            from the final value would create fake provenance.
+            Hidden for warmup/cooldown rows (the AB13-4 helper already
+            excludes those categories from being stamped, but the
+            `!isWarmupCooldown` gate matches the surrounding chip strip's
+            posture). Single-line, never wraps the row container. */}
+        {!isWarmupCooldown && (() => {
+          const rpeCap = (exercise as unknown as {
+            evidenceCalibrationRpeCap?: {
+              source?: string
+              applied?: boolean
+              rpeBefore?: number
+              rpeAfter?: number
+              ceilingRpe?: number
+              reasonCoachLine?: string
+            }
+          }).evidenceCalibrationRpeCap
+          if (!rpeCap) return null
+          // Defense-in-depth: only render when the producer's contract
+          // (`applied: true` + numeric before/after) is actually present.
+          // No inference, no fallback to "would have applied".
+          if (rpeCap.applied !== true) return null
+          if (typeof rpeCap.rpeBefore !== 'number') return null
+          if (typeof rpeCap.rpeAfter !== 'number') return null
+          const titleText =
+            rpeCap.reasonCoachLine ??
+            `Evidence calibration capped this from RPE ${rpeCap.rpeBefore} to ${rpeCap.rpeAfter}.`
+          return (
+            <span
+              className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-teal-500/10 text-teal-300 border border-teal-500/30"
+              title={titleText}
+              aria-label={titleText}
+              data-ab13-7-row-rpe-cap="true"
+              data-ab13-7-rpe-before={rpeCap.rpeBefore}
+              data-ab13-7-rpe-after={rpeCap.rpeAfter}
+            >
+              RPE capped
+            </span>
+          )
+        })()}
       </div>
 
       {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY: ROM + PURPOSE ROW]

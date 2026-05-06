@@ -2024,6 +2024,23 @@ export interface AdaptiveExercise {
   // ==========================================================================
   qualityAudit?: import('./program/program-quality-doctrine-audit-contract').ExerciseQualityAuditStamp
   // ==========================================================================
+  // [AB13-7] EVIDENCE CALIBRATION ROW-LEVEL RPE CAP PROVENANCE
+  // Stamped IN PLACE on a row by the AB13-4 conservative-progression shaping
+  // pass (`lib/program/evidence-calibration-program-shaping.ts`) ONLY when
+  // that pass actually reduced this row's numeric `targetRPE` from a value
+  // strictly greater than the conservative ceiling down to the ceiling.
+  // The numeric mutation lives on `targetRPE` directly — this stamp is the
+  // audit + visible-proof surface (mirrors the `stressAdjustmentDelta`
+  // precedent above), NOT a parallel cosmetic banner. Absent on every row
+  // that the AB13-4 pass did not actually mutate (rows already at/below the
+  // ceiling, excluded categories, or rows the gate did not run on at all).
+  // Optional + JSON-safe; survives save/load round-trip and the post-Phase-AA2
+  // `mapToAdaptiveExercises` whitelist (the AB13-4 stamp is applied AFTER
+  // that mapper). NOT consumed as input by any future structural logic —
+  // AB13-7 is provenance/display only.
+  // ==========================================================================
+  evidenceCalibrationRpeCap?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationRpeCapStamp
+  // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
   // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
   // truth (not eligibility, not preferences, not bundle availability alone).

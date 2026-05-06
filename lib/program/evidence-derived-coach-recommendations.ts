@@ -852,5 +852,11 @@ function buildShapingSkippedDetail(
       return 'The recommendation is held back from mutating this program for safety.'
     case 'no_influence':
       return 'No evidence influence was available when this program was generated.'
+    case 'no_actionable_bias':
+      return 'Evidence calibration did not request a program-shaping change for this program.'
   }
+  // Exhaustive guard: TypeScript will error here if a new skippedReason is added
+  // but not handled above. Do not add a default branch.
+  const _exhaustiveCheck: never = reason
+  return _exhaustiveCheck
 }

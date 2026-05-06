@@ -7699,6 +7699,31 @@ function ExerciseRow({
             </span>
           )
         })()}
+        {/* [AB14] Volume-bias row chip — rendered only from real stamp */}
+        {!isWarmupCooldown && (() => {
+          const volAdj = exercise.evidenceCalibrationVolumeAdjustment
+          if (!volAdj) return null
+          if (volAdj.applied !== true) return null
+          if (typeof volAdj.setsBefore !== 'number') return null
+          if (typeof volAdj.setsAfter !== 'number') return null
+          if (volAdj.setsBefore <= volAdj.setsAfter) return null
+          const titleText =
+            volAdj.reasonCoachLine ??
+            `Evidence calibration reduced this from ${volAdj.setsBefore} sets to ${volAdj.setsAfter}.`
+          return (
+            <span
+              className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-amber-500/10 text-amber-300 border border-amber-500/30"
+              title={titleText}
+              aria-label={titleText}
+              data-ab14-row-volume-adjustment="true"
+              data-ab14-sets-before={volAdj.setsBefore}
+              data-ab14-sets-after={volAdj.setsAfter}
+              data-ab14-sets-removed={volAdj.setsRemoved}
+            >
+              Sets adjusted
+            </span>
+          )
+        })()}
       </div>
 
       {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY: ROM + PURPOSE ROW]

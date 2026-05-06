@@ -93,6 +93,19 @@ const SHAPING_VERSION =
   'ab13-4-evidence-calibration-conservative-progression' as const
 
 // ---------------------------------------------------------------------------
+// AB14 — Volume-bias materialization constants
+// ---------------------------------------------------------------------------
+
+/** AB14 only reduces rows with sets >= this value */
+const VOLUME_REDUCTION_ELIGIBLE_MIN = 3 as const
+/** AB14 never reduces below this floor */
+const VOLUME_REDUCTION_FLOOR = 2 as const
+/** Max rows reduced per session to avoid gutting a single session */
+const VOLUME_REDUCTION_PER_SESSION_CAP = 2 as const
+
+const VOLUME_SHAPING_VERSION = 'ab14-volume-bias-materialization' as const
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -102,6 +115,20 @@ const SHAPING_VERSION =
  * audit / UI consumer can verify the pass ran AND distinguish "active and
  * applied" from "active but nothing in the program needed capping".
  */
+/**
+ * AB14 volume-adjustment program-level proof.
+ */
+export interface EvidenceCalibrationVolumeAdjustmentProof {
+  source: 'evidence_calibration_volume_bias_reduce'
+  applied: boolean
+  eligibleExerciseCount: number
+  adjustedExerciseCount: number
+  totalSetsRemoved: number
+  volumeBias: 'reduce' | null
+  reasonCode: 'volume_bias_reduce' | 'no_eligible_rows' | 'not_active' | 'not_allowed_to_mutate' | 'volume_bias_not_reduce'
+  summary: string
+}
+
 export interface EvidenceCalibrationShapingProof {
   /** Stable audit stamp. */
   shapingVersion: typeof SHAPING_VERSION
@@ -135,6 +162,11 @@ export interface EvidenceCalibrationShapingProof {
     | 'status_not_active'
     | 'not_allowed_to_mutate'
     | 'progression_not_conservative'
+    | 'no_actionable_bias'
+  /**
+   * AB14 volume-adjustment sub-proof. Present when the AB14 gate was open.
+   */
+  volumeAdjustment?: EvidenceCalibrationVolumeAdjustmentProof
 }
 
 export interface EvidenceCalibrationShapingResult {
@@ -196,6 +228,26 @@ export interface EvidenceCalibrationRpeCapStamp {
 }
 
 // ---------------------------------------------------------------------------
+// AB14 — Row-level volume-adjustment provenance
+// ---------------------------------------------------------------------------
+
+/**
+ * AB14 row-level mutation provenance stamp.
+ * Stamped on `AdaptiveExercise.evidenceCalibrationVolumeAdjustment` ONLY
+ * when the helper actually reduces a numeric `sets` value.
+ */
+export interface EvidenceCalibrationVolumeAdjustmentStamp {
+  source: 'evidence_calibration_volume_bias_reduce'
+  applied: true
+  setsBefore: number
+  setsAfter: number
+  setsRemoved: number
+  volumeBias: 'reduce'
+  reasonCode: 'volume_bias_reduce'
+  reasonCoachLine: string
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -221,98 +273,147 @@ export function applyConservativeProgressionShaping(
   program: AdaptiveProgram,
   influence: EvidenceCalibrationGenerationInfluence | null | undefined,
 ): EvidenceCalibrationShapingResult {
-  // Gate 1: missing influence
+  // ---------------------------------------------------------------------------
+  // Universal gates (must pass before either AB13 or AB14 can run)
+  // ---------------------------------------------------------------------------
   if (!influence) {
-    return {
-      program,
-      shapingProof: buildSkippedProof('no_influence'),
-    }
+    return { program, shapingProof: buildSkippedProof('no_influence') }
   }
-  // Gate 2: status must be active
   if (influence.status !== 'active') {
-    return {
-      program,
-      shapingProof: buildSkippedProof('status_not_active'),
-    }
+    return { program, shapingProof: buildSkippedProof('status_not_active') }
   }
-  // Gate 3: caller must have explicitly allowed mutation
   if (influence.allowedToMutateProgram !== true) {
-    return {
-      program,
-      shapingProof: buildSkippedProof('not_allowed_to_mutate'),
-    }
-  }
-  // Gate 4: only the conservative case has an audited consumer in AB13-4
-  if (influence.progressionAggressiveness !== 'conservative') {
-    return {
-      program,
-      shapingProof: buildSkippedProof('progression_not_conservative'),
-    }
+    return { program, shapingProof: buildSkippedProof('not_allowed_to_mutate') }
   }
 
-  // Gate is open. Walk sessions/exercises and clone-on-write only the rows
-  // we actually touch, so the original references stay intact for any other
-  // consumer that may already hold a reference.
+  // ---------------------------------------------------------------------------
+  // Determine which passes are gated open
+  // ---------------------------------------------------------------------------
+  const ab13Open = influence.progressionAggressiveness === 'conservative'
+  const ab14Open = influence.volumeBias === 'reduce'
+
+  // If NEITHER pass is gated open, skip with an honest reason.
+  if (!ab13Open && !ab14Open) {
+    return { program, shapingProof: buildSkippedProof('no_actionable_bias') }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Single combined walk — both passes in one iteration
+  // ---------------------------------------------------------------------------
   let cappedExerciseCount = 0
+  let adjustedExerciseCount = 0
+  let totalSetsRemoved = 0
+  let eligibleExerciseCount = 0
+
   const newSessions: AdaptiveSession[] = program.sessions.map((session) => {
     let sessionMutated = false
+    let sessionVolumeReductions = 0
+
     const newExercises: AdaptiveExercise[] = session.exercises.map((ex) => {
-      if (!isExerciseEligibleForCap(ex)) return ex
-      // [AB13-7] Capture `rpeBefore` BEFORE the cap. `isExerciseEligibleForCap`
-      // already guarantees `typeof ex.targetRPE === 'number'` and
-      // `ex.targetRPE > CONSERVATIVE_RPE_CEILING`, but TS does not carry that
-      // refinement through a function call — the explicit narrowing keeps the
-      // type system aligned with the runtime guarantee without any
-      // suppression. The narrowing CANNOT fail at runtime; the early return
-      // is belt-and-suspenders.
-      const rpeBefore = ex.targetRPE
-      if (typeof rpeBefore !== 'number') return ex
-      cappedExerciseCount += 1
-      sessionMutated = true
-      const rowStamp: EvidenceCalibrationRpeCapStamp = {
-        source: 'evidence_calibration_conservative_progression',
-        applied: true,
-        rpeBefore,
-        rpeAfter: CONSERVATIVE_RPE_CEILING,
-        ceilingRpe: CONSERVATIVE_RPE_CEILING,
-        reasonCode: 'progression_aggressiveness_conservative',
-        reasonCoachLine: `Evidence calibration capped this from RPE ${rpeBefore} to ${CONSERVATIVE_RPE_CEILING}.`,
+      let mutatedEx: AdaptiveExercise = ex
+      let rowMutated = false
+
+      // -----------------------------------------------------------------------
+      // AB13 — RPE cap pass
+      // -----------------------------------------------------------------------
+      if (ab13Open && isExerciseEligibleForRpeCap(mutatedEx)) {
+        const rpeBefore = mutatedEx.targetRPE
+        if (typeof rpeBefore === 'number') {
+          cappedExerciseCount += 1
+          rowMutated = true
+          const rowStamp: EvidenceCalibrationRpeCapStamp = {
+            source: 'evidence_calibration_conservative_progression',
+            applied: true,
+            rpeBefore,
+            rpeAfter: CONSERVATIVE_RPE_CEILING,
+            ceilingRpe: CONSERVATIVE_RPE_CEILING,
+            reasonCode: 'progression_aggressiveness_conservative',
+            reasonCoachLine: `Evidence calibration capped this from RPE ${rpeBefore} to ${CONSERVATIVE_RPE_CEILING}.`,
+          }
+          mutatedEx = {
+            ...mutatedEx,
+            targetRPE: CONSERVATIVE_RPE_CEILING,
+            evidenceCalibrationRpeCap: rowStamp,
+          }
+        }
       }
-      return {
-        ...ex,
-        targetRPE: CONSERVATIVE_RPE_CEILING,
-        evidenceCalibrationRpeCap: rowStamp,
+
+      // -----------------------------------------------------------------------
+      // AB14 — Volume reduction pass
+      // -----------------------------------------------------------------------
+      if (ab14Open && isExerciseEligibleForVolumeReduction(mutatedEx)) {
+        eligibleExerciseCount += 1
+        if (sessionVolumeReductions < VOLUME_REDUCTION_PER_SESSION_CAP) {
+          const setsBefore = mutatedEx.sets
+          if (typeof setsBefore === 'number') {
+            const setsAfter = setsBefore - 1
+            const setsRemoved = 1
+            adjustedExerciseCount += 1
+            totalSetsRemoved += setsRemoved
+            sessionVolumeReductions += 1
+            rowMutated = true
+            const volumeStamp: EvidenceCalibrationVolumeAdjustmentStamp = {
+              source: 'evidence_calibration_volume_bias_reduce',
+              applied: true,
+              setsBefore,
+              setsAfter,
+              setsRemoved,
+              volumeBias: 'reduce',
+              reasonCode: 'volume_bias_reduce',
+              reasonCoachLine: `Evidence calibration reduced this from ${setsBefore} sets to ${setsAfter}.`,
+            }
+            mutatedEx = {
+              ...mutatedEx,
+              sets: setsAfter,
+              evidenceCalibrationVolumeAdjustment: volumeStamp,
+            }
+          }
+        }
       }
+
+      if (rowMutated) sessionMutated = true
+      return rowMutated ? mutatedEx : ex
     })
+
     if (!sessionMutated) return session
-    return {
-      ...session,
-      exercises: newExercises,
-    }
+    return { ...session, exercises: newExercises }
   })
 
-  const appliedAtLeastOneMutation = cappedExerciseCount > 0
+  // ---------------------------------------------------------------------------
+  // Build proof objects
+  // ---------------------------------------------------------------------------
+  const ab13Applied = cappedExerciseCount > 0
+  const ab14Applied = adjustedExerciseCount > 0
+
+  const volumeAdjustmentProof: EvidenceCalibrationVolumeAdjustmentProof | undefined =
+    ab14Open
+      ? {
+          source: 'evidence_calibration_volume_bias_reduce',
+          applied: ab14Applied,
+          eligibleExerciseCount,
+          adjustedExerciseCount,
+          totalSetsRemoved,
+          volumeBias: 'reduce',
+          reasonCode: ab14Applied ? 'volume_bias_reduce' : 'no_eligible_rows',
+          summary: ab14Applied
+            ? `Reduced sets on ${adjustedExerciseCount} exercise${adjustedExerciseCount === 1 ? '' : 's'} (${totalSetsRemoved} total sets removed).`
+            : `Volume reduction active — no eligible exercises found (all working sets already at minimum).`,
+        }
+      : undefined
 
   const shapingProof: EvidenceCalibrationShapingProof = {
     shapingVersion: SHAPING_VERSION,
-    ranShapingPass: true,
-    appliedAtLeastOneMutation,
+    ranShapingPass: ab13Open,
+    appliedAtLeastOneMutation: ab13Applied,
     cappedExerciseCount,
     ceilingRpe: CONSERVATIVE_RPE_CEILING,
-    summary: appliedAtLeastOneMutation
-      ? `Conservative progression applied — ${cappedExerciseCount} exercise${cappedExerciseCount === 1 ? '' : 's'} capped at RPE ${CONSERVATIVE_RPE_CEILING}.`
-      : `Conservative progression active — no exercises required capping (every prescribed RPE was already ≤ ${CONSERVATIVE_RPE_CEILING}).`,
+    summary: buildCombinedSummary(ab13Open, ab13Applied, cappedExerciseCount, ab14Open, ab14Applied, adjustedExerciseCount),
     skippedReason: null,
+    volumeAdjustment: volumeAdjustmentProof,
   }
 
-  // Always return a NEW program reference when the gate ran, even if no
-  // sessions were mutated, so a downstream consumer that compares
-  // references can detect "AB13-4 ran on this program".
   return {
-    program: {
-      ...program,
-      sessions: newSessions,
-    },
+    program: { ...program, sessions: newSessions },
     shapingProof,
   }
 }
@@ -321,14 +422,21 @@ export function applyConservativeProgressionShaping(
 // Internal helpers — pure
 // ---------------------------------------------------------------------------
 
-function isExerciseEligibleForCap(ex: AdaptiveExercise): boolean {
-  // Only cap when the builder already prescribed a numeric targetRPE.
-  // Never invent an RPE for a row that did not have one.
+/** AB13 eligibility: RPE cap */
+function isExerciseEligibleForRpeCap(ex: AdaptiveExercise): boolean {
   if (typeof ex.targetRPE !== 'number') return false
   if (!Number.isFinite(ex.targetRPE)) return false
   if (ex.targetRPE <= CONSERVATIVE_RPE_CEILING) return false
-  // Never cap warmup / cooldown / mobility / recovery / pre-/re-hab rows.
-  // Their dosage convention is different from prescribed working sets.
+  const category = (ex.category ?? '').toLowerCase()
+  if (NON_PRESCRIPTIVE_CATEGORIES.has(category)) return false
+  return true
+}
+
+/** AB14 eligibility: volume reduction */
+function isExerciseEligibleForVolumeReduction(ex: AdaptiveExercise): boolean {
+  if (typeof ex.sets !== 'number') return false
+  if (!Number.isFinite(ex.sets)) return false
+  if (ex.sets < VOLUME_REDUCTION_ELIGIBLE_MIN) return false
   const category = (ex.category ?? '').toLowerCase()
   if (NON_PRESCRIPTIVE_CATEGORIES.has(category)) return false
   return true
@@ -353,12 +461,38 @@ function buildSkippedSummary(
 ): string {
   switch (reason) {
     case 'no_influence':
-      return 'Conservative progression shaping skipped — no influence stamped on this program.'
+      return 'Program shaping skipped — no influence stamped.'
     case 'status_not_active':
-      return 'Conservative progression shaping skipped — influence is not active (waiting / observing / degraded).'
+      return 'Program shaping skipped — influence not active.'
     case 'not_allowed_to_mutate':
-      return 'Conservative progression shaping skipped — influence is not allowed to mutate the program.'
+      return 'Program shaping skipped — mutation not allowed.'
     case 'progression_not_conservative':
-      return 'Conservative progression shaping skipped — plan did not request the conservative direction.'
+      return 'Program shaping skipped — not conservative progression.'
+    case 'no_actionable_bias':
+      return 'Program shaping skipped — no actionable bias requested.'
   }
+}
+
+function buildCombinedSummary(
+  ab13Open: boolean,
+  ab13Applied: boolean,
+  cappedCount: number,
+  ab14Open: boolean,
+  ab14Applied: boolean,
+  adjustedCount: number,
+): string {
+  const parts: string[] = []
+  if (ab13Open) {
+    parts.push(ab13Applied
+      ? `Capped ${cappedCount} exercise${cappedCount === 1 ? '' : 's'} at RPE ${CONSERVATIVE_RPE_CEILING}`
+      : `Conservative progression active (no RPE capping needed)`)
+  }
+  if (ab14Open) {
+    parts.push(ab14Applied
+      ? `reduced sets on ${adjustedCount} exercise${adjustedCount === 1 ? '' : 's'}`
+      : `volume reduction active (no eligible rows)`)
+  }
+  if (parts.length === 0) return 'No shaping applied.'
+  const first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
+  return parts.length === 1 ? `${first}.` : `${first} and ${parts.slice(1).join(' and ')}.`
 }

@@ -3431,18 +3431,14 @@ export async function executeAuthoritativeGeneration(
 
       const influence: EvidenceCalibrationGenerationInfluence =
         buildEvidenceCalibrationGenerationInfluence(plan, {
-          // [AB13-4] First real structural hook is now wired:
-          // `progressionAggressiveness` flows through to
-          // `applyConservativeProgressionShaping` below, which caps
-          // `targetRPE` to 7 on prescribed working rows when (and only
-          // when) the influence resolves to `active` + `conservative`.
-          // Every other structural constraint remains suppressed
-          // because no audited builder consumer exists for them yet.
-          // Each future flip follows the same shape: wire ONE consumer,
-          // then flip ONE hook.
+          // [AB13-4 + AB14] Two structural hooks are now wired:
+          //   - AB13-4: progressionAggressiveness === 'conservative' caps RPE to 7
+          //   - AB14:   volumeBias === 'reduce' reduces sets by 1 on eligible rows
+          // Both pass through `applyConservativeProgressionShaping`.
+          // intensityBias and recoveryBias remain suppressed until audited consumers exist.
           structuralHooks: {
             progressionAggressiveness: true,
-            volumeBias: false,
+            volumeBias: true,
             intensityBias: false,
             recoveryBias: false,
             benchmarkRetestPrompt: true,

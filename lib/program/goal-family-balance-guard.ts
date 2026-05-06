@@ -93,6 +93,16 @@ import {
   getExerciseClassification,
 } from '../exercise-classification-registry'
 import type { ExerciseClassification } from '../exercise-classification-registry'
+// =============================================================================
+// [V2] DB-TRUTH SWAP POOL IMPORTS
+// =============================================================================
+// `getAllExercises()` is the canonical exercise pool consumed by the rest of
+// the program builder (see `lib/adaptive-program-builder.ts:mapToAdaptiveExercises`).
+// Pulling V2 swap candidates from this exact source guarantees that any row
+// the guard inserts will survive into live workout execution and preserves
+// the AB10 live-runtime DB-truth parity contract (`source: 'database'`).
+import { getAllExercises } from '../adaptive-exercise-pool'
+import type { Exercise as PoolExercise } from '../adaptive-exercise-pool'
 
 // =============================================================================
 // PUBLIC TYPES — all fields optional / JSON-safe / additive
@@ -169,13 +179,67 @@ export interface GoalFamilyBalanceCorrection {
   family: GoalFamily
   fromExercise?: string
   toExercise?: string
+  /**
+   * [V2] DB-truth exercise id introduced into the program. Stamped only when
+   * `action === 'replace'` and a real DB-truth candidate was applied. Carries
+   * the canonical pool id (e.g. `pppu`, `pike_pushup`, `dragon_flag_neg`) so
+   * downstream auditors can verify the swap originated from the same pool the
+   * builder uses.
+   */
+  toExerciseId?: string
   reason: string
   reasonCode: GoalFamilyBalanceReasonCode
 }
 
-/** Top-level audit. Stamped on `program.goalFamilyBalanceAudit`. */
+/**
+ * [V2] A typed DB-truth candidate pulled from `getAllExercises()`. All fields
+ * are echoes of canonical pool data — the guard NEVER fabricates names or
+ * ids. `source` is fixed to `'exercise_pool'` for v2; future iterations may
+ * extend with `'exercise_selector' | 'classification_registry'` if richer
+ * sources are wired.
+ */
+export interface GoalFamilySwapCandidate {
+  exerciseId: string
+  exerciseName: string
+  family: GoalFamily
+  reason: string
+  source: 'exercise_pool' | 'exercise_selector' | 'classification_registry'
+}
+
+/**
+ * [V2] The outcome of a single replacement attempt. Returned by the
+ * resolver for diagnostics; the per-row audit lives on
+ * `GoalFamilyBalanceCorrection`. `applied = true` IFF a row was actually
+ * mutated; otherwise the resolver records `preserve_no_change` with a
+ * stable typed reasonCode.
+ */
+export interface GoalFamilyReplacementResult {
+  applied: boolean
+  dayNumber: number
+  family: GoalFamily
+  fromExercise?: string
+  toExercise?: string
+  reason: string
+  reasonCode: GoalFamilyBalanceReasonCode
+}
+
+/** Top-level audit. Stamped on `program.goalFamilyBalanceAudit`.
+ *
+ * Version history:
+ *   - v1 = audit-only (every weak exposure -> preserve_no_change with
+ *          `protected_db_truth_pool_unavailable`).
+ *   - v2 = real correction layer. The guard may apply at least one
+ *          `replace` action when (a) a selected goal is underexposed,
+ *          (b) a DB-truth candidate exists in `getAllExercises()`, and
+ *          (c) a safe accessory tail slot exists in a non-completed,
+ *          non-grouped, non-cluster session.
+ *
+ * Older programs (saved under v1) still pass the strict version check
+ * because the field is optional on `AdaptiveProgram` and consumers
+ * already null-guard. Programs generated under v2 carry `version: 'v2'`.
+ */
 export interface GoalFamilyBalanceAudit {
-  version: 'goal-family-balance-v1'
+  version: 'goal-family-balance-v1' | 'goal-family-balance-v2'
   /** Skills that drove the audit (echo of `program.selectedSkills`). */
   selectedSkills: string[]
   /** Per-family weekly tissue-load counts (working-set rows only —
@@ -201,6 +265,18 @@ export interface GoalFamilyBalanceAudit {
     classifiedFromRegistry: number
     classifiedFromHeuristics: number
     completedSessionsSkipped: number
+    /**
+     * [V2] Number of `replace` actions actually applied in-place to the
+     * program. 0 on v1 audits and on v2 audits where every weak exposure
+     * was protected by tendon / saturation / no-slot / no-candidate gates.
+     */
+    replacementsApplied: number
+    /**
+     * [V2] Total number of DB-truth candidates considered across all
+     * weak exposures (sum of pool searches). Useful for auditing whether
+     * the pool is too narrow for the current goal mix.
+     */
+    candidatesConsidered: number
   }
   /** Stable reason codes rolled up across the audit. */
   reasonCodes: GoalFamilyBalanceReasonCode[]

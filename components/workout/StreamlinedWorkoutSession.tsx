@@ -4104,7 +4104,7 @@ export function StreamlinedWorkoutSession({
       // [ACTIVE-WEEK-PARITY] Even the stage-skipped fast path must report
       // effective scaled display so the active shell never flashes raw
       // Week-1 dosage mid-mount.
-      targetRPE: activeEffectiveContract.effectiveTargetRPE,
+      targetRPE: activeEffectiveContract.effectiveTargetRPE ?? 8,
       isHoldExercise: false,
       displaySets: `${activeEffectiveContract.effectiveSets} sets`,
       displayRepsTime: activeEffectiveContract.effectiveRepsOrTime,
@@ -4150,17 +4150,17 @@ export function StreamlinedWorkoutSession({
     
     return {
       ok: true as const,
-      failureStage: null,
-      failureReason: null,
-      targetValue,
-      recommendedBand,
-      // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present
-      targetRPE: activeEffectiveContract.effectiveTargetRPE,
-      isHoldExercise,
-      // [WEEK-PROGRESSION-TRUTH] Effective scaled values for display
-      displaySets: `${activeEffectiveContract.effectiveSets} sets`,
-      displayRepsTime: activeEffectiveContract.effectiveRepsOrTime,
-    }
+failureStage: null,
+        failureReason: null,
+        targetValue,
+        recommendedBand,
+        // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present, fallback to 8
+        targetRPE: activeEffectiveContract.effectiveTargetRPE ?? 8,
+        isHoldExercise,
+        // [WEEK-PROGRESSION-TRUTH] Effective scaled values for display
+        displaySets: `${activeEffectiveContract.effectiveSets} sets`,
+        displayRepsTime: activeEffectiveContract.effectiveRepsOrTime,
+      }
     } catch (error) {
       console.error('[v0] [activeEntryPreparation_error]', error instanceof Error ? error.message : 'unknown')
       return {
@@ -5350,7 +5350,7 @@ export function StreamlinedWorkoutSession({
         // scaled dosage the user actually trained against (Week 2 = 5 sets
         // instead of base 3), and the adaptive summary sees the right
         // denominators for completion-rate calculations.
-        targetRPE: activeEffectiveContract.effectiveTargetRPE,
+        targetRPE: activeEffectiveContract.effectiveTargetRPE ?? 8,
         recommendedBand: localRecommendedBand,
         // Exercise context for action planning
         exerciseName: safeCurrentExercise?.name || '',
@@ -8152,8 +8152,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             restType: 'between_sets',
             exerciseCategory: (safeCurrentExercise?.category || 'general'),
             exerciseName: safeCurrentExercise?.name || '',
-            // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present
-            targetRPE: activeEffectiveContract.effectiveTargetRPE,
+            // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present, fallback to 8
+            targetRPE: activeEffectiveContract.effectiveTargetRPE ?? 8,
             actualRPE: lastRPE,
             isHoldBased,
             groupType: null,

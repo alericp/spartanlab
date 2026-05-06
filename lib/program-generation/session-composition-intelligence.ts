@@ -26,6 +26,12 @@ import type { ExperienceLevel, SessionLength, PrimaryGoal } from '../program-ser
 import type { EquipmentType } from '../adaptive-exercise-pool'
 import type { SessionArchitectureTruthContract } from '../session-architecture-truth'
 import type { DoctrineRuntimeContract } from '../doctrine-runtime-contract'
+// [WEEKLY-SESSION-ROLE-CONTRACT] Per-day role assigned at the program level
+// (one per session) so the composition intelligence engine can pin the
+// authoritative role onto its blueprint output. The downstream builder reads
+// `blueprint.weeklyRoleSummary` to drive Program-page card differentiation
+// (role label, intensity class, breadth target, progression character).
+import type { WeeklyDayRole } from '../program/weekly-session-role-contract'
 
 // =============================================================================
 // TYPES
@@ -102,6 +108,15 @@ export interface SessionCompositionBlueprint {
     methodsEarned: boolean
     templateEscaped: boolean
   }
+
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role pinned onto
+  // the blueprint when the program-level role assigner provided one. The
+  // adaptive builder reads this to render the visible "why this day looks
+  // like this" rationale on the Program page card. Optional because legacy
+  // programs / preview paths may not have a role assigner result yet —
+  // downstream readers MUST treat the absence as "no role assigned" (no
+  // invented label).
+  weeklyRoleSummary?: WeeklyDayRole | null
 }
 
 /**
@@ -234,6 +249,13 @@ export interface SessionCompositionContext {
   // Week-level complexity context
   weeklyComplexity?: 'low' | 'moderate' | 'high'
   adaptationPhase?: 'initial_acclimation' | 'normal_progression' | 'recovery_constrained' | 'rebuild_after_disruption'
+
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Optional per-day role from the program
+  // role assigner. When present, propagates to blueprint.weeklyRoleSummary
+  // and drives Program-page card differentiation. Optional so non-role
+  // call sites (preview / legacy) keep compiling and the engine produces
+  // a role-less blueprint honestly rather than inventing one.
+  weeklyRole?: WeeklyDayRole | null
 }
 
 // =============================================================================
@@ -373,7 +395,11 @@ export function buildSessionCompositionContext(
   doctrineRuntimeContract: DoctrineRuntimeContract | null,
   fatigueState?: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload',
   recentSessionShapes?: string[],
-  weekAdaptation?: WeekAdaptationInput | null
+  weekAdaptation?: WeekAdaptationInput | null,
+  // [WEEKLY-SESSION-ROLE-CONTRACT] 18th positional arg — the program-level
+  // role assigner's per-day role. Optional + nullable so call sites without
+  // a role contract keep working unchanged.
+  weeklyRole?: WeeklyDayRole | null
 ): SessionCompositionContext {
   // Determine training style from equipment and profile
   const hasWeightedEquipment = equipment.some(eq => 
@@ -440,6 +466,10 @@ export function buildSessionCompositionContext(
     firstWeekProtection: weekAdaptation?.firstWeekProtection || null,
     weeklyComplexity: weekAdaptation?.weeklyComplexity,
     adaptationPhase: weekAdaptation?.adaptationPhase,
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Propagate per-day role through the
+    // composition context so buildSessionCompositionBlueprint can pin it
+    // onto blueprint.weeklyRoleSummary for downstream readers.
+    weeklyRole: weeklyRole ?? null,
   }
 }
 
@@ -1135,6 +1165,9 @@ export function buildSessionCompositionBlueprint(
     },
     compositionReasons,
     audit,
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Pin per-day role onto the blueprint
+    // verbatim from context. Honest null when no role assigner ran.
+    weeklyRoleSummary: ctx.weeklyRole ?? null,
   }
   
   console.log('[SESSION-COMPOSITION-BLUEPRINT]', {

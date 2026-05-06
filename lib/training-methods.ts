@@ -2017,6 +2017,32 @@ export interface StyledExerciseGroup {
   restProtocol: string
 }
 
+/**
+ * [PHASE 3G NEON-BACKED METHOD MATERIALITY] Per-method decision evidence
+ * payload. Documents the bundle confidence, which signals were available,
+ * and per-method outcomes (applied / rejected / deferred) with the drivers
+ * and blockers that caused each decision. Survives every persistence and
+ * reload boundary by riding on `SessionStyleResult.methodDecisionEvidence`
+ * and being copied verbatim into `session.styleMetadata.methodDecisionEvidence`.
+ *
+ * Optional on SessionStyleResult because the legacy preference-only happy
+ * path does not produce evidence yet; the catch-fallback corridor and any
+ * future bundle-aware happy path emit a fully-populated payload.
+ */
+export interface MethodDecisionEvidence {
+  bundleConfidence: 'none' | 'low' | 'medium' | 'high'
+  bundleSignalsAvailable: string[]
+  decisions: Array<{
+    method: TrainingMethodPreference
+    outcome: 'applied' | 'rejected' | 'deferred'
+    drivers: string[]
+    blockers: string[]
+    evidenceConfidence: 'none' | 'low' | 'medium' | 'high'
+    bundleSignalsConsumed: string[]
+  }>
+  bundleMateriallyChangedOutcome: boolean
+}
+
 export interface SessionStyleResult {
   styledGroups: StyledExerciseGroup[]
   appliedMethods: TrainingMethodPreference[]
@@ -2028,6 +2054,12 @@ export interface SessionStyleResult {
     hasDensityApplied: boolean
     structureDescription: string
   }
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Optional per-method evidence
+  // payload. Present in the catch-fallback corridor today; the legacy
+  // happy path may omit it. Builders that consume it MUST handle the
+  // optional / null case honestly — never invent decisions or claim bundle
+  // truth that does not exist.
+  methodDecisionEvidence?: MethodDecisionEvidence
 }
 
 /**

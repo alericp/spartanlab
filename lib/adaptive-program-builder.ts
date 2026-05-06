@@ -30719,21 +30719,29 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Builder-side audit log
     // proving the bundle was consulted for method decisions and reporting
     // whether earned truth materially changed any outcome on this session.
+    // [PHASE 3G EVIDENCE-OPTIONAL-NARROW] methodDecisionEvidence is now
+    // formally optional on SessionStyleResult (training-methods.ts) so the
+    // legacy preference-only happy path does not have to invent evidence.
+    // Locally pin to a non-null narrow with explicit per-decision typing so
+    // every `.filter`/`.map` callback has a concrete type and the audit
+    // honestly reports "no evidence" when none was produced.
+    const evidence = styleResult.methodDecisionEvidence
+    type EvidenceDecision = NonNullable<typeof evidence>['decisions'][number]
     console.log('[phase3g-neon-method-materiality-audit]', {
       dayNumber: day.dayNumber,
       bundlePresent: !!programmingTruthBundle,
-      bundleConfidence: styleResult.methodDecisionEvidence.bundleConfidence,
-      bundleSignalsAvailable: styleResult.methodDecisionEvidence.bundleSignalsAvailable,
-      bundleMateriallyChangedOutcome: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome,
+      bundleConfidence: evidence?.bundleConfidence ?? 'none',
+      bundleSignalsAvailable: evidence?.bundleSignalsAvailable ?? [],
+      bundleMateriallyChangedOutcome: evidence?.bundleMateriallyChangedOutcome ?? false,
       methodsAppliedCount: styleResult.appliedMethods.length,
       methodsRejectedCount: styleResult.rejectedMethods.length,
-      bundleDrivenRejections: styleResult.methodDecisionEvidence.decisions
-        .filter(d => d.outcome === 'rejected' && d.bundleSignalsConsumed.length > 0)
-        .map(d => ({ method: d.method, signals: d.bundleSignalsConsumed, blockers: d.blockers })),
-      bundleDrivenAdjustments: styleResult.methodDecisionEvidence.decisions
-        .filter(d => d.outcome === 'applied' && d.drivers.some(c => c.startsWith('bundle_')))
-        .map(d => ({ method: d.method, drivers: d.drivers.filter(c => c.startsWith('bundle_')) })),
-      verdict: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome
+      bundleDrivenRejections: (evidence?.decisions ?? [])
+        .filter((d: EvidenceDecision) => d.outcome === 'rejected' && d.bundleSignalsConsumed.length > 0)
+        .map((d: EvidenceDecision) => ({ method: d.method, signals: d.bundleSignalsConsumed, blockers: d.blockers })),
+      bundleDrivenAdjustments: (evidence?.decisions ?? [])
+        .filter((d: EvidenceDecision) => d.outcome === 'applied' && d.drivers.some((c: string) => c.startsWith('bundle_')))
+        .map((d: EvidenceDecision) => ({ method: d.method, drivers: d.drivers.filter((c: string) => c.startsWith('bundle_')) })),
+      verdict: evidence?.bundleMateriallyChangedOutcome
         ? 'NEON_TRUTH_MATERIALLY_CHANGED_METHOD_OUTCOMES'
         : (programmingTruthBundle
             ? 'BUNDLE_AVAILABLE_NO_OUTCOME_CHANGE_THIS_SESSION'

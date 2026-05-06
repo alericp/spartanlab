@@ -241,8 +241,14 @@ export function FatigueIntelligenceCard({ className = '', compact = false }: Fat
       )}
 
       {/* Explanation Layer */}
+      {/* [PRE-AB6 BUILD GREEN GATE / TRAININGLOADSUMMARY CONTRACT]
+        TrainingLoadSummary (lib/training-load-analyzer.ts:21) exposes only
+        { acuteLoad, chronicLoad, acuteChronicRatio, loadTrend, weeklyLoads }
+        — there is no `workoutsAnalyzed` field. Explanation text references
+        real contract fields (loadTrend, acute/chronic ratios) rather than
+        inventing a workout count that the analyzer does not compute. */}
       <InsightExplanation
-        explanation={`Recovery status based on ${indicators.recentTrainingLoad.workoutsAnalyzed} recent workouts. Fatigue score (${indicators.fatigueScore.value}) reflects RPE patterns, session density, and training load trends.`}
+        explanation={`Recovery status based on recent training load patterns. Fatigue score (${indicators.fatigueScore.value}) reflects RPE trends, session density, acute/chronic load balance (ACWR: ${indicators.recentTrainingLoad.acuteChronicRatio.toFixed(2)}), and load trend (${indicators.recentTrainingLoad.loadTrend}).`}
         variant="bordered"
       />
 

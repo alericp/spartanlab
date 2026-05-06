@@ -281,7 +281,10 @@ function generateSession(
   const methodProfileContext: MethodProfileContext = {
     primaryGoal: context.athlete.primaryGoal as Parameters<typeof selectMethodProfile>[0]['primaryGoal'],
     experienceLevel: context.athlete.trainingAge > 3 ? 'advanced' : context.athlete.trainingAge > 1 ? 'intermediate' : 'beginner',
-    scheduleMode: 'fixed', // Could be dynamic based on athlete preferences
+    // [SCHEDULE-MODE-CANONICAL-LITERAL] ScheduleMode is `'static' |
+    // 'flexible'`; the legacy `'fixed'` literal is gone, with `'static'`
+    // representing the same fixed-days identity.
+    scheduleMode: 'static',
     sessionMinutes: context.athlete.sessionDurationMinutes,
     fatigueState: context.fatigue.fatigueLevel === 'fatigued' ? 'high' : 
                   context.fatigue.fatigueLevel === 'normal' ? 'moderate' : 'low',
@@ -382,14 +385,17 @@ function buildWarmupBlock(context: UnifiedEngineContext, isPrimaryDay: boolean):
   }
   
   // Add protocol exercises
+  // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
+  // `protocol`/`reason`/`priority`. The display fields live on the
+  // nested `protocol` object (id/name/exercises/purpose).
   protocols.slice(0, 2).forEach(protocol => {
     exercises.push({
-      id: protocol.id,
-      name: protocol.name,
+      id: protocol.protocol.id,
+      name: protocol.protocol.name,
       sets: 2,
-      reps: protocol.prescription || '8-12 reps',
+      reps: protocol.protocol.exercises[0]?.prescription || '8-12 reps',
       rest: '30s',
-      notes: [protocol.rationale || ''],
+      notes: [protocol.reason || protocol.protocol.purpose || 'Joint integrity support'],
       movementFamily: 'joint_integrity',
       isSubstitutable: true,
     })
@@ -648,14 +654,15 @@ function buildCooldownBlock(context: UnifiedEngineContext, includeExtra: boolean
   
   // Add recovery protocols
   if (includeExtra) {
+    // [PROTOCOL-RECOMMENDATION-NESTED] same migration as warmup branch.
     context.protocols.recoveryProtocols.slice(0, 2).forEach(protocol => {
       exercises.push({
-        id: protocol.id,
-        name: protocol.name,
+        id: protocol.protocol.id,
+        name: protocol.protocol.name,
         sets: 1,
-        reps: protocol.prescription || '2 minutes',
+        reps: protocol.protocol.exercises[0]?.prescription || '2 minutes',
         rest: '-',
-        notes: [protocol.rationale || 'Recovery support'],
+        notes: [protocol.reason || protocol.protocol.purpose || 'Recovery support'],
         movementFamily: 'mobility',
         isSubstitutable: true,
       })
@@ -821,6 +828,18 @@ function buildStrengthExercise(
     mobility: { name: 'Mobility Work', id: 'mobility' },
     skill_isometric: { name: 'Skill Hold', id: 'skill_hold' },
     hypertrophy_accessory: { name: 'Accessory', id: 'accessory' },
+    // [MOVEMENT-FAMILY-RECORD-COMPLETION] Canonical MovementFamily union
+    // includes the rings/transition/lower-body and isolation patterns
+    // below; complete the strength-builder fallback exercise map so the
+    // exhaustive Record<MovementFamily, ...> stays satisfied.
+    transition: { name: 'Transition Drill', id: 'transition_drill' },
+    barbell_hinge: { name: 'Romanian Deadlift', id: 'romanian_deadlift' },
+    rotational_core: { name: 'Rotational Core Drill', id: 'rotational_core' },
+    rings_stability: { name: 'Ring Support Hold', id: 'ring_support_hold' },
+    rings_strength: { name: 'Ring Dip', id: 'ring_dip' },
+    shoulder_isolation: { name: 'Shoulder Isolation', id: 'shoulder_isolation' },
+    arm_isolation: { name: 'Arm Isolation', id: 'arm_isolation' },
+    grip_strength: { name: 'Grip Work', id: 'grip_work' },
   }
   
   const exercise = familyExercises[family]

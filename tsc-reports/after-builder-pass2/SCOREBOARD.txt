@@ -1,0 +1,88 @@
+===== AFTER BUILDER PASS 2 SCOREBOARD =====
+Previous known diagnostics: 1571
+Current diagnostics: 1571
+Delta: 0
+Current files with errors: 150
+adaptive-program-builder.ts diagnostics: 557
+
+===== TOP 20 FILES =====
+    557 lib/adaptive-program-builder.ts
+    145 lib/program-exercise-selector.ts
+     52 lib/canonical-profile-service.ts
+     48 lib/weak-point-engine.ts
+     48 lib/server/authoritative-program-generation.ts
+     36 lib/prediction/prediction-service.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/repositories/profile-repository.ts
+     14 lib/performance-envelope-integration.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+
+===== BUILDER CODES =====
+    260 error TS2339
+     42 error TS2367
+     38 error TS2322
+     38 error TS2304
+     34 error TS18047
+     29 error TS2345
+     21 error TS2454
+     17 error TS2551
+     17 error TS2448
+     11 error TS7006
+      9 error TS18048
+      8 error TS2353
+      7 error TS2365
+      4 error TS2552
+      3 error TS2554
+      3 error TS2352
+      3 error TS18004
+      2 error TS2769
+      2 error TS2741
+      2 error TS2739
+      2 error TS2300
+      1 error TS7053
+      1 error TS2717
+      1 error TS2677
+      1 error TS2459
+      1 error TS2363
+
+===== BUILDER MISSING PROPERTY TOP 30 =====
+     31 exercise
+     22 category
+     17 skill
+     12 movementPattern
+     10 exerciseRole
+      9 groupType
+      8 overallDecision
+      8 name
+      7 selectionTrace
+      7 recoveryLevel
+      6 targetSkills
+      6 outerDoctrineRecoveryTracker
+      5 selectionContext
+      5 broaderSkillsExpressed
+      4 transferTo
+      4 straightArmFatigue
+      4 skillFamily
+      4 rest
+      3 weeks
+      3 supportSkillsExpressed
+      3 sessionStylePreference
+      3 representationType
+      3 progression
+      3 prescriptionStyle
+      2 weightedPullUpWeight
+      2 weightedDipWeight
+      2 title
+      2 styleRules
+      2 styleMode
+      2 skillTarget

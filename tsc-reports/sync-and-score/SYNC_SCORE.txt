@@ -1,0 +1,194 @@
+===== STEP 1 — CURRENT LOCAL STATE =====
+Current branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD: a7ce785f
+
+Latest local commits:
+a7ce785f refactor: streamline skill progression and doctrine files
+3a8df5eb feat: resolve AdaptiveExercise errors and improve metadata handling
+14d11cf0 fix: resolve stale type issues in workout module
+8dff422a refactor: apply Pass 4 quick wins for WeakPointType completion
+71d2bc96 feat: update skill-volume-engine and cooldown-recovery-engine maps
+
+Tracked local changes:
+ M lib/adaptive-program-builder.ts
+
+===== STEP 2 — FETCH REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+
+Remote HEAD: 1a0b29e1
+
+Latest remote commits:
+1a0b29e1 fix: resolve remaining code issues in adaptive-program-builder.ts
+9de71a06 refactor: streamline builder API and canonical profile fields
+c53b8903 fix: resolve key section errors in CanonicalProgrammingProfile
+b3c2531c feat: add polymorphic accessors for adaptive-program-builder
+1ba14359 refactor: optimize adaptive program with polymorphic accessors
+
+Local vs remote count:
+Format: LEFT=local-only commits, RIGHT=remote-only commits
+0	10
+
+===== STEP 3 — SAFE FAST-FORWARD PULL IF CLEAN =====
+STOP: You have tracked local changes. Not pulling because it could overwrite or conflict.
+Tracked changes below:
+ M lib/adaptive-program-builder.ts
+
+===== STEP 4 — POST-SYNC STATE =====
+Current HEAD after sync attempt: a7ce785f
+
+Latest commits after sync attempt:
+a7ce785f refactor: streamline skill progression and doctrine files
+3a8df5eb feat: resolve AdaptiveExercise errors and improve metadata handling
+14d11cf0 fix: resolve stale type issues in workout module
+8dff422a refactor: apply Pass 4 quick wins for WeakPointType completion
+71d2bc96 feat: update skill-volume-engine and cooldown-recovery-engine maps
+
+Local vs remote after sync attempt:
+Format: LEFT=local-only commits, RIGHT=remote-only commits
+0	10
+
+===== STEP 5 — FRESH TYPESCRIPT SCORE =====
+Previous known total diagnostics: 1571
+Current total diagnostics: 1571
+Total delta from previous known: 0
+Current files with errors: 150
+
+Previous known adaptive-program-builder.ts diagnostics: 557
+Current adaptive-program-builder.ts diagnostics: 557
+Builder delta from previous known: 0
+
+===== TOP 25 ERROR FILES =====
+    557 lib/adaptive-program-builder.ts
+    145 lib/program-exercise-selector.ts
+     52 lib/canonical-profile-service.ts
+     48 lib/weak-point-engine.ts
+     48 lib/server/authoritative-program-generation.ts
+     36 lib/prediction/prediction-service.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/repositories/profile-repository.ts
+     14 lib/performance-envelope-integration.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program-generation/exercise-selection-materiality.ts
+
+===== FIRST 25 BUILDER ERRORS =====
+lib/adaptive-program-builder.ts(62,15): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-program-builder.ts(1764,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2059,25): error TS2304: Cannot find name 'WeakPointAssessment'.
+lib/adaptive-program-builder.ts(2502,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2502,3): error TS2717: Subsequent property declarations must have the same type.  Property 'weekAdaptationDecision' must be of type '{ phase: "initial_acclimation" | "normal_progression" | "recovery_constrained" | "rebuild_after_disruption"; targetDays: number; confidence: "low" | "moderate" | "high"; triggerSource: "first_week_initial_generation" | ... 2 more ... | "mid_week_adjustment"; ... 4 more ...; decidedAt: string; } | undefined', but here has type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "reduced" | "normal" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+lib/adaptive-program-builder.ts(3814,47): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3816,44): error TS2339: Property 'trainingFrequency' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(4020,38): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(4021,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(6599,82): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(7021,5): error TS2345: Argument of type 'LimiterDrivenProgramMods | null' is not assignable to parameter of type 'LimiterDrivenProgramMods | undefined'.
+lib/adaptive-program-builder.ts(7081,57): error TS2554: Expected 0 arguments, but got 1.
+lib/adaptive-program-builder.ts(7083,43): error TS2339: Property 'averageRecentRPE' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(7109,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+lib/adaptive-program-builder.ts(7124,5): error TS2322: Type 'string[]' is not assignable to type 'JointCaution[]'.
+lib/adaptive-program-builder.ts(7131,87): error TS2339: Property 'expectedSessionsPerWeek' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(7132,27): error TS2339: Property 'expectedSessionsPerWeek' does not exist on type 'TrainingFeedbackSummary'.
+lib/adaptive-program-builder.ts(7282,33): error TS2339: Property 'recoveryProfile' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(7283,34): error TS2304: Cannot find name 'AthleteProfile'.
+lib/adaptive-program-builder.ts(7699,24): error TS2367: This comparison appears to be unintentional because the types '"baseline_4_days" | "conservative_first_week_4_days" | "insufficient_data_4_days" | "adapted_to_4_days_after_feedback" | "hidden_modifier_collision_4_days" | "non_4_days_adaptive"' and '"stale_feedback_false_4_days"' have no overlap.
+lib/adaptive-program-builder.ts(7859,39): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(7860,40): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(7889,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(7891,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(7893,5): error TS2322: Type 'string | null' is not assignable to type 'number | null'.
+
+===== CHECK RECENT TARGETS STILL PRESENT =====
+lib/adaptive-athlete-engine.ts(5,90): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-program-builder.ts(62,15): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-program-builder.ts(1764,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2059,25): error TS2304: Cannot find name 'WeakPointAssessment'.
+lib/adaptive-program-builder.ts(2502,3): error TS2300: Duplicate identifier 'weekAdaptationDecision'.
+lib/adaptive-program-builder.ts(2502,3): error TS2717: Subsequent property declarations must have the same type.  Property 'weekAdaptationDecision' must be of type '{ phase: "initial_acclimation" | "normal_progression" | "recovery_constrained" | "rebuild_after_disruption"; targetDays: number; confidence: "low" | "moderate" | "high"; triggerSource: "first_week_initial_generation" | ... 2 more ... | "mid_week_adjustment"; ... 4 more ...; decidedAt: string; } | undefined', but here has type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "reduced" | "normal" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+lib/adaptive-program-builder.ts(8713,21): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8714,7): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8715,14): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8716,21): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8720,88): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8720,152): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8728,30): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8729,22): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8730,35): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8731,17): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8748,93): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8773,28): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8774,20): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8775,33): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8776,31): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8777,36): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8778,28): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8779,30): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8780,22): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8796,22): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8797,28): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8798,20): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8799,33): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8800,31): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(8801,30): error TS18047: 'postAllocationOwnerBridge' is possibly 'null'.
+lib/adaptive-program-builder.ts(16029,28): error TS2552: Cannot find name 'sessionAssemblyErr'. Did you mean 'getSessionAssemblyError'?
+lib/adaptive-program-builder.ts(16029,66): error TS2552: Cannot find name 'sessionAssemblyErr'. Did you mean 'getSessionAssemblyError'?
+lib/adaptive-program-builder.ts(17447,32): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17447,32): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17448,9): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17448,9): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17455,10): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17455,10): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17456,9): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17456,9): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17467,24): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17467,24): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17467,63): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17467,63): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17476,41): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17476,41): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17477,61): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17477,61): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17478,34): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17478,34): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17481,11): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17481,11): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17482,11): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17482,11): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17486,13): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17486,13): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17487,13): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17487,13): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17488,13): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17488,13): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17490,33): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17490,33): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17491,11): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17491,11): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(17492,11): error TS2448: Block-scoped variable 'truthfulHybridSummary' used before its declaration.
+lib/adaptive-program-builder.ts(17492,11): error TS2454: Variable 'truthfulHybridSummary' is used before being assigned.
+lib/adaptive-program-builder.ts(18568,29): error TS2552: Cannot find name 'finalScheduleMode'. Did you mean 'inputScheduleMode'?
+lib/adaptive-program-builder.ts(18827,29): error TS2552: Cannot find name 'finalScheduleMode'. Did you mean 'inputScheduleMode'?
+lib/adaptive-training-cycle-engine.ts(743,18): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/adaptive-training-cycle-engine.ts(744,34): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/constraint-detection-engine.ts(785,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(820,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(930,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(957,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: SkillConstraintResult; back_lever: SkillConstraintResult; planche: SkillConstraintResult; hspu: SkillConstraintResult; muscle_up: SkillConstraintResult; l_sit: SkillConstraintResult; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-engine.ts(88,7): error TS2353: Object literal may only specify known properties, and 'recommendations' does not exist in type 'ConstraintResult'.
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/training-coach.ts(11,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.

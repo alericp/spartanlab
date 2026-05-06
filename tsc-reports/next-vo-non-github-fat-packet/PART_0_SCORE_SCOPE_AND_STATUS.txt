@@ -1,0 +1,239 @@
+===== NEXT VO NON-GITHUB FAT PACKET — SCORE + SAFE SYNC =====
+Purpose: verify current score after VO/GitHub activity and generate next VO packet excluding GitHub-AI-targeted files.
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD before fetch: 29f4bcf7
+Remote HEAD before fetch: 29f4bcf7
+
+Tracked changes before fetch:
+ M lib/doctrine/doctrine-consumption-audit.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== FETCH REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+   29f4bcf7..60718e5e  v0/alericpetsch836-6923-6213db1c-2 -> origin/v0/alericpetsch836-6923-6213db1c-2
+
+Local HEAD after fetch: 29f4bcf7
+Remote HEAD after fetch: 60718e5e
+Local vs remote before pull, format local-only remote-only:
+0	1
+
+===== FAST-FORWARD PULL ONLY IF CLEAN =====
+STOP: tracked local changes exist. Not pulling because it could overwrite local work.
+ M lib/doctrine/doctrine-consumption-audit.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== POST-SYNC STATE =====
+Local HEAD: 29f4bcf7
+Remote HEAD: 60718e5e
+Local vs remote after pull, format local-only remote-only:
+0	1
+Tracked changes after pull:
+ M lib/doctrine/doctrine-consumption-audit.ts
+ M lib/recovery-fatigue-engine.ts
+
+===== RUN REAL TSC =====
+===== VERIFIED SCOREBOARD =====
+Previous known total diagnostics: 363
+Current total diagnostics: 356
+Total delta from previous known: 7
+Current files with errors: 115
+
+===== GITHUB-AI FILES EXCLUDED FROM NEXT VO PACKET =====
+lib/recovery-fatigue-engine.ts
+lib/doctrine/doctrine-consumption-audit.ts
+lib/program-exercise-selector.ts
+lib/program/onboarding-truth-expression-audit.ts
+lib/program-adjustment-engine.ts
+lib/program/program-display-contract.ts
+lib/back-lever-training-system.ts
+
+===== TOP 60 FILES CURRENTLY =====
+     20 lib/server/authoritative-program-generation.ts
+     16 lib/unified-coaching-engine.ts
+     12 lib/program/skill-specific-truth-resolution.ts
+     11 lib/performance-envelope-engine.ts
+      9 lib/repositories/profile-repository.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      9 lib/adaptive-program-builder.ts
+      8 lib/weak-point-engine.ts
+      8 lib/program/db-truth-scoring-bridge.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      6 lib/session-variety-engine.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/canonical-profile-service.ts
+      5 lib/onboarding-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-program-generation.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/roadmap/skill-roadmap-service.ts
+      4 lib/program-version-service.ts
+      4 lib/prescription-contract.ts
+      4 lib/dashboard-service.ts
+      4 lib/constraint-detection-engine.ts
+      4 lib/advanced-skills-integration.ts
+      4 lib/adaptive-athlete-engine.ts
+      3 lib/strength-score-engine.ts
+      3 lib/recovery-fatigue-engine.ts
+      3 lib/program-generation/week-adaptation-decision-contract.ts
+      3 lib/program-exercise-selector.ts
+      3 lib/milestone-engine.ts
+      3 lib/flexible-schedule-engine.ts
+      3 lib/exercise-family-integration.ts
+      3 lib/elite-insight-engine.ts
+      3 lib/doctrine/source-batches/index.ts
+      3 lib/doctrine/method-profile-registry.ts
+      3 lib/constraint-integration.ts
+      3 lib/adaptive-progression-engine.ts
+      2 lib/workout-feedback-integration.ts
+      2 lib/workout-execution-truth.ts
+      2 lib/warmup-intelligence-engine.ts
+      2 lib/warmup-engine.ts
+      2 lib/unified-readiness-integration.ts
+      2 lib/training-principles-engine.ts
+      2 lib/training-coach.ts
+      2 lib/strength-trend-engine.ts
+      2 lib/skill-readiness/skillReadinessTypes.ts
+      2 lib/skill-audit-system.ts
+      2 lib/server/authoritative-generation-truth-ingestion.ts
+      2 lib/relative-strength-engine.ts
+      2 lib/progression-decision-engine.ts
+      2 lib/progress-data-service.ts
+      2 lib/program/row-level-method-prescription-mutator.ts
+      2 lib/program/onboarding-truth-expression-audit.ts
+      2 lib/program/doctrine-causality-audit-contract.ts
+
+===== TOP 60 FILES EXCLUDING GITHUB-AI FILES =====
+     20 lib/server/authoritative-program-generation.ts
+     16 lib/unified-coaching-engine.ts
+     12 lib/program/skill-specific-truth-resolution.ts
+     11 lib/performance-envelope-engine.ts
+      9 lib/repositories/profile-repository.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      9 lib/adaptive-program-builder.ts
+      8 lib/weak-point-engine.ts
+      8 lib/program/db-truth-scoring-bridge.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      6 lib/session-variety-engine.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/canonical-profile-service.ts
+      5 lib/onboarding-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-program-generation.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/roadmap/skill-roadmap-service.ts
+      4 lib/program-version-service.ts
+      4 lib/prescription-contract.ts
+      4 lib/dashboard-service.ts
+      4 lib/constraint-detection-engine.ts
+      4 lib/advanced-skills-integration.ts
+      4 lib/adaptive-athlete-engine.ts
+      3 lib/strength-score-engine.ts
+      3 lib/program-generation/week-adaptation-decision-contract.ts
+      3 lib/milestone-engine.ts
+      3 lib/flexible-schedule-engine.ts
+      3 lib/exercise-family-integration.ts
+      3 lib/elite-insight-engine.ts
+      3 lib/doctrine/source-batches/index.ts
+      3 lib/doctrine/method-profile-registry.ts
+      3 lib/constraint-integration.ts
+      3 lib/adaptive-progression-engine.ts
+      2 lib/workout-feedback-integration.ts
+      2 lib/workout-execution-truth.ts
+      2 lib/warmup-intelligence-engine.ts
+      2 lib/warmup-engine.ts
+      2 lib/unified-readiness-integration.ts
+      2 lib/training-principles-engine.ts
+      2 lib/training-coach.ts
+      2 lib/strength-trend-engine.ts
+      2 lib/skill-readiness/skillReadinessTypes.ts
+      2 lib/skill-audit-system.ts
+      2 lib/server/authoritative-generation-truth-ingestion.ts
+      2 lib/relative-strength-engine.ts
+      2 lib/progression-decision-engine.ts
+      2 lib/progress-data-service.ts
+      2 lib/program/row-level-method-prescription-mutator.ts
+      2 lib/program/doctrine-causality-audit-contract.ts
+      2 lib/program-validation.ts
+      2 lib/program-generation/session-composition-intelligence.ts
+      2 lib/program-generation/exercise-selection-materiality.ts
+      2 lib/profile-sync-service.ts
+      2 lib/performance-envelope-service.ts
+
+===== ERROR CODE COUNTS CURRENTLY =====
+    113 error TS2322
+     59 error TS2339
+     33 error TS2345
+     31 error TS2367
+     16 error TS2740
+     16 error TS2304
+     14 error TS2305
+     12 error TS2353
+      9 error TS2739
+      8 error TS2724
+      5 error TS2741
+      5 error TS2459
+      5 error TS18048
+      4 error TS7006
+      4 error TS2300
+      2 error TS7053
+      2 error TS2719
+      2 error TS2694
+      2 error TS2454
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2554
+      1 error TS2552
+      1 error TS2551
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365
+      1 error TS2352
+
+===== ERROR CODE COUNTS EXCLUDING GITHUB-AI FILES =====
+    110 error TS2322
+     54 error TS2339
+     32 error TS2345
+     22 error TS2367
+     15 error TS2740
+     14 error TS2304
+     13 error TS2305
+     11 error TS2353
+      9 error TS2739
+      8 error TS2724
+      5 error TS2741
+      5 error TS2459
+      5 error TS18048
+      4 error TS2300
+      2 error TS7053
+      2 error TS7006
+      2 error TS2719
+      2 error TS2694
+      2 error TS2454
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2554
+      1 error TS2552
+      1 error TS2551
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365
+      1 error TS2352

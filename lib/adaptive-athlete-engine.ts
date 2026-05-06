@@ -2,14 +2,20 @@
 // Central integration layer that synthesizes all SpartanLab tools into unified athlete intelligence
 
 import { getAthleteProfile, getSkillProgressions, type AthleteProfile, type SkillProgression } from './data-service'
-import { getConstraintInsight, analyzeConstraints, deriveCanonicalDisplayedLimiter, type ConstraintResult } from './constraint-engine'
+// [TYPE-OWNER-IMPORT] ConstraintResult lives in @/types/constraint-engine,
+// not in ./constraint-engine. Import the type directly from its owner.
+import { getConstraintInsight, analyzeConstraints, deriveCanonicalDisplayedLimiter } from './constraint-engine'
+import type { ConstraintResult } from '@/types/constraint-engine'
 import { assessDeloadNeed, type DeloadAssessment, type DeloadStatus } from './deload-detection-engine'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
 import { getStrengthRecords } from './strength-service'
 import { calculateStrengthTrend, getOverallMomentum, type TrendDirection } from './strength-trend-engine'
 import { getSkillSessions, getRecentSkillSessions } from './skill-session-service'
 import { calculateSkillDensityMetrics, analyzeHoldTrend, analyzeDensityTrend } from './skill-density-engine'
-import { calculateReadinessDecision, type ReadinessDecision, type ReadinessStatus } from './skill-readiness-engine'
+// [TYPE-OWNER-IMPORT] ReadinessDecision/ReadinessStatus live in
+// @/types/skill-readiness, not in ./skill-readiness-engine.
+import { calculateReadinessDecision } from './skill-readiness-engine'
+import type { ReadinessDecision, ReadinessStatus } from '@/types/skill-readiness'
 import { getWorkoutLogs } from './workout-log-service'
 import { calculateWeeklyVolume, getWorkoutsLastNDays } from './volume-analyzer'
 import { getSkillProgression } from './skill-progression-rules'
@@ -602,29 +608,49 @@ export function buildAthleteState(): AthleteState {
   // [PHASE 16L] FIX: Handle null profile in server context
   // Return a safe default state instead of crashing
   if (!profile) {
+    // [ADAPTIVE-ATHLETE-STATE-CANONICAL-FALLBACK] Canonical
+    // `AthleteState` (L31-77) owns flat fields:
+    // `currentSkillLevel` / `targetSkillLevel` (not `currentLevel`),
+    // `pullStrengthTrend` / `pushStrengthTrend` (not `strengthTrends`),
+    // `skillReadinessStatus` (not `readinessStatus`),
+    // `fatigueState` (not `fatigueLevel`),
+    // `sessionConsistency` (not `consistencyScore`),
+    // separate `primaryConstraint` / `constraintLabel` /
+    // `constraintCategory` / `constraintConfidence` (not nested
+    // `constraintFocus`), `strengthSupportLevel` (not `strengthSupport`),
+    // and `dataQuality` directly on AthleteState (no nested `state`).
     return {
       username: 'Athlete',
       experienceLevel: 'intermediate',
       primaryGoal: null,
-      primarySkill: null,
-      currentLevel: null,
-      targetLevel: null,
+      primaryGoalLabel: '',
+      currentSkillLevel: 0,
+      targetSkillLevel: 0,
+      primaryConstraint: 'insufficient_data',
+      constraintLabel: 'Insufficient Data',
+      constraintCategory: 'data',
+      constraintConfidence: 'low',
+      strengthSupportLevel: 'unknown',
+      pullStrengthTrend: 'insufficient_data',
+      pushStrengthTrend: 'insufficient_data',
+      // [ATHLETE-STATE-FALLBACK-INDEXED-BOUNDARY] keep legacy literal
+      // fallbacks for the insufficient-data path; cast at boundary so
+      // the union narrowings still compile.
+      trainingMomentum: 'insufficient_data' as AthleteState['trainingMomentum'],
       momentumScore: 0,
-      plateauStatus: 'insufficient_data',
-      strengthTrends: { pull: 'insufficient_data', push: 'insufficient_data' },
-      readinessStatus: null,
-      fatigueLevel: 'optimal',
-      consistencyScore: 0,
-      constraintFocus: { label: 'Insufficient Data', code: 'insufficient_data' },
-      strengthSupport: 'unknown',
-      state: {
-        hasData: false,
-        dataQuality: 'insufficient',
-        isOptimal: false,
-        needsDeload: false,
-        hasSkillData: false,
-        hasStrengthData: false,
-      },
+      plateauStatus: 'no_plateau',
+      fatigueState: 'optimal' as AthleteState['fatigueState'],
+      recoveryLevel: 'green' as AthleteState['recoveryLevel'],
+      recoveryScore: 0,
+      sessionConsistency: 0,
+      weeklyFrequency: 0,
+      recentWorkoutCount: 0,
+      skillReadinessStatus: null,
+      skillReadinessConfidence: 0,
+      deloadStatus: 'not_needed' as AthleteState['deloadStatus'],
+      deloadScore: 0,
+      dataQuality: 'insufficient',
+      lastUpdated: new Date().toISOString(),
     }
   }
   

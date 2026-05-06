@@ -181,6 +181,14 @@ const BASE_STRESS_BY_FAMILY: Record<SkillStressFocus, number> = {
   dip_pattern: 3,
   squat_pattern: 2,
   hinge_pattern: 2,
+  // [SKILL-STRESS-FOCUS-CONTRACT] barbell_hinge is a canonical MovementFamily
+  // (lib/movement-family-registry.ts:35) and therefore part of the
+  // SkillStressFocus union. Per-set base stress is set to 3 — same magnitude
+  // as dip_pattern and slightly above hinge_pattern, reflecting that loaded
+  // deadlift hinges carry more systemic fatigue than bodyweight RDLs but
+  // less than ring/straight-arm work. Doctrine intent of the surrounding
+  // entries is preserved verbatim.
+  barbell_hinge: 3,
   unilateral_leg: 2,
   anti_extension_core: 2,
   anti_rotation_core: 2,
@@ -189,6 +197,9 @@ const BASE_STRESS_BY_FAMILY: Record<SkillStressFocus, number> = {
   explosive_push: 5,
   joint_integrity: 1,
   mobility: 1,
+  // [SKILL-ISOMETRIC-BASE-STRESS] Static skill holds carry meaningful
+  // tendon and neural cost; score similar to ring_support.
+  skill_isometric: 7,
   transition: 5,
   rings_stability: 6,
   rings_strength: 9,
@@ -238,6 +249,11 @@ const WEEKLY_STRESS_THRESHOLDS: Record<SkillStressFocus, { safe: number; warning
   dip_pattern: { safe: 130, warning: 190, limit: 260 },
   squat_pattern: { safe: 160, warning: 240, limit: 320 },
   hinge_pattern: { safe: 140, warning: 200, limit: 280 },
+  // [SKILL-STRESS-FOCUS-CONTRACT] barbell_hinge thresholds set conservatively
+  // 10-15% lower than hinge_pattern — loaded barbell deadlift work fatigues
+  // the posterior chain faster than bodyweight hinges. Same shape as the
+  // hinge_pattern row above; only the absolute numbers differ.
+  barbell_hinge: { safe: 120, warning: 170, limit: 240 },
   unilateral_leg: { safe: 120, warning: 180, limit: 240 },
   anti_extension_core: { safe: 140, warning: 200, limit: 280 },
   anti_rotation_core: { safe: 120, warning: 180, limit: 240 },
@@ -246,6 +262,9 @@ const WEEKLY_STRESS_THRESHOLDS: Record<SkillStressFocus, { safe: number; warning
   explosive_push: { safe: 100, warning: 150, limit: 200 },
   joint_integrity: { safe: 200, warning: 300, limit: 400 },
   mobility: { safe: 300, warning: 400, limit: 500 },
+  // [SKILL-ISOMETRIC-WEEKLY-THRESHOLDS] Conservative ring-support
+  // adjacent thresholds for skill-position holds.
+  skill_isometric: { safe: 60, warning: 90, limit: 120 },
   transition: { safe: 80, warning: 120, limit: 160 },
   rings_stability: { safe: 100, warning: 150, limit: 200 },
   rings_strength: { safe: 60, warning: 90, limit: 120 },
@@ -462,6 +481,14 @@ function getJointStressForExercise(exercise: PlannedExercise): Record<JointStres
     rings_strength: { shoulder: 85, shoulder_tendon: 90 },
     squat_pattern: {},
     hinge_pattern: {},
+    // [SKILL-STRESS-FOCUS-CONTRACT] barbell_hinge: deadlift variants load the
+    // hip flexors and lumbar spine. hip_flexor is the only canonical
+    // JointStressFocus that maps cleanly to barbell hinge fatigue; the other
+    // canonical foci (wrist/elbow/shoulder/scapular_tendon/bicep_tendon/sternum)
+    // are not loaded by deadlift patterns. Empty `{}` would falsely imply
+    // zero joint stress, so a single hip_flexor: 40 entry is doctrinally
+    // accurate without overstating systemic load.
+    barbell_hinge: { hip_flexor: 40 },
     unilateral_leg: {},
     anti_extension_core: {},
     anti_rotation_core: {},
@@ -470,6 +497,9 @@ function getJointStressForExercise(exercise: PlannedExercise): Record<JointStres
     explosive_push: { shoulder: 50, wrist: 50 },
     joint_integrity: {},
     mobility: {},
+    // [SKILL-ISOMETRIC-JOINT-DIST] Skill holds load shoulders/scapular
+    // tendons primarily, with secondary elbow/wrist stress.
+    skill_isometric: { shoulder: 70, scapular_tendon: 70, elbow: 40, wrist: 40 },
     shoulder_isolation: { shoulder: 40 },
     arm_isolation: { elbow: 30 },
     grip_strength: { wrist: 40 },

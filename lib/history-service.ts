@@ -95,9 +95,9 @@ function toProgramHistory(row: ProgramHistoryRow): ProgramHistory {
     status: row.status as ProgramStatus,
     generationReason: row.generation_reason,
     reasonSummary: row.reason_summary ?? undefined,
-    goalsSnapshot: row.goals_snapshot as ProgramHistory['goalsSnapshot'],
-    athleteInputsSnapshot: row.athlete_inputs_snapshot as ProgramHistory['athleteInputsSnapshot'],
-    programStructureSnapshot: row.program_structure_snapshot as ProgramHistory['programStructureSnapshot'],
+    goalsSnapshot: row.goals_snapshot as unknown as ProgramHistory['goalsSnapshot'],
+    athleteInputsSnapshot: row.athlete_inputs_snapshot as unknown as ProgramHistory['athleteInputsSnapshot'],
+    programStructureSnapshot: row.program_structure_snapshot as unknown as ProgramHistory['programStructureSnapshot'],
     primaryGoal: row.primary_goal ?? undefined,
     trainingDaysPerWeek: row.training_days_per_week ?? undefined,
     sessionLengthMinutes: row.session_length_minutes ?? undefined,
@@ -832,7 +832,9 @@ export async function getWorkoutSessionsForProgram(
       LIMIT ${limit}
     `
 
-    return result.map(row => toWorkoutSession(row as WorkoutSessionRow))
+    // [DB-ROW-TYPE-AT-BOUNDARY] explicit Record<string, unknown> avoids
+    // implicit-any on the row callback parameter.
+    return result.map((row: Record<string, unknown>) => toWorkoutSession(row as unknown as WorkoutSessionRow))
   } catch (error) {
     console.error('[HistoryService] Error fetching program sessions:', error)
     return []

@@ -1,0 +1,24 @@
+lib/adaptive-deload-recovery-engine.ts(471,17): error TS2323: Cannot redeclare exported variable 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(599,17): error TS2323: Cannot redeclare exported variable 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(706,17): error TS2323: Cannot redeclare exported variable 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(753,17): error TS2323: Cannot redeclare exported variable 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(876,17): error TS2323: Cannot redeclare exported variable 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(965,17): error TS2323: Cannot redeclare exported variable 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1004,17): error TS2323: Cannot redeclare exported variable 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1062,17): error TS2323: Cannot redeclare exported variable 'assessCycleCompatibility'.
+lib/adaptive-deload-recovery-engine.ts(1109,3): error TS2323: Cannot redeclare exported variable 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(1109,3): error TS2484: Export declaration conflicts with exported declaration of 'assessRecoveryNeed'.
+lib/adaptive-deload-recovery-engine.ts(1110,3): error TS2323: Cannot redeclare exported variable 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(1110,3): error TS2484: Export declaration conflicts with exported declaration of 'generatePhaseAdjustments'.
+lib/adaptive-deload-recovery-engine.ts(1111,3): error TS2323: Cannot redeclare exported variable 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(1111,3): error TS2484: Export declaration conflicts with exported declaration of 'calculatePhaseDuration'.
+lib/adaptive-deload-recovery-engine.ts(1112,3): error TS2323: Cannot redeclare exported variable 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(1112,3): error TS2484: Export declaration conflicts with exported declaration of 'applyRecoveryAdjustmentsToSession'.
+lib/adaptive-deload-recovery-engine.ts(1113,3): error TS2323: Cannot redeclare exported variable 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(1113,3): error TS2484: Export declaration conflicts with exported declaration of 'generateRecoveryPhaseExplanation'.
+lib/adaptive-deload-recovery-engine.ts(1114,3): error TS2323: Cannot redeclare exported variable 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1114,3): error TS2484: Export declaration conflicts with exported declaration of 'generateRecoveryCoachMessage'.
+lib/adaptive-deload-recovery-engine.ts(1115,3): error TS2323: Cannot redeclare exported variable 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1115,3): error TS2484: Export declaration conflicts with exported declaration of 'assessPhaseCompletion'.
+lib/adaptive-deload-recovery-engine.ts(1116,3): error TS2323: Cannot redeclare exported variable 'assessCycleCompatibility'.
+lib/adaptive-deload-recovery-engine.ts(1116,3): error TS2484: Export declaration conflicts with exported declaration of 'assessCycleCompatibility'.

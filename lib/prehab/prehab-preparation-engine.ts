@@ -961,13 +961,9 @@ export function generateSkillFocusedPrehab(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeJointStress,
-  calculatePrehabDuration,
-  selectPrehabExercises,
-  generateSafetyNotes,
-  generatePrehabWarmup,
-  prehabToExerciseBlock,
-  generateSkillFocusedPrehab,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All seven functions are declared with
+// inline `export function` at lines 559, 668, 707, 808, 853, 922, 947.
+// The previous bottom export block re-listed every name and produced
+// TS2300/TS2484. Inline `export function` remains the single canonical
+// export style; public API is unchanged.

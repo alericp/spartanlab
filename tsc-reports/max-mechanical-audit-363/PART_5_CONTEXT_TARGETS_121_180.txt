@@ -1,0 +1,89 @@
+===== PART 5 — CONTEXT TARGETS 121-180 =====
+
+--- CONTEXT 001 | lib/unified-coaching-engine.ts:786:20 | TS2339 ---
+lib/unified-coaching-engine.ts(786,20): error TS2339: Property 'recommendation' does not exist on type 'TrainingDecision'.
+Hint: Map/remove stale `recommendation` using local code context. Do not add shared type fields.
+   774:     requiresDeload: deloadRecommendation?.shouldDeload || false,
+   775:     sessionAdjustments,
+   776:   }
+   777: }
+   778: 
+   779: function determineFatigueLevel(
+   780:   decision: TrainingDecision,
+   781:   deload: DeloadRecommendation | null
+   782: ): FatigueContext['fatigueLevel'] {
+   783:   if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
+   784:   if (deload?.shouldDeload) return 'fatigued'
+   785:   
+>> 786:   switch (decision.recommendation) {
+   787:     case 'full_session':
+   788:       return 'fresh'
+   789:     case 'modified_session':
+   790:       return 'normal'
+   791:     case 'light_session':
+   792:       return 'fatigued'
+   793:     case 'rest_day':
+   794:       return 'overtrained'
+   795:     default:
+   796:       return 'normal'
+   797:   }
+   798: }
+
+--- CONTEXT 002 | lib/unified-coaching-engine.ts:895:53 | TS2345 ---
+lib/unified-coaching-engine.ts(895,53): error TS2345: Argument of type '{ primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }' is not assignable to parameter of type 'string'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   883:   // Add general categories based on constraints
+   884:   if (constraintContext.primaryConstraint?.includes('pull')) {
+   885:     skillRelevance.push('general_pulling')
+   886:   }
+   887:   if (constraintContext.primaryConstraint?.includes('push')) {
+   888:     skillRelevance.push('general_pushing')
+   889:   }
+   890:   if (constraintContext.primaryConstraint?.includes('compression')) {
+   891:     skillRelevance.push('general_compression')
+   892:   }
+   893:   
+   894:   // Get protocols using the session recommendation function
+>> 895:   const allProtocols = recommendProtocolsForSession({
+   896:     primarySkill: athleteContext.primaryGoal,
+   897:     jointCautions: athleteContext.jointCautions as JointCaution[],
+   898:     sessionFocus: skillContext.primarySkillState?.skill 
+   899:       ? [skillContext.primarySkillState.skill as string]
+   900:       : [],
+   901:     experienceLevel: 'intermediate',
+   902:     sessionLength: athleteContext.sessionDurationMinutes,
+   903:     includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
+   904:   })
+   905:   
+   906:   // Categorize protocols by activation type
+   907:   // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
+
+--- CONTEXT 003 | lib/unified-coaching-engine.ts:957:5 | TS2322 ---
+lib/unified-coaching-engine.ts(957,5): error TS2322: Type '"intermediate" | "advanced" | "beginner" | "elite"' is not assignable to type 'ExperienceLevel'.
+Hint: Only patch if local shape fix is clear from context; otherwise defer.
+   945:       'beginner': 1,
+   946:       'novice': 2,
+   947:       'intermediate': 3,
+   948:       'advanced': 4,
+   949:       'elite': 5,
+   950:     }
+   951:     skillLevels[state.skill] = levelScores[state.currentLevel] || 1
+   952:   }
+   953:   
+   954:   const input: FrameworkSelectionInput = {
+   955:     primaryGoal: athleteContext.primaryGoal,
+   956:     secondaryGoals: athleteContext.secondaryGoals,
+>> 957:     experienceLevel: getExperienceLevelFromTrainingAge(athleteContext.trainingAge),
+   958:     trainingStyle: athleteContext.trainingStyle,
+   959:     equipment: athleteContext.equipment,
+   960:     jointCautions: athleteContext.jointCautions,
+   961:     primarySkill: skillContext.primarySkillState?.skill || null,
+   962:     skillLevels,
+   963:     readinessScore: skillContext.readinessBreakdown?.overallScore || 50,
+   964:     limitingFactor: skillContext.readinessBreakdown?.limitingFactor || null,
+   965:     primaryConstraint: constraintContext.primaryConstraint || null,
+   966:     hasTendonConcern,
+   967:     preferredRepRange: envelopeContext.recommendations.preferredRepRange,
+   968:     preferredDensity: envelopeContext.recommendations.preferredDensity,
+   969:     envelopeConfidence: envelopeContext.hasHighConfidenceData ? 0.8 : 0.3,
+

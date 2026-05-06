@@ -1,0 +1,29 @@
+lib/program-history-versioning.ts(72,16): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-history-versioning.ts(184,19): error TS2367: This comparison appears to be unintentional because the types 'number | undefined' and 'string' have no overlap.
+lib/program-history-versioning.ts(185,25): error TS2339: Property 'sessions' does not exist on type 'ProgramHistory'.
+lib/program-history-versioning.ts(355,26): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(356,26): error TS2339: Property 'weightUnit' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(360,26): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-history-versioning.ts(368,30): error TS2339: Property 'skillInterests' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(369,5): error TS2322: Type 'PullUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(370,5): error TS2322: Type 'PushUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(371,5): error TS2322: Type 'DipCapacity | null | undefined' is not assignable to type 'number | undefined'.
+lib/program-history-versioning.ts(372,34): error TS2551: Property 'weightedPullUpLoad' does not exist on type 'OnboardingProfile'. Did you mean 'weightedPullUp'?
+lib/program-history-versioning.ts(373,31): error TS2551: Property 'weightedDipLoad' does not exist on type 'OnboardingProfile'. Did you mean 'weightedDip'?
+lib/program-history-versioning.ts(374,37): error TS2551: Property 'frontLeverLevel' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/program-history-versioning.ts(375,34): error TS2339: Property 'plancheLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(376,33): error TS2339: Property 'muscleUpReadiness' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(377,31): error TS2339: Property 'hspuLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(378,28): error TS2339: Property 'sleepQuality' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(379,27): error TS2339: Property 'stressLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(380,34): error TS2339: Property 'recoveryConfidence' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(419,30): error TS2339: Property 'skillInterests' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(445,18): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+lib/program-history-versioning.ts(451,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+lib/program-history-versioning.ts(461,25): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(461,55): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(461,66): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(462,18): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(463,18): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(464,19): error TS2551: Property 'notes' does not exist on type 'AdaptiveExercise'. Did you mean 'note'?
+lib/program-history-versioning.ts(561,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.

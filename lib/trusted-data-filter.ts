@@ -10,7 +10,10 @@
 
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getStrengthRecords, type StrengthRecord } from './strength-service'
-import { getSkillSessions, type SkillSession } from './skill-session-service'
+// [SKILL-SESSION-DERIVED-FROM-FN] `skill-session-service` no longer
+// re-exports `SkillSession`; derive from the function return shape.
+import { getSkillSessions } from './skill-session-service'
+type SkillSession = Awaited<ReturnType<typeof getSkillSessions>>[number]
 
 /**
  * Filter workout logs to only trusted data

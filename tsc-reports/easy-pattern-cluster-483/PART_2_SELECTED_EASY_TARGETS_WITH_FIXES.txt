@@ -1,0 +1,1535 @@
+===== PART 2 — SELECTED EASY TARGETS WITH FIX GUIDANCE =====
+
+Selected file counts:
+- lib/server/authoritative-program-generation.ts: 15
+- lib/program/skill-specific-truth-resolution.ts: 14
+- lib/unified-coaching-engine.ts: 11
+- lib/onboarding-service.ts: 10
+- lib/session-variety-engine.ts: 9
+- lib/performance-envelope-engine.ts: 9
+- lib/program-truth-extractor.ts: 8
+- lib/adaptive-program-builder.ts: 6
+- lib/program-history-versioning.ts: 5
+- lib/program-state.ts: 5
+- lib/repositories/profile-repository.ts: 5
+- lib/unified-program-generation.ts: 5
+- lib/doctrine/doctrine-influence-contract.ts: 5
+- lib/roadmap/skill-roadmap-service.ts: 5
+- lib/readiness/skill-readiness.ts: 5
+- lib/adaptive-athlete-engine.ts: 4
+- lib/dashboard-service.ts: 4
+- lib/program-version-service.ts: 4
+- lib/strength-intelligence-engine.ts: 4
+- lib/volume-analyzer.ts: 4
+- lib/training-coach.ts: 4
+- lib/advanced-skills-integration.ts: 4
+- lib/adaptive-progression-engine.ts: 3
+- lib/canonical-profile-service.ts: 3
+- lib/prescription-contract.ts: 3
+- lib/program-adjustment-engine.ts: 3
+- lib/readiness/canonical-readiness-engine.ts: 3
+- lib/server/authoritative-generation-truth-ingestion.ts: 3
+- lib/weak-point-engine.ts: 3
+- lib/constraint-detection-engine.ts: 3
+- lib/constraint-integration.ts: 3
+- lib/milestone-engine.ts: 3
+- lib/strength-score-engine.ts: 3
+- lib/doctrine/method-profile-registry.ts: 3
+- lib/history-service.ts: 3
+- lib/metrics-update-service.ts: 2
+- lib/movement-bias-detection-engine.ts: 2
+- lib/profile-sync-service.ts: 2
+- lib/skill-audit-system.ts: 2
+- lib/training-methods.ts: 2
+- lib/athlete-profile.ts: 2
+- lib/program-generation/exercise-selection-materiality.ts: 2
+- lib/program/doctrine-causality-audit-contract.ts: 2
+- lib/relative-strength-engine.ts: 2
+- lib/strength-trend-engine.ts: 2
+- lib/weak-point-detection.ts: 2
+- lib/movement-family-registry.ts: 2
+- lib/weekly-stimulus-allocation.ts: 2
+- lib/program/db-truth-scoring-bridge.ts: 2
+- lib/ai-truth-audit.ts: 1
+- lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts: 1
+- lib/doctrine/source-batches/index.ts: 1
+- lib/history-snapshot-engine.ts: 1
+- lib/performance-envelope-integration.ts: 1
+- lib/planner-truth-audit.ts: 1
+- lib/profile-normalizer.ts: 1
+- lib/program/program-display-contract.ts: 1
+- lib/stripe.ts: 1
+- lib/training-principles-engine.ts: 1
+- lib/workout/load-authoritative-session.ts: 1
+- lib/coaching-explanation-contract.ts: 1
+- lib/equipment-adaptation-engine.ts: 1
+- lib/workout-feedback-integration.ts: 1
+- lib/challenges/challenge-definitions.ts: 1
+- lib/doctrine/doctrine-consumption-audit.ts: 1
+- lib/performance-envelope-service.ts: 1
+- lib/progress-data-service.ts: 1
+- lib/strength-guidance-engine.ts: 1
+- lib/workout/live-workout-adaptive-signals.ts: 1
+- lib/workout-history-persistence.ts: 1
+- lib/flexible-schedule-engine.ts: 1
+- lib/goal-projection-engine.ts: 1
+- lib/program/row-level-method-prescription-mutator.ts: 1
+- lib/skill-readiness/skillPrerequisiteData.ts: 1
+- lib/skill-readiness/skillReadinessService.ts: 1
+- lib/unified-readiness-integration.ts: 1
+- lib/adaptive-training-cycle-engine.ts: 1
+
+Selected error-code counts:
+- TS2322: 113
+- TS2345: 30
+- TS2367: 17
+- TS2740: 16
+- TS2339: 15
+- TS2739: 9
+- TS2352: 9
+- TS2551: 9
+- TS2304: 7
+- TS2741: 5
+- TS2454: 5
+- TS2554: 5
+
+--- TARGET 001 ---
+lib/adaptive-athlete-engine.ts(636,7): error TS2322: Type '"insufficient_data"' is not assignable to type 'MomentumState'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "insufficient_data", MomentumState, adaptive, athlete, engine, TS2322, insufficient_data
+
+--- TARGET 002 ---
+lib/adaptive-athlete-engine.ts(639,7): error TS2322: Type '"optimal"' is not assignable to type 'FatigueState'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "optimal", FatigueState, adaptive, athlete, engine, TS2322, optimal
+
+--- TARGET 003 ---
+lib/adaptive-athlete-engine.ts(640,7): error TS2322: Type '"green"' is not assignable to type 'RecoveryLevel'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "green", RecoveryLevel, adaptive, athlete, engine, TS2322, green
+
+--- TARGET 004 ---
+lib/adaptive-athlete-engine.ts(647,7): error TS2322: Type '"not_needed"' is not assignable to type 'DeloadStatus'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "not_needed", DeloadStatus, adaptive, athlete, engine, TS2322, not_needed
+
+--- TARGET 005 ---
+lib/adaptive-program-builder.ts(32868,5): error TS2322: Type 'string' is not assignable to type 'TrainingPathType | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string, TrainingPathType | undefined, adaptive, program, builder, TS2322, TrainingPathType, undefined
+
+--- TARGET 006 ---
+lib/adaptive-program-builder.ts(33042,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }, string, adaptive, program, builder, TS2322, primaryGoal, null
+
+--- TARGET 007 ---
+lib/adaptive-progression-engine.ts(1049,9): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 2 | 3 | 4 | 5 | 6 | 7, adaptive, progression, engine, TS2322
+
+--- TARGET 008 ---
+lib/adaptive-progression-engine.ts(1063,9): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 2 | 3 | 4 | 5 | 6 | 7, adaptive, progression, engine, TS2322
+
+--- TARGET 009 ---
+lib/adaptive-progression-engine.ts(1070,7): error TS2322: Type 'number' is not assignable to type '2 | 3 | 4 | 5 | 6 | 7'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 2 | 3 | 4 | 5 | 6 | 7, adaptive, progression, engine, TS2322
+
+--- TARGET 010 ---
+lib/ai-truth-audit.ts(813,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | number, number, truth, audit, TS2322, string
+
+--- TARGET 011 ---
+lib/canonical-profile-service.ts(1451,131): error TS2322: Type '"lbs" | "kg" | undefined' is not assignable to type '"lbs" | "kg"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "lbs" | "kg" | undefined, "lbs" | "kg", canonical, profile, service, TS2322, lbs, undefined
+
+--- TARGET 012 ---
+lib/canonical-profile-service.ts(1454,122): error TS2322: Type '"lbs" | "kg" | undefined' is not assignable to type '"lbs" | "kg"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "lbs" | "kg" | undefined, "lbs" | "kg", canonical, profile, service, TS2322, lbs, undefined
+
+--- TARGET 013 ---
+lib/dashboard-service.ts(127,3): error TS2322: Type '0' is not assignable to type 'SessionLengthMinutes'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: 0, SessionLengthMinutes, dashboard, service, TS2322
+
+--- TARGET 014 ---
+lib/dashboard-service.ts(144,5): error TS2322: Type 'Partial<Record<ExerciseType, StrengthRecord | null>>' is not assignable to type 'Record<ExerciseType, StrengthRecord | null>'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: Partial<Record<ExerciseType, StrengthRecord | null>>, Record<ExerciseType, StrengthRecord | null>, dashboard, service, TS2322, Partial, Record, ExerciseType
+
+--- TARGET 015 ---
+lib/dashboard-service.ts(330,7): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | number, number, dashboard, service, TS2322, string
+
+--- TARGET 016 ---
+lib/dashboard-service.ts(372,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | number, number, dashboard, service, TS2322, string
+
+--- TARGET 017 ---
+lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts(375,5): error TS2322: Type 'Record<string, unknown> | null' is not assignable to type 'Record<string, boolean> | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: Record<string, unknown> | null, Record<string, boolean> | null, doctrine, source, batches, batch, uploaded, pdf
+
+--- TARGET 018 ---
+lib/doctrine/source-batches/index.ts(738,3): error TS2322: Type 'Batch01Provenance | { batch: "batch_04"; sourceId: string | null; } | { batch: "batch_05"; sourceId: string | null; } | { batch: "batch_06"; sourceId: string | null; } | ... 4 more ... | null' is not assignable to type 'Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | ... 5 more ... | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: Batch01Provenance | { batch: "batch_04"; sourceId: string | null; } | { batch: "batch_05"; sourceId: string | null; } | { batch: "batch_06"; sourceId: string | null; } | ... 4 more ... | null, Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | ... 5 more ... | null, doctrine, source, batches, index, TS2322, Batch01Provenance
+
+--- TARGET 019 ---
+lib/history-snapshot-engine.ts(262,61): error TS2322: Type '"declining"' is not assignable to type 'TrendDirection'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "declining", TrendDirection, history, snapshot, engine, TS2322, declining
+
+--- TARGET 020 ---
+lib/metrics-update-service.ts(403,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: WeightedBenchmark | undefined, { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined, metrics, update, service, TS2322, WeightedBenchmark, undefined
+
+--- TARGET 021 ---
+lib/metrics-update-service.ts(404,5): error TS2322: Type 'WeightedBenchmark | undefined' is not assignable to type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: WeightedBenchmark | undefined, { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null | undefined, metrics, update, service, TS2322, WeightedBenchmark, undefined
+
+--- TARGET 022 ---
+lib/movement-bias-detection-engine.ts(720,50): error TS2322: Type '"compression"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "compression", MovementFamily, movement, bias, detection, engine, TS2322, compression
+
+--- TARGET 023 ---
+lib/movement-bias-detection-engine.ts(720,65): error TS2322: Type '"hip_flexion"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "hip_flexion", MovementFamily, movement, bias, detection, engine, TS2322, hip_flexion
+
+--- TARGET 024 ---
+lib/onboarding-service.ts(661,7): error TS2322: Type 'number' is not assignable to type 'TrainingDays'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, TrainingDays, onboarding, service, TS2322
+
+--- TARGET 025 ---
+lib/performance-envelope-integration.ts(458,5): error TS2322: Type '{ movementFamily: MovementFamily; repRange: { min: number; max: number; display: string; }; weeklyVolume: { min: number; max: number; tolerated: number; display: string; }; sessionDensity: { ...; }; fatigueWarning: any; }[]' is not assignable to type '{ movementFamily: MovementFamily; repRange: string; weeklyVolume: string; sessionDensity: string; fatigueWarning?: string | undefined; }[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { movementFamily: MovementFamily; repRange: { min: number; max: number; display: string; }; weeklyVolume: { min: number; max: number; tolerated: number; display: string; }; sessionDensity: { ...; }; fatigueWarning: any; }[], { movementFamily: MovementFamily; repRange: string; weeklyVolume: string; sessionDensity: string; fatigueWarning?: string | undefined; }[], performance, envelope, integration, TS2322, movementFamily, MovementFamily
+
+--- TARGET 026 ---
+lib/planner-truth-audit.ts(499,9): error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: boolean | undefined, boolean, planner, truth, audit, TS2322, undefined
+
+--- TARGET 027 ---
+lib/prescription-contract.ts(168,7): error TS2322: Type '"add_reps"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "add_reps", "add_sets" | "reduce_rest" | "add_accessory" | undefined, prescription, contract, TS2322, add_reps, add_sets, reduce_rest
+
+--- TARGET 028 ---
+lib/prescription-contract.ts(252,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "progress_variation", "add_sets" | "reduce_rest" | "add_accessory" | undefined, prescription, contract, TS2322, progress_variation, add_sets, reduce_rest
+
+--- TARGET 029 ---
+lib/prescription-contract.ts(280,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "progress_variation", "add_sets" | "reduce_rest" | "add_accessory" | undefined, prescription, contract, TS2322, progress_variation, add_sets, reduce_rest
+
+--- TARGET 030 ---
+lib/profile-normalizer.ts(334,17): error TS2322: Type 'T' is not assignable to type 'object'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: T, object, profile, normalizer, TS2322
+
+--- TARGET 031 ---
+lib/profile-sync-service.ts(87,5): error TS2322: Type 'WeakestArea | null' is not assignable to type '"pulling_strength" | "pushing_strength" | "core_strength" | "shoulder_stability" | "hip_mobility" | "hamstring_flexibility" | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: WeakestArea | null, "pulling_strength" | "pushing_strength" | "core_strength" | "shoulder_stability" | "hip_mobility" | "hamstring_flexibility" | null | undefined, profile, sync, service, TS2322, WeakestArea, null
+
+--- TARGET 032 ---
+lib/profile-sync-service.ts(272,5): error TS2322: Type 'AthleteProfile | null' is not assignable to type 'AthleteProfile'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | null, AthleteProfile, profile, sync, service, TS2322, null
+
+--- TARGET 033 ---
+lib/program-adjustment-engine.ts(466,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | number, number, program, adjustment, engine, TS2322, string
+
+--- TARGET 034 ---
+lib/program-history-versioning.ts(383,5): error TS2322: Type '"kg" | "lb"' is not assignable to type '"lbs" | "kg" | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "kg" | "lb", "lbs" | "kg" | undefined, program, history, versioning, TS2322, lbs, undefined
+
+--- TARGET 035 ---
+lib/program-state.ts(105,9): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string[], TrainingMethodPreference[], program, state, TS2322, string, TrainingMethodPreference
+
+--- TARGET 036 ---
+lib/program-state.ts(192,7): error TS2322: Type '{ id: string; groupType: "straight"; exercises: { id: string; name: string; }[]; }[]' is not assignable to type '{ id: string; groupType: "density_block" | "straight" | "superset" | "circuit" | "cluster"; exercises: { id: string; name: string; prefix?: string | undefined; trainingMethod: string; methodRationale: string; }[]; instruction: string; restProtocol: string; }[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { id: string; groupType: "straight"; exercises: { id: string; name: string; }[]; }[], { id: string; groupType: "density_block" | "straight" | "superset" | "circuit" | "cluster"; exercises: { id: string; name: string; prefix?: string | undefined; trainingMethod: string; methodRationale: string; }[]; instruction: string; restProtocol: string; }[], program, state, TS2322, string, groupType, straight
+
+--- TARGET 037 ---
+lib/program-state.ts(1421,7): error TS2322: Type 'SafeSkillTrace | { readonly sourceSkillCount: 0; readonly weightedAllocationCount: 0; readonly primarySpineCount: 0; readonly secondaryAnchorCount: 0; readonly tertiaryCount: 0; ... 4 more ...; readonly finalWeekExpression: { ...; }; }' is not assignable to type 'SelectedSkillTraceContract | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: SafeSkillTrace | { readonly sourceSkillCount: 0; readonly weightedAllocationCount: 0; readonly primarySpineCount: 0; readonly secondaryAnchorCount: 0; readonly tertiaryCount: 0; ... 4 more ...; readonly finalWeekExpression: { ...; }; }, SelectedSkillTraceContract | null | undefined, program, state, TS2322, SafeSkillTrace, readonly, sourceSkillCount
+
+--- TARGET 038 ---
+lib/program-truth-extractor.ts(328,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | undefined, TrainingPathType | undefined, program, truth, extractor, TS2322, string, undefined
+
+--- TARGET 039 ---
+lib/program-truth-extractor.ts(330,5): error TS2322: Type 'string' is not assignable to type 'ExperienceLevel'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string, ExperienceLevel, program, truth, extractor, TS2322
+
+--- TARGET 040 ---
+lib/program-truth-extractor.ts(332,5): error TS2322: Type 'number' is not assignable to type '"flexible" | TrainingDays'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, "flexible" | TrainingDays, program, truth, extractor, TS2322, flexible, TrainingDays
+
+--- TARGET 041 ---
+lib/program-truth-extractor.ts(334,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, SessionLength, program, truth, extractor, TS2322
+
+--- TARGET 042 ---
+lib/program-version-service.ts(339,7): error TS2322: Type '{ skill: SkillKey; currentLevel: number; readinessScore: number; limitingFactor: string | null; }[]' is not assignable to type '{ skill: string; currentLevel: string; readinessScore: number; limitingFactor: string | null; }[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { skill: SkillKey; currentLevel: number; readinessScore: number; limitingFactor: string | null; }[], { skill: string; currentLevel: string; readinessScore: number; limitingFactor: string | null; }[], program, version, service, TS2322, skill, SkillKey
+
+--- TARGET 043 ---
+lib/program-version-service.ts(652,5): error TS2322: Type 'number' is not assignable to type 'TrainingDays | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, TrainingDays | undefined, program, version, service, TS2322, TrainingDays, undefined
+
+--- TARGET 044 ---
+lib/program-version-service.ts(654,5): error TS2322: Type 'number' is not assignable to type 'SessionLength | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, SessionLength | undefined, program, version, service, TS2322, SessionLength, undefined
+
+--- TARGET 045 ---
+lib/program/program-display-contract.ts(6593,5): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'boolean'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean | undefined, boolean, program, display, contract, TS2322, number, undefined
+
+--- TARGET 046 ---
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 047 ---
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 048 ---
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 049 ---
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 050 ---
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 051 ---
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 052 ---
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 053 ---
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+
+--- TARGET 054 ---
+lib/readiness/canonical-readiness-engine.ts(549,3): error TS2322: Type '"moderate" | "strong" | "weak" | "very_strong"' is not assignable to type '"moderate" | "strong" | "weak"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "moderate" | "strong" | "weak" | "very_strong", "moderate" | "strong" | "weak", readiness, canonical, engine, TS2322, moderate, strong
+
+--- TARGET 055 ---
+lib/readiness/canonical-readiness-engine.ts(1219,7): error TS2322: Type 'ReadinessLevel | "Building"' is not assignable to type 'ReadinessLevel'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: ReadinessLevel | "Building", ReadinessLevel, readiness, canonical, engine, TS2322, Building
+
+--- TARGET 056 ---
+lib/repositories/profile-repository.ts(65,11): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, repositories, profile, repository, TS2322, string, userId
+
+--- TARGET 057 ---
+lib/repositories/profile-repository.ts(257,9): error TS2322: Type 'AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }' is not assignable to type 'AthleteProfile'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | { id: string; userId: string; sex: any; height: any; heightUnit: "inches"; bodyweight: any; weightUnit: "lbs"; experienceLevel: "beginner"; trainingDaysPerWeek: number; ... 12 more ...; createdAt: string; }, AthleteProfile, repositories, profile, repository, TS2322, string, userId
+
+--- TARGET 058 ---
+lib/repositories/profile-repository.ts(307,9): error TS2322: Type 'number' is not assignable to type 'TrainingDaysPerWeek | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, TrainingDaysPerWeek | null, repositories, profile, repository, TS2322, TrainingDaysPerWeek, null
+
+--- TARGET 059 ---
+lib/server/authoritative-generation-truth-ingestion.ts(542,7): error TS2322: Type '"flexible" | TrainingDays' is not assignable to type 'number | null'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "flexible" | TrainingDays, number | null, server, authoritative, generation, truth, ingestion, TS2322
+
+--- TARGET 060 ---
+lib/server/authoritative-generation-truth-ingestion.ts(1090,5): error TS2322: Type 'NeonSignalQuality' is not assignable to type 'SignalQuality'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: NeonSignalQuality, SignalQuality, server, authoritative, generation, truth, ingestion, TS2322
+
+--- TARGET 061 ---
+lib/server/authoritative-program-generation.ts(1343,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, server, authoritative, program, generation, TS2322, addedWeight
+
+--- TARGET 062 ---
+lib/server/authoritative-program-generation.ts(1344,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, number | null | undefined, server, authoritative, program, generation, TS2322, addedWeight
+
+--- TARGET 063 ---
+lib/server/authoritative-program-generation.ts(3183,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string | undefined, string, server, authoritative, program, generation, TS2322, undefined
+
+--- TARGET 064 ---
+lib/server/authoritative-program-generation.ts(3291,5): error TS2322: Type '"1.0.0"' is not assignable to type '"1.1.0"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "1.0.0", "1.1.0", server, authoritative, program, generation, TS2322
+
+--- TARGET 065 ---
+lib/session-variety-engine.ts(830,33): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "hip_hinge", MovementFamily, session, variety, engine, TS2322, hip_hinge
+
+--- TARGET 066 ---
+lib/skill-audit-system.ts(624,5): error TS2322: Type 'RPEValue | [RPEValue, RPEValue]' is not assignable to type '[number, number]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: RPEValue | [RPEValue, RPEValue], [number, number], skill, audit, system, TS2322, RPEValue, number
+
+--- TARGET 067 ---
+lib/skill-audit-system.ts(625,5): error TS2322: Type '"avoid" | "occasional" | "allowed" | "encouraged"' is not assignable to type '"never" | "avoid" | "occasional" | "allowed"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "avoid" | "occasional" | "allowed" | "encouraged", "never" | "avoid" | "occasional" | "allowed", skill, audit, system, TS2322, avoid, occasional
+
+--- TARGET 068 ---
+lib/strength-intelligence-engine.ts(343,7): error TS2322: Type 'number' is not assignable to type '0 | 2 | 3 | 1'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 0 | 2 | 3 | 1, strength, intelligence, engine, TS2322
+
+--- TARGET 069 ---
+lib/strength-intelligence-engine.ts(344,7): error TS2322: Type 'number' is not assignable to type '0 | 2 | 3 | 1'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 0 | 2 | 3 | 1, strength, intelligence, engine, TS2322
+
+--- TARGET 070 ---
+lib/strength-intelligence-engine.ts(354,7): error TS2322: Type 'number' is not assignable to type '0 | 2 | 3 | 1'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 0 | 2 | 3 | 1, strength, intelligence, engine, TS2322
+
+--- TARGET 071 ---
+lib/strength-intelligence-engine.ts(355,7): error TS2322: Type 'number' is not assignable to type '0 | 2 | 3 | 1'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number, 0 | 2 | 3 | 1, strength, intelligence, engine, TS2322
+
+--- TARGET 072 ---
+lib/stripe.ts(4,3): error TS2322: Type '"2025-04-30.basil"' is not assignable to type '"2025-02-24.acacia"'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "2025-04-30.basil", "2025-02-24.acacia", stripe, TS2322, basil, acacia
+
+--- TARGET 073 ---
+lib/training-methods.ts(2577,7): error TS2322: Type '{ id: string; name: string; prefix: string; trainingMethod: "circuit"; methodRationale: string; }[]' is not assignable to type '{ id: string; name: string; prefix?: string | undefined; trainingMethod: TrainingMethod; methodRationale: string; }[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { id: string; name: string; prefix: string; trainingMethod: "circuit"; methodRationale: string; }[], { id: string; name: string; prefix?: string | undefined; trainingMethod: TrainingMethod; methodRationale: string; }[], training, methods, TS2322, string, name, prefix
+
+--- TARGET 074 ---
+lib/training-principles-engine.ts(518,19): error TS2322: Type '4' is not assignable to type 'RPEValue'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: 4, RPEValue, training, principles, engine, TS2322
+
+--- TARGET 075 ---
+lib/unified-coaching-engine.ts(486,5): error TS2322: Type 'number | "flexible"' is not assignable to type 'number'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | "flexible", number, unified, coaching, engine, TS2322, flexible
+
+--- TARGET 076 ---
+lib/unified-coaching-engine.ts(749,5): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, unified, coaching, engine, TS2322, decision, shortGuidance
+
+--- TARGET 077 ---
+lib/unified-coaching-engine.ts(930,5): error TS2322: Type '"beginner" | "intermediate" | "advanced" | "elite"' is not assignable to type 'ExperienceLevel'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "beginner" | "intermediate" | "advanced" | "elite", ExperienceLevel, unified, coaching, engine, TS2322, beginner, intermediate
+
+--- TARGET 078 ---
+lib/unified-program-generation.ts(284,5): error TS2322: Type '"fixed"' is not assignable to type 'ScheduleMode'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "fixed", ScheduleMode, unified, program, generation, TS2322, fixed
+
+--- TARGET 079 ---
+lib/unified-program-generation.ts(379,7): error TS2322: Type '"skill_isometric"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "skill_isometric", MovementFamily, unified, program, generation, TS2322, skill_isometric
+
+--- TARGET 080 ---
+lib/unified-program-generation.ts(425,7): error TS2322: Type '"skill_isometric"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "skill_isometric", MovementFamily, unified, program, generation, TS2322, skill_isometric
+
+--- TARGET 081 ---
+lib/volume-analyzer.ts(255,5): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "hip_hinge", MovementFamily, volume, analyzer, TS2322, hip_hinge
+
+--- TARGET 082 ---
+lib/volume-analyzer.ts(255,18): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "squat", MovementFamily, volume, analyzer, TS2322, squat
+
+--- TARGET 083 ---
+lib/volume-analyzer.ts(462,7): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "hip_hinge", MovementFamily, volume, analyzer, TS2322, hip_hinge
+
+--- TARGET 084 ---
+lib/volume-analyzer.ts(464,5): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "squat", MovementFamily, volume, analyzer, TS2322, squat
+
+--- TARGET 085 ---
+lib/weak-point-engine.ts(1505,5): error TS2322: Type 'WeightedBenchmark | null' is not assignable to type '{ load: number; } | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: WeightedBenchmark | null, { load: number; } | null | undefined, weak, point, engine, TS2322, WeightedBenchmark, null
+
+--- TARGET 086 ---
+lib/weak-point-engine.ts(1506,5): error TS2322: Type 'WeightedBenchmark | null' is not assignable to type '{ load: number; } | null | undefined'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: WeightedBenchmark | null, { load: number; } | null | undefined, weak, point, engine, TS2322, WeightedBenchmark, null
+
+--- TARGET 087 ---
+lib/workout/load-authoritative-session.ts(207,5): error TS2322: Type '{ id: string; name: string; category: string; sets: number; repsOrTime: string; note: string; isOverrideable: boolean; selectionReason: string; prescribedLoad: unknown; targetRPE: unknown; restSeconds: unknown; method: unknown; ... 13 more ...; targetWeightedRPE: unknown; }[]' is not assignable to type 'AdaptiveExercise[]'.
+Pattern: TS2322: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { id: string; name: string; category: string; sets: number; repsOrTime: string; note: string; isOverrideable: boolean; selectionReason: string; prescribedLoad: unknown; targetRPE: unknown; restSeconds: unknown; method: unknown; ... 13 more ...; targetWeightedRPE: unknown; }[], AdaptiveExercise[], workout, load, authoritative, session, TS2322, string
+
+--- TARGET 088 ---
+lib/adaptive-program-builder.ts(28227,13): error TS2345: Argument of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...' is not assignable to parameter of type '{ byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb...'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { byFamily: Map<import("/workspaces/spartanlab/lib/program/skill-specific-truth-resolution").SkillFamily, { modifier: number; depth: "moderate" | "conservative" | "progressive"; ... 4 more ...; confidence: import("/workspaces/spartanlab/lib/program/programming-truth-bundle-contract").TruthConfidence; }>; globalFallb..., adaptive, program, builder, TS2345, byFamily, Map, import
+
+--- TARGET 089 ---
+lib/adaptive-program-builder.ts(31836,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AdaptiveProgram, ProgramToValidate, adaptive, program, builder, TS2345
+
+--- TARGET 090 ---
+lib/adaptive-program-builder.ts(32775,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string, PrimaryGoal | undefined, adaptive, program, builder, TS2345, PrimaryGoal, undefined
+
+--- TARGET 091 ---
+lib/athlete-profile.ts(1535,65): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SkillGoal'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string, SkillGoal, athlete, profile, TS2345
+
+--- TARGET 092 ---
+lib/athlete-profile.ts(1538,60): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EquipmentType'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string, EquipmentType, athlete, profile, TS2345
+
+--- TARGET 093 ---
+lib/coaching-explanation-contract.ts(927,5): error TS2345: Argument of type '"accessory" | "primary_skill" | "support" | "strength_output"' is not assignable to parameter of type '"primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "accessory" | "primary_skill" | "support" | "strength_output", "primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined, coaching, explanation, contract, TS2345, accessory, primary_skill
+
+--- TARGET 094 ---
+lib/constraint-detection-engine.ts(1045,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | null, AthleteProfile, constraint, detection, engine, TS2345, null
+
+--- TARGET 095 ---
+lib/constraint-integration.ts(197,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | null, AthleteProfile, constraint, integration, TS2345, null
+
+--- TARGET 096 ---
+lib/constraint-integration.ts(294,46): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | null, AthleteProfile, constraint, integration, TS2345, null
+
+--- TARGET 097 ---
+lib/constraint-integration.ts(307,58): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AthleteProfile | null, AthleteProfile, constraint, integration, TS2345, null
+
+--- TARGET 098 ---
+lib/doctrine/doctrine-influence-contract.ts(509,33): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean, boolean, doctrine, influence, contract, TS2345, number
+
+--- TARGET 099 ---
+lib/doctrine/doctrine-influence-contract.ts(511,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean, boolean, doctrine, influence, contract, TS2345, number
+
+--- TARGET 100 ---
+lib/doctrine/doctrine-influence-contract.ts(512,31): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean, boolean, doctrine, influence, contract, TS2345, number
+
+--- TARGET 101 ---
+lib/doctrine/doctrine-influence-contract.ts(513,34): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean, boolean, doctrine, influence, contract, TS2345, number
+
+--- TARGET 102 ---
+lib/doctrine/doctrine-influence-contract.ts(515,39): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: number | boolean, boolean, doctrine, influence, contract, TS2345, number
+
+--- TARGET 103 ---
+lib/equipment-adaptation-engine.ts(152,43): error TS2345: Argument of type '"pullup_bar"' is not assignable to parameter of type 'EquipmentType'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "pullup_bar", EquipmentType, equipment, adaptation, engine, TS2345, pullup_bar
+
+--- TARGET 104 ---
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"fallback" | "engine" | "profile"'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "canonical_profile", "fallback" | "engine" | "profile", onboarding, service, TS2345, canonical_profile, fallback, engine
+
+--- TARGET 105 ---
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: AdaptiveProgram, ProgramToValidate, onboarding, service, TS2345
+
+--- TARGET 106 ---
+lib/program-adjustment-engine.ts(470,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Exercise'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: string, Exercise, program, adjustment, engine, TS2345
+
+--- TARGET 107 ---
+lib/program-generation/exercise-selection-materiality.ts(703,68): error TS2345: Argument of type '"none"' is not assignable to parameter of type 'EquipmentType'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "none", EquipmentType, program, generation, exercise, selection, materiality, TS2345
+
+--- TARGET 108 ---
+lib/program-generation/exercise-selection-materiality.ts(1083,60): error TS2345: Argument of type '"weighted_belt"' is not assignable to parameter of type 'EquipmentType'.
+Pattern: TS2345: local shape mismatch
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "weighted_belt", EquipmentType, program, generation, exercise, selection, materiality, TS2345
+
+--- TARGET 109 ---
+lib/program-truth-extractor.ts(246,48): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'Record<string, unknown>'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: CanonicalProgrammingProfile, Record<string, unknown>, program, truth, extractor, TS2345, Record, string
+
+--- TARGET 110 ---
+lib/program/doctrine-causality-audit-contract.ts(483,46): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string | undefined'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: null, string | undefined, program, doctrine, causality, audit, contract, TS2345
+
+--- TARGET 111 ---
+lib/program/doctrine-causality-audit-contract.ts(484,46): error TS2345: Argument of type 'null' is not assignable to parameter of type 'string | undefined'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: null, string | undefined, program, doctrine, causality, audit, contract, TS2345
+
+--- TARGET 112 ---
+lib/server/authoritative-program-generation.ts(1125,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: TriggerSource, TruthTriggerSource, server, authoritative, program, generation, TS2345
+
+--- TARGET 113 ---
+lib/server/authoritative-program-generation.ts(1132,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: TriggerSource, TruthTriggerSource, server, authoritative, program, generation, TS2345
+
+--- TARGET 114 ---
+lib/unified-coaching-engine.ts(739,46): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, unified, coaching, engine, TS2345, decision, shortGuidance
+
+--- TARGET 115 ---
+lib/unified-coaching-engine.ts(742,72): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }, TrainingDecision, unified, coaching, engine, TS2345, decision, shortGuidance
+
+--- TARGET 116 ---
+lib/unified-coaching-engine.ts(871,53): error TS2345: Argument of type '{ primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }' is not assignable to parameter of type 'string'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: { primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }, string, unified, coaching, engine, TS2345, primarySkill, jointCautions
+
+--- TARGET 117 ---
+lib/workout-feedback-integration.ts(373,41): error TS2345: Argument of type '"conditioning"' is not assignable to parameter of type 'TrainingIntent'.
+Pattern: TS2345: local shape mismatch
+Fix: Map local value/object shape to target type only if obvious. Do not widen unions.
+Anchors: "conditioning", TrainingIntent, workout, feedback, integration, TS2345, conditioning
+
+--- TARGET 118 ---
+lib/challenges/challenge-definitions.ts(1170,14): error TS2740: Type '{ workout_count: string; rep_total: string; streak_days: string; skill_sessions: string; training_minutes: string; exercise_count: string; }' is missing the following properties from type 'Record<ChallengeGoalType, string>': weighted_strength, hold_time, skill_milestone, strength_reps, and 2 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { workout_count: string; rep_total: string; streak_days: string; skill_sessions: string; training_minutes: string; exercise_count: string; }, Record<ChallengeGoalType, string>, challenges, challenge, definitions, TS2740, workout_count, string
+
+--- TARGET 119 ---
+lib/doctrine/doctrine-consumption-audit.ts(283,9): error TS2740: Type 'Map<string, number>' is missing the following properties from type 'string[]': length, pop, push, concat, and 30 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: Map<string, number>, string[], doctrine, consumption, audit, TS2740, Map, string
+
+--- TARGET 120 ---
+lib/milestone-engine.ts(139,9): error TS2740: Type '{ weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }' is missing the following properties from type 'Record<ExerciseType, string>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }, Record<ExerciseType, string>, milestone, engine, TS2740, weighted_pull_up, string, weighted_dip
+
+--- TARGET 121 ---
+lib/milestone-engine.ts(146,9): error TS2740: Type '{ weighted_pull_up: number[]; weighted_dip: number[]; weighted_muscle_up: number[]; }' is missing the following properties from type 'Record<ExerciseType, number[]>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: number[]; weighted_dip: number[]; weighted_muscle_up: number[]; }, Record<ExerciseType, number[]>, milestone, engine, TS2740, weighted_pull_up, number, weighted_dip
+
+--- TARGET 122 ---
+lib/milestone-engine.ts(153,9): error TS2740: Type '{ weighted_pull_up: null; weighted_dip: null; weighted_muscle_up: null; }' is missing the following properties from type 'Record<ExerciseType, { weight: number; date: string; } | null>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: null; weighted_dip: null; weighted_muscle_up: null; }, Record<ExerciseType, { weight: number; date: string; } | null>, milestone, engine, TS2740, weighted_pull_up, null, weighted_dip
+
+--- TARGET 123 ---
+lib/performance-envelope-service.ts(443,3): error TS2740: Type '{ athleteId: any; movementFamily: any; goalType: any; preferredRepRangeMin: any; preferredRepRangeMax: any; bestRepZone: any; repZoneConfidence: any; preferredSetRangeMin: any; preferredSetRangeMax: any; ... 21 more ...; updateCount: any; }' is missing the following properties from type 'PerformanceEnvelope': volumeMetrics, recoveryRateEstimate, trendStrength, consecutiveImprovements, and 2 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { athleteId: any; movementFamily: any; goalType: any; preferredRepRangeMin: any; preferredRepRangeMax: any; bestRepZone: any; repZoneConfidence: any; preferredSetRangeMin: any; preferredSetRangeMax: any; ... 21 more ...; updateCount: any; }, PerformanceEnvelope, performance, envelope, service, TS2740, athleteId, any
+
+--- TARGET 124 ---
+lib/progress-data-service.ts(67,7): error TS2740: Type '{ weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }' is missing the following properties from type 'Record<ExerciseType, string>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }, Record<ExerciseType, string>, progress, data, service, TS2740, weighted_pull_up, string
+
+--- TARGET 125 ---
+lib/relative-strength-engine.ts(48,7): error TS2740: Type '{ weighted_pull_up: { novice: number; developing: number; strong: number; advanced: number; elite: number; }; weighted_dip: { novice: number; developing: number; strong: number; advanced: number; elite: number; }; weighted_muscle_up: { ...; }; }' is missing the following properties from type 'Record<ExerciseType, TierThresholds>': conventional_deadlift, sumo_deadlift, romanian_deadlift, trap_bar_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: { novice: number; developing: number; strong: number; advanced: number; elite: number; }; weighted_dip: { novice: number; developing: number; strong: number; advanced: number; elite: number; }; weighted_muscle_up: { ...; }; }, Record<ExerciseType, TierThresholds>, relative, strength, engine, TS2740, weighted_pull_up, novice
+
+--- TARGET 126 ---
+lib/relative-strength-engine.ts(191,14): error TS2740: Type '{ weighted_pull_up: { name: string; supportedSkills: string[]; tipForImprovement: string; }; weighted_dip: { name: string; supportedSkills: string[]; tipForImprovement: string; }; weighted_muscle_up: { ...; }; }' is missing the following properties from type 'Record<ExerciseType, ExerciseRelativeInfo>': conventional_deadlift, sumo_deadlift, romanian_deadlift, trap_bar_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: { name: string; supportedSkills: string[]; tipForImprovement: string; }; weighted_dip: { name: string; supportedSkills: string[]; tipForImprovement: string; }; weighted_muscle_up: { ...; }; }, Record<ExerciseType, ExerciseRelativeInfo>, relative, strength, engine, TS2740, weighted_pull_up, name
+
+--- TARGET 127 ---
+lib/server/authoritative-program-generation.ts(860,11): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type 'CanonicalProgrammingProfile': userId, onboardingComplete, sex, heightRange, and 59 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, server, authoritative, program, generation, TS2740, Record
+
+--- TARGET 128 ---
+lib/strength-guidance-engine.ts(196,9): error TS2740: Type '{ weighted_pull_up: ExerciseAnalysis | null; weighted_dip: ExerciseAnalysis | null; weighted_muscle_up: ExerciseAnalysis | null; }' is missing the following properties from type 'Record<ExerciseType, ExerciseAnalysis | null>': conventional_deadlift, sumo_deadlift, romanian_deadlift, trap_bar_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: ExerciseAnalysis | null; weighted_dip: ExerciseAnalysis | null; weighted_muscle_up: ExerciseAnalysis | null; }, Record<ExerciseType, ExerciseAnalysis | null>, strength, guidance, engine, TS2740, weighted_pull_up, ExerciseAnalysis
+
+--- TARGET 129 ---
+lib/strength-score-engine.ts(95,7): error TS2740: Type '{ weighted_pull_up: { 0: number; 25: number; 45: number; 70: number; 90: number; 115: number; }; weighted_dip: { 0: number; 35: number; 55: number; 80: number; 100: number; 135: number; }; weighted_muscle_up: { ...; }; }' is missing the following properties from type 'Record<ExerciseType, Record<number, number>>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: { 0: number; 25: number; 45: number; 70: number; 90: number; 115: number; }; weighted_dip: { 0: number; 35: number; 55: number; 80: number; 100: number; 135: number; }; weighted_muscle_up: { ...; }; }, Record<ExerciseType, Record<number, number>>, strength, score, engine, TS2740, weighted_pull_up, number
+
+--- TARGET 130 ---
+lib/strength-score-engine.ts(102,7): error TS2740: Type '{ weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }' is missing the following properties from type 'Record<ExerciseType, string>': overhead_press, conventional_deadlift, sumo_deadlift, romanian_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }, Record<ExerciseType, string>, strength, score, engine, TS2740, weighted_pull_up, string
+
+--- TARGET 131 ---
+lib/strength-trend-engine.ts(244,3): error TS2740: Type '{ weighted_pull_up: StrengthTrend; weighted_dip: StrengthTrend; weighted_muscle_up: StrengthTrend; }' is missing the following properties from type 'Record<ExerciseType, StrengthTrend>': conventional_deadlift, sumo_deadlift, romanian_deadlift, trap_bar_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: StrengthTrend; weighted_dip: StrengthTrend; weighted_muscle_up: StrengthTrend; }, Record<ExerciseType, StrengthTrend>, strength, trend, engine, TS2740, weighted_pull_up, StrengthTrend
+
+--- TARGET 132 ---
+lib/strength-trend-engine.ts(255,9): error TS2740: Type '{ weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }' is missing the following properties from type 'Record<ExerciseType, string>': conventional_deadlift, sumo_deadlift, romanian_deadlift, trap_bar_deadlift, and 4 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { weighted_pull_up: string; weighted_dip: string; weighted_muscle_up: string; }, Record<ExerciseType, string>, strength, trend, engine, TS2740, weighted_pull_up, string
+
+--- TARGET 133 ---
+lib/workout/live-workout-adaptive-signals.ts(150,7): error TS2740: Type '{ too_easy: "info"; too_hard: "warning"; pain: "critical"; discomfort: "warning"; fatigue: "warning"; grip_limited: "info"; form_issue: "warning"; balance_issue: "info"; focus_lost: "info"; breathing_issue: "warning"; joint_stress: "critical"; muscle_cramping: "warning"; }' is missing the following properties from type 'Record<"fatigue" | "pain" | "too_hard" | "technique_breakdown" | "joint_stress" | "too_easy" | "discomfort" | "grip_limited" | "form_issue" | "balance_issue" | "focus_lost" | "breathing_issue" | ... 5 more ... | "endurance_limited", "critical" | ... 1 more ... | "info">': technique_breakdown, straight_arm_fatigue, support_mismatch, load_mismatch, and 2 more.
+Pattern: TS2740: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { too_easy: "info"; too_hard: "warning"; pain: "critical"; discomfort: "warning"; fatigue: "warning"; grip_limited: "info"; form_issue: "warning"; balance_issue: "info"; focus_lost: "info"; breathing_issue: "warning"; joint_stress: "critical"; muscle_cramping: "warning"; }, Record<"fatigue" | "pain" | "too_hard" | "technique_breakdown" | "joint_stress" | "too_easy" | "discomfort" | "grip_limited" | "form_issue" | "balance_issue" | "focus_lost" | "breathing_issue" | ... 5 more ... | "endurance_limited", "critical" | ... 1 more ... | "info">, workout, live, adaptive, signals, TS2740, too_easy
+
+--- TARGET 134 ---
+lib/doctrine/method-profile-registry.ts(563,44): error TS2322: Type '"handstand"' is not assignable to type 'PrimaryGoal'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "handstand", PrimaryGoal, doctrine, method, profile, registry, TS2322, handstand
+
+--- TARGET 135 ---
+lib/doctrine/method-profile-registry.ts(563,57): error TS2322: Type '"l_sit"' is not assignable to type 'PrimaryGoal'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "l_sit", PrimaryGoal, doctrine, method, profile, registry, TS2322, l_sit
+
+--- TARGET 136 ---
+lib/doctrine/method-profile-registry.ts(563,66): error TS2322: Type '"general_strength"' is not assignable to type 'PrimaryGoal'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "general_strength", PrimaryGoal, doctrine, method, profile, registry, TS2322, general_strength
+
+--- TARGET 137 ---
+lib/program-adjustment-engine.ts(616,13): error TS2322: Type '"dip_station"' is not assignable to type 'EquipmentType'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: "dip_station", EquipmentType, program, adjustment, engine, TS2322, dip_station
+
+--- TARGET 138 ---
+lib/program-state.ts(1282,7): error TS2322: Type '{ adaptationNotes: string[]; available: EquipmentType[]; hasFullSetup: boolean; missingCritical: EquipmentType[]; missing: never[]; } | undefined' is not assignable to type 'EquipmentProfile'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: { adaptationNotes: string[]; available: EquipmentType[]; hasFullSetup: boolean; missingCritical: EquipmentType[]; missing: never[]; } | undefined, EquipmentProfile, program, state, TS2322, adaptationNotes, string, available
+
+--- TARGET 139 ---
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string, PrimaryGoal, program, truth, extractor, TS2322
+
+--- TARGET 140 ---
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string | undefined, PrimaryGoal | undefined, program, truth, extractor, TS2322, string, undefined
+
+--- TARGET 141 ---
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string[], EquipmentType[], program, truth, extractor, TS2322, string, EquipmentType
+
+--- TARGET 142 ---
+lib/program-version-service.ts(650,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal | undefined'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string, PrimaryGoal | undefined, program, version, service, TS2322, PrimaryGoal, undefined
+
+--- TARGET 143 ---
+lib/repositories/profile-repository.ts(301,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string | null, PrimaryGoalType | null, repositories, profile, repository, TS2322, string, null
+
+--- TARGET 144 ---
+lib/repositories/profile-repository.ts(302,9): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null'.
+Pattern: TS2322: string to union validation
+Fix: Validate string into target union; invalid -> undefined/null if accepted. Do not cast raw string.
+Anchors: string | null, PrimaryGoalType | null, repositories, profile, repository, TS2322, string, null
+
+--- TARGET 145 ---
+lib/adaptive-program-builder.ts(27234,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: number | undefined, number, adaptive, program, builder, TS2322, undefined
+
+--- TARGET 146 ---
+lib/canonical-profile-service.ts(1374,50): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: number | null, number | undefined, canonical, profile, service, TS2322, number, null
+
+--- TARGET 147 ---
+lib/program-history-versioning.ts(397,5): error TS2322: Type 'PullUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: PullUpCapacity | null | undefined, number | undefined, program, history, versioning, TS2322, PullUpCapacity, null
+
+--- TARGET 148 ---
+lib/program-history-versioning.ts(398,5): error TS2322: Type 'PushUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: PushUpCapacity | null | undefined, number | undefined, program, history, versioning, TS2322, PushUpCapacity, null
+
+--- TARGET 149 ---
+lib/program-history-versioning.ts(399,5): error TS2322: Type 'DipCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: DipCapacity | null | undefined, number | undefined, program, history, versioning, TS2322, DipCapacity, null
+
+--- TARGET 150 ---
+lib/program-history-versioning.ts(485,5): error TS2322: Type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets: number; reps: string; hold: string | undefined; rest: string | number | undefined; notes: string | undefined; }[]; }[]' is not assignable to type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets?: number | undefined; reps?: string | undefined; hold?: string | undefined; rest?: string | undefined; notes?: string | undefined; }[]; }[]'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: { dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets: number; reps: string; hold: string | undefined; rest: string | number | undefined; notes: string | undefined; }[]; }[], { dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets?: number | undefined; reps?: string | undefined; hold?: string | undefined; rest?: string | undefined; notes?: string | undefined; }[]; }[], program, history, versioning, TS2322, dayNumber, number
+
+--- TARGET 151 ---
+lib/weak-point-detection.ts(475,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ load: number | null; reps?: number | undefined; } | null | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, { load: number | null; reps?: number | undefined; } | null | undefined, weak, point, detection, TS2322, WeightedBenchmark, addedWeight
+
+--- TARGET 152 ---
+lib/weak-point-detection.ts(480,5): error TS2322: Type 'WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type '{ load: number | null; reps?: number | undefined; } | null | undefined'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: WeightedBenchmark | { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, { load: number | null; reps?: number | undefined; } | null | undefined, weak, point, detection, TS2322, WeightedBenchmark, addedWeight
+
+--- TARGET 153 ---
+lib/workout-history-persistence.ts(453,11): error TS2322: Type '{ exerciseId: string; exerciseName: string; category: ExerciseCategory; prescribed: { sets: number; reps: string | undefined; hold: string | undefined; weight: number | undefined; }; ... 4 more ...; prType: PRType | undefined; }[]' is not assignable to type 'ExerciseResultSnapshot[]'.
+Pattern: TS2322: number undefined fallback
+Fix: Use `value ?? 0` only if scoring/metadata; otherwise guard.
+Anchors: { exerciseId: string; exerciseName: string; category: ExerciseCategory; prescribed: { sets: number; reps: string | undefined; hold: string | undefined; weight: number | undefined; }; ... 4 more ...; prType: PRType | undefined; }[], ExerciseResultSnapshot[], workout, history, persistence, TS2322, exerciseId, string
+
+--- TARGET 154 ---
+lib/flexible-schedule-engine.ts(816,9): error TS2739: Type '{ canonicalScheduleMode: string; canonicalTrainingDaysPerWeek: number; canonicalSessionDurationMode: string; requestedScheduleMode: string; requestedTrainingDaysPerWeek: number; ... 16 more ...; modificationSteps: string[]; }' is missing the following properties from type 'FlexibleFrequencyRootCauseAudit': complexityScore, complexityElevation, selectedSkillsCount, hasPushAndPullSkills, hasAdaptiveSessionDuration
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { canonicalScheduleMode: string; canonicalTrainingDaysPerWeek: number; canonicalSessionDurationMode: string; requestedScheduleMode: string; requestedTrainingDaysPerWeek: number; ... 16 more ...; modificationSteps: string[]; }, FlexibleFrequencyRootCauseAudit, flexible, schedule, engine, TS2739, canonicalScheduleMode, string
+
+--- TARGET 155 ---
+lib/goal-projection-engine.ts(94,7): error TS2739: Type '{ front_lever: { exercise: "weighted_pull_up"; thresholds: number[]; }; planche: { exercise: "weighted_dip"; thresholds: number[]; }; muscle_up: { exercise: "weighted_pull_up"; thresholds: number[]; }; handstand_pushup: { ...; }; }' is missing the following properties from type 'Record<GoalType, { exercise: ExerciseType; thresholds: number[]; }>': l_sit, pancake, toe_touch, front_splits, side_splits
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { front_lever: { exercise: "weighted_pull_up"; thresholds: number[]; }; planche: { exercise: "weighted_dip"; thresholds: number[]; }; muscle_up: { exercise: "weighted_pull_up"; thresholds: number[]; }; handstand_pushup: { ...; }; }, Record<GoalType, { exercise: ExerciseType; thresholds: number[]; }>, goal, projection, engine, TS2739, front_lever, exercise
+
+--- TARGET 156 ---
+lib/movement-family-registry.ts(633,14): error TS2739: Type '{ vertical_pull: { id: "vertical_pull"; name: string; description: string; primaryMuscles: string[]; relatedFamilies: ("scapular_control" | "horizontal_pull" | "straight_arm_pull")[]; typicalIntents: ("skill" | ... 1 more ... | "hypertrophy")[]; skillTransfers: ("front_lever" | ... 1 more ... | "one_arm_pull_up")[];...' is missing the following properties from type 'Record<MovementFamily, MovementFamilyMetadata>': rings_strength, rings_stability, hypertrophy_accessory
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { vertical_pull: { id: "vertical_pull"; name: string; description: string; primaryMuscles: string[]; relatedFamilies: ("scapular_control" | "horizontal_pull" | "straight_arm_pull")[]; typicalIntents: ("skill" | ... 1 more ... | "hypertrophy")[]; skillTransfers: ("front_lever" | ... 1 more ... | "one_arm_pull_up")[];..., Record<MovementFamily, MovementFamilyMetadata>, movement, family, registry, TS2739, vertical_pull, name
+
+--- TARGET 157 ---
+lib/movement-family-registry.ts(870,14): error TS2739: Type '{ front_lever: { id: "front_lever"; name: string; primaryFamilies: ("horizontal_pull" | "straight_arm_pull")[]; supportFamilies: ("scapular_control" | "vertical_pull" | "compression_core")[]; keyIntents: ("skill" | "strength")[]; }; ... 11 more ...; dragon_flag: { ...; }; }' is missing the following properties from type 'Record<SkillCarryover, SkillCarryoverMetadata>': planche_push_up, i_sit
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { front_lever: { id: "front_lever"; name: string; primaryFamilies: ("horizontal_pull" | "straight_arm_pull")[]; supportFamilies: ("scapular_control" | "vertical_pull" | "compression_core")[]; keyIntents: ("skill" | "strength")[]; }; ... 11 more ...; dragon_flag: { ...; }; }, Record<SkillCarryover, SkillCarryoverMetadata>, movement, family, registry, TS2739, front_lever, name
+
+--- TARGET 158 ---
+lib/program-state.ts(161,7): error TS2739: Type '{ hasSupersetsApplied: boolean; structureDescription: string; styledGroups?: { groupType: string; }[] | undefined; hasCircuitsApplied?: boolean | undefined; hasDensityApplied?: boolean | undefined; appliedMethods?: string[] | undefined; }' is missing the following properties from type '{ primaryStyle: TrainingMethodPreference; hasSupersetsApplied: boolean; hasCircuitsApplied: boolean; hasDensityApplied: boolean; hasClusterApplied?: boolean | undefined; ... 7 more ...; methodMaterializationSummary?: MethodMaterializationSummary | undefined; }': primaryStyle, rejectedMethods
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { hasSupersetsApplied: boolean; structureDescription: string; styledGroups?: { groupType: string; }[] | undefined; hasCircuitsApplied?: boolean | undefined; hasDensityApplied?: boolean | undefined; appliedMethods?: string[] | undefined; }, { primaryStyle: TrainingMethodPreference; hasSupersetsApplied: boolean; hasCircuitsApplied: boolean; hasDensityApplied: boolean; hasClusterApplied?: boolean | undefined; ... 7 more ...; methodMaterializationSummary?: MethodMaterializationSummary | undefined; }, program, state, TS2739, hasSupersetsApplied, boolean, structureDescription
+
+--- TARGET 159 ---
+lib/program/row-level-method-prescription-mutator.ts(899,7): error TS2739: Type '{ version: "phase-4l"; ran: false; source: "row_level_method_prescription_mutator"; inputStatus: RowLevelMutatorInputStatus; appliedCount: number; blockedCount: number; ... 10 more ...; doctrineApplicationCorridor: null; }' is missing the following properties from type 'RowLevelMutatorSummary': structuralMaterialization, blockResolution, doctrineParticipation
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { version: "phase-4l"; ran: false; source: "row_level_method_prescription_mutator"; inputStatus: RowLevelMutatorInputStatus; appliedCount: number; blockedCount: number; ... 10 more ...; doctrineApplicationCorridor: null; }, RowLevelMutatorSummary, program, row, level, method, prescription, mutator
+
+--- TARGET 160 ---
+lib/skill-readiness/skillPrerequisiteData.ts(51,14): error TS2739: Type '{ front_lever: { skill: "front_lever"; displayName: string; difficulty: "advanced"; typicalTimeToAchieve: string; categoryWeights: { pulling_strength: number; core_compression: number; straight_arm_strength: number; ... 4 more ...; body_control: number; }; metrics: ({ ...; } | ... 2 more ... | { ...; })[]; coachingN...' is missing the following properties from type 'Record<SkillType, SkillPrerequisiteProfile>': one_arm_pull_up, one_arm_push_up, planche_push_up
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { front_lever: { skill: "front_lever"; displayName: string; difficulty: "advanced"; typicalTimeToAchieve: string; categoryWeights: { pulling_strength: number; core_compression: number; straight_arm_strength: number; ... 4 more ...; body_control: number; }; metrics: ({ ...; } | ... 2 more ... | { ...; })[]; coachingN..., Record<SkillType, SkillPrerequisiteProfile>, skill, readiness, skillPrerequisiteData, TS2739, front_lever, displayName
+
+--- TARGET 161 ---
+lib/skill-readiness/skillReadinessService.ts(151,14): error TS2739: Type '{ front_lever: { skill: "front_lever"; displayName: string; description: string; requiredMetrics: ({ name: string; baselineTarget: number; unit: string; importance: "critical"; } | { name: string; baselineTarget: number; unit: string; importance: "high"; } | { ...; })[]; strengthIndicators: string[]; mobilityIndicat...' is missing the following properties from type 'Record<SkillType, SkillPrerequisites>': one_arm_pull_up, one_arm_push_up, dragon_flag, planche_push_up
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { front_lever: { skill: "front_lever"; displayName: string; description: string; requiredMetrics: ({ name: string; baselineTarget: number; unit: string; importance: "critical"; } | { name: string; baselineTarget: number; unit: string; importance: "high"; } | { ...; })[]; strengthIndicators: string[]; mobilityIndicat..., Record<SkillType, SkillPrerequisites>, skill, readiness, skillReadinessService, TS2739, front_lever, displayName
+
+--- TARGET 162 ---
+lib/unified-readiness-integration.ts(117,9): error TS2739: Type '{ front_lever: string; back_lever: string; planche: string; hspu: string; muscle_up: string; l_sit: string; iron_cross: string; }' is missing the following properties from type 'Record<SkillType, string>': one_arm_pull_up, one_arm_push_up, dragon_flag, planche_push_up, v_sit
+Pattern: TS2739: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: { front_lever: string; back_lever: string; planche: string; hspu: string; muscle_up: string; l_sit: string; iron_cross: string; }, Record<SkillType, string>, unified, readiness, integration, TS2739, front_lever, string
+
+--- TARGET 163 ---
+lib/history-service.ts(98,20): error TS2352: Conversion of type 'Record<string, unknown>' to type 'GoalsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, GoalsSnapshot, unknown, history, service, TS2352, Conversion, Record
+
+--- TARGET 164 ---
+lib/history-service.ts(99,28): error TS2352: Conversion of type 'Record<string, unknown>' to type 'AthleteInputsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, AthleteInputsSnapshot, unknown, history, service, TS2352, Conversion, Record
+
+--- TARGET 165 ---
+lib/history-service.ts(100,31): error TS2352: Conversion of type 'Record<string, unknown>' to type 'ProgramStructureSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, ProgramStructureSnapshot, unknown, history, service, TS2352, Conversion, Record
+
+--- TARGET 166 ---
+lib/server/authoritative-generation-truth-ingestion.ts(362,25): error TS2352: Conversion of type '{ primaryGoal: string; scheduleMode: "weekly"; trainingDaysPerWeek: number; experienceLevel: "intermediate"; }' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: { primaryGoal: string; scheduleMode: "weekly"; trainingDaysPerWeek: number; experienceLevel: "intermediate"; }, CanonicalProgrammingProfile, unknown, server, authoritative, generation, truth, ingestion
+
+--- TARGET 167 ---
+lib/server/authoritative-program-generation.ts(1123,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+
+--- TARGET 168 ---
+lib/server/authoritative-program-generation.ts(1131,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+
+--- TARGET 169 ---
+lib/server/authoritative-program-generation.ts(1153,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: Record<string, unknown>, CanonicalProgrammingProfile, unknown, server, authoritative, program, generation, TS2352
+
+--- TARGET 170 ---
+lib/server/authoritative-program-generation.ts(2579,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: AdaptiveProgram, ReconcilableProgram, unknown, server, authoritative, program, generation, TS2352
+
+--- TARGET 171 ---
+lib/unified-coaching-engine.ts(646,8): error TS2352: Conversion of type 'ReadinessBreakdown' to type 'Record<string, number>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Pattern: TS2352: conversion bridge through unknown
+Fix: If intentional, bridge exactly through unknown: `value as unknown as TargetType`. Never use `as any`.
+Anchors: ReadinessBreakdown, Record<string, number>, unknown, unified, coaching, engine, TS2352, Conversion
+
+--- TARGET 172 ---
+lib/roadmap/skill-roadmap-service.ts(587,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+
+--- TARGET 173 ---
+lib/roadmap/skill-roadmap-service.ts(588,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+
+--- TARGET 174 ---
+lib/roadmap/skill-roadmap-service.ts(589,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+
+--- TARGET 175 ---
+lib/roadmap/skill-roadmap-service.ts(590,57): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+
+--- TARGET 176 ---
+lib/roadmap/skill-roadmap-service.ts(591,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, roadmap, skill, service, TS2551, Did
+
+--- TARGET 177 ---
+lib/training-coach.ts(580,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, training, coach, TS2551, Did, you
+
+--- TARGET 178 ---
+lib/training-coach.ts(581,60): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, training, coach, TS2551, Did, you
+
+--- TARGET 179 ---
+lib/training-coach.ts(582,49): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, training, coach, TS2551, Did, you
+
+--- TARGET 180 ---
+lib/training-coach.ts(583,52): error TS2551: Property 'exerciseKey' does not exist on type 'StrengthRecord'. Did you mean 'exercise'?
+Pattern: TS2551: stale/suggested property `exerciseKey`
+Fix: Use compiler-suggested current key if semantically identical; otherwise remove/gate stale `exerciseKey`. Do not add stale fields to shared types.
+Anchors: exerciseKey, StrengthRecord, exercise, training, coach, TS2551, Did, you
+
+--- TARGET 181 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: PrimaryGoalType | null, "skill", onboarding, service, TS2367, This, comparison, appears
+
+--- TARGET 182 ---
+lib/session-variety-engine.ts(396,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 183 ---
+lib/session-variety-engine.ts(410,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 184 ---
+lib/session-variety-engine.ts(434,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 185 ---
+lib/session-variety-engine.ts(472,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 186 ---
+lib/session-variety-engine.ts(514,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 187 ---
+lib/training-methods.ts(730,34): error TS2367: This comparison appears to be unintentional because the types '"strength" | "flexibility" | "accessory" | "core" | "warmup" | "cooldown"' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: "strength" | "flexibility" | "accessory" | "core" | "warmup" | "cooldown", "skill", training, methods, TS2367, This, comparison, appears
+
+--- TARGET 188 ---
+lib/weekly-stimulus-allocation.ts(167,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+Pattern: TS2367: impossible comparison `"skill"`
+Fix: Remove/gate stale comparison to `"skill"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "skill", weekly, stimulus, allocation, TS2367, This, comparison
+
+--- TARGET 189 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, TrainingBlock, onboarding, service, TS2339
+
+--- TARGET 190 ---
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, TrainingBlock, onboarding, service, TS2339
+
+--- TARGET 191 ---
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, TrainingBlock, onboarding, service, TS2339
+
+--- TARGET 192 ---
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, TrainingBlock, onboarding, service, TS2339
+
+--- TARGET 193 ---
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, TrainingBlock, onboarding, service, TS2339
+
+--- TARGET 194 ---
+lib/unified-program-generation.ts(388,22): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, ProtocolRecommendation, unified, program, generation, TS2339
+
+--- TARGET 195 ---
+lib/unified-program-generation.ts(654,24): error TS2339: Property 'name' does not exist on type 'ProtocolRecommendation'.
+Pattern: TS2339: stale/suggested property `name`
+Fix: Remove/gate stale `name` read/key, or use current local equivalent only if obvious. Do not add `name` to shared types.
+Anchors: name, ProtocolRecommendation, unified, program, generation, TS2339
+
+--- TARGET 196 ---
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 197 ---
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 198 ---
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 199 ---
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 200 ---
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 201 ---
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 202 ---
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+Pattern: TS2304: missing symbol `feedback`
+Fix: Use nearby renamed variable only if obvious; otherwise remove/gate stale proof/debug `feedback`.
+Anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+
+--- TARGET 203 ---
+lib/adaptive-training-cycle-engine.ts(748,5): error TS2322: Type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]' is not assignable to type 'string[]'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: { exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[], string[], adaptive, training, cycle, engine, TS2322, exerciseId
+
+--- TARGET 204 ---
+lib/advanced-skills-integration.ts(251,29): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: "dynamic_push", WeakPointType, advanced, skills, integration, TS2322, dynamic_push
+
+--- TARGET 205 ---
+lib/advanced-skills-integration.ts(290,52): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: "lockout_strength", WeakPointType, advanced, skills, integration, TS2322, lockout_strength
+
+--- TARGET 206 ---
+lib/advanced-skills-integration.ts(307,45): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: "lockout_strength", WeakPointType, advanced, skills, integration, TS2322, lockout_strength
+
+--- TARGET 207 ---
+lib/advanced-skills-integration.ts(401,7): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: "dynamic_push", WeakPointType, advanced, skills, integration, TS2322, dynamic_push
+
+--- TARGET 208 ---
+lib/weak-point-engine.ts(994,3): error TS2322: Type '{ targetedLimiter: WeakPointType; id: string; name: string; reason: string; }[]' is not assignable to type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]'.
+Pattern: TS2322: WeakPointType literal mismatch
+Fix: Map stale weak-point literal to current WeakPointType only if obvious; otherwise omit/gate.
+Anchors: { targetedLimiter: WeakPointType; id: string; name: string; reason: string; }[], { exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[], weak, point, engine, TS2322, targetedLimiter, WeakPointType
+
+--- TARGET 209 ---
+lib/constraint-detection-engine.ts(830,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+Pattern: TS2741: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: iron_cross, { front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }, Record<SkillType, SkillConstraintResult | null>, constraint, detection, engine, TS2741, missing
+
+--- TARGET 210 ---
+lib/constraint-detection-engine.ts(970,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: SkillConstraintResult; back_lever: SkillConstraintResult; planche: SkillConstraintResult; hspu: SkillConstraintResult; muscle_up: SkillConstraintResult; l_sit: SkillConstraintResult; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+Pattern: TS2741: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: iron_cross, { front_lever: SkillConstraintResult; back_lever: SkillConstraintResult; planche: SkillConstraintResult; hspu: SkillConstraintResult; muscle_up: SkillConstraintResult; l_sit: SkillConstraintResult; }, Record<SkillType, SkillConstraintResult | null>, constraint, detection, engine, TS2741, missing
+
+--- TARGET 211 ---
+lib/performance-envelope-engine.ts(152,14): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }' but required in type 'Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>'.
+Pattern: TS2741: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: barbell_hinge, { vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }, Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>, performance, envelope, engine, TS2741, missing
+
+--- TARGET 212 ---
+lib/performance-envelope-engine.ts(1393,9): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }' but required in type 'Record<MovementFamily, string>'.
+Pattern: TS2741: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: barbell_hinge, { vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }, Record<MovementFamily, string>, performance, envelope, engine, TS2741, missing
+
+--- TARGET 213 ---
+lib/readiness/canonical-readiness-engine.ts(658,9): error TS2741: Property 'tendonTolerance' is missing in type '{ pullStrength: number; pushStrength: number; compression: number; scapularControl: number; straightArmStrength: number; shoulderStability: number; wristTolerance: number; mobility: number; explosivePower: number; skillSpecific: number; }' but required in type 'ReadinessComponentScores'.
+Pattern: TS2741: missing required fields
+Fix: Add missing truthful fallback fields only for fallback/summary object, or use existing complete object nearby.
+Anchors: tendonTolerance, { pullStrength: number; pushStrength: number; compression: number; scapularControl: number; straightArmStrength: number; shoulderStability: number; wristTolerance: number; mobility: number; explosivePower: number; skillSpecific: number; }, ReadinessComponentScores, readiness, canonical, engine, TS2741, missing
+
+--- TARGET 214 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Fix: Remove/gate stale comparison to `"strength"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: PrimaryGoalType | null, "strength", onboarding, service, TS2367, This, comparison, appears
+
+--- TARGET 215 ---
+lib/session-variety-engine.ts(417,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Fix: Remove/gate stale comparison to `"strength"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "strength", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 216 ---
+lib/session-variety-engine.ts(482,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Fix: Remove/gate stale comparison to `"strength"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "strength", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 217 ---
+lib/session-variety-engine.ts(525,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Fix: Remove/gate stale comparison to `"strength"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "strength", session, variety, engine, TS2367, This, comparison
+
+--- TARGET 218 ---
+lib/weekly-stimulus-allocation.ts(172,14): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+Pattern: TS2367: impossible comparison `"strength"`
+Fix: Remove/gate stale comparison to `"strength"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: TrainingStyleMode, "strength", weekly, stimulus, allocation, TS2367, This, comparison
+
+--- TARGET 219 ---
+lib/readiness/skill-readiness.ts(2672,33): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned/declaration `result`
+Fix: Move `result` assignment before read, or initialize truthful fallback only for debug/fallback output.
+Anchors: result, readiness, skill, TS2454, Variable, used, before, being
+
+--- TARGET 220 ---
+lib/readiness/skill-readiness.ts(2673,40): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned/declaration `result`
+Fix: Move `result` assignment before read, or initialize truthful fallback only for debug/fallback output.
+Anchors: result, readiness, skill, TS2454, Variable, used, before, being
+
+--- TARGET 221 ---
+lib/readiness/skill-readiness.ts(2678,12): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned/declaration `result`
+Fix: Move `result` assignment before read, or initialize truthful fallback only for debug/fallback output.
+Anchors: result, readiness, skill, TS2454, Variable, used, before, being
+
+--- TARGET 222 ---
+lib/readiness/skill-readiness.ts(2682,17): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned/declaration `result`
+Fix: Move `result` assignment before read, or initialize truthful fallback only for debug/fallback output.
+Anchors: result, readiness, skill, TS2454, Variable, used, before, being
+
+--- TARGET 223 ---
+lib/readiness/skill-readiness.ts(2683,16): error TS2454: Variable 'result' is used before being assigned.
+Pattern: TS2454: used before assigned/declaration `result`
+Fix: Move `result` assignment before read, or initialize truthful fallback only for debug/fallback output.
+Anchors: result, readiness, skill, TS2454, Variable, used, before, being
+
+--- TARGET 224 ---
+lib/strength-score-engine.ts(576,50): error TS2554: Expected 6 arguments, but got 5.
+Pattern: TS2554: wrong argument count
+Fix: Match local callee signature. Remove extra arg or provide missing arg only if obvious nearby.
+Anchors: strength, score, engine, TS2554, Expected, arguments, but, got
+
+--- TARGET 225 ---
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Fix: Match local callee signature. Remove extra arg or provide missing arg only if obvious nearby.
+Anchors: unified, coaching, engine, TS2554, Expected, arguments, but, got
+
+--- TARGET 226 ---
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Fix: Match local callee signature. Remove extra arg or provide missing arg only if obvious nearby.
+Anchors: unified, coaching, engine, TS2554, Expected, arguments, but, got
+
+--- TARGET 227 ---
+lib/unified-coaching-engine.ts(733,50): error TS2554: Expected 0 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Fix: Match local callee signature. Remove extra arg or provide missing arg only if obvious nearby.
+Anchors: unified, coaching, engine, TS2554, Expected, arguments, but, got
+
+--- TARGET 228 ---
+lib/unified-coaching-engine.ts(736,38): error TS2554: Expected 4-5 arguments, but got 1.
+Pattern: TS2554: wrong argument count
+Fix: Match local callee signature. Remove extra arg or provide missing arg only if obvious nearby.
+Anchors: unified, coaching, engine, TS2554, Expected, arguments, but, got
+
+--- TARGET 229 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Fix: Remove/gate stale comparison to `"declining"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: "unknown" | "sporadic" | null | undefined, "declining", program, truth, scoring, bridge, TS2367, This
+
+--- TARGET 230 ---
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Fix: Remove/gate stale comparison to `"declining"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, truth, scoring, bridge, TS2367, This
+
+--- TARGET 231 ---
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Fix: Remove/gate stale comparison to `"declining"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, skill, specific, truth, resolution, TS2367
+
+--- TARGET 232 ---
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Pattern: TS2367: impossible comparison `"declining"`
+Fix: Remove/gate stale comparison to `"declining"`, or map to current valid literal only if obvious. Do not widen union.
+Anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, skill, specific, truth, resolution, TS2367
+
+--- TARGET 233 ---
+lib/program/skill-specific-truth-resolution.ts(367,9): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Pattern: TS2339: stale/suggested property `toLowerCase`
+Fix: Remove/gate stale `toLowerCase` read/key, or use current local equivalent only if obvious. Do not add `toLowerCase` to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+
+--- TARGET 234 ---
+lib/program/skill-specific-truth-resolution.ts(368,36): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Pattern: TS2339: stale/suggested property `toLowerCase`
+Fix: Remove/gate stale `toLowerCase` read/key, or use current local equivalent only if obvious. Do not add `toLowerCase` to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+
+--- TARGET 235 ---
+lib/program/skill-specific-truth-resolution.ts(571,34): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Pattern: TS2339: stale/suggested property `toLowerCase`
+Fix: Remove/gate stale `toLowerCase` read/key, or use current local equivalent only if obvious. Do not add `toLowerCase` to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+
+--- TARGET 236 ---
+lib/program/skill-specific-truth-resolution.ts(571,73): error TS2339: Property 'toLowerCase' does not exist on type '{ constraint: string; severity: string; detectedAt: string; }'.
+Pattern: TS2339: stale/suggested property `toLowerCase`
+Fix: Remove/gate stale `toLowerCase` read/key, or use current local equivalent only if obvious. Do not add `toLowerCase` to shared types.
+Anchors: toLowerCase, { constraint: string; severity: string; detectedAt: string; }, program, skill, specific, truth, resolution, TS2339
+
+--- TARGET 237 ---
+lib/server/authoritative-program-generation.ts(1396,15): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Pattern: TS2339: stale/suggested property `architectureTruthSnapshot`
+Fix: Remove/gate stale `architectureTruthSnapshot` read/key, or use current local equivalent only if obvious. Do not add `architectureTruthSnapshot` to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+
+--- TARGET 238 ---
+lib/server/authoritative-program-generation.ts(1437,44): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Pattern: TS2339: stale/suggested property `architectureTruthSnapshot`
+Fix: Remove/gate stale `architectureTruthSnapshot` read/key, or use current local equivalent only if obvious. Do not add `architectureTruthSnapshot` to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+
+--- TARGET 239 ---
+lib/server/authoritative-program-generation.ts(1438,39): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Pattern: TS2339: stale/suggested property `architectureTruthSnapshot`
+Fix: Remove/gate stale `architectureTruthSnapshot` read/key, or use current local equivalent only if obvious. Do not add `architectureTruthSnapshot` to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+
+--- TARGET 240 ---
+lib/server/authoritative-program-generation.ts(1439,35): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+Pattern: TS2339: stale/suggested property `architectureTruthSnapshot`
+Fix: Remove/gate stale `architectureTruthSnapshot` read/key, or use current local equivalent only if obvious. Do not add `architectureTruthSnapshot` to shared types.
+Anchors: architectureTruthSnapshot, AdaptiveProgram, server, authoritative, program, generation, TS2339
+

@@ -393,7 +393,7 @@ function getSessionDistribution(
 ): SessionDistribution[] {
   // 2-day distribution
   if (days === 2) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'support_volume', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
@@ -407,14 +407,14 @@ function getSessionDistribution(
   
   // 3-day distribution
   if (days === 3) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
         { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -431,7 +431,7 @@ function getSessionDistribution(
   
   // 4-day distribution
   if (days === 4) {
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -469,7 +469,7 @@ function getSessionDistribution(
       verdict: 'using_6day_distribution',
     })
     
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -479,7 +479,7 @@ function getSessionDistribution(
         { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' }, // Recovery-oriented
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -511,7 +511,7 @@ function getSessionDistribution(
       verdict: 'using_7day_distribution',
     })
     
-    if (style === 'skill') {
+    if (style === 'skill_focused') {
       return [
         { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -522,7 +522,7 @@ function getSessionDistribution(
         { type: 'mixed_capacity', isPrimary: false, variant: 'B', supportVariant: 'secondary' }, // Light balanced day
       ]
     }
-    if (style === 'strength') {
+    if (style === 'strength_focused') {
       return [
         { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
         { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
@@ -654,7 +654,12 @@ function getFatigueProfileForSessionType(type: SessionType): FatigueProfile {
 }
 
 function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 'tertiary', constraint: string | null): string[] {
-  const baseSupport: Record<SkillType, string[][]> = {
+  // [BASE-SUPPORT-PARTIAL-RECORD] Canonical SkillType excludes
+  // `iron_cross` and `weighted_strength`; relax this lookup to a
+  // `Partial<Record<SkillType, ...>>` so the missing keys are handled
+  // by the empty-array fallback below rather than breaking the record
+  // contract. Invalid keys are removed.
+  const baseSupport: Partial<Record<SkillType, string[][]>> = {
     front_lever: [
       ['weighted_pull', 'compression'],
       ['rows', 'scapular_control'],
@@ -675,36 +680,18 @@ function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 
       ['handstand_hold', 'wall_slides'],
       ['face_pull', 'rear_delt'],
     ],
-    back_lever: [
-      ['skin_the_cat', 'shoulder_extension'],
-      ['german_hang', 'bicep_curl'],
-      ['rear_delt', 'core_work'],
-    ],
-    iron_cross: [
-      ['ring_support', 'cross_pull'],
-      ['wide_ring_fly', 'bicep_curl'],
-      ['shoulder_rehab', 'tendon_conditioning'],
-    ],
     l_sit: [
       ['compression', 'pike_stretch'],
       ['hanging_leg_raise', 'hip_flexor'],
       ['support_hold', 'wrist_prep'],
     ],
-    weighted_strength: [
-      ['weighted_pull', 'weighted_dip'],
-      ['rows', 'push_ups'],
-      ['accessory_arm', 'core'],
-    ],
-    general: [
-      ['pull', 'push'],
-      ['core', 'mobility'],
-      ['accessory', 'conditioning'],
-    ],
   }
-  
+
+  // [SKILL-RECORD-NO-GENERAL] SkillType records no longer carry a
+  // 'general' fallback entry; use an empty array fallback instead.
   const variantIndex = variant === 'primary' ? 0 : variant === 'secondary' ? 1 : 2
-  const skillSupport = baseSupport[skill] || baseSupport.general
-  const focus = [...(skillSupport[variantIndex] || skillSupport[0])]
+  const skillSupport = baseSupport[skill] || []
+  const focus = [...(skillSupport[variantIndex] || skillSupport[0] || [])]
   
   // Add constraint-specific focus if relevant
   if (constraint) {
@@ -820,19 +807,20 @@ function buildWeakPointPhrase(weakPoint: string): string {
 }
 
 function getSkillMovementFamilies(skill: SkillType): MovementFamily[] {
-  const skillFamilyMap: Record<SkillType, MovementFamily[]> = {
+  // [SKILL-FAMILY-MAP-PARTIAL] Canonical SkillType excludes
+  // `iron_cross`, `back_lever`, and `weighted_strength`. Use a partial
+  // record so the missing keys flow through the empty-array fallback
+  // instead of producing record-key errors. Also replace the legacy
+  // `hip_hinge` MovementFamily with `hinge_pattern`.
+  const skillFamilyMap: Partial<Record<SkillType, MovementFamily[]>> = {
     front_lever: ['straight_arm_pull', 'horizontal_pull', 'compression_core'],
     planche: ['straight_arm_push', 'horizontal_push', 'compression_core'],
     muscle_up: ['vertical_pull', 'vertical_push', 'horizontal_pull'],
     hspu: ['vertical_push', 'compression_core'],
-    back_lever: ['straight_arm_pull', 'compression_core'],
-    iron_cross: ['straight_arm_pull', 'straight_arm_push'],
-    l_sit: ['compression_core', 'hip_hinge'],
-    weighted_strength: ['vertical_pull', 'vertical_push', 'horizontal_pull', 'horizontal_push'],
-    general: ['vertical_pull', 'vertical_push', 'compression_core'],
+    l_sit: ['compression_core', 'hinge_pattern'],
   }
-  
-  return skillFamilyMap[skill] || skillFamilyMap.general
+
+  return skillFamilyMap[skill] || []
 }
 
 // =============================================================================
@@ -849,7 +837,11 @@ export interface ExerciseVariationSet {
  * Get exercise variants for a skill to ensure variety across days
  */
 export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
-  const variants: Record<SkillType, ExerciseVariationSet> = {
+  // [VARIANTS-PARTIAL-RECORD] Canonical SkillType excludes
+  // `iron_cross` and `weighted_strength`; relax to a Partial record so
+  // the empty-variation fallback handles them instead of breaking the
+  // record contract. Invalid keys are removed.
+  const variants: Partial<Record<SkillType, ExerciseVariationSet>> = {
     front_lever: {
       variantA: ['front_lever_hold', 'weighted_pull_up', 'compression_hold'],
       variantB: ['front_lever_raise', 'row_progression', 'scapular_pull'],
@@ -870,34 +862,15 @@ export function getExerciseVariants(skill: SkillType): ExerciseVariationSet {
       variantB: ['wall_hspu_negative', 'elevated_pike', 'face_pull'],
       variantC: ['box_hspu', 'wall_walk', 'rear_delt_fly'],
     },
-    back_lever: {
-      variantA: ['skin_the_cat', 'german_hang', 'bicep_curl'],
-      variantB: ['back_lever_raise', 'shoulder_extension', 'rear_support'],
-      variantC: ['back_lever_negative', 'ring_row_supinated', 'core_rotation'],
-    },
-    iron_cross: {
-      variantA: ['ring_support', 'cross_pull', 'ring_fly'],
-      variantB: ['rto_support', 'wide_pull', 'tendon_conditioning'],
-      variantC: ['iron_cross_negative', 'band_cross', 'shoulder_stability'],
-    },
     l_sit: {
       variantA: ['l_sit_hold', 'compression_lift', 'pike_stretch'],
       variantB: ['tuck_l_sit', 'hanging_leg_raise', 'hip_flexor_march'],
       variantC: ['straddle_l', 'v_up', 'pancake_compression'],
     },
-    weighted_strength: {
-      variantA: ['weighted_pull_up', 'weighted_dip', 'ring_row'],
-      variantB: ['weighted_chin_up', 'ring_dip', 'push_up'],
-      variantC: ['one_arm_row', 'close_grip_dip', 'archer_pull'],
-    },
-    general: {
-      variantA: ['pull_up', 'push_up', 'hollow_hold'],
-      variantB: ['row', 'dip', 'plank'],
-      variantC: ['chin_up', 'pike_push', 'dead_bug'],
-    },
   }
-  
-  return variants[skill] || variants.general
+
+  // [SKILL-RECORD-NO-GENERAL] empty variation set fallback.
+  return variants[skill] || { variantA: [], variantB: [], variantC: [] }
 }
 
 // =============================================================================

@@ -1,0 +1,27 @@
+lib/unified-coaching-engine.ts(15,31): error TS2305: Module '"./performance-envelope-service"' has no exported member 'getEnvelopeBasedRecommendations'.
+lib/unified-coaching-engine.ts(437,43): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(438,49): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(446,17): error TS2339: Property 'equipment' does not exist on type 'AthleteProfile'.
+lib/unified-coaching-engine.ts(450,83): error TS2345: Argument of type 'OnboardingProfile | {}' is not assignable to parameter of type '{ primaryOutcome?: string | undefined; workoutDuration?: string | undefined; trainingAge?: number | undefined; }'.
+lib/unified-coaching-engine.ts(474,24): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+lib/unified-coaching-engine.ts(476,47): error TS2339: Property 'heightCm' does not exist on type 'OnboardingProfile'.
+lib/unified-coaching-engine.ts(477,51): error TS2339: Property 'weightKg' does not exist on type 'OnboardingProfile'.
+lib/unified-coaching-engine.ts(479,30): error TS2339: Property 'trainingAge' does not exist on type 'OnboardingProfile'.
+lib/unified-coaching-engine.ts(486,5): error TS2322: Type 'number | "flexible"' is not assignable to type 'number'.
+lib/unified-coaching-engine.ts(506,61): error TS2339: Property 'workoutDuration' does not exist on type 'OnboardingProfile'.
+lib/unified-coaching-engine.ts(530,27): error TS2339: Property 'primaryOutcome' does not exist on type 'OnboardingProfile'.
+lib/unified-coaching-engine.ts(642,8): error TS2352: Conversion of type 'ReadinessBreakdown' to type 'Record<string, number>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/unified-coaching-engine.ts(729,50): error TS2554: Expected 0 arguments, but got 1.
+lib/unified-coaching-engine.ts(732,38): error TS2554: Expected 4-5 arguments, but got 1.
+lib/unified-coaching-engine.ts(735,46): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+lib/unified-coaching-engine.ts(738,72): error TS2345: Argument of type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to parameter of type 'TrainingDecision'.
+lib/unified-coaching-engine.ts(745,5): error TS2322: Type '{ decision: TrainingDecision; shortGuidance: string; needsAttention: boolean; }' is not assignable to type 'TrainingDecision'.
+lib/unified-coaching-engine.ts(755,38): error TS2339: Property 'severity' does not exist on type 'DeloadRecommendation'.
+lib/unified-coaching-engine.ts(758,20): error TS2339: Property 'recommendation' does not exist on type 'TrainingDecision'.
+lib/unified-coaching-engine.ts(867,53): error TS2345: Argument of type '{ primarySkill: string; jointCautions: JointCaution[]; sessionFocus: string[]; experienceLevel: string; sessionLength: number; includeRecovery: boolean; }' is not assignable to parameter of type 'string'.
+lib/unified-coaching-engine.ts(879,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+lib/unified-coaching-engine.ts(880,56): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+lib/unified-coaching-engine.ts(881,54): error TS2339: Property 'timing' does not exist on type 'ProtocolRecommendation'.
+lib/unified-coaching-engine.ts(926,5): error TS2322: Type '"beginner" | "intermediate" | "advanced" | "elite"' is not assignable to type 'ExperienceLevel'.
+lib/unified-coaching-engine.ts(1032,84): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.
+lib/unified-coaching-engine.ts(1039,80): error TS2339: Property 'currentNode' does not exist on type 'SkillState'.

@@ -9,7 +9,9 @@ import { getAthleteProfile, type AthleteProfile } from './data-service'
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getSkillReadiness, getAthleteSkillReadiness, type SkillReadinessData } from './readiness-service'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
-import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
+// [CONSTRAINT-RESULT-NOT-RE-EXPORTED] constraint-engine doesn't
+// re-export ConstraintResult; it isn't used here anyway.
+import { analyzeConstraints } from './constraint-engine'
 import type { SkillState } from './skill-state-service'
 import type { LimitingFactor } from './readiness/canonical-readiness-engine'
 
@@ -780,8 +782,14 @@ export async function detectConstraints(
       primaryConstraint: 'none',
       secondaryConstraint: null,
       strongQualities: [],
-      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      // [CONSTRAINT-DETECTION-SCHEDULE-STATUS-CONTRACT] L379 declares
+      // `scheduleStatus` with `isTimeLimited` / `averageSessionMinutes`
+      // / `shortenedSessionRate` / `recommendation`. The legacy
+      // `isOptimal` / `weeksConsistent` keys were removed.
+      scheduleStatus: { isTimeLimited: false, averageSessionMinutes: 0, shortenedSessionRate: 0, recommendation: 'Insufficient data' },
       fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
+      // [CONSTRAINT-DETECTION-SKILL-RESULTS-EXHAUSTIVE]
+      // Record<SkillType, ...> (L373) includes `iron_cross`.
       skillResults: {
         front_lever: null,
         back_lever: null,
@@ -789,8 +797,12 @@ export async function detectConstraints(
         hspu: null,
         muscle_up: null,
         l_sit: null,
+        iron_cross: null,
       },
-      recommendations: ['Complete profile setup'],
+      // [CONSTRAINT-DETECTION-RECOMMENDATIONS-FIELD] L385 owns
+      // `overallRecommendations`, not `recommendations`.
+      overallRecommendations: ['Complete profile setup'],
+      dataQuality: 'insufficient',
     }
   }
   
@@ -816,7 +828,9 @@ export async function detectConstraints(
     recommendation: fatigueDecision.shortGuidance,
   }
   
-  // Detect constraints for each skill
+  // [SKILL-RECORD-IRON-CROSS] SkillType union owns 'iron_cross';
+  // Record<SkillType, ...> must include the key. Initialize null so
+  // it remains a sentinel when iron_cross is not in the active list.
   const skillResults: Record<SkillType, SkillConstraintResult | null> = {
     front_lever: null,
     back_lever: null,
@@ -824,6 +838,7 @@ export async function detectConstraints(
     hspu: null,
     muscle_up: null,
     l_sit: null,
+    iron_cross: null,
   }
   
   const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit']
@@ -925,7 +940,8 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
       primaryConstraint: 'none',
       secondaryConstraint: null,
       strongQualities: [],
-      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      // [CONSTRAINT-DETECTION-SCHEDULE-STATUS-CONTRACT] same as L783.
+      scheduleStatus: { isTimeLimited: false, averageSessionMinutes: 0, shortenedSessionRate: 0, recommendation: 'Insufficient data' },
       fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
       skillResults: {
         front_lever: null,
@@ -934,8 +950,10 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
         hspu: null,
         muscle_up: null,
         l_sit: null,
+        iron_cross: null,
       },
-      recommendations: ['Complete profile setup'],
+      overallRecommendations: ['Complete profile setup'],
+      dataQuality: 'insufficient',
     }
   }
   
@@ -954,6 +972,9 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
   }
   
   // Initialize skill results (without readiness data - will use profile-based scoring)
+  // [SKILL-RECORD-IRON-CROSS] include iron_cross to satisfy
+  // Record<SkillType, ...> completeness; default null (no profile
+  // scoring path defined for iron_cross yet).
   const skillResults: Record<SkillType, SkillConstraintResult | null> = {
     front_lever: detectSkillConstraints('front_lever', null, profile),
     back_lever: detectSkillConstraints('back_lever', null, profile),
@@ -961,6 +982,7 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
     hspu: detectSkillConstraints('hspu', null, profile),
     muscle_up: detectSkillConstraints('muscle_up', null, profile),
     l_sit: detectSkillConstraints('l_sit', null, profile),
+    iron_cross: null,
   }
   
   // Determine global constraints
@@ -1028,7 +1050,20 @@ export function getConstraintInsightForSkill(skill: SkillType): {
   recommendations: string[]
   explanation: string
 } {
+  // [ATHLETE-PROFILE-NULL-GUARD] getAthleteProfile may return null
+  // before persisted profile exists; surface the same insufficient-data
+  // payload instead of forcing a non-null profile through.
   const profile = getAthleteProfile()
+  if (!profile) {
+    return {
+      hasInsight: false,
+      primaryLabel: 'More Data Needed',
+      secondaryLabel: null,
+      strongQualitiesLabel: '',
+      recommendations: ['Log workouts to unlock constraint detection'],
+      explanation: 'Track your training to receive personalized constraint analysis.',
+    }
+  }
   const result = detectSkillConstraints(skill, null, profile)
   
   if (result.primaryConstraint === 'insufficient_data') {

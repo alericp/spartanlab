@@ -1,0 +1,7 @@
+===== PART 2 — EASY BUILDER EXACT TARGETS =====
+Exact current tsc errors with fix guidance. Use line + anchor. If line drifted, search only ±80 lines in that same file.
+
+File counts in this packet:
+
+Error-code counts in this packet:
+

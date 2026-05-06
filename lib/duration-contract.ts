@@ -62,6 +62,64 @@ export interface EstimatedSessionDuration {
 }
 
 // =============================================================================
+// [BUILD GREEN GATE / SESSION DURATION MODE RESOLVER — READ-ONLY BOUNDARY]
+//
+// `sessionDurationMode` is canonical profile/program truth (it lives on the
+// onboarding profile, the canonical profile service, and the produced
+// AdaptiveProgram). It is *not* a field on `AdaptiveProgramInputs`. At
+// runtime, however, the `inputs` object passed to the builder is assembled
+// by `entryToAdaptiveInputs()` (canonical-profile-service) and carries the
+// extra `sessionDurationMode` key — TypeScript does not see it on the static
+// `AdaptiveProgramInputs` type, but the value is still present at runtime.
+//
+// These helpers let UI/form/builder code read that runtime value at a typed
+// boundary without polluting `AdaptiveProgramInputs`, without `as any`, and
+// without weakening the source contract. They are pure read-only guards:
+// invalid/missing input always degrades to `null`, never to fake truth.
+// =============================================================================
+export type SessionDurationMode = 'static' | 'adaptive'
+
+export function isSessionDurationMode(value: unknown): value is SessionDurationMode {
+  return value === 'static' || value === 'adaptive'
+}
+
+/**
+ * Read `sessionDurationMode` from any unknown-shaped runtime source through a
+ * guarded boundary. Returns the validated mode or `null` — never a fake
+ * default. Use when reading from objects whose static type does not declare
+ * `sessionDurationMode` (e.g. `AdaptiveProgramInputs` runtime values that
+ * carry profile metadata structurally but not statically).
+ */
+export function readSessionDurationMode(source: unknown): SessionDurationMode | null {
+  if (!source || typeof source !== 'object') return null
+  const value = (source as Record<string, unknown>).sessionDurationMode
+  return isSessionDurationMode(value) ? value : null
+}
+
+/**
+ * Resolve the effective session-duration mode by preferring the canonical
+ * profile source, then the legacy input source, then a safe fallback. This
+ * mirrors the existing `canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'static'`
+ * fallback chain used throughout the builder and onboarding flow, but routes
+ * the read through a typed unknown boundary on each side so neither object
+ * needs to expose the field on its static type.
+ *
+ * Default fallback is `'static'` — the conservative choice for display.
+ * Adaptive must be explicitly signalled, never invented.
+ */
+export function resolveSessionDurationMode(
+  canonicalSource: unknown,
+  inputSource: unknown,
+  fallback: SessionDurationMode = 'static',
+): SessionDurationMode {
+  return (
+    readSessionDurationMode(canonicalSource) ||
+    readSessionDurationMode(inputSource) ||
+    fallback
+  )
+}
+
+// =============================================================================
 // CANONICAL DURATION PREFERENCE LABELS
 // =============================================================================
 

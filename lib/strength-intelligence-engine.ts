@@ -319,6 +319,18 @@ export interface FrequencyRecommendation {
 /**
  * Get frequency recommendations based on modality and training days
  */
+// [STRENGTH-FREQUENCY-TIER-CLAMP] FrequencyRecommendation pins the
+// per-week counts to the tight `0 | 1 | 2 | 3` union; runtime
+// arithmetic (Math.min, derived day counts) returns plain `number`,
+// so clamp to the nearest allowed tier here rather than `as` casts at
+// every call site.
+function toStrengthTier(value: number): 0 | 1 | 2 | 3 {
+  if (value <= 0) return 0
+  if (value === 1) return 1
+  if (value === 2) return 2
+  return 3
+}
+
 export function getFrequencyRecommendation(
   modality: HybridStrengthModality,
   trainingDaysPerWeek: number,
@@ -340,8 +352,8 @@ export function getFrequencyRecommendation(
     const weightedDays = Math.min(Math.floor(trainingDaysPerWeek / 2), 2)
     return {
       deadliftPerWeek: 0,
-      weightedPullPerWeek: weightedDays,
-      weightedDipPerWeek: weightedDays,
+      weightedPullPerWeek: toStrengthTier(weightedDays),
+      weightedDipPerWeek: toStrengthTier(weightedDays),
       skillWorkDays: trainingDaysPerWeek - weightedDays,
       reason: 'Weighted calisthenics for strength, skill work on alternating days.',
     }
@@ -351,8 +363,8 @@ export function getFrequencyRecommendation(
   if (modality === 'hybrid_light') {
     return {
       deadliftPerWeek: 1,
-      weightedPullPerWeek: Math.min(trainingDaysPerWeek >= 4 ? 2 : 1, 2),
-      weightedDipPerWeek: Math.min(trainingDaysPerWeek >= 4 ? 2 : 1, 2),
+      weightedPullPerWeek: toStrengthTier(Math.min(trainingDaysPerWeek >= 4 ? 2 : 1, 2)),
+      weightedDipPerWeek: toStrengthTier(Math.min(trainingDaysPerWeek >= 4 ? 2 : 1, 2)),
       skillWorkDays: Math.max(trainingDaysPerWeek - 2, 2),
       reason: 'Light hybrid: 1x deadlift for posterior chain, skill remains priority.',
     }
@@ -1066,9 +1078,9 @@ export function selectStrengthMethod(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  STRENGTH_METHOD_PROFILES,
-  INTENSITY_ZONES,
-  DEFAULT_FATIGUE_BUDGETS,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] STRENGTH_METHOD_PROFILES (line 99),
+// INTENSITY_ZONES (line 218), and DEFAULT_FATIGUE_BUDGETS (line 416) are
+// exported inline at their declarations. The previous bottom export block
+// duplicated all three names (TS2300/TS2484). Inline export remains the
+// single canonical export style; public API is unchanged.

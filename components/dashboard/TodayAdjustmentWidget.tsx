@@ -23,6 +23,35 @@ import { InsightExplanation, generateAdjustmentExplanation } from '@/components/
 import { AdaptiveEngineBadge, ENGINE_MESSAGES } from '@/components/shared/AdaptiveEngineBadge'
 import { useIsPremium, PremiumFeatureLockCard, ProBadge } from '@/components/premium/PremiumFeature'
 
+// [PRE-AB6 BUILD GREEN GATE / SESSIONADJUSTMENT CONTRACT]
+// SessionAdjustment (lib/daily-adjustment-engine.ts:29) does NOT expose
+// `adjustmentPercent`. Real fields: type, label, original (AdaptiveSession),
+// adjusted (AdaptiveSession), whatToKeep, whatToCut, whatToModify,
+// explanation, wasAdjusted. Derive a display-only reduction percent from
+// the exercise-count delta between original and adjusted sessions.
+// Returns undefined when no reliable percent can be computed, so
+// generateAdjustmentExplanation falls back to "Session adjusted" copy
+// instead of inventing a precise number.
+function getAdjustmentMagnitude(
+  adjustment: SessionAdjustment | null
+): number | undefined {
+  if (!adjustment?.wasAdjusted) return undefined
+
+  const originalCount = Array.isArray(adjustment.original?.exercises)
+    ? adjustment.original.exercises.length
+    : 0
+
+  const adjustedCount = Array.isArray(adjustment.adjusted?.exercises)
+    ? adjustment.adjusted.exercises.length
+    : 0
+
+  if (originalCount > 0 && adjustedCount < originalCount) {
+    return Math.round(((originalCount - adjustedCount) / originalCount) * 100)
+  }
+
+  return undefined
+}
+
 export function TodayAdjustmentWidget() {
   const [currentSession, setCurrentSession] = useState<AdaptiveSession | null>(null)
   const [adjustment, setAdjustment] = useState<SessionAdjustment | null>(null)
@@ -141,7 +170,7 @@ export function TodayAdjustmentWidget() {
         explanation={generateAdjustmentExplanation(
           wellnessState,
           adjustment?.wasAdjusted ?? false,
-          adjustment?.adjustmentPercent
+          getAdjustmentMagnitude(adjustment)
         )}
         variant="bordered"
         className="mt-4"

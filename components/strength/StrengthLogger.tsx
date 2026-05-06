@@ -35,7 +35,8 @@ export function StrengthLogger({ exercise, exerciseName, onRecordSaved }: Streng
     setSaving(true)
     
     try {
-      saveStrengthRecord(exercise, weightNum, repsNum, date)
+      // [SAVE-STRENGTH-RECORD CONTRACT] 4th arg is the options object, not a raw date string.
+      saveStrengthRecord(exercise, weightNum, repsNum, { dateLogged: date })
       setWeightAdded('')
       setReps('')
       setDate(new Date().toISOString().split('T')[0])

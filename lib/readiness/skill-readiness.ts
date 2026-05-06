@@ -2667,6 +2667,11 @@ export function calculateUnifiedReadiness(
       result = calculateHSPUReadiness(inputs as HSPUInputs)
       skillName = 'Handstand Push-Up'
       break
+    default:
+      // [READINESS-DEFINITE-ASSIGNMENT] Closed-skill switch needs an
+      // explicit default branch so `result` is provably assigned for
+      // the post-switch read.
+      throw new Error(`Unsupported skill type: ${skillType}`)
   }
   
   const tier = getReadinessTier(result.score)

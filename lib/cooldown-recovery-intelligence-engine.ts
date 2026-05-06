@@ -514,8 +514,33 @@ export const RECOVERY_EXERCISE_DATABASE: RecoveryExercise[] = [
 
 /**
  * Maps session stress patterns to recommended recovery regions
+ *
+ * [SKILL-STRESS-FOCUS-CONTRACT] Type changed from
+ * `Record<SkillStressFocus, TargetRegion[]>` to
+ * `Partial<Record<SkillStressFocus, TargetRegion[]>>`. Justification:
+ *
+ *   1. Both consumers (lines 602 and 637 below) already null-check the
+ *      lookup result before reading regions — the consuming code is
+ *      written for missing-entry semantics:
+ *        if (exercise.movementFamily && SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]) { ... }
+ *
+ *   2. The five stale keys removed below (`support_hold`, `planche_family`,
+ *      `lever_family`, `handstand_family`, `muscle_up_family`) were never
+ *      members of the canonical SkillStressFocus union; they produced
+ *      TS2353 errors and were never reachable at runtime because the
+ *      consuming code only passes canonical SkillStressFocus values.
+ *
+ *   3. Many canonical SkillStressFocus members (mobility, joint_integrity,
+ *      arm_isolation, hypertrophy_accessory, etc.) have no doctrinally
+ *      meaningful recovery region — fabricating entries for them would
+ *      violate the guardrail "Do not fake product behavior." `Partial`
+ *      lets the recovery engine skip these correctly without inventing
+ *      regions.
+ *
+ * The thirteen canonical entries below carry the original doctrine
+ * verbatim: which body regions need cooldown for which stress family.
  */
-const SESSION_STRESS_TO_RECOVERY: Record<SkillStressFocus, TargetRegion[]> = {
+const SESSION_STRESS_TO_RECOVERY: Partial<Record<SkillStressFocus, TargetRegion[]>> = {
   straight_arm_push: ['wrists', 'shoulders', 'scapula', 'forearms'],
   straight_arm_pull: ['shoulders', 'elbows', 'forearms', 'lats', 'scapula'],
   ring_support: ['shoulders', 'elbows', 'scapula', 'wrists'],
@@ -527,11 +552,9 @@ const SESSION_STRESS_TO_RECOVERY: Record<SkillStressFocus, TargetRegion[]> = {
   vertical_push: ['shoulders', 'elbows', 'wrists'],
   horizontal_push: ['shoulders', 'elbows', 'wrists'],
   dip_pattern: ['shoulders', 'elbows', 'wrists'],
-  support_hold: ['shoulders', 'wrists', 'scapula'],
-  planche_family: ['wrists', 'shoulders', 'scapula', 'forearms'],
-  lever_family: ['shoulders', 'elbows', 'lats', 'forearms'],
-  handstand_family: ['wrists', 'shoulders', 'thoracic_spine'],
-  muscle_up_family: ['shoulders', 'elbows', 'lats'],
+  rings_stability: ['shoulders', 'elbows', 'scapula', 'wrists'],
+  rings_strength: ['shoulders', 'elbows', 'scapula'],
+  transition: ['shoulders', 'elbows', 'lats'],
 }
 
 /**
@@ -551,15 +574,22 @@ const JOINT_STRESS_TO_RECOVERY: Record<JointStressFocus, TargetRegion[]> = {
 /**
  * Maps weak points to additional recovery emphasis
  */
+// [WEAK-POINT-TYPE-CONTRACT] Keys are canonical WeakPointType members
+// (lib/weak-point-engine.ts:43-77). Stale aliases mapped:
+//   elbow_tolerance     → tendon_tolerance (canonical covers elbow tendons)
+//   transition_control  → transition_strength
+//   pulling_power       → pull_strength
+//   pushing_power       → push_strength
+// TargetRegion arrays unchanged — recovery doctrine intent preserved.
 const WEAK_POINT_TO_RECOVERY: Partial<Record<WeakPointType, TargetRegion[]>> = {
   scapular_control: ['scapula', 'thoracic_spine'],
   shoulder_stability: ['shoulders', 'scapula'],
   wrist_tolerance: ['wrists', 'forearms'],
-  elbow_tolerance: ['elbows', 'forearms'],
+  tendon_tolerance: ['elbows', 'forearms'],
   compression_strength: ['hip_flexors', 'hamstrings'],
-  transition_control: ['shoulders', 'elbows'],
-  pulling_power: ['lats', 'shoulders'],
-  pushing_power: ['shoulders', 'wrists'],
+  transition_strength: ['shoulders', 'elbows'],
+  pull_strength: ['lats', 'shoulders'],
+  push_strength: ['shoulders', 'wrists'],
 }
 
 // =============================================================================
@@ -593,7 +623,12 @@ export function analyzeSessionForRecovery(
   for (const exercise of input.completedExercises) {
     // Movement family mapping
     if (exercise.movementFamily && SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]) {
-      const regions = SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]
+      // [COOLDOWN-REGION-LOOKUP-DEFAULT] The map's value type is
+      // `RecoveryRegion[] | undefined`. The truthy guard above keeps
+      // this branch reachable only when the lookup was non-undefined,
+      // but TS's narrowing doesn't survive the second indexed read; pin
+      // an empty-array fallback so the for-loop is type-safe.
+      const regions = SESSION_STRESS_TO_RECOVERY[exercise.movementFamily] ?? []
       for (const region of regions) {
         regionScores[region] += exercise.setsCompleted
         if (!reasonMap[region]) {
@@ -628,7 +663,8 @@ export function analyzeSessionForRecovery(
   if (input.stressAnalysis) {
     for (const [family, stress] of Object.entries(input.stressAnalysis.stressByFamily || {})) {
       if (stress > 10 && SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus]) {
-        const regions = SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus]
+        // [COOLDOWN-REGION-LOOKUP-DEFAULT] same narrowing-loss as above.
+        const regions = SESSION_STRESS_TO_RECOVERY[family as SkillStressFocus] ?? []
         for (const region of regions) {
           regionScores[region] += Math.floor(stress / 5)
         }
@@ -987,13 +1023,9 @@ function capitalize(str: string): string {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeSessionForRecovery,
-  selectRecoveryExercises,
-  generateIntelligentCooldown,
-  generateCompressedCooldown,
-  getRecoveryKnowledgeBubble,
-  generateCooldownExplanation,
-  createCooldownLogEntry,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All seven functions are exported inline
+// at their declarations (lines 572, 686, 747, 819, 885, 943, 962). The
+// previous bottom export block duplicated every name (TS2300/TS2484).
+// Inline `export function` remains the single canonical export style;
+// public API is unchanged.

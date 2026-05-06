@@ -1,0 +1,26 @@
+lib/doctrine-runtime-contract.ts(257,22): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+lib/doctrine-runtime-contract.ts(259,25): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+lib/doctrine-runtime-contract.ts(310,27): error TS2345: Argument of type 'DoctrinePrinciple[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(311,27): error TS2345: Argument of type 'ProgressionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(312,27): error TS2345: Argument of type 'MethodRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(313,27): error TS2345: Argument of type 'PrescriptionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(314,27): error TS2345: Argument of type 'ExerciseSelectionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(315,27): error TS2345: Argument of type 'CarryoverRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(343,39): error TS2345: Argument of type 'DoctrinePrinciple[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(344,45): error TS2345: Argument of type 'ProgressionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(345,40): error TS2345: Argument of type 'MethodRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(346,46): error TS2345: Argument of type 'PrescriptionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(347,43): error TS2345: Argument of type 'CarryoverRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(348,51): error TS2345: Argument of type 'ExerciseSelectionRule[]' is not assignable to parameter of type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(379,7): error TS2322: Type 'DoctrinePrinciple[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(380,7): error TS2322: Type 'ProgressionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(381,7): error TS2322: Type 'MethodRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(382,7): error TS2322: Type 'PrescriptionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(383,7): error TS2322: Type 'CarryoverRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(384,7): error TS2322: Type 'ExerciseSelectionRule[]' is not assignable to type '{ source_id?: string | null | undefined; }[]'.
+lib/doctrine-runtime-contract.ts(415,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'ProgressionRule[]'.
+lib/doctrine-runtime-contract.ts(424,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'MethodRule[]'.
+lib/doctrine-runtime-contract.ts(432,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'PrescriptionRule[]'.
+lib/doctrine-runtime-contract.ts(439,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'CarryoverRule[]'.
+lib/doctrine-runtime-contract.ts(447,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'ExerciseSelectionRule[]'.
+lib/doctrine-runtime-contract.ts(453,7): error TS2345: Argument of type '{ source_id?: string | null | undefined; }[]' is not assignable to parameter of type 'DoctrinePrinciple[]'.

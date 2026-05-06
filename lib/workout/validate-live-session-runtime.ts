@@ -20,7 +20,31 @@ import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
 // TYPES
 // =============================================================================
 
-/** Minimal normalized exercise shape required for live workout runtime */
+/** Minimal normalized exercise shape required for live workout runtime
+ *
+ * [LIVE-WORKOUT-RUNTIME-CONTRACT / ROOT-CONTRACT-REPAIR]
+ * This shape is the runtime live-workout exercise contract — the type that
+ * both the in-component normalizer in
+ * components/workout/StreamlinedWorkoutSession.tsx (the writer) and the
+ * downstream live-workout consumers (readers) agree on.
+ *
+ * The canonical builder type (AdaptiveExercise in
+ * lib/adaptive-program-builder.ts) is INTENTIONALLY a different, richer
+ * contract. We do NOT import AdaptiveExercise here because:
+ *   1. The runtime exercise can originate from a builder output, a saved
+ *      session payload, or a loader-resolved week-scaled object, so it
+ *      cannot require every AdaptiveExercise field.
+ *   2. Importing AdaptiveExercise here would force runtime callers to
+ *      satisfy builder-only fields (selectionReason as required string,
+ *      doctrine stamps, performance feedback adaptations, etc.) — which is
+ *      the exact contract drift this repair is undoing.
+ *
+ * Therefore every additional field below is OPTIONAL. Each one is added
+ * because the in-component normalizer already writes it from the upstream
+ * loader output and downstream live-workout readers already consume it.
+ * The shapes mirror — but do not import from — the builder/canonical types
+ * to keep the runtime contract narrow and decoupled.
+ */
 export interface NormalizedExercise {
   id?: string
   name: string
@@ -37,6 +61,60 @@ export interface NormalizedExercise {
   }
   targetRPE?: number
   executionTruth?: unknown
+
+  // [RUNTIME-CONTRACT] Per-exercise rest in seconds. Written by the live
+  // session normalizer from base exercise.restSeconds; read by the rest
+  // resolver and the active-effective contract.
+  restSeconds?: number
+
+  // [METHOD-TAXONOMY] Grouped-structure membership and method label.
+  // Written by the normalizer; read by grouped rendering, method gating,
+  // and the execution-plan derivation in the live session.
+  method?: string
+  methodLabel?: string
+  blockId?: string
+
+  // [LOADER-PROVENANCE] Tracks where this exercise came from (loader,
+  // adaptation, fallback, etc.) and whether the loader pre-adapted it.
+  source?: string
+  wasAdapted?: boolean
+
+  // [PERFORMANCE-FEEDBACK] Loose shape preserved from upstream. Narrower
+  // typing would require importing builder types, which would re-couple
+  // the runtime contract to the builder corridor.
+  progressionDecision?: {
+    decision?: string
+    confidence?: number
+    reason?: string
+  }
+
+  // [WEEK-TRUTH-CORRIDOR] Week-scaled dosage fields produced by
+  // scaleSessionForWeek() in lib/week-dosage-scaling.ts and forwarded
+  // through the loader. getEffectiveExerciseValues() reads these.
+  scaledSets?: number
+  scaledReps?: string
+  scaledHoldDuration?: number
+  scaledTargetRPE?: number
+  scaledRestPeriod?: number
+  weekScalingApplied?: boolean
+
+  // [COACH-LAYER] Structured coaching metadata for coach-like display.
+  // Mirrors (but does not import) the AdaptiveExercise.coachingMeta shape;
+  // every field is optional because the runtime exercise may originate
+  // from a saved or partially-built session that did not populate it.
+  coachingMeta?: {
+    expressionMode?: string
+    progressionIntent?: string
+    skillSupportTargets?: string[]
+    loadDecisionSummary?: string
+    restLabel?: string
+    roleInSession?: string
+  }
+
+  // [PROTECTION-FLAG] Canonical NormalizedExerciseInput.isProtected from
+  // lib/coaching-explanation-contract.ts. Optional here because the
+  // runtime exercise is not guaranteed to carry it; consumers must guard.
+  isProtected?: boolean
 }
 
 /** Minimal normalized session contract shape */

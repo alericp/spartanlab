@@ -173,7 +173,18 @@ export default function CalisthenicsStrengthScoreCalculator() {
   setResult(calcResult)
   
   // Track tool usage
-  trackToolUsed('calisthenics_strength_score', { score: calcResult.score, classification: calcResult.classification })
+  // [PRE-AB6 BUILD GREEN GATE / CALCULATOR ANALYTICS CONTRACT]
+  //   The local result contract (L31) declares `level: string`, not
+  //   `classification`. The previous payload read `calcResult.classification`,
+  //   which does not exist on the result object — TypeScript correctly
+  //   rejected it. Preserved the existing analytics key `classification`
+  //   (matches the sibling `pull-up-strength-score/page.tsx:138` payload
+  //   convention so downstream dashboards keep a stable key) while
+  //   sourcing the value from the authoritative `calcResult.level` field.
+  //   `trackToolUsed` accepts `Record<string, unknown>` (see
+  //   `lib/analytics.ts:251`), so the key name is free-form. No casts,
+  //   no suppressions, no result-type widening, no scoring/UI change.
+  trackToolUsed('calisthenics_strength_score', { score: calcResult.score, classification: calcResult.level })
   }
   
   const handleReset = () => {

@@ -721,9 +721,10 @@ export function getUploadedDoctrineBatchCountsBySource(): Record<string, number>
   return out
 }
 
-export function getUploadedDoctrineProvenanceFor(
-  atomId: string,
-):
+// [DOCTRINE-PROVENANCE-UNION-ALIAS] each per-batch provenance type
+// is structurally narrow; expose a single union and project the
+// expression to it so the assignability check holds.
+type UploadedDoctrineProvenance =
   | Batch01Provenance
   | Batch02Provenance
   | Batch03Provenance
@@ -734,7 +735,11 @@ export function getUploadedDoctrineProvenanceFor(
   | Batch08Provenance
   | Batch09Provenance
   | Batch10Provenance
-  | null {
+  | null
+
+export function getUploadedDoctrineProvenanceFor(
+  atomId: string,
+): UploadedDoctrineProvenance {
   return (
     getBatch01ProvenanceFor(atomId) ??
     getBatch02ProvenanceFor(atomId) ??
@@ -747,5 +752,5 @@ export function getUploadedDoctrineProvenanceFor(
     getBatch09ProvenanceFor(atomId) ??
     getBatch10ProvenanceFor(atomId) ??
     null
-  )
+  ) as UploadedDoctrineProvenance
 }

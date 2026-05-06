@@ -241,10 +241,21 @@ export function getRecentPerformance(
 export function calculateAllTrends(
   records: StrengthRecord[]
 ): Record<ExerciseType, StrengthTrend> {
+  // [EXERCISE-TYPE-RECORD-COMPLETION] cover the full ExerciseType
+  // union so the Record contract holds; reuse the same per-exercise
+  // calculator so trend logic remains uniform.
   return {
     weighted_pull_up: calculateStrengthTrend(records, 'weighted_pull_up'),
     weighted_dip: calculateStrengthTrend(records, 'weighted_dip'),
     weighted_muscle_up: calculateStrengthTrend(records, 'weighted_muscle_up'),
+    conventional_deadlift: calculateStrengthTrend(records, 'conventional_deadlift'),
+    sumo_deadlift: calculateStrengthTrend(records, 'sumo_deadlift'),
+    romanian_deadlift: calculateStrengthTrend(records, 'romanian_deadlift'),
+    trap_bar_deadlift: calculateStrengthTrend(records, 'trap_bar_deadlift'),
+    back_squat: calculateStrengthTrend(records, 'back_squat'),
+    front_squat: calculateStrengthTrend(records, 'front_squat'),
+    bench_press: calculateStrengthTrend(records, 'bench_press'),
+    overhead_press: calculateStrengthTrend(records, 'overhead_press'),
   }
 }
 
@@ -252,10 +263,19 @@ export function calculateAllTrends(
  * Format exercise name for display
  */
 function formatExerciseName(exercise: ExerciseType): string {
+  // [EXERCISE-TYPE-RECORD-COMPLETION] cover all ExerciseType keys.
   const names: Record<ExerciseType, string> = {
     weighted_pull_up: 'weighted pull-up',
     weighted_dip: 'weighted dip',
     weighted_muscle_up: 'weighted muscle-up',
+    conventional_deadlift: 'conventional deadlift',
+    sumo_deadlift: 'sumo deadlift',
+    romanian_deadlift: 'romanian deadlift',
+    trap_bar_deadlift: 'trap bar deadlift',
+    back_squat: 'back squat',
+    front_squat: 'front squat',
+    bench_press: 'bench press',
+    overhead_press: 'overhead press',
   }
   return names[exercise]
 }

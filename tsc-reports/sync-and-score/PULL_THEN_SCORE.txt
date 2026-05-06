@@ -1,0 +1,121 @@
+===== SAVE LOCAL CHANGE BACKUP PATCH =====
+Backup patch saved in backups/.
+
+===== STASH LOCAL TRACKED CHANGE =====
+Saved working directory and index state On v0/alericpetsch836-6923-6213db1c-2: backup local adaptive-program-builder before pulling VO remote
+<stdin>:19: trailing whitespace.
+import { 
+<stdin>:366: trailing whitespace.
+    entryPathClassification: inputs.regenerationMode === 'rebuild' 
+warning: 2 lines add whitespace errors.
+
+===== FETCH + FAST-FORWARD PULL =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Updating a7ce785f..1a0b29e1
+Fast-forward
+ components/workout/StreamlinedWorkoutSession.tsx |  182 ++-
+ components/workout/WhyThisWorkout.tsx            |   31 +-
+ components/workout/WorkoutSessionSummary.tsx     |   20 +-
+ hooks/useWorkoutSession.ts                       |   41 +-
+ lib/adaptive-program-builder.ts                  | 1425 +++++++++++++++++-----
+ scripts/run-tsc-full.js                          |   99 ++
+ scripts/run-tsc-full.sh.bak                      |   51 +
+ 7 files changed, 1480 insertions(+), 369 deletions(-)
+ create mode 100644 scripts/run-tsc-full.js
+ create mode 100644 scripts/run-tsc-full.sh.bak
+
+===== POST-PULL STATE =====
+Current HEAD: 1a0b29e1
+Remote HEAD: 1a0b29e1
+Local vs remote count:
+0	0
+
+Latest commits:
+1a0b29e1 fix: resolve remaining code issues in adaptive-program-builder.ts
+9de71a06 refactor: streamline builder API and canonical profile fields
+c53b8903 fix: resolve key section errors in CanonicalProgrammingProfile
+b3c2531c feat: add polymorphic accessors for adaptive-program-builder
+1ba14359 refactor: optimize adaptive program with polymorphic accessors
+a82f95fc fix: partial adaptive session field renames without type check
+7fb875fb fix: correct type mismatches in adaptive program builder
+d44a4213 rename: convert run-tsc-full.mjs to run-tsc-full.js
+
+===== FRESH TYPESCRIPT SCORE AFTER REAL SYNC =====
+Previous known total diagnostics: 1571
+Current total diagnostics after pull: 1313
+Total delta after pull: 258
+Current files with errors: 147
+
+Previous known adaptive-program-builder.ts diagnostics: 557
+Current adaptive-program-builder.ts diagnostics after pull: 315
+Builder delta after pull: 242
+
+===== TOP 25 ERROR FILES AFTER PULL =====
+    315 lib/adaptive-program-builder.ts
+    145 lib/program-exercise-selector.ts
+     54 lib/server/authoritative-program-generation.ts
+     52 lib/canonical-profile-service.ts
+     48 lib/weak-point-engine.ts
+     36 lib/prediction/prediction-service.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/repositories/profile-repository.ts
+     14 lib/performance-envelope-integration.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+
+===== FIRST 25 BUILDER ERRORS AFTER PULL =====
+lib/adaptive-program-builder.ts(567,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(729,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(812,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(839,8): error TS2724: '"./program/programming-truth-bundle"' has no exported member named 'ProgrammingTruthBundle'. Did you mean 'buildProgrammingTruthBundle'?
+lib/adaptive-program-builder.ts(994,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(5538,30): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"rebuild"' have no overlap.
+lib/adaptive-program-builder.ts(5540,9): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"adapt"' have no overlap.
+lib/adaptive-program-builder.ts(5956,7): error TS2322: Type 'SessionLength' is not assignable to type 'number | undefined'.
+lib/adaptive-program-builder.ts(6107,30): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6753,34): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6919,67): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6935,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6936,73): error TS2339: Property 'selectedFlexibility' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6943,88): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6994,78): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7216,12): error TS2339: Property 'generationIntent' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7252,5): error TS2353: Object literal may only specify known properties, and 'generationIntent' does not exist in type 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(7270,21): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7322,62): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/program-generation/session-composition-intelligence").WeekAdaptationInput' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/program-generation/week-adaptation-decision-contract").WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(7882,24): error TS2367: This comparison appears to be unintentional because the types '"baseline_4_days" | "conservative_first_week_4_days" | "insufficient_data_4_days" | "adapted_to_4_days_after_feedback" | "hidden_modifier_collision_4_days" | "non_4_days_adaptive"' and '"stale_feedback_false_4_days"' have no overlap.
+lib/adaptive-program-builder.ts(8042,39): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(8043,40): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(8069,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8072,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(8074,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+
+===== CHECK RECENT TARGETS STILL PRESENT AFTER PULL =====
+lib/adaptive-athlete-engine.ts(5,90): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-training-cycle-engine.ts(743,18): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/adaptive-training-cycle-engine.ts(744,34): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/constraint-detection-engine.ts(785,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(820,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(930,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(957,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: SkillConstraintResult; back_lever: SkillConstraintResult; planche: SkillConstraintResult; hspu: SkillConstraintResult; muscle_up: SkillConstraintResult; l_sit: SkillConstraintResult; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-engine.ts(88,7): error TS2353: Object literal may only specify known properties, and 'recommendations' does not exist in type 'ConstraintResult'.
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/training-coach.ts(11,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.

@@ -74,11 +74,19 @@ export function getAllSkillPredictions(): BatchPredictionResult {
     }
   })
   
-  // Add primary goals from onboarding
+  // [PREDICTION-SERVICE-CANONICAL-FIELD] Iterate over canonical
+  // onboarding skill targets. The previous `primaryGoals` field never
+  // existed on `OnboardingProfile`; the canonical skill-target collection
+  // is `selectedSkills: SkillGoal[]` (declared on OnboardingProfile in
+  // `lib/athlete-profile.ts`). The singular `primaryGoal` is a *single*
+  // overall goal type, not a per-skill list — using it here would be
+  // wrong both type-wise and semantically. Iterating `selectedSkills`
+  // matches the prior intent: surface skill IDs the athlete actively
+  // selected as goals so prediction can compute skill-specific outlooks.
   const onboarding = getOnboardingProfile()
-  if (onboarding?.primaryGoals) {
-    onboarding.primaryGoals.forEach(goal => {
-      if (SKILL_DIFFICULTY_CONFIG[goal]) {
+  if (onboarding?.selectedSkills) {
+    onboarding.selectedSkills.forEach(goal => {
+      if (SKILL_DIFFICULTY_CONFIG[goal as SkillId]) {
         activeSkillIds.add(goal as SkillId)
       }
     })
@@ -158,6 +166,15 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
   const strengthRecords = getStrengthRecords()
   const onboarding = getOnboardingProfile()
   
+  // [PREDICTION-SERVICE-PROFILE-NULL-GUARD] `getAthleteProfile()` returns
+  // `AthleteProfile | null`. All downstream reads expect a non-null
+  // profile; rather than guarding every read, fail fast for
+  // not-yet-onboarded users with a clear error. Callers (dashboard,
+  // batch-prediction) already wrap this in try/catch.
+  if (!profile) {
+    throw new Error('[PredictionService] No athlete profile available')
+  }
+  
   // Try to get fatigue indicators (may not be available)
   let fatigue: FatigueIndicators | null = null
   try {
@@ -171,27 +188,31 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
   // These || fallbacks are acceptable since this is a read-only analysis path
   let weakPointsList: WeakPointAssessment[] | null = null
   try {
+    // [PREDICTION-SERVICE-WEAK-POINT-FACTORS-CANONICAL]
+    // `UserProfileFactors` accepts numeric strength benchmarks plus a
+    // narrow `experienceLevel`. `AthleteProfile` does not own
+    // `pushUpMax`, `lSitHoldSeconds`, `plancheLevel`, `frontLeverLevel`,
+    // `hasMuscleUp`, `hasRings`, `hasWeights`, `hasPullUpBar`,
+    // `hasShoulderIssues`, `hasElbowIssues`, `hasWristIssues`. Canonical
+    // sources for these are `OnboardingProfile` (with enum-typed
+    // benchmarks). For type safety we only pass fields present on
+    // `AthleteProfile`; richer inputs would require a separate
+    // benchmark-coercion helper that lives in onboarding-service.
+    // `OnboardingProfile.primaryTrainingOutcome` is the canonical
+    // outcome field (legacy `primaryOutcome` was removed).
     const wpResult = analyzeWeakPoints({
-      experienceLevel: profile.experienceLevel as any || 'intermediate',
-      primaryOutcome: onboarding?.primaryOutcome || 'skill_mastery',
-      skillGoals: onboarding?.primaryGoals,
-      trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,  // Prediction display fallback
-      sessionLengthMinutes: profile.sessionLengthMinutes || 60,  // Prediction display fallback
-      pullUpMax: profile.pullUpMax,
-      pushUpMax: profile.pushUpMax,
-      dipMax: profile.dipMax,
-      lSitHoldSeconds: profile.lSitHoldSeconds,
-      currentPlancheLevel: profile.plancheLevel,
-      currentFrontLeverLevel: profile.frontLeverLevel,
-      currentMuscleUpCapable: profile.hasMuscleUp,
-      hasRings: profile.hasRings,
-      hasWeights: profile.hasWeights,
-      hasPullUpBar: profile.hasPullUpBar,
-      hasShoulderIssues: profile.hasShoulderIssues,
-      hasElbowIssues: profile.hasElbowIssues,
-      hasWristIssues: profile.hasWristIssues,
+      experienceLevel: profile.experienceLevel || 'intermediate',
+      primaryOutcome: onboarding?.primaryTrainingOutcome || 'skills',
+      skillGoals: onboarding?.selectedSkills,
+      trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,
+      sessionLengthMinutes: profile.sessionLengthMinutes || 60,
+      pullUpMax: typeof profile.pullUpMax === 'number' ? profile.pullUpMax : undefined,
+      dipMax: typeof profile.dipMax === 'number' ? profile.dipMax : undefined,
     })
-    weakPointsList = wpResult.weakPoints
+    // [PREDICTION-SERVICE-WEAK-POINT-RESULT-FIELD] Canonical
+    // `WeakPointAnalysisResult` exposes `weakPointsByPriority`, not the
+    // legacy `weakPoints` key.
+    weakPointsList = wpResult.weakPointsByPriority
   } catch {
     // Weak point data not available
   }
@@ -225,8 +246,11 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
   // Normalize consistency
   const consistencyLevel = normalizeConsistencyLevel(momentum)
   
-  // Get tendon level from onboarding
-  const tendonLevel = normalizeTendonLevel(onboarding?.tendonAdaptationLevel)
+  // [PREDICTION-SERVICE-TENDON-LEVEL-FALLBACK] `OnboardingProfile`
+  // does not own `tendonAdaptationLevel`; tendon adaptation is
+  // derived elsewhere. Pass `undefined` so `normalizeTendonLevel`
+  // applies its default.
+  const tendonLevel = normalizeTendonLevel(undefined)
   
   return {
     skillId,

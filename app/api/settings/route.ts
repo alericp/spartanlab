@@ -332,7 +332,15 @@ export async function PUT(request: Request) {
               secondaryGoal: programInputs.secondaryGoal || 'none',
               scheduleMode: programInputs.scheduleMode,
             })
-            const program = generateAdaptiveProgram(programInputs)
+            // [PRE-AB6 BUILD GREEN GATE / ASYNC PROGRAM GENERATION CONTRACT]
+            // generateAdaptiveProgram is declared `export async function`
+            // (lib/adaptive-program-builder.ts:5016) so its return type is
+            // Promise<AdaptiveProgram>. createProgramVersionOnSettingsChange
+            // expects a resolved AdaptiveProgram, so the Promise must be
+            // awaited before being passed in. The call already lives inside
+            // the async PUT handler's try/catch, so awaiting is safe and
+            // does not change failure semantics.
+            const program = await generateAdaptiveProgram(programInputs)
             
             // Save to program history (archives previous, creates new entry)
             const historyResult = await createProgramVersionOnSettingsChange(

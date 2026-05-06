@@ -132,10 +132,7 @@ function SkillProgressChart({ data }: SkillProgressChartProps) {
               borderRadius: '6px',
               fontSize: '12px',
             }}
-            formatter={(value: number, name: string, props: { payload: { label: string }}) => [
-              props.payload.label,
-              'Level'
-            ]}
+            formatter={(value) => [String(value), 'Level']}
           />
           <Line
             type="stepAfter"

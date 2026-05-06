@@ -1411,19 +1411,9 @@ export function generateWhyThisWeightedExercise(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  ENHANCED_EXERCISE_PROFILES,
-  getEnhancedExerciseProfile,
-  checkContraindications,
-  getExercisesForUseCase,
-  getExercisesForWeakPoint,
-  generateWhyThisExercise,
-  scoreSubstitution,
-  generateOverrideWarning,
-  getExercisesForProgressionNode,
-  getPrerequisiteExercises,
-  // Weighted skill integration
-  getWeightedExercisesForSkillTarget,
-  generateWhyThisWeightedExercise,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All twelve symbols are declared with
+// inline `export const` / `export function` at lines 154, 816, 836, 883,
+// 904, 933, 1032, 1159, 1224, 1260, 1320, 1373. The previous bottom export
+// block re-listed every name and produced TS2300/TS2484. Inline export
+// remains the single canonical export style; public API is unchanged.

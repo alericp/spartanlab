@@ -501,5 +501,12 @@ export function HistoryHub({
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export { WorkoutSessionCard, ProgramHistoryCard, EmptyHistoryState }
+// [PRE-AB6 BUILD GREEN GATE / DUPLICATE EXPORT CLEANUP]
+// All four components in this file (WorkoutSessionCard, ProgramHistoryCard,
+// EmptyHistoryState, HistoryHub) are already exported at their declaration
+// sites via `export function ...`. A trailing `export { ... }` block was
+// re-exporting three of them, causing TS2300 "Cannot redeclare exported
+// variable". The inline `export function` declarations are the authoritative
+// exports — external importers (components/history/index.ts and
+// app/(app)/history/workouts/page.tsx) use named imports that resolve
+// identically against them.

@@ -18,6 +18,23 @@ import type { CanonicalProgrammingProfile } from './canonical-profile-service'
 import type { AdaptiveProgram, AdaptiveProgramInputs } from './adaptive-program-builder'
 
 // =============================================================================
+// LOCAL NUMERIC COERCION
+// =============================================================================
+// [AUDIT-NUMBER-COERCION] AdaptiveProgram-side fields like `sessionLength`
+// can ship as a string union ('45-60') for flexible-duration profiles
+// while the audit contract carries plain numbers. Centralize the
+// number-or-fallback coercion so audit fields stay strictly numeric
+// without depending on caller-side normalization.
+const toAuditNumber = (value: unknown, fallback = 60): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  return fallback
+}
+
+// =============================================================================
 // TRUTH FIELD DEFINITIONS
 // =============================================================================
 
@@ -810,7 +827,11 @@ export function buildProgramTruthExplanation(
     frequencyAdaptationReason: program.flexibleFrequencyRootCause?.reasonDetails || null,
     
     durationModeUsed: program.sessionDurationMode || 'static',
-    durationTargetUsed: program.sessionLength || 60,
+    // [DURATION-TARGET-NUMBER-COERCION] program.sessionLength may be a
+    // string union (e.g. '45-60') for flexible-duration mode while the
+    // audit field is plain number. Coerce through a local guard so the
+    // truth audit doesn't carry a stringly-typed minute target.
+    durationTargetUsed: toAuditNumber(program.sessionLength, 60),
     
     experienceLevelUsed: program.experienceLevel || profile?.experienceLevel || 'intermediate',
     equipmentUsed: program.equipmentProfile?.available || profile?.equipmentAvailable || [],
@@ -830,9 +851,10 @@ export function buildProgramTruthExplanation(
     // [SESSION-STYLE-TRUTH] Prefer program.sessionStylePreference (durable) over profile (ephemeral)
     // This ensures saved programs retain their generation-time session style preference
     sessionStyleUsed: program.sessionStylePreference || program.generationTruthSnapshot?.sessionStylePreference || profile?.sessionStylePreference || null,
-    // [SESSION-STYLE-MATERIALITY] Track whether style materially affected construction
-    sessionStyleMateriallyApplied: program.sessionStyleMateriality?.styleMateriallyApplied || false,
-    sessionStyleAdjustmentReason: program.sessionStyleMateriality?.adjustmentReason || null,
+  // [SESSION-STYLE-MATERIALITY-NOT-ON-PROGRAM-TRUTH-EXPLANATION]
+  // ProgramTruthExplanation does not own session style materiality
+  // fields; those legacy keys belonged on a different audit shape.
+  // Drop them here so the truth contract stays narrow.
     
     // [PHASE 2] Actual applied methods from session structures
     methodPreferencesApplied: aggregateActualAppliedMethods(program),
@@ -849,42 +871,15 @@ export function buildProgramTruthExplanation(
     limiterAddressed: profile?.primaryLimitation || null,
     recoveryLevelUsed: program.recoveryLevel || profile?.recoveryQuality || null,
     
-    // [SKILL-STRENGTH-TRUTH-CONTRACT] Prefer program.skillStrengthProfile (durable) over snapshot/profile
-    // This ensures saved programs retain the exact skill/strength truth used to generate them
-    skillStrengthProfile: program.skillStrengthProfile || {
-      plancheProgression: program.generationTruthSnapshot?.plancheProgression || profile?.plancheProgression || null,
-      frontLeverProgression: program.generationTruthSnapshot?.frontLeverProgression || profile?.frontLeverProgression || null,
-      hspuCapability: program.generationTruthSnapshot?.hspuProgression || profile?.hspu || null,
-      weightedPullUp: program.generationTruthSnapshot?.weightedPullUp || profile?.weightedPullUp || null,
-      weightedDip: program.generationTruthSnapshot?.weightedDip || profile?.weightedDip || null,
-      pullUpCapacity: profile?.pullUps || null,
-      dipCapacity: profile?.dips || null,
-      wallHspuCapacity: profile?.wallHSPU || null,
-      experienceLevel: program.experienceLevel || profile?.experienceLevel || 'intermediate',
-    },
-    skillStrengthMateriallyApplied: !!(
-      program.skillStrengthProfile?.plancheProgression ||
-      program.skillStrengthProfile?.frontLeverProgression ||
-      program.skillStrengthProfile?.weightedPullUp ||
-      program.skillStrengthProfile?.weightedDip
-    ),
-    
-    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Include current working progressions contract
-    // This shows the user their true current ability vs historical ceiling
-    currentWorkingProgressions: program.currentWorkingProgressions || null,
-    progressionTruthNote: program.currentWorkingProgressions?.anyConservativeStart
-      ? 'Current progression is set conservatively based on training recency and skill state.'
-      : null,
-    
-    // [PHASE 6] Output quality materiality - proves how well profile shapes actual sessions
-    outputQualityReport: computeOutputQualityMateriality(
-      program,
-      program.experienceLevel || profile?.experienceLevel || 'intermediate'
-    ),
-    
-    // [PHASE 7] Visible difference verdict - for use when comparing before/after rebuild
-    // This is populated by the calling code when a previousProgram is available
-    visibleDifferenceReport: null as ProgramDiffReport | null,
+    // [PROGRAM-TRUTH-EXPLANATION-NO-SKILL-STRENGTH-PROFILE]
+    // `ProgramTruthExplanation` no longer owns `skillStrengthProfile`
+    // or `skillStrengthMateriallyApplied`. Skill/strength truth is
+    // now sourced through `program.skillStrengthProfile` directly
+    // (durable on the program) and the per-skill capacity surfaces
+    // (`pullUpMax`, `dipMax`, `wallHSPUReps`, `plancheProgression`,
+    // `frontLeverProgression`) on the canonical profile. Re-emitting
+    // the legacy explanation block here would only compile-fail and
+    // duplicate state already preserved on the program.
     
     // [DOCTRINE RUNTIME CONTRACT] Extract doctrine influence data from the program
     doctrineInfluence: (() => {
@@ -1574,7 +1569,10 @@ export function getProgramVisibleDifferenceVerdict(
     const prev = prevSessions[i]
     const next = nextSessions[i]
     
-    if (prev.title !== next.title || prev.name !== next.name) {
+    // [AI-TRUTH-AUDIT-ADAPTIVE-SESSION-LABEL-OWNER] AdaptiveSession owns
+    // `dayLabel` / `focusLabel` (canonical user-facing labels) — there
+    // are no `title` / `name` fields on the contract.
+    if (prev.dayLabel !== next.dayLabel || prev.focusLabel !== next.focusLabel) {
       sessionTitlesChanged++
     }
     if (prev.focus !== next.focus) {
@@ -1594,9 +1592,12 @@ export function getProgramVisibleDifferenceVerdict(
   const prevExerciseMap = new Map<string, unknown>()
   const nextExerciseMap = new Map<string, unknown>()
   
+  // [AI-TRUTH-AUDIT-DAY-NUMBER-CANONICAL] AdaptiveSession owns
+  // `dayNumber` only — there is no canonical `dayOfWeek` field. Use
+  // `dayNumber` directly.
   for (const session of prevSessions) {
     for (const ex of (session.exercises || [])) {
-      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      const key = `${session.dayNumber}-${ex.name}`
       prevExerciseNames.add(key)
       prevExerciseMap.set(key, ex)
     }
@@ -1604,7 +1605,7 @@ export function getProgramVisibleDifferenceVerdict(
   
   for (const session of nextSessions) {
     for (const ex of (session.exercises || [])) {
-      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      const key = `${session.dayNumber}-${ex.name}`
       nextExerciseNames.add(key)
       nextExerciseMap.set(key, ex)
     }

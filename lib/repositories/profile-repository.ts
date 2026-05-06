@@ -10,7 +10,7 @@ import { dbGetProfile, dbSaveProfile } from '../db-queries'
 import type { AthleteProfile, ProfileRepository } from '@/types/domain'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
-import { saveOnboardingProfile, getOnboardingProfile } from '../athlete-profile'
+import { saveOnboardingProfile, getOnboardingProfile, type OnboardingProfile } from '../athlete-profile'
 import { saveCanonicalProfile, logCanonicalProfileState } from '../canonical-profile-service'
 
 const STORAGE_KEY = 'spartanlab_profile'
@@ -21,6 +21,72 @@ const STORAGE_KEY = 'spartanlab_profile'
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined'
+}
+
+// [DEFAULT-ATHLETE-PROFILE-FACTORY] Build a fully-typed AthleteProfile
+// fallback so the localStorage save path satisfies the canonical
+// interface without scattered `as any` null casts. Every required
+// nullable field is set to `null`, arrays default to `[]`, and the
+// schedule/duration defaults match the previous inline fallback.
+function createDefaultAthleteProfile(
+  id: string = 'local-profile',
+  userId: string = 'local-user',
+): AthleteProfile {
+  return {
+    id,
+    userId,
+    sex: null,
+    height: null,
+    heightUnit: 'inches',
+    bodyweight: null,
+    weightUnit: 'lbs',
+    bodyFatPercent: null,
+    bodyFatSource: null,
+    trainingExperience: null,
+    experienceLevel: 'beginner',
+    goalCategories: [],
+    primaryGoal: null,
+    secondaryGoal: null,
+    selectedSkills: [],
+    selectedFlexibility: [],
+    selectedStrength: [],
+    pullUpMax: null,
+    pushUpMax: null,
+    dipMax: null,
+    wallHspuReps: null,
+    weightedPullUpLoad: null,
+    weightedPullUpUnit: null,
+    weightedDipLoad: null,
+    weightedDipUnit: null,
+    frontLeverProgression: null,
+    frontLeverHoldSeconds: null,
+    plancheProgression: null,
+    plancheHoldSeconds: null,
+    muscleUpReadiness: null,
+    hspuProgression: null,
+    lSitHoldSeconds: null,
+    vSitHoldSeconds: null,
+    pancakeLevel: null,
+    pancakeRangeIntent: null,
+    toeTouchLevel: null,
+    frontSplitsLevel: null,
+    frontSplitsRangeIntent: null,
+    sideSplitsLevel: null,
+    sideSplitsRangeIntent: null,
+    equipmentAvailable: [],
+    trainingDaysPerWeek: 3,
+    sessionLengthMinutes: 60,
+    sessionStyle: null,
+    sleepQuality: null,
+    energyLevel: null,
+    stressLevel: null,
+    recoveryConfidence: null,
+    rangeIntent: null,
+    rangeTrainingMode: null,
+    goalCategory: null,
+    onboardingComplete: false,
+    createdAt: new Date().toISOString(),
+  }
 }
 
 // =============================================================================
@@ -61,31 +127,9 @@ const previewProfileRepository: ProfileRepository = {
 
     const current = (await this.getProfile(userId))
     
-    // TASK 3: Handle null profile safely
-    const baseProfile: AthleteProfile = current ?? {
-      id: 'local-profile',
-      userId: 'local-user',
-      sex: null as any,
-      height: null as any,
-      heightUnit: 'inches',
-      bodyweight: null as any,
-      weightUnit: 'lbs',
-      experienceLevel: 'beginner',
-      trainingDaysPerWeek: 3,
-      sessionLengthMinutes: 60,
-      goalCategory: null as any,
-      selectedSkills: [],
-      selectedFlexibility: [],
-      selectedStrength: [],
-      primaryGoal: null,
-      equipmentAvailable: [],
-      rangeIntent: null,
-      rangeTrainingMode: null,
-      pullUpMax: null,
-      dipMax: null,
-      onboardingComplete: false,
-      createdAt: new Date().toISOString(),
-    }
+    // [DEFAULT-PROFILE-FACTORY] Use typed helper instead of an inline
+    // fallback that needs `as any` to silence missing-field errors.
+    const baseProfile: AthleteProfile = current ?? createDefaultAthleteProfile()
     
     const updated: AthleteProfile = {
       ...baseProfile,
@@ -253,31 +297,9 @@ export function saveAthleteProfile(
 
   const current = getAthleteProfile()
   
-  // TASK 3: Handle null profile safely - create safe local-only base if needed
-  const baseProfile: AthleteProfile = current ?? {
-    id: 'local-profile',
-    userId: 'local-user',
-    sex: null as any,
-    height: null as any,
-    heightUnit: 'inches',
-    bodyweight: null as any,
-    weightUnit: 'lbs',
-    experienceLevel: 'beginner',
-    trainingDaysPerWeek: 3,
-    sessionLengthMinutes: 60,
-    goalCategory: null as any,
-    selectedSkills: [],
-    selectedFlexibility: [],
-    selectedStrength: [],
-    primaryGoal: null,
-    equipmentAvailable: [],
-    rangeIntent: null,
-    rangeTrainingMode: null,
-    pullUpMax: null,
-    dipMax: null,
-    onboardingComplete: false,
-    createdAt: new Date().toISOString(),
-  }
+  // [DEFAULT-PROFILE-FACTORY] Same typed helper as the repository path
+  // — keeps both fallbacks honest against the AthleteProfile contract.
+  const baseProfile: AthleteProfile = current ?? createDefaultAthleteProfile()
   
   // TASK 3: Now safely merge - baseProfile is guaranteed to exist
   const updated: AthleteProfile = {
@@ -296,23 +318,26 @@ export function saveAthleteProfile(
   try {
     const currentOnboarding = getOnboardingProfile()
     if (currentOnboarding) {
+      // [ONBOARDING-PROFILE-CURRENT-FIELDS] OnboardingProfile owns
+      // `equipment`/`goalCategories`; legacy
+      // `equipmentAvailable`/`goalCategory`/`selectedStrength`/
+      // `trainingStyle` are not part of the contract and are preserved
+      // from the existing snapshot only.
       saveOnboardingProfile({
         ...currentOnboarding,
-        primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
-        secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
-        goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+        primaryGoal: currentOnboarding.primaryGoal,
+        secondaryGoal: currentOnboarding.secondaryGoal,
+        goalCategories: currentOnboarding.goalCategories,
         selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
         selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
-        selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
-        trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
-        sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
-        equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
-        scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
-        trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+        trainingDaysPerWeek: currentOnboarding.trainingDaysPerWeek,
+        sessionLengthMinutes: currentOnboarding.sessionLengthMinutes,
+        equipment: updated.equipmentAvailable ?? currentOnboarding.equipment,
+        scheduleMode: currentOnboarding.scheduleMode,
         onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
         // Sync strength benchmarks if present
-        pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
-        dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+        pullUpMax: (updated.pullUpMax?.toString() as OnboardingProfile['pullUpMax']) ?? currentOnboarding.pullUpMax,
+        dipMax: (updated.dipMax?.toString() as OnboardingProfile['dipMax']) ?? currentOnboarding.dipMax,
       })
       console.log('[ProfileRepository] Synced profile changes to onboarding profile')
     }
@@ -330,10 +355,10 @@ export function saveAthleteProfile(
       selectedFlexibility: updated.selectedFlexibility ?? undefined,
       selectedStrength: updated.selectedStrength ?? undefined,
       trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
-      scheduleMode: updated.scheduleMode ?? undefined,
+      // [ATHLETEPROFILE-NO-SCHEDULE-OR-STYLE] dropped from sync; canonical
+      // profile derives these from the onboarding source of truth.
       sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
       equipmentAvailable: updated.equipmentAvailable ?? undefined,
-      trainingStyle: updated.trainingStyle ?? undefined,
       onboardingComplete: updated.onboardingComplete ?? undefined,
     })
     logCanonicalProfileState('After saveAthleteProfile sync')
@@ -342,7 +367,10 @@ export function saveAthleteProfile(
   }
   
   // Check for newly unlocked achievements (strength milestones, etc.)
-  const newAchievements = onTrainingEvent()
+  // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] onTrainingEvent now requires a
+  // TrainingEventType. Use 'strength_record' since this fires after a
+  // profile-level save (often triggered by max-test updates).
+  const newAchievements = onTrainingEvent('strength_record')
   if (newAchievements.length > 0) {
     showAchievementNotifications(newAchievements)
   }

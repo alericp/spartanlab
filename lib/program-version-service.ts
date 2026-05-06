@@ -335,10 +335,39 @@ export async function createInputSnapshot(
       trainingAge: context.athlete.trainingAge,
       bodyWeight: context.athlete.weightKg,
     },
+    // [FRAMEWORK-SNAPSHOT-REQUIRED] ProgramInputSnapshot.frameworkSnapshot
+    // is `{ frameworkId; frameworkName; confidenceScore; selectionReason } | null`.
+    // Project the loose context.framework shape onto those required
+    // string/number fields, falling back to safe sentinels.
+    frameworkSnapshot: ((): {
+      frameworkId: string
+      frameworkName: string
+      confidenceScore: number
+      selectionReason: string
+    } | null => {
+      const framework = (context as unknown as {
+        framework?: {
+          frameworkId?: string | null
+          frameworkName?: string | null
+          selectedFramework?: string | null
+          confidenceScore?: number | null
+          selectionReason?: string | null
+        }
+      })?.framework
+      if (!framework) return null
+      return {
+        frameworkId: framework.frameworkId ?? framework.selectedFramework ?? 'unknown',
+        frameworkName: framework.frameworkName ?? framework.selectedFramework ?? 'unknown',
+        confidenceScore: framework.confidenceScore ?? 0,
+        selectionReason: framework.selectionReason ?? 'unknown',
+      }
+    })(),
     skillStateSnapshot: {
+      // [SKILL-STATE-SNAPSHOT-STRINGS] snapshot expects string fields;
+      // upstream skill/currentLevel may be number-coded enums.
       skills: context.skills.states.map(s => ({
-        skill: s.skill,
-        currentLevel: s.currentLevel,
+        skill: String(s.skill),
+        currentLevel: String(s.currentLevel),
         readinessScore: s.readinessScore || 50,
         limitingFactor: s.limitingFactor,
       })),
@@ -646,16 +675,22 @@ export async function regenerateProgramIfNeeded(
   
   // Also create an entry in the program_history table for durable history
   // Build a minimal program-like object for the history versioning system
+  // [PROGRAM-FOR-HISTORY-INDEXED-CASTS] coerce athlete-context primitives
+  // to the AdaptiveProgram literal unions at this snapshot boundary.
+  // [PROGRAM-FOR-HISTORY-FIELDS-CURRENT] AdaptiveProgram no longer
+  // owns sessionLengthMinutes or equipment; only sessionLength
+  // survives. Drop the stale keys instead of fabricating shape.
   const programForHistory: Partial<AdaptiveProgram> = {
-    primaryGoal: context.athlete.primaryGoal,
+    primaryGoal: context.athlete.primaryGoal as AdaptiveProgram['primaryGoal'],
     goalLabel: summary.primaryGoal,
-    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
-    sessionLengthMinutes: context.athlete.sessionDurationMinutes,
-    sessionLength: context.athlete.sessionDurationMinutes,
-    equipment: context.athlete.equipment,
-    styleMode: context.athlete.trainingStyle,
-    constraintFocus: context.constraints.primaryConstraint,
-    primaryConstraint: context.constraints.primaryConstraint,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek as AdaptiveProgram['trainingDaysPerWeek'],
+    sessionLength: context.athlete.sessionDurationMinutes as AdaptiveProgram['sessionLength'],
+    // [PARTIAL-ADAPTIVE-PROGRAM-NO-STYLE-MODE] Canonical AdaptiveProgram
+    // does not own a `styleMode` property; training style truth lives
+    // on the program's styleMetadata / trainingMethodPreferences.
+    // [PARTIAL-ADAPTIVE-PROGRAM-NO-CONSTRAINT-FOCUS] AdaptiveProgram
+    // does not own `primaryConstraint`; the legacy `constraintFocus` mirror is
+    // not part of the canonical surface.
     experienceLevel: 'intermediate',
     sessions: [],
   }

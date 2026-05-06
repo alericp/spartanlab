@@ -51,14 +51,21 @@ export function FirstRunGuide() {
       }
     } catch {}
 
-    // Determine completion status using safe unified state
+    // Determine completion status using safe unified state.
+    // [PRE-AB6 BUILD GREEN GATE / SETUPSTEP BOOLEAN CONTRACT]
+    // SetupStep.isComplete is typed as `boolean` (line 29). The previous
+    // `profile && profile.primaryGoal` derivation returned
+    // `AthleteProfile | string | null | undefined` (truthy-coalesced),
+    // not a strict boolean. Wrap the producers in `Boolean(...)` so each
+    // hasX value is genuinely boolean before being assigned to
+    // SetupStep.isComplete or used as a route discriminator.
     const profile = getOnboardingProfile()
     const { hasUsableWorkoutProgram } = getProgramState()
     const logs = getWorkoutLogs()
-    
-    const hasProfile = profile && profile.primaryGoal
-    const hasProgram = hasUsableWorkoutProgram
-    const hasWorkout = logs.length > 0
+
+    const hasProfile: boolean = Boolean(profile?.primaryGoal)
+    const hasProgram: boolean = Boolean(hasUsableWorkoutProgram)
+    const hasWorkout: boolean = Array.isArray(logs) && logs.length > 0
 
     // Build steps with completion status
     // Use canonical routing: /onboarding/complete for program generation (not /programs which is marketing)

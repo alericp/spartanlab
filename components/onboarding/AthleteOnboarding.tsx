@@ -29,7 +29,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
-import { saveAthleteProfile } from '@/lib/data-service'
+import { saveAthleteProfile, type Equipment as LegacyEquipment } from '@/lib/data-service'
 import {
   type OnboardingProfile,
   type Sex,
@@ -162,6 +162,385 @@ import {
  * - sessionDurationMode 'adaptive' → sessionLengthMinutes 'flexible'
  * - equipment alias reconciliation (bench → bench_box)
  */
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / RAW EQUIPMENT BOUNDARY NORMALIZATION]
+// EquipmentType (lib/athlete-profile.ts:584) is the canonical 10-value union:
+//   'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+//   | 'weights' | 'bench_box' | 'minimal' | 'barbell' | 'weight_plates'
+// It does NOT include 'bench' — that's a legacy raw localStorage alias.
+// Once a value is typed as EquipmentType, comparing it to 'bench' is a
+// TS2367 "no overlap" error. The fix is to do alias normalization at the
+// raw-input boundary BEFORE the canonical type narrows the value space.
+// This helper accepts `unknown` (so legacy raw arrays from storage are
+// representable), maps 'bench' → 'bench_box', filters via a real type
+// guard against the canonical union, and dedupes.
+// =============================================================================
+const CANONICAL_EQUIPMENT_TYPES: ReadonlySet<EquipmentType> = new Set<EquipmentType>([
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+  'weights',
+  'bench_box',
+  'minimal',
+  'barbell',
+  'weight_plates',
+])
+
+function isCanonicalEquipmentType(value: unknown): value is EquipmentType {
+  return typeof value === 'string' && (CANONICAL_EQUIPMENT_TYPES as ReadonlySet<string>).has(value)
+}
+
+function normalizeStoredEquipmentForUI(rawEquipment: unknown): EquipmentType[] | undefined {
+  if (!Array.isArray(rawEquipment)) return undefined
+
+  const aliased = rawEquipment.map((value): unknown => {
+    // Legacy alias 'bench' → canonical 'bench_box'
+    if (value === 'bench') return 'bench_box'
+    return value
+  })
+
+  const canonical = aliased.filter(isCanonicalEquipmentType)
+  return Array.from(new Set(canonical))
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK BOUNDARY NORMALIZATION]
+// AllTimePRBenchmark (lib/athlete-profile.ts:337-342) requires:
+//   load: number | null, unit: 'lbs' | 'kg', reps?: number, timeframe: PRTimeframe
+// Canonical sources may surface a looser shape with `timeframe: string`.
+// Direct assignment of that loose shape into OnboardingProfile.allTimePR*
+// produces TS2322. This boundary helper validates each field, narrows
+// `timeframe` to the canonical PRTimeframe union via a type guard, and
+// returns the supplied fallback when required fields are missing or
+// invalid — never inventing PR data, never widening the canonical type.
+// =============================================================================
+const PR_TIMEFRAMES = [
+  'current',
+  'within_3_months',
+  '3_to_6_months',
+  '6_to_12_months',
+  '1_to_2_years',
+  'over_2_years',
+] as const satisfies readonly PRTimeframe[]
+
+function isPRTimeframe(value: unknown): value is PRTimeframe {
+  return typeof value === 'string' && (PR_TIMEFRAMES as readonly string[]).includes(value)
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / SESSION LENGTH PREFERENCE BOUNDARY NORMALIZATION]
+// SessionLengthPreference (lib/athlete-profile.ts:751) is the canonical strict
+// union: 20 | 30 | 45 | 60 | 75 | 90 | 120 | 'flexible'. Canonical/raw sources
+// surface `sessionLengthMinutes` as plain `number | 'flexible' | null`, which
+// is structurally too broad to assign into OnboardingProfile.sessionLengthMinutes
+// (TS2322). This boundary helper validates the literal set, snaps arbitrary
+// numeric values to the nearest valid bucket, and falls back to the previous
+// valid value when the input is unrecognized — never widening the canonical
+// union, never inventing duration data when none was provided.
+// =============================================================================
+const SESSION_LENGTH_PREFERENCES = [
+  20,
+  30,
+  45,
+  60,
+  75,
+  90,
+  120,
+  'flexible',
+] as const satisfies readonly SessionLengthPreference[]
+
+function isSessionLengthPreference(value: unknown): value is SessionLengthPreference {
+  return (SESSION_LENGTH_PREFERENCES as readonly (string | number)[]).includes(
+    value as string | number
+  )
+}
+
+function normalizeSessionLengthPreference(
+  value: unknown,
+  fallback: SessionLengthPreference | null
+): SessionLengthPreference | null {
+  // Already a canonical literal — pass through.
+  if (isSessionLengthPreference(value)) return value
+
+  // Arbitrary finite numeric minutes (e.g. canonical `number`) — snap to
+  // the nearest canonical bucket. Reject NaN/Infinity/negative.
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    if (value <= 20) return 20
+    if (value <= 30) return 30
+    if (value <= 45) return 45
+    if (value <= 60) return 60
+    if (value <= 75) return 75
+    if (value <= 90) return 90
+    return 120
+  }
+
+  // null / undefined / unrecognized → preserve previous valid user state.
+  return fallback
+}
+
+function normalizeAllTimePRBenchmark(
+  incoming: unknown,
+  fallback: AllTimePRBenchmark | null
+): AllTimePRBenchmark | null {
+  if (!incoming || typeof incoming !== 'object') {
+    return fallback ?? null
+  }
+
+  const raw = incoming as {
+    load?: unknown
+    reps?: unknown
+    timeframe?: unknown
+    unit?: unknown
+  }
+
+  // unit and timeframe are REQUIRED. If either is invalid, do not silently
+  // drop into a default — preserve any previously-valid user-entered PR.
+  const unit: 'lbs' | 'kg' | null =
+    raw.unit === 'lbs' || raw.unit === 'kg' ? raw.unit : null
+  if (unit === null) return fallback ?? null
+
+  if (!isPRTimeframe(raw.timeframe)) return fallback ?? null
+  const timeframe: PRTimeframe = raw.timeframe
+
+  // load is `number | null` — accept null, accept finite numbers, reject NaN/Infinity/strings.
+  const load: number | null =
+    raw.load === null || raw.load === undefined
+      ? null
+      : typeof raw.load === 'number' && Number.isFinite(raw.load)
+        ? raw.load
+        : null
+
+  // reps is optional `number?` — accept finite numbers, omit otherwise.
+  const reps: number | undefined =
+    typeof raw.reps === 'number' && Number.isFinite(raw.reps) ? raw.reps : undefined
+
+  return reps === undefined
+    ? { load, unit, timeframe }
+    : { load, unit, reps, timeframe }
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK PAYLOAD SHAPE BOUNDARY MAP]
+// Canonical WeightedBenchmark (lib/athlete-profile.ts:328-332) is:
+//   { load: number | null; unit: 'lbs' | 'kg'; reps?: number }
+// Destination CanonicalProgrammingProfile.weightedPullUp / weightedDip
+// (lib/canonical-profile-service.ts:298-299) requires the narrower shape:
+//   { addedWeight: number; reps: number; unit?: 'lbs' | 'kg' } | null
+// Field renames + tightened nullability (load:number|null → addedWeight:number,
+// reps optional → required) mean direct assignment is structurally invalid.
+// This mapper renames `load` → `addedWeight`, drops back to null when either
+// required numeric is missing or non-finite, and preserves only canonical
+// 'lbs' | 'kg' unit literals — never inventing weight or rep data, never
+// widening either canonical or destination types.
+// =============================================================================
+type WeightedBenchmarkPayload = {
+  addedWeight: number
+  reps: number
+  unit?: 'lbs' | 'kg'
+}
+
+// [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK HELPER INPUT TYPE-SCOPE FIX]
+// `WeightedBenchmark` is not exported into this file's import surface from
+// '@/lib/athlete-profile' (only OnboardingProfile and its companion types
+// are imported above). Rather than add a new cross-module import or risk a
+// stale duplicate type definition, we derive the helper's input type
+// directly from the authoritative OnboardingProfile field types it
+// consumes at the call sites: profile.weightedPullUp / profile.weightedDip.
+// Using the union of both fields' NonNullable variants keeps the helper
+// tied to exactly the data it receives, and any future canonical
+// WeightedBenchmark shape change automatically flows through.
+type OnboardingWeightedBenchmark =
+  | NonNullable<OnboardingProfile['weightedPullUp']>
+  | NonNullable<OnboardingProfile['weightedDip']>
+
+function toWeightedBenchmarkPayload(
+  value: OnboardingWeightedBenchmark | null | undefined
+): WeightedBenchmarkPayload | null {
+  if (!value) return null
+
+  // canonical `load: number | null` — destination requires non-null finite number.
+  const addedWeight = value.load
+  if (typeof addedWeight !== 'number' || !Number.isFinite(addedWeight)) return null
+
+  // canonical `reps?: number` — destination requires non-null finite number.
+  const reps = value.reps
+  if (typeof reps !== 'number' || !Number.isFinite(reps)) return null
+
+  // unit is optional at destination — pass through only canonical literals.
+  return value.unit === 'lbs' || value.unit === 'kg'
+    ? { addedWeight, reps, unit: value.unit }
+    : { addedWeight, reps }
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK PAYLOAD SHAPE BOUNDARY MAP]
+// Canonical AllTimePRBenchmark (lib/athlete-profile.ts:337-342) is:
+//   { load: number | null; unit: 'lbs' | 'kg'; reps?: number; timeframe: PRTimeframe }
+// Destination CanonicalProgrammingProfile.allTimePRPullUp / allTimePRDip
+// requires the narrower shape:
+//   { load: number; reps: number; timeframe: string; unit: 'lbs' | 'kg' } | null
+// Tightened nullability (load:number|null → load:number, reps optional →
+// reps required) means direct assignment is structurally invalid.
+// This mapper preserves all four required fields when canonical truth is
+// complete, and returns null when ANY required field is missing/invalid —
+// never inventing PR weights, reps, units, or timeframes, never widening
+// either canonical or destination types. Mirrors the WeightedBenchmark
+// helper above for the same payload corridor.
+// =============================================================================
+type AllTimePRBenchmarkPayload = {
+  load: number
+  reps: number
+  timeframe: string
+  unit: 'lbs' | 'kg'
+}
+
+type OnboardingAllTimePRBenchmark =
+  | NonNullable<OnboardingProfile['allTimePRPullUp']>
+  | NonNullable<OnboardingProfile['allTimePRDip']>
+
+function toAllTimePRBenchmarkPayload(
+  value: OnboardingAllTimePRBenchmark | null | undefined
+): AllTimePRBenchmarkPayload | null {
+  if (!value) return null
+
+  // canonical `load: number | null` — destination requires non-null finite number.
+  const load = value.load
+  if (typeof load !== 'number' || !Number.isFinite(load)) return null
+
+  // canonical `reps?: number` — destination requires non-null finite number.
+  const reps = value.reps
+  if (typeof reps !== 'number' || !Number.isFinite(reps)) return null
+
+  // canonical `unit: 'lbs' | 'kg'` — destination requires the same literal pair.
+  const unit = value.unit
+  if (unit !== 'lbs' && unit !== 'kg') return null
+
+  // canonical `timeframe: PRTimeframe` — destination accepts any non-empty
+  // string. Tighten the runtime guard to the canonical PRTimeframe union via
+  // the in-file `isPRTimeframe` type guard so we never forward stale or
+  // empty timeframe data into the destination payload.
+  const timeframe = value.timeframe
+  if (!isPRTimeframe(timeframe)) return null
+
+  return { load, reps, unit, timeframe }
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT PAYLOAD BOUNDARY MAP]
+// Two equipment unions exist in this codebase by design:
+//
+//   1. CANONICAL onboarding `EquipmentType` (lib/athlete-profile.ts):
+//      pullup_bar | dip_bars | parallettes | rings | resistance_bands
+//      | weights | bench_box | minimal | barbell | weight_plates
+//      — broad 10-value canonical truth carried by `profile.equipment` and
+//      accepted by saveCanonicalProfile and the API DB payload.
+//
+//   2. LEGACY data-service `Equipment` (lib/data-service.ts):
+//      pullup_bar | dip_bars | parallettes | rings | resistance_bands
+//      — narrow 5-value union; the legacy local-storage compatibility
+//      contract used by saveAthleteProfile (predates the broader
+//      categories).
+//
+// The narrow legacy union has NO semantic equivalent for the 5 broader
+// values (weights, bench_box, minimal, barbell, weight_plates) — fake-
+// mapping any of them into 'pullup_bar' or another unrelated value would
+// be a lie. We therefore route only the 5 representable values through
+// to saveAthleteProfile, while the FULL 10-value equipment truth flows
+// unchanged through the canonical save and the API DB payload, which
+// each accept the wider canonical contract.
+//
+// Mapper input is `readonly string[] | null | undefined` so it can safely
+// consume both `OnboardingProfile['equipment']` (EquipmentType[]) and the
+// `any`-typed DB-response sync path (`dbResult.profile.equipmentAvailable`)
+// without any cast or `as` escape — runtime guards do the narrowing.
+// =============================================================================
+const LEGACY_ATHLETE_EQUIPMENT_VALUES = [
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+] as const satisfies readonly LegacyEquipment[]
+
+function isLegacyAthleteEquipment(value: unknown): value is LegacyEquipment {
+  return (
+    typeof value === 'string' &&
+    (LEGACY_ATHLETE_EQUIPMENT_VALUES as readonly string[]).includes(value)
+  )
+}
+
+function toLegacyAthleteProfileEquipment(
+  values: readonly string[] | null | undefined
+): LegacyEquipment[] {
+  if (!Array.isArray(values)) return []
+
+  const result: LegacyEquipment[] = []
+  for (const value of values) {
+    // Pass through only values representable in the narrow legacy union.
+    // Broader EquipmentType values (weights, bench_box, minimal, barbell,
+    // weight_plates) are intentionally excluded here — they are NOT
+    // representable in the legacy contract and are preserved unchanged
+    // by the canonical save and the API DB payload.
+    if (isLegacyAthleteEquipment(value) && !result.includes(value)) {
+      result.push(value)
+    }
+  }
+  return result
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE WEAKEST-AREA PAYLOAD BOUNDARY MAP]
+// Two weakest-area unions exist in this codebase by design:
+//
+//   1. CANONICAL onboarding `WeakestArea` (lib/athlete-profile.ts:123):
+//      pulling_strength | pushing_strength | core_strength
+//      | shoulder_stability | hip_mobility | hamstring_flexibility | not_sure
+//      — broad 7-value canonical truth; "not_sure" means the user has not
+//      identified a specific weak point yet.
+//
+//   2. LEGACY data-service AthleteProfile.weakestArea (lib/data-service.ts):
+//      pulling_strength | pushing_strength | core_strength
+//      | shoulder_stability | hip_mobility | hamstring_flexibility | null
+//      — narrow 6-value union; the legacy local-storage compatibility
+//      contract used by saveAthleteProfile (no "not_sure" representation).
+//
+// "not_sure" has NO semantic equivalent in the narrow legacy union. The
+// honest mapping is null (legacy programming emphasis treats the absence
+// of a specified weak point the same way) — fake-mapping it to any
+// specific weakness would be a lie. Canonical "not_sure" is preserved
+// unchanged by saveCanonicalProfile and the API DB payload.
+// =============================================================================
+type LegacyAthleteWeakestArea =
+  | 'pulling_strength'
+  | 'pushing_strength'
+  | 'core_strength'
+  | 'shoulder_stability'
+  | 'hip_mobility'
+  | 'hamstring_flexibility'
+
+function toLegacyAthleteWeakestArea(
+  weakestArea: WeakestArea | null | undefined
+): LegacyAthleteWeakestArea | null {
+  switch (weakestArea) {
+    case 'pulling_strength':
+    case 'pushing_strength':
+    case 'core_strength':
+    case 'shoulder_stability':
+    case 'hip_mobility':
+    case 'hamstring_flexibility':
+      return weakestArea
+    case 'not_sure':
+    case null:
+    case undefined:
+      return null
+    default:
+      return null
+  }
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -169,19 +548,25 @@ function reconcileStoredProfileForUI(
   const reconciled = { ...storedProfile }
   
   // [PHASE 16A TASK 2] Equipment alias normalization - bench → bench_box
-  if (Array.isArray(reconciled.equipment)) {
-    const normalizedEquipment = reconciled.equipment.map(e => {
-      // Legacy alias 'bench' should become 'bench_box'
-      if (e === 'bench') return 'bench_box' as EquipmentType
-      return e
-    }).filter((e, i, arr) => arr.indexOf(e) === i) // Remove duplicates
-    
+  // Pass storedProfile.equipment through the raw-input normalizer (which
+  // accepts `unknown`) so legacy 'bench' aliases from localStorage are
+  // converted before reaching canonical typing — no `as EquipmentType`
+  // casts on impossible string literals.
+  const normalizedEquipment = normalizeStoredEquipmentForUI(storedProfile.equipment)
+  if (normalizedEquipment) {
     reconciled.equipment = normalizedEquipment
-    
+
+    // Untyped raw view used only for the audit signal — checking whether the
+    // legacy 'bench' alias was present requires comparing against an unknown
+    // value, which would be impossible against the canonical EquipmentType.
+    const rawEquipmentForAudit: unknown[] = Array.isArray(storedProfile.equipment)
+      ? storedProfile.equipment
+      : []
+
     console.log('[phase16a-benchbox-raw-equipment-audit]', {
       rawEquipment: storedProfile.equipment,
       normalizedEquipment,
-      hadBenchAlias: storedProfile.equipment?.includes('bench' as any),
+      hadBenchAlias: rawEquipmentForAudit.some((value) => value === 'bench'),
       nowHasBenchBox: normalizedEquipment.includes('bench_box'),
     })
   }
@@ -461,6 +846,12 @@ interface OptionButtonProps {
   description?: string
   className?: string
   /**
+   * When true, the button is non-interactive and visually muted.
+   * Used by gated options that require an upstream selection
+   * (e.g. body-fat calculator requires `profile.sex` first).
+   */
+  disabled?: boolean
+  /**
    * Content rendering mode:
    * - "compact": for short numeric/range labels (0, 1–3, 21–25) — centered, no wrapping
    * - "standard": default behavior with controlled wrapping
@@ -469,19 +860,52 @@ interface OptionButtonProps {
   contentMode?: 'compact' | 'standard' | 'wrapSafe'
 }
 
-function OptionButton({ selected, onClick, children, description, className = '', contentMode = 'standard' }: OptionButtonProps) {
+function OptionButton({
+  selected,
+  onClick,
+  children,
+  description,
+  className = '',
+  disabled = false,
+  contentMode = 'standard',
+}: OptionButtonProps) {
+  // [PRE-AB6 BUILD GREEN GATE / OPTIONBUTTON DISABLED CONTRACT]
+  // Belt-and-suspenders click suppression: native `disabled` attribute
+  // hardware-blocks the click event, and this guard prevents the wrapped
+  // onClick callback from running even if a synthetic event somehow fires.
+  const handleClick = () => {
+    if (disabled) return
+    onClick()
+  }
+
+  // Disabled visual treatment, applied via Tailwind `disabled:` variants
+  // so the styles only activate when the native `disabled` attribute is
+  // present. Matches the existing `disabled:opacity-50 disabled:cursor-not-allowed`
+  // convention already used elsewhere in this file (e.g. L4548 next button).
+  const disabledStateClasses = 'disabled:opacity-50 disabled:cursor-not-allowed'
+
+  // Unselected branch swaps to a no-hover variant when disabled so the
+  // button does not visually respond to hover while unavailable. The
+  // selected branch keeps its full styling (a disabled selected option
+  // is rare and should still read as selected, just dimmed via opacity).
+  const unselectedClasses = disabled
+    ? 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8]'
+    : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
+
   // Compact mode: centered content, no icon slot, no text wrapping
   if (contentMode === 'compact') {
     return (
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
+        disabled={disabled}
+        aria-disabled={disabled || undefined}
         data-selected={selected ? 'true' : 'false'}
         className={`py-2.5 px-2 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center min-h-[44px] ${
           selected
             ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-        } ${className}`}
+            : unselectedClasses
+        } ${disabledStateClasses} ${className}`}
       >
         <span className="whitespace-nowrap text-center">{children}</span>
       </button>
@@ -493,13 +917,15 @@ function OptionButton({ selected, onClick, children, description, className = ''
     return (
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
+        disabled={disabled}
+        aria-disabled={disabled || undefined}
         data-selected={selected ? 'true' : 'false'}
         className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center text-center min-h-[44px] ${
           selected
             ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-        } ${className}`}
+            : unselectedClasses
+        } ${disabledStateClasses} ${className}`}
       >
         <span className="leading-tight">{children}</span>
       </button>
@@ -510,13 +936,15 @@ function OptionButton({ selected, onClick, children, description, className = ''
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       data-selected={selected ? 'true' : 'false'}
       className={`py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center gap-2 text-left ${
         selected
           ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-          : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-      } ${className}`}
+          : unselectedClasses
+      } ${disabledStateClasses} ${className}`}
     >
       {/* Fixed-width icon slot — always reserves space so content never shifts */}
       <span className="w-4 h-4 shrink-0 flex items-center justify-center">
@@ -2144,11 +2572,43 @@ const SKILL_PROGRESSION_OPTIONS: Record<string, { value: string; label: string }
   ],
 }
 
+// [PRE-AB6 BUILD GREEN GATE / SKILLHISTORY KEY NARROWING]
+// SkillGoal is broader than the canonical OnboardingProfile.skillHistory key
+// set (lib/athlete-profile.ts:1052-1060 → 'front_lever' | 'planche' |
+// 'muscle_up' | 'handstand_pushup' | 'handstand' | 'l_sit' | 'v_sit').
+// Broader SkillGoal members like 'back_lever' or 'i_sit' must NOT be allowed
+// to index profile.skillHistory. Derive the allowed key set straight from
+// the canonical type so future changes propagate, and provide a runtime
+// type guard that narrows SkillGoal → SkillHistoryKey before any indexing.
+type SkillHistoryKey = keyof OnboardingProfile['skillHistory']
+
+const SKILL_HISTORY_KEYS = [
+  'front_lever',
+  'planche',
+  'muscle_up',
+  'handstand_pushup',
+  'handstand',
+  'l_sit',
+  'v_sit',
+] as const satisfies readonly SkillHistoryKey[]
+
+function isSkillHistoryKey(skillKey: SkillGoal): skillKey is SkillHistoryKey {
+  return (SKILL_HISTORY_KEYS as readonly string[]).includes(skillKey)
+}
+
 function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
   const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
   const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_3_months', '3_to_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
   
-  const currentHistory = profile.skillHistory?.[skillKey]
+  // [PRE-AB6 BUILD GREEN GATE / SKILLHISTORY KEY NARROWING]
+  // Narrow once at the top of the component. Every read/write against
+  // profile.skillHistory below uses skillHistoryKey, never raw skillKey.
+  // For unsupported SkillGoal values, skillHistoryKey is null and history
+  // reads/writes short-circuit safely without crashing or storing under
+  // unsupported keys.
+  const skillHistoryKey: SkillHistoryKey | null = isSkillHistoryKey(skillKey) ? skillKey : null
+
+  const currentHistory = skillHistoryKey ? profile.skillHistory?.[skillHistoryKey] : undefined
   const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'
   const showHighestLevel = currentHistory?.trainingHistory === 'previously_strong'
   const progressionOptions = SKILL_PROGRESSION_OPTIONS[skillKey] || []
@@ -2166,13 +2626,15 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
     : currentHistory?.highestLevelEverReached ?? null
   
   const updateHistory = (trainingHistory: SkillTrainingHistory) => {
+    if (!skillHistoryKey) return
+
     const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
     const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
     
     updateProfile({
       skillHistory: {
         ...profile.skillHistory,
-        [skillKey]: {
+        [skillHistoryKey]: {
           ...currentHistory,
           trainingHistory,
           lastTrained,
@@ -2183,13 +2645,15 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   }
   
   const updateLastTrained = (lastTrained: SkillLastTrained) => {
+    if (!skillHistoryKey) return
+
     const trainingHistory = currentHistory?.trainingHistory || 'never'
     const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
     
     updateProfile({
       skillHistory: {
         ...profile.skillHistory,
-        [skillKey]: {
+        [skillHistoryKey]: {
           ...currentHistory,
           trainingHistory,
           lastTrained,
@@ -2210,24 +2674,27 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
           highestLevelEverReached: level,
         }
       })
-    } else {
-      // For skills without SkillBenchmark (muscle_up, l_sit, v_sit), store on SkillHistoryEntry
-      const trainingHistory = currentHistory?.trainingHistory || 'previously_strong'
-      const tendonAdaptationScore = currentHistory?.tendonAdaptationScore || calculateTendonAdaptation(trainingHistory, currentHistory?.lastTrained ?? null)
-      
-      updateProfile({
-        skillHistory: {
-          ...profile.skillHistory,
-          [skillKey]: {
-            ...currentHistory,
-            trainingHistory,
-            lastTrained: currentHistory?.lastTrained ?? null,
-            tendonAdaptationScore,
-            highestLevelEverReached: level,
-          }
-        }
-      })
+      return
     }
+
+    // For skills without SkillBenchmark (muscle_up, l_sit, v_sit), store on SkillHistoryEntry
+    if (!skillHistoryKey) return
+
+    const trainingHistory = currentHistory?.trainingHistory || 'previously_strong'
+    const tendonAdaptationScore = currentHistory?.tendonAdaptationScore || calculateTendonAdaptation(trainingHistory, currentHistory?.lastTrained ?? null)
+
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillHistoryKey]: {
+          ...currentHistory,
+          trainingHistory,
+          lastTrained: currentHistory?.lastTrained ?? null,
+          tendonAdaptationScore,
+          highestLevelEverReached: level,
+        }
+      }
+    })
   }
   
   return (
@@ -3175,23 +3642,70 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   return items.length > 0 ? items : null
   }
 
+  // [PRE-AB6 BUILD GREEN GATE / STRICT LABEL MAP KEY GUARDS]
+  // SkillBenchmark.progression is canonically typed as plain `string`
+  // (lib/athlete-profile.ts:401), so direct indexing into the strict label
+  // maps Record<FrontLeverProgression | PlancheProgression | HSPUProgression, string>
+  // produces TS7053. Each helper below derives its key set from the actual
+  // label-map shape via `keyof typeof MAP`, type-guards the input via a
+  // hasOwnProperty check, and returns null on miss — preserving the existing
+  // `|| rawString` runtime fallback used at the highest-level-ever sites.
+  type FrontLeverProgressionKey = keyof typeof FRONT_LEVER_LABELS
+  type PlancheProgressionKey = keyof typeof PLANCHE_LABELS
+  type HSPUProgressionKey = keyof typeof HSPU_LABELS
+
+  const isFrontLeverProgressionKey = (value: unknown): value is FrontLeverProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(FRONT_LEVER_LABELS, value)
+
+  const isPlancheProgressionKey = (value: unknown): value is PlancheProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(PLANCHE_LABELS, value)
+
+  const isHSPUProgressionKey = (value: unknown): value is HSPUProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(HSPU_LABELS, value)
+
+  const getFrontLeverProgressionLabel = (value: unknown): string | null =>
+    isFrontLeverProgressionKey(value) ? FRONT_LEVER_LABELS[value] : null
+
+  const getPlancheProgressionLabel = (value: unknown): string | null =>
+    isPlancheProgressionKey(value) ? PLANCHE_LABELS[value] : null
+
+  const getHSPUProgressionLabel = (value: unknown): string | null =>
+    isHSPUProgressionKey(value) ? HSPU_LABELS[value] : null
+
   // Helper for skill level summary with history
   const getSkillSummary = () => {
   const items: string[] = []
   
+  // [PRE-AB6 BUILD GREEN GATE / NULLABLE SKILL NARROWING]
+  // profile.frontLever / profile.planche / profile.hspu are canonically
+  // nullable SkillBenchmark objects. Optional-chain guards on `.progression`
+  // do not narrow re-reads of `profile.frontLever.holdSeconds` etc. because
+  // `profile` is a re-readable property access, not a stable reference.
+  // Lift each nullable object into a local const once, then read exclusively
+  // through the local. Preserves all existing summary semantics, the
+  // previously-introduced typed label-key guards, and the SkillHistory lookup.
+
   // Front Lever
-  if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
-    let flSummary = `Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`
+  const frontLever = profile.frontLever
+  const flProgressionLabel = getFrontLeverProgressionLabel(frontLever?.progression)
+  if (
+    frontLever &&
+    flProgressionLabel &&
+    frontLever.progression !== 'unknown' &&
+    frontLever.progression !== 'none'
+  ) {
+    let flSummary = `Front Lever: ${flProgressionLabel}`
     // Add hold time + band assistance
-    if (profile.frontLever.holdSeconds) {
-      flSummary += ` ${profile.frontLever.holdSeconds}s`
+    if (frontLever.holdSeconds) {
+      flSummary += ` ${frontLever.holdSeconds}s`
     }
-    if (profile.frontLever.isAssisted && profile.frontLever.bandLevel) {
-      flSummary += ` (${profile.frontLever.bandLevel} band)`
+    if (frontLever.isAssisted && frontLever.bandLevel) {
+      flSummary += ` (${frontLever.bandLevel} band)`
     }
     // Add highest level ever
-    if (profile.frontLever.highestLevelEverReached && profile.frontLever.highestLevelEverReached !== profile.frontLever.progression) {
-      flSummary += ` — was ${FRONT_LEVER_LABELS[profile.frontLever.highestLevelEverReached as FrontLeverProgression] || profile.frontLever.highestLevelEverReached}`
+    if (frontLever.highestLevelEverReached && frontLever.highestLevelEverReached !== frontLever.progression) {
+      const flHighestLabel = getFrontLeverProgressionLabel(frontLever.highestLevelEverReached)
+      flSummary += ` — was ${flHighestLabel || frontLever.highestLevelEverReached}`
     }
     const flHistory = profile.skillHistory?.front_lever
     if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
@@ -3204,18 +3718,26 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // Planche
-  if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
-    let plSummary = `Planche: ${PLANCHE_LABELS[profile.planche.progression]}`
+  const planche = profile.planche
+  const plProgressionLabel = getPlancheProgressionLabel(planche?.progression)
+  if (
+    planche &&
+    plProgressionLabel &&
+    planche.progression !== 'unknown' &&
+    planche.progression !== 'none'
+  ) {
+    let plSummary = `Planche: ${plProgressionLabel}`
     // Add hold time + band assistance
-    if (profile.planche.holdSeconds) {
-      plSummary += ` ${profile.planche.holdSeconds}s`
+    if (planche.holdSeconds) {
+      plSummary += ` ${planche.holdSeconds}s`
     }
-    if (profile.planche.isAssisted && profile.planche.bandLevel) {
-      plSummary += ` (${profile.planche.bandLevel} band)`
+    if (planche.isAssisted && planche.bandLevel) {
+      plSummary += ` (${planche.bandLevel} band)`
     }
     // Add highest level ever
-    if (profile.planche.highestLevelEverReached && profile.planche.highestLevelEverReached !== profile.planche.progression) {
-      plSummary += ` — was ${PLANCHE_LABELS[profile.planche.highestLevelEverReached as PlancheProgression] || profile.planche.highestLevelEverReached}`
+    if (planche.highestLevelEverReached && planche.highestLevelEverReached !== planche.progression) {
+      const plHighestLabel = getPlancheProgressionLabel(planche.highestLevelEverReached)
+      plSummary += ` — was ${plHighestLabel || planche.highestLevelEverReached}`
     }
     const plHistory = profile.skillHistory?.planche
     if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
@@ -3234,7 +3756,7 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
     // Add highest level ever reached from skill history
     if (muHistory?.highestLevelEverReached && muHistory.highestLevelEverReached !== profile.muscleUp) {
       const highestLabel = SKILL_PROGRESSION_OPTIONS['muscle_up']?.find(o => o.value === muHistory.highestLevelEverReached)?.label || muHistory.highestLevelEverReached
-      muSummary += ` — was ${highestLabel}`
+      muSummary += ` �� was ${highestLabel}`
     }
     if (muHistory?.trainingHistory && muHistory.trainingHistory !== 'never') {
       muSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[muHistory.trainingHistory]}`
@@ -3246,8 +3768,15 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // HSPU
-  if (profile.hspu?.progression && profile.hspu.progression !== 'unknown' && profile.hspu.progression !== 'none') {
-    let hspuSummary = `HSPU: ${HSPU_LABELS[profile.hspu.progression]}`
+  const hspu = profile.hspu
+  const hspuProgressionLabel = getHSPUProgressionLabel(hspu?.progression)
+  if (
+    hspu &&
+    hspuProgressionLabel &&
+    hspu.progression !== 'unknown' &&
+    hspu.progression !== 'none'
+  ) {
+    let hspuSummary = `HSPU: ${hspuProgressionLabel}`
     const hspuHistory = profile.skillHistory?.handstand_pushup
     if (hspuHistory?.trainingHistory && hspuHistory.trainingHistory !== 'never') {
       hspuSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[hspuHistory.trainingHistory]}`
@@ -3729,16 +4258,27 @@ export function AthleteOnboarding() {
           ? 'flexible' 
           : (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
         // ISSUE B FIX: Restore sessionDurationMode and sessionLengthMinutes correctly
-        // When sessionDurationMode is 'adaptive', set sessionLengthMinutes to 'flexible' string
+        // When sessionDurationMode is 'adaptive', set sessionLengthMinutes to 'flexible' string.
+        // [PRE-AB6 BUILD GREEN GATE / SESSION LENGTH PREFERENCE BOUNDARY NORMALIZATION]
+        // For static mode, canonical.sessionLengthMinutes is typed as plain `number`
+        // (broader than SessionLengthPreference). Route through
+        // normalizeSessionLengthPreference so arbitrary minute values snap to the
+        // nearest canonical bucket and prev is preserved when the input is invalid.
         sessionLengthMinutes: canonical.sessionDurationMode === 'adaptive'
           ? 'flexible'
-          : canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+          : normalizeSessionLengthPreference(
+              canonical.sessionLengthMinutes,
+              prev.sessionLengthMinutes
+            ),
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
         // Equipment & diagnostics - [PHASE 16A TASK 2] normalize bench → bench_box
-        equipment: ((canonical.equipmentAvailable || prev.equipment) as EquipmentType[])?.map(e => 
-          e === 'bench' ? 'bench_box' as EquipmentType : e
-        ).filter((e, i, arr) => arr.indexOf(e) === i) || prev.equipment,
+        // [PRE-AB6 BUILD GREEN GATE / RAW EQUIPMENT BOUNDARY NORMALIZATION]
+        // Route through normalizeStoredEquipmentForUI so the canonical
+        // `EquipmentType[]` cast on a possibly-legacy source is replaced with
+        // proper raw-input normalization. Falls back to prev.equipment (already
+        // canonical) if neither source produces a usable array.
+        equipment: normalizeStoredEquipmentForUI(canonical.equipmentAvailable ?? prev.equipment) ?? prev.equipment,
         jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
         weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
         primaryLimitation: (canonical.primaryLimitation as PrimaryLimitation) || prev.primaryLimitation,
@@ -3760,8 +4300,13 @@ export function AthleteOnboarding() {
         } : prev.weightedDip,
         
         // All-time PRs
-        allTimePRPullUp: canonical.allTimePRPullUp || prev.allTimePRPullUp,
-        allTimePRDip: canonical.allTimePRDip || prev.allTimePRDip,
+        // [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK BOUNDARY NORMALIZATION]
+        // Canonical PR objects may carry a loose `timeframe: string` shape that
+        // does not satisfy `PRTimeframe`. Route through normalizeAllTimePRBenchmark
+        // so the timeframe and unit are guarded before assignment, with prev as
+        // the fallback when canonical data is missing required fields.
+        allTimePRPullUp: normalizeAllTimePRBenchmark(canonical.allTimePRPullUp, prev.allTimePRPullUp),
+        allTimePRDip: normalizeAllTimePRBenchmark(canonical.allTimePRDip, prev.allTimePRDip),
         
         // Skill benchmarks with band context
         frontLever: canonical.frontLeverProgression ? {
@@ -4040,8 +4585,31 @@ export function AthleteOnboarding() {
         secondaryGoal: profile.secondaryGoal,
         selectedSkills: profile.selectedSkills,
         selectedFlexibility: profile.selectedFlexibility,
-        selectedStrength: profile.selectedStrength || [],
-        goalCategory: profile.goalCategory,
+        // [PRE-AB6 BUILD GREEN GATE / selectedStrength PAYLOAD COMPATIBILITY — PATH B]
+        // saveCanonicalProfile expects Partial<CanonicalProgrammingProfile>, where
+        // selectedStrength is canonically declared as a mutable `string[]`
+        // (lib/canonical-profile-service.ts:264). Canonical OnboardingProfile
+        // (lib/athlete-profile.ts:1020-1080) does NOT itself track a
+        // `selectedStrength` field — strength intent is already represented through
+        // goalCategories + selectedSkills + the strength benchmark numerics
+        // (pullUpMax/dipMax/etc.). The destination contract still requires this
+        // key for legacy payload compatibility, so we send a typed mutable empty
+        // array literal — compatibility-only, never inventing strength-goal data,
+        // never widening the canonical OnboardingProfile to add a stale field.
+        selectedStrength: [] as string[],
+        // [PRE-AB6 BUILD GREEN GATE / goalCategory PAYLOAD COMPATIBILITY — PATH B]
+        // Canonical OnboardingProfile (lib/athlete-profile.ts:1025) tracks ONLY
+        // the plural `goalCategories: GoalCategory[]` — there is no singular
+        // `goalCategory` field. The destination CanonicalProgrammingProfile
+        // (lib/canonical-profile-service.ts:265-266) still declares both
+        // `goalCategory: string | null` and `goalCategories: string[]` for
+        // legacy payload compatibility. We derive the singular value from the
+        // canonical plural source at this boundary only — never inventing
+        // separate singular profile truth, never widening OnboardingProfile.
+        goalCategory:
+          Array.isArray(profile.goalCategories) && profile.goalCategories.length > 0
+            ? profile.goalCategories[0]
+            : null,
         goalCategories: profile.goalCategories,
         trainingPathType: profile.trainingPathType,
         primaryTrainingOutcome: profile.primaryTrainingOutcome,
@@ -4059,7 +4627,20 @@ export function AthleteOnboarding() {
              : 90)
           : 60,
         sessionStylePreference: profile.sessionStyle,
-        trainingStyle: profile.trainingStyle,
+        // [PRE-AB6 BUILD GREEN GATE / trainingStyle PAYLOAD COMPATIBILITY — PATH B]
+        // Canonical OnboardingProfile (lib/athlete-profile.ts:1075-1089) tracks
+        // ONLY `sessionStyle: SessionStylePreference | null` — there is no
+        // `trainingStyle` field. The destination CanonicalProgrammingProfile
+        // (lib/canonical-profile-service.ts:282) still declares
+        // `trainingStyle: string | null` for legacy compatibility, and its own
+        // merge logic falls through onboarding to athleteProfile to null
+        // (canonical-profile-service.ts:714 pick(...)). The `trainingStyle`
+        // enum (skill_focused/strength_focused/endurance_focused/balanced_hybrid)
+        // is semantically distinct from both `sessionStyle` and
+        // `trainingPathType`, so we cannot truthfully derive it from either.
+        // We send null to let the canonical merge layer pick from athleteProfile
+        // — never inventing training-intent truth, never widening OnboardingProfile.
+        trainingStyle: null,
         
         // TASK A: Equipment - was missing from canonical save!
         equipmentAvailable: profile.equipment || [],
@@ -4074,10 +4655,23 @@ export function AthleteOnboarding() {
         dipMax: profile.dipMax || null,
         pushUpMax: profile.pushUpMax || null,
         wallHSPUReps: profile.wallHSPUReps || null,
-        weightedPullUp: profile.weightedPullUp || null,
-        weightedDip: profile.weightedDip || null,
-        allTimePRPullUp: profile.allTimePRPullUp || null,
-        allTimePRDip: profile.allTimePRDip || null,
+        // [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK PAYLOAD SHAPE — BOUNDARY MAP]
+        // Canonical WeightedBenchmark uses `load: number | null`; destination
+        // requires `addedWeight: number` with required `reps: number`. Route
+        // both fields through toWeightedBenchmarkPayload — never silently drops
+        // valid user-entered benchmarks; returns null only when load or reps
+        // are missing/non-finite (which the destination null-branch accepts).
+        weightedPullUp: toWeightedBenchmarkPayload(profile.weightedPullUp),
+        weightedDip: toWeightedBenchmarkPayload(profile.weightedDip),
+        // [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK PAYLOAD SHAPE — BOUNDARY MAP]
+        // Canonical AllTimePRBenchmark allows `load: number | null` and
+        // `reps?: number`; destination requires both as non-null finite numbers
+        // plus a non-empty timeframe and a 'lbs'|'kg' unit. Route both fields
+        // through toAllTimePRBenchmarkPayload — never silently drops valid
+        // user-entered PRs; returns null only when a required field is
+        // missing/invalid (which the destination null-branch accepts).
+        allTimePRPullUp: toAllTimePRBenchmarkPayload(profile.allTimePRPullUp),
+        allTimePRDip: toAllTimePRBenchmarkPayload(profile.allTimePRDip),
         
         // TASK A: Skill benchmarks - CRITICAL for engine
         frontLeverProgression: profile.frontLever?.progression || null,
@@ -4185,8 +4779,15 @@ export function AthleteOnboarding() {
       // Log canonical state after save for debugging
       logProfileTruthState('After onboarding submit')
       
-      // LEGACY: Also sync to athlete profile for backward compatibility
-      // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
+      // LEGACY: Also sync to athlete profile for backward compatibility.
+      // [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT BOUNDARY]
+      // saveAthleteProfile() uses the narrow lib/data-service Equipment[]
+      // union, which CANNOT represent broader onboarding equipment values
+      // (weights, bench_box, minimal, barbell, weight_plates). The full
+      // 10-value canonical equipment truth is preserved in the canonical
+      // save (saveCanonicalProfile, above) and the API DB payload (below);
+      // here we map only to the legacy-accepted subset. No casts, no fake
+      // aliases, no truth loss outside this legacy local-storage path.
       saveAthleteProfile({
         sex: profile.sex,
         experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -4205,12 +4806,21 @@ export function AthleteOnboarding() {
              : 90)
           : 60,
         primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
-        // [PHASE 14A] REMOVED LOSSY FILTER - preserve full equipment array
-        equipmentAvailable: profile.equipment || [],
+        // Map full canonical EquipmentType[] truth into the narrow legacy
+        // Equipment[] union the data-service contract accepts. Values not
+        // representable here (weights, bench_box, minimal, barbell,
+        // weight_plates) remain preserved by canonical/DB payloads above
+        // and below — see toLegacyAthleteProfileEquipment header comment.
+        equipmentAvailable: toLegacyAthleteProfileEquipment(profile.equipment),
         // Sync joint cautions for protocol recommendations and exercise selection
         jointCautions: profile.jointCautions || [],
-        // Sync weakest area for programming emphasis
-        weakestArea: profile.weakestArea || null,
+        // [PRE-AB6 BUILD GREEN GATE / LEGACY WEAKEST-AREA BOUNDARY]
+        // saveAthleteProfile() cannot represent canonical "not_sure".
+        // Preserve "not_sure" in the canonical save and API DB payload
+        // (where the destination accepts it); here, map it to null for
+        // legacy programming emphasis rather than inventing a fake weak
+        // point — see toLegacyAthleteWeakestArea header comment.
+        weakestArea: toLegacyAthleteWeakestArea(profile.weakestArea),
         onboardingComplete: true,
       })
       
@@ -4247,13 +4857,34 @@ export function AthleteOnboarding() {
           secondaryGoal: profile.secondaryGoal || null,
           selectedSkills: profile.selectedSkills || [],
           selectedFlexibility: profile.selectedFlexibility || [],
-          selectedStrength: profile.selectedStrength || [],
-          goalCategory: profile.goalCategory || null,
+          // [PRE-AB6 BUILD GREEN GATE / selectedStrength PAYLOAD COMPATIBILITY — PATH B]
+          // See note above (saveCanonicalProfile call). The API route declares
+          // selectedStrength: unknown (app/api/onboarding/profile/route.ts:32) and
+          // the DB column always serializes to []. We mirror the canonical save
+          // shape with a mutable string[] for cross-site consistency — never
+          // inventing strength-goal data, never widening any canonical type.
+          selectedStrength: [] as string[],
+          // [PRE-AB6 BUILD GREEN GATE / goalCategory PAYLOAD COMPATIBILITY — PATH B]
+          // See note at saveCanonicalProfile call site above. The DB row keeps
+          // a singular `goalCategory` column for legacy compatibility but the
+          // canonical OnboardingProfile only tracks plural `goalCategories`.
+          // Derive at the boundary; never invent separate singular truth.
+          goalCategory:
+            Array.isArray(profile.goalCategories) && profile.goalCategories.length > 0
+              ? profile.goalCategories[0]
+              : null,
           // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
           equipmentAvailable: profile.equipment || [],
           jointCautions: profile.jointCautions || [],
           weakestArea: profile.weakestArea || null,
-          trainingStyle: profile.trainingStyle || 'balanced_hybrid',
+          // [PRE-AB6 BUILD GREEN GATE / trainingStyle PAYLOAD COMPATIBILITY — PATH B]
+          // See note at saveCanonicalProfile call site above. Canonical
+          // OnboardingProfile has no `trainingStyle` field, so the previous
+          // `profile.trainingStyle || 'balanced_hybrid'` always evaluated to the
+          // 'balanced_hybrid' literal at runtime. Preserving exact runtime DB
+          // write behavior with the literal — never deriving fake user-selected
+          // training-intent truth from canonical onboarding data.
+          trainingStyle: 'balanced_hybrid',
         }
         
         // TASK 6: Log DB payload for verification
@@ -4316,10 +4947,26 @@ export function AthleteOnboarding() {
             onboardingComplete: dbResult.profile?.onboardingComplete,
           })
           
-          // Sync DB response back to local storage - DB truth wins
+          // Sync DB response back to local storage - DB truth wins.
+          // [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT BOUNDARY]
+          // dbResult.profile comes from `await dbResponse.json()` (typed `any`),
+          // so tsc would not flag a wider EquipmentType[] flowing into the
+          // narrow legacy Equipment[] contract here. Normalize defensively
+          // through the same mapper so the legacy local-storage contract
+          // never sees unrepresentable values at runtime — full canonical
+          // equipment truth still lives in the DB and canonical caches.
           if (dbResult.success && dbResult.profile) {
             saveAthleteProfile({
               ...dbResult.profile,
+              equipmentAvailable: toLegacyAthleteProfileEquipment(
+                dbResult.profile.equipmentAvailable
+              ),
+              // Same rationale as equipmentAvailable above: the spread carries
+              // a possibly-canonical "not_sure" through the `any`-typed JSON,
+              // which tsc would not flag but the legacy contract rejects.
+              weakestArea: toLegacyAthleteWeakestArea(
+                dbResult.profile.weakestArea
+              ),
               onboardingComplete: true,
             })
             console.log('[Onboarding] Synced DB profile to local storage')

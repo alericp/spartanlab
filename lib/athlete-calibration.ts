@@ -469,14 +469,17 @@ function inferEnduranceCompatibility(
   // Abs goal often involves circuits (legacy)
   if (goal === 'abs' && session !== 'short') return 'high'
   
-  // General fitness / overall_fitness supports endurance
-  if ((goal === 'general' || goal === 'overall_fitness') && session !== 'short') return 'moderate'
+  // [CALIBRATION-STALE-GOAL-COMPARES-GATED] Legacy OnboardingGoal labels
+  // `overall_fitness`/`muscle_and_strength`/`skills_and_moves` were
+  // removed from the canonical PrimaryGoalType union. Drop the
+  // stale-literal arms; the canonical labels still match below.
+  if (goal === 'general' && session !== 'short') return 'moderate'
   
   // Short sessions = lower endurance compatibility
   if (session === 'short') return 'low'
   
-  // Skill/strength/muscle_and_strength focused goals are lower endurance compatibility by default
-  if (goal === 'skill' || goal === 'strength' || goal === 'muscle_and_strength' || goal === 'skills_and_moves') {
+  // Skill/strength focused goals are lower endurance compatibility by default
+  if (goal === 'skill' || goal === 'strength') {
     return consistency === 'high' ? 'moderate' : 'low'
   }
   
@@ -865,6 +868,9 @@ function buildSkillCalibrationFromCanonicalProfile(
 function isCanonicalProgrammingProfile(profile: CalibrationProfile): boolean {
   // CanonicalProgrammingProfile has flat fields like plancheProgression
   // OnboardingProfile has nested objects like planche: { progression, isAssisted }
+  // [CALIBRATION-PROFILE-NULL-GUARD] CalibrationProfile is nullable
+  // (L86) — `in` requires a non-null operand (TS18047/TS2322).
+  if (!profile) return false
   return (
     'plancheProgression' in profile ||
     'frontLeverProgression' in profile ||
@@ -934,8 +940,17 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
   const sessionCapacity = inferSessionCapacityFromMinutes(sessionMinutes) ?? 'medium'
   const consistencyCapacity = inferConsistencyCapacityFromDays(daysPerWeek) ?? 'moderate'
   
+  // [CALIBRATION-PRIMARY-GOAL-NULLISH-NORMALIZE] profile.primaryGoal
+  // ships as `string | null | undefined`; inferEnduranceCompatibility
+  // accepts `OnboardingGoal | PrimaryGoalType | null`. Coerce undefined
+  // to null and narrow the string at the boundary so neither contract
+  // has to widen.
+  const calibrationPrimaryGoal =
+    profile.primaryGoal == null
+      ? null
+      : profile.primaryGoal as OnboardingGoal | PrimaryGoalType
   const enduranceCompatibility = inferEnduranceCompatibility(
-    profile.primaryGoal,
+    calibrationPrimaryGoal,
     sessionCapacity,
     consistencyCapacity
   )

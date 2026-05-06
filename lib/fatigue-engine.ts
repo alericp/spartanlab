@@ -285,8 +285,10 @@ function generateFatigueRecommendations(
   }
   
   // ACWR risk
+  // [ACWR-RISK-LEVEL-ACCESS] getACWRRiskLevel returns
+  // `{ level; message }`, not a string. Compare on `.level`.
   const acwrRisk = getACWRRiskLevel(loadSummary.acuteChronicRatio)
-  if (acwrRisk === 'high') {
+  if (acwrRisk.level === 'high') {
     recommendations.push('Training load increased rapidly. Maintain current load.')
   }
   

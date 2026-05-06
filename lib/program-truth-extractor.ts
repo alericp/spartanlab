@@ -243,7 +243,10 @@ function auditFieldPresence(
   }
   
   // Check profile
-  const profileValue = profile ? getFieldValue(profile, field) : undefined
+  // [GET-FIELD-VALUE-RECORD-BOUNDARY] getFieldValue accepts a flat
+  // record; bridge CanonicalProgrammingProfile via unknown only at
+  // this read-only call site.
+  const profileValue = profile ? getFieldValue(profile as unknown as Record<string, unknown>, field) : undefined
   if (profileValue !== undefined && profileValue !== null) {
     const isEmpty = Array.isArray(profileValue) ? profileValue.length === 0 : false
     if (!isEmpty) {
@@ -321,18 +324,20 @@ function buildNormalizedInputs(
     return entry?.value ?? DEFAULTS[field] ?? null
   }
   
+  // [NORMALIZED-INPUTS-INDEXED-TYPE-BOUNDARY] cast each resolved value
+  // to the matching AdaptiveProgramInputs field type at the boundary.
   return {
-    primaryGoal: getValue('primaryGoal') as string,
-    secondaryGoal: getValue('secondaryGoal') as string | undefined,
-    selectedSkills: (getValue('selectedSkills') as string[]) || [],
-    trainingPathType: getValue('trainingPathType') as string | undefined,
+    primaryGoal: getValue('primaryGoal') as AdaptiveProgramInputs['primaryGoal'],
+    secondaryGoal: getValue('secondaryGoal') as AdaptiveProgramInputs['secondaryGoal'],
+    selectedSkills: (getValue('selectedSkills') as AdaptiveProgramInputs['selectedSkills']) || [],
+    trainingPathType: getValue('trainingPathType') as AdaptiveProgramInputs['trainingPathType'],
     goalCategories: (getValue('goalCategories') as string[]) || [],
-    experienceLevel: getValue('experienceLevel') as string,
-    scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
-    trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
-    sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
-    sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
-    equipment: (getValue('equipment') as string[]) || [],
+    experienceLevel: getValue('experienceLevel') as AdaptiveProgramInputs['experienceLevel'],
+    scheduleMode: (getValue('scheduleMode') as AdaptiveProgramInputs['scheduleMode']) || 'flexible',
+    trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as AdaptiveProgramInputs['trainingDaysPerWeek']) || 4,
+    sessionDurationMode: (getValue('sessionDurationMode') as AdaptiveProgramInputs['sessionDurationMode']) || 'adaptive',
+    sessionLength: (getValue('sessionLengthMinutes') as AdaptiveProgramInputs['sessionLength']) || 60,
+    equipment: (getValue('equipment') as AdaptiveProgramInputs['equipment']) || [],
     // Pass through any additional fields from inputs
     ...inputs,
   }
@@ -389,24 +394,76 @@ export function attachTruthExplanation(
 ): AdaptiveProgram {
   const explanation = buildProgramTruthExplanation(program, profile)
   
-  // [CHECKLIST 1 OF 5] Extract authoritativeMultiSkillIntentContract from program if available
-  const authoritativeContract = (program as {
-    authoritativeMultiSkillIntentContract?: {
-      selectedSkills: string[]
-      primarySkill: string | null
-      secondarySkill: string | null
-      supportSkills: string[]
-      deferredSkills: Array<{ skill: string; reasonCode: string; reasonLabel: string; details?: string }>
-      materiallyExpressedSkills: string[]
-      reducedThisCycleSkills: string[]
-      skillPriorityOrder: Array<{ skill: string; role: string; priorityScore: number; exposureSessions: number; currentWorkingProgression?: string | null; historicalCeiling?: string | null }>
-      coverageVerdict: 'strong' | 'adequate' | 'weak'
-      sourceTruthCount: number
-      materiallyUsedCount: number
-      auditTrail: { canonicalSourceSkillCount: number; builderInputSkillCount: number; weightedAllocationSkillCount: number; sessionArchitectureSkillCount: number; skillsLostInPipeline: string[]; skillsNarrowedReason: string | null }
-    } | null
-  }).authoritativeMultiSkillIntentContract || null
+  // [TRUTH-EXPLANATION-NO-AUTHORITATIVE-CONTRACT] previously extracted
+  // authoritativeMultiSkillIntentContract here for the truthExplanation
+  // block; that field is no longer part of the contract.
   
+  // ==========================================================================
+  // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Build the rollup ENTIRELY from final
+  // saved exercises (`program.sessions[].exercises[].dbTruthWinnerProvenance`).
+  // We do NOT recompute rationale here, do NOT consult transient scorer
+  // arrays, and do NOT consult the in-memory `progressionDepthAdjustments`
+  // map. The whole point of this lock is that the rollup reflects what
+  // actually survived into the saved program — if the per-exercise stamp
+  // was dropped along the way, the rollup will honestly report zero
+  // influence rather than synthesize fake provenance.
+  // ==========================================================================
+  const dbTruthWinnerSummary: NonNullable<typeof program.truthExplanation>['dbTruthWinnerSummary'] = (() => {
+    const sessions = Array.isArray(program.sessions) ? program.sessions : []
+    let influenced = 0
+    let reordered = 0
+    let conservativeByCurrent = 0
+    let readinessGated = 0
+    let currentBeatHistorical = 0
+    const precedence = { current: 0, response: 0, historical: 0, readinessGate: 0, default: 0 }
+    for (const sess of sessions) {
+      const exs = Array.isArray(sess?.exercises) ? sess.exercises : []
+      for (const ex of exs) {
+        const prov = (ex as { dbTruthWinnerProvenance?: NonNullable<typeof ex.dbTruthWinnerProvenance> }).dbTruthWinnerProvenance
+        if (!prov || prov.sourceOfTruth !== 'db_truth_final_winner') continue
+        // An exercise counts as "influenced" when *something* in the canonical
+        // winner stage materially shaped its final placement: the rerank
+        // changed order, OR a non-zero depth bias/delta was applied, OR a
+        // per-skill precedence/readiness signal was joined into the stamp.
+        const hadDepthDelta = typeof prov.depthDelta === 'number' && prov.depthDelta !== 0
+        const hadDepthBias = typeof prov.depthBias === 'number' && prov.depthBias !== 0
+        const hadPrecedenceSignal = !!prov.precedenceUsed && prov.precedenceUsed !== 'none' && prov.precedenceUsed !== 'default'
+        const hadCurrentVsHistory = prov.currentBeatsHistorical === true
+        const wasGated = prov.readinessGated === true
+        const wasConservative = prov.conservativeByCurrentTruth === true
+        if (
+          prov.rankingChanged ||
+          hadDepthDelta || hadDepthBias ||
+          hadPrecedenceSignal || hadCurrentVsHistory ||
+          wasGated || wasConservative
+        ) {
+          influenced += 1
+        }
+        if (prov.rankingChanged) reordered += 1
+        if (wasConservative) conservativeByCurrent += 1
+        if (wasGated) readinessGated += 1
+        if (hadCurrentVsHistory) currentBeatHistorical += 1
+        switch (prov.precedenceUsed) {
+          case 'current': precedence.current += 1; break
+          case 'response': precedence.response += 1; break
+          case 'historical': precedence.historical += 1; break
+          case 'readiness_gate': precedence.readinessGate += 1; break
+          case 'default': precedence.default += 1; break
+          default: break
+        }
+      }
+    }
+    return {
+      totalExercisesWithDbTruthInfluence: influenced,
+      exercisesReorderedByDbTruth: reordered,
+      exercisesConservativeByCurrentTruth: conservativeByCurrent,
+      exercisesReadinessGated: readinessGated,
+      exercisesWhereCurrentBeatHistorical: currentBeatHistorical,
+      precedenceBreakdown: precedence,
+      sourceOfTruth: 'db_truth_final_winner_rollup' as const,
+    }
+  })()
+
   return {
     ...program,
     truthExplanation: {
@@ -415,28 +472,17 @@ export function attachTruthExplanation(
       triggerSource,
       // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
       materializationVerdict: program.materializationVerdict || null,
-      // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
-      authoritativeMultiSkillIntentContract: authoritativeContract ? {
-        selectedSkills: authoritativeContract.selectedSkills,
-        primarySkill: authoritativeContract.primarySkill,
-        secondarySkill: authoritativeContract.secondarySkill,
-        supportSkills: authoritativeContract.supportSkills,
-        deferredSkills: authoritativeContract.deferredSkills,
-        materiallyExpressedSkills: authoritativeContract.materiallyExpressedSkills,
-        reducedThisCycleSkills: authoritativeContract.reducedThisCycleSkills,
-        skillPriorityOrder: authoritativeContract.skillPriorityOrder.map(s => ({
-          skill: s.skill,
-          role: s.role as 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred',
-          priorityScore: s.priorityScore,
-          exposureSessions: s.exposureSessions,
-          currentWorkingProgression: s.currentWorkingProgression,
-          historicalCeiling: s.historicalCeiling,
-        })),
-        coverageVerdict: authoritativeContract.coverageVerdict,
-        sourceTruthCount: authoritativeContract.sourceTruthCount,
-        materiallyUsedCount: authoritativeContract.materiallyUsedCount,
-        auditTrail: authoritativeContract.auditTrail,
-      } : null,
+      // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
+      dbTruthWinnerSummary,
+      // [SESSION-STYLE-MATERIALIZATION-CONTRACT] truthExplanation owns
+      // these required fields; default to "not materially applied" so
+      // the contract is satisfied without inventing fake adjustment
+      // reasoning.
+      sessionStyleMateriallyApplied: false,
+      sessionStyleAdjustmentReason: null,
+      // [TRUTH-EXPLANATION-NO-AUTHORITATIVE-CONTRACT] truthExplanation
+      // shape no longer carries authoritativeMultiSkillIntentContract;
+      // the canonical multi-skill intent lives elsewhere now.
     },
   }
 }

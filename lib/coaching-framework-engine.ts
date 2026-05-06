@@ -284,7 +284,10 @@ export const COACHING_FRAMEWORKS: Record<CoachingFrameworkId, CoachingFramework>
     progressionMethod: 'undulating',
     
     recommendedSkillTypes: ['front_lever', 'muscle_up', 'weighted_pull', 'weighted_dip', 'planche'],
-    recommendedExperienceLevels: ['intermediate', 'advanced', 'elite'],
+    // [COACHING-FRAMEWORK-EXPERIENCE-LEVEL-CANONICAL] Canonical
+    // `ExperienceLevel` is `'beginner' | 'intermediate' | 'advanced'`
+    // — `'elite'` was collapsed into `'advanced'`.
+    recommendedExperienceLevels: ['intermediate', 'advanced'],
     
     rules: {
       preferredRepRangeMin: 3,
@@ -475,7 +478,9 @@ export const COACHING_FRAMEWORKS: Record<CoachingFrameworkId, CoachingFramework>
     progressionMethod: 'block_periodization',
     
     recommendedSkillTypes: ['iron_cross', 'planche', 'back_lever', 'front_lever'],
-    recommendedExperienceLevels: ['advanced', 'elite'],
+    // [COACHING-FRAMEWORK-EXPERIENCE-LEVEL-CANONICAL] same as above —
+    // collapse `'elite'` into the canonical `'advanced'` literal.
+    recommendedExperienceLevels: ['advanced'],
     
     rules: {
       preferredRepRangeMin: 3,
@@ -693,7 +698,13 @@ export function selectFramework(input: FrameworkSelectionInput): FrameworkSelect
     }
     
     // 5. Iron Cross / advanced rings detection
-    if (input.primaryGoal === 'iron_cross' || input.primarySkill === 'iron_cross') {
+    // [IRON-CROSS-STRING-BOUNDARY-COMPARE] primarySkill SkillKey union
+    // does not include 'iron_cross'; compare on the string boundary so
+    // the heuristic continues to work without widening the SkillKey
+    // union just to recognize this skill literal.
+    const primaryGoalKey = input.primaryGoal == null ? null : String(input.primaryGoal)
+    const primarySkillKey = input.primarySkill == null ? null : String(input.primarySkill)
+    if (primaryGoalKey === 'iron_cross' || primarySkillKey === 'iron_cross') {
       if (frameworkId === 'tendon_conservative') {
         score += 30
         reasons[frameworkId].push('Required for Iron Cross progression')

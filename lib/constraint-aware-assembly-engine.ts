@@ -406,8 +406,11 @@ function analyzeFatigueConstraint(input: ConstraintAwareInput): ActiveConstraint
     }
   }
   
-  // Check fatigue decision
-  if (input.fatigueDecision === 'REDUCE_INTENSITY') {
+  // [TRAINING-DECISION-NO-REDUCE-INTENSITY] TrainingDecision union is
+  // TRAIN_AS_PLANNED|PRESERVE_QUALITY|LIGHTEN_SESSION|COMPRESS_WEEKLY_LOAD|
+  // DELOAD_RECOMMENDED. The legacy 'REDUCE_INTENSITY' literal is
+  // covered by LIGHTEN_SESSION.
+  if (input.fatigueDecision === 'LIGHTEN_SESSION') {
     return {
       type: 'fatigue_constraint',
       severity: 'moderate',
@@ -977,10 +980,8 @@ function getProtocolRationale(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeConstraints,
-  formatBuilderReasoning,
-  generateWarmupProtocols,
-  SESSION_TIERS,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All four symbols are exported inline at
+// their declarations (lines 72, 209, 801, 903). The previous bottom export
+// block duplicated every name (TS2300/TS2484). Inline export remains the
+// single canonical export style; public API is unchanged.

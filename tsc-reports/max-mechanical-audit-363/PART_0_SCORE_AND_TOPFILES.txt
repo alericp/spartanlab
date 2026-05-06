@@ -1,0 +1,113 @@
+===== MAX MECHANICAL AUDIT FROM CLEAN 363 STATE =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD: 29f4bcf7
+Remote HEAD: 29f4bcf7
+Local vs remote, format local-only remote-only:
+0	0
+Tracked changes:
+
+===== RUN REAL TSC =====
+===== VERIFIED SCOREBOARD =====
+Previous total diagnostics: 363
+Current total diagnostics: 363
+Total delta from previous known: 0
+Current files with errors: 115
+
+Current authgen diagnostics: 20
+Current unified-coaching diagnostics: 16
+Current builder diagnostics: 9
+
+===== TOP 60 ERROR FILES =====
+     20 lib/server/authoritative-program-generation.ts
+     16 lib/unified-coaching-engine.ts
+     12 lib/program/skill-specific-truth-resolution.ts
+     11 lib/performance-envelope-engine.ts
+      9 lib/repositories/profile-repository.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      9 lib/adaptive-program-builder.ts
+      8 lib/weak-point-engine.ts
+      8 lib/program/db-truth-scoring-bridge.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      6 lib/session-variety-engine.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/canonical-profile-service.ts
+      5 lib/onboarding-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-program-generation.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/roadmap/skill-roadmap-service.ts
+      4 lib/recovery-fatigue-engine.ts
+      4 lib/program-version-service.ts
+      4 lib/prescription-contract.ts
+      4 lib/dashboard-service.ts
+      4 lib/constraint-detection-engine.ts
+      4 lib/advanced-skills-integration.ts
+      4 lib/adaptive-athlete-engine.ts
+      3 lib/strength-score-engine.ts
+      3 lib/program-generation/week-adaptation-decision-contract.ts
+      3 lib/program-exercise-selector.ts
+      3 lib/milestone-engine.ts
+      3 lib/flexible-schedule-engine.ts
+      3 lib/exercise-family-integration.ts
+      3 lib/elite-insight-engine.ts
+      3 lib/doctrine/source-batches/index.ts
+      3 lib/doctrine/method-profile-registry.ts
+      3 lib/constraint-integration.ts
+      3 lib/adaptive-progression-engine.ts
+      2 lib/workout-feedback-integration.ts
+      2 lib/workout-execution-truth.ts
+      2 lib/warmup-intelligence-engine.ts
+      2 lib/warmup-engine.ts
+      2 lib/unified-readiness-integration.ts
+      2 lib/training-principles-engine.ts
+      2 lib/training-coach.ts
+      2 lib/strength-trend-engine.ts
+      2 lib/skill-readiness/skillReadinessTypes.ts
+      2 lib/skill-audit-system.ts
+      2 lib/server/authoritative-generation-truth-ingestion.ts
+      2 lib/relative-strength-engine.ts
+      2 lib/progression-decision-engine.ts
+      2 lib/progress-data-service.ts
+      2 lib/program/row-level-method-prescription-mutator.ts
+      2 lib/program/onboarding-truth-expression-audit.ts
+
+===== ERROR CODE COUNTS =====
+    113 error TS2322
+     65 error TS2339
+     34 error TS2367
+     33 error TS2345
+     16 error TS2740
+     14 error TS2305
+     14 error TS2304
+     12 error TS2353
+      9 error TS2739
+      8 error TS2724
+      5 error TS2741
+      5 error TS2459
+      5 error TS18048
+      4 error TS7006
+      4 error TS2300
+      2 error TS7053
+      2 error TS2719
+      2 error TS2694
+      2 error TS2454
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2554
+      1 error TS2552
+      1 error TS2551
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365
+      1 error TS2352

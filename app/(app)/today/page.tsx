@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { type AdaptiveSession, type AdaptiveExercise, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { buildSelectedVariantMain } from '@/lib/workout/selected-variant-session-contract'
 import { getProgramState } from '@/lib/program-state'
 import { getWeekAdaptationDisplay, getOmittedSkillDisplay, buildExercisePurposeLine } from '@/lib/program/program-display-contract'
 import {
@@ -34,6 +35,24 @@ import {
 import { assessDeloadNeed, type DeloadAssessment } from '@/lib/deload-detection-engine'
 import { getQuickWeekStatus, type QuickWeekStatus } from '@/lib/week-reschedule-engine'
 import { getSessionAdjustmentExplanation, getDeloadExplanation } from '@/lib/adjustment-explanation-engine'
+// =============================================================================
+// [PHASE AB5] GROUPED EXECUTION PRESCRIPTION + ORPHAN-ROW GUARD (Today parity)
+// =============================================================================
+// Today's Plan re-uses the SAME authoritative resolver the Program card uses
+// so it cannot disagree with Program/Program-card on rounds, member doses,
+// rest microcopy, or orphan-row drop verdicts. Both surfaces feed the same
+// `resolveGroupedExecutionPrescription` and consume `buildRoundsHeaderText`
+// for the rounds chip; rest microcopy comes from the single semantic owner
+// (`getGroupedMethodSemantics`). The resolver is a pure module (no server
+// imports, no DOM, no React hooks) so this is a safe client-side import
+// from a `'use client'` page.
+// =============================================================================
+import {
+  resolveGroupedExecutionPrescription,
+  buildRoundsHeaderText,
+  type ResolvedGroupedExecutionPrescription,
+} from '@/components/programs/lib/grouped-execution-prescription'
+import { getGroupedMethodSemantics, type GroupType } from '@/components/programs/lib/session-group-display'
 
 export default function TodaySessionPage() {
   const [currentSession, setCurrentSession] = useState<AdaptiveSession | null>(null)
@@ -182,32 +201,35 @@ export default function TodaySessionPage() {
     
     if (!baseSession) return null
     
-    // If variants exist and a non-default variant is selected, merge variant exercises
+    // [PRE-AB6 BUILD GREEN GATE / STEP-5A-OMEGA] Delegate variant body
+    //   resolution to the canonical shared helper
+    //   `buildSelectedVariantMain` (also used by
+    //   `app/(app)/workout/session/page.tsx` and
+    //   `components/programs/AdaptiveSessionCard.tsx`). The previous
+    //   inline mapper read invalid fields (`sel.name`, `sel.category`,
+    //   `sel.wasAdapted`, `sel.coachingMeta`) directly off
+    //   `SelectedExercise`, but the authoritative contract at
+    //   `lib/program-exercise-selector.ts:796` places identity under
+    //   `sel.exercise` (Exercise: id/name/category/...) and exposes
+    //   prescription fields directly on `sel`. The shared helper
+    //   already does the correct identity match (by id, then
+    //   normalized name) against the full session, overlays variant
+    //   prescription, preserves `wasAdapted`/`coachingMeta`/method
+    //   metadata, and stamps the variant-declared duration into
+    //   `estimatedMinutes`. Today page now consumes that single
+    //   source of truth instead of maintaining a parallel stale
+    //   mapper. No casts, no suppressions, no widening, no
+    //   SelectedExercise contract change. Behavior preserved exactly:
+    //   selected-variant rendering still occurs only when
+    //   `selectedVariant > 0` and within range; full-session
+    //   rendering is untouched.
     const variants = baseSession.variants
     if (variants && variants.length > 1 && selectedVariant > 0 && selectedVariant < variants.length) {
-      const variant = variants[selectedVariant]
-      if (variant?.selection?.main) {
-        // Map variant selection to exercises format
-        const variantExercises = variant.selection.main.map((sel, idx) => ({
-          id: `variant-${selectedVariant}-${idx}`,
-          name: sel.name,
-          category: sel.category || 'general',
-          sets: sel.sets,
-          repsOrTime: sel.repsOrTime,
-          note: sel.note || '',
-          isOverrideable: true,
-          selectionReason: sel.selectionReason || '',
-          targetRPE: sel.targetRPE,
-          restSeconds: sel.restSeconds,
-          wasAdapted: sel.wasAdapted,
-          coachingMeta: sel.coachingMeta,
-        }))
-        
-        return {
-          ...baseSession,
-          exercises: variantExercises,
-          estimatedMinutes: variant.duration,
-        }
+      const resolved = buildSelectedVariantMain(baseSession, selectedVariant)
+      return {
+        ...baseSession,
+        exercises: resolved.exercises,
+        estimatedMinutes: resolved.estimatedMinutes,
       }
     }
     
@@ -379,11 +401,30 @@ export default function TodaySessionPage() {
                       )
                     })}
                   </div>
+                  {/* [PRE-AB6 BUILD GREEN GATE / TODAY COMPRESSION CONTRACT]
+                        The authoritative `compressionLevel` union (defined in
+                        `lib/program/session-length-truth-contract.ts:114` and
+                        `lib/session-compression-engine.ts:16`) is
+                        `'none' | 'light' | 'moderate' | 'heavy'`. The previous
+                        ternary compared against a legacy literal that is no
+                        longer part of the contract — TypeScript correctly
+                        rejected the comparison as having no overlap with the
+                        narrowed union. Replaced the stale literal with the
+                        canonical `'heavy'` (significant trimming / skill work
+                        preserved) and added a `'light'` branch so minor
+                        trimming also surfaces a message, matching the full
+                        union. The outer guard
+                        `selectedVariant > 0 && compressionLevel` is preserved,
+                        and `'none'` continues to render no message because its
+                        branch returns `''`. No casts, no suppressions, no
+                        widening, no new compression values. */}
                   {selectedVariant > 0 && sessionVariants[selectedVariant]?.compressionLevel && (
                     <p className="text-[10px] text-[#6A6A6A] mt-1">
-                      {sessionVariants[selectedVariant].compressionLevel === 'moderate' 
-                        ? 'Lower-priority exercises trimmed to fit time.' 
-                        : sessionVariants[selectedVariant].compressionLevel === 'aggressive'
+                      {sessionVariants[selectedVariant].compressionLevel === 'light'
+                        ? 'Minor trimming applied to fit your selected session length.'
+                        : sessionVariants[selectedVariant].compressionLevel === 'moderate'
+                        ? 'Lower-priority exercises trimmed to fit time.'
+                        : sessionVariants[selectedVariant].compressionLevel === 'heavy'
                         ? 'Significant trimming applied. Skill work preserved.'
                         : ''}
                     </p>
@@ -704,41 +745,185 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
           if (isGrouped) {
             // Render grouped block with header and visual grouping
             const groupInfo = getGroupTypeInfo(group.groupType)
-            
-            return (
-              <div key={group.id || `group-${groupIdx}`} className="space-y-1">
-                {/* Group header */}
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded-t bg-[#222] border-l-2" style={{ borderColor: groupInfo.color }}>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: groupInfo.color + '20', color: groupInfo.color }}>
-                    {groupInfo.abbreviation}
-                  </span>
-                  <span className="text-xs text-[#A5A5A5] font-medium">{groupInfo.label}</span>
-                  <span className="text-[10px] text-[#6A6A6A]">{group.exercises.length} exercises</span>
-                </div>
-                
-                {/* Grouped exercises with visual bracket */}
-                <div className="pl-3 border-l-2 space-y-1.5" style={{ borderColor: groupInfo.color + '40' }}>
-                  {group.exercises.map((groupEx, exIdx) => {
+
+            // -----------------------------------------------------------------
+            // [PHASE AB5 - TODAY PARITY] Run the SAME grouped execution
+            // prescription resolver the Program card runs, so Today's Plan
+            // shows identical rounds / member doses / rest microcopy and
+            // applies the same orphan-row drop verdict. The hydrate function
+            // delegates lookup to Today's already-built `exerciseMap`
+            // (id-keyed plus lowercased-name-keyed) so the resolver cannot
+            // disagree with the visible row list.
+            // -----------------------------------------------------------------
+            const prescription: ResolvedGroupedExecutionPrescription =
+              resolveGroupedExecutionPrescription({
+                block: {
+                  kind: 'rich',
+                  group: {
+                    id: group.id,
+                    groupType: group.groupType as GroupType,
+                    label: groupInfo.label,
+                    exercises: group.exercises.map((m, i) => ({
+                      id: m.id,
+                      name: m.name,
+                      prefix:
+                        m.prefix ||
+                        (group.groupType === 'superset' ? `A${i + 1}` : `${i + 1}`),
+                    })),
+                    instruction: group.instruction,
+                    restProtocol: group.restProtocol,
+                  },
+                },
+                hydrate: ({ id, name }) => {
+                  // [PHASE AB5 - HYDRATE TYPE GUARD] The shared resolver
+                  // contract allows `id` to be `string | undefined`, but
+                  // `exerciseMap` is `Map<string, AdaptiveExercise>` and
+                  // therefore `.get()` only accepts `string`. Narrow both
+                  // lookup keys before calling `.get()` instead of casting
+                  // — this preserves resolver type strictness and never
+                  // allows a non-string key into the map. Returns the
+                  // first non-null hit, or `null` for the resolver to
+                  // record as an unbound (orphan) member.
+                  const byId =
+                    typeof id === 'string' && id.trim().length > 0
+                      ? exerciseMap.get(id)
+                      : undefined
+                  const byName =
+                    typeof name === 'string' && name.trim().length > 0
+                      ? exerciseMap.get(name.toLowerCase())
+                      : undefined
+                  return byId ?? byName ?? null
+                },
+              })
+
+            // -----------------------------------------------------------------
+            // [PHASE AB5 - ORPHAN-ROW GUARD] Visible rows are restricted to
+            // bound members whose prescription is complete (sets + reps both
+            // resolvable). Bound-but-incomplete and unbound members are
+            // counted into a single "needs review" tally so the user gets
+            // honest visible proof when something dropped, without ever
+            // showing an executable row with no prescription.
+            // -----------------------------------------------------------------
+            const visibleMembers = prescription.boundMembers.filter(
+              (m) => m.prescriptionComplete,
+            )
+            const incompleteBoundCount = prescription.boundMembers.length -
+              visibleMembers.length
+            const needsReviewCount =
+              prescription.orphanMemberCount + incompleteBoundCount
+
+            // -----------------------------------------------------------------
+            // [PHASE AB5 - DEGRADE HONESTLY] If grouped truth claimed a
+            // multi-member structure (superset/circuit) but the resolver
+            // could not bind enough complete members to actually execute
+            // grouped work, fall through to flat row rendering for the
+            // members that DID bind so we never display a fake grouped
+            // header over a single lonely row. This mirrors the
+            // `minMembersFor` doctrine in session-group-display.ts.
+            // -----------------------------------------------------------------
+            const minMembersForGroup =
+              group.groupType === 'superset' || group.groupType === 'circuit'
+                ? 2
+                : 1
+            if (visibleMembers.length < minMembersForGroup) {
+              return (
+                <div key={group.id || `group-${groupIdx}`} className="space-y-1.5">
+                  {visibleMembers.map((m) => {
                     globalIndex++
-                    const fullExercise = exerciseMap.get(groupEx.id) || exerciseMap.get(groupEx.name.toLowerCase())
+                    const fullExercise =
+                      exerciseMap.get(m.id) || exerciseMap.get(m.name.toLowerCase())
                     if (!fullExercise) return null
-                    
                     return (
                       <ExerciseRow
                         key={fullExercise.id}
                         exercise={fullExercise}
-                        prefix={groupEx.prefix || (group.groupType === 'superset' ? `A${exIdx + 1}` : `${exIdx + 1}`)}
+                        index={globalIndex}
+                        wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
+                        sessionContext={sessionContext}
+                      />
+                    )
+                  })}
+                  {needsReviewCount > 0 && (
+                    <p className="text-[10px] text-[#F59E0B] px-2 py-1">
+                      Grouped block adjusted — using safe fallback prescription.
+                    </p>
+                  )}
+                </div>
+              )
+            }
+
+            const roundsHeader = buildRoundsHeaderText(prescription)
+            const semantics = getGroupedMethodSemantics(group.groupType as GroupType)
+            const intraRest = prescription.intraExerciseRestText
+            const afterRest = prescription.afterRoundRestText
+
+            return (
+              <div key={group.id || `group-${groupIdx}`} className="space-y-1">
+                {/* Group header — rounds chip + canonical rest microcopy */}
+                <div
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-t bg-[#222] border-l-2"
+                  style={{ borderColor: groupInfo.color }}
+                >
+                  <span
+                    className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: groupInfo.color + '20',
+                      color: groupInfo.color,
+                    }}
+                  >
+                    {groupInfo.abbreviation}
+                  </span>
+                  <span className="text-xs text-[#A5A5A5] font-medium">
+                    {groupInfo.label}
+                  </span>
+                  {semantics?.headerTagline && (
+                    <span className="text-[10px] text-[#6A6A6A]">
+                      {semantics.headerTagline}
+                    </span>
+                  )}
+                  {roundsHeader && (
+                    <span className="text-[10px] text-[#A5A5A5] font-medium ml-auto">
+                      {roundsHeader}
+                    </span>
+                  )}
+                </div>
+
+                {/* Grouped exercises with visual bracket */}
+                <div
+                  className="pl-3 border-l-2 space-y-1.5"
+                  style={{ borderColor: groupInfo.color + '40' }}
+                >
+                  {visibleMembers.map((m) => {
+                    globalIndex++
+                    const fullExercise =
+                      exerciseMap.get(m.id) || exerciseMap.get(m.name.toLowerCase())
+                    if (!fullExercise) return null
+                    return (
+                      <ExerciseRow
+                        key={fullExercise.id}
+                        exercise={fullExercise}
+                        prefix={m.prefix}
                         wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
                         sessionContext={sessionContext}
                       />
                     )
                   })}
                 </div>
-                
-                {/* Rest protocol if available */}
-                {group.restProtocol && (
+
+                {/* Rest microcopy — single authoritative semantic source */}
+                {(intraRest || afterRest) && (
                   <p className="text-[10px] text-[#6A6A6A] px-2 py-1">
-                    Rest: {group.restProtocol}
+                    Rest:{' '}
+                    {[intraRest, afterRest].filter((s) => s && s.length > 0).join(', ')}
+                  </p>
+                )}
+
+                {/* Orphan-row honest warning — never show fake grouped doses */}
+                {needsReviewCount > 0 && (
+                  <p className="text-[10px] text-[#F59E0B] px-2 py-1">
+                    {needsReviewCount === 1
+                      ? '1 grouped member needs prescription review.'
+                      : `${needsReviewCount} grouped members need prescription review.`}
                   </p>
                 )}
               </div>
@@ -766,18 +951,53 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
     )
   }
   
-  // Fallback: flat list render
+  // -----------------------------------------------------------------------
+  // [PHASE AB5 - FLAT ORPHAN GUARD] Honest flat list. A row is treated as
+  // orphan when neither sets nor any reps/time field is resolvable; such a
+  // row is rendered with a compact "Prescription needs review" warning so
+  // it cannot pose as a normal executable row. Real-program exercises
+  // always carry these fields so this branch is rarely hit, but it closes
+  // the AB5 contract for the no-grouped-truth corridor as well.
+  // -----------------------------------------------------------------------
   return (
     <div className="px-4 pb-4 space-y-2">
-      {session.exercises.map((exercise, idx) => (
-        <ExerciseRow
-          key={exercise.id}
-          exercise={exercise}
-          index={idx + 1}
-          wasRemoved={adjustment.whatToCut.includes(exercise.name)}
-          sessionContext={sessionContext}
-        />
-      ))}
+      {session.exercises.map((exercise, idx) => {
+        const sets =
+          typeof (exercise as unknown as { scaledSets?: number | null }).scaledSets ===
+            'number' &&
+          ((exercise as unknown as { scaledSets?: number }).scaledSets ?? 0) > 0
+            ? (exercise as unknown as { scaledSets: number }).scaledSets
+            : typeof exercise.sets === 'number' && exercise.sets > 0
+              ? exercise.sets
+              : null
+        const reps =
+          (typeof (exercise as unknown as { scaledReps?: string | null }).scaledReps ===
+            'string' &&
+          ((exercise as unknown as { scaledReps?: string }).scaledReps ?? '').trim()
+            .length > 0
+            ? (exercise as unknown as { scaledReps: string }).scaledReps
+            : null) ||
+          (typeof exercise.repsOrTime === 'string' && exercise.repsOrTime.trim().length > 0
+            ? exercise.repsOrTime
+            : null)
+        const isPrescriptionMissing = sets == null || !reps
+
+        return (
+          <div key={exercise.id} className="space-y-1">
+            <ExerciseRow
+              exercise={exercise}
+              index={idx + 1}
+              wasRemoved={adjustment.whatToCut.includes(exercise.name)}
+              sessionContext={sessionContext}
+            />
+            {isPrescriptionMissing && (
+              <p className="text-[10px] text-[#F59E0B] px-2">
+                Prescription needs review.
+              </p>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

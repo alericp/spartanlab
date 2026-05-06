@@ -47,8 +47,8 @@ function detectBiggestImprovement(): EliteInsight | null {
   let bestImprovement: { area: string; improvement: number; type: 'skill' | 'strength' } | null = null
   
   // Check skill improvements (hold time increase)
-  skillSnapshots.forEach(skill => {
-    if (!skill.hasData || skill.previousBestHold === 0) return
+  for (const skill of skillSnapshots) {
+    if (!skill.hasData || skill.previousBestHold === 0) continue
     
     const improvement = skill.bestHoldSeconds - skill.previousBestHold
     if (improvement > 0) {
@@ -61,11 +61,11 @@ function detectBiggestImprovement(): EliteInsight | null {
         }
       }
     }
-  })
+  }
   
   // Check strength improvements (1RM increase)
-  strengthSnapshots.forEach(strength => {
-    if (!strength.hasData || strength.previousOneRM === 0) return
+  for (const strength of strengthSnapshots) {
+    if (!strength.hasData || strength.previousOneRM === 0) continue
     
     const improvement = strength.estimatedOneRM - strength.previousOneRM
     if (improvement > 0) {
@@ -78,10 +78,10 @@ function detectBiggestImprovement(): EliteInsight | null {
         }
       }
     }
-  })
+  }
   
   if (!bestImprovement) return null
-  
+
   return {
     type: 'biggest_improvement',
     title: 'Biggest Improvement',

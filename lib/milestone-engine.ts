@@ -130,14 +130,28 @@ function detectSkillMilestones(): Milestone[] {
 
 function detectStrengthMilestones(): Milestone[] {
   const records = getStrengthRecords()
+  // [MILESTONE-PROFILE-NULL-GUARD] `getAthleteProfile()` can return
+  // null in server contexts. Use optional chain with a sane default.
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight || 160
+  const bodyweight = profile?.bodyweight ?? 160
   const milestones: Milestone[] = []
   
+  // [EXERCISE-TYPE-RECORD-COMPLETION] ExerciseType now also includes
+  // the deadlift variants (BarbellExerciseType union). Default the
+  // hybrid-strength milestones to empty until barbell milestone
+  // thresholds are explicitly defined.
   const exerciseLabels: Record<ExerciseType, string> = {
     weighted_pull_up: 'Weighted Pull-Up',
     weighted_dip: 'Weighted Dip',
     weighted_muscle_up: 'Weighted Muscle-Up',
+    conventional_deadlift: 'Conventional Deadlift',
+    sumo_deadlift: 'Sumo Deadlift',
+    romanian_deadlift: 'Romanian Deadlift',
+    trap_bar_deadlift: 'Trap Bar Deadlift',
+    back_squat: 'Back Squat',
+    front_squat: 'Front Squat',
+    bench_press: 'Bench Press',
+    overhead_press: 'Overhead Press',
   }
   
   // Weight thresholds for milestones
@@ -145,6 +159,14 @@ function detectStrengthMilestones(): Milestone[] {
     weighted_pull_up: [25, 45, 70, 90],
     weighted_dip: [45, 70, 90, 135],
     weighted_muscle_up: [10, 25, 45],
+    conventional_deadlift: [],
+    sumo_deadlift: [],
+    romanian_deadlift: [],
+    trap_bar_deadlift: [],
+    back_squat: [],
+    front_squat: [],
+    bench_press: [],
+    overhead_press: [],
   }
   
   // Track best records per exercise
@@ -152,6 +174,14 @@ function detectStrengthMilestones(): Milestone[] {
     weighted_pull_up: null,
     weighted_dip: null,
     weighted_muscle_up: null,
+    conventional_deadlift: null,
+    sumo_deadlift: null,
+    romanian_deadlift: null,
+    trap_bar_deadlift: null,
+    back_squat: null,
+    front_squat: null,
+    bench_press: null,
+    overhead_press: null,
   }
   
   records.forEach(record => {

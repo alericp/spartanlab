@@ -16,7 +16,7 @@
  * 5. Full diagnostic logging for debugging
  */
 
-import type { AdaptiveSession, AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import type { AdaptiveSession, AdaptiveProgram, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 import { 
   normalizeWorkoutSession, 
   normalizeAndValidateSession,
@@ -26,6 +26,17 @@ import { getSessionDiagnostic } from '@/lib/workout/validate-session'
 import type { WorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
 // [WEEK-PROGRESSION-TRUTH] Import week scaling to apply dosage adjustments at session load time
 import { scaleSessionForWeek, type ScaledSession } from '@/lib/week-dosage-scaling'
+// [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Single authority for repairing reps/seconds
+// mismatches when a saved program is hydrated for the live workout. Ensures
+// Program page and Live Workout always agree on prescription unit. See
+// lib/program/exercise-prescription-unit-truth.ts.
+import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
+// [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate at the loader boundary so
+// any legacy-persisted "7-12" / "5-11" / "6-13" rep strings get snapped to
+// a canonical band on hydration. The resolver already snaps for fresh
+// generations; this protects programs saved before Step 5C and any future
+// fallback path that bypasses the resolver.
+import { normalizeRepsOrTimeString } from '@/lib/program/canonical-range-grammar'
 
 // =============================================================================
 // SESSION METADATA - TRACKS SOURCE AND VALIDATION STATUS
@@ -106,27 +117,100 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
       if (!ex || typeof ex !== 'object') return null
       const e = ex as Record<string, unknown>
       
+      // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Repair any reps/seconds mismatch on
+      // load so the live workout reads the same hold/seconds the Program page
+      // displays. No-op for rep-based exercises and time-based holds.
+      const rawRepsOrTime = typeof e.repsOrTime === 'string' && e.repsOrTime ? e.repsOrTime : '8-12 reps'
+      const unitTruth = resolveExercisePrescriptionUnitTruth({
+        name: typeof e.name === 'string' ? e.name : null,
+        id: typeof e.id === 'string' ? e.id : null,
+        category: typeof e.category === 'string' ? e.category : null,
+        isIsometric: typeof e.isIsometric === 'boolean' ? e.isIsometric : undefined,
+        defaultRepsOrTime: typeof e.defaultRepsOrTime === 'string' ? e.defaultRepsOrTime : null,
+        difficultyLevel: typeof e.difficultyLevel === 'string' ? e.difficultyLevel : null,
+        repsOrTime: rawRepsOrTime,
+      })
+
+      // [STEP-5C-CANONICAL-GRAMMAR] After unit-truth repair, snap any
+      // non-canonical rep ranges (e.g. legacy 7-12 / 5-11 / 6-13) to
+      // the approved coaching grammar. `normalizeRepsOrTimeString` is a
+      // pure no-op for canonical strings, hold ranges already on the
+      // canonical hold grammar, single-value durations, and unparsed
+      // strings — so calling it unconditionally is safe at the loader
+      // boundary and protects programs saved before Step 5C.
+      const repairedReps = unitTruth.repsOrTime || rawRepsOrTime
+      const snappedReps = normalizeRepsOrTimeString(
+        repairedReps,
+        'unknown',
+        'moderate',
+      ).repsOrTime
+
+      // [LEGACY-PERSISTED-PASS-THROUGH] These fields originate from
+      // persisted DB JSON typed as `unknown`; AdaptiveExercise pins
+      // each to a structured optional shape. The legacy data is
+      // already-validated upstream by the Program build pipeline, so
+      // narrow boundary `as unknown as <field type>` casts at this
+      // single hydration point preserve the typed contract without
+      // weakening AdaptiveExercise itself.
+      
+      type LiveWorkoutPreservedExerciseFields = {
+        densityPrescription?: unknown
+        doctrineApplicationDeltas?: unknown
+        structuralMethodDeltas?: unknown
+        numericPrescriptionDelta?: unknown
+        targetWeightedRPE?: unknown
+      }
+      
+      type LoadableAdaptiveExercise =
+        AdaptiveExercise & LiveWorkoutPreservedExerciseFields
+      
       return {
         id: typeof e.id === 'string' && e.id ? e.id : `exercise-${idx}`,
         name: typeof e.name === 'string' && e.name ? e.name : 'Exercise',
         category: typeof e.category === 'string' ? e.category : 'general',
         sets: typeof e.sets === 'number' && e.sets > 0 ? e.sets : 3,
-        repsOrTime: typeof e.repsOrTime === 'string' && e.repsOrTime ? e.repsOrTime : '8-12 reps',
+        repsOrTime: snappedReps,
         note: typeof e.note === 'string' ? e.note : '',
         isOverrideable: e.isOverrideable !== false,
         selectionReason: typeof e.selectionReason === 'string' ? e.selectionReason : '',
-        prescribedLoad: e.prescribedLoad,
-        targetRPE: e.targetRPE,
-        restSeconds: e.restSeconds,
-        method: e.method,
-        methodLabel: e.methodLabel,
-        blockId: e.blockId,
-        wasAdapted: e.wasAdapted,
-        source: e.source,
-        progressionDecision: e.progressionDecision,
-        coachingMeta: e.coachingMeta,
-        executionTruth: e.executionTruth,
-      }
+        prescribedLoad: e.prescribedLoad as unknown as AdaptiveExercise['prescribedLoad'],
+        targetRPE: e.targetRPE as unknown as AdaptiveExercise['targetRPE'],
+        restSeconds: typeof e.restSeconds === 'number' ? e.restSeconds : undefined,
+        method: e.method as unknown as AdaptiveExercise['method'],
+        methodLabel: typeof e.methodLabel === 'string' ? e.methodLabel : undefined,
+        blockId: typeof e.blockId === 'string' ? e.blockId : undefined,
+        wasAdapted: typeof e.wasAdapted === 'boolean' ? e.wasAdapted : undefined,
+        source: e.source as unknown as AdaptiveExercise['source'],
+        progressionDecision: e.progressionDecision as unknown as AdaptiveExercise['progressionDecision'],
+        coachingMeta: e.coachingMeta as unknown as AdaptiveExercise['coachingMeta'],
+        executionTruth: e.executionTruth as unknown as AdaptiveExercise['executionTruth'],
+        // [PHASE 4Q] Preserve doctrine-corridor-stamped row-level method
+        // truth across the live-workout normalize boundary. Without these
+        // pass-throughs, methods that the program page card showed (top
+        // set / drop set / rest-pause / endurance density / cluster) get
+        // silently flattened into generic straight sets when Start Workout
+        // is tapped. See lib/program/doctrine-application-corridor.ts for
+        // where these are stamped and lib/workout/normalize-workout-session.ts
+        // for the parallel preservation block in the secondary normalizer.
+        setExecutionMethod: e.setExecutionMethod as unknown as AdaptiveExercise['setExecutionMethod'],
+        densityPrescription: e.densityPrescription,
+        doctrineApplicationDeltas: e.doctrineApplicationDeltas,
+        // [PHASE 4P] Structural method materialization corridor flags. Used
+        // by the live workout to attribute superset/circuit/density block
+        // membership to the corridor vs the builder.
+        structuralMethodApplied: typeof e.structuralMethodApplied === 'boolean' ? e.structuralMethodApplied : undefined,
+        structuralMethodDeltas: e.structuralMethodDeltas,
+        // [PHASE 4Z / PHASE I] Numeric prescription mutation per-row proof.
+        // Stamped by lib/program/numeric-prescription-mutation-contract.ts
+        // and carries the row's mutated sets/reps/holdSeconds before/after,
+        // protectedBy reason for non-mutated rows, and the visible chip
+        // label. Without this pass-through the Program-card chip and live
+        // workout coaching surface would lose proof that doctrine actually
+        // changed the prescription.
+        numericPrescriptionDelta: e.numericPrescriptionDelta,
+        // [WEEK-PROGRESSION-TRUTH] Preserve weighted RPE if present.
+        targetWeightedRPE: e.targetWeightedRPE,
+      } as unknown as LoadableAdaptiveExercise
     })
     .filter((ex): ex is NonNullable<typeof ex> => ex !== null)
   

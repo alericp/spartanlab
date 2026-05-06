@@ -215,9 +215,13 @@ export function validateProgramStructure(
     let foundHeavyStrength = false
     for (const ex of exercises) {
       const category = ex.exercise?.category
-      const neuralDemand = ex.exercise?.neuralDemand
+      // [NEURAL-DEMAND-UNKNOWN-NORMALIZE] `exercise` may be the loose
+      // `{ [key: string]: unknown }` shape, so `neuralDemand` is
+      // `unknown`; normalize to a number before comparing.
+      const rawNeural = ex.exercise?.neuralDemand
+      const neuralDemand = typeof rawNeural === 'number' ? rawNeural : 0
       
-      if (category === 'strength' && (neuralDemand || 0) >= 3) {
+      if (category === 'strength' && neuralDemand >= 3) {
         foundHeavyStrength = true
       }
       
@@ -339,7 +343,13 @@ export function validateProgramEquipment(
     const exercises = session.exercises || []
     
     for (const ex of exercises) {
-      const equipment = ex.exercise?.equipment || []
+      // [EQUIPMENT-UNKNOWN-NORMALIZE] `exercise.equipment` is `unknown`
+      // on the loose validator shape; normalize to a string array
+      // before iterating so the for-of has a real iterable.
+      const rawEquipment = ex.exercise?.equipment
+      const equipment: string[] = Array.isArray(rawEquipment)
+        ? rawEquipment.filter((e): e is string => typeof e === 'string')
+        : []
       
       // Check if any required equipment is not available
       for (const req of equipment) {

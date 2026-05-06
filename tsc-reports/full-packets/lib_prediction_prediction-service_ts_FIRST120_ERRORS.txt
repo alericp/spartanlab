@@ -1,0 +1,40 @@
+lib/prediction/prediction-service.ts(79,19): error TS2551: Property 'primaryGoals' does not exist on type 'OnboardingProfile'. Did you mean 'primaryGoal'?
+lib/prediction/prediction-service.ts(80,16): error TS2551: Property 'primaryGoals' does not exist on type 'OnboardingProfile'. Did you mean 'primaryGoal'?
+lib/prediction/prediction-service.ts(80,37): error TS7006: Parameter 'goal' implicitly has an 'any' type.
+lib/prediction/prediction-service.ts(175,24): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(176,35): error TS2339: Property 'primaryOutcome' does not exist on type 'OnboardingProfile'.
+lib/prediction/prediction-service.ts(177,31): error TS2551: Property 'primaryGoals' does not exist on type 'OnboardingProfile'. Did you mean 'primaryGoal'?
+lib/prediction/prediction-service.ts(178,28): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(179,29): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(180,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | undefined'.
+lib/prediction/prediction-service.ts(180,18): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(181,18): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(181,26): error TS2339: Property 'pushUpMax' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(182,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | undefined'.
+lib/prediction/prediction-service.ts(182,15): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(183,24): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(183,32): error TS2339: Property 'lSitHoldSeconds' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(184,28): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(184,36): error TS2339: Property 'plancheLevel' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(185,31): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(185,39): error TS2339: Property 'frontLeverLevel' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(186,31): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(186,39): error TS2339: Property 'hasMuscleUp' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(187,17): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(187,25): error TS2339: Property 'hasRings' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(188,19): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(188,27): error TS2339: Property 'hasWeights' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(189,21): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(189,29): error TS2339: Property 'hasPullUpBar' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(190,26): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(190,34): error TS2339: Property 'hasShoulderIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(191,23): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(191,31): error TS2339: Property 'hasElbowIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(192,23): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(192,31): error TS2339: Property 'hasWristIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(194,31): error TS2339: Property 'weakPoints' does not exist on type 'WeakPointAnalysisResult'.
+lib/prediction/prediction-service.ts(221,5): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(229,56): error TS2339: Property 'tendonAdaptationLevel' does not exist on type 'OnboardingProfile'.
+lib/prediction/prediction-service.ts(234,22): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(235,26): error TS18047: 'profile' is possibly 'null'.
+lib/prediction/prediction-service.ts(236,17): error TS18047: 'profile' is possibly 'null'.

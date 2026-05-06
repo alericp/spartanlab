@@ -165,7 +165,10 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_weight',
-      secondary: 'add_reps',
+      // [SECONDARY-PROGRESSION-WORKLOAD] secondary union is sets/rest/
+      // accessory; add_sets is the closest "add workload" mapping for
+      // the legacy 'add_reps' secondary.
+      secondary: 'add_sets',
       thresholdToProgress: 'Complete top of rep range at RPE 7-8',
     },
     coachingNotes: [
@@ -249,7 +252,9 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_hold_time',
-      secondary: 'progress_variation',
+      // [SECONDARY-PROGRESSION-VARIATION] 'progress_variation' is a
+      // primary-only literal; map secondary to 'add_accessory'.
+      secondary: 'add_accessory',
       thresholdToProgress: 'Hold 45s+ with solid compression',
     },
     coachingNotes: [
@@ -277,7 +282,8 @@ export const PRESCRIPTION_TEMPLATES: Record<PrescriptionMode, PrescriptionContra
     },
     progression: {
       primary: 'add_hold_time',
-      secondary: 'progress_variation',
+      // [SECONDARY-PROGRESSION-VARIATION] map to 'add_accessory'.
+      secondary: 'add_accessory',
       thresholdToProgress: 'Comfortable at position for 60s',
     },
     coachingNotes: [
@@ -1246,7 +1252,10 @@ export function determineProgressionPhase(
 // =============================================================================
 
 export interface AdvancedSkillPrescription {
-  mode: 'quality_singles' | 'cluster_exposure' | 'max_holds' | 'volume_accumulation'
+  // [ADVANCED-SKILL-PRESCRIPTION-MODE-UNION] `volume_accumulation` was
+  // removed from the canonical mode union; the engine maps that intent
+  // through `cluster_exposure` instead.
+  mode: 'quality_singles' | 'cluster_exposure' | 'max_holds'
   setsRange: [number, number]
   holdSecondsRange: [number, number]
   restSeconds: number
@@ -1326,17 +1335,10 @@ export function getAdvancedSkillPrescription(
       progressionThreshold = 'Hit target time for 3 sets to confirm readiness'
       break
       
-    case 'volume_accumulation':
-      // Build total time under tension
-      setsRange = [5, 8]
-      holdSecondsRange = isStaticHold ? [5, 10] : [2, 4]
-      restSeconds = 90
-      rpe = 7
-      coachingNotes.push('Accumulate total hold time')
-      coachingNotes.push('Maintain consistent quality across all sets')
-      progressionThreshold = 'Total time > 60s across all sets'
-      break
-      
+    // [VOLUME-ACCUMULATION-FOLDED-INTO-CLUSTER] The legacy
+    // `volume_accumulation` branch is no longer reachable via the
+    // canonical mode union; cluster exposure now serves the same
+    // accumulation intent.
     case 'cluster_exposure':
     default:
       // Multiple short exposures

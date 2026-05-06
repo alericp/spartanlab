@@ -37,7 +37,18 @@
 // architecture layer ready to receive content, not the content itself.
 // =============================================================================
 
-import { sql } from './doctrine-db'
+// [DOCTRINE-DB-NO-SQL-EXPORT] doctrine-db.ts doesn't export a `sql`
+// tag; the canonical SQL client is `getSqlClient()` from './db'.
+// Wrap it as a tagged-template proxy so existing call sites keep
+// their `sql\`\`` ergonomics without rewriting every query.
+import { getSqlClient } from './db'
+
+async function sql<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
+  const client = await getSqlClient()
+  if (!client) return []
+  // The neon serverless client is itself a tagged-template function.
+  return (client as unknown as (s: TemplateStringsArray, ...v: unknown[]) => Promise<T[]>)(strings, ...values)
+}
 import type {
   DoctrineDomain,
   DoctrinePriorityType,

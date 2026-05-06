@@ -91,7 +91,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [PHASE 7] Fully surfaced in key decisions
     reason: 'Used in generation and shown as "Secondary Focus" key decision in ProgramTruthSummary.',
     nearestFileOrFunction: 'ProgramTruthSummary.tsx: identitySecondary',
-    nextFixPriority: 'done', // [PHASE 7] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [PHASE 7] Completed
   },
   {
     fieldName: 'selectedSkills',
@@ -133,7 +139,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [PHASE 7] Fully surfaced in key decisions
     reason: 'skill_progression vs strength_endurance vs hybrid affects structure. Now shown as "Training Path" key decision.',
     nearestFileOrFunction: 'ProgramTruthSummary.tsx: trainingPathUsed',
-    nextFixPriority: 'done', // [PHASE 7] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [PHASE 7] Completed
   },
   
   // ==========================================================================
@@ -211,7 +223,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [PHASE 7] Fully surfaced - was already displayed
     reason: 'Affects volume, progression rate, complexity. Shown as "Experience Level" key decision.',
     nearestFileOrFunction: 'ProgramTruthSummary.tsx: experienceLevelUsed',
-    nextFixPriority: 'done', // [PHASE 7] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [PHASE 7] Completed
   },
   {
     fieldName: 'equipment',
@@ -243,7 +261,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [METHOD-TRUTH-CONTRACT] Fully authoritative, durable, and materially generative
     reason: '[PHASE 8] Supersets now materially applied to accessory exercises when selected. Up to 2 superset pairs per session on non-skill work. Explained in ProgramTruthSummary and applied via session assembly step D2.',
     nearestFileOrFunction: 'adaptive-program-builder.ts: STEP D2 superset grouping, authoritative-program-generation.ts: program.trainingMethodPreferences, ai-truth-audit.ts: aggregateActualAppliedMethods()',
-    nextFixPriority: 'done', // [PHASE 8] Superset application now material
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [PHASE 8] Superset application now material
   },
   {
     fieldName: 'sessionStylePreference',
@@ -257,7 +281,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [SESSION-STYLE-MATERIALITY] Fully authoritative, durable, and materially generative
     reason: 'longer_complete vs shorter_focused materially adjusts session construction via applySessionStyleToDurationConfig(). Affects exercise counts and accessory inclusion.',
     nearestFileOrFunction: 'adaptive-program-builder.ts: applySessionStyleToDurationConfig(), authoritative-program-generation.ts: program.sessionStylePreference',
-    nextFixPriority: 'done', // [SESSION-STYLE-MATERIALITY] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [SESSION-STYLE-MATERIALITY] Completed
   },
   
   // ==========================================================================
@@ -275,7 +305,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [FLEXIBILITY-TRUTH-CONTRACT] Fully authoritative, durable, and materially generative
     reason: 'Affects cooldown/mobility content via planFlexibilityInsertions(). Now durably persisted on program and shown in UI.',
     nearestFileOrFunction: 'authoritative-program-generation.ts: program.selectedFlexibility, engine-quality-contract.ts: planFlexibilityInsertions()',
-    nextFixPriority: 'done', // [FLEXIBILITY-TRUTH-CONTRACT] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [FLEXIBILITY-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================
@@ -293,7 +329,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [AI-TRUTH-PERSISTENCE] Upgraded - fully durable and surfaced
     reason: 'CRITICAL: Filters exercises for safety. Now durably persisted and shown in UI.',
     nearestFileOrFunction: 'authoritative-program-generation.ts: program.jointCautions, exercise-database-resolver.ts: hasJointConflict()',
-    nextFixPriority: 'done', // [AI-TRUTH-PERSISTENCE] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [AI-TRUTH-PERSISTENCE] Completed
   },
   
   // ==========================================================================
@@ -311,7 +353,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
     reason: 'Drives weighted load prescription. Now durably persisted in skillStrengthProfile and shown in UI.',
     nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveWeightedLoading()',
-    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   {
     fieldName: 'weightedDip',
@@ -325,7 +373,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
     reason: 'Drives weighted load prescription. Now durably persisted in skillStrengthProfile and shown in UI.',
     nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveWeightedLoading()',
-    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================
@@ -343,7 +397,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [PHASE 9] Current progression now outranks experience level for exercise selection
     reason: '[PHASE 9] Current progression now limits exercise pool via filterByCurrentProgression(). Advanced user at tuck level will NOT get straddle exercises. Experience level only selects WITHIN current tier.',
     nearestFileOrFunction: 'program-exercise-selector.ts: filterByCurrentProgression(), selectByLevel()',
-    nextFixPriority: 'done', // [PHASE 9] Current vs history fix completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [PHASE 9] Current vs history fix completed
   },
   {
     fieldName: 'frontLeverProgression',
@@ -357,7 +417,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     verdict: 'GREEN', // [PHASE 9] Current progression now outranks experience level
     reason: '[PHASE 9] Current progression now limits exercise pool via filterByCurrentProgression(). Experience level only selects WITHIN current tier.',
     nearestFileOrFunction: 'program-exercise-selector.ts: filterByCurrentProgression(), selectByLevel()',
-    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
+    // [MATERIALITY-PRIORITY-CONTRACT] Mapped stale alias 'done' to canonical
+    // 'none'. The authoritative union is 'high' | 'medium' | 'low' | 'none'
+    // (line 57 of this file). The records that previously used 'done' are
+    // each annotated as completed phases (see trailing comment), which is
+    // semantically identical to 'none' (no remaining fix priority). No
+    // downstream consumer reads nextFixPriority anywhere in the codebase.
+    nextFixPriority: 'none', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================

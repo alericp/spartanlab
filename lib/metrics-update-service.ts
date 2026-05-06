@@ -44,6 +44,24 @@ import {
 import { saveCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
 
 // =============================================================================
+// LOCAL BOUNDARY NORMALIZERS
+// =============================================================================
+// [WEIGHTED-BENCHMARK-CANONICAL-SHAPE] athlete-profile's WeightedBenchmark
+// uses `load`/`unit`/`reps?` while canonical-profile-service persistence
+// uses `addedWeight`/`reps`/`unit?`. Translate the former to the latter
+// at the persistence boundary so neither contract has to widen.
+const normalizeWeightedBenchmarkForCanonical = (
+  benchmark: WeightedBenchmark | null | undefined,
+): { addedWeight: number; reps: number; unit?: 'lbs' | 'kg' } | undefined => {
+  if (!benchmark) return undefined
+  return {
+    addedWeight: typeof benchmark.load === 'number' ? benchmark.load : 0,
+    reps: typeof benchmark.reps === 'number' ? benchmark.reps : 1,
+    unit: benchmark.unit === 'kg' ? 'kg' : 'lbs',
+  }
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -196,9 +214,11 @@ export function analyzeMetricChanges(
     }
 
     // Weighted benchmarks
+    // [METRICS-WEIGHTED-BENCHMARK-LOAD] Canonical `WeightedBenchmark`
+    // owns `load`, not the legacy `addedWeight`.
     if (updates.strength.weightedPullUp !== undefined) {
-      const oldWeight = current.weightedPullUp?.addedWeight ?? 0
-      const newWeight = updates.strength.weightedPullUp?.addedWeight ?? 0
+      const oldWeight = current.weightedPullUp?.load ?? 0
+      const newWeight = updates.strength.weightedPullUp?.load ?? 0
       if (oldWeight !== newWeight) {
         changedMetrics.push('Weighted Pull-up')
         if (Math.abs(newWeight - oldWeight) >= 10) significantChanges++
@@ -206,8 +226,8 @@ export function analyzeMetricChanges(
     }
 
     if (updates.strength.weightedDip !== undefined) {
-      const oldWeight = current.weightedDip?.addedWeight ?? 0
-      const newWeight = updates.strength.weightedDip?.addedWeight ?? 0
+      const oldWeight = current.weightedDip?.load ?? 0
+      const newWeight = updates.strength.weightedDip?.load ?? 0
       if (oldWeight !== newWeight) {
         changedMetrics.push('Weighted Dip')
         if (Math.abs(newWeight - oldWeight) >= 10) significantChanges++
@@ -398,8 +418,13 @@ export function saveMetricUpdates(updates: MetricUpdate): OnboardingProfile {
     dipMax: updates.strength?.dipMax ?? undefined,
     pushUpMax: updates.strength?.pushUpMax ?? undefined,
     wallHSPUReps: updates.strength?.wallHSPUReps ?? undefined,
-    weightedPullUp: updates.strength?.weightedPullUp ?? undefined,
-    weightedDip: updates.strength?.weightedDip ?? undefined,
+    // [WEIGHTED-BENCHMARK-CANONICAL-SHAPE] Two structurally distinct
+    // WeightedBenchmark types coexist: athlete-profile's owns `load`,
+    // canonical-profile-service's owns `addedWeight`. Normalize at the
+    // boundary so canonical persistence stays addedWeight/reps-shaped
+    // without altering the athlete-profile contract.
+    weightedPullUp: normalizeWeightedBenchmarkForCanonical(updates.strength?.weightedPullUp),
+    weightedDip: normalizeWeightedBenchmarkForCanonical(updates.strength?.weightedDip),
     
     // Skill benchmarks (with band/history context when available)
     frontLeverProgression: updates.skills?.frontLever?.progression ?? undefined,

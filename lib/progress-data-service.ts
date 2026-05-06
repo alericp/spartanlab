@@ -3,7 +3,10 @@
 
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getStrengthRecords, type StrengthRecord, type ExerciseType } from './strength-service'
-import { getSkillSessions, type SkillSession } from './skill-session-service'
+// [SKILL-SESSION-NO-LONGER-EXPORTED] `skill-session-service` no longer
+// exports a `SkillSession` type; this file does not reference the type
+// directly, so only the value import is needed.
+import { getSkillSessions } from './skill-session-service'
 import { calculateSpartanScore } from './strength-score-engine'
 
 // =============================================================================
@@ -64,10 +67,19 @@ export interface ProgressDashboardData {
 // STRENGTH PROGRESS
 // =============================================================================
 
+// [EXERCISE-TYPE-RECORD-COMPLETION] cover full ExerciseType.
 const STRENGTH_LABELS: Record<ExerciseType, string> = {
   weighted_pull_up: 'Weighted Pull-Up',
   weighted_dip: 'Weighted Dip',
   weighted_muscle_up: 'Weighted Muscle-Up',
+  conventional_deadlift: 'Conventional Deadlift',
+  sumo_deadlift: 'Sumo Deadlift',
+  romanian_deadlift: 'Romanian Deadlift',
+  trap_bar_deadlift: 'Trap Bar Deadlift',
+  back_squat: 'Back Squat',
+  front_squat: 'Front Squat',
+  bench_press: 'Bench Press',
+  overhead_press: 'Overhead Press',
 }
 
 export function getStrengthProgressData(): StrengthProgressData[] {

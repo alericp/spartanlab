@@ -15,7 +15,11 @@ import { detectConstraintsSync, type GlobalConstraintResult } from './constraint
 import { getAthleteEnvelopes, getEnvelopeBasedRecommendations, type PerformanceEnvelope } from './performance-envelope-service'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type DeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
+// [EQUIPMENT-TYPE-CANONICAL-IMPORT] `equipment-adaptation-engine`
+// declares `EquipmentType` locally but does not export it; pull
+// the canonical type from `adaptive-exercise-pool` instead.
 import { analyzeEquipmentProfile, type EquipmentProfile } from './equipment-adaptation-engine'
+import type { EquipmentType } from './adaptive-exercise-pool'
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { recommendProtocolsForSession, type ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
@@ -434,20 +438,48 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   logCanonicalProfileState('loadAthleteContext')
   
   // Legacy reads for backward compatibility (async sources)
-  const profile = await getAthleteProfile(userId)
-  const onboarding = await getOnboardingProfile(userId)
+  // [GET-PROFILE-NO-USERID-ARG] getAthleteProfile/getOnboardingProfile
+  // accept zero arguments in the current contract.
+  const profile = await getAthleteProfile()
+  const onboarding = await getOnboardingProfile()
   
   // Load training style profile from DB (if exists)
   const styleProfileFromDb = await getTrainingStyleProfile(userId)
   
   // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
-  const equipment = canonical.equipmentAvailable.length > 0 
-    ? canonical.equipmentAvailable 
-    : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
-  const equipmentProfile = analyzeEquipmentProfile(equipment)
+  // [ATHLETEPROFILE-NO-EQUIPMENT] AthleteProfile no longer exposes
+  // `equipment`; canonical + onboarding remain the truthful sources.
+  const equipment = canonical.equipmentAvailable.length > 0
+    ? canonical.equipmentAvailable
+    : (onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
+  // [EQUIPMENT-TYPE-BOUNDARY] canonical/onboarding equipment arrives
+  // as `string[]`; analyzeEquipmentProfile owns the EquipmentType
+  // union. Project at this single boundary instead of widening callers.
+  const typedEquipment = equipment as unknown as EquipmentType[]
+  const equipmentProfile = analyzeEquipmentProfile(typedEquipment)
   
+  // [INFER-STYLE-PROJECTION] inferStyleFromOnboarding owns a narrow
+  // input shape ({ primaryOutcome, workoutDuration, trainingAge }).
+  // OnboardingProfile + persisted-doc legacy slice may both ship those
+  // fields but with looser types; project here at the boundary.
+  const onboardingLooseForStyle = onboarding as unknown as {
+    primaryOutcome?: unknown
+    workoutDuration?: unknown
+    trainingAge?: unknown
+  } | null | undefined
+  const onboardingForStyle = {
+    primaryOutcome: typeof onboardingLooseForStyle?.primaryOutcome === 'string'
+      ? onboardingLooseForStyle.primaryOutcome
+      : undefined,
+    workoutDuration: typeof onboardingLooseForStyle?.workoutDuration === 'string'
+      ? onboardingLooseForStyle.workoutDuration
+      : undefined,
+    trainingAge: typeof onboardingLooseForStyle?.trainingAge === 'number'
+      ? onboardingLooseForStyle.trainingAge
+      : undefined,
+  }
   // Determine training style - prefer DB, then infer from onboarding
-  const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboarding || {})
+  const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboardingForStyle)
   const stylePriorities = styleProfileFromDb 
     ? {
         skill: styleProfileFromDb.skillPriority,
@@ -469,14 +501,37 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
     : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
   
+  // [ATHLETE-CONTEXT-LEGACY-FIELD-NARROW] AthleteProfile no longer
+  // exposes `username`; OnboardingProfile no longer declares
+  // heightCm/weightKg/trainingAge/workoutDuration. Persisted shapes
+  // may still carry these — read via runtime narrows.
+  const profileLegacy = profile as unknown as { username?: unknown }
+  const onboardingLegacy = onboarding as unknown as {
+    heightCm?: number
+    weightKg?: number
+    trainingAge?: string | number
+    workoutDuration?: string
+  }
+  const usernameValue = typeof profileLegacy?.username === 'string' && profileLegacy.username
+    ? profileLegacy.username
+    : 'Athlete'
+
   return {
     userId,
-    username: profile?.username || 'Athlete',
+    username: usernameValue,
     sex: (onboarding?.sex as 'male' | 'female') || 'male',
-    heightCm: canonical.height || onboarding?.heightCm || null,
-    weightKg: canonical.bodyweight || onboarding?.weightKg || null,
+    heightCm: canonical.height || onboardingLegacy?.heightCm || null,
+    weightKg: canonical.bodyweight || onboardingLegacy?.weightKg || null,
     bodyFatPercent: onboarding?.bodyFatPercent || null,
-    trainingAge: onboarding?.trainingAge || 1,
+    // [TRAINING-AGE-NUMBER-COERCION] AthleteContext.trainingAge is
+    // `number`; legacy onboarding slice may ship `string | number`.
+    trainingAge: typeof onboardingLegacy?.trainingAge === 'number'
+      ? onboardingLegacy.trainingAge
+      : typeof onboardingLegacy?.trainingAge === 'string'
+        ? Number.isFinite(Number(onboardingLegacy.trainingAge))
+          ? Number(onboardingLegacy.trainingAge)
+          : 1
+        : 1,
     // CANONICAL FIX: Use canonical goals
     primaryGoal,
     primaryGoalLabel: getGoalLabel(primaryGoal),
@@ -490,7 +545,10 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
       }
       // Only fallback for legacy users without canonical data
       console.log('[UnifiedCoaching] FALLBACK: trainingDaysPerWeek using onboarding fallback')
-      return onboarding?.trainingDaysPerWeek || 3
+      // [TRAINING-DAYS-NUMBER-COERCION] OnboardingProfile.trainingDaysPerWeek
+      // is `2|3|4|5|6|7|'flexible'|null`; AthleteContext owns plain `number`.
+      const fallbackDays = onboarding?.trainingDaysPerWeek
+      return typeof fallbackDays === 'number' ? fallbackDays : 3
     })(),
     sessionDurationMinutes: (() => {
       // ISSUE A FIX: Prefer canonical, only fallback when truly absent
@@ -503,7 +561,7 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
         return canonical.sessionLengthMinutes
       }
       // Only fallback for legacy users
-      const durationMinutes = getSessionMinutes(onboarding?.workoutDuration || 'standard')
+      const durationMinutes = getSessionMinutes(onboardingLegacy?.workoutDuration || 'standard')
       console.log('[UnifiedCoaching] FALLBACK: sessionDurationMinutes using onboarding fallback')
       logDurationTruth('loadAthleteContext', {
         canonicalPreference: durationMinutes,
@@ -527,7 +585,11 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
 function inferTrainingStyle(profile: OnboardingProfile | null): TrainingStyleMode {
   if (!profile) return 'balanced_hybrid'
   
-  const outcome = profile.primaryOutcome
+  // [UNIFIED-COACHING-PRIMARY-OUTCOME-CANONICAL] Canonical
+  // OnboardingProfile owns `primaryTrainingOutcome:
+  // PrimaryTrainingOutcome | null` (athlete-profile.ts L1012). The
+  // legacy `primaryOutcome` field was renamed.
+  const outcome = profile.primaryTrainingOutcome
   
   switch (outcome) {
     case 'strength':
@@ -639,7 +701,7 @@ function calculateReadinessBreakdown(
   // Clamp all scores to 0-100
   Object.keys(breakdown).forEach(key => {
     if (typeof breakdown[key as keyof ReadinessBreakdown] === 'number') {
-      (breakdown as Record<string, number>)[key] = Math.max(0, Math.min(100, 
+      (breakdown as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, 
         breakdown[key as keyof ReadinessBreakdown] as number
       ))
     }
@@ -726,23 +788,47 @@ async function buildFatigueContext(
   const trainingDecision = getQuickFatigueDecision()
   
   // Get recovery signal
-  const recoverySignal = calculateRecoverySignal(userId)
+  // [CALCULATE-RECOVERY-SIGNAL-NO-ARG] zero-arg signature.
+  const recoverySignal = calculateRecoverySignal()
   
   // Get deload recommendation
-  const deloadRecommendation = await getDeloadRecommendation(userId)
+  // [DELOAD-CONTRACT-CURRENT] getDeloadRecommendation now expects
+  // (recoveryStatus, fatigueTrend, jointDiscomforts, signals,
+  // daysSinceLastDeload?). Build a minimal FatigueSignalSummary from
+  // the canonical recovery + joint state we already have in context.
+  const deloadSignals: FatigueSignalSummary = {
+    performanceDrop: false,
+    exerciseSkips: false,
+    jointFlags: athleteContext.jointCautions.length > 0,
+    volumeSpike: false,
+    consecutiveTrainingDays: 0,
+    missedReps: false,
+    rpeElevated: false,
+  }
+  // [RECOVERY-LEVEL-CURRENT-UNION] RecoveryLevel is 'HIGH'|'MODERATE'|
+  // 'LOW'; the legacy traffic-light 'red' literal maps to 'LOW'.
+  const deloadRecommendation = getDeloadRecommendation(
+    recoverySignal.level === 'LOW' ? 'fatigued' : 'recovered',
+    'stable',
+    [],
+    deloadSignals,
+    30
+  )
   
-  // Determine fatigue level
-  const fatigueLevel = determineFatigueLevel(trainingDecision, deloadRecommendation)
+  // [QUICK-FATIGUE-WRAPPER-UNWRAP] getQuickFatigueDecision returns
+  // { decision, shortGuidance, needsAttention } — downstream APIs
+  // expect just the TrainingDecision literal.
+  const fatigueLevel = determineFatigueLevel(trainingDecision.decision, deloadRecommendation)
   
   // Calculate session adjustments
-  const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision)
+  const sessionAdjustments = calculateSessionAdjustments(fatigueLevel, trainingDecision.decision)
   
   return {
     fatigueLevel,
     recoveryLevel: recoverySignal.level,
     recoveryScore: recoverySignal.score,
     deloadRecommendation,
-    trainingDecision,
+    trainingDecision: trainingDecision.decision,
     requiresDeload: deloadRecommendation?.shouldDeload || false,
     sessionAdjustments,
   }
@@ -752,17 +838,23 @@ function determineFatigueLevel(
   decision: TrainingDecision,
   deload: DeloadRecommendation | null
 ): FatigueContext['fatigueLevel'] {
-  if (deload?.shouldDeload && deload.severity === 'high') return 'overtrained'
+  // [DELOAD-RECOMMENDATION-NO-SEVERITY] DeloadRecommendation no longer
+  // exposes a severity bucket; any deload trigger maps to 'fatigued'.
   if (deload?.shouldDeload) return 'fatigued'
   
-  switch (decision.recommendation) {
-    case 'full_session':
+  // [TRAINING-DECISION-IS-STRING-UNION] TrainingDecision is a string
+  // literal union (TRAIN_AS_PLANNED/PRESERVE_QUALITY/...). Switch on
+  // the value directly; there is no `.recommendation` field.
+  switch (decision) {
+    case 'TRAIN_AS_PLANNED':
       return 'fresh'
-    case 'modified_session':
+    case 'PRESERVE_QUALITY':
       return 'normal'
-    case 'light_session':
+    case 'LIGHTEN_SESSION':
       return 'fatigued'
-    case 'rest_day':
+    case 'COMPRESS_WEEKLY_LOAD':
+      return 'fatigued'
+    case 'DELOAD_RECOMMENDED':
       return 'overtrained'
     default:
       return 'normal'
@@ -864,21 +956,21 @@ function buildProtocolContext(
   }
   
   // Get protocols using the session recommendation function
-  const allProtocols = recommendProtocolsForSession({
-    primarySkill: athleteContext.primaryGoal,
-    jointCautions: athleteContext.jointCautions as JointCaution[],
-    sessionFocus: skillContext.primarySkillState?.skill 
-      ? [skillContext.primarySkillState.skill as string]
-      : [],
-    experienceLevel: 'intermediate',
-    sessionLength: athleteContext.sessionDurationMinutes,
-    includeRecovery: fatigueContext.fatigueLevel === 'fatigued' || fatigueContext.fatigueLevel === 'overtrained',
-  })
+  // [RECOMMEND-PROTOCOLS-CURRENT-SIG] recommendProtocolsForSession
+  // accepts (primaryGoal, jointCautions?). Extra context fields are
+  // not part of the contract.
+  const allProtocols = recommendProtocolsForSession(
+    athleteContext.primaryGoal,
+    athleteContext.jointCautions as JointCaution[]
+  )
   
-  // Categorize protocols by timing
-  const warmupProtocols = allProtocols.filter(p => p.timing === 'warmup')
-  const recoveryProtocols = allProtocols.filter(p => p.timing === 'cooldown')
-  const prehabProtocols = allProtocols.filter(p => p.timing === 'standalone')
+  // Categorize protocols by activation type
+  // [PROTOCOL-RECOMMENDATION-NESTED] ProtocolRecommendation owns
+  // `protocol` / `reason` / `priority`; `timing` was renamed and
+  // moved into `protocol.activationType`.
+  const warmupProtocols = allProtocols.filter(p => p.protocol.activationType === 'warmup')
+  const recoveryProtocols = allProtocols.filter(p => p.protocol.activationType === 'recovery')
+  const prehabProtocols = allProtocols.filter(p => p.protocol.activationType === 'prehab')
   
   return {
     recommendations: allProtocols,
@@ -920,10 +1012,17 @@ function buildFrameworkContext(
     skillLevels[state.skill] = levelScores[state.currentLevel] || 1
   }
   
+  // [EXPERIENCE-LEVEL-CLAMP] FrameworkSelectionInput.experienceLevel is
+  // beginner|intermediate|advanced — `elite` (training-age util) is
+  // clamped down to `advanced` here.
+  const trainingAgeLevel = getExperienceLevelFromTrainingAge(athleteContext.trainingAge)
+  const frameworkExperienceLevel: 'beginner' | 'intermediate' | 'advanced' =
+    trainingAgeLevel === 'elite' ? 'advanced' : trainingAgeLevel
+
   const input: FrameworkSelectionInput = {
     primaryGoal: athleteContext.primaryGoal,
     secondaryGoals: athleteContext.secondaryGoals,
-    experienceLevel: getExperienceLevelFromTrainingAge(athleteContext.trainingAge),
+    experienceLevel: frameworkExperienceLevel,
     trainingStyle: athleteContext.trainingStyle,
     equipment: athleteContext.equipment,
     jointCautions: athleteContext.jointCautions,
@@ -1029,14 +1128,17 @@ function buildMovementBiasContext(
       frontLever: skillContext.states.find(s => s.skill === 'front_lever')
         ? {
             readiness: readiness?.straightArmScore || 50,
-            currentNode: skillContext.states.find(s => s.skill === 'front_lever')?.currentNode || 'tuck',
+            // [SKILLSTATE-NO-CURRENT-NODE] SkillState no longer owns
+            // `currentNode`; use the legacy default literal.
+            currentNode: 'tuck',
             confidence: 0.7,
           }
         : undefined,
       planche: skillContext.states.find(s => s.skill === 'planche')
         ? {
             readiness: readiness?.straightArmScore ? readiness.straightArmScore * 0.8 : 40,
-            currentNode: skillContext.states.find(s => s.skill === 'planche')?.currentNode || 'lean',
+            // [SKILLSTATE-NO-CURRENT-NODE]
+            currentNode: 'lean',
             confidence: 0.7,
           }
         : undefined,

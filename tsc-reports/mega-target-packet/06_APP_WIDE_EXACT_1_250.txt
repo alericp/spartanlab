@@ -1,0 +1,251 @@
+===== APP-WIDE EXACT ERRORS 1-250 =====
+components/workout/StreamlinedWorkoutSession.tsx(4642,7): error TS2345: Argument of type 'MachineExercise[]' is not assignable to parameter of type '{ id?: string | undefined; name: string; category: string; sets: number; repsOrTime: string; note?: string | undefined; executionTruth?: { recommendedBandColor?: ResistanceBandColor | undefined; } | undefined; }[]'.
+components/workouts/QuickLogModal.tsx(78,31): error TS2554: Expected 1 arguments, but got 0.
+components/workouts/WorkoutLogForm.tsx(90,31): error TS2554: Expected 1 arguments, but got 0.
+hooks/useEntitlement.ts(184,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+hooks/useEntitlement.ts(193,9): error TS2322: Type '"ownerSimulation"' is not assignable to type '"database" | "owner" | "unauthenticated"'.
+hooks/useWorkoutSession.ts(342,11): error TS2322: Type '{ id: string; name: string; category: string; sets: number; targetReps: number | undefined; targetHold: string | undefined; weight: number | undefined; }[]' is not assignable to type '{ id: string; name: string; category: string; sets: number; targetReps?: number | undefined; targetHold?: number | undefined; weight?: number | undefined; }[]'.
+lib/achievements/achievement-engine.ts(169,26): error TS2339: Property 'maxReps' does not exist on type 'StrengthRecord'.
+lib/achievements/achievement-engine.ts(171,32): error TS2339: Property 'maxReps' does not exist on type 'StrengthRecord'.
+lib/achievements/index.ts(3,1): error TS2308: Module './achievement-definitions' has already exported a member named 'getUnlockedAchievements'. Consider explicitly re-exporting to resolve the ambiguity.
+lib/achievements/index.ts(3,1): error TS2308: Module './achievement-definitions' has already exported a member named 'markAchievementSeen'. Consider explicitly re-exporting to resolve the ambiguity.
+lib/active-week-mutation-service.ts(149,18): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(229,55): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(230,58): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(399,24): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(422,24): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(436,22): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(453,22): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/active-week-mutation-service.ts(468,20): error TS2339: Property 'id' does not exist on type 'AdaptiveSession'.
+lib/adaptive-athlete-engine.ts(5,90): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,43): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessDecision' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,67): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessStatus' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(613,7): error TS2322: Type '"insufficient_data"' is not assignable to type 'PlateauStatus'.
+lib/adaptive-program-builder.ts(567,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(729,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(812,8): error TS2300: Duplicate identifier 'TrainingStyleMode'.
+lib/adaptive-program-builder.ts(839,8): error TS2724: '"./program/programming-truth-bundle"' has no exported member named 'ProgrammingTruthBundle'. Did you mean 'buildProgrammingTruthBundle'?
+lib/adaptive-program-builder.ts(994,8): error TS2300: Duplicate identifier 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(5538,30): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"rebuild"' have no overlap.
+lib/adaptive-program-builder.ts(5540,9): error TS2367: This comparison appears to be unintentional because the types 'GenerationMode | undefined' and '"adapt"' have no overlap.
+lib/adaptive-program-builder.ts(5956,7): error TS2322: Type 'SessionLength' is not assignable to type 'number | undefined'.
+lib/adaptive-program-builder.ts(6107,30): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6753,34): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6919,67): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6935,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6936,73): error TS2339: Property 'selectedFlexibility' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6943,88): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(6994,78): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7216,12): error TS2339: Property 'generationIntent' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7252,5): error TS2353: Object literal may only specify known properties, and 'generationIntent' does not exist in type 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(7270,21): error TS2339: Property 'trainingPathType' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(7322,62): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/program-generation/session-composition-intelligence").WeekAdaptationInput' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/program-generation/week-adaptation-decision-contract").WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(7882,24): error TS2367: This comparison appears to be unintentional because the types '"baseline_4_days" | "conservative_first_week_4_days" | "insufficient_data_4_days" | "adapted_to_4_days_after_feedback" | "hidden_modifier_collision_4_days" | "non_4_days_adaptive"' and '"stale_feedback_false_4_days"' have no overlap.
+lib/adaptive-program-builder.ts(8042,39): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(8043,40): error TS2367: This comparison appears to be unintentional because the types '"partially_ready_needs_schedule_metadata" | "structurally_ready_for_next_phases"' and '"state_not_ready_for_future_adaptation"' have no overlap.
+lib/adaptive-program-builder.ts(8069,63): error TS2339: Property 'goalCategories' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8072,5): error TS2322: Type 'number | "flexible" | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(8074,5): error TS2322: Type 'number | "10-20" | "20-30" | "30-45" | "45-60" | "60+"' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(8075,73): error TS2339: Property 'selectedFlexibility' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8076,5): error TS2322: Type 'string | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(8077,5): error TS2322: Type 'string | null' is not assignable to type 'number | null'.
+lib/adaptive-program-builder.ts(8136,66): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8137,29): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8138,32): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8139,26): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8140,31): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8141,30): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8181,24): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8182,66): error TS2339: Property 'currentWorkingProgressions' does not exist on type 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(8201,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(8209,41): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8209,72): error TS7006: Parameter 'p' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(8210,28): error TS2339: Property 'sessionStyle' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8257,30): error TS2339: Property 'sessionStyle' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(8627,23): error TS2554: Expected 2 arguments, but got 1.
+lib/adaptive-program-builder.ts(8632,9): error TS2322: Type '{ blocked: boolean; reason: string; }' is not assignable to type 'boolean'.
+lib/adaptive-program-builder.ts(8730,67): error TS7006: Parameter 'f' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(8891,7): error TS2322: Type 'MaterialSkillIntentEntry[]' is not assignable to type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]'.
+lib/adaptive-program-builder.ts(8895,7): error TS2322: Type 'Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean; }>' is not assignable to type 'Record<string, { progressionId: string; currentLevel: number; }>'.
+lib/adaptive-program-builder.ts(8899,7): error TS2322: Type '{ skill: string; reasonCode: DeferralReasonCode; reasonLabel: string; }[]' is not assignable to type '{ skill: string; reason: string; }[]'.
+lib/adaptive-program-builder.ts(8900,7): error TS2322: Type 'MultiSkillSessionAllocationEntry[]' is not assignable to type '{ skill: string; allocated: boolean; }[]'.
+lib/adaptive-program-builder.ts(9297,7): error TS2345: Argument of type '{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null; }[]' is not assignable to parameter of type 'MaterialSkillIntentEntry[]'.
+lib/adaptive-program-builder.ts(9569,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9572,9): error TS2322: Type 'string | null' is not assignable to type 'string'.
+lib/adaptive-program-builder.ts(9576,43): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(9576,74): error TS7006: Parameter 'p' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(9577,30): error TS2339: Property 'sessionStyle' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(9737,41): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(9738,38): error TS2339: Property 'sessionStyle' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(10331,8): error TS18048: 'flexibleWeekStructure.rootCauseAudit.jointCautionPenalty' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(10333,9): error TS18047: 'flexibleWeekStructure' is possibly 'null'.
+lib/adaptive-program-builder.ts(10412,35): error TS2339: Property 'identifiedLimiters' does not exist on type 'ExpandedAthleteContext'.
+lib/adaptive-program-builder.ts(10501,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10510,29): error TS2352: Conversion of type 'TrainingMethodPreference[]' to type 'TrainingStyleMode[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(10513,26): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"dumbbells"' have no overlap.
+lib/adaptive-program-builder.ts(10513,47): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"weighted_vest"' have no overlap.
+lib/adaptive-program-builder.ts(10513,72): error TS2367: This comparison appears to be unintentional because the types '"pull_bar" | "dip_bars" | "rings" | "parallettes" | "bands" | "floor" | "wall" | "bench"' and '"kettlebell"' have no overlap.
+lib/adaptive-program-builder.ts(10515,20): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10515,52): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10515,85): error TS2365: Operator '<=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(10671,21): error TS2339: Property 'sessionStylePreference' does not exist on type 'ExpandedAthleteContext'.
+lib/adaptive-program-builder.ts(10672,5): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(10677,39): error TS2339: Property 'sessionStylePreference' does not exist on type 'ExpandedAthleteContext'.
+lib/adaptive-program-builder.ts(10706,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(10710,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+lib/adaptive-program-builder.ts(10712,5): error TS2322: Type 'PrimaryGoal | undefined' is not assignable to type 'string | null'.
+lib/adaptive-program-builder.ts(10717,37): error TS2339: Property 'warmupMinutes' does not exist on type 'DurationConfig'.
+lib/adaptive-program-builder.ts(10718,43): error TS2339: Property 'warmupExerciseCount' does not exist on type 'DurationConfig'.
+lib/adaptive-program-builder.ts(10719,39): error TS2339: Property 'cooldownMinutes' does not exist on type 'DurationConfig'.
+lib/adaptive-program-builder.ts(10720,41): error TS2339: Property 'cooldownExercises' does not exist on type 'DurationConfig'.
+lib/adaptive-program-builder.ts(10721,38): error TS2339: Property 'accessorySlots' does not exist on type 'DurationConfig'.
+lib/adaptive-program-builder.ts(10766,7): error TS2345: Argument of type 'PrimaryGoalType | null' is not assignable to parameter of type 'OnboardingGoal | null'.
+lib/adaptive-program-builder.ts(10833,7): error TS2353: Object literal may only specify known properties, and 'preferredRepRange' does not exist in type 'OutcomeTrainingStyle'.
+lib/adaptive-program-builder.ts(11405,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(11415,33): error TS2339: Property 'rangeTrainingMode' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(11416,66): error TS2339: Property 'goalCategory' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(11441,9): error TS2353: Object literal may only specify known properties, and 'internalLabel' does not exist in type 'MethodProfile'.
+lib/adaptive-program-builder.ts(11450,7): error TS2322: Type 'null' is not assignable to type 'MethodProfile | undefined'.
+lib/adaptive-program-builder.ts(11737,102): error TS2339: Property 'primaryOutcome' does not exist on type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(11738,26): error TS2339: Property 'primaryOutcome' does not exist on type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(11744,19): error TS18047: 'normalizedProfile' is possibly 'null'.
+lib/adaptive-program-builder.ts(11744,37): error TS2551: Property 'scheduleMode' does not exist on type 'NormalizedProfile'. Did you mean 'schedule'?
+lib/adaptive-program-builder.ts(11745,26): error TS18047: 'normalizedProfile' is possibly 'null'.
+lib/adaptive-program-builder.ts(11745,44): error TS2339: Property 'sessionDurationMode' does not exist on type 'NormalizedProfile'.
+lib/adaptive-program-builder.ts(11795,5): error TS2322: Type '"planche" | "front_lever" | "back_lever" | "muscle_up" | "iron_cross" | "weighted_strength" | "general" | "hspu" | "l_sit"' is not assignable to type 'SkillType'.
+lib/adaptive-program-builder.ts(11827,9): error TS2322: Type 'string' is not assignable to type 'WeekPhaseTag'.
+lib/adaptive-program-builder.ts(12020,5): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+lib/adaptive-program-builder.ts(12090,7): error TS2345: Argument of type '"day_contract_mismatch"' is not assignable to parameter of type 'GenerationErrorCode'.
+lib/adaptive-program-builder.ts(12282,7): error TS2322: Type '{ volumeBias: BiasLevel; intensityBias: BiasLevel; densityBias: BiasLevel; finisherBias: "normal" | "expanded" | "limited"; straightArmExposureBias: ProtectionLevel; connectiveTissueBias: "normal" | "protected"; restSpacingBias: "normal" | "increased"; } | null' is not assignable to type '{ volumeBias: "reduced" | "normal" | "expanded"; intensityBias: "reduced" | "normal" | "expanded"; densityBias: "reduced" | "normal" | "expanded"; finisherBias: "normal" | "expanded" | "limited"; straightArmExposureBias?: "normal" | ... 1 more ... | undefined; connectiveTissueBias?: "normal" | ... 1 more ... | undef...'.
+lib/adaptive-program-builder.ts(12329,7): error TS2345: Argument of type 'SessionWeekAdaptation' is not assignable to parameter of type 'WeekAdaptationInput'.
+lib/adaptive-program-builder.ts(12406,3): error TS2353: Object literal may only specify known properties, and 'outerDoctrineRecoveryTracker' does not exist in type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(12438,18): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(12597,17): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(12727,38): error TS2367: This comparison appears to be unintentional because the types 'SessionLength' and '"<30"' have no overlap.
+lib/adaptive-program-builder.ts(12770,64): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'WeakPointType[]'.
+lib/adaptive-program-builder.ts(12778,15): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<WeakPointType, string>'.
+lib/adaptive-program-builder.ts(12830,11): error TS2345: Argument of type '{ id: string; name: string; category: string; neuralDemand: number; fatigueCost: number; movementPattern: undefined; isIsometric: boolean; }[]' is not assignable to parameter of type '{ id: string; name: string; category: ExerciseCategory; neuralDemand: number; fatigueCost: number; movementPattern?: string | undefined; isIsometric?: boolean | undefined; }[]'.
+lib/adaptive-program-builder.ts(13397,41): error TS2345: Argument of type '"drop_set"' is not assignable to parameter of type 'TrainingMethodPreference'.
+lib/adaptive-program-builder.ts(13400,41): error TS2345: Argument of type '"top_sets"' is not assignable to parameter of type 'TrainingMethodPreference'.
+lib/adaptive-program-builder.ts(13401,41): error TS2345: Argument of type '"top_set"' is not assignable to parameter of type 'TrainingMethodPreference'.
+lib/adaptive-program-builder.ts(13875,46): error TS2339: Property 'hasCircuitsApplied' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(13876,45): error TS2339: Property 'hasDensityApplied' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(14006,13): error TS2322: Type '"circuit" | "density_block"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14076,15): error TS2322: Type '"circuit" | "density_block"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14392,9): error TS2322: Type '"cluster"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(14591,15): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod' and '"straight"' have no overlap.
+lib/adaptive-program-builder.ts(14636,13): error TS2322: Type '"top_set"' is not assignable to type 'TrainingMethod | undefined'.
+lib/adaptive-program-builder.ts(15107,17): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod' and '"straight"' have no overlap.
+lib/adaptive-program-builder.ts(15109,11): error TS2367: This comparison appears to be unintentional because the types '"rest_pause" | "superset" | "density_block" | "drop_set" | "ladder" | "emom" | "cluster_set"' and '"cluster"' have no overlap.
+lib/adaptive-program-builder.ts(15114,12): error TS2367: This comparison appears to be unintentional because the types '"rest_pause" | "superset" | "density_block" | "drop_set" | "ladder" | "emom" | "cluster_set"' and '"top_set"' have no overlap.
+lib/adaptive-program-builder.ts(15122,12): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod | undefined' and '"cluster"' have no overlap.
+lib/adaptive-program-builder.ts(15243,29): error TS2339: Property 'structureDescription' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15273,7): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+lib/adaptive-program-builder.ts(15310,5): error TS18048: 'session.styleMetadata' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(15354,28): error TS18048: 'session.styleMetadata' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(15357,7): error TS18048: 'session.styleMetadata' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(15373,23): error TS18048: 'session.styleMetadata' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(15389,75): error TS2339: Property 'appliedMethods' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15390,29): error TS2339: Property 'appliedMethods' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15392,43): error TS18048: 'session.styleMetadata' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(16152,48): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(16350,46): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(16496,89): error TS2339: Property 'sessionDurationMode' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(16931,32): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(16957,33): error TS2365: Operator '>' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(16957,84): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+lib/adaptive-program-builder.ts(17229,52): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'ConstraintCategory'.
+lib/adaptive-program-builder.ts(17885,9): error TS2339: Property 'movementEmphasis' does not exist on type 'AdaptiveSession'.
+lib/adaptive-program-builder.ts(18011,90): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(18012,86): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(18065,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(18243,18): error TS2339: Property 'labelShown' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18244,27): error TS2339: Property 'actualDominant' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18245,19): error TS2339: Property 'mismatchReason' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18280,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal'.
+lib/adaptive-program-builder.ts(18388,9): error TS2353: Object literal may only specify known properties, and 'recoveryLevel' does not exist in type '{ exercises: SessionExerciseForIdentity[]; templateFocus?: string | undefined; templateLabel?: string | undefined; primaryGoal: string; secondaryGoal?: string | ... 1 more ... | undefined; recoveryState?: "normal" | ... 3 more ... | undefined; isDeloadSession?: boolean | undefined; dayNumber: number; }'.
+lib/adaptive-program-builder.ts(18413,61): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18414,61): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18415,67): error TS2339: Property 'multiSkillArchitectureActive' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18416,53): error TS2339: Property 'skillBreakdown' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18445,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(18463,76): error TS2339: Property 'multiSkillArchitectureActive' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18464,81): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18464,109): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18465,74): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18465,102): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18466,88): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18467,80): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18495,22): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(18529,22): error TS2365: Operator '>=' cannot be applied to types 'string | number' and 'number'.
+lib/adaptive-program-builder.ts(18542,9): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(18682,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingMethod | undefined' and '"circuit"' have no overlap.
+lib/adaptive-program-builder.ts(18683,12): error TS2551: Property 'notes' does not exist on type 'AdaptiveExercise'. Did you mean 'note'?
+lib/adaptive-program-builder.ts(18684,12): error TS2551: Property 'notes' does not exist on type 'AdaptiveExercise'. Did you mean 'note'?
+lib/adaptive-program-builder.ts(18968,65): error TS2339: Property 'load' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/adaptive-program-builder.ts(18969,37): error TS2339: Property 'load' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/adaptive-program-builder.ts(18983,11): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(18983,53): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(19239,7): error TS2345: Argument of type '{ supersets: boolean; circuits: boolean; densityBlocks: boolean; clusterSets: boolean; dropSets: boolean; ladderSets: boolean; restPause: boolean; }' is not assignable to parameter of type '{ supersets?: string | undefined; circuits?: string | undefined; densityBlocks?: string | undefined; clusterSets?: string | undefined; }'.
+lib/adaptive-program-builder.ts(19248,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(19482,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(19791,103): error TS2339: Property 'sessionDurationMode' does not exist on type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(20100,39): error TS2339: Property 'sessionStylePreference' does not exist on type 'ExpandedAthleteContext'.
+lib/adaptive-program-builder.ts(20157,3): error TS2739: Type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; }' is missing the following properties from type '{ sessionIntents: SessionIntent[]; repetitionJustifications: RepetitionJustification[]; varietyScore: number; fatigueLevel: string; coachingMessage: string; volumeReductionPercent: number; recommendedProtocols: string[]; }': fatigueLevel, coachingMessage, volumeReductionPercent, recommendedProtocols
+lib/adaptive-program-builder.ts(20274,5): error TS2322: Type '{ prioritization: { primaryEmphasis: SkillKey | null; secondaryEmphasis: SkillKey | null; exposureOnly: SkillKey[]; shouldAvoid: SkillKey[]; }; globalLimiters: { ...; }; dataQuality: "excellent" | ... 2 more ... | "partial"; adjustments: TrainingAdjustment[]; } | { ...; }' is not assignable to type '{ prioritization: { primaryEmphasis: string | null; secondaryEmphasis: string | null; exposureOnly: string[]; shouldAvoid: string[]; }; globalLimiters: { primaryPattern: string | null; affectedSkills: string[]; recommendation: string; }; dataQuality: "excellent" | ... 2 more ... | "partial"; adjustments: { ...; }[];...'.
+lib/adaptive-program-builder.ts(20434,13): error TS2367: This comparison appears to be unintentional because the types '"skill" | "back_lever" | "handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"hspu"' have no overlap.
+lib/adaptive-program-builder.ts(20436,13): error TS2367: This comparison appears to be unintentional because the types '"skill" | "handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"l_sit"' have no overlap.
+lib/adaptive-program-builder.ts(20464,11): error TS2345: Argument of type '{ primaryConstraint: string; secondaryConstraint: ConstraintCategory | null; protocolsAdded: string[]; } | null' is not assignable to parameter of type '{ primaryConstraint?: string | undefined; secondaryConstraint?: string | undefined; protocolsAdded?: string[] | undefined; } | null'.
+lib/adaptive-program-builder.ts(20490,46): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20507,11): error TS2345: Argument of type 'AthleteProfile' is not assignable to parameter of type 'OnboardingProfile'.
+lib/adaptive-program-builder.ts(20508,11): error TS2304: Cannot find name 'calibration'.
+lib/adaptive-program-builder.ts(20529,31): error TS2304: Cannot find name 'getCycleBuilderModifications'.
+lib/adaptive-program-builder.ts(20606,11): error TS2353: Object literal may only specify known properties, and 'styleEnabled' does not exist in type 'ConstraintAwareInput'.
+lib/adaptive-program-builder.ts(20653,11): error TS2353: Object literal may only specify known properties, and 'styleEnabled' does not exist in type 'ConstraintAwareInput'.
+lib/adaptive-program-builder.ts(20660,45): error TS2554: Expected 1 arguments, but got 2.
+lib/adaptive-program-builder.ts(20689,34): error TS2339: Property 'weightedPullUp' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(20690,33): error TS2339: Property 'weightedDip' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(20691,32): error TS2339: Property 'lSitHold' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(20696,32): error TS2304: Cannot find name 'canonicalReadiness'.
+lib/adaptive-program-builder.ts(20726,44): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20766,49): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(20773,30): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(20789,52): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(20832,54): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(20832,83): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(20848,26): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(20879,44): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(20928,34): error TS2339: Property 'weakPoints' does not exist on type 'ProgramConstraintContext'.
+lib/adaptive-program-builder.ts(20928,50): error TS7006: Parameter 'wp' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(21066,7): error TS2353: Object literal may only specify known properties, and 'sessionDurationMode' does not exist in type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(21212,16): error TS2339: Property 'weightedPrescription' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21582,36): error TS2339: Property 'sessionLength' does not exist on type 'ComposedPlannerInput'.
+lib/adaptive-program-builder.ts(21660,30): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21660,40): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21667,62): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21667,72): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21669,63): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22308,16): error TS2339: Property 'multiSkillAllocationContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(22370,16): error TS2339: Property 'doctrineRuntimeContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(22930,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+lib/adaptive-program-builder.ts(22931,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+lib/adaptive-program-builder.ts(23107,18): error TS2339: Property 'doctrineInfluenceContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(23121,18): error TS2339: Property 'unifiedDoctrineDecision' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(23138,5): error TS2741: Property 'generatedAt' is missing in type 'SessionArchitectureTruthContract' but required in type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/adaptive-program-builder.ts(23153,61): error TS2345: Argument of type '{ exercises: unknown[]; dayType: unknown; focus: unknown; }[]' is not assignable to parameter of type '{ exercises: { id: string; category?: string | undefined; }[]; dayType?: string | undefined; focus?: string | undefined; }[]'.
+lib/adaptive-program-builder.ts(23157,7): error TS2739: Type '{ avgExercisesPerSession: number; distinctSessionRoles: number; supportSkillTouches: number; nonPrimaryAppearances: number; methodPackagedBlockCount: number; currentWorkingConstrainedCount: number; }' is missing the following properties from type '{ skillClassificationUniqueness: number; progressionDifferentiation: number; structuralPersonalization: number; overallMaterialityScore: number; }': skillClassificationUniqueness, progressionDifferentiation, structuralPersonalization, overallMaterialityScore
+lib/adaptive-program-builder.ts(23541,29): error TS2345: Argument of type 'DeferredSkillEntry' is not assignable to parameter of type 'string'.
+lib/adaptive-program-builder.ts(23552,32): error TS2339: Property 'id' does not exist on type '{ selectionContext?: { doctrineSource?: unknown; } | undefined; }'.
+lib/adaptive-program-builder.ts(24305,33): error TS18048: 'sessionArchitectureTruth.methodPackaging.actualMethodsApplied.length' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(24368,51): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'ExpandedAthleteContext'.
+lib/adaptive-program-builder.ts(24896,11): error TS2339: Property 'fatigueCost' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(24954,10): error TS2304: Cannot find name 'tempProgram'.
+lib/adaptive-program-builder.ts(25400,27): error TS18048: 'advancedFamily.technicalSlotWeight' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(26520,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+lib/adaptive-program-builder.ts(26569,15): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26570,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26571,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26572,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26578,100): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(26579,93): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+lib/adaptive-program-builder.ts(26588,36): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.

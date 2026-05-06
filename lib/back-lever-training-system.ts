@@ -889,16 +889,23 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
     optimalFrequency: 3,
     minimumFrequency: 2,
     maximumFrequency: 4,
-    restDaysBetweenSessions: 1,
-    deloadFrequency: 4,
+    restBetweenSessions: 1,
+    rationale: 'Reduce session frequency only when fatigue warrants it',
   },
 
-  sessionPlacement: {
-    idealPlacement: 'early',
-    maxFatigueBeforeSkill: 20,
-    conflictingExercises: ['front_lever_work', 'heavy_pulling', 'planche_work'],
-    synergyExercises: ['hollow_holds', 'ring_support', 'inverted_work'],
+  sessionPlacementRules: {
+    preferredPosition: 'early',
+    afterWarmup: true,
+    beforeStrengthWork: true,
+    maxDurationMinutes: 20,
+    rationale: 'Back lever should be trained early after warm-up, before heavy pulling or planche work, while shoulders and straight-arm tissues are fresh.',
   },
+
+  safetyWarnings: [
+    'Do not force german hang or skin-the-cat depth if biceps, elbow, or shoulder-extension discomfort appears.',
+    'Reduce or skip back lever work when straight-arm pulling, planche, or heavy pulling has already created tendon tension.',
+    'Prioritize banded back lever holds, scapular preparation, and low-risk shoulder-extension preparation over repeated max-depth skin-the-cat exposure.',
+  ],
 }
 
 // =============================================================================
@@ -1193,16 +1200,8 @@ export const BACK_LEVER_SESSION_TEMPLATE = {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  BACK_LEVER_EXERCISE_LIBRARY,
-  BACK_LEVER_READINESS_GATES,
-  BACK_LEVER_WEAK_POINTS,
-  BACK_LEVER_PROGRESSION_SYSTEM,
-  BACK_LEVER_SKILL_RELATIONSHIPS,
-  BACK_LEVER_SKILL_CYCLE,
-  BACK_LEVER_GUIDE_STRUCTURE,
-  BACK_LEVER_SEO_PAGES,
-  BACK_LEVER_MARKETING_CLAIMS,
-  BACK_LEVER_SESSION_TEMPLATE,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All ten BACK_LEVER_* constants are
+// exported inline at their declarations. The previous bottom export block
+// duplicated every name (TS2300/TS2484). Inline `export const` remains the
+// single canonical export style; public API is unchanged.

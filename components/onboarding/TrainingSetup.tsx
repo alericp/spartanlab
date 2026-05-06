@@ -8,7 +8,12 @@ import { Target, Calendar, Clock, Wrench, ArrowRight, ArrowLeft, Check, Dumbbell
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { saveAthleteProfile } from '@/lib/repositories/profile-repository'
 import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
-import type { Equipment, SessionLengthMinutes } from '@/types/domain'
+import type {
+  Equipment,
+  SessionLengthMinutes,
+  GoalCategory as DomainGoalCategory,
+  SkillGoal as DomainSkillGoal,
+} from '@/types/domain'
 import { RANGE_MODE_COPY, type RangeTrainingMode } from '@/lib/range-training-system'
 import {
   Dialog,
@@ -28,6 +33,52 @@ type SkillGoal = 'front_lever' | 'back_lever' | 'planche' | 'muscle_up' | 'hands
 type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
 type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
 type TrainingDays = 2 | 3 | 4 | 5 | 6
+
+// =============================================================================
+// [BUILD GREEN GATE / TRAININGSETUP PROFILE-SAVE BOUNDARY MAPPERS]
+//
+// The local UI uses friendly category labels (e.g. 'skills') and a local
+// SkillGoal union that includes legacy 'muscle_up_bar'. The canonical
+// AthleteProfile contract in types/domain.ts uses different canonical
+// values:
+//   - GoalCategory: 'skill_mastery' | 'strength' | 'muscle_physique'
+//                 | 'flexibility' | 'mobility' | 'endurance'
+//   - SkillGoal:   'front_lever' | 'back_lever' | 'planche' | 'muscle_up'
+//                 | 'handstand_pushup' | 'handstand' | 'l_sit'
+//                 | 'v_sit' | 'i_sit'
+//
+// Local UI may keep using 'skills' / 'muscle_up_bar' for branching and
+// display. Only the saved domain payload is canonicalized. saveCanonicalProfile
+// is permissive (string/string[]) so local values flow through unchanged
+// for backward-compatible prefill — see fromStoredGoalCategory below.
+// =============================================================================
+function toDomainGoalCategory(
+  value: GoalCategory | null | undefined,
+): DomainGoalCategory | null {
+  if (value === 'skills') return 'skill_mastery'
+  if (value === 'strength') return 'strength'
+  if (value === 'flexibility') return 'flexibility'
+  return null
+}
+
+function toDomainSkillGoal(value: SkillGoal): DomainSkillGoal | null {
+  switch (value) {
+    case 'front_lever':
+    case 'back_lever':
+    case 'planche':
+    case 'muscle_up':
+    case 'handstand':
+    case 'l_sit':
+      return value
+    case 'muscle_up_bar':
+      // Canonical compatibility alias: legacy 'muscle_up_bar' maps to
+      // domain 'muscle_up' (same skill, bar variant). Preserves user
+      // intent in the strict AthleteProfile store.
+      return 'muscle_up'
+    default:
+      return null
+  }
+}
 
 interface FormData {
   // Step 1: Goal category
@@ -161,9 +212,17 @@ export function TrainingSetup() {
     if (profile.onboardingComplete || profile.primaryGoal || profile.selectedSkills?.length > 0) {
       console.log('[TrainingSetup] Prefilling from canonical profile')
       
-      // Determine goal category from selected goals
+      // Determine goal category from selected goals.
+      // [BUILD GREEN GATE] Accept BOTH legacy 'skills' and canonical
+      // 'skill_mastery' values from stored profile so users with profiles
+      // saved under either representation prefill into the local UI's
+      // 'skills' branch correctly.
       let goalCategory: GoalCategory | null = null
-      if (profile.selectedSkills?.length > 0 || profile.goalCategory === 'skills') {
+      if (
+        profile.selectedSkills?.length > 0 ||
+        profile.goalCategory === 'skills' ||
+        profile.goalCategory === 'skill_mastery'
+      ) {
         goalCategory = 'skills'
       } else if (profile.selectedFlexibility?.length > 0 || profile.goalCategory === 'flexibility') {
         goalCategory = 'flexibility'
@@ -362,18 +421,34 @@ export function TrainingSetup() {
         ? 45
         : formData.sessionLengthMinutes!
 
+      // [BUILD GREEN GATE] Canonicalize local UI values to the strict
+      // domain AthleteProfile contract at the save boundary:
+      //   - goalCategory:  'skills' -> 'skill_mastery'
+      //   - selectedSkills: legacy 'muscle_up_bar' -> domain 'muscle_up'
+      // null stays null (no fake default goal). saveCanonicalProfile below
+      // is permissive (string/string[]) and preserves the local form values
+      // for the canonical store + backward-compatible prefill.
+      const domainGoalCategory = toDomainGoalCategory(formData.goalCategory)
+      const domainSelectedSkills = formData.selectedSkills
+        .map(toDomainSkillGoal)
+        .filter((value): value is DomainSkillGoal => value !== null)
+
       // TASK 2: Save ALL canonical profile fields including secondaryGoal
-      // This ensures downstream generation has complete athlete truth
+      // This ensures downstream generation has complete athlete truth.
+      // NOTE: sessionDurationMode is intentionally NOT included here — the
+      // domain AthleteProfile contract in types/domain.ts does not define
+      // that field. Adaptive duration mode is persisted via the canonical
+      // profile store call below, which is the authoritative source for
+      // sessionDurationMode in the runtime.
       saveAthleteProfile({
-        goalCategory: formData.goalCategory,
-        selectedSkills: formData.selectedSkills,
+        goalCategory: domainGoalCategory,
+        selectedSkills: domainSelectedSkills,
         selectedFlexibility: formData.selectedFlexibility,
         selectedStrength: formData.selectedStrength,
         primaryGoal,
         secondaryGoal, // TASK 3: Now persisted canonically
         trainingDaysPerWeek: formData.trainingDaysPerWeek!,
-        // TASK B FIX: Save sessionDurationMode and resolved session length
-        sessionDurationMode: formData.sessionDurationMode,
+        // TASK B FIX: Save resolved session length (domain-compatible)
         sessionLengthMinutes: resolvedSessionLength,
         equipmentAvailable: formData.equipmentAvailable,
         rangeIntent,

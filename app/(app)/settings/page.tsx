@@ -304,6 +304,61 @@ function OwnerInlineSimulationControl() {
   )
 }
 
+// [PRE-AB6 BUILD GREEN GATE / STEP-5A-CHI] Diagnostic-only equipment
+//   membership helper. The legacy `Equipment` union exported from
+//   `lib/data-service.ts` is narrow (5 values: pullup_bar / dip_bars /
+//   parallettes / rings / resistance_bands) — it does NOT include
+//   `'weights'`, `'bench_box'`, or `'minimal'`. The Settings page
+//   imports `AthleteProfile` from `data-service`, so its
+//   `equipmentAvailable` is typed as the narrow `Equipment[]`, which
+//   blocks direct `.includes('weights' | 'bench_box')` calls at the
+//   type level. The full canonical union in `types/domain.ts` does
+//   include those values, and the persisted profile / API / save+load
+//   path already round-trips them correctly via the local
+//   `equipment: EquipmentType[]` state. This helper widens the input
+//   to `readonly string[]` via direct assignment (no cast, no
+//   suppression, no `Equipment` widening) for diagnostic membership
+//   checks only — it does NOT modify the data-service `Equipment`
+//   union, the `AthleteProfile` shape, the persisted profile, save /
+//   load behavior, or any operational logic.
+const equipmentListIncludes = (
+  list: readonly string[] | null | undefined,
+  value: string,
+): boolean => (list != null && list.includes(value))
+
+// [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] Settings-local exhaustive
+//   `EquipmentType` allowlist + type guard. Mirrors the canonical
+//   union exported from `@/lib/athlete-profile` (imported as
+//   `EquipmentType` at L29) and is enforced by
+//   `satisfies readonly EquipmentType[]` — if the canonical union
+//   ever changes, TypeScript fails compile here, so this list cannot
+//   silently drift. Used by the equipment normalization pipeline
+//   below to safely narrow legacy/raw `string[]` profile equipment
+//   into strict `EquipmentType[]` before reaching `setEquipment(...)`
+//   (state typed as `EquipmentType[]` at L351). No casts, no
+//   suppressions, no widening — `EquipmentType` is unchanged, the
+//   persisted profile shape is unchanged, and unknown legacy values
+//   are filtered out safely.
+const EQUIPMENT_TYPE_VALUES = [
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+  'weights',
+  'bench_box',
+  'minimal',
+  'barbell',
+  'weight_plates',
+] as const satisfies readonly EquipmentType[]
+
+// `Set<EquipmentType>` is assignable to `ReadonlySet<string>` via
+//   ReadonlySet covariance — no cast needed.
+const EQUIPMENT_TYPE_SET: ReadonlySet<string> = new Set(EQUIPMENT_TYPE_VALUES)
+
+const isEquipmentType = (value: unknown): value is EquipmentType =>
+  typeof value === 'string' && EQUIPMENT_TYPE_SET.has(value)
+
 export default function SettingsPage() {
   // [PHASE 14D] Use canonical owner source from OwnerBootstrapProvider
   const { isOwner } = useOwnerBootstrap()
@@ -396,7 +451,8 @@ export default function SettingsPage() {
     console.log('[adjustment-sync] sessionLengthMinutes:', data.sessionLengthMinutes)
     console.log('[adjustment-sync] primaryGoal:', data.primaryGoal)
     console.log('[adjustment-sync] equipmentAvailable:', data.equipmentAvailable)
-    console.log('[adjustment-sync] hasWeights:', data.equipmentAvailable?.includes('weights'))
+    // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+    console.log('[adjustment-sync] hasWeights:', equipmentListIncludes(data.equipmentAvailable, 'weights'))
     console.log('[adjustment-sync] === END CANONICAL TRUTH ===')
     
     setProfile(data as AthleteProfile)
@@ -487,16 +543,30 @@ export default function SettingsPage() {
     setPrimaryGoal(data.primaryGoal || 'none')
     
     // [PHASE 16A TASK 2] Equipment normalization - bench → bench_box
+    // [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] `setEquipment` expects
+    //   `EquipmentType[]` (state typed at L351). The previous pipeline
+    //   produced `string[]` because the legacy-alias `.map(...)` widens
+    //   the result. Route through `isEquipmentType` (the exhaustive
+    //   `EquipmentType` guard at module scope) to narrow back to
+    //   `EquipmentType[]` and drop unknown legacy values safely.
+    //   Deduplication preserved via `Array.from(new Set(...))`. The
+    //   `'bench' → 'bench_box'` legacy alias is preserved exactly.
+    //   No casts, no suppressions, no `EquipmentType` widening.
     const rawEquipment = data.equipmentAvailable || []
-    const normalizedEquipment = rawEquipment.map((e: string) => 
-      e === 'bench' ? 'bench_box' : e
-    ).filter((e: string, i: number, arr: string[]) => arr.indexOf(e) === i)
+    const normalizedEquipment: EquipmentType[] = Array.from(
+      new Set(
+        rawEquipment
+          .map((e: string) => (e === 'bench' ? 'bench_box' : e))
+          .filter(isEquipmentType)
+      )
+    )
     setEquipment(normalizedEquipment)
     
     console.log('[phase16a-settings-benchbox-normalization-audit]', {
       rawEquipment,
       normalizedEquipment,
-      hadBenchAlias: rawEquipment.includes('bench'),
+      // [STEP-5A-CHI] routed via diagnostic helper — `rawEquipment` is typed as the narrow data-service `Equipment[]`, which does not include the legacy `'bench'` alias
+      hadBenchAlias: equipmentListIncludes(rawEquipment, 'bench'),
       nowHasBenchBox: normalizedEquipment.includes('bench_box'),
     })
     
@@ -524,7 +594,8 @@ export default function SettingsPage() {
     console.log('[phase15a-field-truth-map-equipment-bench-audit]', {
       stage: 'settings_load',
       equipmentAvailable: data.equipmentAvailable,
-      hasBenchBox: data.equipmentAvailable?.includes('bench_box'),
+      // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+      hasBenchBox: equipmentListIncludes(data.equipmentAvailable, 'bench_box'),
       sourceField: 'API response or localStorage',
     })
     
@@ -546,8 +617,9 @@ export default function SettingsPage() {
       equipmentLoadedIntoState: loadedEquipment,
       equipmentShownInUIList: visibleEquipmentKeys,
       hiddenEquipmentNotEditable: hiddenEquipment,
-      hasWeights: loadedEquipment.includes('weights'),
-      hasBenchBox: loadedEquipment.includes('bench_box'),
+      // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+      hasWeights: equipmentListIncludes(loadedEquipment, 'weights'),
+      hasBenchBox: equipmentListIncludes(loadedEquipment, 'bench_box'),
       verdict: hiddenEquipment.length === 0 ? 'all_equipment_visible' : 'some_equipment_hidden',
     })
     
@@ -1065,7 +1137,8 @@ export default function SettingsPage() {
             // [PHASE 14A TASK 3] Settings equipment roundtrip verdict
             const sentEquipment = equipment
             const returnedEquipment = result.profile.equipmentAvailable || []
-            const droppedOnSave = sentEquipment.filter((e: string) => !returnedEquipment.includes(e))
+            // [STEP-5A-CHI] routed via diagnostic helper — `returnedEquipment` is typed as the narrow data-service `Equipment[]`, so a direct `.includes(e: string)` call would fail TS narrowing
+            const droppedOnSave = sentEquipment.filter((e: string) => !equipmentListIncludes(returnedEquipment, e))
             
             console.log('[phase14a-settings-equipment-roundtrip-verdict]', {
               equipmentSentInPUT: sentEquipment,
@@ -1131,13 +1204,15 @@ export default function SettingsPage() {
               verdict: sessionDurationMode === result.profile.sessionDurationMode ? 'no_mask' : 'MASK_DETECTED',
             })
             
+            // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union on the right-hand side
+            const benchBoxReturnedRoundtrip = equipmentListIncludes(result.profile.equipmentAvailable, 'bench_box')
             console.log('[phase15a-no-default-mask-equipment-verdict]', {
               equipmentAtSave: equipment,
               equipmentReturned: result.profile.equipmentAvailable,
               benchBoxAtSave: equipment.includes('bench_box'),
-              benchBoxReturned: result.profile.equipmentAvailable?.includes('bench_box'),
-              masked: equipment.includes('bench_box') !== (result.profile.equipmentAvailable?.includes('bench_box') || false),
-              verdict: equipment.includes('bench_box') === (result.profile.equipmentAvailable?.includes('bench_box') || false) ? 'no_mask' : 'BENCH_BOX_MASK_DETECTED',
+              benchBoxReturned: benchBoxReturnedRoundtrip,
+              masked: equipment.includes('bench_box') !== benchBoxReturnedRoundtrip,
+              verdict: equipment.includes('bench_box') === benchBoxReturnedRoundtrip ? 'no_mask' : 'BENCH_BOX_MASK_DETECTED',
             })
             
             // Note: selectedSkills are not directly edited on settings page - they come from onboarding
@@ -1162,16 +1237,19 @@ export default function SettingsPage() {
               uiWillReflect: result.profile.sessionDurationMode === 'adaptive' ? 'Adaptive toggle active' : `${result.profile.sessionLengthMinutes} min`,
             })
             
+            // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+            const benchBoxSavedDiag = equipmentListIncludes(result.profile.equipmentAvailable, 'bench_box')
             console.log('[phase15a-settings-read-canonical-bench-audit]', {
               savedEquipment: result.profile.equipmentAvailable,
-              benchBoxSaved: result.profile.equipmentAvailable?.includes('bench_box'),
-              uiWillReflect: result.profile.equipmentAvailable?.includes('bench_box') ? 'Bench/Box checked' : 'Bench/Box unchecked',
+              benchBoxSaved: benchBoxSavedDiag,
+              uiWillReflect: benchBoxSavedDiag ? 'Bench/Box checked' : 'Bench/Box unchecked',
             })
             
             console.log('[phase15a-settings-visual-roundtrip-final-verdict]', {
               scheduleRoundTrip: scheduleMode === result.profile.scheduleMode ? 'PASS' : 'FAIL',
               durationRoundTrip: sessionDurationMode === result.profile.sessionDurationMode ? 'PASS' : 'FAIL',
-              benchBoxRoundTrip: equipment.includes('bench_box') === (result.profile.equipmentAvailable?.includes('bench_box') || false) ? 'PASS' : 'FAIL',
+              // [STEP-5A-CHI] reuses helper-derived value — no direct narrow-union .includes call
+              benchBoxRoundTrip: equipment.includes('bench_box') === benchBoxSavedDiag ? 'PASS' : 'FAIL',
               overallVerdict: 'settings_visual_roundtrip_audited',
             })
             
@@ -1230,8 +1308,24 @@ export default function SettingsPage() {
             ))
             const hasDerivedRecovery = !!result.profile.recoveryQuality
             
+            // [PRE-AB6 BUILD GREEN GATE / SETTINGS RECOVERY DIAGNOSTIC]
+            //   The previous `recoveryQualitySent: recoveryQuality` reference
+            //   pointed at an undeclared local — there is no in-scope
+            //   `recoveryQuality` variable in this Settings save handler, and
+            //   the Settings page does not send a `recoveryQuality` field in
+            //   its save payload (recovery quality is derived server-side
+            //   from `recoveryRaw` and surfaced via `result.profile.recoveryQuality`).
+            //   Degrade the diagnostic honestly: emit `null` for the "sent"
+            //   slot and a `recoveryQualitySentAvailable: false` flag so any
+            //   downstream log consumer can distinguish "not sent" from
+            //   "sent but null". The `Stored`, `Raw`, `hasRawRecovery`,
+            //   `hasDerivedRecovery`, and `verdict` slots remain unchanged
+            //   and continue to reflect real server roundtrip truth. No
+            //   recovery state invented, no save payload changed, no schema
+            //   touched.
             console.log('[phase14a-recovery-roundtrip-audit]', {
-              recoveryQualitySent: recoveryQuality,
+              recoveryQualitySent: null,
+              recoveryQualitySentAvailable: false,
               recoveryQualityStored: result.profile.recoveryQuality,
               recoveryRawStored: result.profile.recoveryRaw,
               hasRawRecovery: hasRawRecovery,
@@ -1601,27 +1695,36 @@ export default function SettingsPage() {
                 // [PHASE 30C] SETTINGS UI SELECTION FINAL (days change)
                 // THE DEFINITIVE LOG proving UI state change
                 // ==========================================================================
+                // [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] These two
+                //   diagnostic verdicts run inside the JSX branch
+                //   `{scheduleMode === 'static' && ...}` at L1688, so
+                //   `scheduleMode` is narrowed to the literal `'static'`
+                //   here. Comparisons against `'flexible'` are
+                //   structurally impossible and TypeScript correctly
+                //   rejects them. Collapsed the verdicts to static-only
+                //   cases keyed off `nextTrainingDaysPerWeek`. The logged
+                //   `next_scheduleMode` is now pinned to the literal
+                //   `'static'` to make the static-branch invariant
+                //   explicit. No casts, no suppressions, no widening,
+                //   no behavior change — `setTrainingDays(v)` below is
+                //   untouched.
                 console.log('[phase30c-settings-ui-selection-final]', {
-                  next_scheduleMode: scheduleMode,
+                  next_scheduleMode: 'static',
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
                   next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
                   verdict:
-                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                    nextTrainingDaysPerWeek === 6
                       ? 'SETTINGS_UI_STATIC_6'
-                      : scheduleMode === 'flexible'
-                      ? 'SETTINGS_UI_FLEXIBLE'
                       : `SETTINGS_UI_STATIC_${nextTrainingDaysPerWeek}`,
                 })
                 // [PHASE 30B] SETTINGS UI DAYS SELECTION AUTHORITATIVE
                 console.log('[phase30b-settings-ui-selection-authoritative]', {
-                  next_scheduleMode: scheduleMode,
+                  next_scheduleMode: 'static',
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
                   next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
                   verdict:
-                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                    nextTrainingDaysPerWeek === 6
                       ? 'SETTINGS_UI_NOW_STATIC_6'
-                      : scheduleMode === 'flexible'
-                      ? 'SETTINGS_UI_NOW_FLEXIBLE'
                       : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
                 })
                 setTrainingDays(v)

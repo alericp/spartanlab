@@ -307,13 +307,25 @@ export function normalizeExplanationInput(
     },
     program: {
       id: program.id,
-      scheduleMode: program.scheduleMode,
+      // [COACHING-EXPLAIN-SCHEDULE-MODE-DEFAULT] The canonical
+      // `scheduleMode` may be undefined on legacy programs; the
+      // contract requires `'static' | 'flexible'`. Default to 'static'
+      // (the canonical baseline path) when undefined.
+      scheduleMode: program.scheduleMode ?? 'static',
       trainingDaysPerWeek: (program as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek || sessions.length,
       sessionDurationTarget: (program as unknown as { sessionDurationTarget?: number }).sessionDurationTarget || 60,
       trainingPath: (program as unknown as { trainingPath?: string }).trainingPath || null,
       isFirstWeek: weekAdaptation?.firstWeekGovernor?.active ?? false,
       adaptationPhase: weekAdaptation?.phase || 'normal_progression',
-      doctrineConstraints: weekAdaptation?.doctrineConstraints || [],
+      // [WEEK-ADAPTATION-DECISION-EMBED-PARTIAL] AdaptiveProgram's
+      // `weekAdaptationDecision?:` embed only declares phase /
+      // loadStrategy / firstWeekGovernor / complexityContext /
+      // adaptationSummary / decidedAt — `doctrineConstraints` lives on
+      // the upstream WeekAdaptationDecision contract but is not threaded
+      // into the embed. Read defensively via a typed unknown bridge.
+      doctrineConstraints:
+        (weekAdaptation as unknown as { doctrineConstraints?: string[] } | undefined)
+          ?.doctrineConstraints || [],
     },
     week: {
       totalSessions: sessions.length,
@@ -321,10 +333,15 @@ export function normalizeExplanationInput(
       secondaryFocusSessions,
       mixedSessions,
       isProtective: weekAdaptation?.phase === 'initial_acclimation' || weekAdaptation?.phase === 'recovery_constrained',
+      // [COACHING-EXPLAIN-IMPOSSIBLE-INCREASED-DROPPED] The canonical
+      // load-strategy bias union is `'reduced' | 'normal' | 'elevated'`
+      // — the legacy `'increased'` literal was renamed to `'elevated'`
+      // upstream. Replace the stale compare with the canonical literal
+      // and project to the explanation contract's accepted output union.
       loadBias: weekAdaptation?.loadStrategy?.intensityBias === 'reduced' ? 'reduced' : 
-                weekAdaptation?.loadStrategy?.intensityBias === 'increased' ? 'increased' : 'normal',
+                weekAdaptation?.loadStrategy?.intensityBias === 'elevated' ? 'increased' : 'normal',
       volumeBias: weekAdaptation?.loadStrategy?.volumeBias === 'reduced' ? 'reduced' : 
-                  weekAdaptation?.loadStrategy?.volumeBias === 'increased' ? 'increased' : 'normal',
+                  weekAdaptation?.loadStrategy?.volumeBias === 'elevated' ? 'increased' : 'normal',
     },
     sessions: normalizedSessions,
     truthSource: 'program_object',
@@ -380,6 +397,13 @@ function normalizeExerciseInput(exercise: AdaptiveExercise): NormalizedExerciseI
     movementFamily = 'skill'
   }
   
+  // [COACHING-META-LEGACY-NARROW] Canonical coachingMeta does not own
+  // `roleInSession`; legacy persisted coaching meta still carries it.
+  // Read through a legacy intersection so the canonical type stays
+  // narrow.
+  const legacyCoaching =
+    coaching as (typeof coaching & { roleInSession?: string }) | undefined
+
   return {
     id: exercise.id,
     name: exercise.name,
@@ -388,11 +412,16 @@ function normalizeExerciseInput(exercise: AdaptiveExercise): NormalizedExerciseI
     repsOrTime: exercise.repsOrTime || '8-12',
     targetRPE: exercise.targetRPE ?? null,
     restSeconds: exercise.restSeconds ?? null,
-    roleInSession: coaching?.roleInSession || 'support',
+    // [COACHING-EXPLAIN-EXERCISE-FIELDS-RUNTIME-NARROW] `roleInSession`,
+    // `isPrimary`, and `isProtected` are not on the canonical
+    // AdaptiveExercise type but are still present on legacy persisted
+    // shapes; read through a runtime-shape narrow with a coaching-meta
+    // fallback for `roleInSession`.
+    roleInSession: legacyCoaching?.roleInSession || (exercise as { roleInSession?: string }).roleInSession || 'support',
     expressionMode: coaching?.expressionMode || 'support',
     progressionIntent: coaching?.progressionIntent || 'maintain',
-    isPrimary: exercise.isPrimary ?? false,
-    isProtected: exercise.isProtected ?? false,
+    isPrimary: (exercise as { isPrimary?: boolean }).isPrimary ?? false,
+    isProtected: (exercise as { isProtected?: boolean }).isProtected ?? false,
     skillSupportTargets: coaching?.skillSupportTargets || [],
     selectionReason: exercise.selectionReason || '',
     movementFamily,
@@ -898,11 +927,31 @@ function buildExerciseRoleExplanation(
     emphasisKind = 'accessory'
   }
   
+  // [EMPHASIS-KIND-DISPLAY-CONTRACT-MAP] Local `emphasisKind` uses
+  // accessory/support/primary_skill/strength_output, while the display
+  // contract owns the narrower primary/secondary/support/protection/
+  // fallback_minimal union. Map at the boundary so neither contract
+  // has to widen.
+  const displayEmphasisKind:
+    | 'primary'
+    | 'secondary'
+    | 'support'
+    | 'protection'
+    | 'fallback_minimal'
+    | undefined =
+      emphasisKind === 'primary_skill' || emphasisKind === 'strength_output'
+        ? 'primary'
+        : emphasisKind === 'accessory'
+          ? 'secondary'
+          : emphasisKind === 'support'
+            ? 'support'
+            : undefined
+
   // Call the sophisticated reasoning engine
   const purposeLine = buildPurposeLineFromDisplayContract(
     exerciseForPurposeLine,
     sessionContextForPurposeLine,
-    emphasisKind
+    displayEmphasisKind
   )
   
   // Return the result, with a fallback if the engine returns null

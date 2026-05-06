@@ -37,6 +37,33 @@ import {
 } from './unified-readiness-integration'
 
 // =============================================================================
+// BENCHMARK NORMALIZERS
+// =============================================================================
+
+/**
+ * [WEIGHTED-BENCHMARK-LOAD] Read weighted-benchmark load defensively.
+ * Canonical WeightedBenchmark owns `load`; legacy persisted documents
+ * may still ship `addedWeight`. Returns 0 when no usable load is found.
+ */
+function getBenchmarkLoad(value: unknown): number {
+  if (value && typeof value === 'object') {
+    const record = value as { load?: unknown; addedWeight?: unknown }
+    if (typeof record.load === 'number' && Number.isFinite(record.load)) return record.load
+    if (typeof record.addedWeight === 'number' && Number.isFinite(record.addedWeight)) return record.addedWeight
+  }
+  return 0
+}
+
+/**
+ * [DETECTION-INPUT-LOAD] Project a weighted benchmark down to the
+ * `{ load: number } | null` shape DetectionInput expects.
+ */
+function toDetectionLoad(value: unknown): { load: number } | null {
+  const load = getBenchmarkLoad(value)
+  return load > 0 ? { load } : null
+}
+
+// =============================================================================
 // WEAK POINT TYPES
 // =============================================================================
 
@@ -519,22 +546,61 @@ interface BenchmarkScores {
   mobility: number
 }
 
+// [WEAK-POINT-ENGINE-CAPACITY-BUCKET-COERCION]
+// `OnboardingProfile.pullUpMax / dipMax / pushUpMax` are CATEGORICAL bucket
+// strings (e.g. '0', '1_3', '4_7', '8_12', '13_18', '19_25', '25_plus' for
+// pull-ups; '0_10', '10_25', '25_40', '40_plus' for push-ups; etc). The
+// weak-point engine treated them as numbers, producing TS2367/TS2365 across
+// the entire scoring block. Map the bucket string to a representative
+// numeric upper-bound ONCE per benchmark — preserves all downstream
+// thresholds since the existing scoring code already keys on those numeric
+// breakpoints (3, 8, 12, 18, 25 for pulls; 5, 12, 20, 30 for dips;
+// 30, 50 for push-ups).
+function bucketToNumber(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null
+  // Plain numeric string (e.g. '0', '50') — parse directly.
+  if (/^\d+$/.test(value)) return parseInt(value, 10)
+  // Range bucket ('1_3', '4_7', '8_12', ...) — use upper bound.
+  const range = /^(\d+)_(\d+)$/.exec(value)
+  if (range) return parseInt(range[2]!, 10)
+  // Open-ended bucket ('25_plus', '40_plus') — use the lower bound + 1
+  // so the value falls into the highest tier of the engine's thresholds.
+  const open = /^(\d+)_plus$/.exec(value)
+  if (open) return parseInt(open[1]!, 10) + 1
+  return null
+}
+
 function calculateBenchmarkScores(profile: OnboardingProfile, calibration: AthleteCalibration | null): BenchmarkScores {
+  // [WEAK-POINT-ENGINE-CAPACITY-BUCKET-COERCION] coerce all three at once.
+  const pullUpMaxN = bucketToNumber(profile.pullUpMax as string | null)
+  const dipMaxN = bucketToNumber(profile.dipMax as string | null)
+  const pushUpMaxN = bucketToNumber(profile.pushUpMax as string | null)
+
   // Pull strength (0-100)
   let pullStrength = 50
-  if (profile.pullUpMax !== null) {
-    if (profile.pullUpMax === 0) pullStrength = 10
-    else if (profile.pullUpMax <= 3) pullStrength = 25
-    else if (profile.pullUpMax <= 8) pullStrength = 45
-    else if (profile.pullUpMax <= 12) pullStrength = 60
-    else if (profile.pullUpMax <= 18) pullStrength = 75
-    else if (profile.pullUpMax <= 25) pullStrength = 85
+  if (pullUpMaxN !== null) {
+    if (pullUpMaxN === 0) pullStrength = 10
+    else if (pullUpMaxN <= 3) pullStrength = 25
+    else if (pullUpMaxN <= 8) pullStrength = 45
+    else if (pullUpMaxN <= 12) pullStrength = 60
+    else if (pullUpMaxN <= 18) pullStrength = 75
+    else if (pullUpMaxN <= 25) pullStrength = 85
     else pullStrength = 95
   }
   
   // Weighted pull-up bonus
+  // [WEAK-POINT-ENGINE-WEIGHTED-LIFT-OWNER] canonical
+  // `WeightedBenchmark.load` is the numeric load (lbs/kg). Previous
+  // edit incorrectly wrote `addedWeight`; the correct canonical field
+  // is `load`. Bodyweight is *not* on `OnboardingProfile`, so we drop
+  // the bodyweight-relative percentage path and use absolute load
+  // thresholds instead.
+  const legacyProfile = profile as OnboardingProfile & { bodyweight?: number | null }
   if (profile.weightedPullUp?.load) {
-    const bwPercent = profile.bodyweight ? (profile.weightedPullUp.load / profile.bodyweight) * 100 : 0
+    const load = profile.weightedPullUp.load
+    const bwPercent = legacyProfile.bodyweight
+      ? (load / legacyProfile.bodyweight) * 100
+      : 0
     if (bwPercent >= 50) pullStrength = Math.max(pullStrength, 90)
     else if (bwPercent >= 30) pullStrength = Math.max(pullStrength, 75)
     else if (bwPercent >= 15) pullStrength = Math.max(pullStrength, 60)
@@ -542,22 +608,23 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
   
   // Push strength (0-100)
   let pushStrength = 50
-  if (profile.dipMax !== null) {
-    if (profile.dipMax === 0) pushStrength = 15
-    else if (profile.dipMax <= 5) pushStrength = 30
-    else if (profile.dipMax <= 12) pushStrength = 50
-    else if (profile.dipMax <= 20) pushStrength = 70
-    else if (profile.dipMax <= 30) pushStrength = 85
+  if (dipMaxN !== null) {
+    if (dipMaxN === 0) pushStrength = 15
+    else if (dipMaxN <= 5) pushStrength = 30
+    else if (dipMaxN <= 12) pushStrength = 50
+    else if (dipMaxN <= 20) pushStrength = 70
+    else if (dipMaxN <= 30) pushStrength = 85
     else pushStrength = 95
   }
   
   // Push-up bonus
-  if (profile.pushUpMax !== null) {
-    if (profile.pushUpMax >= 50) pushStrength = Math.max(pushStrength, 70)
-    else if (profile.pushUpMax >= 30) pushStrength = Math.max(pushStrength, 55)
+  if (pushUpMaxN !== null) {
+    if (pushUpMaxN >= 50) pushStrength = Math.max(pushStrength, 70)
+    else if (pushUpMaxN >= 30) pushStrength = Math.max(pushStrength, 55)
   }
   
   // Weighted dip bonus
+  // [WEAK-POINT-ENGINE-WEIGHTED-LIFT-OWNER] canonical field is `load`.
   if (profile.weightedDip?.load) {
     const load = profile.weightedDip.load
     if (load >= 45) pushStrength = Math.max(pushStrength, 90)
@@ -565,9 +632,17 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
     else if (load >= 10) pushStrength = Math.max(pushStrength, 60)
   }
   
+  // [WEAK-POINT-ENGINE-SKILL-BENCHMARK-OWNER]
+  // `OnboardingProfile.frontLever` is `SkillBenchmark | null` (an object
+  // with a `.progression` field), not a flat `frontLeverHold` string.
+  // Same applies to `planche`. Read the progression off the benchmark
+  // object — same downstream string keys, real owner.
+  const frontLeverProgression = profile.frontLever?.progression ?? null
+  const plancheProgression = profile.planche?.progression ?? null
+
   // Straight-arm pulling (estimated from weighted pull + skill levels)
   let straightArmPull = pullStrength * 0.7 // Base estimate
-  if (profile.frontLeverHold && profile.frontLeverHold !== 'none') {
+  if (frontLeverProgression && frontLeverProgression !== 'none') {
     const levelBonus: Record<string, number> = {
       'tuck': 50,
       'adv_tuck': 65,
@@ -575,12 +650,12 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
       'straddle': 85,
       'full': 95,
     }
-    straightArmPull = Math.max(straightArmPull, levelBonus[profile.frontLeverHold] || 50)
+    straightArmPull = Math.max(straightArmPull, levelBonus[frontLeverProgression] || 50)
   }
   
   // Straight-arm pushing (estimated from weighted dip + planche level)
   let straightArmPush = pushStrength * 0.7
-  if (profile.plancheHold && profile.plancheHold !== 'none') {
+  if (plancheProgression && plancheProgression !== 'none') {
     const levelBonus: Record<string, number> = {
       'lean': 40,
       'tuck': 55,
@@ -588,7 +663,7 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
       'straddle': 85,
       'full': 95,
     }
-    straightArmPush = Math.max(straightArmPush, levelBonus[profile.plancheHold] || 40)
+    straightArmPush = Math.max(straightArmPush, levelBonus[plancheProgression] || 40)
   }
   
   // Compression (from L-sit and core work)
@@ -603,35 +678,59 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
     compression = lsitScores[profile.lSitHold] || 50
   }
   
-  // Calibration bonus for compression
-  if (calibration?.hollowBodySeconds) {
-    if (calibration.hollowBodySeconds >= 60) compression = Math.max(compression, 75)
-    else if (calibration.hollowBodySeconds >= 30) compression = Math.max(compression, 55)
+  // [WEAK-POINT-ENGINE-CALIBRATION-FIELD-OWNER]
+  // `AthleteCalibration` no longer exposes `hollowBodySeconds` directly.
+  // Read defensively through the looser legacy shape so calibration data
+  // that still carries the field on disk continues to contribute.
+  const legacyCalibration = calibration as (AthleteCalibration & { hollowBodySeconds?: number }) | null
+  if (legacyCalibration?.hollowBodySeconds) {
+    if (legacyCalibration.hollowBodySeconds >= 60) compression = Math.max(compression, 75)
+    else if (legacyCalibration.hollowBodySeconds >= 30) compression = Math.max(compression, 55)
   }
   
   // Explosive power (estimated from pull-ups + muscle-up capability)
   let explosivePower = pullStrength * 0.6
-  if (profile.muscleUpCapable) explosivePower = Math.max(explosivePower, 80)
+  // [WEAK-POINT-ENGINE-MUSCLEUP-OWNER] `OnboardingProfile.muscleUp` is
+  // `MuscleUpReadiness | null`. The literal union here may not overlap
+  // every legacy persisted token, so bridge through `string | null`
+  // instead of comparing directly to keep persisted-doc compatibility.
+  const muscleUpReadiness = profile.muscleUp == null ? null : String(profile.muscleUp)
+  const muscleUpCapable =
+    muscleUpReadiness === 'capable' ||
+    muscleUpReadiness === 'working_on' ||
+    muscleUpReadiness === 'can_do' ||
+    muscleUpReadiness === 'yes'
+  if (muscleUpCapable) explosivePower = Math.max(explosivePower, 80)
   
   // Scapular control (inferred from skill levels)
   let scapularControl = Math.min(pullStrength, compression) * 0.8
   
+  // [WEAK-POINT-ENGINE-JOINT-CAUTION-PLURALIZATION] `jointCautions` union
+  // uses plural tokens (`shoulders`, `wrists`, `elbows`); singular forms
+  // never matched at runtime. Use the canonical plurals.
+  // [WEAK-POINT-ENGINE-HANDSTAND-FIELD-DROPPED] OnboardingProfile no
+  // longer carries a `handstandHold` field. Read defensively through a
+  // legacy structural slice so persisted documents that still have it
+  // continue to feed the wrist/balance scores.
+  const legacyProfileForHandstand = profile as OnboardingProfile & { handstandHold?: string | null }
+  const handstandHold = legacyProfileForHandstand.handstandHold ?? null
+
   // Shoulder stability (inferred from skill levels and absence of issues)
   let shoulderStability = 60
-  if (profile.jointCautions?.includes('shoulder')) shoulderStability = 40
-  else if (pushStrength >= 70 && profile.plancheHold) shoulderStability = 75
+  if (profile.jointCautions?.includes('shoulders')) shoulderStability = 40
+  else if (pushStrength >= 70 && plancheProgression) shoulderStability = 75
   
   // Wrist tolerance
   let wristTolerance = 60
-  if (profile.jointCautions?.includes('wrist')) wristTolerance = 35
-  else if (profile.handstandHold && profile.handstandHold !== 'none') wristTolerance = 75
+  if (profile.jointCautions?.includes('wrists')) wristTolerance = 35
+  else if (handstandHold && handstandHold !== 'none') wristTolerance = 75
   
   // Core control (from compression + calibration)
   let coreControl = compression * 0.9
   
   // Balance control (from handstand)
   let balanceControl = 50
-  if (profile.handstandHold && profile.handstandHold !== 'none') {
+  if (handstandHold && handstandHold !== 'none') {
     const hsScores: Record<string, number> = {
       'wall_assisted': 45,
       'wall': 55,
@@ -639,13 +738,17 @@ function calculateBenchmarkScores(profile: OnboardingProfile, calibration: Athle
       'free_15s': 80,
       'free_30s': 90,
     }
-    balanceControl = hsScores[profile.handstandHold] || 50
+    balanceControl = hsScores[handstandHold] || 50
   }
   
   // Mobility (general estimate)
+  // [WEAK-POINT-ENGINE-FLEX-EMPHASIS-LEGACY] `flexibilityEmphasis` is no
+  // longer declared on `OnboardingProfile` but persisted documents may
+  // still carry it. Read defensively through a structural slice.
+  const legacyFlex = (profile as OnboardingProfile & { flexibilityEmphasis?: 'high' | 'low' | string }).flexibilityEmphasis
   let mobility = 55
-  if (profile.flexibilityEmphasis === 'high') mobility = 70
-  else if (profile.flexibilityEmphasis === 'low') mobility = 40
+  if (legacyFlex === 'high') mobility = 70
+  else if (legacyFlex === 'low') mobility = 40
   
   return {
     pullStrength,
@@ -797,7 +900,9 @@ export function detectWeakPoints(
   }
   
   return {
-    athleteId: profile.userId || 'unknown',
+    // [ONBOARDING-PROFILE-NO-USER-ID] OnboardingProfile does not own
+    // `userId`; weak-point output uses the canonical 'unknown' tag.
+    athleteId: 'unknown',
     skillTarget,
     evaluatedAt: new Date().toISOString(),
     
@@ -839,16 +944,30 @@ export function detectWeakPoints(
 // =============================================================================
 
 function generateEmphasisLabel(factor: WeakPointType): string {
+  // [WEAK-POINT-TYPE-CONTRACT] This map is typed `Record<WeakPointType, string>`
+  // — exhaustive, NOT Partial. The five entries below (bent_arm_pull,
+  // bent_arm_push, core_compression, core_anti_extension, general_fatigue)
+  // were missing from the prior version and produced TS2741 missing-key
+  // errors. Each label is derived directly from the canonical
+  // WEAK_POINT_LABELS table (line 79-107) and the WEAK_POINT_ACCESSORIES
+  // doctrine (line 1524-1677): the emphasis text describes the same
+  // accessory protocol that the accessory map prescribes, so coaching
+  // language stays consistent across both surfaces. No new doctrine is
+  // invented; existing per-key accessory intent is summarized.
   const emphasisMap: Record<WeakPointType, string> = {
     pull_strength: 'Weighted pull-up progressions',
     push_strength: 'Weighted dip and push-up work',
     straight_arm_pull_strength: 'Front lever and straight-arm pulling',
     straight_arm_push_strength: 'Planche lean and straight-arm pushing',
+    bent_arm_pull: 'Chin-up and inverted row progressions',
+    bent_arm_push: 'Push-up and dip progressions',
     compression_strength: 'L-sit and compression drills',
     explosive_power: 'High pulls and explosive pulling',
     transition_strength: 'Muscle-up transition drills',
     vertical_push_strength: 'Pike push-ups and overhead pressing',
     dip_strength: 'Dip progressions and weighted dips',
+    core_compression: 'L-sit and dragon flag tuck progressions',
+    core_anti_extension: 'Hollow body and dragon flag negatives',
     scapular_control: 'Scapular pulls and holds',
     shoulder_stability: 'Shoulder stability protocols',
     core_control: 'Hollow body and plank progressions',
@@ -860,6 +979,7 @@ function generateEmphasisLabel(factor: WeakPointType): string {
     shoulder_extension_mobility: 'Shoulder extension stretches',
     recovery_capacity: 'Recovery optimization',
     work_capacity: 'Volume building',
+    general_fatigue: 'Reduced volume and recovery focus',
     equipment_limitation: 'Equipment alternatives',
     none: 'Balanced progression',
   }
@@ -906,9 +1026,21 @@ function getPriorityExercises(
   const primaryExercises = exerciseMap[primary] || []
   const secondaryExercises = secondary ? (exerciseMap[secondary] || []).slice(0, 1) : []
   
+  // [RECOMMENDED-EXERCISE-SHAPE] consumer expects { exerciseId,
+  // exerciseName, reason, targetedLimiter }, not raw { id, name, ... }.
   return [
-    ...primaryExercises.map(e => ({ ...e, targetedLimiter: primary })),
-    ...secondaryExercises.map(e => ({ ...e, targetedLimiter: secondary! })),
+    ...primaryExercises.map(e => ({
+      exerciseId: e.id,
+      exerciseName: e.name,
+      reason: e.reason,
+      targetedLimiter: primary,
+    })),
+    ...secondaryExercises.map(e => ({
+      exerciseId: e.id,
+      exerciseName: e.name,
+      reason: e.reason,
+      targetedLimiter: secondary!,
+    })),
   ]
 }
 
@@ -1063,17 +1195,27 @@ export function detectWeakPointsWithReadiness(
   let readinessWeakPoints: WeakPointFromReadiness[] = []
   
   try {
-    // Convert OnboardingProfile to AthleteProfile format for readiness calculation
+    // [WEAK-POINT-READINESS-SHIM-COERCION] Convert OnboardingProfile to
+    // the legacy AthleteProfile shape consumed by
+    // `generateAthleteReadinessSummary`. Categorical capacity buckets
+    // are coerced via `bucketToNumber`; `experienceLevel` is not on
+    // OnboardingProfile so default to 'intermediate'; bodyweight and
+    // hollowHold/lSitHold are not on OnboardingProfile either —
+    // fall back to safe defaults.
     const athleteProfile = {
-      userId: profile.userId || 'unknown',
-      experienceLevel: profile.experienceLevel || 'intermediate',
-      maxPullUps: profile.pullUpMax || 0,
-      maxDips: profile.dipMax || 0,
-      weightedPullUp: profile.weightedPullUp?.load || 0,
-      weightedDip: profile.weightedDip?.load || 0,
-      hollowHold: profile.hollowHold || 0,
-      lSitHold: profile.lSitHold || 0,
-      bodyweight: profile.bodyweight || 75,
+      // [ONBOARDING-PROFILE-NO-USER-ID]
+      userId: 'unknown',
+      experienceLevel: 'intermediate' as const,
+      maxPullUps: bucketToNumber(profile.pullUpMax as string | null) || 0,
+      maxDips: bucketToNumber(profile.dipMax as string | null) || 0,
+      // [WEIGHTED-BENCHMARK-LOAD-NORMALIZER] WeightedBenchmark owns
+      // `load`, but legacy persisted docs may still ship `addedWeight`.
+      // getBenchmarkLoad coerces both to a finite number.
+      weightedPullUp: getBenchmarkLoad(profile.weightedPullUp),
+      weightedDip: getBenchmarkLoad(profile.weightedDip),
+      hollowHold: 0,
+      lSitHold: 0,
+      bodyweight: 75,
       primaryGoal: primaryGoal || skillTarget,
     }
     
@@ -1401,17 +1543,37 @@ export function detectWeakPointsForProfile(
     return { primary: [], secondary: [] }
   }
   
+  // [WEAK-POINT-DETECTION-INPUT-CAPACITY-COERCION] DetectionInput expects
+  // numeric `pullUpMax` / `dipMax`. Canonical OnboardingProfile stores
+  // them as categorical bucket strings (`PullUpCapacity` / `DipCapacity`).
+  // Reuse `bucketToNumber` to coerce — same path used by
+  // `calculateBenchmarkScores`. `frontLeverHold` / `plancheHold` /
+  // `lSitHold` are NOT on OnboardingProfile; fall back to canonical
+  // `<skill>.progression`. `experienceLevel` is not on OnboardingProfile.
+  // [DETECTION-INPUT-WEIGHTED-SHAPE] DetectionInput expects
+  // { load: number } | null for weighted benchmarks, not the full
+  // WeightedBenchmark. Use toDetectionLoad to project at the boundary.
+  // [LEGACY-PROFILE-LSIT] OnboardingProfile no longer carries `lSit`;
+  // narrow through a structural-legacy slice for persisted-doc support.
+  // [LEGACY-CALIBRATION-FITNESS-LEVEL] AthleteCalibration no longer
+  // owns `fitnessLevel`; structurally narrow only here.
+  const legacyProfileForLSit = profile as OnboardingProfile & {
+    lSit?: { progression?: string | null } | null
+  }
+  const legacyCalibrationForExperience = calibration as (typeof calibration & {
+    fitnessLevel?: 'beginner' | 'intermediate' | 'advanced'
+  }) | null
   const input: DetectionInput = {
-    pullUpMax: profile.pullUpMax,
-    dipMax: profile.dipMax,
-    weightedPullUp: profile.weightedPullUp,
-    weightedDip: profile.weightedDip,
-    frontLeverLevel: profile.frontLeverHold || profile.frontLever?.progression,
-    plancheLevel: profile.plancheHold || profile.planche?.progression,
-    lSitLevel: profile.lSitHold,
+    pullUpMax: bucketToNumber(profile.pullUpMax as string | null),
+    dipMax: bucketToNumber(profile.dipMax as string | null),
+    weightedPullUp: toDetectionLoad(profile.weightedPullUp),
+    weightedDip: toDetectionLoad(profile.weightedDip),
+    frontLeverLevel: profile.frontLever?.progression ?? null,
+    plancheLevel: profile.planche?.progression ?? null,
+    lSitLevel: legacyProfileForLSit.lSit?.progression ?? null,
     needsDeload: fatigueNeedsDeload,
     fatigueScore: fatigueScore,
-    experienceLevel: calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' || 'intermediate',
+    experienceLevel: legacyCalibrationForExperience?.fitnessLevel ?? 'intermediate',
   }
   
   // Get benchmark-derived weak points

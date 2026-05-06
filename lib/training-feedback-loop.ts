@@ -16,7 +16,11 @@
 import { getWorkoutLogs, type WorkoutLog, type PerceivedDifficulty } from './workout-log-service'
 import { getRecentSessionFeedback, type SessionFeedback, computeFatigueStateFromFeedback } from './session-feedback'
 import { getStrengthRecords, type StrengthRecord } from './strength-service'
-import { getSkillSessions, type SkillSession } from './skill-session-service'
+// [SKILL-SESSION-DERIVED-FROM-FN] `skill-session-service` no longer
+// re-exports `SkillSession`. Derive it from the function return so
+// type usage stays aligned with the actual persisted shape.
+import { getSkillSessions } from './skill-session-service'
+type SkillSession = Awaited<ReturnType<typeof getSkillSessions>>[number]
 import { recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================
@@ -332,18 +336,24 @@ function analyzeExerciseOutcomes(logs: WorkoutLog[]): ExerciseOutcomeSummary[] {
     }
   }
   
-  return Array.from(exerciseMap.entries()).map(([name, data]) => ({
-    exerciseId: name,
-    exerciseName: name,
-    completionRate: data.total > 0 ? data.completed / data.total : 0,
-    averageRPE: data.rpeCount > 0 ? data.rpeSum / data.rpeCount : null,
-    targetsMet: data.targetsMet,
-    targetsMissed: data.targetsMissed,
-    progressionPotential: data.total < 2 ? 'insufficient_data' 
-      : data.completionRate >= 0.9 ? 'ready'
-      : data.completionRate >= 0.5 ? 'hold'
-      : 'regress',
-  }))
+  // [COMPLETION-RATE-LOCAL] `data` (the per-exercise tally) does not
+  // own `completionRate`; lift it to a local before threshold checks.
+  return Array.from(exerciseMap.entries()).map(([name, data]) => {
+    const completionRate = data.total > 0 ? data.completed / data.total : 0
+
+    return {
+      exerciseId: name,
+      exerciseName: name,
+      completionRate,
+      averageRPE: data.rpeCount > 0 ? data.rpeSum / data.rpeCount : null,
+      targetsMet: data.targetsMet,
+      targetsMissed: data.targetsMissed,
+      progressionPotential: data.total < 2 ? 'insufficient_data'
+        : completionRate >= 0.9 ? 'ready'
+        : completionRate >= 0.5 ? 'hold'
+        : 'regress',
+    }
+  })
 }
 
 function calculateProgressionSuccessRate(outcomes: ExerciseOutcomeSummary[]): number {

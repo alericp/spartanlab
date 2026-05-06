@@ -1,0 +1,99 @@
+===== FAMILY: MISSING EXPORT / CANNOT FIND NAME =====
+lib/adaptive-athlete-engine.ts(5,90): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,43): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessDecision' locally, but it is not exported.
+lib/adaptive-athlete-engine.ts(12,67): error TS2459: Module '"./skill-readiness-engine"' declares 'ReadinessStatus' locally, but it is not exported.
+lib/adaptive-program-builder.ts(62,15): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/adaptive-program-builder.ts(416,3): error TS2305: Module '"./performance-envelope-service"' has no exported member 'getEnvelopeBasedRecommendations'.
+lib/adaptive-program-builder.ts(449,8): error TS2724: '"./program/programming-truth-bundle"' has no exported member named 'ProgrammingTruthBundle'. Did you mean 'buildProgrammingTruthBundle'?
+lib/adaptive-program-builder.ts(2031,25): error TS2304: Cannot find name 'WeakPointAssessment'.
+lib/adaptive-program-builder.ts(3548,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3558,58): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(3775,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(4079,21): error TS2304: Cannot find name 'CanonicalProgrammingProfile'.
+lib/adaptive-program-builder.ts(6998,34): error TS2304: Cannot find name 'AthleteProfile'.
+lib/adaptive-program-builder.ts(15744,28): error TS2304: Cannot find name 'sessionAssemblyErr'.
+lib/adaptive-program-builder.ts(15744,66): error TS2304: Cannot find name 'sessionAssemblyErr'.
+lib/adaptive-program-builder.ts(18283,29): error TS2304: Cannot find name 'finalScheduleMode'.
+lib/adaptive-program-builder.ts(18542,29): error TS2304: Cannot find name 'finalScheduleMode'.
+lib/adaptive-program-builder.ts(18643,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(18876,7): error TS2304: Cannot find name 'program'.
+lib/adaptive-program-builder.ts(19878,46): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(19896,11): error TS2304: Cannot find name 'calibration'.
+lib/adaptive-program-builder.ts(19917,31): error TS2304: Cannot find name 'getCycleBuilderModifications'.
+lib/adaptive-program-builder.ts(20050,32): error TS2304: Cannot find name 'canonicalReadiness'.
+lib/adaptive-program-builder.ts(20080,44): error TS2304: Cannot find name 'SkillTarget'.
+lib/adaptive-program-builder.ts(20175,54): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(20191,26): error TS2304: Cannot find name 'exercises'.
+lib/adaptive-program-builder.ts(22257,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+lib/adaptive-program-builder.ts(22258,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+lib/adaptive-program-builder.ts(24252,10): error TS2304: Cannot find name 'tempProgram'.
+lib/adaptive-program-builder.ts(26434,21): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26435,23): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26518,7): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26519,5): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26528,12): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26724,43): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(26725,39): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(26745,13): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(26746,13): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27509,38): error TS2304: Cannot find name 'sessionContext'.
+lib/adaptive-program-builder.ts(27683,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27684,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27704,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27707,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27710,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27850,51): error TS2304: Cannot find name 'exposureReadinessMap'.
+lib/adaptive-program-builder.ts(27953,32): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27955,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27956,22): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27957,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(27962,25): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28876,54): error TS2304: Cannot find name 'effectiveMainSource'.
+lib/adaptive-program-builder.ts(29468,36): error TS2304: Cannot find name 'phase15eSubstepDegradedReason'.
+lib/adaptive-program-builder.ts(29474,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+lib/consistency-momentum-engine.ts(679,20): error TS2304: Cannot find name 'getTrainingMomentum'.
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/doctrine-athlete-context-query.ts(40,10): error TS2305: Module '"./doctrine-db"' has no exported member 'sql'.
+lib/doctrine/source-batches/index.ts(57,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02PriorityType' locally, but it is not exported.
+lib/doctrine/source-batches/index.ts(58,8): error TS2459: Module '"./batch-02-uploaded-pdf-doctrine"' declares 'Batch02IntelligenceTier' locally, but it is not exported.
+lib/engine/index.ts(353,3): error TS2724: '"../skill-readiness"' has no exported member named 'SkillReadinessEngine'. Did you mean 'SkillReadinessInput'?
+lib/engine/index.ts(354,3): error TS2305: Module '"../skill-readiness"' has no exported member 'quickReadinessCheck'.
+lib/engine/index.ts(355,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getPrimaryLimiter'.
+lib/engine/index.ts(356,3): error TS2305: Module '"../skill-readiness"' has no exported member 'meetsBaselineRequirements'.
+lib/engine/index.ts(357,3): error TS2305: Module '"../skill-readiness"' has no exported member 'getTrainingRecommendations'.
+lib/enhanced-exercise-intelligence.ts(17,15): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+lib/exercise-family-integration.ts(24,8): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+lib/flexible-schedule-engine.ts(62,3): error TS2305: Module '"./athlete-profile"' has no exported member 'PrimaryGoal'.
+lib/flexible-schedule-engine.ts(63,3): error TS2305: Module '"./athlete-profile"' has no exported member 'ExperienceLevel'.
+lib/performance-envelope-engine.ts(16,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-service.ts(21,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.
+lib/planner-truth-audit.ts(983,14): error TS2304: Cannot find name 'selectedSkills'.
+lib/planner-truth-audit.ts(986,39): error TS2304: Cannot find name 'selectedSkills'.
+lib/program-exercise-selector.ts(2129,25): error TS2304: Cannot find name 'usedIds'.
+lib/program-exercise-selector.ts(2130,9): error TS2304: Cannot find name 'addExercise'.
+lib/program-exercise-selector.ts(5375,51): error TS2304: Cannot find name 'context'.
+lib/progress-data-service.ts(6,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+lib/readiness/canonical-readiness-engine.ts(591,14): error TS2552: Cannot find name 'calculateOneArmPullUpReadiness'. Did you mean 'calculateMuscleUpReadiness'?
+lib/readiness/canonical-readiness-engine.ts(600,14): error TS2552: Cannot find name 'calculateOneArmPushUpReadiness'. Did you mean 'calculateMuscleUpReadiness'?
+lib/readiness/canonical-readiness-engine.ts(608,14): error TS2552: Cannot find name 'calculatePlanchePushUpReadiness'. Did you mean 'calculatePlancheReadiness'?
+lib/recovery-fatigue-engine.ts(12,10): error TS2305: Module '"./daily-readiness"' has no exported member 'calculateDailyReadiness'.
+lib/session-architecture-truth.ts(19,15): error TS2724: '"./adaptive-program-builder"' has no exported member named 'MaterialityContract'. Did you mean 'buildMaterialityContract'?
+lib/session-structure-engine.ts(20,36): error TS2459: Module '"./performance-envelope-engine"' declares 'MovementFamily' locally, but it is not exported.
+lib/skill-readiness/skillReadinessTypes.ts(51,44): error TS2694: Namespace '"/workspaces/spartanlab/lib/skill-readiness/skillReadinessService"' has no exported member 'SkillType'.
+lib/skill-readiness/skillReadinessTypes.ts(123,44): error TS2694: Namespace '"/workspaces/spartanlab/lib/skill-readiness/skillReadinessService"' has no exported member 'SkillType'.
+lib/skill-state-service.ts(613,15): error TS2552: Cannot find name 'updateSkillState'. Did you mean 'updatedSkills'?
+lib/training-coach.ts(11,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/training-feedback-loop.ts(19,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+lib/trusted-data-filter.ts(13,33): error TS2724: '"./skill-session-service"' has no exported member named 'SkillSession'. Did you mean 'getSkillSessions'?
+lib/unified-coaching-engine.ts(15,31): error TS2305: Module '"./performance-envelope-service"' has no exported member 'getEnvelopeBasedRecommendations'.
+lib/unified-readiness-integration.ts(25,15): error TS2305: Module '"./athlete-profile"' has no exported member 'AthleteProfile'.
+lib/warmup-engine.ts(1213,12): error TS2304: Cannot find name 'generateStandardWarmup'.
+lib/workout-feedback-integration.ts(9,31): error TS2305: Module '"./movement-family-registry"' has no exported member 'TrainingGoalType'.

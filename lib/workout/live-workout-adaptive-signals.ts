@@ -147,6 +147,9 @@ export interface PriorSetContext {
 // CANONICAL SUMMARY BUILDER
 // =============================================================================
 
+// [COACHING-SIGNAL-SEVERITY-COMPLETE] cover the full canonical
+// CoachingSignalTag union — including the live-workout normalizer
+// additions — so this Record is exhaustive.
 const COACHING_SIGNAL_SEVERITY_MAP: Record<CoachingSignalTag, 'info' | 'warning' | 'critical'> = {
   'too_easy': 'info',
   'too_hard': 'warning',
@@ -160,6 +163,12 @@ const COACHING_SIGNAL_SEVERITY_MAP: Record<CoachingSignalTag, 'info' | 'warning'
   'breathing_issue': 'warning',
   'joint_stress': 'critical',
   'muscle_cramping': 'warning',
+  'straight_arm_fatigue': 'warning',
+  'support_mismatch': 'warning',
+  'load_mismatch': 'warning',
+  'recovery_concern': 'warning',
+  'technique_breakdown': 'warning',
+  'endurance_limited': 'warning',
 }
 
 /**
@@ -223,8 +232,12 @@ export function buildAdaptiveExecutionSummary(
     const recommendedBands = target.recommendedBands || (target.recommendedBand ? [target.recommendedBand] : [])
     
     // Calculate rough assistance levels
+    // [RESISTANCE-BAND-COLOR-CONTRACT] Removed stale 'orange' entry: not a
+    // member of the canonical ResistanceBandColor union. Same fix as in
+    // lib/workout/live-workout-normalizers.ts:277 and
+    // lib/workout/live-workout-authority-contract.ts:340.
     const bandAssistance: Record<ResistanceBandColor, number> = {
-      'black': 100, 'purple': 80, 'green': 60, 'blue': 45, 'red': 30, 'yellow': 15, 'orange': 10,
+      'black': 100, 'purple': 80, 'green': 60, 'blue': 45, 'red': 30, 'yellow': 15,
     }
     
     const actualAssistance = selectedBands.reduce((sum, b) => sum + (bandAssistance[b] || 20), 0)

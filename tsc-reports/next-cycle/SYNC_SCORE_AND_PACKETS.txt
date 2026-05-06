@@ -1,0 +1,135 @@
+===== STEP 1 — LOCAL/REMOTE SYNC CHECK =====
+Branch: v0/alericpetsch836-6923-6213db1c-2
+Local HEAD: 3f3b7c12
+
+Tracked local changes before fetch:
+
+===== STEP 2 — FETCH REMOTE =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Remote HEAD: cf28ac05
+Local vs remote before pull, format local-only remote-only:
+0	5
+
+===== STEP 3 — FAST-FORWARD PULL IF CLEAN =====
+Tracked files clean. Pulling latest remote with --ff-only...
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+Updating 3f3b7c12..cf28ac05
+Fast-forward
+ app/(app)/program/page.tsx                       |  18 +--
+ app/api/program/rebuild-adjustment/route.ts      |  16 +--
+ components/workout/StreamlinedWorkoutSession.tsx |  17 ++-
+ components/workouts/QuickLogModal.tsx            |   5 +-
+ components/workouts/WorkoutLogForm.tsx           |   3 +-
+ hooks/useEntitlement.ts                          |   9 +-
+ hooks/useWorkoutSession.ts                       |   8 +-
+ lib/achievements/achievement-engine.ts           |   8 +-
+ lib/achievements/index.ts                        |  18 ++-
+ lib/active-week-mutation-service.ts              |  25 +++--
+ lib/adaptive-athlete-engine.ts                   |  16 ++-
+ lib/adaptive-program-builder.ts                  |  20 +++-
+ lib/canonical-profile-service.ts                 | 107 +++++++++++++-----
+ lib/program-exercise-selector.ts                 | 134 +++++++++++++++++------
+ lib/repositories/profile-repository.ts           |   5 +-
+ scripts/run-tsc.js                               |  86 +++++++++++++++
+ scripts/run-tsc.sh                               |  35 ++++++
+ 17 files changed, 426 insertions(+), 104 deletions(-)
+ create mode 100644 scripts/run-tsc.js
+ create mode 100644 scripts/run-tsc.sh
+
+===== STEP 4 — POST-SYNC STATE =====
+Current HEAD: cf28ac05
+Remote HEAD: cf28ac05
+Local vs remote after pull attempt, format local-only remote-only:
+0	0
+
+Latest commits:
+cf28ac05 fix: resolve silent tsc failures and path issues
+905500b2 chore: rename run-tsc.mjs to run-tsc.js
+7caa2bee feat: add TypeScript diagnostics summary script
+5c642eb1 refactor: update canonical profile service and program exercise selector
+af9f3b5e feat: fix adaptive program builder and canonical service issues
+3f3b7c12 feat: enhance type compatibility and fix missing fields
+9fd25a77 feat: resolve major duplicate and stale field issues
+1a0b29e1 fix: resolve remaining code issues in adaptive-program-builder.ts
+
+===== STEP 5 — FRESH TYPESCRIPT CHECK =====
+===== VERIFIED SCOREBOARD =====
+Previous total diagnostics: 1150
+Current total diagnostics: 1075
+Total delta from previous known: 75
+Current files with errors: 142
+
+Previous builder diagnostics: 249
+Current builder diagnostics: 245
+Builder delta from previous known: 4
+
+Key file counts:
+lib/adaptive-program-builder.ts: 245
+lib/program-exercise-selector.ts: 80
+lib/canonical-profile-service.ts: 17
+lib/prediction/prediction-service.ts: 36
+lib/server/authoritative-program-generation.ts: 32
+
+===== TOP 60 ERROR FILES =====
+    245 lib/adaptive-program-builder.ts
+     80 lib/program-exercise-selector.ts
+     36 lib/prediction/prediction-service.ts
+     32 lib/server/authoritative-program-generation.ts
+     29 lib/program-history-versioning.ts
+     26 lib/unified-coaching-engine.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts
+     18 lib/weak-point-engine.ts
+     17 lib/canonical-profile-service.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     16 lib/ai-truth-audit.ts
+     14 lib/session-variety-engine.ts
+     14 lib/performance-envelope-integration.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     12 lib/athlete-memory-engine.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     11 lib/onboarding-service.ts
+     10 lib/warmup-engine.ts
+     10 lib/safe-access.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/program-generation/exercise-selection-materiality.ts
+      9 lib/engine/index.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/program-service.ts
+      8 lib/planner-truth-audit.ts
+      8 lib/doctrine-to-output-verification.ts
+      8 lib/constraint-detection-engine.ts
+      8 lib/coaching-explanation-contract.ts
+      8 lib/athlete-calibration.ts
+      7 lib/training-coach.ts
+      7 lib/session-assembly-engine.ts
+      7 lib/progress-streak-engine.ts
+      7 lib/doctrine/doctrine-consumption-audit.ts
+      7 lib/dashboard-service.ts
+      7 lib/athlete-profile.ts
+      6 lib/readiness/skill-readiness.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-adjustment-engine.ts
+      6 lib/metrics-update-service.ts
+      6 lib/adaptive-progression-engine.ts
+      5 lib/pr-vault-engine.ts
+      5 lib/engine-quality-contract.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      5 lib/consistency-momentum-engine.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-readiness-integration.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/recovery-fatigue-engine.ts
+      4 lib/program-version-service.ts
+      4 lib/program-generation/week-adaptation-decision-contract.ts
+      4 lib/program-generation/session-composition-intelligence.ts
+      4 lib/prescription-contract.ts
+      4 lib/milestone-engine.ts
+      4 lib/history-service.ts

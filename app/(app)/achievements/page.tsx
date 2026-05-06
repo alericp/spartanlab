@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { PageContainer, Section, SectionHeader } from '@/components/layout'
-import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap } from 'lucide-react'
+import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap, Swords, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AchievementBadge } from '@/components/achievements/AchievementBadge'
 import { 
@@ -16,12 +16,24 @@ import {
   CATEGORY_LABELS,
 } from '@/lib/achievements/achievement-definitions'
 
-const CATEGORY_ICONS: Record<AchievementCategory, React.ReactNode> = {
-  training: <Dumbbell className="w-4 h-4" />,
-  strength: <Target className="w-4 h-4" />,
-  skill: <Star className="w-4 h-4" />,
-  consistency: <Flame className="w-4 h-4" />,
-  volume: <Trophy className="w-4 h-4" />,
+// [AB10-CONTRACT-CLEANUP] Map every authoritative AchievementCategory key to a
+// LucideIcon component (not JSX) so this map satisfies both:
+//   - SectionHeader.icon prop (LucideIcon component type)
+//   - inline JSX render in the category filter button (renders <Icon ... />)
+// Missing keys (challenge / h2h / longevity / balance) were the actual TS
+// errors — those categories already exist in the authoritative
+// AchievementCategory union and CATEGORY_LABELS, so the icon map must cover
+// them too.
+const CATEGORY_ICONS: Record<AchievementCategory, LucideIcon> = {
+  training: Dumbbell,
+  strength: Target,
+  skill: Star,
+  consistency: Flame,
+  volume: Trophy,
+  challenge: Swords,
+  h2h: Crown,
+  longevity: Medal,
+  balance: Zap,
 }
 
 export default function AchievementsPage() {
@@ -96,43 +108,49 @@ export default function AchievementsPage() {
 
       {/* Category filter */}
       <div className="flex gap-2 flex-wrap mb-6">
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setSelectedCategory(category)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
-              selectedCategory === category
-                ? "bg-[#2A2D31] text-[#F5F5F5]"
-                : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
-            )}
-          >
-            {category !== 'all' && CATEGORY_ICONS[category]}
-            {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
-          </button>
-        ))}
+        {categories.map(category => {
+          const Icon = category !== 'all' ? CATEGORY_ICONS[category] : null
+          return (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
+                selectedCategory === category
+                  ? "bg-[#2A2D31] text-[#F5F5F5]"
+                  : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
+              )}
+            >
+              {Icon && <Icon className="w-4 h-4" />}
+              {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
+            </button>
+          )
+        })}
       </div>
 
       {/* Achievements by category */}
       {selectedCategory === 'all' ? (
-        Object.entries(groupedAchievements).map(([category, achievements]) => (
-          <Section key={category} className="mb-8">
-            <SectionHeader 
-              title={CATEGORY_LABELS[category as AchievementCategory]}
-              icon={CATEGORY_ICONS[category as AchievementCategory]}
-            />
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {achievements.map(achievement => (
-                <AchievementCard 
-                  key={achievement.id}
-                  achievement={achievement}
-                  unlocked={unlockedIds.has(achievement.id)}
-                  unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
-                />
-              ))}
-            </div>
-          </Section>
-        ))
+        Object.entries(groupedAchievements).map(([category, achievements]) => {
+          const Icon = CATEGORY_ICONS[category as AchievementCategory]
+          return (
+            <Section key={category} className="mb-8">
+              <SectionHeader 
+                title={CATEGORY_LABELS[category as AchievementCategory]}
+                icon={Icon}
+              />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {achievements.map(achievement => (
+                  <AchievementCard 
+                    key={achievement.id}
+                    achievement={achievement}
+                    unlocked={unlockedIds.has(achievement.id)}
+                    unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
+                  />
+                ))}
+              </div>
+            </Section>
+          )
+        })
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAchievements.map(achievement => (
@@ -187,12 +205,16 @@ function AchievementCard({ achievement, unlocked, unlockedAt }: AchievementCardP
           </p>
         )}
         {!unlocked && (
+          // [AB10-CONTRACT-CLEANUP] TIER_COLORS exposes Tailwind class strings
+          // (bg / text / border / glow) — not raw hex values. Use className with
+          // the authoritative bg + text classes instead of an inline style that
+          // expected a `.primary` field that does not exist on the type.
           <div 
-            className="mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase"
-            style={{ 
-              backgroundColor: `${tierColors.primary}20`,
-              color: tierColors.primary
-            }}
+            className={cn(
+              "mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase",
+              tierColors.bg,
+              tierColors.text,
+            )}
           >
             {achievement.tier}
           </div>

@@ -1114,11 +1114,13 @@ export function getTempoRecommendation(
     context.currentGoal === 'technique' ||
     context.fatigueLevel === 'fatigued' ||
     context.isDeloadWeek ||
-    context.primaryWeakPoint === 'transition_control'
+    // [WEAK-POINT-TYPE-CONTRACT] primaryWeakPoint is canonical WeakPointType;
+    // mapped 'transition_control' (stale) → 'transition_strength' (canonical).
+    context.primaryWeakPoint === 'transition_strength'
   
   if (tempoOverWeight && profile.tempoSupportTypes.length > 1) {
     // Transition control weakness
-    if (context.primaryWeakPoint === 'transition_control') {
+    if (context.primaryWeakPoint === 'transition_strength') {
       tempoType = 'slow_both'
       rationale = 'Slow tempo chosen to develop transition control weakness.'
       prescription = {
@@ -1303,36 +1305,65 @@ export function getWeightedRecommendationsForWeakPoint(
   weakPoint: WeakPointType
 ): WeakPointWeightedRecommendation {
   const recommendations: Record<string, WeakPointWeightedRecommendation> = {
-    explosive_pull: {
-      weakPoint: 'explosive_pull',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'explosive_pull' to
+    // canonical 'explosive_power' (WeakPointType in lib/weak-point-engine.ts;
+    // canonical label "Explosive Pull Power" at WEAK_POINT_LABELS line 87).
+    // The doctrine intent is preserved verbatim — only the union-conformant
+    // identifier changes. The map is keyed `Record<string, ...>` so the key
+    // change is structural only; the function's resolution logic still
+    // accepts a `WeakPointType` parameter and dereferences via canonical key.
+    explosive_power: {
+      weakPoint: 'explosive_power',
       recommendedWeightedSkills: ['weighted_pullup', 'weighted_chinup'],
       recommendedTempoWork: ['tempo_pullup'],
       avoidUntilResolved: ['weighted_muscle_up'],
       rationale: 'Build explosive pulling strength with weighted basics before heavy skill work.',
     },
-    transition_control: {
-      weakPoint: 'transition_control',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'transition_control' to
+    // canonical 'transition_strength' (label "Transition Strength" at
+    // WEAK_POINT_LABELS line 88). Same doctrine, canonical identifier.
+    transition_strength: {
+      weakPoint: 'transition_strength',
       recommendedWeightedSkills: ['straight_bar_dip'],
       recommendedTempoWork: ['slow_muscle_up', 'tempo_muscle_up', 'tempo_dip'],
       avoidUntilResolved: ['weighted_muscle_up'],
       rationale: 'Focus on tempo control work to develop transition quality.',
     },
+    // [WEAK-POINT-TYPE-CONTRACT] The `lockout_strength` doctrine is preserved
+    // by merging it into the canonical `dip_strength` entry below. Rationale:
+    //
+    //   1. `lockout_strength` is NOT a member of the canonical WeakPointType
+    //      union (lib/weak-point-engine.ts:43-77). It IS a valid member of
+    //      PullWeakPointCategory (lib/pulling-strength-engine.ts:25), a
+    //      different type system. The previous map entry typed its inner
+    //      `weakPoint:` field as `WeakPointType` and assigned the string
+    //      `'lockout_strength'` to it, producing a TS2322 error.
+    //
+    //   2. The closest canonical concept for "terminal-range pressing power"
+    //      IS `dip_strength`. Both prior entries already prescribed the same
+    //      core exercise (`weighted_dip`) and tempo work (`tempo_dip`); only
+    //      the rationale differed. Merging the lockout-specific coaching
+    //      string into the dip_strength rationale preserves doctrine.
+    //
+    //   3. The function's runtime fallback at line 1393
+    //      (`recommendations[weakPoint] || { ...empty defaults... }`) means
+    //      callers passing a non-canonical key like 'lockout_strength' will
+    //      now hit the safe-default path with an empty recommendation set,
+    //      which is the correct behavior since lockout_strength isn't a
+    //      WeakPointType the function was ever statically able to receive.
     dip_strength: {
       weakPoint: 'dip_strength',
-      recommendedWeightedSkills: ['weighted_dip', 'weighted_ring_dip'],
+      recommendedWeightedSkills: ['weighted_dip', 'weighted_ring_dip', 'straight_bar_dip'],
       recommendedTempoWork: ['tempo_dip'],
       avoidUntilResolved: ['weighted_muscle_up'],
-      rationale: 'Build pressing strength foundation with weighted dip progressions.',
+      rationale: 'Build pressing strength foundation with weighted dip progressions, including partial-range and heavy dip work to target lockout specifically.',
     },
-    lockout_strength: {
-      weakPoint: 'lockout_strength',
-      recommendedWeightedSkills: ['weighted_dip', 'straight_bar_dip'],
-      recommendedTempoWork: ['tempo_dip'],
-      avoidUntilResolved: [],
-      rationale: 'Target lockout specifically with partial range and heavy dip work.',
-    },
-    straight_arm_pull: {
-      weakPoint: 'straight_arm_pull',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'straight_arm_pull' to
+    // canonical 'straight_arm_pull_strength' (canonical WeakPointType union
+    // member at lib/weak-point-engine.ts:47, label "Straight-Arm Pull
+    // Strength"). Same doctrine, canonical identifier.
+    straight_arm_pull_strength: {
+      weakPoint: 'straight_arm_pull_strength',
       recommendedWeightedSkills: ['weighted_front_lever_row'],
       recommendedTempoWork: ['tempo_front_lever_row'],
       avoidUntilResolved: [],
@@ -1345,8 +1376,14 @@ export function getWeightedRecommendationsForWeakPoint(
       avoidUntilResolved: ['weighted_pullup'],
       rationale: 'Focus on tempo work to develop scapular awareness before heavy loading.',
     },
-    compression: {
-      weakPoint: 'compression',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'compression' to
+    // canonical 'compression_strength' (WeakPointType member at
+    // lib/weak-point-engine.ts:51, label "Compression Strength"). The
+    // canonical union also has 'core_compression' (line 57) — that one is
+    // a control/stability concept; this entry's doctrine is about pressing
+    // compression strength, so 'compression_strength' is the correct match.
+    compression_strength: {
+      weakPoint: 'compression_strength',
       recommendedWeightedSkills: [],
       recommendedTempoWork: [],
       avoidUntilResolved: [],
@@ -1630,16 +1667,11 @@ export function getAvailableWeightedSkillsForAthlete(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  WEIGHTED_SKILL_PROFILES,
-  WEIGHTED_PROGRESSION_LADDERS,
-  TENDON_SAFETY_RULES,
-  checkWeightedSkillPrerequisites,
-  getTempoRecommendation,
-  getFrameworkWeightedGuidance,
-  getWeightedRecommendationsForWeakPoint,
-  applyTendonSafetyRules,
-  generateWeightedSkillExplanation,
-  getAvailableWeightedSkillsForAthlete,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All public symbols are exported inline at
+// their declaration sites (`export const WEIGHTED_SKILL_PROFILES`,
+// `export const WEIGHTED_PROGRESSION_LADDERS`, `export const
+// TENDON_SAFETY_RULES`, and seven `export function` declarations). The
+// previous bottom `export { ... }` block duplicated every name, producing
+// TS2300/TS2484. Inline export remains the single canonical export style;
+// public API is unchanged.

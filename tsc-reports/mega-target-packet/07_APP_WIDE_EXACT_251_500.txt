@@ -1,0 +1,251 @@
+===== APP-WIDE EXACT ERRORS 251-500 =====
+lib/adaptive-program-builder.ts(26605,76): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+lib/adaptive-program-builder.ts(26926,87): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+lib/adaptive-program-builder.ts(27019,31): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27143,21): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27144,23): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27227,7): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27228,5): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27237,12): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27369,41): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27390,98): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27390,125): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27417,44): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27417,71): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27417,113): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27445,43): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27446,39): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(27466,13): error TS2304: Cannot find name 'skillSpecificModifiers'.
+lib/adaptive-program-builder.ts(27467,13): error TS2304: Cannot find name 'dbTruthRankingModifiers'.
+lib/adaptive-program-builder.ts(27490,34): error TS2353: Object literal may only specify known properties, and 'fallbackUsed' does not exist in type 'string[]'.
+lib/adaptive-program-builder.ts(27555,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27556,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27560,41): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27615,33): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27616,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27617,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27688,44): error TS2769: No overload matches this call.
+lib/adaptive-program-builder.ts(27689,51): error TS2769: No overload matches this call.
+lib/adaptive-program-builder.ts(27961,90): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27961,117): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27968,24): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28130,37): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28130,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28148,82): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28194,16): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28195,16): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28207,48): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28244,38): error TS2304: Cannot find name 'sessionContext'.
+lib/adaptive-program-builder.ts(28419,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28420,11): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28432,28): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28441,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28444,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28447,15): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28496,40): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28496,63): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28497,39): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28497,71): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28584,50): error TS2339: Property 'constructor' does not exist on type 'never'.
+lib/adaptive-program-builder.ts(28595,51): error TS2304: Cannot find name 'exposureReadinessMap'.
+lib/adaptive-program-builder.ts(28702,32): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28704,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28705,22): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28706,17): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28711,25): error TS2304: Cannot find name 'dbTruthPrescriptionCalibration'.
+lib/adaptive-program-builder.ts(28807,37): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28807,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28825,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28882,45): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28892,101): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(29188,27): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+lib/adaptive-program-builder.ts(29188,66): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"yellow"' have no overlap.
+lib/adaptive-program-builder.ts(29287,14): error TS2454: Variable 'variants' is used before being assigned.
+lib/adaptive-program-builder.ts(29291,15): error TS2454: Variable 'rationale' is used before being assigned.
+lib/adaptive-program-builder.ts(29292,25): error TS2454: Variable 'enduranceResult' is used before being assigned.
+lib/adaptive-program-builder.ts(29293,29): error TS2454: Variable 'currentFatigueScore' is used before being assigned.
+lib/adaptive-program-builder.ts(29534,15): error TS2322: Type '{ id: string; exerciseId: string; name: string; sets: number; repsOrTime: string; restPeriod: string; category: string; movementPattern: MovementPattern; sessionRole: "support"; ... 7 more ...; expectedTimeMinutes: number; }[]' is not assignable to type 'AdaptiveExercise[]'.
+lib/adaptive-program-builder.ts(29563,11): error TS2353: Object literal may only specify known properties, and 'estimatedDurationMinutes' does not exist in type 'ValidatedSession'.
+lib/adaptive-program-builder.ts(29637,54): error TS2304: Cannot find name 'effectiveMainSource'.
+lib/adaptive-program-builder.ts(29754,22): error TS18046: 'e' is of type 'unknown'.
+lib/adaptive-program-builder.ts(29768,21): error TS18046: 'e' is of type 'unknown'.
+lib/adaptive-program-builder.ts(29799,29): error TS2339: Property 'movementPattern' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(29800,25): error TS2339: Property 'neuralDemand' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(29801,24): error TS2339: Property 'failureRisk' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(30194,7): error TS2322: Type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: false; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_BY_...' is not assignable to type '{ adaptationPhase: string; firstWeekProtectionActive: boolean; appliedReductions: { setsReduced: boolean; rpeReduced: boolean; finisherSuppressed: boolean; densityReduced: boolean; secondaryTrimmed: boolean; }; reductionReason: string | null; loadStrategyApplied: { ...; }; verdict: "PRESCRIPTION_MATERIALLY_CHANGED_B...'.
+lib/adaptive-program-builder.ts(30228,5): error TS18004: No value exists in scope for the shorthand property 'phase15eSubstepDegraded'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30229,36): error TS2304: Cannot find name 'phase15eSubstepDegradedReason'.
+lib/adaptive-program-builder.ts(30230,5): error TS18004: No value exists in scope for the shorthand property 'phase15eExactStep'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30231,5): error TS18004: No value exists in scope for the shorthand property 'phase15eLastSafeStep'. Either declare one or provide an initializer.
+lib/adaptive-program-builder.ts(30235,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+lib/adaptive-program-builder.ts(30337,3): error TS2322: Type '({ id: string; name: string; category: ExerciseCategory; sets: number; repsOrTime: string; note: string | undefined; isOverrideable: boolean; selectionReason: string; ... 9 more ...; dbTruthWinnerProvenance: { ...; } | undefined; } | null)[]' is not assignable to type 'AdaptiveExercise[]'.
+lib/adaptive-program-builder.ts(30401,8): error TS2345: Argument of type 'import("/workspaces/spartanlab/lib/adaptive-exercise-pool").MethodCompatibility' is not assignable to parameter of type 'import("/workspaces/spartanlab/lib/training-methods").MethodCompatibility'.
+lib/adaptive-program-builder.ts(30485,23): error TS2677: A type predicate's type must be assignable to its parameter's type.
+lib/adaptive-program-builder.ts(30543,5): error TS2353: Object literal may only specify known properties, and 'roleInSession' does not exist in type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+lib/adaptive-program-builder.ts(30919,50): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+lib/adaptive-program-builder.ts(31858,97): error TS2345: Argument of type 'string' is not assignable to parameter of type 'PrimaryGoal | undefined'.
+lib/adaptive-program-builder.ts(31951,5): error TS2353: Object literal may only specify known properties, and 'trainingPathType' does not exist in type 'AdaptiveProgramInputs'.
+lib/adaptive-program-builder.ts(32125,5): error TS2322: Type 'string | { primaryGoal: string | null; secondaryGoal: string | null; scheduleMode: string | null; trainingDaysPerWeek: number | null; sessionLengthMinutes: number | null; equipmentHash: string; hasLoadableEquipment: boolean; experienceLevel: string | null; createdAt: string; }' is not assignable to type 'string'.
+lib/adaptive-progression-engine.ts(263,50): error TS2339: Property 'workoutId' does not exist on type 'StoredRPESession'.
+lib/adaptive-progression-engine.ts(265,11): error TS2339: Property 'exerciseId' does not exist on type '{ exerciseName: string; sets: { setNumber: number; targetRPE: number; actualRPE: number; targetReps: number; actualReps: number; }[]; }'.
+lib/adaptive-progression-engine.ts(1011,33): error TS2339: Property 'weeklyTraining' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1012,39): error TS2339: Property 'weeklyTraining' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1165,16): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1169,40): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/adaptive-training-cycle-engine.ts(743,18): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/adaptive-training-cycle-engine.ts(744,34): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/adaptive-training-cycle-engine.ts(893,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoal' and '"weighted_pull"' have no overlap.
+lib/adaptive-training-cycle-engine.ts(893,42): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoal' and '"weighted_dip"' have no overlap.
+lib/advanced-skills-integration.ts(251,29): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(290,52): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(307,45): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/advanced-skills-integration.ts(401,7): error TS2322: Type '"dynamic_push"' is not assignable to type 'WeakPointType'.
+lib/ai-truth-audit.ts(813,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/ai-truth-audit.ts(855,60): error TS2339: Property 'plancheProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(856,63): error TS2339: Property 'frontLeverProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,56): error TS2339: Property 'hspuProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,84): error TS2339: Property 'hspu' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(858,56): error TS2339: Property 'weightedPullUp' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(859,53): error TS2339: Property 'weightedDip' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(860,32): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(861,29): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(862,34): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(1577,14): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,29): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,43): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,57): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1599,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1607,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.
+lib/ai/skill-materiality-score.ts(154,3): error TS1117: An object literal cannot have multiple properties with the same name.
+lib/athlete-calibration.ts(473,30): error TS2367: This comparison appears to be unintentional because the types '"skill" | "strength" | "planche" | "front_lever" | "handstand_pushup" | "back_lever" | "muscle_up" | "weighted_dip" | "l_sit" | "v_sit" | "dragon_flag" | "i_sit" | "toe_touch" | ... 13 more ... | null' and '"overall_fitness"' have no overlap.
+lib/athlete-calibration.ts(479,50): error TS2367: This comparison appears to be unintentional because the types '"planche" | "front_lever" | "handstand_pushup" | "back_lever" | "muscle_up" | "weighted_dip" | "l_sit" | "v_sit" | "dragon_flag" | "i_sit" | "toe_touch" | "pancake" | "side_splits" | ... 12 more ... | null' and '"muscle_and_strength"' have no overlap.
+lib/athlete-calibration.ts(479,84): error TS2367: This comparison appears to be unintentional because the types '"planche" | "front_lever" | "handstand_pushup" | "back_lever" | "muscle_up" | "weighted_dip" | "l_sit" | "v_sit" | "dragon_flag" | "i_sit" | "toe_touch" | "pancake" | "side_splits" | ... 12 more ... | null' and '"skills_and_moves"' have no overlap.
+lib/athlete-calibration.ts(869,29): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(870,32): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(871,28): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(872,31): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(938,5): error TS2345: Argument of type 'string | null | undefined' is not assignable to parameter of type 'PrimaryGoalType | OnboardingGoal | null'.
+lib/athlete-memory-engine.ts(565,39): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"weighted"' have no overlap.
+lib/athlete-memory-engine.ts(567,16): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"max_reps"' have no overlap.
+lib/athlete-memory-engine.ts(567,44): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"reps"' have no overlap.
+lib/athlete-memory-engine.ts(569,16): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"max_hold"' have no overlap.
+lib/athlete-memory-engine.ts(569,44): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"hold"' have no overlap.
+lib/athlete-memory-engine.ts(571,16): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"volume"' have no overlap.
+lib/athlete-memory-engine.ts(605,39): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"weighted"' have no overlap.
+lib/athlete-memory-engine.ts(607,16): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"max_reps"' have no overlap.
+lib/athlete-memory-engine.ts(607,44): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"reps"' have no overlap.
+lib/athlete-memory-engine.ts(609,16): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"max_hold"' have no overlap.
+lib/athlete-memory-engine.ts(609,44): error TS2367: This comparison appears to be unintentional because the types '"weighted_calisthenics" | "best_reps" | "best_hold" | "best_volume" | "best_density" | "best_level" | "best_sets" | "first_unlock" | "barbell_1rm" | "barbell_top_set" | "relative_strength"' and '"hold"' have no overlap.
+lib/athlete-memory-engine.ts(905,23): error TS2367: This comparison appears to be unintentional because the types '"moderate" | "significant" | "major"' and '"mild"' have no overlap.
+lib/athlete-profile.ts(1326,14): error TS2739: Type '{ pullup_bar: string; dip_bars: string; parallettes: string; rings: string; resistance_bands: string; weights: string; bench_box: string; minimal: string; }' is missing the following properties from type 'Record<EquipmentType, string>': barbell, weight_plates
+lib/athlete-profile.ts(1337,14): error TS2739: Type '{ 20: string; 30: string; 45: string; 60: string; 75: string; flexible: string; }' is missing the following properties from type 'Record<SessionLengthPreference, string>': 90, 120
+lib/athlete-profile.ts(1346,14): error TS2741: Property '7' is missing in type '{ 2: string; 3: string; 4: string; 5: string; 6: string; flexible: string; }' but required in type 'Record<TrainingDaysPerWeek, string>'.
+lib/athlete-profile.ts(1482,30): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/athlete-profile.ts(1504,34): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+lib/athlete-profile.ts(1518,65): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SkillGoal'.
+lib/athlete-profile.ts(1521,60): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EquipmentType'.
+lib/back-lever-training-system.ts(892,5): error TS2561: Object literal may only specify known properties, but 'restDaysBetweenSessions' does not exist in type '{ optimalFrequency: number; minimumFrequency: number; maximumFrequency: number; restBetweenSessions: number; rationale: string; }'. Did you mean to write 'restBetweenSessions'?
+lib/banded-progression-integration-engine.ts(347,37): error TS2820: Type '"grip_strength"' is not assignable to type 'WeakPointType'. Did you mean '"dip_strength"'?
+lib/baseline-earned-truth.ts(200,40): error TS2352: Conversion of type 'WorkoutLog' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/baseline-earned-truth.ts(228,21): error TS2352: Conversion of type 'StrengthRecord' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/canonical-profile-service.ts(404,49): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(437,58): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(472,52): error TS2339: Property 'selectedStrength' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(473,43): error TS2551: Property 'goalCategory' does not exist on type 'OnboardingProfile'. Did you mean 'goalCategories'?
+lib/canonical-profile-service.ts(704,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/canonical-profile-service.ts(714,44): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(730,94): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/canonical-profile-service.ts(735,88): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/canonical-profile-service.ts(822,54): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(822,99): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(823,29): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(870,33): error TS2339: Property 'height' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(870,73): error TS2339: Property 'height' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(907,41): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(949,47): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(958,49): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(963,37): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(1218,9): error TS2322: Type 'TrainingDaysPerWeek | null' is not assignable to type 'number | null'.
+lib/canonical-profile-service.ts(1313,50): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+lib/canonical-profile-service.ts(1344,44): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+lib/canonical-profile-service.ts(1345,46): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+lib/canonical-profile-service.ts(1346,47): error TS2322: Type 'string[]' is not assignable to type 'SkillGoal[]'.
+lib/canonical-profile-service.ts(1347,52): error TS2322: Type 'string[]' is not assignable to type 'FlexibilityGoal[]'.
+lib/canonical-profile-service.ts(1348,67): error TS2339: Property 'selectedStrength' does not exist on type 'Partial<OnboardingProfile>'.
+lib/canonical-profile-service.ts(1349,63): error TS2551: Property 'goalCategory' does not exist on type 'Partial<OnboardingProfile>'. Did you mean 'goalCategories'?
+lib/canonical-profile-service.ts(1355,52): error TS2322: Type 'number | null' is not assignable to type 'TrainingDaysPerWeek | null | undefined'.
+lib/canonical-profile-service.ts(1360,53): error TS2322: Type 'number' is not assignable to type 'SessionLengthPreference | null | undefined'.
+lib/canonical-profile-service.ts(1365,64): error TS2339: Property 'trainingStyle' does not exist on type 'Partial<OnboardingProfile>'.
+lib/canonical-profile-service.ts(1365,123): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(1373,47): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+lib/canonical-profile-service.ts(1374,44): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+lib/canonical-profile-service.ts(1389,144): error TS2339: Property 'progression' does not exist on type 'SkillBenchmark | null'.
+lib/canonical-profile-service.ts(1392,128): error TS2339: Property 'bandLevel' does not exist on type 'SkillBenchmark | null'.
+lib/canonical-profile-service.ts(1400,135): error TS2339: Property 'progression' does not exist on type 'SkillBenchmark | null'.
+lib/canonical-profile-service.ts(1403,119): error TS2339: Property 'bandLevel' does not exist on type 'SkillBenchmark | null'.
+lib/canonical-profile-service.ts(1412,75): error TS2339: Property 'progression' does not exist on type 'SkillBenchmark | null'.
+lib/canonical-profile-service.ts(1425,120): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1426,133): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1431,123): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1432,136): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1437,132): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1438,145): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1443,129): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1444,142): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1467,86): error TS2339: Property 'recoveryConfidence' does not exist on type 'RecoveryProfile | null'.
+lib/canonical-profile-service.ts(1680,5): error TS2322: Type 'null' is not assignable to type '"skill_focused" | "strength_focused" | "power_focused" | "endurance_focused" | "hypertrophy_supported" | "balanced_hybrid" | undefined'.
+lib/canonical-profile-service.ts(1716,44): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(1903,68): error TS2367: This comparison appears to be unintentional because the types '"static"' and '"adaptive"' have no overlap.
+lib/canonical-profile-service.ts(3035,34): error TS2551: Property 'trainingStyles' does not exist on type 'CanonicalProgrammingProfile'. Did you mean 'trainingStyle'?
+lib/canonical-profile-service.ts(4007,68): error TS2352: Conversion of type 'CanonicalProgrammingProfile' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/canonical-profile-service.ts(4008,32): error TS2352: Conversion of type 'CanonicalProgrammingProfile' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/canonical-profile-service.ts(4542,68): error TS2367: This comparison appears to be unintentional because the types '"static"' and '"adaptive"' have no overlap.
+lib/challenges/challenge-definitions.ts(1170,14): error TS2740: Type '{ workout_count: string; rep_total: string; streak_days: string; skill_sessions: string; training_minutes: string; exercise_count: string; }' is missing the following properties from type 'Record<ChallengeGoalType, string>': weighted_strength, hold_time, skill_milestone, strength_reps, and 2 more.
+lib/coaching-explanation-contract.ts(310,7): error TS2322: Type 'ScheduleMode | undefined' is not assignable to type '"flexible" | "static"'.
+lib/coaching-explanation-contract.ts(316,44): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "reduced" | "normal" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+lib/coaching-explanation-contract.ts(325,17): error TS2367: This comparison appears to be unintentional because the types '"normal" | "elevated" | undefined' and '"increased"' have no overlap.
+lib/coaching-explanation-contract.ts(327,19): error TS2367: This comparison appears to be unintentional because the types '"normal" | "elevated" | undefined' and '"increased"' have no overlap.
+lib/coaching-explanation-contract.ts(391,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+lib/coaching-explanation-contract.ts(394,25): error TS2339: Property 'isPrimary' does not exist on type 'AdaptiveExercise'.
+lib/coaching-explanation-contract.ts(395,27): error TS2339: Property 'isProtected' does not exist on type 'AdaptiveExercise'.
+lib/coaching-explanation-contract.ts(905,5): error TS2345: Argument of type '"primary_skill" | "support" | "accessory" | "strength_output"' is not assignable to parameter of type '"primary" | "secondary" | "support" | "protection" | "fallback_minimal" | undefined'.
+lib/coaching-framework-engine.ts(287,63): error TS2322: Type '"elite"' is not assignable to type 'ExperienceLevel'.
+lib/coaching-framework-engine.ts(478,47): error TS2322: Type '"elite"' is not assignable to type 'ExperienceLevel'.
+lib/coaching-framework-engine.ts(696,47): error TS2367: This comparison appears to be unintentional because the types 'SkillKey | null' and '"iron_cross"' have no overlap.
+lib/compression-readiness.ts(87,5): error TS2353: Object literal may only specify known properties, and ''3_sec'' does not exist in type 'Record<LSitCapacity, number>'.
+lib/compression-readiness.ts(345,42): error TS2339: Property 'lSitCapacity' does not exist on type 'OnboardingProfile'.
+lib/consistency-momentum-engine.ts(163,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/consistency-momentum-engine.ts(164,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/consistency-momentum-engine.ts(165,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/consistency-momentum-engine.ts(271,5): error TS2322: Type '"increasing" | "stable" | "decreasing"' is not assignable to type '"stable" | "improving" | "declining"'.
+lib/consistency-momentum-engine.ts(679,20): error TS2304: Cannot find name 'getTrainingMomentum'.
+lib/constraint-aware-assembly-engine.ts(410,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | null' and '"REDUCE_INTENSITY"' have no overlap.
+lib/constraint-detection-engine.ts(12,35): error TS2459: Module '"./constraint-engine"' declares 'ConstraintResult' locally, but it is not exported.
+lib/constraint-detection-engine.ts(783,25): error TS2353: Object literal may only specify known properties, and 'isOptimal' does not exist in type '{ isTimeLimited: boolean; averageSessionMinutes: number; shortenedSessionRate: number; recommendation: string; }'.
+lib/constraint-detection-engine.ts(785,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(820,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(928,25): error TS2353: Object literal may only specify known properties, and 'isOptimal' does not exist in type '{ isTimeLimited: boolean; averageSessionMinutes: number; shortenedSessionRate: number; recommendation: string; }'.
+lib/constraint-detection-engine.ts(930,7): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: null; back_lever: null; planche: null; hspu: null; muscle_up: null; l_sit: null; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(957,9): error TS2741: Property 'iron_cross' is missing in type '{ front_lever: SkillConstraintResult; back_lever: SkillConstraintResult; planche: SkillConstraintResult; hspu: SkillConstraintResult; muscle_up: SkillConstraintResult; l_sit: SkillConstraintResult; }' but required in type 'Record<SkillType, SkillConstraintResult | null>'.
+lib/constraint-detection-engine.ts(1032,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-engine.ts(88,7): error TS2353: Object literal may only specify known properties, and 'recommendations' does not exist in type 'ConstraintResult'.
+lib/constraint-history-service.ts(2,30): error TS2724: '"./constraint-detection-engine"' has no exported member named 'ConstraintResult'. Did you mean 'SkillConstraintResult'?
+lib/constraint-integration.ts(197,54): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-integration.ts(294,46): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/constraint-integration.ts(307,58): error TS2345: Argument of type 'AthleteProfile | null' is not assignable to parameter of type 'AthleteProfile'.
+lib/cooldown-recovery-intelligence-engine.ts(627,28): error TS18048: 'regions' is possibly 'undefined'.
+lib/cooldown-recovery-intelligence-engine.ts(662,30): error TS18048: 'regions' is possibly 'undefined'.
+lib/dashboard-service.ts(127,3): error TS2322: Type '0' is not assignable to type 'SessionLengthMinutes'.
+lib/dashboard-service.ts(144,5): error TS2322: Type 'Partial<Record<ExerciseType, StrengthRecord | null>>' is not assignable to type 'Record<ExerciseType, StrengthRecord | null>'.
+lib/dashboard-service.ts(320,26): error TS2352: Conversion of type 'AdaptiveProgram' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/dashboard-service.ts(326,7): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/dashboard-service.ts(336,29): error TS2352: Conversion of type 'AdaptiveProgram' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/dashboard-service.ts(339,26): error TS2352: Conversion of type 'AdaptiveProgram' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/dashboard-service.ts(367,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+lib/doctrine-athlete-context-query.ts(40,10): error TS2305: Module '"./doctrine-db"' has no exported member 'sql'.
+lib/doctrine-coverage-validator.ts(68,13): error TS2367: This comparison appears to be unintentional because the types 'MovementFamily' and 'SkillType' have no overlap.
+lib/doctrine-to-output-verification.ts(199,35): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+lib/doctrine-to-output-verification.ts(438,30): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+lib/doctrine-to-output-verification.ts(521,21): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(522,25): error TS2339: Property 'holdTime' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.

@@ -1,0 +1,11 @@
+===== TOP ERROR FILES RANKED 6 TO 15 =====
+     48 lib/weak-point-engine.ts
+     46 lib/advanced-skill-graphs.ts
+     43 components/workout/StreamlinedWorkoutSession.tsx
+     40 lib/prediction/prediction-service.ts
+     29 lib/program-history-versioning.ts
+     27 lib/unified-coaching-engine.ts
+     26 lib/doctrine-runtime-contract.ts
+     25 lib/weak-point-detection.ts
+     22 lib/program-state.ts
+     21 lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts

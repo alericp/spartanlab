@@ -194,6 +194,135 @@ export function minMembersFor(groupType: GroupType): number {
   }
 }
 
+// =============================================================================
+// [PHASE 3F METHOD SEMANTIC TRUTH LOCK] AUTHORITATIVE GROUPED METHOD SEMANTICS
+// =============================================================================
+//
+// Single source of truth for the visible per-method copy used by:
+//   - components/programs/AdaptiveSessionCard.tsx (header label / tagline /
+//     member semantic line)
+//   - components/programs/lib/grouped-execution-prescription.ts (rest microcopy)
+//   - app/(app)/today/page.tsx (header tagline)
+//
+// Pre-AB10: this table existed only as a comment reference; multiple consumers
+// imported `getGroupedMethodSemantics` from this file but the export was lost
+// during conflict resolution, leaving the call sites compiling against a
+// missing symbol. Restoring exactly one authoritative typed helper here keeps
+// every consumer aligned and stops grouped semantics from drifting per-call-site.
+
+export interface GroupedMethodSemantics {
+  /** Short pill / header label e.g. "Superset". */
+  label: string
+  /** Sub-label rendered next to the header e.g. "alternating pair". */
+  headerTagline: string
+  /**
+   * Canonical rest microcopy for the block. For `superset`, encodes both
+   * intra-pair and after-pair rest separated by a comma — the resolver in
+   * grouped-execution-prescription.ts splits on the comma to produce two
+   * lines when the renderer wants them stacked.
+   */
+  restProtocol: string
+  /**
+   * Compact one-line cue rendered on each grouped member row. Returns null
+   * when no member-level cue applies for the position. Position is 0-indexed.
+   */
+  memberLine: (args: {
+    positionIndex: number
+    totalMembers: number
+    partnerName?: string
+  }) => string | null
+  /**
+   * [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Optional in-body cue strip rendered
+   * beneath grouped exercise rows by AdaptiveSessionCard's `getMethodBodyCue`.
+   * Populated only for methods that do NOT structurally self-express through
+   * row prefixes — `cluster` and `density_block`. `superset` and `circuit`
+   * deliberately leave this undefined so the strip is omitted (their A1/A2/B1/B2
+   * row prefixes already convey the structure visually). The lucide icon is
+   * selected at the call site (cluster -> Repeat, density -> Timer) because
+   * React component refs cannot be serialised into this data table.
+   */
+  bodyCue?: {
+    primary: string
+    secondary: string
+  }
+}
+
+const GROUPED_METHOD_SEMANTICS: Record<Exclude<GroupType, 'straight'>, GroupedMethodSemantics> = {
+  superset: {
+    label: 'Superset',
+    headerTagline: 'alternating pair',
+    // intra-pair rest, after-pair rest — comma separated for resolver split
+    restProtocol: '0–15s between, 90–120s after pair',
+    memberLine: ({ positionIndex, totalMembers, partnerName }) => {
+      if (totalMembers < 2) return null
+      if (positionIndex === 0) {
+        return partnerName
+          ? `Then immediately ${partnerName} — minimal rest`
+          : 'Then immediately partner — minimal rest'
+      }
+      // Last member of the pair completes the round
+      if (positionIndex === totalMembers - 1) {
+        return 'Rest 90–120s after both, repeat'
+      }
+      return 'Move to next without rest'
+    },
+  },
+  circuit: {
+    label: 'Circuit',
+    headerTagline: 'rotate, rest after round',
+    restProtocol: '60–90s after each round',
+    memberLine: ({ positionIndex, totalMembers }) => {
+      if (positionIndex === totalMembers - 1) {
+        return 'Rest 60–90s after round, repeat'
+      }
+      return 'Move to next exercise'
+    },
+  },
+  density_block: {
+    label: 'Density Block',
+    headerTagline: 'time-capped quality work',
+    restProtocol: 'Rest as needed to maintain quality',
+    memberLine: () => 'AMRAP — keep form, stop short of failure',
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Density does not self-express
+    // through row prefixes (no A1/B1 letters), so the in-body cue strip
+    // surfaces the work-capacity-vs-time framing the method requires.
+    bodyCue: {
+      primary: 'Work inside the time cap',
+      secondary: 'Maintain controlled pace and repeatable quality across the block.',
+    },
+  },
+  cluster: {
+    label: 'Cluster',
+    headerTagline: 'intra-set rest, high quality reps',
+    restProtocol: '10–15s between cluster reps, 2–3 min between cluster sets',
+    memberLine: () => 'Rest 10–15s between cluster reps',
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Clusters often emit as a single
+    // row, so without an in-body cue the row would look like an ordinary
+    // straight set. The strip explicitly names the cluster pattern.
+    bodyCue: {
+      primary: 'Cluster set — short pauses inside the set',
+      secondary: 'Use 10–15s intra-set rests to keep reps powerful and technically clean.',
+    },
+  },
+}
+
+/**
+ * Authoritative grouped method semantics resolver. Returns null for `straight`
+ * (no method-specific copy applies) so consumers can branch on presence with
+ * `if (!semantics) return null` / `semantics?.label`.
+ *
+ * One module, one table, one function — every grouped consumer reads the
+ * same truth so superset / circuit / density / cluster microcopy cannot
+ * drift between the program card, the today page header, and the execution
+ * prescription resolver.
+ */
+export function getGroupedMethodSemantics(
+  groupType: GroupType,
+): GroupedMethodSemantics | null {
+  if (groupType === 'straight') return null
+  return GROUPED_METHOD_SEMANTICS[groupType] ?? null
+}
+
 /**
  * [PARTIAL-VALIDITY] A member "resolves" when it has a usable name. Empty or
  * stub entries (e.g. single-letter placeholders) are not rendered. Unresolved

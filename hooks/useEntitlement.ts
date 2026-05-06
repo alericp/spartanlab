@@ -173,6 +173,11 @@ export function useEntitlement(): Entitlement {
   }
 
   // Owner simulation overlay
+  // [ENTITLEMENT-ACCESS-SOURCE-OWNER] `accessSource` is
+  // `'database' | 'owner' | 'unauthenticated'`. There is no
+  // `'ownerSimulation'` value on the union — owner simulation is a
+  // platform-owner overlay, so it MUST surface as `'owner'` to
+  // downstream consumers (gate logic, analytics).
   if (isSimulating) {
     if (simulationMode === 'free') {
       finalState = {
@@ -181,7 +186,7 @@ export function useEntitlement(): Entitlement {
         isPro: false,
         isTrialing: false,
         hasProAccess: false,
-        accessSource: 'ownerSimulation' as const,
+        accessSource: 'owner' as const,
       }
     } else if (simulationMode === 'pro') {
       finalState = {
@@ -190,7 +195,7 @@ export function useEntitlement(): Entitlement {
         isPro: true,
         isTrialing: false,
         hasProAccess: true,
-        accessSource: 'ownerSimulation' as const,
+        accessSource: 'owner' as const,
       }
     }
   }

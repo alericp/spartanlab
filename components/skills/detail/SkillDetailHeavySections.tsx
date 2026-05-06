@@ -60,18 +60,31 @@ export function SkillDetailHeavySections({
       const allSessions = getSkillSessions()
       const skillSessions = getSessionsBySkill(skillKey)
       const strengthRecords = getStrengthRecords()
+      // [PATTERN-BANK / NULLABILITY-OPTIONAL-OBJECT-DRIFT]
+      // `getAthleteProfile()` returns `AthleteProfile | null` (it returns null
+      // when running outside the browser, before storage is populated, or if
+      // the stored payload fails to parse). `generateSkillAnalysis` already
+      // accepts honestly optional inputs at this exact boundary:
+      //   - bodyweight: number | null
+      //   - experienceLevel: string = 'intermediate' (defaulted, so undefined
+      //     is accepted and the canonical 'intermediate' default applies)
+      // We therefore derive safe typed locals via optional chaining and pass
+      // them through unchanged. No fake bodyweight, no fake experience level,
+      // no `profile!`, no `as any`.
       const profile = getAthleteProfile()
-      
+      const bodyweight: number | null = profile?.bodyweight ?? null
+      const experienceLevel: string | undefined = profile?.experienceLevel
+
       setSessions(skillSessions)
-      
+
       const newAnalysis = generateSkillAnalysis(
         allSessions,
         skillKey,
         safeCurrentLevel,
         safeTargetLevel,
         strengthRecords,
-        profile.bodyweight,
-        profile.experienceLevel
+        bodyweight,
+        experienceLevel
       )
       
       setAnalysis(newAnalysis)

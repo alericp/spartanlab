@@ -1,0 +1,9 @@
+===== BUILDER OBJECT STALE KEYS =====
+lib/adaptive-program-builder.ts(10345,7): error TS2353: Object literal may only specify known properties, and 'preferredRepRange' does not exist in type 'OutcomeTrainingStyle'.
+lib/adaptive-program-builder.ts(10941,9): error TS2353: Object literal may only specify known properties, and 'internalLabel' does not exist in type 'MethodProfile'.
+lib/adaptive-program-builder.ts(11902,3): error TS2353: Object literal may only specify known properties, and 'outerDoctrineRecoveryTracker' does not exist in type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(17845,9): error TS2353: Object literal may only specify known properties, and 'recoveryLevel' does not exist in type '{ exercises: SessionExerciseForIdentity[]; templateFocus?: string | undefined; templateLabel?: string | undefined; primaryGoal: string; secondaryGoal?: string | ... 1 more ... | undefined; recoveryState?: "normal" | ... 3 more ... | undefined; isDeloadSession?: boolean | undefined; dayNumber: number; }'.
+lib/adaptive-program-builder.ts(20432,7): error TS2353: Object literal may only specify known properties, and 'sessionDurationMode' does not exist in type 'ProfileSnapshot'.
+lib/adaptive-program-builder.ts(26797,34): error TS2353: Object literal may only specify known properties, and 'fallbackUsed' does not exist in type 'string[]'.
+lib/adaptive-program-builder.ts(28830,11): error TS2353: Object literal may only specify known properties, and 'estimatedDurationMinutes' does not exist in type 'ValidatedSession'.
+lib/adaptive-program-builder.ts(29810,5): error TS2353: Object literal may only specify known properties, and 'roleInSession' does not exist in type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.

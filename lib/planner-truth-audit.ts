@@ -472,7 +472,9 @@ function auditWeightedEligibility(
       }
       
       // Check if weighted actually appeared
-      const hasLoad = ex.prescribedLoad && ex.prescribedLoad.load > 0
+      // [HAS-LOAD-FORCE-BOOLEAN] && short-circuit returned the
+      // truthy operand; the audit detail wants a strict boolean.
+      const hasLoad = Boolean(ex.prescribedLoad && ex.prescribedLoad.load > 0)
       if (hasLoad) actuallyAppeared++
       
       // Classify absence
@@ -799,8 +801,14 @@ function auditLimiterInfluence(
   profile: CanonicalProgrammingProfile,
   program: AdaptiveProgram
 ): LimiterInfluenceAudit {
-  // Get current limiter from profile diagnostics
-  const currentLimiter = profile.limiterIdentification?.currentLimiter || null
+  // [PLANNER-TRUTH-AUDIT-LIMITER-OPTIONAL] `limiterIdentification`
+  // is an optional diagnostic field — not declared on the canonical
+  // `CanonicalProgrammingProfile` contract. Bridge through `unknown`
+  // so the audit still surfaces a stable `currentLimiter` when the
+  // diagnostic happens to be present at runtime, without TS2339.
+  const currentLimiter =
+    (profile as unknown as { limiterIdentification?: { currentLimiter?: string | null } })
+      .limiterIdentification?.currentLimiter || null
   const limiterClaimedInRationale = currentLimiter 
     ? (program.programRationale?.toLowerCase()?.includes(currentLimiter.toLowerCase()) || false)
     : false
@@ -964,6 +972,43 @@ export function runPlannerTruthAudit(
   // [TASK 5] DETERMINE TOP ISSUE REASON
   // Priority order: primary goal -> sessions -> skills -> limiter -> rationale -> templates
   // ==========================================================================
+  // [PLANNER-TRUTH-AUDIT-ORDERING] The top-issue classification block
+  // below reads `weekSummary.totalExercises` and `selectedSkills.length`,
+  // both of which were defined later in the function — referencing them
+  // before declaration produced TS2448/TS2454. Hoist the week summary
+  // and selected skills computation above the classification so the
+  // priority cascade can read real density and skill count.
+  const selectedSkills = resolvedProfile.selectedSkills || []
+
+  let totalExercises = 0
+  let weightedCount = 0
+  let directCount = 0
+  let technicalCount = 0
+  let supportCount = 0
+  const families = new Set<string>()
+
+  for (const session of program.sessions) {
+    for (const ex of session.exercises) {
+      totalExercises++
+      families.add(getExerciseFamily(ex.id || ex.name))
+
+      if (ex.prescribedLoad && ex.prescribedLoad.load > 0) weightedCount++
+      if (ex.category === 'direct') directCount++
+      if (ex.category === 'technical') technicalCount++
+      if (ex.category === 'support') supportCount++
+    }
+  }
+
+  const weekSummary = {
+    sessionCount: program.sessions.length,
+    totalExercises,
+    uniqueExerciseFamilies: families.size,
+    weightedExerciseCount: weightedCount,
+    directWorkCount: directCount,
+    technicalWorkCount: technicalCount,
+    supportWorkCount: supportCount,
+  }
+
   let topIssueReason: ProgramQualityIssueReason = 'none'
   let topIssueDescription = 'Program quality meets expectations'
   
@@ -1025,36 +1070,10 @@ export function runPlannerTruthAudit(
     experienceLevel: resolvedProfile.experienceLevel || 'intermediate',
   }
   
-  // Build week summary
-  let totalExercises = 0
-  let weightedCount = 0
-  let directCount = 0
-  let technicalCount = 0
-  let supportCount = 0
-  const families = new Set<string>()
-  
-  for (const session of program.sessions) {
-    for (const ex of session.exercises) {
-      totalExercises++
-      families.add(getExerciseFamily(ex.id || ex.name))
-      
-      if (ex.prescribedLoad && ex.prescribedLoad.load > 0) weightedCount++
-      if (ex.category === 'direct') directCount++
-      if (ex.category === 'technical') technicalCount++
-      if (ex.category === 'support') supportCount++
-    }
-  }
-  
-  const weekSummary = {
-    sessionCount: program.sessions.length,
-    totalExercises,
-    uniqueExerciseFamilies: families.size,
-    weightedExerciseCount: weightedCount,
-    directWorkCount: directCount,
-    technicalWorkCount: technicalCount,
-    supportWorkCount: supportCount,
-  }
-  
+  // [PLANNER-TRUTH-AUDIT-ORDERING] week summary already computed above
+  // (hoisted alongside selectedSkills) so the top-issue classification
+  // can read it. No duplicate computation needed here.
+
   const report: PlannerTruthAuditReport = {
     auditTimestamp: new Date().toISOString(),
     auditVersion: '1.0',

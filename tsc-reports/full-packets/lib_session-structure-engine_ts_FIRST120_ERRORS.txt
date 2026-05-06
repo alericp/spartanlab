@@ -1,0 +1,37 @@
+lib/session-structure-engine.ts(20,36): error TS2459: Module '"./performance-envelope-engine"' declares 'MovementFamily' locally, but it is not exported.
+lib/session-structure-engine.ts(115,17): error TS2323: Cannot redeclare exported variable 'buildEMOMStructure'.
+lib/session-structure-engine.ts(216,17): error TS2323: Cannot redeclare exported variable 'buildLadderStructure'.
+lib/session-structure-engine.ts(296,17): error TS2323: Cannot redeclare exported variable 'buildPyramidStructure'.
+lib/session-structure-engine.ts(350,17): error TS2323: Cannot redeclare exported variable 'buildDensityBlockStructure'.
+lib/session-structure-engine.ts(449,17): error TS2323: Cannot redeclare exported variable 'buildShortSessionStructure'.
+lib/session-structure-engine.ts(530,17): error TS2323: Cannot redeclare exported variable 'buildSkillMicroSession'.
+lib/session-structure-engine.ts(619,17): error TS2323: Cannot redeclare exported variable 'selectSessionStructure'.
+lib/session-structure-engine.ts(946,17): error TS2323: Cannot redeclare exported variable 'adjustStructureForEnvelope'.
+lib/session-structure-engine.ts(1029,17): error TS2323: Cannot redeclare exported variable 'integrateWeakPointIntoStructure'.
+lib/session-structure-engine.ts(1087,17): error TS2323: Cannot redeclare exported variable 'getRecommendedStructureForStyle'.
+lib/session-structure-engine.ts(1135,17): error TS2323: Cannot redeclare exported variable 'checkStructureOveruse'.
+lib/session-structure-engine.ts(1187,17): error TS2323: Cannot redeclare exported variable 'getStructureCoachingDetails'.
+lib/session-structure-engine.ts(1311,3): error TS2323: Cannot redeclare exported variable 'selectSessionStructure'.
+lib/session-structure-engine.ts(1311,3): error TS2484: Export declaration conflicts with exported declaration of 'selectSessionStructure'.
+lib/session-structure-engine.ts(1312,3): error TS2323: Cannot redeclare exported variable 'buildEMOMStructure'.
+lib/session-structure-engine.ts(1312,3): error TS2484: Export declaration conflicts with exported declaration of 'buildEMOMStructure'.
+lib/session-structure-engine.ts(1313,3): error TS2323: Cannot redeclare exported variable 'buildLadderStructure'.
+lib/session-structure-engine.ts(1313,3): error TS2484: Export declaration conflicts with exported declaration of 'buildLadderStructure'.
+lib/session-structure-engine.ts(1314,3): error TS2323: Cannot redeclare exported variable 'buildPyramidStructure'.
+lib/session-structure-engine.ts(1314,3): error TS2484: Export declaration conflicts with exported declaration of 'buildPyramidStructure'.
+lib/session-structure-engine.ts(1315,3): error TS2323: Cannot redeclare exported variable 'buildDensityBlockStructure'.
+lib/session-structure-engine.ts(1315,3): error TS2484: Export declaration conflicts with exported declaration of 'buildDensityBlockStructure'.
+lib/session-structure-engine.ts(1316,3): error TS2323: Cannot redeclare exported variable 'buildShortSessionStructure'.
+lib/session-structure-engine.ts(1316,3): error TS2484: Export declaration conflicts with exported declaration of 'buildShortSessionStructure'.
+lib/session-structure-engine.ts(1317,3): error TS2323: Cannot redeclare exported variable 'buildSkillMicroSession'.
+lib/session-structure-engine.ts(1317,3): error TS2484: Export declaration conflicts with exported declaration of 'buildSkillMicroSession'.
+lib/session-structure-engine.ts(1318,3): error TS2323: Cannot redeclare exported variable 'adjustStructureForEnvelope'.
+lib/session-structure-engine.ts(1318,3): error TS2484: Export declaration conflicts with exported declaration of 'adjustStructureForEnvelope'.
+lib/session-structure-engine.ts(1319,3): error TS2323: Cannot redeclare exported variable 'integrateWeakPointIntoStructure'.
+lib/session-structure-engine.ts(1319,3): error TS2484: Export declaration conflicts with exported declaration of 'integrateWeakPointIntoStructure'.
+lib/session-structure-engine.ts(1320,3): error TS2323: Cannot redeclare exported variable 'getRecommendedStructureForStyle'.
+lib/session-structure-engine.ts(1320,3): error TS2484: Export declaration conflicts with exported declaration of 'getRecommendedStructureForStyle'.
+lib/session-structure-engine.ts(1321,3): error TS2323: Cannot redeclare exported variable 'checkStructureOveruse'.
+lib/session-structure-engine.ts(1321,3): error TS2484: Export declaration conflicts with exported declaration of 'checkStructureOveruse'.
+lib/session-structure-engine.ts(1322,3): error TS2323: Cannot redeclare exported variable 'getStructureCoachingDetails'.
+lib/session-structure-engine.ts(1322,3): error TS2484: Export declaration conflicts with exported declaration of 'getStructureCoachingDetails'.

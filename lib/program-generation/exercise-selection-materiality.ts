@@ -699,8 +699,10 @@ function scoreEquipmentFit(
   
   const requiredEquipment = exercise.equipment || []
   
-  // No equipment needed - good for minimalist
-  if (requiredEquipment.length === 0 || requiredEquipment.includes('none')) {
+  // [NO-EQUIPMENT-CHECK] EquipmentType union does not include `'none'`;
+  // bodyweight-only exercises register with an empty equipment array
+  // or a `'floor'` entry instead.
+  if (requiredEquipment.length === 0 || requiredEquipment.includes('floor')) {
     if (context.trainingStyle === 'minimalist') {
       score = 15
       notes.push('Bodyweight-only matches minimalist style')
@@ -848,8 +850,24 @@ function scoreScheduleComplexity(
   let score = 5
   let isGoodFit = false
   
-  const fatigueCost = exercise.fatigueCost || 'moderate'
-  const neuralDemand = exercise.neuralDemand || 'moderate'
+  // [MATERIALITY-FATIGUE-NORMALIZE] The canonical Exercise schema now
+  // exposes `fatigueCost`/`neuralDemand` as numeric scores (0-10) on
+  // some sources and string buckets on others. Normalize to the
+  // string bucket here so the existing equality compares stay
+  // type-safe and behave identically. Numeric scores follow the
+  // standard 0-3 = low, 4-6 = moderate, 7-8 = high, 9+ = very_high.
+  const _toBucket = (v: number | string | undefined): 'low' | 'moderate' | 'high' | 'very_high' => {
+    if (typeof v === 'string') {
+      return (v === 'low' || v === 'moderate' || v === 'high' || v === 'very_high') ? v : 'moderate'
+    }
+    if (typeof v !== 'number' || !Number.isFinite(v)) return 'moderate'
+    if (v <= 3) return 'low'
+    if (v <= 6) return 'moderate'
+    if (v <= 8) return 'high'
+    return 'very_high'
+  }
+  const fatigueCost = _toBucket(exercise.fatigueCost)
+  const neuralDemand = _toBucket(exercise.neuralDemand)
   
   // Match complexity to session budget
   if (context.sessionComplexityBudget === 'low') {
@@ -1064,7 +1082,10 @@ export function buildExerciseSelectionMaterialityContext(
   }
 ): ExerciseMaterialityContext {
   // Detect training style from equipment if not provided
-  const hasWeightedEquipment = equipmentAvailable.includes('weighted_belt') ||
+  // [WEIGHTED-EQUIPMENT-CANONICAL] EquipmentType uses `'weights'` for
+  // any weighted-belt / dumbbell / plate equipment; legacy
+  // `'weighted_belt'` is no longer in the union.
+  const hasWeightedEquipment = equipmentAvailable.includes('weights') ||
                                equipmentAvailable.includes('dumbbells' as EquipmentType) ||
                                equipmentAvailable.includes('weight_plates' as EquipmentType)
   

@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Crown, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useSubscriptionStatus } from '@/lib/billing/subscription-status'
+import { useEntitlement, type Entitlement } from '@/hooks/useEntitlement'
 import { isSimulationActive } from '@/lib/billing/subscription-simulation'
 
 // =============================================================================
@@ -24,6 +24,47 @@ interface ProBadgeProps {
   className?: string
 }
 
+// =============================================================================
+// LOCAL ENTITLEMENT → UI STATUS PROJECTION
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / CANONICAL ENTITLEMENT MIGRATION]
+// The legacy `useSubscriptionStatus` hook was removed from
+// `lib/billing/subscription-status`. The canonical client-side
+// entitlement source is now `useEntitlement` (hooks/useEntitlement.ts),
+// which exposes `isTrialing`, `hasProAccess`, `isOwner`, etc., but
+// does NOT expose `trialDaysRemaining` or `planLabel`. This local
+// projection preserves the legacy hook's visible UI surface
+// (status / isTrial / trialDaysRemaining / planLabel / isOwner)
+// without reintroducing localStorage truth or stacking a new
+// useSubscriptionStatus hook on top of the canonical system.
+// `trialDaysRemaining` defaults to 0 per the migration spec since
+// the canonical entitlement API does not expose exact day counts.
+type LegacyDisplayStatus = 'free' | 'trial' | 'pro'
+
+interface LegacyDisplayShape {
+  status: LegacyDisplayStatus
+  isTrial: boolean
+  trialDaysRemaining: number
+  planLabel: string
+  isOwner: boolean
+}
+
+function projectEntitlementToLegacyDisplay(entitlement: Entitlement): LegacyDisplayShape {
+  const status: LegacyDisplayStatus = entitlement.isTrialing
+    ? 'trial'
+    : entitlement.hasProAccess
+      ? 'pro'
+      : 'free'
+  const planLabel = status === 'pro' ? 'Pro' : status === 'trial' ? 'Trial' : 'Free'
+  return {
+    status,
+    isTrial: entitlement.isTrialing,
+    trialDaysRemaining: 0,
+    planLabel,
+    isOwner: entitlement.isOwner,
+  }
+}
+
 /**
  * Pro Badge - Premium identity indicator
  * 
@@ -38,7 +79,8 @@ export function ProBadge({
   showIcon = true,
   className,
 }: ProBadgeProps) {
-  const { status, isTrial, trialDaysRemaining } = useSubscriptionStatus()
+  const entitlement = useEntitlement()
+  const { status, isTrial, trialDaysRemaining } = projectEntitlementToLegacyDisplay(entitlement)
   
   // Determine which variant to show
   let displayVariant: 'pro' | 'trial'
@@ -113,7 +155,8 @@ interface PlanStatusBadgeProps {
  * Owner in simulation mode shows simulated state badge
  */
 export function PlanStatusBadge({ className, size = 'sm' }: PlanStatusBadgeProps) {
-  const { status, isOwner } = useSubscriptionStatus()
+  const entitlement = useEntitlement()
+  const { status, isOwner } = projectEntitlementToLegacyDisplay(entitlement)
   const simActive = isOwner && isSimulationActive()
   
   // Owner in simulation mode - show simulated state badge (not Owner badge)
@@ -160,7 +203,8 @@ export function SubscriptionStatusIndicator({
   compact = false, 
   className 
 }: SubscriptionStatusIndicatorProps) {
-  const { status, planLabel, trialDaysRemaining, isOwner } = useSubscriptionStatus()
+  const entitlement = useEntitlement()
+  const { status, planLabel, trialDaysRemaining, isOwner } = projectEntitlementToLegacyDisplay(entitlement)
   const simActive = isOwner && isSimulationActive()
   
   if (compact) {
@@ -250,4 +294,10 @@ export function SubscriptionStatusIndicator({
 // EXPORTS
 // =============================================================================
 
-export { useSubscriptionStatus } from '@/lib/billing/subscription-status'
+// [PRE-AB6 BUILD GREEN GATE / CANONICAL ENTITLEMENT MIGRATION]
+// Re-export the canonical entitlement hook so any external consumer
+// previously importing the (now-removed) `useSubscriptionStatus`
+// from this module can migrate to the canonical hook directly.
+// Grep confirmed zero external consumers of `useSubscriptionStatus`
+// before this change, so removing that re-export is safe.
+export { useEntitlement } from '@/hooks/useEntitlement'

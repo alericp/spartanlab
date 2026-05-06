@@ -87,7 +87,8 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
       })
       
       // Check for newly unlocked achievements
-      const newAchievements = onTrainingEvent()
+      // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] see QuickLogModal.tsx note.
+      const newAchievements = onTrainingEvent('workout_complete')
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
       }

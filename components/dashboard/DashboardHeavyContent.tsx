@@ -181,7 +181,17 @@ export default function DashboardHeavyContent({
       setOverview(data)
     } catch (e) {
       console.error('[v0] DashboardHeavy CRASH at getDashboardOverview:', e)
-      setOverview({ profile: null as any, progressions: [], workouts: [], goals: [] })
+      // [PRE-AB6 BUILD GREEN GATE / DASHBOARDOVERVIEW FALLBACK CONTRACT]
+      // The authoritative DashboardOverview (lib/dashboard-service.ts:50)
+      // requires non-null `user`, `profile`, `progressions`,
+      // `strengthRecords`, and a `latestProgram: GeneratedProgram | null`.
+      // The previous fallback invented phantom `workouts`/`goals` fields,
+      // omitted required fields, and faked `profile: null as any`. The
+      // safe path is to leave overview null — the render guard at the
+      // top of the component (`if (!loaded || !overview || !userState)`)
+      // already routes a null overview to <DashboardSkeleton />, so no
+      // UI redesign or fake-healthy-data is needed here.
+      setOverview(null)
       setLoaded(true)
       return
     }
@@ -208,6 +218,31 @@ export default function DashboardHeavyContent({
       try {
         const profile = data.profile
         const recovery = calculateRecoverySignal()
+        // [PRE-AB6 BUILD GREEN GATE / RECOVERYSIGNAL CONTRACT]
+        // Authoritative RecoverySignal (lib/recovery-engine.ts:14)
+        // exposes:
+        //   level: 'HIGH' | 'MODERATE' | 'LOW'
+        //   score: number (0-100)
+        //   message: string
+        //   factors: { volumeLoad, trainingFrequency, recencyGap, ... }
+        // There is no `readinessLevel` field. Recovery and fatigue are
+        // inverses: HIGH recovery means LOW fatigue, LOW recovery means
+        // HIGH fatigue. Map directly off the canonical `level` field
+        // and default to 'moderate' when recovery is unavailable. This
+        // is a dashboard-side translator only; it does not introduce a
+        // second recovery engine.
+        const currentFatigueLevel: 'low' | 'moderate' | 'high' =
+          recovery?.level === 'LOW'
+            ? 'high'
+            : recovery?.level === 'HIGH'
+              ? 'low'
+              : 'moderate'
+        // [PRE-AB6 BUILD GREEN GATE / ATHLETEPROFILE CONTRACT]
+        // AthleteProfile (lib/data-service.ts:42-67) does NOT expose
+        // `rangeTrainingMode`. SelectionContext.rangeTrainingMode
+        // (lib/training-principles-engine.ts:906) is optional, so
+        // omitting it here is type-correct and avoids inventing
+        // athlete-profile truth that the data layer does not store.
         const selectionContext: SelectionContext = {
           primaryGoal: (profile.primaryGoal || 'general_strength') as any,
           experienceLevel: profile.experienceLevel || 'intermediate',
@@ -215,9 +250,8 @@ export default function DashboardHeavyContent({
           sorenessToleranceHigh: false,
           sessionMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
           trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
-          currentFatigueLevel: recovery?.readinessLevel === 'low' ? 'high' : 'moderate',
+          currentFatigueLevel,
           recentSorenessLevel: 'mild',
-          rangeTrainingMode: profile.rangeTrainingMode || undefined,
         }
         const methods = selectMethodProfiles(selectionContext)
         setTrainingMethods(methods)
@@ -281,6 +315,82 @@ export default function DashboardHeavyContent({
   const safeProgressOverview = progressOverview && typeof progressOverview === 'object' ? progressOverview : null
   const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
   const safeStrength = safeProgressOverview && Array.isArray(safeProgressOverview.strength) ? safeProgressOverview.strength : []
+
+  // [PRE-AB6 BUILD GREEN GATE / SKILLFOCUSNOTE CONTRACT]
+  // CurrentFocus (lib/dashboard-service.ts:104) exposes only
+  // { mainFocus, supportingFocus, hasEnoughData } — there is no
+  // `skillName` field. SkillFocusNote (PremiumSkillProgressCard.tsx:12)
+  // requires a skillName that is matched case-insensitively against
+  // SkillProgressData.skillName (lib/progress-streak-engine.ts:22).
+  // Derive a real skill identifier by matching focusSummary's
+  // user-facing focus labels against each skill's canonical
+  // `skillName` and user-facing `displayName`. Only emit a focus
+  // note when constraintInsight has a real label AND a matching
+  // skill exists in safeSkills — otherwise pass an empty array
+  // rather than fabricating a blank skillName.
+  const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, ' ').trim()
+  const mainFocusNorm = focusSummary?.mainFocus ? normalize(focusSummary.mainFocus) : ''
+  const supportingFocusNorm = focusSummary?.supportingFocus ? normalize(focusSummary.supportingFocus) : ''
+  const matchedFocusSkill = (mainFocusNorm || supportingFocusNorm)
+    ? safeSkills.find((skill) => {
+        const candidates = [skill.skillName, skill.displayName]
+          .filter((c): c is string => typeof c === 'string' && c.length > 0)
+          .map(normalize)
+        return candidates.some((candidate) => {
+          if (!candidate) return false
+          if (mainFocusNorm && (mainFocusNorm.includes(candidate) || candidate.includes(mainFocusNorm))) return true
+          if (supportingFocusNorm && (supportingFocusNorm.includes(candidate) || candidate.includes(supportingFocusNorm))) return true
+          return false
+        })
+      })
+    : undefined
+  const focusNotesForSkillProgress: SkillFocusNote[] =
+    constraintInsight?.hasInsight && constraintInsight.label && matchedFocusSkill?.skillName
+      ? [{
+          skillName: matchedFocusSkill.skillName,
+          note: constraintInsight.label,
+          type: 'limiter' as const,
+        }]
+      : []
+
+  // [PRE-AB6 BUILD GREEN GATE / SKILLREADINESS PROFILE ADAPTER]
+  // The active AthleteProfile (lib/data-service.ts:42) exposes only
+  // pullUpMax?, dipMax?, experienceLevel, and equipmentAvailable
+  // (Equipment[]) for strength/equipment data. It does NOT expose
+  // pushUpMax, hollowHoldTime, or `equipment`. SkillReadinessPanelProps
+  // (components/readiness/SkillReadinessPanel.tsx:21-31) accepts every
+  // field as optional with `| null` for benchmarks, so the honest
+  // adapter passes:
+  //   - real pullUpMax / dipMax (with `?? null`)
+  //   - null for unstored benchmarks (pushUpMax, hollowHoldTime)
+  //   - equipmentAvailable mapped to string[] (Equipment is a string-
+  //     literal union, structurally assignable to string[])
+  //   - primarySkill derived from focusSummary.mainFocus /
+  //     supportingFocus (real CurrentFocus fields), normalized and
+  //     constrained to known skill keys, or undefined.
+  const KNOWN_SKILL_KEYS = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit', 'iron_cross'] as const
+  type KnownSkillKey = typeof KNOWN_SKILL_KEYS[number]
+  const toKnownSkillKey = (s: string | null | undefined): KnownSkillKey | undefined => {
+    if (!s) return undefined
+    const normalized = s.toLowerCase().replace(/[\s-]+/g, '_').trim()
+    return KNOWN_SKILL_KEYS.find(
+      (k) => normalized === k || normalized.includes(k) || k.includes(normalized)
+    )
+  }
+  const primarySkillFromFocus =
+    toKnownSkillKey(focusSummary?.mainFocus) ??
+    toKnownSkillKey(focusSummary?.supportingFocus)
+  const readinessAthleteProfile = overview?.profile
+    ? {
+        pullUpMax: overview.profile.pullUpMax ?? null,
+        dipMax: overview.profile.dipMax ?? null,
+        pushUpMax: null,
+        hollowHoldTime: null,
+        experienceLevel: overview.profile.experienceLevel,
+        equipment: overview.profile.equipmentAvailable ?? [],
+        primarySkill: primarySkillFromFocus,
+      }
+    : undefined
 
   return (
     <>
@@ -388,11 +498,7 @@ export default function DashboardHeavyContent({
             <SafeWidget name="SkillProgressSection">
               <SkillProgressSection 
                 skills={safeSkills}
-                focusNotes={constraintInsight?.hasInsight ? [{
-                  skillName: focusSummary?.skillName || '',
-                  note: constraintInsight.label || '',
-                  type: 'limiter' as const,
-                }] : []}
+                focusNotes={focusNotesForSkillProgress}
                 goalSummaries={[]}
                 maxDisplay={4}
               />
@@ -412,16 +518,8 @@ export default function DashboardHeavyContent({
       {/* SECTION: SKILL READINESS - Only show for users with real workout data */}
       {ENABLE_SECTION_SKILL_READINESS && showMatureWidgets && overview?.profile && (
         <SafeWidget name="SkillReadinessPanel">
-          <SkillReadinessPanel 
-            athleteProfile={{
-              pullUpMax: overview.profile.pullUpMax,
-              dipMax: overview.profile.dipMax,
-              pushUpMax: overview.profile.pushUpMax,
-              hollowHoldTime: overview.profile.hollowHoldTime,
-              experienceLevel: overview.profile.experienceLevel,
-              equipment: overview.profile.equipment,
-              primarySkill: focusSummary?.skillName?.toLowerCase().replace(/[\s-]+/g, '_'),
-            }}
+          <SkillReadinessPanel
+            athleteProfile={readinessAthleteProfile}
             skills={['front_lever', 'planche', 'muscle_up', 'hspu', 'l_sit']}
             maxDisplay={3}
           />

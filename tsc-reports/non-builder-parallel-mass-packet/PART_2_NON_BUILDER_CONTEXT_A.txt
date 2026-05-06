@@ -1,0 +1,1705 @@
+===== PART 2 — NON-BUILDER CONTEXT A =====
+Purpose: local code windows for exact non-builder errors. Use anchors and ±80-line drift rule. Do not touch builder.
+
+--- NON-BUILDER ERROR 001 | lib/canonical-profile-service.ts:1269:9 | TS2322 ---
+lib/canonical-profile-service.ts(1269,9): error TS2322: Type 'TrainingDaysPerWeek | null' is not assignable to type 'number | null'.
+Suggested search anchors: TrainingDaysPerWeek | null, number | null, canonical, profile, service, TS2322, TrainingDaysPerWeek, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1261-1277:
+   1261:       repairReason,
+   1262:     })
+   1263:   }
+   1264:   
+   1265:   return {
+   1266:     diagnosis: {
+   1267:       onboarding: {
+   1268:         scheduleMode: onboarding?.scheduleMode ?? null,
+>> 1269:         trainingDaysPerWeek: onboarding?.trainingDaysPerWeek ?? null,
+   1270:       },
+   1271:       athlete: {
+   1272:         scheduleMode: athlete?.scheduleMode ?? null,
+   1273:         trainingDaysPerWeek: athlete?.trainingDaysPerWeek ?? null,
+   1274:       },
+   1275:       canonical: {
+   1276:         scheduleMode: canonical.scheduleMode ?? null,
+   1277:         trainingDaysPerWeek: canonical.trainingDaysPerWeek ?? null,
+
+--- NON-BUILDER ERROR 002 | lib/canonical-profile-service.ts:1364:50 | TS2322 ---
+lib/canonical-profile-service.ts(1364,50): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+Suggested search anchors: number | null, number | undefined, canonical, profile, service, TS2322, number, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1356-1372:
+   1356:   
+   1357:   // 1. Update athlete profile (data-service)
+   1358:   const athleteUpdates: Partial<AthleteProfile> = {}
+   1359:   
+   1360:   if (updates.primaryGoal !== undefined) athleteUpdates.primaryGoal = updates.primaryGoal
+   1361:   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
+   1362:   // ISSUE A FIX: Do not fallback to 4 - preserve the actual canonical value
+   1363:   // Only use the value if explicitly set, never inject defaults during save
+>> 1364:   if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+   1365:   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
+   1366:   // ISSUE A/B FIX: sessionDurationMode - store in athlete profile for downstream consumption
+   1367:   if (updates.sessionDurationMode !== undefined) {
+   1368:     athleteUpdates.sessionDurationMode = updates.sessionDurationMode
+   1369:   }
+   1370:   if (updates.sessionLengthMinutes !== undefined) athleteUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as 30 | 45 | 60 | 90
+   1371:   if (updates.equipmentAvailable !== undefined) athleteUpdates.equipmentAvailable = updates.equipmentAvailable as AthleteProfile['equipmentAvailable']
+   1372:   if (updates.jointCautions !== undefined) athleteUpdates.jointCautions = updates.jointCautions as AthleteProfile['jointCautions']
+
+--- NON-BUILDER ERROR 003 | lib/canonical-profile-service.ts:1400:44 | TS2322 ---
+lib/canonical-profile-service.ts(1400,44): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+Suggested search anchors: string | null, PrimaryGoalType | null | undefined, canonical, profile, service, TS2322, string, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1392-1408:
+   1392:   if (currentOnboarding) {
+   1393:     // [LEGACY-ONBOARDING-UPDATES-WIDENED] Some persisted-only legacy fields
+   1394:     // (e.g. singular `goalCategory`) are still synced from the canonical
+   1395:     // service even though they no longer appear on the strict
+   1396:     // `OnboardingProfile` type. Widen the local update accumulator with
+   1397:     // the same legacy slice the reconciler uses.
+   1398:     const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
+   1399:     
+>> 1400:     if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
+   1401:     if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
+   1402:     if (updates.selectedSkills !== undefined) onboardingUpdates.selectedSkills = updates.selectedSkills
+   1403:     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+   1404:     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
+   1405:     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+   1406:     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
+   1407:     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+
+--- NON-BUILDER ERROR 004 | lib/canonical-profile-service.ts:1401:46 | TS2322 ---
+lib/canonical-profile-service.ts(1401,46): error TS2322: Type 'string | null' is not assignable to type 'PrimaryGoalType | null | undefined'.
+Suggested search anchors: string | null, PrimaryGoalType | null | undefined, canonical, profile, service, TS2322, string, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1393-1409:
+   1393:     // [LEGACY-ONBOARDING-UPDATES-WIDENED] Some persisted-only legacy fields
+   1394:     // (e.g. singular `goalCategory`) are still synced from the canonical
+   1395:     // service even though they no longer appear on the strict
+   1396:     // `OnboardingProfile` type. Widen the local update accumulator with
+   1397:     // the same legacy slice the reconciler uses.
+   1398:     const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
+   1399:     
+   1400:     if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
+>> 1401:     if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
+   1402:     if (updates.selectedSkills !== undefined) onboardingUpdates.selectedSkills = updates.selectedSkills
+   1403:     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+   1404:     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
+   1405:     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+   1406:     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
+   1407:     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+   1409:     // Previously this was MISSING, causing canonical resolution to fallback to flexible
+
+--- NON-BUILDER ERROR 005 | lib/canonical-profile-service.ts:1402:47 | TS2322 ---
+lib/canonical-profile-service.ts(1402,47): error TS2322: Type 'string[]' is not assignable to type 'SkillGoal[]'.
+Suggested search anchors: string[], SkillGoal[], canonical, profile, service, TS2322, string, SkillGoal
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1394-1410:
+   1394:     // (e.g. singular `goalCategory`) are still synced from the canonical
+   1395:     // service even though they no longer appear on the strict
+   1396:     // `OnboardingProfile` type. Widen the local update accumulator with
+   1397:     // the same legacy slice the reconciler uses.
+   1398:     const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
+   1399:     
+   1400:     if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
+   1401:     if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
+>> 1402:     if (updates.selectedSkills !== undefined) onboardingUpdates.selectedSkills = updates.selectedSkills
+   1403:     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+   1404:     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
+   1405:     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+   1406:     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
+   1407:     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+   1409:     // Previously this was MISSING, causing canonical resolution to fallback to flexible
+   1410:     // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
+
+--- NON-BUILDER ERROR 006 | lib/canonical-profile-service.ts:1403:52 | TS2322 ---
+lib/canonical-profile-service.ts(1403,52): error TS2322: Type 'string[]' is not assignable to type 'FlexibilityGoal[]'.
+Suggested search anchors: string[], FlexibilityGoal[], canonical, profile, service, TS2322, string, FlexibilityGoal
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1395-1411:
+   1395:     // service even though they no longer appear on the strict
+   1396:     // `OnboardingProfile` type. Widen the local update accumulator with
+   1397:     // the same legacy slice the reconciler uses.
+   1398:     const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
+   1399:     
+   1400:     if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
+   1401:     if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
+   1402:     if (updates.selectedSkills !== undefined) onboardingUpdates.selectedSkills = updates.selectedSkills
+>> 1403:     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+   1404:     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
+   1405:     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+   1406:     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
+   1407:     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+   1409:     // Previously this was MISSING, causing canonical resolution to fallback to flexible
+   1410:     // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
+   1411:     if (updates.trainingDaysPerWeek !== undefined) onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+
+--- NON-BUILDER ERROR 007 | lib/canonical-profile-service.ts:1411:52 | TS2322 ---
+lib/canonical-profile-service.ts(1411,52): error TS2322: Type 'number | null' is not assignable to type 'TrainingDaysPerWeek | null | undefined'.
+Suggested search anchors: number | null, TrainingDaysPerWeek | null | undefined, canonical, profile, service, TS2322, number, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1403-1419:
+   1403:     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
+   1404:     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
+   1405:     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+   1406:     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
+   1407:     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+   1409:     // Previously this was MISSING, causing canonical resolution to fallback to flexible
+   1410:     // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
+>> 1411:     if (updates.trainingDaysPerWeek !== undefined) onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+   1412:     // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
+   1413:     if (updates.sessionDurationMode !== undefined) {
+   1414:       onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
+   1415:     }
+   1416:     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
+   1417:     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
+   1418:     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
+   1419:     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
+
+--- NON-BUILDER ERROR 008 | lib/canonical-profile-service.ts:1416:53 | TS2322 ---
+lib/canonical-profile-service.ts(1416,53): error TS2322: Type 'number' is not assignable to type 'SessionLengthPreference | null | undefined'.
+Suggested search anchors: number, SessionLengthPreference | null | undefined, canonical, profile, service, TS2322, SessionLengthPreference, null
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1408-1424:
+   1408:     // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+   1409:     // Previously this was MISSING, causing canonical resolution to fallback to flexible
+   1410:     // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
+   1411:     if (updates.trainingDaysPerWeek !== undefined) onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+   1412:     // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
+   1413:     if (updates.sessionDurationMode !== undefined) {
+   1414:       onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
+   1415:     }
+>> 1416:     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
+   1417:     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
+   1418:     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
+   1419:     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
+   1420:     if (updates.weakestArea !== undefined) onboardingUpdates.weakestArea = updates.weakestArea as OnboardingProfile['weakestArea']
+   1421:     if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
+   1422:     if (updates.onboardingComplete !== undefined) onboardingUpdates.onboardingComplete = updates.onboardingComplete
+   1423:     
+   1424:     // Strength benchmarks
+
+--- NON-BUILDER ERROR 009 | lib/canonical-profile-service.ts:1421:123 | TS2339 ---
+lib/canonical-profile-service.ts(1421,123): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+Suggested search anchors: trainingStyle, OnboardingProfile, canonical, profile, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1413-1429:
+   1413:     if (updates.sessionDurationMode !== undefined) {
+   1414:       onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
+   1415:     }
+   1416:     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
+   1417:     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
+   1418:     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
+   1419:     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
+   1420:     if (updates.weakestArea !== undefined) onboardingUpdates.weakestArea = updates.weakestArea as OnboardingProfile['weakestArea']
+>> 1421:     if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
+   1422:     if (updates.onboardingComplete !== undefined) onboardingUpdates.onboardingComplete = updates.onboardingComplete
+   1423:     
+   1424:     // Strength benchmarks
+   1425:     if (updates.pullUpMax !== undefined) onboardingUpdates.pullUpMax = updates.pullUpMax as OnboardingProfile['pullUpMax']
+   1426:     if (updates.dipMax !== undefined) onboardingUpdates.dipMax = updates.dipMax as OnboardingProfile['dipMax']
+   1427:     if (updates.pushUpMax !== undefined) onboardingUpdates.pushUpMax = updates.pushUpMax as OnboardingProfile['pushUpMax']
+   1428:     if (updates.wallHSPUReps !== undefined) onboardingUpdates.wallHSPUReps = updates.wallHSPUReps as OnboardingProfile['wallHSPUReps']
+   1429:     if (updates.weightedPullUp !== undefined) onboardingUpdates.weightedPullUp = updates.weightedPullUp
+
+--- NON-BUILDER ERROR 010 | lib/canonical-profile-service.ts:1429:47 | TS2322 ---
+lib/canonical-profile-service.ts(1429,47): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+Suggested search anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, WeightedBenchmark | null | undefined, canonical, profile, service, TS2322, addedWeight, number
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1421-1437:
+   1421:     if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
+   1422:     if (updates.onboardingComplete !== undefined) onboardingUpdates.onboardingComplete = updates.onboardingComplete
+   1423:     
+   1424:     // Strength benchmarks
+   1425:     if (updates.pullUpMax !== undefined) onboardingUpdates.pullUpMax = updates.pullUpMax as OnboardingProfile['pullUpMax']
+   1426:     if (updates.dipMax !== undefined) onboardingUpdates.dipMax = updates.dipMax as OnboardingProfile['dipMax']
+   1427:     if (updates.pushUpMax !== undefined) onboardingUpdates.pushUpMax = updates.pushUpMax as OnboardingProfile['pushUpMax']
+   1428:     if (updates.wallHSPUReps !== undefined) onboardingUpdates.wallHSPUReps = updates.wallHSPUReps as OnboardingProfile['wallHSPUReps']
+>> 1429:     if (updates.weightedPullUp !== undefined) onboardingUpdates.weightedPullUp = updates.weightedPullUp
+   1430:     if (updates.weightedDip !== undefined) onboardingUpdates.weightedDip = updates.weightedDip
+   1431:     
+   1432:     // All-time PR benchmarks
+   1433:     if (updates.allTimePRPullUp !== undefined) {
+   1434:       onboardingUpdates.allTimePRPullUp = updates.allTimePRPullUp as OnboardingProfile['allTimePRPullUp']
+   1435:     }
+   1436:     if (updates.allTimePRDip !== undefined) {
+   1437:       onboardingUpdates.allTimePRDip = updates.allTimePRDip as OnboardingProfile['allTimePRDip']
+
+--- NON-BUILDER ERROR 011 | lib/canonical-profile-service.ts:1430:44 | TS2322 ---
+lib/canonical-profile-service.ts(1430,44): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'WeightedBenchmark | null | undefined'.
+Suggested search anchors: { addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null, WeightedBenchmark | null | undefined, canonical, profile, service, TS2322, addedWeight, number
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 1422-1438:
+   1422:     if (updates.onboardingComplete !== undefined) onboardingUpdates.onboardingComplete = updates.onboardingComplete
+   1423:     
+   1424:     // Strength benchmarks
+   1425:     if (updates.pullUpMax !== undefined) onboardingUpdates.pullUpMax = updates.pullUpMax as OnboardingProfile['pullUpMax']
+   1426:     if (updates.dipMax !== undefined) onboardingUpdates.dipMax = updates.dipMax as OnboardingProfile['dipMax']
+   1427:     if (updates.pushUpMax !== undefined) onboardingUpdates.pushUpMax = updates.pushUpMax as OnboardingProfile['pushUpMax']
+   1428:     if (updates.wallHSPUReps !== undefined) onboardingUpdates.wallHSPUReps = updates.wallHSPUReps as OnboardingProfile['wallHSPUReps']
+   1429:     if (updates.weightedPullUp !== undefined) onboardingUpdates.weightedPullUp = updates.weightedPullUp
+>> 1430:     if (updates.weightedDip !== undefined) onboardingUpdates.weightedDip = updates.weightedDip
+   1431:     
+   1432:     // All-time PR benchmarks
+   1433:     if (updates.allTimePRPullUp !== undefined) {
+   1434:       onboardingUpdates.allTimePRPullUp = updates.allTimePRPullUp as OnboardingProfile['allTimePRPullUp']
+   1435:     }
+   1436:     if (updates.allTimePRDip !== undefined) {
+   1437:       onboardingUpdates.allTimePRDip = updates.allTimePRDip as OnboardingProfile['allTimePRDip']
+   1438:     }
+
+--- NON-BUILDER ERROR 012 | lib/canonical-profile-service.ts:1511:129 | TS2339 ---
+lib/canonical-profile-service.ts(1511,129): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+Suggested search anchors: level, FlexibilityBenchmark | null, canonical, profile, service, TS2339, FlexibilityBenchmark, null
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1503-1519:
+   1503:     if (updates.frontSplitsLevel !== undefined || updates.frontSplitsRangeIntent !== undefined) {
+   1504:       onboardingUpdates.frontSplits = { 
+   1505:         level: (updates.frontSplitsLevel ?? currentOnboarding.frontSplits?.level ?? 'unknown') as FrontSplitsSlice['level'], 
+   1506:         rangeIntent: (updates.frontSplitsRangeIntent ?? currentOnboarding.frontSplits?.rangeIntent ?? null) as FrontSplitsSlice['rangeIntent'],
+   1507:       }
+   1508:     }
+   1509:     if (updates.sideSplitsLevel !== undefined || updates.sideSplitsRangeIntent !== undefined) {
+   1510:       onboardingUpdates.sideSplits = { 
+>> 1511:         level: (updates.sideSplitsLevel ?? currentOnboarding.sideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
+   1512:         rangeIntent: (updates.sideSplitsRangeIntent ?? currentOnboarding.sideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
+   1513:       }
+   1514:     }
+   1515:     
+   1516:     // Goal categories and training path
+   1517:     if (updates.goalCategories !== undefined) onboardingUpdates.goalCategories = updates.goalCategories as OnboardingProfile['goalCategories']
+   1518:     if (updates.trainingPathType !== undefined) onboardingUpdates.trainingPathType = updates.trainingPathType as OnboardingProfile['trainingPathType']
+   1519:     if (updates.primaryTrainingOutcome !== undefined) onboardingUpdates.primaryTrainingOutcome = updates.primaryTrainingOutcome as OnboardingProfile['primaryTrainingOutcome']
+
+--- NON-BUILDER ERROR 013 | lib/canonical-profile-service.ts:1512:142 | TS2339 ---
+lib/canonical-profile-service.ts(1512,142): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+Suggested search anchors: rangeIntent, FlexibilityBenchmark | null, canonical, profile, service, TS2339, FlexibilityBenchmark, null
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1504-1520:
+   1504:       onboardingUpdates.frontSplits = { 
+   1505:         level: (updates.frontSplitsLevel ?? currentOnboarding.frontSplits?.level ?? 'unknown') as FrontSplitsSlice['level'], 
+   1506:         rangeIntent: (updates.frontSplitsRangeIntent ?? currentOnboarding.frontSplits?.rangeIntent ?? null) as FrontSplitsSlice['rangeIntent'],
+   1507:       }
+   1508:     }
+   1509:     if (updates.sideSplitsLevel !== undefined || updates.sideSplitsRangeIntent !== undefined) {
+   1510:       onboardingUpdates.sideSplits = { 
+   1511:         level: (updates.sideSplitsLevel ?? currentOnboarding.sideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
+>> 1512:         rangeIntent: (updates.sideSplitsRangeIntent ?? currentOnboarding.sideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
+   1513:       }
+   1514:     }
+   1515:     
+   1516:     // Goal categories and training path
+   1517:     if (updates.goalCategories !== undefined) onboardingUpdates.goalCategories = updates.goalCategories as OnboardingProfile['goalCategories']
+   1518:     if (updates.trainingPathType !== undefined) onboardingUpdates.trainingPathType = updates.trainingPathType as OnboardingProfile['trainingPathType']
+   1519:     if (updates.primaryTrainingOutcome !== undefined) onboardingUpdates.primaryTrainingOutcome = updates.primaryTrainingOutcome as OnboardingProfile['primaryTrainingOutcome']
+   1520:     
+
+--- NON-BUILDER ERROR 014 | lib/canonical-profile-service.ts:1535:86 | TS2339 ---
+lib/canonical-profile-service.ts(1535,86): error TS2339: Property 'recoveryConfidence' does not exist on type 'RecoveryProfile | null'.
+Suggested search anchors: recoveryConfidence, RecoveryProfile | null, canonical, profile, service, TS2339, RecoveryProfile, null
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1527-1543:
+   1527:     // Session style
+   1528:     if (updates.sessionStylePreference !== undefined) onboardingUpdates.sessionStyle = updates.sessionStylePreference as OnboardingProfile['sessionStyle']
+   1529:     
+   1530:     // TASK A FIX: Recovery quality - map to onboarding profile recovery object
+   1531:     if (updates.recoveryQuality !== undefined) {
+   1532:       onboardingUpdates.recovery = {
+   1533:         ...(currentOnboarding.recovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
+   1534:         // Use recoveryQuality as the primary recovery indicator
+>> 1535:         recoveryConfidence: updates.recoveryQuality as OnboardingProfile['recovery']['recoveryConfidence'],
+   1536:       }
+   1537:     }
+   1538:     
+   1539:     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
+   1540:     
+   1541:     // [schedule-final-persisted] Concise save confirmation
+   1542:     if (updates.scheduleMode !== undefined || updates.trainingDaysPerWeek !== undefined) {
+   1543:       console.log('[schedule-final-persisted]', {
+
+--- NON-BUILDER ERROR 015 | lib/canonical-profile-service.ts:2373:24 | TS2339 ---
+lib/canonical-profile-service.ts(2373,24): error TS2339: Property 'pancake' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: pancake, CanonicalProgrammingProfile, canonical, profile, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 2365-2381:
+   2365:     // FLEXIBILITY BENCHMARKS - with range intent
+   2366:     // [CANONICAL-FLEXIBILITY-BENCHMARK-NESTED-OWNER] Canonical
+   2367:     // `FlexibilityBenchmark` (athlete-profile.ts L575) is the nested
+   2368:     // object `{ level, rangeIntent }`. The legacy
+   2369:     // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
+   2370:     // when benchmarks were consolidated into nested slices on
+   2371:     // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
+   2372:     flexibilityBenchmarks: {
+>> 2373:       pancake: profile.pancake ?? 'not set',
+   2374:       toeTouch: profile.toeTouch ?? 'not set',
+   2375:       frontSplits: profile.frontSplits ?? 'not set',
+   2376:       sideSplits: profile.sideSplits ?? 'not set',
+   2377:     },
+   2378:     
+   2379:     // Diagnostics
+   2380:     jointCautions: profile.jointCautions || [],
+   2381:     weakestArea: profile.weakestArea,
+
+--- NON-BUILDER ERROR 016 | lib/canonical-profile-service.ts:2374:25 | TS2339 ---
+lib/canonical-profile-service.ts(2374,25): error TS2339: Property 'toeTouch' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: toeTouch, CanonicalProgrammingProfile, canonical, profile, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 2366-2382:
+   2366:     // [CANONICAL-FLEXIBILITY-BENCHMARK-NESTED-OWNER] Canonical
+   2367:     // `FlexibilityBenchmark` (athlete-profile.ts L575) is the nested
+   2368:     // object `{ level, rangeIntent }`. The legacy
+   2369:     // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
+   2370:     // when benchmarks were consolidated into nested slices on
+   2371:     // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
+   2372:     flexibilityBenchmarks: {
+   2373:       pancake: profile.pancake ?? 'not set',
+>> 2374:       toeTouch: profile.toeTouch ?? 'not set',
+   2375:       frontSplits: profile.frontSplits ?? 'not set',
+   2376:       sideSplits: profile.sideSplits ?? 'not set',
+   2377:     },
+   2378:     
+   2379:     // Diagnostics
+   2380:     jointCautions: profile.jointCautions || [],
+   2381:     weakestArea: profile.weakestArea,
+   2382:     primaryLimitation: profile.primaryLimitation,
+
+--- NON-BUILDER ERROR 017 | lib/canonical-profile-service.ts:2375:28 | TS2339 ---
+lib/canonical-profile-service.ts(2375,28): error TS2339: Property 'frontSplits' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: frontSplits, CanonicalProgrammingProfile, canonical, profile, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 2367-2383:
+   2367:     // `FlexibilityBenchmark` (athlete-profile.ts L575) is the nested
+   2368:     // object `{ level, rangeIntent }`. The legacy
+   2369:     // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
+   2370:     // when benchmarks were consolidated into nested slices on
+   2371:     // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
+   2372:     flexibilityBenchmarks: {
+   2373:       pancake: profile.pancake ?? 'not set',
+   2374:       toeTouch: profile.toeTouch ?? 'not set',
+>> 2375:       frontSplits: profile.frontSplits ?? 'not set',
+   2376:       sideSplits: profile.sideSplits ?? 'not set',
+   2377:     },
+   2378:     
+   2379:     // Diagnostics
+   2380:     jointCautions: profile.jointCautions || [],
+   2381:     weakestArea: profile.weakestArea,
+   2382:     primaryLimitation: profile.primaryLimitation,
+   2383:     
+
+--- NON-BUILDER ERROR 018 | lib/canonical-profile-service.ts:2376:27 | TS2339 ---
+lib/canonical-profile-service.ts(2376,27): error TS2339: Property 'sideSplits' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: sideSplits, CanonicalProgrammingProfile, canonical, profile, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 2368-2384:
+   2368:     // object `{ level, rangeIntent }`. The legacy
+   2369:     // `pancakeLevel` / `pancakeRangeIntent` flat fields were removed
+   2370:     // when benchmarks were consolidated into nested slices on
+   2371:     // `OnboardingProfile` (`pancake: FlexibilityBenchmark | null`).
+   2372:     flexibilityBenchmarks: {
+   2373:       pancake: profile.pancake ?? 'not set',
+   2374:       toeTouch: profile.toeTouch ?? 'not set',
+   2375:       frontSplits: profile.frontSplits ?? 'not set',
+>> 2376:       sideSplits: profile.sideSplits ?? 'not set',
+   2377:     },
+   2378:     
+   2379:     // Diagnostics
+   2380:     jointCautions: profile.jointCautions || [],
+   2381:     weakestArea: profile.weakestArea,
+   2382:     primaryLimitation: profile.primaryLimitation,
+   2383:     
+   2384:     // Equipment
+
+--- NON-BUILDER ERROR 019 | lib/doctrine-to-output-verification.ts:199:35 | TS2339 ---
+lib/doctrine-to-output-verification.ts(199,35): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: trainingDays, CanonicalProgrammingProfile, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 191-207:
+   191:   
+   192:   // Build profile snapshot
+   193:   const profileSnapshot = {
+   194:     primaryGoal: resolvedProfile.primaryGoal,
+   195:     secondaryGoal: resolvedProfile.secondaryGoal,
+   196:     selectedSkillCount: (resolvedProfile.selectedSkills || []).length,
+   197:     selectedSkills: resolvedProfile.selectedSkills || [],
+   198:     scheduleMode: resolvedProfile.scheduleMode || 'static',
+>> 199:     trainingDays: resolvedProfile.trainingDays || program.sessions.length,
+   200:     sessionDuration: resolvedProfile.sessionDurationMode || 'medium',
+   201:     equipmentAvailable: resolvedProfile.equipmentAvailable || [],
+   202:     experienceLevel: resolvedProfile.experienceLevel || 'intermediate',
+   203:     recoveryQuality: resolvedProfile.recoveryQuality || null,
+   204:     jointCautions: resolvedProfile.jointCautions || [],
+   205:   }
+   206:   
+   207:   // Build program snapshot
+
+--- NON-BUILDER ERROR 020 | lib/doctrine-to-output-verification.ts:438:30 | TS2339 ---
+lib/doctrine-to-output-verification.ts(438,30): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+Suggested search anchors: trainingDays, CanonicalProgrammingProfile, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 430-446:
+   430: }
+   431: 
+   432: function verifyWeeklyStructure(
+   433:   program: AdaptiveProgram,
+   434:   profile: CanonicalProgrammingProfile,
+   435:   audit: PlannerTruthAuditReport
+   436: ): DimensionVerdict {
+   437:   const sessionCount = program.sessions.length
+>> 438:   const targetDays = profile.trainingDays || sessionCount
+   439:   
+   440:   // Check session differentiation
+   441:   const diffAudit = audit.sessionDifferentiationAudit
+   442:   const differentiationRatio = diffAudit.sessionPairsChecked > 0
+   443:     ? diffAudit.pairsDifferentiated / diffAudit.sessionPairsChecked
+   444:     : 1
+   445:   
+   446:   const score = diffAudit.overallScore
+
+--- NON-BUILDER ERROR 021 | lib/doctrine-to-output-verification.ts:521:21 | TS2339 ---
+lib/doctrine-to-output-verification.ts(521,21): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+Suggested search anchors: reps, AdaptiveExercise, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 513-529:
+   513:   const allExercises = program.sessions.flatMap(s => s.exercises)
+   514:   
+   515:   // Check for reasonable set/rep ranges
+   516:   let wellDosedCount = 0
+   517:   let oddDosageCount = 0
+   518:   
+   519:   for (const ex of allExercises) {
+   520:     const sets = ex.sets || 0
+>> 521:     const reps = ex.reps || 0
+   522:     const holdTime = ex.holdTime || 0
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+
+--- NON-BUILDER ERROR 022 | lib/doctrine-to-output-verification.ts:522:25 | TS2339 ---
+lib/doctrine-to-output-verification.ts(522,25): error TS2339: Property 'holdTime' does not exist on type 'AdaptiveExercise'.
+Suggested search anchors: holdTime, AdaptiveExercise, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 514-530:
+   514:   
+   515:   // Check for reasonable set/rep ranges
+   516:   let wellDosedCount = 0
+   517:   let oddDosageCount = 0
+   518:   
+   519:   for (const ex of allExercises) {
+   520:     const sets = ex.sets || 0
+   521:     const reps = ex.reps || 0
+>> 522:     const holdTime = ex.holdTime || 0
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+
+--- NON-BUILDER ERROR 023 | lib/doctrine-to-output-verification.ts:531:23 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Suggested search anchors: rpe, AdaptiveExercise, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 523-539:
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+
+--- NON-BUILDER ERROR 024 | lib/doctrine-to-output-verification.ts:531:47 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,47): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Suggested search anchors: rpe, AdaptiveExercise, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 523-539:
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+
+--- NON-BUILDER ERROR 025 | lib/doctrine-to-output-verification.ts:531:62 | TS2339 ---
+lib/doctrine-to-output-verification.ts(531,62): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+Suggested search anchors: rpe, AdaptiveExercise, doctrine, output, verification, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 523-539:
+   523:     
+   524:     // Basic dosage sanity checks
+   525:     const hasSets = sets >= 2 && sets <= 8
+   526:     const hasReps = reps >= 1 && reps <= 30
+   527:     const hasHold = holdTime >= 5 && holdTime <= 60
+   528:     const hasAnyDosage = hasSets || hasReps || hasHold
+   529:     
+   530:     // RPE should be specified for main work
+>> 531:     const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+   532:     
+   533:     if (hasAnyDosage && hasSets) {
+   534:       wellDosedCount++
+   535:     } else {
+   536:       oddDosageCount++
+   537:     }
+   538:   }
+   539:   
+
+--- NON-BUILDER ERROR 026 | lib/doctrine-to-output-verification.ts:808:32 | TS2551 ---
+lib/doctrine-to-output-verification.ts(808,32): error TS2551: Property 'trainingPath' does not exist on type 'CanonicalProgrammingProfile'. Did you mean 'trainingPathType'?
+Suggested search anchors: trainingPath, CanonicalProgrammingProfile, trainingPathType, doctrine, output, verification, TS2551, Did
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 800-816:
+   800:   }
+   801: }
+   802: 
+   803: function verifyDoctrineShape(
+   804:   program: AdaptiveProgram,
+   805:   profile: CanonicalProgrammingProfile
+   806: ): DimensionVerdict {
+   807:   const primaryGoal = profile.primaryGoal
+>> 808:   const trainingPath = profile.trainingPath || 'hybrid'
+   809:   
+   810:   // Check if week structure matches doctrine expectations
+   811:   const sessions = program.sessions
+   812:   const totalExercises = sessions.flatMap(s => s.exercises).length
+   813:   
+   814:   // Doctrine: primary skill should appear in 50-60% of sessions
+   815:   const primarySkillSessions = sessions.filter(s => {
+   816:     const exercises = s.exercises
+
+--- NON-BUILDER ERROR 027 | lib/onboarding-service.ts:276:7 | TS2367 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+Suggested search anchors: PrimaryGoalType | null, "skill", onboarding, service, TS2367, This, comparison, appears
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 268-284:
+   268:   skill_advanced: "Welcome to SpartanLab! Your program is optimized for advanced skill work with intelligent volume management.",
+   269:   strength: "Welcome to SpartanLab! Your program focuses on building raw strength with progressive overload principles.",
+   270:   general: "Welcome to SpartanLab! Your balanced program covers strength, skills, and conditioning for overall fitness.",
+   271: }
+   272: 
+   273: function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
+   274:   const goal = profile.primaryGoal
+   275:   
+>> 276:   if (goal === 'skill') {
+   277:     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
+   278:   }
+   279:   
+   280:   if (goal === 'strength') {
+   281:     return WELCOME_MESSAGES.strength
+   282:   }
+   283:   
+   284:   return WELCOME_MESSAGES.general
+
+--- NON-BUILDER ERROR 028 | lib/onboarding-service.ts:280:7 | TS2367 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+Suggested search anchors: PrimaryGoalType | null, "strength", onboarding, service, TS2367, This, comparison, appears
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 272-288:
+   272: 
+   273: function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
+   274:   const goal = profile.primaryGoal
+   275:   
+   276:   if (goal === 'skill') {
+   277:     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
+   278:   }
+   279:   
+>> 280:   if (goal === 'strength') {
+   281:     return WELCOME_MESSAGES.strength
+   282:   }
+   283:   
+   284:   return WELCOME_MESSAGES.general
+   285: }
+   286: 
+   287: // =============================================================================
+   288: // MAIN FUNCTIONS
+
+--- NON-BUILDER ERROR 029 | lib/onboarding-service.ts:512:7 | TS2345 ---
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"fallback" | "profile" | "engine"'.
+Suggested search anchors: "canonical_profile", "fallback" | "profile" | "engine", onboarding, service, TS2345, canonical_profile, fallback, profile
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 504-520:
+   504:       sessionLength: programInputs.sessionLength,
+   505:       entrySource: entryResult.entry?.__entrySource,
+   506:     })
+   507:     
+   508:     // ENGINE PROOF: Verify schedule mode resolution
+   509:     verifyScheduleModeResolution(
+   510:       programInputs.scheduleMode || 'static',
+   511:       programInputs.trainingDaysPerWeek,
+>> 512:       'canonical_profile'
+   513:     )
+   514:     
+   515:     // PRODUCTION SAFETY: Verify flexible mode semantics are intact
+   516:     assertFlexibleModeIntact({
+   517:       scheduleMode: programInputs.scheduleMode,
+   518:       trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+   519:     })
+   520:     
+
+--- NON-BUILDER ERROR 030 | lib/onboarding-service.ts:597:54 | TS2345 ---
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Suggested search anchors: AdaptiveProgram, ProgramToValidate, onboarding, service, TS2345
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 589-605:
+   589:       programSecondaryGoal: program.secondaryGoal || 'none',
+   590:       inputPrimaryGoal: programInputs.primaryGoal,
+   591:       inputSecondaryGoal: programInputs.secondaryGoal || 'none',
+   592:       goalMatch: program.primaryGoal === programInputs.primaryGoal,
+   593:     })
+   594:     
+   595:     markStage('db_validation_start')
+   596:     // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
+>> 597:     const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+   598:     if (!dbValidationPassed) {
+   599:       console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
+   600:     }
+   601:     markStage('db_validation_done')
+   602:     
+   603:     // ENGINE PROOF: Count DB-backed exercises
+   604:     const totalExercises = program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0
+   605:     verifyDbResolverUsed(totalExercises, totalExercises, false)
+
+--- NON-BUILDER ERROR 031 | lib/onboarding-service.ts:661:7 | TS2322 ---
+lib/onboarding-service.ts(661,7): error TS2322: Type 'number' is not assignable to type 'TrainingDays'.
+Suggested search anchors: number, TrainingDays, onboarding, service, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 653-669:
+   653:       }
+   654:       if (typeof session.focusLabel !== 'string' || !session.focusLabel) {
+   655:         session.focusLabel = `Session ${i + 1}`
+   656:       }
+   657:     }
+   658:     
+   659:     // Ensure top-level fields used by downstream UI exist
+   660:     if (typeof program.trainingDaysPerWeek !== 'number') {
+>> 661:       program.trainingDaysPerWeek = program.sessions.length
+   662:     }
+   663:     if (typeof program.goalLabel !== 'string' || !program.goalLabel) {
+   664:       program.goalLabel = 'Strength Training'
+   665:     }
+   666:     
+   667:     markStage('shape_validation_done')
+   668:     console.log('[OnboardingService] Strict validation passed:', {
+   669:       sessions: program.sessions.length,
+
+--- NON-BUILDER ERROR 032 | lib/onboarding-service.ts:1355:31 | TS2339 ---
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Suggested search anchors: name, TrainingBlock, onboarding, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1347-1363:
+   1347:     const exercisesCount = Array.isArray(session.exercises) ? session.exercises.length : 0
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+>> 1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+
+--- NON-BUILDER ERROR 033 | lib/onboarding-service.ts:1356:48 | TS2339 ---
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Suggested search anchors: name, TrainingBlock, onboarding, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1348-1364:
+   1348:     const totalExercises = blocks.length > 0 
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+>> 1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+
+--- NON-BUILDER ERROR 034 | lib/onboarding-service.ts:1357:36 | TS2339 ---
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Suggested search anchors: name, TrainingBlock, onboarding, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1349-1365:
+   1349:       ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+>> 1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+
+--- NON-BUILDER ERROR 035 | lib/onboarding-service.ts:1358:38 | TS2339 ---
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Suggested search anchors: name, TrainingBlock, onboarding, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1350-1366:
+   1350:       : exercisesCount
+   1351:     
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+>> 1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+   1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+
+--- NON-BUILDER ERROR 036 | lib/onboarding-service.ts:1360:38 | TS2339 ---
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+Suggested search anchors: name, TrainingBlock, onboarding, service, TS2339
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 1352-1368:
+   1352:     // Determine primary focus from session blocks or focusLabel
+   1353:     let primaryFocus = 'Strength and skill development'
+   1354:     if (blocks.length > 0) {
+   1355:       if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+   1356:         const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+   1357:         primaryFocus = skillBlock?.name || 'Skill progression'
+   1358:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+   1359:         primaryFocus = 'Pulling strength'
+>> 1360:       } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+   1361:         primaryFocus = 'Pushing strength'
+   1362:       }
+   1363:     } else if (session.focusLabel) {
+   1364:       primaryFocus = session.focusLabel
+   1365:     }
+   1366:     
+   1367:     firstSession = {
+   1368:       title: session.focusLabel || session.dayLabel || 'Day 1',
+
+--- NON-BUILDER ERROR 037 | lib/performance-envelope-engine.ts:152:14 | TS2741 ---
+lib/performance-envelope-engine.ts(152,14): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }' but required in type 'Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>'.
+Suggested search anchors: barbell_hinge, { vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }, Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>, performance, envelope, engine, TS2741, missing
+Likely fix guidance: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Local context lines 144-160:
+   144:   createdAt: Date
+   145:   updateCount: number // How many times this envelope has been updated
+   146: }
+   147: 
+   148: /**
+   149:  * Movement-family-specific fatigue thresholds
+   150:  * Straight-arm work typically has lower thresholds than bent-arm
+   151:  */
+>> 152: export const MOVEMENT_FAMILY_FATIGUE_DEFAULTS: Record<MovementFamily, {
+   153:   baseThreshold: number
+   154:   recoveryMultiplier: number
+   155:   description: string
+   156: }> = {
+   157:   vertical_pull: { baseThreshold: 45, recoveryMultiplier: 1.0, description: 'Moderate recovery needs' },
+   158:   horizontal_pull: { baseThreshold: 50, recoveryMultiplier: 0.9, description: 'Good recovery' },
+   159:   straight_arm_pull: { baseThreshold: 25, recoveryMultiplier: 1.4, description: 'High recovery needs - connective tissue stress' },
+   160:   vertical_push: { baseThreshold: 45, recoveryMultiplier: 1.0, description: 'Moderate recovery needs' },
+
+--- NON-BUILDER ERROR 038 | lib/performance-envelope-engine.ts:1393:9 | TS2741 ---
+lib/performance-envelope-engine.ts(1393,9): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }' but required in type 'Record<MovementFamily, string>'.
+Suggested search anchors: barbell_hinge, { vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }, Record<MovementFamily, string>, performance, envelope, engine, TS2741, missing
+Likely fix guidance: Missing required fields. Add truthful local fallback fields only for fallback/summary objects, or use an existing complete object nearby.
+Local context lines 1385-1401:
+   1385:   // Default insight
+   1386:   return `${familyLabel}: ${Math.round(envelope.preferredWeeklyVolumeMin)}-${Math.round(envelope.preferredWeeklyVolumeMax)} weekly sets optimal.`
+   1387: }
+   1388: 
+   1389: /**
+   1390:  * Format movement family for display
+   1391:  */
+   1392: function formatMovementFamily(family: MovementFamily): string {
+>> 1393:   const labels: Record<MovementFamily, string> = {
+   1394:     vertical_pull: 'Vertical pulling',
+   1395:     horizontal_pull: 'Horizontal pulling',
+   1396:     straight_arm_pull: 'Straight-arm pulling',
+   1397:     vertical_push: 'Vertical pushing',
+   1398:     horizontal_push: 'Horizontal pushing',
+   1399:     straight_arm_push: 'Straight-arm pushing',
+   1400:     dip_pattern: 'Dip work',
+   1401:     squat_pattern: 'Squat work',
+
+--- NON-BUILDER ERROR 039 | lib/performance-envelope-engine.ts:1953:7 | TS2304 ---
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1945-1961:
+   1945:   
+   1946:   // Align performance trend with benchmark trend
+   1947:   if (refinement.trendDirection !== 'unknown' && envelope.trendConfidence < 0.5) {
+   1948:     updates.performanceTrend = refinement.trendDirection
+   1949:     updates.trendConfidence = Math.max(envelope.trendConfidence, 0.4)
+   1950:   }
+   1951:   
+   1952:   return { ...envelope, ...updates }
+>> 1953:   if (feedback.wasDeloadTriggered && feedback.volumeAtTrigger > 0) {
+   1954:     const currentThreshold = envelope.fatigueThreshold
+   1955:     const observedThreshold = feedback.volumeAtTrigger
+   1956:     
+   1957:     // If we triggered deload BELOW our current threshold, lower it
+   1958:     if (observedThreshold < currentThreshold * 0.9) {
+   1959:       const newThreshold = Math.round(observedThreshold * 0.9) // Set threshold below trigger point
+   1960:       const confidenceBoost = envelope.fatigueThresholdConfidence < 0.7 ? 0.15 : 0.05
+   1961:       
+
+--- NON-BUILDER ERROR 040 | lib/performance-envelope-engine.ts:1953:38 | TS2304 ---
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1945-1961:
+   1945:   
+   1946:   // Align performance trend with benchmark trend
+   1947:   if (refinement.trendDirection !== 'unknown' && envelope.trendConfidence < 0.5) {
+   1948:     updates.performanceTrend = refinement.trendDirection
+   1949:     updates.trendConfidence = Math.max(envelope.trendConfidence, 0.4)
+   1950:   }
+   1951:   
+   1952:   return { ...envelope, ...updates }
+>> 1953:   if (feedback.wasDeloadTriggered && feedback.volumeAtTrigger > 0) {
+   1954:     const currentThreshold = envelope.fatigueThreshold
+   1955:     const observedThreshold = feedback.volumeAtTrigger
+   1956:     
+   1957:     // If we triggered deload BELOW our current threshold, lower it
+   1958:     if (observedThreshold < currentThreshold * 0.9) {
+   1959:       const newThreshold = Math.round(observedThreshold * 0.9) // Set threshold below trigger point
+   1960:       const confidenceBoost = envelope.fatigueThresholdConfidence < 0.7 ? 0.15 : 0.05
+   1961:       
+
+--- NON-BUILDER ERROR 041 | lib/performance-envelope-engine.ts:1955:31 | TS2304 ---
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1947-1963:
+   1947:   if (refinement.trendDirection !== 'unknown' && envelope.trendConfidence < 0.5) {
+   1948:     updates.performanceTrend = refinement.trendDirection
+   1949:     updates.trendConfidence = Math.max(envelope.trendConfidence, 0.4)
+   1950:   }
+   1951:   
+   1952:   return { ...envelope, ...updates }
+   1953:   if (feedback.wasDeloadTriggered && feedback.volumeAtTrigger > 0) {
+   1954:     const currentThreshold = envelope.fatigueThreshold
+>> 1955:     const observedThreshold = feedback.volumeAtTrigger
+   1956:     
+   1957:     // If we triggered deload BELOW our current threshold, lower it
+   1958:     if (observedThreshold < currentThreshold * 0.9) {
+   1959:       const newThreshold = Math.round(observedThreshold * 0.9) // Set threshold below trigger point
+   1960:       const confidenceBoost = envelope.fatigueThresholdConfidence < 0.7 ? 0.15 : 0.05
+   1961:       
+   1962:       return {
+   1963:         ...envelope,
+
+--- NON-BUILDER ERROR 042 | lib/performance-envelope-engine.ts:1967:24 | TS2304 ---
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1959-1975:
+   1959:       const newThreshold = Math.round(observedThreshold * 0.9) // Set threshold below trigger point
+   1960:       const confidenceBoost = envelope.fatigueThresholdConfidence < 0.7 ? 0.15 : 0.05
+   1961:       
+   1962:       return {
+   1963:         ...envelope,
+   1964:         fatigueThreshold: newThreshold,
+   1965:         toleratedWeeklyVolumeMax: Math.min(envelope.toleratedWeeklyVolumeMax, newThreshold),
+   1966:         fatigueThresholdConfidence: Math.min(0.9, envelope.fatigueThresholdConfidence + confidenceBoost),
+>> 1967:         recoveryNeeds: feedback.fatigueLevel === 'critical' || feedback.fatigueLevel === 'high' ? 'high' : 'elevated',
+   1968:         lastUpdated: new Date(),
+   1969:         updateCount: envelope.updateCount + 1,
+   1970:       }
+   1971:     }
+   1972:   }
+   1973:   
+   1974:   // If fatigue was high but we didn't need deload, our threshold might be accurate
+   1975:   if (feedback.fatigueLevel === 'moderate' && !feedback.wasDeloadTriggered) {
+
+--- NON-BUILDER ERROR 043 | lib/performance-envelope-engine.ts:1967:64 | TS2304 ---
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1959-1975:
+   1959:       const newThreshold = Math.round(observedThreshold * 0.9) // Set threshold below trigger point
+   1960:       const confidenceBoost = envelope.fatigueThresholdConfidence < 0.7 ? 0.15 : 0.05
+   1961:       
+   1962:       return {
+   1963:         ...envelope,
+   1964:         fatigueThreshold: newThreshold,
+   1965:         toleratedWeeklyVolumeMax: Math.min(envelope.toleratedWeeklyVolumeMax, newThreshold),
+   1966:         fatigueThresholdConfidence: Math.min(0.9, envelope.fatigueThresholdConfidence + confidenceBoost),
+>> 1967:         recoveryNeeds: feedback.fatigueLevel === 'critical' || feedback.fatigueLevel === 'high' ? 'high' : 'elevated',
+   1968:         lastUpdated: new Date(),
+   1969:         updateCount: envelope.updateCount + 1,
+   1970:       }
+   1971:     }
+   1972:   }
+   1973:   
+   1974:   // If fatigue was high but we didn't need deload, our threshold might be accurate
+   1975:   if (feedback.fatigueLevel === 'moderate' && !feedback.wasDeloadTriggered) {
+
+--- NON-BUILDER ERROR 044 | lib/performance-envelope-engine.ts:1975:7 | TS2304 ---
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1967-1983:
+   1967:         recoveryNeeds: feedback.fatigueLevel === 'critical' || feedback.fatigueLevel === 'high' ? 'high' : 'elevated',
+   1968:         lastUpdated: new Date(),
+   1969:         updateCount: envelope.updateCount + 1,
+   1970:       }
+   1971:     }
+   1972:   }
+   1973:   
+   1974:   // If fatigue was high but we didn't need deload, our threshold might be accurate
+>> 1975:   if (feedback.fatigueLevel === 'moderate' && !feedback.wasDeloadTriggered) {
+   1976:     return {
+   1977:       ...envelope,
+   1978:       fatigueThresholdConfidence: Math.min(0.9, envelope.fatigueThresholdConfidence + 0.03),
+   1979:       lastUpdated: new Date(),
+   1980:     }
+   1981:   }
+   1982:   
+   1983:   return envelope
+
+--- NON-BUILDER ERROR 045 | lib/performance-envelope-engine.ts:1975:48 | TS2304 ---
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+Suggested search anchors: feedback, performance, envelope, engine, TS2304, Cannot, find, name
+Likely fix guidance: Missing local symbol. Use nearby renamed variable only if obvious; otherwise gate/remove optional proof/debug field. Do not invent data.
+Local context lines 1967-1983:
+   1967:         recoveryNeeds: feedback.fatigueLevel === 'critical' || feedback.fatigueLevel === 'high' ? 'high' : 'elevated',
+   1968:         lastUpdated: new Date(),
+   1969:         updateCount: envelope.updateCount + 1,
+   1970:       }
+   1971:     }
+   1972:   }
+   1973:   
+   1974:   // If fatigue was high but we didn't need deload, our threshold might be accurate
+>> 1975:   if (feedback.fatigueLevel === 'moderate' && !feedback.wasDeloadTriggered) {
+   1976:     return {
+   1977:       ...envelope,
+   1978:       fatigueThresholdConfidence: Math.min(0.9, envelope.fatigueThresholdConfidence + 0.03),
+   1979:       lastUpdated: new Date(),
+   1980:     }
+   1981:   }
+   1982:   
+   1983:   return envelope
+
+--- NON-BUILDER ERROR 046 | lib/program-truth-extractor.ts:246:48 | TS2345 ---
+lib/program-truth-extractor.ts(246,48): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'Record<string, unknown>'.
+Suggested search anchors: CanonicalProgrammingProfile, Record<string, unknown>, program, truth, extractor, TS2345, Record, string
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 238-254:
+   238:         status: 'present',
+   239:         value: inputValue,
+   240:         source: 'builder_inputs',
+   241:       }
+   242:     }
+   243:   }
+   244:   
+   245:   // Check profile
+>> 246:   const profileValue = profile ? getFieldValue(profile, field) : undefined
+   247:   if (profileValue !== undefined && profileValue !== null) {
+   248:     const isEmpty = Array.isArray(profileValue) ? profileValue.length === 0 : false
+   249:     if (!isEmpty) {
+   250:       return {
+   251:         field,
+   252:         status: 'present',
+   253:         value: profileValue,
+   254:         source: 'profile',
+
+--- NON-BUILDER ERROR 047 | lib/program-truth-extractor.ts:325:5 | TS2322 ---
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+Suggested search anchors: string, PrimaryGoal, program, truth, extractor, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 317-333:
+   317: ): AdaptiveProgramInputs {
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+>> 325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+
+--- NON-BUILDER ERROR 048 | lib/program-truth-extractor.ts:326:5 | TS2322 ---
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+Suggested search anchors: string | undefined, PrimaryGoal | undefined, program, truth, extractor, TS2322, string, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 318-334:
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+>> 326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+
+--- NON-BUILDER ERROR 049 | lib/program-truth-extractor.ts:328:5 | TS2322 ---
+lib/program-truth-extractor.ts(328,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+Suggested search anchors: string | undefined, TrainingPathType | undefined, program, truth, extractor, TS2322, string, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 320-336:
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+>> 328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+
+--- NON-BUILDER ERROR 050 | lib/program-truth-extractor.ts:330:5 | TS2322 ---
+lib/program-truth-extractor.ts(330,5): error TS2322: Type 'string' is not assignable to type 'ExperienceLevel'.
+Suggested search anchors: string, ExperienceLevel, program, truth, extractor, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 322-338:
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+>> 330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+
+--- NON-BUILDER ERROR 051 | lib/program-truth-extractor.ts:332:5 | TS2322 ---
+lib/program-truth-extractor.ts(332,5): error TS2322: Type 'number' is not assignable to type '"flexible" | TrainingDays'.
+Suggested search anchors: number, "flexible" | TrainingDays, program, truth, extractor, TS2322, flexible, TrainingDays
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 324-340:
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+>> 332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+
+--- NON-BUILDER ERROR 052 | lib/program-truth-extractor.ts:334:5 | TS2322 ---
+lib/program-truth-extractor.ts(334,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Suggested search anchors: number, SessionLength, program, truth, extractor, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 326-342:
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+>> 334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+
+--- NON-BUILDER ERROR 053 | lib/program-truth-extractor.ts:335:5 | TS2322 ---
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+Suggested search anchors: string[], EquipmentType[], program, truth, extractor, TS2322, string, EquipmentType
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 327-343:
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+>> 335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+   343: // =============================================================================
+
+--- NON-BUILDER ERROR 054 | lib/program-truth-extractor.ts:487:7 | TS2353 ---
+lib/program-truth-extractor.ts(487,7): error TS2353: Object literal may only specify known properties, and 'authoritativeMultiSkillIntentContract' does not exist in type '{ identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }'.
+Suggested search anchors: authoritativeMultiSkillIntentContract, { identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }, program, truth, extractor, TS2353, may, properties
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 479-495:
+   479:       ...explanation,
+   480:       generatedAt: new Date().toISOString(),
+   481:       triggerSource,
+   482:       // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
+   483:       materializationVerdict: program.materializationVerdict || null,
+   484:       // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
+   485:       dbTruthWinnerSummary,
+   486:       // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
+>> 487:       authoritativeMultiSkillIntentContract: authoritativeContract ? {
+   488:         selectedSkills: authoritativeContract.selectedSkills,
+   489:         primarySkill: authoritativeContract.primarySkill,
+   490:         secondarySkill: authoritativeContract.secondarySkill,
+   491:         supportSkills: authoritativeContract.supportSkills,
+   492:         deferredSkills: authoritativeContract.deferredSkills,
+   493:         materiallyExpressedSkills: authoritativeContract.materiallyExpressedSkills,
+   494:         reducedThisCycleSkills: authoritativeContract.reducedThisCycleSkills,
+   495:         skillPriorityOrder: authoritativeContract.skillPriorityOrder.map(s => ({
+
+--- NON-BUILDER ERROR 055 | lib/program/db-truth-scoring-bridge.ts:203:30 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+Suggested search anchors: envelope.confidenceScore, undefined, program, truth, scoring, bridge, TS18048, envelope
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 195-211:
+   195:     if (families.length > 0) {
+   196:       let totalConfidence = 0
+   197:       let avgDensity = 0
+   198:       let count = 0
+   199:       
+   200:       for (const family of families) {
+   201:         const envelope = envelopes[family]
+   202:         if (envelope.confidenceScore !== null) {
+>> 203:           totalConfidence += envelope.confidenceScore
+   204:           count++
+   205:         }
+   206:         if (envelope.preferredDensityLevel) {
+   207:           avgDensity += envelope.preferredDensityLevel === 'high' ? 3 : 
+   208:                         envelope.preferredDensityLevel === 'medium' ? 2 : 1
+   209:         }
+   210:       }
+   211:       
+
+--- NON-BUILDER ERROR 056 | lib/program/db-truth-scoring-bridge.ts:252:37 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+Suggested search anchors: "unknown" | "sporadic" | null | undefined, "improving", program, truth, scoring, bridge, TS2367, This
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 244-260:
+   244:   // 4. TRAINING RESPONSE MODIFIERS
+   245:   if (bundle.trainingResponse.meta.available) {
+   246:     sourceSections.push('training_response')
+   247:     
+   248:     if (bundle.trainingResponse.hasEarnedHistory) {
+   249:       // Adherence pattern affects exercise complexity tolerance
+   250:       const adherence = bundle.trainingResponse.recentAdherencePattern
+   251:       modifiers.adherenceModifier = adherence === 'consistent' ? 5 :
+>> 252:                                     adherence === 'improving' ? 3 :
+   253:                                     adherence === 'declining' ? -5 :
+   254:                                     adherence === 'sporadic' ? -8 : 0
+   255:       
+   256:       // Consistency signal affects fatigue-sensitive selections
+   257:       const consistency = bundle.trainingResponse.consistencySignal
+   258:       modifiers.fatigueRiskModifier = consistency === 'high' ? 5 :
+   259:                                        consistency === 'medium' ? 0 :
+   260:                                        consistency === 'low' ? -10 : 0
+
+--- NON-BUILDER ERROR 057 | lib/program/db-truth-scoring-bridge.ts:253:37 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Suggested search anchors: "unknown" | "sporadic" | null | undefined, "declining", program, truth, scoring, bridge, TS2367, This
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 245-261:
+   245:   if (bundle.trainingResponse.meta.available) {
+   246:     sourceSections.push('training_response')
+   247:     
+   248:     if (bundle.trainingResponse.hasEarnedHistory) {
+   249:       // Adherence pattern affects exercise complexity tolerance
+   250:       const adherence = bundle.trainingResponse.recentAdherencePattern
+   251:       modifiers.adherenceModifier = adherence === 'consistent' ? 5 :
+   252:                                     adherence === 'improving' ? 3 :
+>> 253:                                     adherence === 'declining' ? -5 :
+   254:                                     adherence === 'sporadic' ? -8 : 0
+   255:       
+   256:       // Consistency signal affects fatigue-sensitive selections
+   257:       const consistency = bundle.trainingResponse.consistencySignal
+   258:       modifiers.fatigueRiskModifier = consistency === 'high' ? 5 :
+   259:                                        consistency === 'medium' ? 0 :
+   260:                                        consistency === 'low' ? -10 : 0
+   261:     }
+
+--- NON-BUILDER ERROR 058 | lib/program/db-truth-scoring-bridge.ts:399:33 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+Suggested search anchors: envelope.preferredRepRangeMin, undefined, program, truth, scoring, bridge, TS18048, envelope
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 391-407:
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+
+--- NON-BUILDER ERROR 059 | lib/program/db-truth-scoring-bridge.ts:399:65 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+Suggested search anchors: envelope.preferredRepRangeMax, undefined, program, truth, scoring, bridge, TS18048, envelope
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 391-407:
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+
+--- NON-BUILDER ERROR 060 | lib/program/db-truth-scoring-bridge.ts:418:13 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Suggested search anchors: envelope.fatigueThreshold, undefined, program, truth, scoring, bridge, TS18048, envelope
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 410-426:
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+   412:         calibration.densityConfidence = 'medium'
+   413:       }
+   414:       
+   415:       // Rest calibration based on fatigue threshold
+   416:       if (envelope.fatigueThreshold !== null) {
+   417:         // Lower fatigue threshold = need more rest
+>> 418:         if (envelope.fatigueThreshold < 0.4) {
+   419:           calibration.restModifier = 30  // Add 30s rest
+   420:           calibration.restConfidence = 'medium'
+   421:           calibration.restReason = 'low_fatigue_threshold_needs_more_rest'
+   422:         } else if (envelope.fatigueThreshold > 0.7) {
+   423:           calibration.restModifier = -15  // Reduce rest slightly
+   424:           calibration.restConfidence = 'low'
+   425:           calibration.restReason = 'high_fatigue_tolerance_allows_less_rest'
+   426:         }
+
+--- NON-BUILDER ERROR 061 | lib/program/db-truth-scoring-bridge.ts:422:20 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+Suggested search anchors: envelope.fatigueThreshold, undefined, program, truth, scoring, bridge, TS18048, envelope
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 414-430:
+   414:       
+   415:       // Rest calibration based on fatigue threshold
+   416:       if (envelope.fatigueThreshold !== null) {
+   417:         // Lower fatigue threshold = need more rest
+   418:         if (envelope.fatigueThreshold < 0.4) {
+   419:           calibration.restModifier = 30  // Add 30s rest
+   420:           calibration.restConfidence = 'medium'
+   421:           calibration.restReason = 'low_fatigue_threshold_needs_more_rest'
+>> 422:         } else if (envelope.fatigueThreshold > 0.7) {
+   423:           calibration.restModifier = -15  // Reduce rest slightly
+   424:           calibration.restConfidence = 'low'
+   425:           calibration.restReason = 'high_fatigue_tolerance_allows_less_rest'
+   426:         }
+   427:       }
+   428:     }
+   429:   }
+   430:   
+
+--- NON-BUILDER ERROR 062 | lib/program/db-truth-scoring-bridge.ts:450:49 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(450,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+Suggested search anchors: strengthBenchmarks.pullUpMax, undefined, program, truth, scoring, bridge, TS18048, strengthBenchmarks
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 442-458:
+   442:     if (hasStrongBenchmarks) {
+   443:       // Strong benchmarks allow slightly higher intensity
+   444:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   445:       calibration.intensityConfidence = 'medium'
+   446:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   447:     }
+   448:     
+   449:     const hasWeakBenchmarks = 
+>> 450:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+   451:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   452:     
+   453:     if (hasWeakBenchmarks) {
+   454:       // Weak benchmarks = be conservative
+   455:       calibration.intensityModifier = -0.5
+   456:       calibration.intensityConfidence = 'medium'
+   457:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   458:       calibration.setsModifier = -1
+
+--- NON-BUILDER ERROR 063 | lib/program/db-truth-scoring-bridge.ts:451:46 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(451,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+Suggested search anchors: strengthBenchmarks.dipMax, undefined, program, truth, scoring, bridge, TS18048, strengthBenchmarks
+Likely fix guidance: Null/undefined guard. Add local guard, optional chaining, or safe fallback only for scoring/debug/summary values.
+Local context lines 443-459:
+   443:       // Strong benchmarks allow slightly higher intensity
+   444:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   445:       calibration.intensityConfidence = 'medium'
+   446:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   447:     }
+   448:     
+   449:     const hasWeakBenchmarks = 
+   450:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+>> 451:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   452:     
+   453:     if (hasWeakBenchmarks) {
+   454:       // Weak benchmarks = be conservative
+   455:       calibration.intensityModifier = -0.5
+   456:       calibration.intensityConfidence = 'medium'
+   457:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   458:       calibration.setsModifier = -1
+   459:       calibration.setsConfidence = 'low'
+
+--- NON-BUILDER ERROR 064 | lib/program/db-truth-scoring-bridge.ts:470:9 | TS2367 ---
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+Suggested search anchors: "unknown" | "consistent" | "sporadic" | null | undefined, "declining", program, truth, scoring, bridge, TS2367, This
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 462-478:
+   462:   }
+   463:   
+   464:   // 3. TRAINING RESPONSE CALIBRATION
+   465:   if (bundle.trainingResponse.meta.available && bundle.trainingResponse.hasEarnedHistory) {
+   466:     sourceSections.push('training_response')
+   467:     
+   468:     const adherence = bundle.trainingResponse.recentAdherencePattern
+   469:     
+>> 470:     if (adherence === 'declining' || adherence === 'sporadic') {
+   471:       // Poor adherence = reduce volume to improve completion
+   472:       calibration.setsModifier = Math.min(calibration.setsModifier, -1)
+   473:       calibration.setsConfidence = 'medium'
+   474:       calibration.setsReason = 'reduced_volume_for_adherence_recovery'
+   475:     } else if (adherence === 'consistent') {
+   476:       // Good adherence = can handle normal or slightly higher volume
+   477:       calibration.setsModifier = Math.max(calibration.setsModifier, 0)
+   478:       if (calibration.setsReason === 'no_db_truth') {
+
+--- NON-BUILDER ERROR 065 | lib/program/program-display-contract.ts:261:37 | TS2339 ---
+lib/program/program-display-contract.ts(261,37): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Suggested search anchors: doctrineConstraints, { phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., program, display, contract, TS2339, phase, AdaptationPhase
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 253-269:
+   253:       phaseDescription: phaseDescriptions[decision.phase] || '',
+   254:       isProtective: 
+   255:         decision.phase === 'initial_acclimation' ||
+   256:         decision.phase === 'recovery_constrained' ||
+   257:         decision.loadStrategy.volumeBias === 'reduced' ||
+   258:         decision.loadStrategy.intensityBias === 'reduced',
+   259:       targetDays: decision.targetDays,
+   260:       loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
+>> 261:       doctrineConstraints: decision.doctrineConstraints,
+   262:       isFirstWeekProtected: decision.firstWeekGovernor.active,
+   263:       evidence: decision.evidence,
+   264:       source: 'weekAdaptationDecision',
+   265:     }
+   266:   }
+   267:   
+   268:   // Fall back to snapshot audit
+   269:   if (snapshotAudit) {
+
+--- NON-BUILDER ERROR 066 | lib/program/program-display-contract.ts:263:26 | TS2339 ---
+lib/program/program-display-contract.ts(263,26): error TS2339: Property 'evidence' does not exist on type '{ phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+Suggested search anchors: evidence, { phase: AdaptationPhase; confidence: "low" | "moderate" | "high"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "elevated" | "reduced"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string..., program, display, contract, TS2339, phase, AdaptationPhase
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 255-271:
+   255:         decision.phase === 'initial_acclimation' ||
+   256:         decision.phase === 'recovery_constrained' ||
+   257:         decision.loadStrategy.volumeBias === 'reduced' ||
+   258:         decision.loadStrategy.intensityBias === 'reduced',
+   259:       targetDays: decision.targetDays,
+   260:       loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
+   261:       doctrineConstraints: decision.doctrineConstraints,
+   262:       isFirstWeekProtected: decision.firstWeekGovernor.active,
+>> 263:       evidence: decision.evidence,
+   264:       source: 'weekAdaptationDecision',
+   265:     }
+   266:   }
+   267:   
+   268:   // Fall back to snapshot audit
+   269:   if (snapshotAudit) {
+   270:     const phaseLabels: Record<string, string> = {
+   271:       'initial_acclimation': 'Acclimation Week',
+
+--- NON-BUILDER ERROR 067 | lib/program/program-display-contract.ts:544:54 | TS2367 ---
+lib/program/program-display-contract.ts(544,54): error TS2367: This comparison appears to be unintentional because the types '"headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected"' and '"carryover_only"' have no overlap.
+Suggested search anchors: "headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected", "carryover_only", program, display, contract, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 536-552:
+   536:     }
+   537:   }
+   538:   
+   539:   // PRIORITY 5: Indirect coverage through support work
+   540:   const weeklyRep = program.weeklyRepresentation
+   541:   if (weeklyRep?.policies) {
+   542:     const supportCoverage = weeklyRep.policies.filter(p => 
+   543:       deferredSkills.includes(p.skill) && 
+>> 544:       (p.representationVerdict === 'support_only' || p.representationVerdict === 'carryover_only')
+   545:     )
+   546:     if (supportCoverage.length > 0) {
+   547:       return {
+   548:         hasOmissions: true,
+   549:         explanationLine: `${skillList} covered indirectly through support work this week.`,
+   550:         omittedSkills: deferredSkills,
+   551:         reasonCategory: 'indirect_coverage',
+   552:         doctrineJustified: true,
+
+--- NON-BUILDER ERROR 068 | lib/program/program-display-contract.ts:2154:26 | TS7006 ---
+lib/program/program-display-contract.ts(2154,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+Suggested search anchors: id, any, program, display, contract, TS7006, Parameter, implicitly
+Likely fix guidance: Implicit any. Type callback parameter from immediate local array/object shape.
+Local context lines 2146-2162:
+   2146:     if (renderedGroups.length === 0) {
+   2147:       bodyBlocksMatchCanonical = false
+   2148:     } else {
+   2149:       const canonicalIdSets = renderedGroups.map(g => new Set(g.matchedRowIds))
+   2150:       let allBlocksCorrelate = true
+   2151:       for (const b of blocks) {
+   2152:         const memberIds = Array.isArray(b.memberIds) ? b.memberIds : []
+   2153:         const overlaps = canonicalIdSets.some(set =>
+>> 2154:           memberIds.some(id => set.has(id)),
+   2155:         )
+   2156:         if (!overlaps) {
+   2157:           allBlocksCorrelate = false
+   2158:           break
+   2159:         }
+   2160:       }
+   2161:       bodyBlocksMatchCanonical = allBlocksCorrelate
+   2162:       debugReasons.push(
+
+--- NON-BUILDER ERROR 069 | lib/program/program-display-contract.ts:3678:49 | TS2339 ---
+lib/program/program-display-contract.ts(3678,49): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }'.
+Suggested search anchors: roleInSession, { expressionMode?: string | undefined; loadDecisionSummary?: string | undefined; restLabel?: string | undefined; }, program, display, contract, TS2339, expressionMode, string
+Likely fix guidance: Stale/missing property or object key. Remove/gate stale field, or use compiler-suggested/current local field only if clearly equivalent. Do not add stale fields to shared types.
+Local context lines 3670-3686:
+   3670:   // 16 template strings below now consume `rpe` (rounded), not the raw value.
+   3671:   // Floor to keep the prescription on the conservative side of any half-step.
+   3672:   let intensityBadge: string | null = null
+   3673:   if (exercise.targetRPE) {
+   3674:     const rawRpe = exercise.targetRPE
+   3675:     const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
+   3676:     const catLower = categoryLower
+   3677:     const exprMode = expressionMode
+>> 3678:     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+   3679:     const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
+   3680:     
+   3681:     // PRIORITY 1: Protection / tissue management
+   3682:     if (isProtected || prescriptionIntent === 'protection') {
+   3683:       intensityBadge = rpe <= 7 
+   3684:         ? `RPE ${rpe} · tissue-safe load`
+   3685:         : `RPE ${rpe} · managed for longevity`
+   3686:     }
+
+--- NON-BUILDER ERROR 070 | lib/program/program-display-contract.ts:3682:24 | TS2367 ---
+lib/program/program-display-contract.ts(3682,24): error TS2367: This comparison appears to be unintentional because the types 'PrescriptionIntent' and '"protection"' have no overlap.
+Suggested search anchors: PrescriptionIntent, "protection", program, display, contract, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 3674-3690:
+   3674:     const rawRpe = exercise.targetRPE
+   3675:     const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
+   3676:     const catLower = categoryLower
+   3677:     const exprMode = expressionMode
+   3678:     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+   3679:     const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
+   3680:     
+   3681:     // PRIORITY 1: Protection / tissue management
+>> 3682:     if (isProtected || prescriptionIntent === 'protection') {
+   3683:       intensityBadge = rpe <= 7 
+   3684:         ? `RPE ${rpe} · tissue-safe load`
+   3685:         : `RPE ${rpe} · managed for longevity`
+   3686:     }
+   3687:     // PRIORITY 2: Skill / primary work - technique-gated
+   3688:     // [SEMANTIC-TRUTH-FIX] RPE 8 is demanding work (2-3 from failure) - wording must reflect that
+   3689:     else if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity' || catLower === 'skill' || exprMode.includes('direct') || exprMode.includes('primary')) {
+   3690:       if (rpe <= 6) {
+
+--- NON-BUILDER ERROR 071 | lib/program/program-display-contract.ts:5711:9 | TS2367 ---
+lib/program/program-display-contract.ts(5711,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "core" | "scap"' and '"pull"' have no overlap.
+Suggested search anchors: "unknown" | "core" | "scap", "pull", program, display, contract, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 5703-5719:
+   5703:     } else if (sessionIntent.includes('volume')) {
+   5704:       intentLabel = 'Pressing volume'
+   5705:     } else {
+   5706:       intentLabel = 'Pressing strength'
+   5707:     }
+   5708:     source = 'authoritative'
+   5709:   } else if (categoryLower === 'strength') {
+   5710:     // Generic strength — use movement family if available
+>> 5711:     if (movementFamily === 'pull') {
+   5712:       intentLabel = 'Pulling strength'
+   5713:     } else if (movementFamily === 'push') {
+   5714:       intentLabel = 'Pressing strength'
+   5715:     } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5716:       intentLabel = 'Strength overload'
+   5717:     } else if (sessionIntent.includes('volume')) {
+   5718:       intentLabel = 'Strength volume'
+   5719:     } else {
+
+--- NON-BUILDER ERROR 072 | lib/program/program-display-contract.ts:5713:16 | TS2367 ---
+lib/program/program-display-contract.ts(5713,16): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "core" | "scap"' and '"push"' have no overlap.
+Suggested search anchors: "unknown" | "core" | "scap", "push", program, display, contract, TS2367, This, comparison
+Likely fix guidance: Impossible comparison. Remove/gate stale branch or map old literal to current valid literal only if obvious.
+Local context lines 5705-5721:
+   5705:     } else {
+   5706:       intentLabel = 'Pressing strength'
+   5707:     }
+   5708:     source = 'authoritative'
+   5709:   } else if (categoryLower === 'strength') {
+   5710:     // Generic strength — use movement family if available
+   5711:     if (movementFamily === 'pull') {
+   5712:       intentLabel = 'Pulling strength'
+>> 5713:     } else if (movementFamily === 'push') {
+   5714:       intentLabel = 'Pressing strength'
+   5715:     } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+   5716:       intentLabel = 'Strength overload'
+   5717:     } else if (sessionIntent.includes('volume')) {
+   5718:       intentLabel = 'Strength volume'
+   5719:     } else {
+   5720:       intentLabel = 'Strength builder'
+   5721:     }
+
+--- NON-BUILDER ERROR 073 | lib/program/program-display-contract.ts:6593:5 | TS2322 ---
+lib/program/program-display-contract.ts(6593,5): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'boolean'.
+Suggested search anchors: number | boolean | undefined, boolean, program, display, contract, TS2322, number, undefined
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 6585-6601:
+   6585:       label: 'Secondary skill exposure',
+   6586:       reason: `${deferredSkills.map(formatSkillName).join(', ')} deferred for focus`,
+   6587:       isActive: true,
+   6588:     })
+   6589:   }
+   6590:   
+   6591:   const weeklyProtection: WeeklyProtectionDisplay = {
+   6592:     protectedAreas,
+>> 6593:     densityCapActive,
+   6594:     densityCapReason: densityCapActive 
+   6595:       ? (dominantSpine?.densityIntegration?.maxSessionsPerWeek
+   6596:           ? `Limited to ${dominantSpine.densityIntegration.maxSessionsPerWeek} sessions/week`
+   6597:           : 'Density work excluded for skill quality')
+   6598:       : null,
+   6599:     volumeLimited: recoveryLevel === 'low',
+   6600:     volumeLimitReason: recoveryLevel === 'low' 
+   6601:       ? 'Adjusted for current recovery capacity'
+
+--- NON-BUILDER ERROR 074 | lib/program/skill-specific-truth-resolution.ts:347:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Suggested search anchors: number | null | undefined, number | null, program, skill, specific, truth, resolution, TS2322
+Likely fix guidance: Assignability/argument mismatch. Normalize local value, validate union strings, convert null/undefined correctly, map object shape locally. Do not widen public unions.
+Local context lines 339-355:
+   339:   
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+>> 347:       response.volumeTolerance = envelope.confidenceScore
+   348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+

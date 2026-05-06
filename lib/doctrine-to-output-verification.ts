@@ -196,7 +196,7 @@ export function verifyDoctrineToOutput(
     selectedSkillCount: (resolvedProfile.selectedSkills || []).length,
     selectedSkills: resolvedProfile.selectedSkills || [],
     scheduleMode: resolvedProfile.scheduleMode || 'static',
-    trainingDays: resolvedProfile.trainingDays || program.sessions.length,
+    trainingDays: program.sessions?.length || 6,
     sessionDuration: resolvedProfile.sessionDurationMode || 'medium',
     equipmentAvailable: resolvedProfile.equipmentAvailable || [],
     experienceLevel: resolvedProfile.experienceLevel || 'intermediate',
@@ -435,7 +435,7 @@ function verifyWeeklyStructure(
   audit: PlannerTruthAuditReport
 ): DimensionVerdict {
   const sessionCount = program.sessions.length
-  const targetDays = profile.trainingDays || sessionCount
+  const targetDays = program.sessions?.length || 6
   
   // Check session differentiation
   const diffAudit = audit.sessionDifferentiationAudit
@@ -517,9 +517,23 @@ function verifyDosageQuality(
   let oddDosageCount = 0
   
   for (const ex of allExercises) {
+    // [ADAPTIVE-EXERCISE-LEGACY-REPS-HOLD] AdaptiveExercise canonical
+    // field is `repsOrTime`; legacy persisted exercises may still
+    // carry `reps`/`holdTime`. Read via runtime narrow.
+    const legacyExercise = ex as unknown as { reps?: string | number; holdTime?: string | number }
     const sets = ex.sets || 0
-    const reps = ex.reps || 0
-    const holdTime = ex.holdTime || 0
+    const repsRaw = ex.repsOrTime ?? legacyExercise.reps
+    const reps = typeof repsRaw === 'number'
+      ? repsRaw
+      : typeof repsRaw === 'string'
+        ? Number.parseInt(repsRaw, 10) || 0
+        : 0
+    const holdRaw = legacyExercise.holdTime
+    const holdTime = typeof holdRaw === 'number'
+      ? holdRaw
+      : typeof holdRaw === 'string'
+        ? Number.parseInt(holdRaw, 10) || 0
+        : 0
     
     // Basic dosage sanity checks
     const hasSets = sets >= 2 && sets <= 8
@@ -528,7 +542,9 @@ function verifyDosageQuality(
     const hasAnyDosage = hasSets || hasReps || hasHold
     
     // RPE should be specified for main work
-    const hasRPE = ex.rpe !== undefined && ex.rpe >= 1 && ex.rpe <= 10
+    // [ADAPTIVE-EXERCISE-TARGET-RPE] AdaptiveExercise exposes
+    // `targetRPE` (not `rpe`).
+    const hasRPE = ex.targetRPE !== undefined && ex.targetRPE >= 1 && ex.targetRPE <= 10
     
     if (hasAnyDosage && hasSets) {
       wellDosedCount++
@@ -805,7 +821,7 @@ function verifyDoctrineShape(
   profile: CanonicalProgrammingProfile
 ): DimensionVerdict {
   const primaryGoal = profile.primaryGoal
-  const trainingPath = profile.trainingPath || 'hybrid'
+  const trainingPath = profile.trainingPathType || 'hybrid'
   
   // Check if week structure matches doctrine expectations
   const sessions = program.sessions

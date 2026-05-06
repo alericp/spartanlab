@@ -1,0 +1,10 @@
+lib/safe-access.ts(69,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(70,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(71,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(72,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(73,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(74,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(75,5): error TS2322: Type 'number' is not assignable to type '0'.
+lib/safe-access.ts(76,5): error TS2322: Type 'boolean' is not assignable to type 'false'.
+lib/safe-access.ts(77,5): error TS2322: Type 'unknown[]' is not assignable to type 'readonly []'.
+lib/safe-access.ts(84,7): error TS2322: Type 'number' is not assignable to type '0'.

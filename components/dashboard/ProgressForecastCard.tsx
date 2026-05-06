@@ -102,9 +102,21 @@ export function ProgressForecastCard({ nextMilestone }: ProgressForecastCardProp
               )}
 
               {/* Explanation Layer */}
+              {/* [PRE-AB6 BUILD GREEN GATE / CONFIDENCELEVEL CONTRACT]
+                GoalProjection.confidence (lib/goal-projection-engine.ts:48)
+                is `ConfidenceLevel = 'high' | 'moderate' | 'low'`, but
+                generateProjectionExplanation (components/shared/InsightExplanation.tsx:131)
+                expects a numeric 0..1 score that it thresholds at >=0.7 / >=0.4.
+                Map the label union to representative numeric values inside
+                those bands so the resulting copy ("High/Moderate/Low
+                confidence projection from X to Y") matches the label the
+                rest of this card already shows via getConfidenceLabel —
+                no NaN, no Number(...) coercion of an unrelated string. */}
               <InsightExplanation
                 explanation={generateProjectionExplanation(
-                  nextMilestone.confidence,
+                  nextMilestone.confidence === 'high' ? 0.85
+                    : nextMilestone.confidence === 'moderate' ? 0.55
+                    : 0.25,
                   nextMilestone.mainLimiter,
                   nextMilestone.currentLevelName || '',
                   nextMilestone.nextLevelName || ''

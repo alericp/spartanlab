@@ -1,0 +1,106 @@
+===== FINAL PUSH AFTER 309 SCORE =====
+Known branch: v0/alericpetsch836-6923-6213db1c-2
+Current branch from git:
+v0/alericpetsch836-6923-6213db1c-2
+
+HEAD: 07893fd5
+Remote HEAD: 60718e5e
+
+===== STATUS BEFORE PUSH =====
+ M lib/back-lever-training-system.ts
+ M lib/program-adjustment-engine.ts
+ M lib/program-exercise-selector.ts
+ M lib/program/program-display-contract.ts
+
+Local vs remote before push, format local-only remote-only:
+1	0
+
+===== PUSH EXPLICIT BRANCH =====
+To https://github.com/alericp/spartanlab
+   60718e5e..07893fd5  HEAD -> v0/alericpetsch836-6923-6213db1c-2
+
+===== FETCH + VERIFY SYNC =====
+From https://github.com/alericp/spartanlab
+ * branch              v0/alericpetsch836-6923-6213db1c-2 -> FETCH_HEAD
+HEAD: 07893fd5
+Remote HEAD: 07893fd5
+Local vs remote after push, format local-only remote-only:
+0	0
+
+===== VERIFY TYPESCRIPT SCORE STILL 309-ish =====
+===== VERIFIED SCOREBOARD =====
+Current total diagnostics: 300
+Current files with errors: 113
+
+===== TOP 40 FILES =====
+     13 lib/unified-coaching-engine.ts
+     11 lib/performance-envelope-engine.ts
+      9 lib/program/skill-specific-truth-resolution.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      8 lib/weak-point-engine.ts
+      7 lib/program-state.ts
+      7 lib/planner-truth-audit.ts
+      6 lib/readiness/canonical-readiness-engine.ts
+      6 lib/program-history-versioning.ts
+      6 lib/canonical-profile-service.ts
+      6 lib/adaptive-program-builder.ts
+      5 lib/server/authoritative-program-generation.ts
+      5 lib/onboarding-service.ts
+      5 lib/doctrine/doctrine-influence-contract.ts
+      4 lib/weak-point-detection.ts
+      4 lib/volume-analyzer.ts
+      4 lib/unified-program-generation.ts
+      4 lib/strength-intelligence-engine.ts
+      4 lib/roadmap/skill-roadmap-service.ts
+      4 lib/program-version-service.ts
+      4 lib/prescription-contract.ts
+      4 lib/dashboard-service.ts
+      4 lib/constraint-detection-engine.ts
+      4 lib/advanced-skills-integration.ts
+      4 lib/adaptive-athlete-engine.ts
+      3 lib/warmup-engine.ts
+      3 lib/strength-score-engine.ts
+      3 lib/session-variety-engine.ts
+      3 lib/program-generation/week-adaptation-decision-contract.ts
+      3 lib/program-adjustment-engine.ts
+      3 lib/milestone-engine.ts
+      3 lib/flexible-schedule-engine.ts
+      3 lib/exercise-family-integration.ts
+      3 lib/elite-insight-engine.ts
+      3 lib/doctrine/source-batches/index.ts
+      3 lib/doctrine/method-profile-registry.ts
+      3 lib/constraint-integration.ts
+      3 lib/adaptive-progression-engine.ts
+      2 lib/workout-feedback-integration.ts
+
+===== ERROR CODE COUNTS =====
+    106 error TS2322
+     37 error TS2339
+     31 error TS2345
+     18 error TS2367
+     15 error TS2740
+     15 error TS2304
+     14 error TS2305
+      9 error TS2739
+      8 error TS2724
+      8 error TS2353
+      6 error TS2741
+      5 error TS2459
+      4 error TS2300
+      3 error TS7006
+      2 error TS7053
+      2 error TS2719
+      2 error TS2694
+      2 error TS2454
+      2 error TS2448
+      2 error TS2307
+      1 error TS2820
+      1 error TS2678
+      1 error TS2554
+      1 error TS2552
+      1 error TS2538
+      1 error TS2488
+      1 error TS2366
+      1 error TS2365
+      1 error TS2352

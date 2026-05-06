@@ -29,12 +29,15 @@ import type { AdaptiveProgram, AdaptiveSession, AdaptiveExercise } from './adapt
 // [PHASE 1] Import materiality contract for integrated validation
 import type { CanonicalMaterialityContract, MaterialityValidationResult } from './canonical-materiality-contract'
 
-// Re-export ValidationSeverity for external use
-export type { ValidationSeverity }
-
 // =============================================================================
 // TYPES
 // =============================================================================
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] `ValidationSeverity` is declared with
+// inline `export type ...` below. The previous forward re-export
+// `export type { ValidationSeverity }` (above the declaration) caused
+// TS2484 because the same name was being exported twice from this module.
+// Inline `export type` is canonical and remains the public API.
 
 export type ValidationSeverity = 'pass' | 'warning' | 'mismatch' | 'critical'
 
@@ -1265,15 +1268,17 @@ export function checkDisplayedStateDrift(
   let genExercisesWithRest = 0
   let displayExercisesWithRest = 0
   
+  // [ADAPTIVE-EXERCISE-REST-SECONDS] AdaptiveExercise exposes
+  // `restSeconds` (number); legacy `rest` was renamed.
   for (const session of generatedProgram.sessions || []) {
     for (const ex of session.exercises || []) {
-      if (ex.rest) genExercisesWithRest++
+      if (ex.restSeconds != null) genExercisesWithRest++
     }
   }
   
   for (const session of displayedProgram.sessions || []) {
     for (const ex of session.exercises || []) {
-      if (ex.rest) displayExercisesWithRest++
+      if (ex.restSeconds != null) displayExercisesWithRest++
     }
   }
   

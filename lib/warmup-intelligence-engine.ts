@@ -729,6 +729,38 @@ const WEAK_POINT_WARMUP_ADDITIONS: Record<WeakPointType, {
     rationale: 'No weak point detected',
     priorityBoost: 0,
   },
+  // [WEAK-POINT-TYPE-CONTRACT] These five keys complete the
+  // Record<WeakPointType, ...> exhaustiveness contract for the canonical
+  // WeakPointType union (lib/weak-point-engine.ts:43-77). Each entry is a
+  // conservative warm-up addition derived from the existing nearest-neighbour
+  // entries above; no new exercise IDs are introduced. Doctrine intent:
+  // these weak points get standard activation work without overriding the
+  // joint-stress-driven primary warm-up.
+  bent_arm_pull: {
+    extraExercises: ['scapular_pull_ups', 'band_pull_aparts'],
+    rationale: 'Bent-arm pulling activation to prepare elbows and lats',
+    priorityBoost: 1,
+  },
+  bent_arm_push: {
+    extraExercises: ['scapular_push_ups', 'shoulder_rotations'],
+    rationale: 'Bent-arm pushing activation to prepare elbows and shoulders',
+    priorityBoost: 1,
+  },
+  core_compression: {
+    extraExercises: ['pike_pulses', 'hollow_hold_activation', 'dead_bugs'],
+    rationale: 'Compression activation to support core weak point',
+    priorityBoost: 1,
+  },
+  core_anti_extension: {
+    extraExercises: ['hollow_hold_activation', 'dead_bugs'],
+    rationale: 'Anti-extension activation to stabilize lumbar spine',
+    priorityBoost: 1,
+  },
+  general_fatigue: {
+    extraExercises: [],
+    rationale: 'Reduce warm-up intensity due to general fatigue load',
+    priorityBoost: 0,
+  },
 }
 
 // =============================================================================
@@ -1173,33 +1205,92 @@ export function enhanceWarmupFromGovernor(
       if (!existingIds.includes(tendonPrep)) {
         const tendonExercise = WARMUP_EXERCISE_DATABASE.find(e => e.id === tendonPrep)
         if (tendonExercise) {
+          // [WARMUP-EXERCISE-WITH-RATIONALE-CURRENT-SHAPE]
+          // WarmUpExerciseWithRationale exposes
+          // exerciseId/name/prescription/targetJoint/rationale/priority/
+          // isRequired (+ optional knowledgeBubble). The prior
+          // exerciseName/instruction/jointCategory keys came from a
+          // legacy shape and are not on the current contract. The
+          // source definition stores joints in `targetJoints[]`.
           enhancedWarmup.exercises.push({
             exerciseId: tendonExercise.id,
-            exerciseName: tendonExercise.name,
-            instruction: tendonExercise.defaultPrescription,
+            name: tendonExercise.name,
+            prescription: tendonExercise.prescription,
+            targetJoint: tendonExercise.targetJoints[0] ?? 'shoulder',
             rationale: `Added for tendon preparation based on session stress analysis.`,
-            jointCategory: tendonExercise.primaryJoint,
             priority: tendonExercise.priority,
+            isRequired: false,
             knowledgeBubble: tendonExercise.knowledgeBubble,
           })
         }
       }
     }
     
+    // [JOINT-STRESS-TO-CATEGORY-MAPPER] `additionalJointPrep` carries
+    // `JointStressFocus` values (singular forms / tendon-specific
+    // labels); `targetJoints` is typed as `JointCategory[]` (plural
+    // canonical joints). Map stress-focus values to their nearest
+    // valid JointCategory before calling `.includes()`.
+    const toJointCategory = (focus: string): JointCategory => {
+      switch (focus) {
+        case 'wrist':
+        case 'wrists':
+          return 'wrists'
+        case 'elbow':
+        case 'elbows':
+        case 'bicep_tendon':
+          return 'elbows'
+        case 'forearm':
+        case 'forearms':
+          return 'forearms'
+        case 'shoulder':
+        case 'shoulders':
+        case 'shoulder_tendon':
+        case 'scapular_tendon':
+        case 'sternum':
+          return 'shoulders'
+        case 'scapula':
+          return 'scapula'
+        case 'thoracic':
+        case 'thoracic_spine':
+          return 'thoracic_spine'
+        case 'core':
+          return 'core'
+        case 'hip':
+        case 'hips':
+        case 'hip_flexor':
+          return 'hips'
+        case 'hamstring':
+        case 'hamstrings':
+          return 'hamstrings'
+        case 'ankle':
+        case 'ankles':
+          return 'ankles'
+        default:
+          return 'shoulders'
+      }
+    }
+
     // Add joint prep for high-stress joints
     for (const joint of warmupNeeds.additionalJointPrep) {
-      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+      // [WARMUP-EXERCISE-DEFINITION-CURRENT-SHAPE] WarmUpExerciseDefinition
+      // exposes `targetJoints: string[]`; legacy `primaryJoint` is gone.
+      const jointCategory = toJointCategory(joint as unknown as string)
+      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.targetJoints.includes(jointCategory))
       const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
       const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
       
       if (newJointExercise) {
+        // [WARMUP-EXERCISE-WITH-RATIONALE-CURRENT-SHAPE] same migration
+        // as the tendon-prep branch above.
         enhancedWarmup.exercises.push({
           exerciseId: newJointExercise.id,
-          exerciseName: newJointExercise.name,
-          instruction: newJointExercise.defaultPrescription,
-          rationale: `Added for ${joint} preparation due to elevated stress.`,
-          jointCategory: newJointExercise.primaryJoint,
+          name: newJointExercise.name,
+          prescription: newJointExercise.prescription,
+          targetJoint: newJointExercise.targetJoints[0] ?? jointCategory,
+          rationale: `Added for ${jointCategory} preparation due to elevated stress.`,
           priority: newJointExercise.priority,
+          isRequired: false,
           knowledgeBubble: newJointExercise.knowledgeBubble,
         })
       }
@@ -1214,7 +1305,10 @@ export function enhanceWarmupFromGovernor(
     )
     
     enhancedWarmup.tendonPrepIncluded = true
-    enhancedWarmup.coachingNote = `Enhanced warm-up recommended due to ${stressAnalysis.fatigueRiskLevel} session stress. ${stressAnalysis.coachingExplanation}`
+    // [WARMUP-RESULT-NO-COACHING-NOTE] warmup result type no longer
+    // carries `coachingNote`; route the explanation into focusSummary
+    // so it remains visible without widening the contract.
+    enhancedWarmup.focusSummary = `Enhanced warm-up recommended due to ${stressAnalysis.fatigueRiskLevel} session stress. ${stressAnalysis.coachingExplanation}`
     
     return enhancedWarmup
   }
@@ -1225,13 +1319,8 @@ export function enhanceWarmupFromGovernor(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeSessionJointStress,
-  selectWarmupExercises,
-  generateIntelligentWarmup,
-  generateCompressedWarmup,
-  getWarmupKnowledgeBubble,
-  generateWarmupExplanation,
-  enhanceWarmupFromGovernor,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All public symbols are exported inline at
+// their declaration sites. The previous bottom `export { ... }` block
+// duplicated every name, producing TS2300/TS2484. Inline `export function`
+// remains the single canonical export style; public API is unchanged.

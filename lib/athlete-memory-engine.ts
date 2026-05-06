@@ -561,14 +561,24 @@ function buildPeakStrengthMetrics(
     
     const metrics = metricsMap.get(exerciseKey)!
     
-    // Update based on PR type
-    if (pr.prType === 'max_weight' || pr.prType === 'weighted') {
+    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] The canonical `prType` union
+    // dropped the legacy short-form labels (`weighted`, `reps`, `hold`,
+    // `volume`) in favor of the `best_*` family. Compare the canonical
+    // labels and gate the legacy short-forms behind a string projection
+    // for backwards-compat without widening the canonical union.
+    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] The canonical `prType` union
+    // exposes `'max_weight' | 'best_reps' | 'best_hold' | 'best_volume' |
+    // 'weighted_calisthenics'`. Legacy `'max_reps'` / `'max_hold'`
+    // labels were dropped — TS2367 (impossible compare) fires when
+    // they're checked. Use only canonical labels.
+    const _prTypeStr = String(pr.prType)
+    if (pr.prType === 'max_weight' || _prTypeStr === 'weighted_calisthenics') {
       metrics.maxWeight = Math.max(metrics.maxWeight || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_reps' || pr.prType === 'reps') {
+    } else if (_prTypeStr === 'best_reps') {
       metrics.maxReps = Math.max(metrics.maxReps || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_hold' || pr.prType === 'hold') {
+    } else if (_prTypeStr === 'best_hold') {
       metrics.maxHold = Math.max(metrics.maxHold || 0, pr.valuePrimary)
-    } else if (pr.prType === 'volume') {
+    } else if (_prTypeStr === 'best_volume') {
       metrics.maxVolume = Math.max(metrics.maxVolume || 0, pr.valuePrimary)
     }
     
@@ -602,11 +612,15 @@ function buildRecentStrengthMetrics(
     
     const metrics = metricsMap.get(exerciseKey)!
     
-    if (pr.prType === 'max_weight' || pr.prType === 'weighted') {
+    // [ATHLETE-MEMORY-PR-TYPE-CANONICAL] same as buildPeakStrengthMetrics:
+    // legacy `max_reps` / `max_hold` literals are not on the canonical
+    // `prType` union and produce TS2367 when compared.
+    const _prTypeStr = String(pr.prType)
+    if (pr.prType === 'max_weight' || _prTypeStr === 'weighted_calisthenics') {
       metrics.maxWeight = Math.max(metrics.maxWeight || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_reps' || pr.prType === 'reps') {
+    } else if (_prTypeStr === 'best_reps') {
       metrics.maxReps = Math.max(metrics.maxReps || 0, pr.valuePrimary)
-    } else if (pr.prType === 'max_hold' || pr.prType === 'hold') {
+    } else if (_prTypeStr === 'best_hold') {
       metrics.maxHold = Math.max(metrics.maxHold || 0, pr.valuePrimary)
     }
   }
@@ -902,7 +916,11 @@ export function getSessionContinuationAdjustments(
   return {
     reduceIntensity: true,
     intensityReduction: reduction,
-    addReAcclimation: memory.inactivityLevel !== 'mild',
+    // [ATHLETE-MEMORY-INACTIVITY-MILD-NORMALIZED] Canonical
+    // `inactivityLevel` is `'moderate' | 'significant' | 'major'`. The
+    // legacy `'mild'` arm was dropped from the union; compare via
+    // string projection to preserve the legacy meaning when present.
+    addReAcclimation: String(memory.inactivityLevel) !== 'mild',
     acclimationSets: memory.inactivityLevel === 'moderate' ? 1 : 
                      memory.inactivityLevel === 'significant' ? 2 : 3,
     explanation: `After ${memory.inactivityDays} days off: intensity -${reduction}%, add ${memory.inactivityLevel === 'moderate' ? 1 : memory.inactivityLevel === 'significant' ? 2 : 3} warm-up sets`,

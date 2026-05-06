@@ -269,14 +269,21 @@ export function UpdateMetricsCard({ variant = 'full', onUpdate }: UpdateMetricsC
   useEffect(() => {
     const current = getCurrentMetrics()
     
+    // [PRE-AB6 BUILD GREEN GATE / WEIGHTEDBENCHMARK CONTRACT]
+    // The authoritative WeightedBenchmark used by metrics-update-service is
+    // imported from lib/athlete-profile.ts:328 and exposes
+    // { load: number | null, unit: 'lbs' | 'kg', reps?: number } — there is
+    // NO `addedWeight` field. (A separate WeightedBenchmark in
+    // lib/prescription-contract.ts uses `addedWeight`, but that type is
+    // unrelated to getCurrentMetrics()'s return shape.) Read `load` directly.
     setStrengthMetrics({
       pullUpMax: current.strength.pullUpMax,
       dipMax: current.strength.dipMax,
       pushUpMax: current.strength.pushUpMax,
       wallHSPUReps: current.strength.wallHSPUReps,
-      weightedPullUpWeight: current.strength.weightedPullUp?.addedWeight ?? null,
+      weightedPullUpWeight: current.strength.weightedPullUp?.load ?? null,
       weightedPullUpReps: current.strength.weightedPullUp?.reps ?? null,
-      weightedDipWeight: current.strength.weightedDip?.addedWeight ?? null,
+      weightedDipWeight: current.strength.weightedDip?.load ?? null,
       weightedDipReps: current.strength.weightedDip?.reps ?? null,
     })
     
@@ -307,12 +314,18 @@ export function UpdateMetricsCard({ variant = 'full', onUpdate }: UpdateMetricsC
         dipMax: strengthMetrics.dipMax,
         pushUpMax: strengthMetrics.pushUpMax,
         wallHSPUReps: strengthMetrics.wallHSPUReps,
+        // [PRE-AB6 BUILD GREEN GATE / WEIGHTEDBENCHMARK CONTRACT]
+        // Same authoritative type (lib/athlete-profile.ts:328): write `load`
+        // and required `unit`. The WeightedInput UI displays "lbs +" so the
+        // unit is always 'lbs' in this component — no fake conversion.
         weightedPullUp: strengthMetrics.weightedPullUpWeight !== null ? {
-          addedWeight: strengthMetrics.weightedPullUpWeight,
+          load: strengthMetrics.weightedPullUpWeight,
+          unit: 'lbs',
           reps: strengthMetrics.weightedPullUpReps ?? 1,
         } : null,
         weightedDip: strengthMetrics.weightedDipWeight !== null ? {
-          addedWeight: strengthMetrics.weightedDipWeight,
+          load: strengthMetrics.weightedDipWeight,
+          unit: 'lbs',
           reps: strengthMetrics.weightedDipReps ?? 1,
         } : null,
       },

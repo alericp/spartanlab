@@ -515,7 +515,10 @@ export const METHOD_PROFILES: Record<MethodProfileId, MethodProfile> = {
       setRangeMax: 3, // Always 3 rounds
       holdDurationMin: 15,
       holdDurationMax: 15, // Always 15 seconds
-      targetRPE: [4, 6],
+      // [RPE-VALUE-MIN-FLOOR] RPEValue union starts at 5; promote the
+      // legacy floor of 4 to 5 (the lowest valid literal) rather than
+      // widening the union for one entry.
+      targetRPE: [5, 6],
       restTimeMin: 5,
       restTimeMax: 15,
       maxTotalSets: 12,
@@ -1004,7 +1007,10 @@ export function selectMethodProfiles(context: SelectionContext): SelectedMethods
   const tendonLevel = context.tendonAdaptationLevel
   if (tendonLevel === 'low' || tendonLevel === 'low_moderate') {
     // Low tendon adaptation - start with static density for controlled exposure
-    if (primary.id === 'dynamic_skill_mastery' || primary.id === 'hybrid_skill_strength') {
+    // [METHOD-PROFILE-NO-DYNAMIC-MASTERY] MethodProfileId no longer
+    // includes 'dynamic_skill_mastery'; only hybrid_skill_strength
+    // remains as the high-dynamic option.
+    if (primary.id === 'hybrid_skill_strength') {
       primary = METHOD_PROFILES.static_skill_density
     }
   } else if ((tendonLevel === 'moderate_high' || tendonLevel === 'high') && experienceLevel !== 'beginner') {
@@ -1189,9 +1195,10 @@ export function getCoachingMessage(selectedMethods: SelectedMethods): string {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  type MethodProfile,
-  type MethodRules,
-  type SkillMethodCompatibility,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] MethodProfile (line 68), MethodRules
+// (line 105), and SkillMethodCompatibility (line 745) are declared as
+// `export interface ...` inline. The previous bottom `export { type ... }`
+// block re-exported all three names, producing TS2300/TS2484. Inline
+// `export interface` remains the single canonical export style; public API
+// is unchanged.

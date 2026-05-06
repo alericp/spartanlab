@@ -192,11 +192,20 @@ export function generateStrengthAnalysis(
   const hasBodyweight = bodyweight !== null && bodyweight > 0
   const hasData = records.length > 0
   
-  // Analyze each exercise
+  // [EXERCISE-TYPE-RECORD-COMPLETION] Default the deadlift variants
+  // to null until barbell strength guidance is wired in.
   const exercises: Record<ExerciseType, ExerciseAnalysis | null> = {
     weighted_pull_up: analyzeExercise(records, 'weighted_pull_up', bodyweight),
     weighted_dip: analyzeExercise(records, 'weighted_dip', bodyweight),
     weighted_muscle_up: analyzeExercise(records, 'weighted_muscle_up', bodyweight),
+    conventional_deadlift: null,
+    sumo_deadlift: null,
+    romanian_deadlift: null,
+    trap_bar_deadlift: null,
+    back_squat: null,
+    front_squat: null,
+    bench_press: null,
+    overhead_press: null,
   }
   
   // Get relative strength ratios for skill support assessment

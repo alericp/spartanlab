@@ -1,0 +1,14 @@
+lib/performance-envelope-integration.ts(177,37): error TS2339: Property 'sessionDensity' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(179,44): error TS2551: Property 'sessionDurationMinutes' does not exist on type 'WorkoutLog'. Did you mean 'durationMinutes'?
+lib/performance-envelope-integration.ts(188,37): error TS2339: Property 'completionRatio' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(190,38): error TS2339: Property 'timeCompressedFlag' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(191,38): error TS2339: Property 'skippedExercises' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(192,42): error TS2339: Property 'substitutedExercises' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(196,38): error TS2339: Property 'wasDeloadSession' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(200,33): error TS2339: Property 'logQuality' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(201,33): error TS2339: Property 'logQuality' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(427,30): error TS2339: Property 'fatigueWarning' does not exist on type 'EnvelopeRecommendation'.
+lib/performance-envelope-integration.ts(431,5): error TS2322: Type '{ movementFamily: MovementFamily; repRange: { min: number; max: number; display: string; }; weeklyVolume: { min: number; max: number; tolerated: number; display: string; }; sessionDensity: { ...; }; fatigueWarning: any; }[]' is not assignable to type '{ movementFamily: MovementFamily; repRange: string; weeklyVolume: string; sessionDensity: string; fatigueWarning?: string | undefined; }[]'.
+lib/performance-envelope-integration.ts(455,14): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.
+lib/performance-envelope-integration.ts(455,23): error TS2322: Type '"hip_hinge"' is not assignable to type 'MovementFamily'.
+lib/performance-envelope-integration.ts(524,5): error TS2322: Type '"squat"' is not assignable to type 'MovementFamily'.

@@ -1,0 +1,41 @@
+===== PART 5 — GITHUB AI NON-BUILDER GUARDRAIL SEED =====
+Target: non-builder files only. VO is exclusively working on lib/adaptive-program-builder.ts.
+Do not edit lib/adaptive-program-builder.ts. Do not edit app/components/package/schema/env/auth/billing/Prisma files.
+Use exact selected diagnostics and context only. No repo scan. No scripts. No helper-only work. No as any. No union widening.
+Credit-saving cap: touch at most 8-12 files or stop after likely 40+ diagnostics reduced. Commit and stop.
+If a fix is not obvious within local context and ±80-line anchor search, mark BLOCKED and move on.
+
+Selected error count: 220
+Selected file counts:
+- lib/server/authoritative-program-generation.ts: 32
+- lib/unified-coaching-engine.ts: 25
+- lib/canonical-profile-service.ts: 18
+- lib/program/skill-specific-truth-resolution.ts: 15
+- lib/session-variety-engine.ts: 14
+- lib/repositories/profile-repository.ts: 13
+- lib/unified-program-generation.ts: 12
+- lib/roadmap/skill-roadmap-service.ts: 11
+- lib/onboarding-service.ts: 10
+- lib/program/db-truth-scoring-bridge.ts: 10
+- lib/warmup-engine.ts: 10
+- lib/performance-envelope-engine.ts: 9
+- lib/program-truth-extractor.ts: 9
+- lib/program/program-display-contract.ts: 9
+- lib/doctrine-to-output-verification.ts: 8
+- lib/warmup-intelligence-engine.ts: 8
+- lib/weak-point-engine.ts: 7
+
+Selected error-code counts:
+- TS2339: 95
+- TS2322: 46
+- TS2367: 21
+- TS2353: 11
+- TS2345: 10
+- TS2304: 8
+- TS2551: 7
+- TS18048: 7
+- TS2352: 5
+- TS2554: 4
+- TS7006: 3
+- TS2741: 2
+- TS2740: 1

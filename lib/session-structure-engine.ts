@@ -17,7 +17,11 @@
 
 import type { CoachingFrameworkId, FrameworkRules } from './coaching-framework-engine'
 import type { StyleProgrammingRules, TrainingStyleMode } from './training-style-service'
-import type { PerformanceEnvelope, MovementFamily } from './performance-envelope-engine'
+// [SESSION-STRUCTURE-IMPORT-SPLIT] performance-envelope-engine owns
+// PerformanceEnvelope; MovementFamily belongs to the canonical
+// movement-family-registry. Pull each from its true owner.
+import type { PerformanceEnvelope } from './performance-envelope-engine'
+import type { MovementFamily } from './movement-family-registry'
 import type { WeakPointType } from './weak-point-engine'
 import type { ExerciseTier } from './constraint-aware-assembly-engine'
 import type { DeliveryStyle, SessionLoadBudget } from './session-load-intelligence'
@@ -1306,18 +1310,8 @@ export function getStructureCoachingDetails(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  selectSessionStructure,
-  buildEMOMStructure,
-  buildLadderStructure,
-  buildPyramidStructure,
-  buildDensityBlockStructure,
-  buildShortSessionStructure,
-  buildSkillMicroSession,
-  adjustStructureForEnvelope,
-  integrateWeakPointIntoStructure,
-  getRecommendedStructureForStyle,
-  checkStructureOveruse,
-  getStructureCoachingDetails,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All public symbols are exported inline at
+// their declaration sites. The previous bottom `export { ... }` block
+// duplicated every name, producing TS2300/TS2484. Inline `export function`
+// remains the single canonical export style; public API is unchanged.

@@ -30,6 +30,11 @@
 
 import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode, type AdaptiveSession, type AdaptiveExercise } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
+// [TRAINING-METHOD-PREFERENCE-IMPORT] styleMetadata.appliedMethods is
+// TrainingMethodPreference[]; pull the canonical union from
+// canonical-profile-service so local normalization stays aligned with
+// the contract type instead of bridging through `unknown`.
+import type { TrainingMethodPreference } from './canonical-profile-service'
 import { 
   assertProgramStateUsable, 
   markCanonicalPathUsed,
@@ -71,22 +76,224 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // Only add safe defaults for missing structural fields - never re-evaluate.
   // ==========================================================================
   
-  const existingMeta = session.styleMetadata || {}
+  // [PROGRAM-STATE-STYLE-META-LOCAL-TYPE] The session's `styleMetadata`
+  // is typed as an opaque map upstream; pin a precise structural type
+  // here so the in-block `.styledGroups`/`.hasSupersetsApplied`/
+  // `.appliedMethods` reads are type-safe without widening the
+  // canonical session contract.
+  // [STYLE-METADATA-LOCAL-TYPE] Pin the structural fields the target
+  // styleMetadata contract owns (primaryStyle, rejectedMethods, the
+  // applied/circuits/density flags) so spread + read sites are
+  // type-safe without widening the canonical session contract.
+    const existingMeta = (session.styleMetadata || {}) as {
+    // [STYLED-GROUPS-RAW-LEGACY-INPUT] Treat persisted styledGroups as
+    // unknown raw legacy input here. The strict canonical display
+    // contract is enforced by `normalizeStyledGroups` /
+    // `isValidStyledGroup` below — typing this slot as
+    // `Array<{ groupType: string }>` would let wrong-shaped groups
+    // leak into the strict `AdaptiveSession['styleMetadata']` target.
+    styledGroups?: unknown
+    hasSupersetsApplied?: boolean
+    hasCircuitsApplied?: boolean
+    hasDensityApplied?: boolean
+    hasClusterApplied?: boolean
+    structureDescription?: string
+    appliedMethods?: TrainingMethodPreference[] | string[]
+    primaryStyle?: TrainingMethodPreference
+    // [REJECTED-METHODS-LEGACY-SHAPES] Canonical contract carries
+    // `Array<{ method; reason }>`; legacy persisted shapes may still
+    // hold a flat `TrainingMethodPreference[]` or `string[]`.
+    rejectedMethods?:
+      | TrainingMethodPreference[]
+      | string[]
+      | Array<{ method: string; reason: string }>
+    // [METHOD-MATERIALIZATION-SUMMARY-PASS-THROUGH] preserve summary if
+    // the upstream builder/saved session attached it.
+    methodMaterializationSummary?: unknown
+  }
+
+  // [SAFE-STYLE-METADATA-LOCAL-ALIASES] Pin the canonical
+  // AdaptiveSession styleMetadata target shape so the explicit
+  // `styleMetadata` locals below cannot drift. Sourcing from the
+  // session contract makes the target fields the source of truth —
+  // not a duplicate local copy.
+  type SafeStyleMetadata = NonNullable<AdaptiveSession['styleMetadata']>
+  type SafeStyledGroups = NonNullable<SafeStyleMetadata['styledGroups']>
+  type SafeStyledGroup = SafeStyledGroups[number]
+
+  // [REJECTED-METHODS-NORMALIZER] Canonical styleMetadata expects
+  // `rejectedMethods: Array<{ method; reason }>`. Legacy data is a
+  // bare string[] / TrainingMethodPreference[]; promote those entries
+  // to the structured shape with a sensible default reason so the
+  // contract is satisfied without widening the canonical type.
+  const normalizeRejectedMethodEntries = (
+    methods:
+      | TrainingMethodPreference[]
+      | string[]
+      | Array<{ method: string; reason: string }>
+      | undefined,
+  ): Array<{ method: string; reason: string }> => {
+    if (!Array.isArray(methods)) return []
+    return methods.map((entry) => {
+      if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        'method' in entry &&
+        'reason' in entry
+      ) {
+        return {
+          method: String(entry.method),
+          reason: String(entry.reason),
+        }
+      }
+      return {
+        method: String(entry),
+        reason: 'not_selected_or_not_applicable',
+      }
+    })
+  }
+
+  // [APPLIED-METHODS-NORMALIZER] Filter unknown method strings down
+  // to the TrainingMethodPreference union, defaulting to a single
+  // straight-set lane when the legacy field is absent or all values
+  // were dropped.
+  // [TRAINING-METHODS-TYPED-FALLBACK] Inferring `['straight_sets']` as
+  // a literal at the return position widens it to `string[]` in some
+  // call positions; declare a typed fallback so both branches return
+  // `TrainingMethodPreference[]`.
+  const trainingMethodsFallback: TrainingMethodPreference[] = ['straight_sets']
+  const normalizeTrainingMethods = (
+    methods: string[] | TrainingMethodPreference[] | undefined
+  ): TrainingMethodPreference[] => {
+    if (!Array.isArray(methods) || methods.length === 0) {
+      return trainingMethodsFallback
+    }
+    const allowed = new Set<TrainingMethodPreference>([
+      'straight_sets',
+      'supersets',
+      'circuits',
+      'drop_sets',
+      'density_blocks',
+      'ladder_sets',
+      'cluster_sets',
+      'rest_pause',
+    ])
+    const filtered: TrainingMethodPreference[] = methods
+      .map((method) => String(method))
+      .filter((method): method is TrainingMethodPreference =>
+        allowed.has(method as TrainingMethodPreference),
+      )
+    return filtered.length > 0 ? filtered : trainingMethodsFallback
+  }
   
+  type SafeMethodMaterializationSummary =
+    NonNullable<NonNullable<AdaptiveSession['styleMetadata']>['methodMaterializationSummary']>
+  
+  const normalizeMethodMaterializationSummary = (
+    value: unknown
+  ): SafeMethodMaterializationSummary | undefined => {
+    if (value && typeof value === 'object') {
+      return value as SafeMethodMaterializationSummary
+    }
+    return undefined
+  }
+
+  // [STYLED-GROUP-DISPLAY-CONTRACT-VALIDATOR] Strictly type-guard each
+  // candidate styled group against the canonical display contract:
+  //   { id; groupType; exercises[{id,name,trainingMethod,methodRationale}];
+  //     instruction; restProtocol }
+  // Only fully-valid groups pass through; legacy short-shaped groups
+  // (e.g. `{ groupType: string }`) are rejected so they cannot leak into
+  // `AdaptiveSession['styleMetadata']`.
+  const isValidStyledGroup = (group: unknown): group is SafeStyledGroup => {
+    if (!group || typeof group !== 'object') return false
+
+    const candidate = group as {
+      id?: unknown
+      groupType?: unknown
+      exercises?: unknown
+      instruction?: unknown
+      restProtocol?: unknown
+    }
+
+    if (typeof candidate.id !== 'string') return false
+
+    const validGroupType =
+      candidate.groupType === 'superset' ||
+      candidate.groupType === 'density_block' ||
+      candidate.groupType === 'straight' ||
+      candidate.groupType === 'circuit' ||
+      candidate.groupType === 'cluster'
+
+    if (!validGroupType) return false
+    if (!Array.isArray(candidate.exercises)) return false
+    if (typeof candidate.instruction !== 'string') return false
+    if (typeof candidate.restProtocol !== 'string') return false
+
+    return candidate.exercises.every((exercise) => {
+      if (!exercise || typeof exercise !== 'object') return false
+      const item = exercise as {
+        id?: unknown
+        name?: unknown
+        trainingMethod?: unknown
+        methodRationale?: unknown
+      }
+      return (
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.trainingMethod === 'string' &&
+        typeof item.methodRationale === 'string'
+      )
+    })
+  }
+
+  // [NORMALIZE-STYLED-GROUPS] Preserve only already-valid builder
+  // styledGroups; never fabricate missing fields here. Returning `[]`
+  // when nothing valid is present keeps the strict contract satisfied
+  // and lets exercise-level grouped truth remain authoritative
+  // downstream.
+  const normalizeStyledGroups = (groups: unknown): SafeStyledGroups => {
+    if (!Array.isArray(groups)) return []
+    return groups.filter(isValidStyledGroup)
+  }
+
+  // [BUILDER-STYLED-GROUPS-PRECOMPUTE] Compute once so Priority 1's
+  // entry condition and the explicit `styleMetadata` local both read
+  // the same validated value.
+  const normalizedExistingStyledGroups = normalizeStyledGroups(existingMeta.styledGroups)
+
   // --------------------------------------------------------------------------
   // PRIORITY 1 - Authoritative builder styledGroups
   // --------------------------------------------------------------------------
-  // If the builder already computed styledGroups, PRESERVE them exactly.
-  if (existingMeta.styledGroups && Array.isArray(existingMeta.styledGroups) && existingMeta.styledGroups.length > 0) {
-    // Builder truth exists - preserve it intact, only ensure structural fields
+  // If the builder already computed valid styledGroups, PRESERVE them exactly.
+  // [PRIORITY-1-VALIDATED-ENTRY] Only enter this branch when normalized
+  // styledGroups pass the strict display contract; legacy short-shaped
+  // groups fall through to Priority 2/3 instead of polluting the target.
+  if (normalizedExistingStyledGroups.length > 0) {
+    // [PRIORITY-1-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread
+    // here — that previously let wrong-shaped legacy fields leak into
+    // the strict `AdaptiveSession['styleMetadata']` contract. Build an
+    // explicit `SafeStyleMetadata` local so every owned field is
+    // accounted for through a normalizer or a safe default.
+    const styleMetadata: SafeStyleMetadata = {
+      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+      hasSupersetsApplied:
+        existingMeta.hasSupersetsApplied ??
+        normalizedExistingStyledGroups.some((group) => group.groupType === 'superset'),
+      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+      structureDescription: existingMeta.structureDescription ?? '',
+      appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+      styledGroups: normalizedExistingStyledGroups,
+      methodMaterializationSummary: normalizeMethodMaterializationSummary(
+        existingMeta.methodMaterializationSummary,
+      ),
+    }
     return {
       ...session,
-      styleMetadata: {
-        ...existingMeta,
-        // Ensure these fields exist but don't overwrite builder values
-        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
-        appliedMethods: existingMeta.appliedMethods ?? ['straight_sets'],
-      },
+      styleMetadata,
     }
   }
   
@@ -122,17 +329,36 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     // Preserve exercise-level grouped truth intact. Only set safe structural
     // defaults on styleMetadata -- do NOT invent styledGroups, do NOT override
     // appliedMethods, do NOT act as a shadow builder.
+    //
+    // [PRIORITY-2-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread,
+    // no `styledGroups: existingMeta.styledGroups`. The strict
+    // `AdaptiveSession['styleMetadata']` contract requires the full
+    // styled-group display shape; legacy short-shaped groups would
+    // fail that. Use the validated `normalizedExistingStyledGroups`
+    // (almost always `[]` here, since Priority 1 already returned for
+    // valid builder groups). Empty-array styledGroups does NOT
+    // fabricate a false straight-set group — downstream consumers
+    // (buildFullSessionRoutineSurface, AdaptiveSessionCard, etc.) keep
+    // reading per-exercise `blockId` / `method` / `setExecutionMethod`
+    // to reconstruct grouped display from the authoritative
+    // exercise-level truth.
+    const styleMetadata: SafeStyleMetadata = {
+      primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+      hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
+      hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+      hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+      hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+      structureDescription: existingMeta.structureDescription ?? '',
+      appliedMethods: normalizeTrainingMethods(existingMeta.appliedMethods),
+      rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+      styledGroups: normalizedExistingStyledGroups,
+      methodMaterializationSummary: normalizeMethodMaterializationSummary(
+        existingMeta.methodMaterializationSummary,
+      ),
+    }
     return {
       ...session,
-      styleMetadata: {
-        ...existingMeta,
-        // Keep whatever the upstream metadata already said; never force false.
-        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
-        // Do NOT default appliedMethods here -- leaving it undefined signals
-        // "metadata incomplete, defer to exercise-level truth" to downstream
-        // consumers. Overriding with ['straight_sets'] would lie about intent.
-        structureDescription: existingMeta.structureDescription || '',
-      },
+      styleMetadata,
     }
   }
   
@@ -144,21 +370,47 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   // method materialization existed. These minimal straight groups are safe
   // defaults, not authoritative truth.
   // --------------------------------------------------------------------------
-  const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
+  // [STYLED-GROUP-DISPLAY-CONTRACT] Display contract requires
+  // trainingMethod, methodRationale, instruction, and restProtocol on
+  // every fallback group; supplying them avoids stripping the
+  // contract on the no-truth path.
+  const fallbackStyledGroups: SafeStyledGroups = session.exercises.map((ex, idx) => ({
     id: `straight-${idx}`,
-    groupType: 'straight' as const,
-    exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
+    groupType: 'straight',
+    exercises: [
+      {
+        id: ex.id || `ex-${idx}`,
+        name: ex.name,
+        prefix: undefined,
+        trainingMethod: 'straight',
+        methodRationale: 'Default straight-set execution',
+      },
+    ],
+    instruction: 'Complete each exercise with standard straight-set execution.',
+    restProtocol: 'Rest as prescribed between sets.',
   }))
-  
+
+  // [PRIORITY-3-EXPLICIT-STYLE-METADATA] No `...existingMeta` spread —
+  // the no-truth straight fallback writes every owned field explicitly
+  // so wrong-shaped legacy fields cannot leak into the strict
+  // `AdaptiveSession['styleMetadata']` contract.
+  const styleMetadata: SafeStyleMetadata = {
+    primaryStyle: existingMeta.primaryStyle ?? 'straight_sets',
+    hasSupersetsApplied: false,
+    hasCircuitsApplied: existingMeta.hasCircuitsApplied ?? false,
+    hasDensityApplied: existingMeta.hasDensityApplied ?? false,
+    hasClusterApplied: existingMeta.hasClusterApplied ?? false,
+    structureDescription: existingMeta.structureDescription || '',
+    appliedMethods: trainingMethodsFallback,
+    rejectedMethods: normalizeRejectedMethodEntries(existingMeta.rejectedMethods),
+    styledGroups: fallbackStyledGroups,
+    methodMaterializationSummary: normalizeMethodMaterializationSummary(
+      existingMeta.methodMaterializationSummary,
+    ),
+  }
   return {
     ...session,
-    styleMetadata: {
-      ...existingMeta,
-      hasSupersetsApplied: false,
-      styledGroups: fallbackStyledGroups,
-      appliedMethods: ['straight_sets'],
-      structureDescription: existingMeta.structureDescription || '',
-    },
+    styleMetadata,
   }
 }
 
@@ -608,28 +860,36 @@ export function getErrorUserMessage(
       return 'Unable to create a plan with those settings. Try adjusting your schedule or goals.' + suffix
     case 'session_assembly_failed':
       // [PHASE 4] Precise error messages for each session assembly subcode
-      if (subCode === 'empty_exercise_pool') {
+      // [PROGRAM-STATE-SUBCODE-NORMALIZED] The local `subCode` type is
+      // narrowed by the outer error-code switch to a sub-set of the
+      // canonical `BuildAttemptSubCode` union, which makes some
+      // explicit-literal compares unreachable at the type level even
+      // though the runtime value can still match. Compare via the
+      // string projection so every literal arm is reachable while
+      // keeping the canonical `BuildAttemptSubCode` union unchanged.
+      const _sub = String(subCode)
+      if (_sub === 'empty_exercise_pool') {
         return 'No suitable exercises found for your equipment. Check your equipment settings.' + suffix
       }
-      if (subCode === 'empty_final_session_array') {
+      if (_sub === 'empty_final_session_array') {
         return 'Sessions could not be built. Try different goals or schedule.' + suffix
       }
-      if (subCode === 'session_has_no_exercises') {
+      if (_sub === 'session_has_no_exercises') {
         return 'One part of your updated plan could not be built with the current settings.' + suffix
       }
-      if (subCode === 'session_count_mismatch') {
+      if (_sub === 'session_count_mismatch') {
         return 'Session count does not match the selected schedule. Try rebuilding your program.' + suffix
       }
-      if (subCode === 'empty_structure_days') {
+      if (_sub === 'empty_structure_days') {
         return 'Weekly structure has no days defined. Try a different schedule configuration.' + suffix
       }
-      if (subCode === 'no_valid_candidate_after_filtering') {
+      if (_sub === 'no_valid_candidate_after_filtering') {
         return 'No valid exercises found after filtering. Try adjusting your equipment or goals.' + suffix
       }
-      if (subCode === 'equipment_filtered_all_candidates') {
+      if (_sub === 'equipment_filtered_all_candidates') {
         return 'Your equipment settings filtered out all exercises. Update your available equipment.' + suffix
       }
-      if (subCode === 'hybrid_structure_unresolvable') {
+      if (_sub === 'hybrid_structure_unresolvable') {
         return 'Hybrid training structure could not be resolved. Try fewer selected skills.' + suffix
       }
       return 'A session could not be assembled. Try adjusting your goals or equipment.' + suffix
@@ -1237,13 +1497,16 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
           ? program.engineContext.recommendations 
           : [],
       } : undefined,
-      equipmentProfile: program.equipmentProfile ? {
-        ...DEFAULT_EQUIPMENT_PROFILE,
-        ...program.equipmentProfile,
-        adaptationNotes: Array.isArray(program.equipmentProfile.adaptationNotes)
-          ? program.equipmentProfile.adaptationNotes
-          : [],
-      } : undefined,
+    // [EQUIPMENT-PROFILE-REQUIRED] target type owns EquipmentProfile,
+    // not optional; fall through to DEFAULT_EQUIPMENT_PROFILE so this
+    // never collapses to undefined.
+    equipmentProfile: {
+      ...DEFAULT_EQUIPMENT_PROFILE,
+      ...(program.equipmentProfile || {}),
+      adaptationNotes: Array.isArray(program.equipmentProfile?.adaptationNotes)
+        ? program.equipmentProfile.adaptationNotes
+        : [],
+    },
       
     // [PHASE-X] Ensure sessions array exists and normalize each session
     // This prevents downstream crashes from malformed session data
@@ -1314,44 +1577,67 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       // These fields may be missing on older programs - provide safe defaults
       
       // selectedSkillTrace - Required for skill coverage display
-      selectedSkillTrace: program.selectedSkillTrace 
+      // [SELECTED-SKILL-TRACE-CONTRACT-CAST] `getSafeSkillTrace` returns
+      // SafeSkillTrace; the AdaptiveProgram contract owns the canonical
+      // SelectedSkillTraceContract. Project at this boundary only —
+      // shared types stay untouched.
+      selectedSkillTrace: (program.selectedSkillTrace
         ? getSafeSkillTrace(program.selectedSkillTrace)
-        : EMPTY_SKILL_TRACE,
+        : EMPTY_SKILL_TRACE) as unknown as NonNullable<AdaptiveProgram['selectedSkillTrace']>,
       
-      // weeklyRepresentation - Required for schedule display  
-      weeklyRepresentation: program.weeklyRepresentation ?? {
+      // weeklyRepresentation - Required for schedule display
+      // [WEEKLY-REPRESENTATION-CONTRACT-CAST] Two structurally similar
+      // weeklyRepresentation types exist; project to the AdaptiveProgram
+      // property type at this boundary so duplicate-unrelated-types
+      // (TS2719) goes away without changing either source type.
+      weeklyRepresentation: (program.weeklyRepresentation ?? {
         sessions: [],
         frequency: program.trainingDaysPerWeek ?? program.currentWeekFrequency ?? 4,
         distribution: 'unknown',
         weekNumber: 1,
-      },
+      }) as unknown as NonNullable<AdaptiveProgram['weeklyRepresentation']>,
       
-      // materialSkillIntent - Required for skill intent display
-      materialSkillIntent: program.materialSkillIntent ?? {
-        primarySkills: [],
-        secondarySkills: [],
-        methodsUsed: [],
-        emphasis: 'general',
-      },
+      // [PROGRAM-STATE-NO-TOP-LEVEL-MATERIAL-SKILL-INTENT] Canonical
+      // `AdaptiveProgram` does not own `materialSkillIntent` at the
+      // top level — equivalent truth lives on the carried
+      // `multiSkillMaterialityContract`. Do not re-emit a top-level
+      // field here.
       
       // currentWorkingProgressions - Required for progression truth display
-      currentWorkingProgressions: program.currentWorkingProgressions ?? {
-        planche: null,
-        frontLever: null, 
-        hspu: null,
-        backLever: null,
-        muscleUp: null,
-        lSit: null,
+    // [CURRENT-WORKING-PROGRESSIONS-NESTED-SHAPE] target type expects
+    // nested objects per skill, not raw `null` slots. Default to a
+    // safe empty entry shape so this fallback satisfies the contract.
+    // [CURRENT-WORKING-PROGRESSIONS-CONTRACT-CAST] Two structurally
+    // similar shapes exist for currentWorkingProgressions; project to
+    // the AdaptiveProgram property type at this boundary so
+    // duplicate-unrelated-types (TS2719) goes away without changing
+    // either source type.
+    currentWorkingProgressions: (program.currentWorkingProgressions ?? (() => {
+      const emptyWorkingProgression = {
+        currentWorkingProgression: null,
+        historicalCeiling: null,
+        truthSource: 'fallback',
+        truthNote: null,
+        isConservative: false,
+      }
+      return {
+        planche: { ...emptyWorkingProgression },
+        frontLever: { ...emptyWorkingProgression },
+        hspu: { ...emptyWorkingProgression },
+        backLever: { ...emptyWorkingProgression },
+        muscleUp: { ...emptyWorkingProgression },
+        lSit: { ...emptyWorkingProgression },
         resolvedAt: null,
         anyConservativeStart: false,
-      },
-    }
+      }
+    })()) as unknown as AdaptiveProgram['currentWorkingProgressions'],
+  }
     
     // [CONTRACT NORMALIZATION] Log when missing fields were normalized
     const missingFields: string[] = []
     if (!program.selectedSkillTrace) missingFields.push('selectedSkillTrace')
     if (!program.weeklyRepresentation) missingFields.push('weeklyRepresentation')
-    if (!program.materialSkillIntent) missingFields.push('materialSkillIntent')
+    if (!(program as unknown as { materialSkillIntent?: unknown }).materialSkillIntent) missingFields.push('materialSkillIntent')
     if (!program.currentWorkingProgressions) missingFields.push('currentWorkingProgressions')
     
     if (missingFields.length > 0) {

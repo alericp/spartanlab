@@ -252,7 +252,10 @@ export function calculateMovementFamilyVolume(
     'vertical_pull', 'horizontal_pull', 'straight_arm_pull',
     'vertical_push', 'horizontal_push', 'straight_arm_push',
     'compression_core', 'anti_extension_core', 'anti_rotation_core',
-    'hip_hinge', 'squat', 'mobility', 'hypertrophy_accessory', 'joint_integrity'
+    // [MOVEMENT-FAMILY-CANONICAL-LITERALS] Canonical MovementFamily
+    // uses `hinge_pattern`/`squat_pattern`; legacy `hip_hinge`/`squat`
+    // were dropped from the union.
+    'hinge_pattern', 'squat_pattern', 'mobility', 'hypertrophy_accessory', 'joint_integrity'
   ]
   
   for (const family of allFamilies) {
@@ -459,9 +462,9 @@ function inferMovementFamilyFromCategory(
   if (category === 'legs') {
     if (lowerName.includes('deadlift') || lowerName.includes('hinge') || 
         lowerName.includes('rdl') || lowerName.includes('good morning')) {
-      return 'hip_hinge'
+      return 'hinge_pattern'
     }
-    return 'squat'
+    return 'squat_pattern'
   }
   
   // Skill exercises - determine by name

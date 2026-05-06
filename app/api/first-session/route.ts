@@ -22,7 +22,7 @@ export async function GET() {
     let reasoning = null
     
     if (!program) {
-      const result = generateFirstProgram()
+      const result = await generateFirstProgram()
       if (result.success && result.program) {
         program = result.program
         reasoning = getProgramReasoning(result.program)
@@ -42,35 +42,65 @@ export async function GET() {
     const profile = getOnboardingProfile()
     
     // Get constraint insight
-    // ISSUE A FIX: Only get constraint insight if canonical primaryGoal exists
-    // Never fallback to 'front_lever' - let the user's actual goal drive this
+    // [PRE-AB6 BUILD GREEN GATE / HELPER SIGNATURE]
+    // getConstraintInsight (lib/constraint-engine.ts:539) takes zero
+    // arguments and derives the canonical limiter internally; the
+    // previous call passed `profile.primaryGoal` which TypeScript
+    // rejected. Its return shape is { hasInsight, label, category,
+    // focus, explanation, confidence } — there is no `coachingCue`
+    // field, so the route now reads `explanation` (the only string
+    // field that semantically maps to a coaching cue) gated on
+    // `hasInsight` to preserve the original "only surface real
+    // insights" intent of the route. The outer `profile?.primaryGoal`
+    // guard is preserved so the dashboard does not surface constraint
+    // copy before the user has set a goal.
     let constraintInsight: string | null = null
     try {
       if (profile?.primaryGoal) {
-        const insight = getConstraintInsight(profile.primaryGoal)
-        constraintInsight = insight?.coachingCue || null
+        const insight = getConstraintInsight()
+        constraintInsight = insight?.hasInsight ? insight.explanation : null
       }
     } catch {
       // Non-critical
     }
 
     // Calculate readiness context
+    // [PRE-AB6 BUILD GREEN GATE / READINESS INPUT + FIELD CONTRACT]
+    // calculateReadinessScores (lib/athlete-profile.ts:896) takes
+    // `Partial<ReadinessCalibration>`, NOT the full OnboardingProfile.
+    // The correct source is `profile.readinessCalibration` which is
+    // declared on OnboardingProfile (line 1092) as
+    // `ReadinessCalibration | null`; falling back to `{}` keeps the
+    // input within the helper's `Partial<...>` contract when the user
+    // has not yet completed calibration.
+    //
+    // The actual ReadinessScores shape (line 812) is:
+    //   { strengthPotentialScore, skillAdaptationScore,
+    //     recoveryToleranceScore, volumeToleranceScore }
+    // — there are no `pullStrength`/`pushStrength`/`compression`/
+    // `straightArmStrength`/`overall` fields. The four real fields
+    // are realigned below; `readinessScore` (response shape) is
+    // computed as the mean of the four real subscores since the
+    // contract does not expose a precomputed overall.
     let readinessContext = null
     if (profile) {
-      const readiness = calculateReadinessScores(profile)
+      const readiness = calculateReadinessScores(profile.readinessCalibration ?? {})
       const scores = [
-        { key: 'Pull Strength', value: readiness.pullStrength },
-        { key: 'Push Strength', value: readiness.pushStrength },
-        { key: 'Compression', value: readiness.compression },
-        { key: 'Straight-Arm', value: readiness.straightArmStrength },
+        { key: 'Strength Potential', value: readiness.strengthPotentialScore },
+        { key: 'Skill Adaptation', value: readiness.skillAdaptationScore },
+        { key: 'Recovery Tolerance', value: readiness.recoveryToleranceScore },
+        { key: 'Volume Tolerance', value: readiness.volumeToleranceScore },
       ].filter(s => s.value > 0)
-      
+
       const sorted = [...scores].sort((a, b) => b.value - a.value)
-      
+      const overall = scores.length > 0
+        ? Math.round(scores.reduce((sum, s) => sum + s.value, 0) / scores.length)
+        : 0
+
       readinessContext = {
-        primaryStrength: sorted[0]?.value >= 70 ? sorted[0].key : null,
-        primaryLimiter: sorted[sorted.length - 1]?.value < 50 ? sorted[sorted.length - 1].key : null,
-        readinessScore: readiness.overall,
+        primaryStrength: sorted[0] && sorted[0].value >= 70 ? sorted[0].key : null,
+        primaryLimiter: sorted.length > 0 && sorted[sorted.length - 1].value < 50 ? sorted[sorted.length - 1].key : null,
+        readinessScore: overall,
       }
     }
 

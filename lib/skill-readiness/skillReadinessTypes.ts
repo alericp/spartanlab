@@ -5,6 +5,13 @@
  * Re-exports key types and provides additional typing for SEO pages.
  */
 
+// [SKILL-TYPE-LOCAL-IMPORT] `export type {}` re-exports do not put a
+// type in local scope (TS treats `isolatedModules` re-exports as
+// pass-through only). Import `SkillType` from the canonical owner so
+// the in-file references on `CalculatorPageConfig` and
+// `validateCalculatorInput` resolve.
+import type { SkillType } from '../readiness/canonical-readiness-engine'
+
 // Re-export core types from service
 export type {
   SkillReadinessInput,
@@ -48,7 +55,11 @@ export type {
  * Calculator page configuration
  */
 export interface CalculatorPageConfig {
-  skill: import('./skillReadinessService').SkillType
+  // [SKILL-TYPE-CANONICAL-OWNER] SkillType is owned by
+  // canonical-readiness-engine; use the local re-exported `SkillType`
+  // rather than reaching back through skillReadinessService which no
+  // longer re-exports it.
+  skill: SkillType
   title: string
   description: string
   metaTitle: string
@@ -120,7 +131,11 @@ export interface ValidationError {
  */
 export function validateCalculatorInput(
   input: import('./skillReadinessService').SkillReadinessInput,
-  skill: import('./skillReadinessService').SkillType
+  // [SKILL-TYPE-CANONICAL-OWNER] SkillType is owned by
+  // canonical-readiness-engine; use the local re-exported `SkillType`
+  // rather than reaching back through skillReadinessService which no
+  // longer re-exports it.
+  skill: SkillType
 ): ValidationResult {
   const errors: ValidationError[] = []
   

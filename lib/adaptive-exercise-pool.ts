@@ -56,6 +56,38 @@ export interface Exercise {
   progressionDown?: string // ID of the easier regression
   substitutionOptions?: string[] // Exercise IDs that can substitute this movement
   progressionLadder?: string // ID of the progression ladder this belongs to
+
+  // ============================================================
+  // [EXERCISE-ENRICHMENT-METADATA]
+  // The following fields are populated by the exercise-enrichment /
+  // catalog-merge step (see `program-exercise-selector.ts` consumers
+  // such as movementFamily/tag matching, carryover sorting, and
+  // primary-skill inference). They are OPTIONAL so the static
+  // `SKILL_EXERCISES` / `STRENGTH_EXERCISES` literals in this file
+  // remain valid — only enriched records expose them.
+  // ============================================================
+  /** Coarse movement family token (e.g. 'push' | 'pull' | 'squat'). */
+  movementFamily?: string
+  /** Free-form classification tags ('straight_arm', 'compression', ...). */
+  tags?: string[]
+  /** Numeric carryover score used by the selector ranking pass. */
+  carryover?: number
+  /** Pre-resolved target-muscle list (alternative source to primaryMuscles). */
+  targetMuscles?: string[]
+  /** Skill identifier this exercise primarily expresses. */
+  primarySkill?: string
+  /** Numeric progression rung within `progressionLadder`. */
+  progressionLevel?: number
+  /** Pre-rendered numeric reps default (alternative to defaultRepsOrTime). */
+  reps?: number
+  /** Pre-rendered numeric time-under-tension default in seconds. */
+  time?: number
+  /** Pre-rendered numeric set count (alternative to defaultSets). */
+  sets?: number
+  /** Pre-resolved push movement flag (matches selector heuristics). */
+  isPushMovement?: boolean
+  /** Pre-resolved pull movement flag (matches selector heuristics). */
+  isPullMovement?: boolean
 }
 
 // =============================================================================

@@ -90,6 +90,32 @@ export type RulePopulationLedgerEntryState =
  *  the matrix stay one-to-one. */
 export type RulePopulationLedgerCategoryKey = DoctrineCategoryRow['category']
 
+// -----------------------------------------------------------------------------
+// [PHASE AB9 COMPLETION] PROOF-LEVEL CONTRACT.
+//
+// `state` answers "what AB1 ladder rung did this category resolve to?".
+// `proofLevel` answers "what level of evidence backs that rung?". They are
+// related but not identical: `audit_only` and `not_relevant` map to distinct
+// proof levels even though both share the same headline bucket.
+//
+// AB9 honesty rule: proofLevel is never invented from name alone. Every
+// proofLevel is derived from a concrete piece of `DoctrineCategoryRow`
+// truth (`changedProgramFields`, `visibleSurfaces`, `noChangeReason`,
+// `status`) plus the AA4 cooldown bridge telemetry. proofLevel is the
+// single field downstream UIs should read to color/route the row.
+// -----------------------------------------------------------------------------
+export type RulePopulationProofLevel =
+  | 'executable'
+  | 'visible'
+  | 'mutated'
+  | 'scoring_only'
+  | 'audit_only'
+  | 'blocked'
+  | 'no_target'
+  | 'not_relevant'
+  | 'materializer_not_connected'
+  | 'not_available'
+
 export interface RulePopulationLedgerCategoryEntry {
   category: RulePopulationLedgerCategoryKey
   /** The single AB1 state this category resolved to in this run. */
@@ -118,6 +144,29 @@ export interface RulePopulationLedgerCategoryEntry {
   noChangeReason: string | null
   /** Plain-English summary suitable for UI tooltips. */
   notes: string
+  // ---------------------------------------------------------------------------
+  // [PHASE AB9 COMPLETION] PROOF FIELDS.
+  // These are the canonical AB9 user-facing proof surfaces. They are
+  // ALWAYS present (no optional `?`) so consumers can render without
+  // null-checks; defensive defaults are honest empties when a category
+  // resolves to a state that has no concrete proof to show. JSON-safe:
+  // strings, string arrays, and null only.
+  // ---------------------------------------------------------------------------
+  /** Single derived proof level — the "verdict" for this category. */
+  proofLevel: RulePopulationProofLevel
+  /** One-sentence, athlete-readable summary of what this category did. */
+  proofSummary: string
+  /** Mirror of changedProgramFields, only populated when proofLevel is
+   *  executable/visible/mutated. Non-mutating proofLevels return []. */
+  proofFields: string[]
+  /** Mirror of visibleSurfaces, only populated when proofLevel is
+   *  executable/visible. Non-visible proofLevels return []. */
+  proofSurfaces: string[]
+  /** Conservative explanation of why this category counts as `executable`
+   *  (e.g. "Start Workout consumes final session.exercises."). null for
+   *  non-executable proof levels and for executable categories that have
+   *  no canonical reason in the EXECUTABLE_REASONS map. */
+  executableReason: string | null
 }
 
 export interface RulePopulationLedgerTotals {
@@ -197,6 +246,42 @@ const EXECUTABLE_CATEGORIES: ReadonlySet<RulePopulationLedgerCategoryKey> = new 
   'cooldown_flexibility',
   'weekly_architecture',
 ])
+
+// -----------------------------------------------------------------------------
+// [PHASE AB9 COMPLETION] EXECUTABLE-REASON MAP.
+// Conservative one-line copy explaining WHY a category counts as executable
+// (i.e. which Start-Workout / live-workout consumer reads the changed
+// fields). Used only when proofLevel === 'executable'. Non-executable
+// categories return null. Copy is intentionally Start-Workout-shaped so
+// the user can trace "rule said X → Program shows Y → Workout reads Y".
+// -----------------------------------------------------------------------------
+const EXECUTABLE_REASONS: Readonly<
+  Partial<Record<RulePopulationLedgerCategoryKey, string>>
+> = {
+  exercise_selection: 'Start Workout consumes final session.exercises.',
+  method_selection: 'Start Workout consumes grouped/styled method structure.',
+  method_selection_row_level: 'Workout rows consume setExecutionMethod.',
+  prescription: 'Workout rows consume reps/rest/RPE prescription fields.',
+  progression: 'Workout rows consume final progression/exercise prescription.',
+  mobility_warmup_prehab: 'Start Workout consumes warm-up/prehab blocks.',
+  cooldown_flexibility: 'Start Workout consumes cooldown/flexibility blocks.',
+  weekly_architecture: 'Program schedule/session layout changes the executable week.',
+}
+
+/**
+ * Returns the canonical Start-Workout-side consumer line for a category
+ * when the category counts as executable. Returns null for categories
+ * outside `EXECUTABLE_CATEGORIES` so callers must always null-check.
+ *
+ * Pure, side-effect-free, and stable across runs: same key in →
+ * same string out.
+ */
+export function getExecutableReason(
+  category: RulePopulationLedgerCategoryKey,
+): string | null {
+  if (!EXECUTABLE_CATEGORIES.has(category)) return null
+  return EXECUTABLE_REASONS[category] ?? null
+}
 
 // =============================================================================
 // LEDGER BUILDER
@@ -389,6 +474,104 @@ export function buildRulePopulationLedger(
         dominant = 'executable'
       }
 
+      // -----------------------------------------------------------------
+      // [PHASE AB9 COMPLETION] PROOF DERIVATION.
+      //
+      // Map (dominant state × matrix status × bridge telemetry) →
+      // (proofLevel, proofSummary, proofFields, proofSurfaces,
+      // executableReason). The mapping is mechanical and never invents
+      // proof: every populated field is sourced from the matrix row or
+      // the EXECUTABLE_REASONS map; non-applicable proof slots are
+      // always honest empties.
+      //
+      // Honesty contract enforced here:
+      //   • scoring_only / audit_only / blocked / no_target / not_relevant
+      //     never expose proofFields or proofSurfaces (they did not change
+      //     anything, by definition).
+      //   • executable proofLevel is gated on the same evidence as the
+      //     `executable` ladder rung above, so it can never disagree.
+      //   • bridge-upgraded cooldown_flexibility carries a bridge-aware
+      //     proof summary so the user can trace AA4 telemetry.
+      // -----------------------------------------------------------------
+      const changedFieldsCopy = Array.isArray(row.changedProgramFields)
+        ? [...row.changedProgramFields]
+        : []
+      const visibleSurfacesCopy = Array.isArray(row.visibleSurfaces)
+        ? [...row.visibleSurfaces]
+        : []
+
+      let proofLevel: RulePopulationProofLevel
+      let proofSummary: string
+      let proofFields: string[] = []
+      let proofSurfaces: string[] = []
+      let executableReason: string | null = null
+
+      // The bridge upgrade above may have flipped dominant to 'executable'
+      // without populating row.changedProgramFields/visibleSurfaces. We
+      // detect that and emit a bridge-aware proof summary so the row is
+      // not labeled "executable" with empty proof fields.
+      const bridgeBlocks =
+        bridge && typeof bridge.bridgeBlocksInjected === 'number'
+          ? bridge.bridgeBlocksInjected
+          : 0
+      const bridgeUpgradedCooldown =
+        row.category === 'cooldown_flexibility' &&
+        bridgeBlocks > 0 &&
+        dominant === 'executable' &&
+        changedFieldsCopy.length === 0
+
+      if (dominant === 'executable') {
+        proofLevel = 'executable'
+        proofFields = bridgeUpgradedCooldown
+          ? ['session.cooldown']
+          : changedFieldsCopy
+        proofSurfaces = bridgeUpgradedCooldown
+          ? ['Start Workout cooldown']
+          : visibleSurfacesCopy
+        executableReason = getExecutableReason(row.category)
+        proofSummary = bridgeUpgradedCooldown
+          ? `Cool-down bridge injected ${bridgeBlocks} block${bridgeBlocks === 1 ? '' : 's'} into Start Workout.`
+          : 'Changed final program fields and reaches executable workout structure.'
+      } else if (dominant === 'visible') {
+        proofLevel = 'visible'
+        proofFields = changedFieldsCopy
+        proofSurfaces = visibleSurfacesCopy
+        proofSummary = 'Changed final program fields and appears in the Program UI.'
+      } else if (dominant === 'mutated') {
+        proofLevel = 'mutated'
+        proofFields = changedFieldsCopy
+        proofSummary = 'Changed final program fields but no visible surface was proven.'
+      } else if (dominant === 'selected') {
+        // READ_BUT_SCORING_ONLY → influenced ranking, mutated nothing.
+        proofLevel = 'scoring_only'
+        proofSummary = 'Influenced candidate scoring only; no final program field changed.'
+      } else if (dominant === 'audit_only') {
+        if (row.status === 'MATERIALIZER_NOT_CONNECTED') {
+          proofLevel = 'materializer_not_connected'
+          proofSummary = 'Rules were read, but no materializer is wired for this category.'
+        } else {
+          proofLevel = 'audit_only'
+          proofSummary = 'Loaded for audit/proof only; not counted as applied.'
+        }
+      } else if (dominant === 'blocked') {
+        proofLevel = 'blocked'
+        proofSummary = row.noChangeReason
+          ? `Eligible rule was blocked: ${row.noChangeReason}`
+          : 'Eligible rule was blocked by a named gate.'
+      } else if (dominant === 'no_target') {
+        proofLevel = 'no_target'
+        proofSummary =
+          'Rules had no valid session/exercise/profile target this run.'
+      } else if (dominant === 'suppressed') {
+        // Suppressed currently maps 1:1 to NOT_RELEVANT_TO_CURRENT_PROFILE.
+        proofLevel = 'not_relevant'
+        proofSummary = 'Rules were not relevant to this athlete/profile context.'
+      } else {
+        // loaded / candidate / eligible without escalation — defensive.
+        proofLevel = 'audit_only'
+        proofSummary = 'Loaded for audit/proof only; not counted as applied.'
+      }
+
       return {
         category: row.category,
         state: dominant,
@@ -400,14 +583,15 @@ export function buildRulePopulationLedger(
         rulesSelected: row.rulesSelected,
         rulesMaterialized: row.rulesMaterialized,
         rulesBlocked: row.rulesBlocked,
-        changedProgramFields: Array.isArray(row.changedProgramFields)
-          ? [...row.changedProgramFields]
-          : [],
-        visibleSurfaces: Array.isArray(row.visibleSurfaces)
-          ? [...row.visibleSurfaces]
-          : [],
+        changedProgramFields: changedFieldsCopy,
+        visibleSurfaces: visibleSurfacesCopy,
         noChangeReason: row.noChangeReason ?? null,
         notes: row.notes ?? '',
+        proofLevel,
+        proofSummary,
+        proofFields,
+        proofSurfaces,
+        executableReason,
       }
     },
   )

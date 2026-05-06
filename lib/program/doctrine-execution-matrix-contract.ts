@@ -780,7 +780,13 @@ export function buildDoctrineExecutionMatrix(
       }
     }
     const fired = appliedAny > 0
-    const mutationVerdict = rollup?.programFinalVerdict ?? 'UNKNOWN'
+    // [ROLLUP-FINAL-VERDICT-LEGACY-BRIDGE] Canonical rollup summary type
+    // does not own `programFinalVerdict`; legacy/runtime rollups still
+    // carry it. Read through a narrow structural slice rather than
+    // widening the rollup contract.
+    const rollupFinalVerdict =
+      (rollup as unknown as { programFinalVerdict?: string } | null | undefined)?.programFinalVerdict
+    const mutationVerdict = rollupFinalVerdict ?? 'UNKNOWN'
     pushBundle({
       id: 'method_governor',
       sourceBatch: 'batch_10',

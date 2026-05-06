@@ -191,7 +191,13 @@ export function SkillProgressHeatmap({
     try {
       const profile = getAthleteProfile()
       const progressions = getSkillProgressions()
-      
+      // [PRE-AB6 BUILD GREEN GATE / ATHLETEPROFILE NULL GUARD]
+      // getAthleteProfile() can return AthleteProfile | null. When the profile
+      // is missing, primaryGoal is undefined so goal-name matching evaluates
+      // false naturally — but progress-based activation still works through
+      // skillProgression?.progressScore. No fallback profile is fabricated.
+      const primaryGoal = profile?.primaryGoal
+
       // Build entries for all supported goals - each projection is wrapped in try-catch
       // so one bad entry doesn't crash the entire dashboard
       const allEntries: SkillHeatmapEntry[] = SUPPORTED_GOALS.map(goal => {
@@ -200,9 +206,10 @@ export function SkillProgressHeatmap({
           const skillProgression = progressions.find(p => p.skillName === goal.type)
           
           // Determine if this skill is active (user's goal or has progress)
-          const isActive = profile.primaryGoal === goal.type || 
-                          profile.primaryGoal === goal.name ||
-                          (skillProgression?.progressScore ?? 0) > 0
+          const isActive =
+            primaryGoal === goal.type ||
+            primaryGoal === goal.name ||
+            (skillProgression?.progressScore ?? 0) > 0
           
           // Calculate progress percentage
           let progressPercent = 0
@@ -356,11 +363,16 @@ export function SkillProgressMini() {
     try {
       const profile = getAthleteProfile()
       const progressions = getSkillProgressions()
-      
+      // [PRE-AB6 BUILD GREEN GATE / ATHLETEPROFILE NULL GUARD]
+      // Mirror the null-safe pattern from the main heatmap: read primaryGoal
+      // through optional chaining so SkillProgressMini still renders
+      // progress-based skills when the profile is absent.
+      const primaryGoal = profile?.primaryGoal
+
       // Get only active skills (max 3)
       const activeEntries: SkillHeatmapEntry[] = SUPPORTED_GOALS
         .filter(goal => {
-          const isUserGoal = profile.primaryGoal === goal.type || profile.primaryGoal === goal.name
+          const isUserGoal = primaryGoal === goal.type || primaryGoal === goal.name
           const hasProgress = progressions.some(p => p.skillName === goal.type && p.progressScore > 0)
           return isUserGoal || hasProgress
         })

@@ -270,17 +270,47 @@ const WELCOME_MESSAGES = {
   general: "Welcome to SpartanLab! Your balanced program covers strength, skills, and conditioning for overall fitness.",
 }
 
+// [PRIMARY-GOAL-CATEGORY-SETS] PrimaryGoalType is the specific-goal
+// union (front_lever, weighted_pull_up, etc.); the broad category
+// strings 'skill' and 'strength' are not part of the union. Bucket the
+// canonical goal IDs to recover the welcome-message routing.
+const SKILL_WELCOME_GOALS = new Set<string>([
+  'front_lever',
+  'back_lever',
+  'planche',
+  'hspu',
+  'handstand_pushup',
+  'muscle_up',
+  'l_sit',
+  'v_sit',
+  'dragon_flag',
+  'iron_cross',
+  'one_arm_pull_up',
+  'one_arm_push_up',
+  'planche_push_up',
+])
+
+const STRENGTH_WELCOME_GOALS = new Set<string>([
+  'weighted_strength',
+  'weighted_pull_up',
+  'weighted_dip',
+  'weighted_muscle_up',
+  'general_strength',
+  'strength_endurance',
+  'hypertrophy',
+])
+
 function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
   const goal = profile.primaryGoal
-  
-  if (goal === 'skill') {
+
+  if (goal != null && SKILL_WELCOME_GOALS.has(String(goal))) {
     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
   }
-  
-  if (goal === 'strength') {
+
+  if (goal != null && STRENGTH_WELCOME_GOALS.has(String(goal))) {
     return WELCOME_MESSAGES.strength
   }
-  
+
   return WELCOME_MESSAGES.general
 }
 
@@ -506,10 +536,13 @@ export async function generateFirstProgram(
     })
     
     // ENGINE PROOF: Verify schedule mode resolution
+    // [SCHEDULE-RESOLUTION-SOURCE-UNION] verifyScheduleModeResolution
+    // expects 'fallback'|'engine'|'profile'; 'canonical_profile' was
+    // narrowed to 'profile'.
     verifyScheduleModeResolution(
       programInputs.scheduleMode || 'static',
       programInputs.trainingDaysPerWeek,
-      'canonical_profile'
+      'profile'
     )
     
     // PRODUCTION SAFETY: Verify flexible mode semantics are intact
@@ -594,7 +627,14 @@ export async function generateFirstProgram(
     
     markStage('db_validation_start')
     // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
-    const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+    // [PROGRAM-TO-VALIDATE-BOUNDARY] `validateAndLogProgram` accepts the
+    // narrower validation projection `ProgramToValidate`; the richer
+    // `AdaptiveProgram` carries every field it needs and more. Cast
+    // through `unknown` only at this validator boundary.
+    const dbValidationPassed = validateAndLogProgram(
+      program as unknown as Parameters<typeof validateAndLogProgram>[0],
+      'First Program',
+    )
     if (!dbValidationPassed) {
       console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
     }
@@ -658,7 +698,12 @@ export async function generateFirstProgram(
     
     // Ensure top-level fields used by downstream UI exist
     if (typeof program.trainingDaysPerWeek !== 'number') {
-      program.trainingDaysPerWeek = program.sessions.length
+      // [TRAINING-DAYS-LITERAL-UNION] AdaptiveProgram.trainingDaysPerWeek
+      // is a 2|3|4|5|6|7 union; clamp before assignment.
+      const sessionCount = program.sessions.length
+      program.trainingDaysPerWeek = ([2, 3, 4, 5, 6, 7].includes(sessionCount)
+        ? (sessionCount as 2 | 3 | 4 | 5 | 6 | 7)
+        : 4) as typeof program.trainingDaysPerWeek
     }
     if (typeof program.goalLabel !== 'string' || !program.goalLabel) {
       program.goalLabel = 'Strength Training'
@@ -1350,14 +1395,17 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
       : exercisesCount
     
     // Determine primary focus from session blocks or focusLabel
+    // [TRAINING-BLOCK-NO-NAME] TrainingBlock has no `name`; derive a
+    // searchable label from the canonical id + method instead.
     let primaryFocus = 'Strength and skill development'
+    const blockLabel = (block: { id?: string; method?: unknown }) =>
+      `${block.id ?? ''} ${String(block.method ?? '')}`.toLowerCase()
     if (blocks.length > 0) {
-      if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
-        const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
-        primaryFocus = skillBlock?.name || 'Skill progression'
-      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+      if (blocks.some(b => blockLabel(b).includes('skill'))) {
+        primaryFocus = 'Skill progression'
+      } else if (blocks.some(b => blockLabel(b).includes('pull'))) {
         primaryFocus = 'Pulling strength'
-      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+      } else if (blocks.some(b => blockLabel(b).includes('push'))) {
         primaryFocus = 'Pushing strength'
       }
     } else if (session.focusLabel) {
@@ -1388,7 +1436,11 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     }
     areasToImprove.push(weakAreaLabels[profile.weakestArea] || profile.weakestArea)
   }
-  if (calibration?.leverageProfile === 'long_limbed') {
+  // [ONBOARDING-LEVERAGE-PROFILE-LITERAL] Canonical
+  // `LeverageProfile` (athlete-calibration.ts L118) is
+  // `'compact' | 'average' | 'long_lever'` — the legacy `'long_limbed'`
+  // literal was renamed to `'long_lever'`.
+  if (calibration?.leverageProfile === 'long_lever') {
     areasToImprove.push('Leverage disadvantage addressed')
   }
   

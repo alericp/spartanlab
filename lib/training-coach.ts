@@ -8,7 +8,11 @@ import { getOnboardingProfile } from './athlete-profile'
 import { getDailyReadiness, type DailyReadinessResult } from './daily-readiness'
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getCompressionReadiness, type CompressionReadinessResult } from './compression-readiness'
-import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
+// [CONSTRAINT-RESULT-DERIVED] `constraint-engine` no longer re-exports
+// the `ConstraintResult` type. Derive it from the function return so
+// downstream callers stay aligned with the actual shape.
+import { analyzeConstraints } from './constraint-engine'
+type ConstraintResult = Awaited<ReturnType<typeof analyzeConstraints>>
 import { analyzeProgression as analyzeBandProgression, getBandRecommendation, type ProgressionAnalysis as BandProgressionAnalysis } from './band-progression-engine'
 import { getWorkoutLogs } from './workout-log-service'
 import { getSkillSessions } from './skill-session-service'
@@ -274,11 +278,20 @@ function determinePrimaryLimiter(
   // Use constraint engine result
   if (constraints.primaryConstraint && constraints.confidence !== 'low') {
     const category = mapConstraintToCategory(constraints.primaryConstraint)
+    // [CONSTRAINT-RESULT-LEGACY-DISPLAY-BRIDGE] Canonical ConstraintResult
+    // does not own `label` / `focusItems`; legacy/runtime values still
+    // carry them. Read display extras through a narrow legacy slice
+    // rather than widening the canonical contract.
+    const legacyConstraintDisplay = constraints as unknown as {
+      label?: string
+      focusItems?: Array<{ action?: string }>
+    }
     return {
       category,
-      label: constraints.label,
+      label: legacyConstraintDisplay.label ?? constraints.primaryConstraint,
       whyItMatters: constraints.explanation,
-      recommendedFocus: constraints.focusItems[0]?.action || 'Address the identified constraint.',
+      recommendedFocus:
+        legacyConstraintDisplay.focusItems?.[0]?.action ?? 'Address the identified constraint.',
       urgency: constraints.confidence === 'high' ? 'high' : 'medium',
     }
   }
@@ -349,15 +362,9 @@ function determineProgressionGuidance(
     }
   }
   
-  // Band-assisted movements
-  if (snapshot.state.skillReadinessStatus === 'consolidate') {
-    return {
-      decision: 'maintain_assistance',
-      explanation: 'Current level needs more consolidation before reducing assistance.',
-      specificAction: 'Focus on cleaner reps at current assistance level.',
-      confidence: 'medium',
-    }
-  }
+  // [READINESS-STATUS-NO-CONSOLIDATE] ReadinessStatus union no longer
+  // includes 'consolidate'; the band-assisted maintain branch is dead.
+
   
   // Check for progression too aggressive
   if (calibration.suggestedProgressionLevel === 'very_conservative') {
@@ -577,15 +584,16 @@ export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillRe
   const strengthRecords = getStrengthRecords()
   
   // Find relevant metrics
-  const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
-  const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
-  const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
-  const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
-  
-  const maxPullUps = pullUpRecord?.reps || 0
-  const weightedPullUp = weightedPullUpRecord?.weight || 0
-  const maxDips = dipRecord?.reps || 0
-  const maxPushUps = pushUpRecord?.reps || 0
+  // [STRENGTH-RECORD-EXERCISE-TYPE-CURRENT] Same migration as
+  // skill-roadmap-service: only weighted-calisthenics literals exist
+  // in the current ExerciseType union.
+  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_up')
+  const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dip')
+
+  const maxPullUps = weightedPullUpRecord?.reps || 0
+  const weightedPullUp = weightedPullUpRecord?.weightAdded || 0
+  const maxDips = weightedDipRecord?.reps || 0
+  const maxPushUps = 0
 
   // Build unified input for canonical engine
   const input: AthleteReadinessInput = {

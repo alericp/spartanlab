@@ -265,9 +265,15 @@ export function resolveSkillFamilyTruth(
   
   // 1. EXTRACT CURRENT EARNED STATE (highest precedence)
   if (bundle.skillProgressions?.meta?.available) {
-    const progressionData = bundle.skillProgressions.bySkill[normalizedSkill] ||
-                            bundle.skillProgressions.bySkill[skill] ||
-                            bundle.skillProgressions.bySkill[family]
+    // [SKILL-INDEX-NORMALIZATION] `skill` parameter is unknown; only
+    // string keys are valid bySkill index types. Normalize before use.
+    const skillProgressionBySkill = bundle.skillProgressions.bySkill
+    const skillKey = typeof skill === 'string' ? skill : null
+    const familyKey = typeof family === 'string' ? family : null
+    const progressionData =
+      skillProgressionBySkill[normalizedSkill] ||
+      (skillKey ? skillProgressionBySkill[skillKey] : undefined) ||
+      (familyKey ? skillProgressionBySkill[familyKey] : undefined)
     
     if (progressionData) {
       truth.currentEarnedState = {
@@ -344,8 +350,10 @@ export function resolvePatternResponse(
   if (bundle.performanceEnvelopes?.meta?.available) {
     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
     if (envelope) {
-      response.volumeTolerance = envelope.confidenceScore
-      response.intensityTolerance = envelope.confidenceScore
+      // [TOLERANCE-NUMBER-OR-NULL] envelope.confidenceScore can be
+      // number | null | undefined; tolerance fields are number | null.
+      response.volumeTolerance = toNumberOrNull(envelope.confidenceScore)
+      response.intensityTolerance = toNumberOrNull(envelope.confidenceScore)
       
       // Determine tolerance signal from envelope
       if (envelope.performanceTrend === 'declining') {
@@ -364,8 +372,8 @@ export function resolvePatternResponse(
   if (bundle.constraintHistory?.meta?.available) {
     const constraints = bundle.constraintHistory.recentConstraintPatterns || []
     const hasPatternConstraint = constraints.some(c => 
-      c.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
-      affectedFamilies.some(f => c.toLowerCase().includes(f.replace(/_/g, ' ')))
+      c.constraint.toLowerCase().includes(pattern.replace(/_/g, ' ')) ||
+      affectedFamilies.some(f => c.constraint.toLowerCase().includes(f.replace(/_/g, ' ')))
     )
     
     if (hasPatternConstraint) {
@@ -377,7 +385,8 @@ export function resolvePatternResponse(
   // Check training response for completion/adherence signals
   if (bundle.trainingResponse?.meta?.available) {
     const adherence = bundle.trainingResponse.recentAdherencePattern
-    if (adherence === 'declining' || adherence === 'sporadic') {
+    // [ADHERENCE-PATTERN-UNION-CURRENT] declining is impossible.
+    if (adherence === 'sporadic') {
       response.lastSessionQuality = 'partial'
       response.recoveryAdequate = false
     } else if (adherence === 'consistent') {
@@ -548,11 +557,11 @@ function inferToleranceSignal(
   }
   
   // Fall back to adherence pattern
+  // [ADHERENCE-PATTERN-UNION-CURRENT] declining/improving impossible.
   const adherence = bundle.trainingResponse?.recentAdherencePattern
-  if (adherence === 'declining' || adherence === 'sporadic') return 'poor'
+  if (adherence === 'sporadic') return 'poor'
   if (adherence === 'consistent') return 'good'
-  if (adherence === 'improving') return 'moderate'
-  
+
   return 'unknown'
 }
 
@@ -568,30 +577,40 @@ function inferCompletionRate(bundle: ProgrammingTruthBundle): number | null {
 function hasRecentPainMarkers(bundle: ProgrammingTruthBundle, family: SkillFamily): boolean {
   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
   const familyStr = family.replace(/_/g, ' ')
-  return constraints.some(c => c.toLowerCase().includes(familyStr) || c.toLowerCase().includes('pain'))
+  return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
 }
 
 function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
   const benchmarks = bundle.benchmarks
   if (!benchmarks?.meta?.available) return null
   
+  // [BENCHMARK-FIELD-NUMBER-OR-NULL] benchmark fields may be
+  // number | null | undefined; the function contract is number | null.
   // Map family to benchmark field
   switch (family) {
     case 'front_lever':
-      return benchmarks.skills.frontLeverHoldSeconds
+      return toNumberOrNull(benchmarks.skills.frontLeverHoldSeconds)
     case 'planche':
-      return benchmarks.skills.plancheHoldSeconds
+      return toNumberOrNull(benchmarks.skills.plancheHoldSeconds)
     case 'l_sit':
-      return benchmarks.skills.lSitHoldSeconds
+      return toNumberOrNull(benchmarks.skills.lSitHoldSeconds)
     case 'v_sit':
-      return benchmarks.skills.vSitHoldSeconds
+      return toNumberOrNull(benchmarks.skills.vSitHoldSeconds)
     case 'weighted_pull':
-      return benchmarks.strength.weightedPullUpLoad
+      return toNumberOrNull(benchmarks.strength.weightedPullUpLoad)
     case 'weighted_dip':
-      return benchmarks.strength.weightedDipLoad
+      return toNumberOrNull(benchmarks.strength.weightedDipLoad)
     default:
       return null
   }
+}
+
+/**
+ * [NUMBER-OR-NULL-NORMALIZER] Coerce optional/finite numeric fields
+ * down to number | null at module boundaries.
+ */
+function toNumberOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {

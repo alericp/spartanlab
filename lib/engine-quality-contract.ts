@@ -1967,6 +1967,14 @@ export interface ResolvedSessionIdentity {
   dominantExerciseCategory: string      // Most common category in session
   sessionCoherenceScore: number         // 0-1, how coherent the session content is
   identityMatchesContent: boolean       // Whether resolved identity matches actual content
+  // [AI-TRUTH-MATERIALIZATION] Optional broader-skill detection fields
+  // surfaced when `influencingSkills` selection metadata is present on
+  // working exercises. Optional so the early-return shape (no working
+  // exercises) and legacy callers stay assignable.
+  broaderSkillsExpressed?: string[]
+  supportSkillsExpressed?: string[]
+  multiSkillArchitectureActive?: boolean
+  skillBreakdown?: Array<{ skill: string; exerciseCount: number; expressionMode: string }>
 }
 
 export interface SessionExerciseForIdentity {
@@ -1977,6 +1985,10 @@ export interface SessionExerciseForIdentity {
   trainingMethod?: string
   isWarmup?: boolean
   isCooldown?: boolean
+  // [AI-TRUTH-MATERIALIZATION] Optional selection-context metadata used
+  // by `resolveSessionIdentityFromContent` to detect support/secondary
+  // skills beyond the primary/secondary goals.
+  influencingSkills?: Array<{ skillId: string; influence?: string; expressionMode?: string }>
 }
 
 /**

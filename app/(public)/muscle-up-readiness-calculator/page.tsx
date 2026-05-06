@@ -92,7 +92,11 @@ export default function MuscleUpReadinessCalculator() {
     setResult(calcResult)
     
     // Track tool usage
-    trackToolUsed('muscle_up_calculator', { readiness_score: calcResult.readinessScore })
+    // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+    // ReadinessResult exposes `score`, not `readinessScore`. Preserve the
+    // analytics payload key `readiness_score` (existing event schema)
+    // and source the value from the authoritative `calcResult.score`.
+    trackToolUsed('muscle_up_calculator', { readiness_score: calcResult.score })
   }
 
   const handleReset = () => {
@@ -515,9 +519,15 @@ export default function MuscleUpReadinessCalculator() {
               weightedPullUp: weightedPullUpLoad ? parseFloat(weightedPullUpLoad) : undefined,
               maxDips: maxDips ? parseInt(maxDips) : undefined,
               lSitHold: lSitHoldTime ? parseInt(lSitHoldTime) : undefined,
-              readinessScore: result.readinessScore,
-              classification: result.classification,
-              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+              // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+              // ReadinessResult exposes `score`, `level`, and a single
+              // `limitingFactor: string` (not `readinessScore`,
+              // `classification`, or `limitingFactors[]`). The
+              // ToolDataPayload keys are correct; only the *source*
+              // fields needed contract realignment.
+              readinessScore: result.score,
+              classification: result.level,
+              limitingFactors: result.limitingFactor ? [result.limitingFactor] : [],
             } : undefined}
           />
         </section>

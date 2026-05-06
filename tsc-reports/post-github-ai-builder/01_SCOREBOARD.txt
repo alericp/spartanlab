@@ -1,0 +1,11 @@
+===== CURRENT SCOREBOARD =====
+Previous known TypeScript error diagnostics: 1776
+Current TypeScript error diagnostics: 1571
+Diagnostic delta since previous known count: 205
+Previous known files with TypeScript errors: 149
+Current files with TypeScript errors: 150
+Error-file delta since previous known count: -1
+adaptive-program-builder.ts diagnostics: 557
+program-exercise-selector.ts diagnostics: 145
+authoritative-program-generation.ts diagnostics: 48
+canonical-profile-service.ts diagnostics: 52

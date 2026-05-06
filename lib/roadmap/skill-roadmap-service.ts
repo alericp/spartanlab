@@ -562,16 +562,28 @@ export function determineRoadmapPosition(
   const profile = getAthleteProfile()
   
   // [PHASE 16L] FIX: Handle null profile in server context
+  // [ATHLETE-ROADMAP-POSITION-CANONICAL-FIELDS] AthleteRoadmapPosition
+  // does not own `phase`/`phases`/`phaseIndex`/`readinessLevel`/etc.
+  // The current contract carries level-based fields (`currentLevel`,
+  // `nextLevel`, `targetLevel`, ...). Build the no-profile fallback
+  // straight from the canonical SKILL_ROADMAPS levels.
   if (!profile) {
+    const firstLevel = roadmap.levels[0]
     return {
-      phase: roadmap.phases[0],
-      phaseIndex: 0,
-      progressPercent: 0,
+      skillKey,
+      skillName: roadmap.skillName,
+      currentLevelIndex: 0,
+      currentLevel: firstLevel,
+      nextLevel: roadmap.levels[1] ?? null,
+      targetLevelIndex: 0,
+      targetLevel: firstLevel,
       readinessScore: 0,
-      readinessLevel: 'not_ready' as const,
-      constraintsBlocking: [],
-      nextMilestone: null,
-      estimatedWeeksToNext: null,
+      readinessTier: 'not_ready',
+      weakPoints: [],
+      missingPrerequisites: [],
+      progressPercentage: 0,
+      coachingMessage: 'Complete onboarding to see your roadmap.',
+      actionableNextStep: 'Finish onboarding so we can place you on the roadmap.',
     }
   }
   
@@ -584,17 +596,20 @@ export function determineRoadmapPosition(
   )
   
   // Get strength data
-  const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
-  const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
-  const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
-  const weightedDipRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_dips')
-  const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
-  
-  const maxPullUps = pullUpRecord?.reps || 0
-  const weightedPullUp = weightedPullUpRecord?.weight || 0
-  const maxDips = dipRecord?.reps || 0
-  const weightedDips = weightedDipRecord?.weight || 0
-  const maxPushUps = pushUpRecord?.reps || 0
+  // [STRENGTH-RECORD-EXERCISE-TYPE-CURRENT] StrengthRecord ExerciseType
+  // only includes the weighted-calisthenics literals
+  // (`weighted_pull_up`/`weighted_dip`/...). Unweighted pull-up/dip/
+  // push-up max-rep records are not part of the current taxonomy, so
+  // derive max-rep proxies from the weighted records and fall back to
+  // 0 for unweighted push-ups.
+  const weightedPullUpRecord = strengthRecords.find(r => r.exercise === 'weighted_pull_up')
+  const weightedDipRecord = strengthRecords.find(r => r.exercise === 'weighted_dip')
+
+  const maxPullUps = weightedPullUpRecord?.reps || 0
+  const weightedPullUp = weightedPullUpRecord?.weightAdded || 0
+  const maxDips = weightedDipRecord?.reps || 0
+  const weightedDips = weightedDipRecord?.weightAdded || 0
+  const maxPushUps = 0
   
   // Calculate readiness for the skill
   let readinessResult: ReadinessResult
@@ -625,11 +640,15 @@ export function determineRoadmapPosition(
       break
     }
     case 'planche': {
+      // [PLANCHE-INPUTS-CURRENT-FIELDS] Canonical PlancheInputs uses
+      // `plancheLeanHold` (not `leanHoldTime`) and owns
+      // `shoulderMobilityConfidence`/`wallHandstandHold`. Drop the
+      // legacy `bodyweightLbs` field which is not part of the input.
       const inputs: PlancheInputs = {
         maxDips,
         maxPushUps,
-        leanHoldTime: 15,
-        bodyweightLbs: profile.bodyweight || 160,
+        plancheLeanHold: 15,
+        shoulderMobilityConfidence: 'moderate',
         hasParallettes: profile.equipmentAvailable?.includes('parallettes') || false,
         hasFloor: true,
       }
@@ -637,13 +656,18 @@ export function determineRoadmapPosition(
       break
     }
     case 'muscle-up': {
+      // [MUSCLE-UP-INPUTS-CURRENT-FIELDS] Canonical MuscleUpInputs uses
+      // `hasExplosivePulls`/`hasBands` and does not own
+      // `straightBarDipReps`/`hasRings`. Drop legacy fields and derive
+      // an explosive-pull proxy from the chest-to-bar capacity.
+      const explosivePullProxy = Math.floor(maxPullUps * 0.4)
       const inputs: MuscleUpInputs = {
         maxPullUps,
         maxDips,
-        chestToBarReps: Math.floor(maxPullUps * 0.4),
-        straightBarDipReps: Math.floor(maxDips * 0.5),
+        chestToBarReps: explosivePullProxy,
+        hasExplosivePulls: explosivePullProxy >= 1,
         hasBar: true,
-        hasRings: profile.equipmentAvailable?.includes('rings') || false,
+        hasBands: false,
       }
       readinessResult = calculateMuscleUpReadiness(inputs)
       break

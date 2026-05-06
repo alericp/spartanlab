@@ -1,0 +1,48 @@
+lib/weak-point-engine.ts(526,9): error TS2367: This comparison appears to be unintentional because the types 'string' and 'number' have no overlap.
+lib/weak-point-engine.ts(527,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(528,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(529,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(530,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(531,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(537,31): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(537,83): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(546,9): error TS2367: This comparison appears to be unintentional because the types 'string' and 'number' have no overlap.
+lib/weak-point-engine.ts(547,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(548,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(549,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(550,14): error TS2365: Operator '<=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(556,9): error TS2365: Operator '>=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(557,14): error TS2365: Operator '>=' cannot be applied to types 'string' and 'number'.
+lib/weak-point-engine.ts(570,15): error TS2551: Property 'frontLeverHold' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/weak-point-engine.ts(570,41): error TS2551: Property 'frontLeverHold' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/weak-point-engine.ts(578,68): error TS2551: Property 'frontLeverHold' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/weak-point-engine.ts(583,15): error TS2339: Property 'plancheHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(583,38): error TS2339: Property 'plancheHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(591,68): error TS2339: Property 'plancheHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(607,20): error TS2339: Property 'hollowBodySeconds' does not exist on type 'AthleteCalibration'.
+lib/weak-point-engine.ts(608,21): error TS2339: Property 'hollowBodySeconds' does not exist on type 'AthleteCalibration'.
+lib/weak-point-engine.ts(609,26): error TS2339: Property 'hollowBodySeconds' does not exist on type 'AthleteCalibration'.
+lib/weak-point-engine.ts(614,15): error TS2339: Property 'muscleUpCapable' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(621,39): error TS2345: Argument of type '"shoulder"' is not assignable to parameter of type 'JointCaution'.
+lib/weak-point-engine.ts(622,42): error TS2339: Property 'plancheHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(626,39): error TS2345: Argument of type '"wrist"' is not assignable to parameter of type 'JointCaution'.
+lib/weak-point-engine.ts(627,20): error TS2339: Property 'handstandHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(627,45): error TS2339: Property 'handstandHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(634,15): error TS2339: Property 'handstandHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(634,40): error TS2339: Property 'handstandHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(642,39): error TS2339: Property 'handstandHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(647,15): error TS2339: Property 'flexibilityEmphasis' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(648,20): error TS2339: Property 'flexibilityEmphasis' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(800,24): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(924,3): error TS2322: Type '{ targetedLimiter: WeakPointType; id: string; name: string; reason: string; }[]' is not assignable to type '{ exerciseId: string; exerciseName: string; reason: string; targetedLimiter: WeakPointType; }[]'.
+lib/weak-point-engine.ts(1083,23): error TS2339: Property 'userId' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1084,32): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1089,27): error TS2339: Property 'hollowHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1091,27): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1420,5): error TS2322: Type 'PullUpCapacity | null' is not assignable to type 'number | null | undefined'.
+lib/weak-point-engine.ts(1421,5): error TS2322: Type 'DipCapacity | null' is not assignable to type 'number | null | undefined'.
+lib/weak-point-engine.ts(1422,5): error TS2322: Type 'WeightedBenchmark | null' is not assignable to type '{ load: number; } | null | undefined'.
+lib/weak-point-engine.ts(1423,5): error TS2322: Type 'WeightedBenchmark | null' is not assignable to type '{ load: number; } | null | undefined'.
+lib/weak-point-engine.ts(1424,30): error TS2551: Property 'frontLeverHold' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/weak-point-engine.ts(1425,27): error TS2339: Property 'plancheHold' does not exist on type 'OnboardingProfile'.
+lib/weak-point-engine.ts(1429,35): error TS2339: Property 'fitnessLevel' does not exist on type 'AthleteCalibration'.

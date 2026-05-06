@@ -364,7 +364,7 @@ function buildProfileTruthBlock(
         scheduleMode: 'weekly',
         trainingDaysPerWeek: 4,
         experienceLevel: 'intermediate',
-      } as CanonicalProgrammingProfile,
+      } as unknown as CanonicalProgrammingProfile,
       fieldSources: {
         primaryGoal: 'defaulted',
         secondaryGoal: 'none',
@@ -539,7 +539,12 @@ function buildProfileTruthBlock(
       if (!callerOverriddenFields.includes('scheduleMode')) callerOverriddenFields.push('scheduleMode')
     }
     if (callerInputs.trainingDaysPerWeek !== undefined && callerInputs.trainingDaysPerWeek !== merged.trainingDaysPerWeek) {
-      merged.trainingDaysPerWeek = callerInputs.trainingDaysPerWeek
+      // [TRAINING-DAYS-FLEXIBLE-NORMALIZE] callerInputs may carry the
+      // legacy `"flexible"` sentinel; the merged shape is `number | null`.
+      // Map non-numeric inputs to `null` rather than poisoning the
+      // numeric field with a string.
+      const callerDays = callerInputs.trainingDaysPerWeek
+      merged.trainingDaysPerWeek = typeof callerDays === 'number' ? callerDays : null
       fieldSources.trainingDaysPerWeek = 'caller_override'
       if (!callerOverriddenFields.includes('trainingDaysPerWeek')) callerOverriddenFields.push('trainingDaysPerWeek')
     }
@@ -1086,8 +1091,25 @@ function buildGenerationSourceMap(
     influenceSummary.push('First week - acclimation protection active')
   }
   
+  // [SIGNAL-QUALITY-NEON-MAPPER] `NeonSignalQuality` includes
+  // `'unavailable'`, which is not part of `SignalQuality`. Map the
+  // Neon-side quality label to the canonical `SignalQuality` union;
+  // `'unavailable'` collapses to `'missing'`.
+  const normalizeSignalQuality = (quality: unknown): SignalQuality => {
+    if (
+      quality === 'strong' ||
+      quality === 'usable' ||
+      quality === 'partial' ||
+      quality === 'weak' ||
+      quality === 'missing'
+    ) {
+      return quality
+    }
+    return 'missing'
+  }
+
   return {
-    overallQuality: neonPackage?.overallQuality || 'unavailable',
+    overallQuality: normalizeSignalQuality(neonPackage?.overallQuality),
     profileQuality: profileTruth.quality,
     recoveryQuality: recoveryTruth.quality,
     adherenceQuality: adherenceTruth.quality,

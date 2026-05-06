@@ -1,0 +1,132 @@
+===== PART 4 — NULL / COMPARISON / CONVERSION / MISSING SYMBOLS =====
+lib/adaptive-program-builder.ts(10757,29): error TS2352: Conversion of type 'TrainingMethodPreference[]' to type 'TrainingStyleMode[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(12984,17): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(13167,15): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<WeakPointType, string>'.
+lib/adaptive-program-builder.ts(16597,48): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(16795,46): error TS2352: Conversion of type '{ dayNumber: number; focus: DayFocus; warmup: never[]; exercises: { name: string; targetMuscles: any; skillTargets: never[]; sets: number; reps: string; restSeconds: number; notes: string; ... 5 more ...; progressionId: undefined; }[]; ... 7 more ...; _degradedReason: string; }' to type 'AdaptiveSession & { _degraded?: boolean | undefined; _degradedReason?: string | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(20938,13): error TS2367: This comparison appears to be unintentional because the types '"skill" | "back_lever" | "handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"hspu"' have no overlap.
+lib/adaptive-program-builder.ts(20940,13): error TS2367: This comparison appears to be unintentional because the types '"skill" | "handstand_pushup" | "iron_cross" | "weighted_strength" | "general" | "strength" | "endurance" | "abs" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility"' and '"l_sit"' have no overlap.
+lib/adaptive-program-builder.ts(21228,50): error TS7006: Parameter 'wp' implicitly has an 'any' type.
+lib/adaptive-program-builder.ts(23244,33): error TS2304: Cannot find name 'phase4iBlocksInjected'.
+lib/adaptive-program-builder.ts(23245,35): error TS2304: Cannot find name 'phase4iSessionsInjected'.
+lib/adaptive-program-builder.ts(24623,33): error TS18048: 'sessionArchitectureTruth.methodPackaging.actualMethodsApplied.length' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(25281,10): error TS2304: Cannot find name 'finalProgram'.
+lib/adaptive-program-builder.ts(25727,27): error TS18048: 'advancedFamily.technicalSlotWeight' is possibly 'undefined'.
+lib/adaptive-program-builder.ts(27730,151): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(27758,98): error TS2352: Conversion of type 'SelectedExercise' to type '{ category: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/adaptive-program-builder.ts(27896,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27897,13): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27901,41): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27956,33): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27957,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(27958,11): error TS18047: 'progressionDepthAdjustments' is possibly 'null'.
+lib/adaptive-program-builder.ts(29558,27): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"red"' have no overlap.
+lib/adaptive-program-builder.ts(29558,66): error TS2367: This comparison appears to be unintentional because the types 'RecoveryLevel' and '"yellow"' have no overlap.
+lib/adaptive-program-builder.ts(29657,14): error TS2454: Variable 'variants' is used before being assigned.
+lib/adaptive-program-builder.ts(29661,15): error TS2454: Variable 'rationale' is used before being assigned.
+lib/adaptive-program-builder.ts(29662,25): error TS2454: Variable 'enduranceResult' is used before being assigned.
+lib/adaptive-program-builder.ts(29663,29): error TS2454: Variable 'currentFatigueScore' is used before being assigned.
+lib/adaptive-program-builder.ts(30627,9): error TS2304: Cannot find name 'phase15eSubstepDegraded'.
+lib/adaptive-program-builder.ts(30877,23): error TS2677: A type predicate's type must be assignable to its parameter's type.
+lib/athlete-calibration.ts(872,29): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(873,32): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(874,28): error TS18047: 'profile' is possibly 'null'.
+lib/athlete-calibration.ts(875,31): error TS18047: 'profile' is possibly 'null'.
+lib/coaching-framework-engine.ts(696,47): error TS2367: This comparison appears to be unintentional because the types 'SkillKey | null' and '"iron_cross"' have no overlap.
+lib/consistency-momentum-engine.ts(679,20): error TS2304: Cannot find name 'getTrainingMomentum'.
+lib/constraint-aware-assembly-engine.ts(410,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision | null' and '"REDUCE_INTENSITY"' have no overlap.
+lib/doctrine-coverage-validator.ts(68,13): error TS2367: This comparison appears to be unintentional because the types 'MovementFamily' and 'SkillType' have no overlap.
+lib/doctrine/doctrine-consumption-audit.ts(202,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+lib/doctrine/doctrine-consumption-audit.ts(229,33): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"STRICT_SPINE"' have no overlap.
+lib/doctrine/doctrine-consumption-audit.ts(231,7): error TS2367: This comparison appears to be unintentional because the types 'IntegrationMode' and '"BALANCED"' have no overlap.
+lib/exercise-family-integration.ts(307,24): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'Record<TrainingIntent, TrainingIntentMetadata>'.
+lib/exercise-family-integration.ts(479,32): error TS7006: Parameter 'req' implicitly has an 'any' type.
+lib/fatigue-engine.ts(289,7): error TS2367: This comparison appears to be unintentional because the types '{ level: "elevated" | "low" | "moderate" | "high"; message: string; }' and 'string' have no overlap.
+lib/goal-projection-engine.ts(571,8): error TS18047: 'profile' is possibly 'null'.
+lib/goal-projection-engine.ts(584,28): error TS18047: 'profile' is possibly 'null'.
+lib/history-service.ts(98,20): error TS2352: Conversion of type 'Record<string, unknown>' to type 'GoalsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/history-service.ts(99,28): error TS2352: Conversion of type 'Record<string, unknown>' to type 'AthleteInputsSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/history-service.ts(100,31): error TS2352: Conversion of type 'Record<string, unknown>' to type 'ProgramStructureSnapshot' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/history-service.ts(835,23): error TS7006: Parameter 'row' implicitly has an 'any' type.
+lib/milestone-engine.ts(134,22): error TS18047: 'profile' is possibly 'null'.
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+lib/onboarding-service.ts(1391,7): error TS2367: This comparison appears to be unintentional because the types 'LeverageProfile' and '"long_limbed"' have no overlap.
+lib/performance-envelope-engine.ts(1953,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1953,38): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1955,31): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,24): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1967,64): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,7): error TS2304: Cannot find name 'feedback'.
+lib/performance-envelope-engine.ts(1975,48): error TS2304: Cannot find name 'feedback'.
+lib/planner-truth-audit.ts(979,14): error TS2454: Variable 'weekSummary' is used before being assigned.
+lib/planner-truth-audit.ts(982,63): error TS2454: Variable 'weekSummary' is used before being assigned.
+lib/planner-truth-audit.ts(983,14): error TS2304: Cannot find name 'selectedSkills'.
+lib/planner-truth-audit.ts(986,39): error TS2304: Cannot find name 'selectedSkills'.
+lib/program-adjustment-engine.ts(486,56): error TS7006: Parameter 'a' implicitly has an 'any' type.
+lib/program-exercise-selector.ts(5551,25): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+lib/program-exercise-selector.ts(5564,9): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"mobility"' have no overlap.
+lib/program-exercise-selector.ts(5564,45): error TS2367: This comparison appears to be unintentional because the types '"flexibility"' and '"hybrid"' have no overlap.
+lib/program-generation/session-composition-intelligence.ts(846,45): error TS2367: This comparison appears to be unintentional because the types '"discouraged"' and '"blocked"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(252,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"improving"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(253,37): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(418,13): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(422,20): error TS18048: 'envelope.fatigueThreshold' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(450,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(451,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+lib/program/db-truth-scoring-bridge.ts(470,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/method-materialization-summary.ts(333,9): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ superset: number; circuit: number; density_block: number; cluster: number; }'.
+lib/program/onboarding-truth-expression-audit.ts(281,14): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"blocked"' have no overlap.
+lib/program/onboarding-truth-expression-audit.ts(281,49): error TS2367: This comparison appears to be unintentional because the types '"unknown"' and '"discouraged"' have no overlap.
+lib/program/performance-feedback-adaptation-contract.ts(546,16): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+lib/program/program-display-contract.ts(544,54): error TS2367: This comparison appears to be unintentional because the types '"headline_represented" | "broadly_represented" | "selected_but_underexpressed" | "filtered_out_by_constraints" | "not_selected"' and '"carryover_only"' have no overlap.
+lib/program/program-display-contract.ts(2154,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+lib/program/program-display-contract.ts(3682,24): error TS2367: This comparison appears to be unintentional because the types 'PrescriptionIntent' and '"protection"' have no overlap.
+lib/program/program-display-contract.ts(5711,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "core" | "scap"' and '"pull"' have no overlap.
+lib/program/program-display-contract.ts(5713,16): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "core" | "scap"' and '"push"' have no overlap.
+lib/program/programming-truth-bundle.ts(672,50): error TS2367: This comparison appears to be unintentional because the types '"high" | "low" | "medium"' and '"none"' have no overlap.
+lib/program/session-length-truth-contract.ts(596,9): error TS2367: This comparison appears to be unintentional because the types '"STRUCTURALLY_REAL" | "SHORTS_AT_LABEL_PARITY" | "NO_LAUNCHABLE_SHORTS"' and '"LEGACY_NO_VARIANTS"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(380,9): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(552,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | "consistent" | "sporadic" | null | undefined' and '"declining"' have no overlap.
+lib/program/skill-specific-truth-resolution.ts(554,7): error TS2367: This comparison appears to be unintentional because the types '"unknown" | null | undefined' and '"improving"' have no overlap.
+lib/progression-decision-engine.ts(351,14): error TS2367: This comparison appears to be unintentional because the types 'true | undefined' and 'false' have no overlap.
+lib/progression-decision-engine.ts(422,25): error TS2367: This comparison appears to be unintentional because the types 'TrainingDecision' and '"SKIP_TODAY"' have no overlap.
+lib/readiness/canonical-readiness-engine.ts(591,14): error TS2304: Cannot find name 'calculateOneArmPullUpReadiness'.
+lib/readiness/canonical-readiness-engine.ts(600,14): error TS2304: Cannot find name 'calculateOneArmPushUpReadiness'.
+lib/readiness/canonical-readiness-engine.ts(608,14): error TS2304: Cannot find name 'calculatePlanchePushUpReadiness'.
+lib/readiness/skill-readiness.ts(2672,33): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2673,40): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2677,5): error TS2454: Variable 'skillName' is used before being assigned.
+lib/readiness/skill-readiness.ts(2678,12): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2682,17): error TS2454: Variable 'result' is used before being assigned.
+lib/readiness/skill-readiness.ts(2683,16): error TS2454: Variable 'result' is used before being assigned.
+lib/server/authoritative-generation-truth-ingestion.ts(362,25): error TS2352: Conversion of type '{ primaryGoal: string; scheduleMode: "weekly"; trainingDaysPerWeek: number; experienceLevel: "intermediate"; }' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1125,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1133,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1155,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(2581,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/session-assembly-engine.ts(752,42): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/session-variety-engine.ts(396,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(410,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(417,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/session-variety-engine.ts(434,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(472,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(482,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/session-variety-engine.ts(514,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/session-variety-engine.ts(525,9): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.
+lib/skill-state-service.ts(613,15): error TS2304: Cannot find name 'updateSkillState'.
+lib/training-coach.ts(353,7): error TS2367: This comparison appears to be unintentional because the types 'ReadinessStatus | null' and '"consolidate"' have no overlap.
+lib/training-cycle-engine.ts(1416,45): error TS2367: This comparison appears to be unintentional because the types '"back_lever" | "muscle_up" | "iron_cross" | "skill" | "strength" | "pancake" | "toe_touch" | "front_splits" | "side_splits" | "flexibility" | "endurance" | "max_reps" | "military" | ... 4 more ... | "abs"' and '"handstand"' have no overlap.
+lib/training-methods.ts(730,34): error TS2367: This comparison appears to be unintentional because the types '"strength" | "accessory" | "core" | "flexibility" | "cooldown" | "warmup"' and '"skill"' have no overlap.
+lib/training-principles-engine.ts(1007,9): error TS2367: This comparison appears to be unintentional because the types 'MethodProfileId' and '"dynamic_skill_mastery"' have no overlap.
+lib/unified-coaching-engine.ts(642,8): error TS2352: Conversion of type 'ReadinessBreakdown' to type 'Record<string, number>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/warmup-engine.ts(1187,53): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/warmup-engine.ts(1202,51): error TS7006: Parameter 'ex' implicitly has an 'any' type.
+lib/warmup-engine.ts(1213,12): error TS2304: Cannot find name 'generateStandardWarmup'.
+lib/weak-point-engine.ts(669,27): error TS2367: This comparison appears to be unintentional because the types 'MuscleUpReadiness | null' and '"capable"' have no overlap.
+lib/weak-point-priority-engine.ts(387,16): error TS2367: This comparison appears to be unintentional because the types '"moderate" | "significant"' and '"none"' have no overlap.
+lib/weekly-stimulus-allocation.ts(167,7): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"skill"' have no overlap.
+lib/weekly-stimulus-allocation.ts(172,14): error TS2367: This comparison appears to be unintentional because the types 'TrainingStyleMode' and '"strength"' have no overlap.

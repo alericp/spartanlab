@@ -1,0 +1,52 @@
+===== STEP 1 — RUN FRESH TSC FOR BUILDER-ONLY PACKET =====
+===== SCOREBOARD =====
+Previous total diagnostics: 582
+Current total diagnostics: 582
+Total delta from previous known: 0
+Current files with errors: 125
+
+Previous builder diagnostics: 92
+Current builder diagnostics: 92
+Builder delta from previous known: 0
+
+===== BUILDER ERROR CODE COUNTS =====
+     20 error TS2345
+     14 error TS2322
+     12 error TS2339
+      6 error TS2352
+      6 error TS18047
+      5 error TS2739
+      5 error TS2353
+      5 error TS2304
+      4 error TS2454
+      4 error TS2367
+      2 error TS2769
+      2 error TS2741
+      2 error TS18048
+      1 error TS7053
+      1 error TS7006
+      1 error TS2740
+      1 error TS2677
+      1 error TS2554
+
+===== TOP 20 FILES CURRENTLY =====
+     92 lib/adaptive-program-builder.ts
+     32 lib/server/authoritative-program-generation.ts
+     25 lib/unified-coaching-engine.ts
+     18 lib/canonical-profile-service.ts
+     16 lib/program/skill-specific-truth-resolution.ts
+     14 lib/session-variety-engine.ts
+     13 lib/repositories/profile-repository.ts
+     12 lib/unified-program-generation.ts
+     11 lib/roadmap/skill-roadmap-service.ts
+     11 lib/performance-envelope-engine.ts
+     10 lib/warmup-engine.ts
+     10 lib/program/db-truth-scoring-bridge.ts
+     10 lib/onboarding-service.ts
+      9 lib/program/program-display-contract.ts
+      9 lib/program-truth-extractor.ts
+      9 lib/engine/index.ts
+      8 lib/weak-point-engine.ts
+      8 lib/warmup-intelligence-engine.ts
+      8 lib/doctrine-to-output-verification.ts
+      7 lib/training-coach.ts

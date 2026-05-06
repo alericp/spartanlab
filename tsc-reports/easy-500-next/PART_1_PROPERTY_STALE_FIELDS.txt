@@ -1,0 +1,223 @@
+===== EASY PACKET 1 — PROPERTY DOES NOT EXIST / STALE FIELD READS =====
+Purpose: exact locations where VO should remove/gate stale fields or map to compiler-suggested/current fields.
+
+lib/adaptive-program-builder.ts(12737,18): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(14187,46): error TS2339: Property 'hasCircuitsApplied' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(14188,45): error TS2339: Property 'hasDensityApplied' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15584,29): error TS2339: Property 'structureDescription' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15738,75): error TS2339: Property 'appliedMethods' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(15739,29): error TS2339: Property 'appliedMethods' does not exist on type '{}'.
+lib/adaptive-program-builder.ts(18234,9): error TS2339: Property 'movementEmphasis' does not exist on type 'AdaptiveSession'.
+lib/adaptive-program-builder.ts(18592,18): error TS2339: Property 'labelShown' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18593,27): error TS2339: Property 'actualDominant' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18594,19): error TS2339: Property 'mismatchReason' does not exist on type '{ dayNumber: number; labelMatchesSession: boolean; }'.
+lib/adaptive-program-builder.ts(18762,61): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18763,61): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18764,67): error TS2339: Property 'multiSkillArchitectureActive' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18765,53): error TS2339: Property 'skillBreakdown' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18812,76): error TS2339: Property 'multiSkillArchitectureActive' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18813,81): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18813,109): error TS2339: Property 'supportSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18814,74): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18814,102): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18815,88): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(18816,80): error TS2339: Property 'broaderSkillsExpressed' does not exist on type 'ResolvedSessionIdentity'.
+lib/adaptive-program-builder.ts(19340,11): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(19340,53): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21047,30): error TS2339: Property 'weightedPullUp' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(21048,29): error TS2339: Property 'weightedDip' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(21049,32): error TS2339: Property 'lSitHold' does not exist on type 'AthleteProfile'.
+lib/adaptive-program-builder.ts(21124,49): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(21131,30): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(21147,52): error TS2339: Property 'styleRules' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(21237,44): error TS2339: Property 'styleMode' does not exist on type '{ primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string; }'.
+lib/adaptive-program-builder.ts(21286,34): error TS2339: Property 'weakPoints' does not exist on type 'ProgramConstraintContext'.
+lib/adaptive-program-builder.ts(21570,16): error TS2339: Property 'weightedPrescription' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(21940,36): error TS2339: Property 'sessionLength' does not exist on type 'ComposedPlannerInput'.
+lib/adaptive-program-builder.ts(22018,30): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22018,40): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22025,62): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22025,72): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22027,63): error TS2339: Property 'progression' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(22666,16): error TS2339: Property 'multiSkillAllocationContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(22728,16): error TS2339: Property 'doctrineRuntimeContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(23465,18): error TS2339: Property 'doctrineInfluenceContract' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(23479,18): error TS2339: Property 'unifiedDoctrineDecision' does not exist on type 'AdaptiveProgram'.
+lib/adaptive-program-builder.ts(23910,32): error TS2339: Property 'id' does not exist on type '{ selectionContext?: { doctrineSource?: unknown; } | undefined; }'.
+lib/adaptive-program-builder.ts(24726,51): error TS2339: Property 'trainingMethodPreferences' does not exist on type 'ExpandedAthleteContextLocal'.
+lib/adaptive-program-builder.ts(25254,11): error TS2339: Property 'fatigueCost' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(26936,15): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26937,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26938,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26939,13): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26955,36): error TS2339: Property 'outerDoctrineRecoveryTracker' does not exist on type 'AdaptiveSessionContext'.
+lib/adaptive-program-builder.ts(26972,76): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+lib/adaptive-program-builder.ts(27293,87): error TS2339: Property 'requiredEquipment' does not exist on type 'Exercise'.
+lib/adaptive-program-builder.ts(27386,31): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27736,41): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27757,98): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27757,125): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27784,44): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27784,71): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(27784,113): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28328,90): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28328,117): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28335,24): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28497,37): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28497,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28515,82): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28561,16): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28562,16): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28574,48): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28804,28): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28868,40): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28868,63): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28869,39): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28869,71): error TS2339: Property 'rest' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(28956,50): error TS2339: Property 'constructor' does not exist on type 'never'.
+lib/adaptive-program-builder.ts(29182,37): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(29182,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(29200,81): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(29257,45): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(29267,101): error TS2339: Property 'category' does not exist on type 'SelectedExercise'.
+lib/adaptive-program-builder.ts(30177,29): error TS2339: Property 'movementPattern' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(30178,25): error TS2339: Property 'neuralDemand' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-program-builder.ts(30179,24): error TS2339: Property 'failureRisk' does not exist on type 'AdaptiveExercise'.
+lib/adaptive-progression-engine.ts(263,50): error TS2339: Property 'workoutId' does not exist on type 'StoredRPESession'.
+lib/adaptive-progression-engine.ts(265,11): error TS2339: Property 'exerciseId' does not exist on type '{ exerciseName: string; sets: { setNumber: number; targetRPE: number; actualRPE: number; targetReps: number; actualReps: number; }[]; }'.
+lib/adaptive-progression-engine.ts(1011,33): error TS2339: Property 'weeklyTraining' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1012,39): error TS2339: Property 'weeklyTraining' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1165,16): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/adaptive-progression-engine.ts(1169,40): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/adaptive-training-cycle-engine.ts(743,18): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/adaptive-training-cycle-engine.ts(744,34): error TS2339: Property 'primary' does not exist on type 'WeakPointAssessment'.
+lib/ai-truth-audit.ts(855,60): error TS2339: Property 'plancheProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(856,63): error TS2339: Property 'frontLeverProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,56): error TS2339: Property 'hspuProgression' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(857,84): error TS2339: Property 'hspu' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(858,56): error TS2339: Property 'weightedPullUp' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(859,53): error TS2339: Property 'weightedDip' does not exist on type 'GenerationTruthSnapshot'.
+lib/ai-truth-audit.ts(860,32): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(861,29): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(862,34): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+lib/ai-truth-audit.ts(1577,14): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,29): error TS2339: Property 'title' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,43): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1577,57): error TS2339: Property 'name' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1599,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.
+lib/ai-truth-audit.ts(1607,30): error TS2339: Property 'dayOfWeek' does not exist on type 'AdaptiveSession'.
+lib/athlete-profile.ts(1482,30): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/athlete-profile.ts(1504,34): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(778,53): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/canonical-profile-service.ts(783,50): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/canonical-profile-service.ts(1418,123): error TS2339: Property 'trainingStyle' does not exist on type 'OnboardingProfile'.
+lib/canonical-profile-service.ts(1508,129): error TS2339: Property 'level' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1509,142): error TS2339: Property 'rangeIntent' does not exist on type 'FlexibilityBenchmark | null'.
+lib/canonical-profile-service.ts(1532,86): error TS2339: Property 'recoveryConfidence' does not exist on type 'RecoveryProfile | null'.
+lib/coaching-explanation-contract.ts(316,44): error TS2339: Property 'doctrineConstraints' does not exist on type '{ phase: AdaptationPhase; confidence: "moderate" | "high" | "low"; targetDays: number; dayCountReason: string; loadStrategy: { volumeBias: "normal" | "reduced" | "elevated"; ... 5 more ...; restSpacingBias: "normal" | "increased"; }; firstWeekGovernor: { ...; }; complexityContext: { ...; }; adaptationSummary: string...'.
+lib/coaching-explanation-contract.ts(391,30): error TS2339: Property 'roleInSession' does not exist on type '{ expressionMode: string; progressionIntent: string; skillSupportTargets: string[]; loadDecisionSummary: string; restLabel?: string | undefined; }'.
+lib/coaching-explanation-contract.ts(394,25): error TS2339: Property 'isPrimary' does not exist on type 'AdaptiveExercise'.
+lib/coaching-explanation-contract.ts(395,27): error TS2339: Property 'isProtected' does not exist on type 'AdaptiveExercise'.
+lib/compression-readiness.ts(345,42): error TS2339: Property 'lSitCapacity' does not exist on type 'OnboardingProfile'.
+lib/consistency-momentum-engine.ts(163,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/consistency-momentum-engine.ts(164,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/consistency-momentum-engine.ts(165,36): error TS2339: Property 'trainingDays' does not exist on type 'AthleteProfile'.
+lib/doctrine-to-output-verification.ts(199,35): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+lib/doctrine-to-output-verification.ts(438,30): error TS2339: Property 'trainingDays' does not exist on type 'CanonicalProgrammingProfile'.
+lib/doctrine-to-output-verification.ts(521,21): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(522,25): error TS2339: Property 'holdTime' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,23): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,47): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(531,62): error TS2339: Property 'rpe' does not exist on type 'AdaptiveExercise'.
+lib/doctrine-to-output-verification.ts(808,32): error TS2551: Property 'trainingPath' does not exist on type 'CanonicalProgrammingProfile'. Did you mean 'trainingPathType'?
+lib/doctrine/doctrine-consumption-audit.ts(156,31): error TS2339: Property 'intendedIntensity' does not exist on type 'AdaptiveSession'.
+lib/doctrine/doctrine-consumption-audit.ts(162,30): error TS2339: Property 'exerciseName' does not exist on type 'AdaptiveExercise'.
+lib/doctrine/doctrine-consumption-audit.ts(301,117): error TS2339: Property 'maxSessionTypes' does not exist on type '{ mode: IntegrationMode; allowedSecondaryMethods: string[]; blockedMethods: string[]; maxSecondaryExercisesPerSession: number; secondaryMustCarryover: boolean; rationale: string; }'.
+lib/elite-insight-engine.ts(88,28): error TS2339: Property 'area' does not exist on type 'never'.
+lib/elite-insight-engine.ts(89,37): error TS2339: Property 'area' does not exist on type 'never'.
+lib/elite-insight-engine.ts(89,81): error TS2339: Property 'improvement' does not exist on type 'never'.
+lib/engine-quality-contract.ts(2129,12): error TS2339: Property 'influencingSkills' does not exist on type 'SessionExerciseForIdentity'.
+lib/engine-quality-contract.ts(2129,50): error TS2339: Property 'influencingSkills' does not exist on type 'SessionExerciseForIdentity'.
+lib/engine-quality-contract.ts(2129,75): error TS2339: Property 'influencingSkills' does not exist on type 'SessionExerciseForIdentity'.
+lib/engine-quality-contract.ts(2130,34): error TS2339: Property 'influencingSkills' does not exist on type 'SessionExerciseForIdentity'.
+lib/first-session-service.ts(258,16): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/first-session-service.ts(265,25): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/first-session-service.ts(266,39): error TS2339: Property 'trainingTime' does not exist on type 'OnboardingProfile'.
+lib/leaderboards/leaderboard-service.ts(238,27): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+lib/leaderboards/leaderboard-service.ts(285,27): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+lib/leaderboards/leaderboard-service.ts(321,27): error TS2339: Property 'username' does not exist on type 'AthleteProfile'.
+lib/metrics-update-service.ts(200,49): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/metrics-update-service.ts(201,58): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/metrics-update-service.ts(209,46): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/metrics-update-service.ts(210,55): error TS2339: Property 'addedWeight' does not exist on type 'WeightedBenchmark'.
+lib/onboarding-service.ts(1355,31): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1356,48): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1357,36): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1358,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/onboarding-service.ts(1360,38): error TS2339: Property 'name' does not exist on type 'TrainingBlock'.
+lib/performance-envelope-integration.ts(177,37): error TS2339: Property 'sessionDensity' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(179,44): error TS2551: Property 'sessionDurationMinutes' does not exist on type 'WorkoutLog'. Did you mean 'durationMinutes'?
+lib/performance-envelope-integration.ts(188,37): error TS2339: Property 'completionRatio' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(190,38): error TS2339: Property 'timeCompressedFlag' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(191,38): error TS2339: Property 'skippedExercises' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(192,42): error TS2339: Property 'substitutedExercises' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(196,38): error TS2339: Property 'wasDeloadSession' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(200,33): error TS2339: Property 'logQuality' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(201,33): error TS2339: Property 'logQuality' does not exist on type 'WorkoutLog'.
+lib/performance-envelope-integration.ts(427,30): error TS2339: Property 'fatigueWarning' does not exist on type 'EnvelopeRecommendation'.
+lib/planner-truth-audit.ts(803,34): error TS2339: Property 'limiterIdentification' does not exist on type 'CanonicalProgrammingProfile'.
+lib/pr-vault-engine.ts(401,23): error TS2339: Property 'set' does not exist on type 'Set<string>'.
+lib/prediction/prediction-service.ts(184,35): error TS2339: Property 'primaryOutcome' does not exist on type 'OnboardingProfile'.
+lib/prediction/prediction-service.ts(193,26): error TS2339: Property 'pushUpMax' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(195,32): error TS2339: Property 'lSitHoldSeconds' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(196,36): error TS2339: Property 'plancheLevel' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(197,39): error TS2339: Property 'frontLeverLevel' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(198,39): error TS2339: Property 'hasMuscleUp' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(199,25): error TS2339: Property 'hasRings' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(200,27): error TS2339: Property 'hasWeights' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(201,29): error TS2339: Property 'hasPullUpBar' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(202,34): error TS2339: Property 'hasShoulderIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(203,31): error TS2339: Property 'hasElbowIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(204,31): error TS2339: Property 'hasWristIssues' does not exist on type 'AthleteProfile'.
+lib/prediction/prediction-service.ts(206,31): error TS2339: Property 'weakPoints' does not exist on type 'WeakPointAnalysisResult'.
+lib/prediction/prediction-service.ts(241,56): error TS2339: Property 'tendonAdaptationLevel' does not exist on type 'OnboardingProfile'.
+lib/program-adjustment-engine.ts(460,32): error TS2339: Property 'experienceLevel' does not exist on type 'OnboardingProfile'.
+lib/program-adjustment-engine.ts(486,38): error TS2339: Property 'alternatives' does not exist on type 'ExerciseScore'.
+lib/program-exercise-selector.ts(1940,37): error TS2339: Property 'name' does not exist on type 'SelectedExercise'.
+lib/program-exercise-selector.ts(9658,28): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9658,48): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9663,32): error TS2339: Property 'exercises' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9672,41): error TS2339: Property 'sessionSkillExpression' does not exist on type 'ExerciseSelection'.
+lib/program-exercise-selector.ts(9673,38): error TS2339: Property 'materialSkillIntent' does not exist on type 'ExerciseSelection'.
+lib/program-generation/week-adaptation-decision-contract.ts(384,21): error TS2339: Property 'isInConsistentStreak' does not exist on type 'ConsistencyStatus'.
+lib/program-generation/week-adaptation-decision-contract.ts(384,57): error TS2339: Property 'currentStreak' does not exist on type 'ConsistencyStatus'.
+lib/program-generation/week-adaptation-decision-contract.ts(386,43): error TS2339: Property 'gapDays' does not exist on type 'ConsistencyStatus'.
+lib/program-history-versioning.ts(185,25): error TS2339: Property 'sessions' does not exist on type 'ProgramHistory'.
+lib/program-history-versioning.ts(355,26): error TS2339: Property 'bodyweight' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(356,26): error TS2339: Property 'weightUnit' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(368,30): error TS2339: Property 'skillInterests' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(372,34): error TS2551: Property 'weightedPullUpLoad' does not exist on type 'OnboardingProfile'. Did you mean 'weightedPullUp'?
+lib/program-history-versioning.ts(373,31): error TS2551: Property 'weightedDipLoad' does not exist on type 'OnboardingProfile'. Did you mean 'weightedDip'?
+lib/program-history-versioning.ts(374,37): error TS2551: Property 'frontLeverLevel' does not exist on type 'OnboardingProfile'. Did you mean 'frontLever'?
+lib/program-history-versioning.ts(375,34): error TS2339: Property 'plancheLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(376,33): error TS2339: Property 'muscleUpReadiness' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(377,31): error TS2339: Property 'hspuLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(378,28): error TS2339: Property 'sleepQuality' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(379,27): error TS2339: Property 'stressLevel' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(380,34): error TS2339: Property 'recoveryConfidence' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(419,30): error TS2339: Property 'skillInterests' does not exist on type 'OnboardingProfile'.
+lib/program-history-versioning.ts(451,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+lib/program-history-versioning.ts(461,25): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(461,55): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(461,66): error TS2339: Property 'reps' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(462,18): error TS2339: Property 'hold' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(463,18): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+lib/program-history-versioning.ts(464,19): error TS2551: Property 'notes' does not exist on type 'AdaptiveExercise'. Did you mean 'note'?
+lib/program-history-versioning.ts(561,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+lib/program-profile-validator.ts(1273,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+lib/program-profile-validator.ts(1279,14): error TS2339: Property 'rest' does not exist on type 'AdaptiveExercise'.
+lib/program-state-contract.ts(195,97): error TS2339: Property 'equipment' does not exist on type 'AdaptiveProgram'.
+lib/program-state.ts(85,20): error TS2339: Property 'styledGroups' does not exist on type '{}'.
+lib/program-state.ts(85,63): error TS2339: Property 'styledGroups' does not exist on type '{}'.
+lib/program-state.ts(85,93): error TS2339: Property 'styledGroups' does not exist on type '{}'.
+lib/program-state.ts(92,43): error TS2339: Property 'hasSupersetsApplied' does not exist on type '{}'.

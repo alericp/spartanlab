@@ -2174,7 +2174,12 @@ export function buildFullVisibleRoutineExercises(
   // FULL session's `sets`/`targetRPE`/`restSeconds` via the sessionEx
   // fallback branch. That is the exact prescription-divergence point that
   // made 45 and 30 look as heavy as Full.
-  const variantExerciseMap = new Map<string, NonNullable<typeof variantSelection>['main'][0]>()
+  // [VARIANT-MAIN-NON-NULLABLE-INDEXED] `variantSelection['main']` can
+  // be undefined; strip null/undefined before indexing with `[number]`
+  // so the map's value type stays the actual main-item shape.
+  type VariantMainItem =
+    NonNullable<NonNullable<typeof variantSelection>['main']>[number]
+  const variantExerciseMap = new Map<string, VariantMainItem>()
   if (variantSelection?.main) {
     variantSelection.main.forEach(v => {
       if (v.exercise.id) variantExerciseMap.set(v.exercise.id, v)

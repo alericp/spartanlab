@@ -379,21 +379,22 @@ export function seedSampleSessions(): void {
   // Seed strength records (with progression history)
   const existingStrength = getStrengthRecords()
   if (existingStrength.length === 0) {
+    // [SAVE-STRENGTH-RECORD CONTRACT] 4th arg is the options object, not a raw date string.
     // Weighted pull-ups with progression
-    saveStrengthRecord('weighted_pull_up', 25, 5, new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_pull_up', 30, 5, new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_pull_up', 35, 4, new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_pull_up', 40, 3, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_pull_up', 45, 3, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    
+    saveStrengthRecord('weighted_pull_up', 25, 5, { dateLogged: new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_pull_up', 30, 5, { dateLogged: new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_pull_up', 35, 4, { dateLogged: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_pull_up', 40, 3, { dateLogged: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_pull_up', 45, 3, { dateLogged: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+
     // Weighted dips with progression
-    saveStrengthRecord('weighted_dip', 35, 5, new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_dip', 45, 5, new Date(now.getTime() - 18 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_dip', 50, 4, new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    saveStrengthRecord('weighted_dip', 55, 3, new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-    
+    saveStrengthRecord('weighted_dip', 35, 5, { dateLogged: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_dip', 45, 5, { dateLogged: new Date(now.getTime() - 18 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_dip', 50, 4, { dateLogged: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+    saveStrengthRecord('weighted_dip', 55, 3, { dateLogged: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+
     // Weighted muscle-up
-    saveStrengthRecord('weighted_muscle_up', 10, 2, new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+    saveStrengthRecord('weighted_muscle_up', 10, 2, { dateLogged: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
   }
   
   // Seed skill progressions

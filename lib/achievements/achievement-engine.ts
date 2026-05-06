@@ -165,10 +165,14 @@ function calculateMetrics(): AchievementMetrics {
   })
   
   // Add personal records for max reps (pull-ups, dips)
+  // [STRENGTH-RECORD-FIELD-OWNER] StrengthRecord exposes `reps`, not
+  // `maxReps`. The PR slot already represents the best-rep entry per
+  // exercise (sorted by estimatedOneRM in getPersonalRecords), so
+  // reading `record.reps` gives the same semantics.
   Object.entries(personalRecords).forEach(([exercise, record]) => {
-    if (record && record.maxReps) {
+    if (record && record.reps) {
       const key = `max_${exercise.replace('weighted_', '')}s`
-      maxWeights[key] = record.maxReps
+      maxWeights[key] = record.reps
     }
   })
   

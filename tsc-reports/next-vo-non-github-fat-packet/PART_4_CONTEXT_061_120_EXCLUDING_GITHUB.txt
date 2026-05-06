@@ -1,0 +1,1742 @@
+===== PART 4 — CONTEXT 061-120 EXCLUDING GITHUB-AI FILES =====
+
+--- CONTEXT 001 | lib/dashboard-service.ts:127:3 | TS2322 ---
+lib/dashboard-service.ts(127,3): error TS2322: Type '0' is not assignable to type 'SessionLengthMinutes'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   115: 
+   116: // Safe empty profile for when no profile exists
+   117: const EMPTY_PROFILE: AthleteProfile = {
+   118:   id: '',
+   119:   userId: '',
+   120:   sex: null,
+   121:   height: null,
+   122:   heightUnit: 'inches',
+   123:   bodyweight: null,
+   124:   weightUnit: 'lbs',
+   125:   experienceLevel: 'beginner',
+   126:   trainingDaysPerWeek: 0,
+>> 127:   sessionLengthMinutes: 0,
+   128:   primaryGoal: null,
+   129:   equipmentAvailable: [],
+   130:   onboardingComplete: false,
+   131:   createdAt: new Date().toISOString(),
+   132: }
+   133: 
+   134: // Get complete dashboard overview
+   135: // SAFE: Returns empty/default values if no profile exists
+   136: export function getDashboardOverview(): DashboardOverview {
+   137:   const profile = getAthleteProfile()
+   138:   
+   139:   return {
+
+--- CONTEXT 002 | lib/dashboard-service.ts:144:5 | TS2322 ---
+lib/dashboard-service.ts(144,5): error TS2322: Type 'Partial<Record<ExerciseType, StrengthRecord | null>>' is not assignable to type 'Record<ExerciseType, StrengthRecord | null>'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   132: }
+   133: 
+   134: // Get complete dashboard overview
+   135: // SAFE: Returns empty/default values if no profile exists
+   136: export function getDashboardOverview(): DashboardOverview {
+   137:   const profile = getAthleteProfile()
+   138:   
+   139:   return {
+   140:     user: getCurrentUser(),
+   141:     // Return empty profile if none exists - dashboard will handle this state
+   142:     profile: profile || EMPTY_PROFILE,
+   143:     progressions: getSkillProgressions(),
+>> 144:     strengthRecords: getLatestRecords(),
+   145:     latestProgram: getLatestProgram(),
+   146:   }
+   147: }
+   148: 
+   149: // Get primary skill summary (based on profile goal or first progression)
+   150: export function getPrimarySkillSummary(overview: DashboardOverview): PrimarySkillSummary {
+   151:   const { profile, progressions } = overview
+   152:   
+   153:   // Find the skill matching primary goal, or use first progression
+   154:   let targetProgression: SkillProgression | null = null
+   155:   
+   156:   if (profile.primaryGoal) {
+
+--- CONTEXT 003 | lib/dashboard-service.ts:330:7 | TS2322 ---
+lib/dashboard-service.ts(330,7): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   318:       scheduleMode: adaptiveProgram.scheduleMode,
+   319:       selectedSkillsCount: adaptiveProgram.selectedSkills?.length || 0,
+   320:       // [DASHBOARD-SERVICE-LEGACY-FIELD-BRIDGE] AdaptiveProgram does
+   321:       // not declare `trainingPathType` / `sessionDurationMode` in its
+   322:       // canonical contract — they're set at runtime by the program
+   323:       // composer. Bridge through `unknown` to satisfy TS2352.
+   324:       trainingPathType: (adaptiveProgram as unknown as Record<string, unknown>).trainingPathType || 'not set',
+   325:     })
+   326:     
+   327:     return {
+   328:       goalLabel: adaptiveProgram.goalLabel,
+   329:       daysPerWeek: adaptiveProgram.trainingDaysPerWeek,
+>> 330:       sessionLength: adaptiveProgram.sessionLength,
+   331:       createdAt: adaptiveProgram.createdAt,
+   332:       hasData: true,
+   333:       // TASK C FIX: Additional derived fields
+   334:       programName,
+   335:       weeklyStructure,
+   336:       nextSessionFocus,
+   337:       secondaryGoal: adaptiveProgram.secondaryGoal || null,
+   338:       scheduleMode: adaptiveProgram.scheduleMode || null,
+   339:       // TASK C FIX: Access sessionDurationMode safely (may not be typed but is set at runtime)
+   340:       // [DASHBOARD-SERVICE-LEGACY-FIELD-BRIDGE] same bridge pattern.
+   341:       sessionDurationMode: (adaptiveProgram as unknown as Record<string, unknown>).sessionDurationMode as string || null,
+   342:       // Program composition fields
+
+--- CONTEXT 004 | lib/dashboard-service.ts:372:5 | TS2322 ---
+lib/dashboard-service.ts(372,5): error TS2322: Type 'string | number' is not assignable to type 'number'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   360:       scheduleMode: null,
+   361:       sessionDurationMode: null,
+   362:       selectedSkills: null,
+   363:       trainingPathType: null,
+   364:       programRationale: null,
+   365:     }
+   366:   }
+   367:   
+   368:   // Legacy fallback - less rich data
+   369:   return {
+   370:     goalLabel: GOAL_LABELS[latestProgram.primaryGoal],
+   371:     daysPerWeek: latestProgram.trainingDaysPerWeek,
+>> 372:     sessionLength: latestProgram.sessionLength,
+   373:     createdAt: latestProgram.createdAt,
+   374:     hasData: true,
+   375:     programName: GOAL_LABELS[latestProgram.primaryGoal] + ' Program',
+   376:     weeklyStructure: `${latestProgram.trainingDaysPerWeek} days/week`,
+   377:     nextSessionFocus: null,
+   378:     secondaryGoal: null,
+   379:     scheduleMode: null,
+   380:     sessionDurationMode: null,
+   381:     selectedSkills: null,
+   382:     trainingPathType: null,
+   383:     programRationale: null,
+   384:   }
+
+--- CONTEXT 005 | lib/doctrine/doctrine-influence-contract.ts:509:33 | TS2345 ---
+lib/doctrine/doctrine-influence-contract.ts(509,33): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   497:   const hasDbProgression = runtimeContract?.doctrineCoverage?.progressionRuleCount ?? 0 > 0
+   498:   const hasDbMethod = runtimeContract?.doctrineCoverage?.methodRuleCount ?? 0 > 0
+   499:   const hasDbPrescription = runtimeContract?.doctrineCoverage?.prescriptionRuleCount ?? 0 > 0
+   500:   const hasDbCarryover = runtimeContract?.doctrineCoverage?.carryoverRuleCount ?? 0 > 0
+   501:   const hasDbExercise = runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0 > 0
+   502:   const hasDbContraindication = readiness.hasContraindicationRules
+   503:   
+   504:   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0
+   505:   const codeMethodAvailable = Object.keys(METHOD_PROFILES || {}).length > 0
+   506:   const codeSkillSupportAvailable = Object.keys(SKILL_SUPPORT_MAPPINGS || {}).length > 0
+   507:   
+   508:   return {
+>> 509:     progression: determineOwner(dbAvailable && hasDbProgression, codeDoctrineAvailable),
+   510:     contraindications: determineOwner(dbAvailable && hasDbContraindication, false),
+   511:     methodSelection: determineOwner(dbAvailable && hasDbMethod, codeMethodAvailable),
+   512:     carryover: determineOwner(dbAvailable && hasDbCarryover, codeSkillSupportAvailable),
+   513:     prescription: determineOwner(dbAvailable && hasDbPrescription, false),
+   514:     skillSupport: determineOwner(false, codeSkillSupportAvailable), // Always code for now
+   515:     exerciseSelection: determineOwner(dbAvailable && hasDbExercise, false),
+   516:   }
+   517: }
+   518: 
+   519: function determineOwner(dbHasData: boolean, codeHasData: boolean): SourceOwner {
+   520:   if (dbHasData && codeHasData) return 'merged'
+   521:   if (dbHasData) return 'db'
+
+--- CONTEXT 006 | lib/doctrine/doctrine-influence-contract.ts:511:37 | TS2345 ---
+lib/doctrine/doctrine-influence-contract.ts(511,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   499:   const hasDbPrescription = runtimeContract?.doctrineCoverage?.prescriptionRuleCount ?? 0 > 0
+   500:   const hasDbCarryover = runtimeContract?.doctrineCoverage?.carryoverRuleCount ?? 0 > 0
+   501:   const hasDbExercise = runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0 > 0
+   502:   const hasDbContraindication = readiness.hasContraindicationRules
+   503:   
+   504:   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0
+   505:   const codeMethodAvailable = Object.keys(METHOD_PROFILES || {}).length > 0
+   506:   const codeSkillSupportAvailable = Object.keys(SKILL_SUPPORT_MAPPINGS || {}).length > 0
+   507:   
+   508:   return {
+   509:     progression: determineOwner(dbAvailable && hasDbProgression, codeDoctrineAvailable),
+   510:     contraindications: determineOwner(dbAvailable && hasDbContraindication, false),
+>> 511:     methodSelection: determineOwner(dbAvailable && hasDbMethod, codeMethodAvailable),
+   512:     carryover: determineOwner(dbAvailable && hasDbCarryover, codeSkillSupportAvailable),
+   513:     prescription: determineOwner(dbAvailable && hasDbPrescription, false),
+   514:     skillSupport: determineOwner(false, codeSkillSupportAvailable), // Always code for now
+   515:     exerciseSelection: determineOwner(dbAvailable && hasDbExercise, false),
+   516:   }
+   517: }
+   518: 
+   519: function determineOwner(dbHasData: boolean, codeHasData: boolean): SourceOwner {
+   520:   if (dbHasData && codeHasData) return 'merged'
+   521:   if (dbHasData) return 'db'
+   522:   if (codeHasData) return 'code'
+   523:   return 'missing'
+
+--- CONTEXT 007 | lib/doctrine/doctrine-influence-contract.ts:512:31 | TS2345 ---
+lib/doctrine/doctrine-influence-contract.ts(512,31): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   500:   const hasDbCarryover = runtimeContract?.doctrineCoverage?.carryoverRuleCount ?? 0 > 0
+   501:   const hasDbExercise = runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0 > 0
+   502:   const hasDbContraindication = readiness.hasContraindicationRules
+   503:   
+   504:   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0
+   505:   const codeMethodAvailable = Object.keys(METHOD_PROFILES || {}).length > 0
+   506:   const codeSkillSupportAvailable = Object.keys(SKILL_SUPPORT_MAPPINGS || {}).length > 0
+   507:   
+   508:   return {
+   509:     progression: determineOwner(dbAvailable && hasDbProgression, codeDoctrineAvailable),
+   510:     contraindications: determineOwner(dbAvailable && hasDbContraindication, false),
+   511:     methodSelection: determineOwner(dbAvailable && hasDbMethod, codeMethodAvailable),
+>> 512:     carryover: determineOwner(dbAvailable && hasDbCarryover, codeSkillSupportAvailable),
+   513:     prescription: determineOwner(dbAvailable && hasDbPrescription, false),
+   514:     skillSupport: determineOwner(false, codeSkillSupportAvailable), // Always code for now
+   515:     exerciseSelection: determineOwner(dbAvailable && hasDbExercise, false),
+   516:   }
+   517: }
+   518: 
+   519: function determineOwner(dbHasData: boolean, codeHasData: boolean): SourceOwner {
+   520:   if (dbHasData && codeHasData) return 'merged'
+   521:   if (dbHasData) return 'db'
+   522:   if (codeHasData) return 'code'
+   523:   return 'missing'
+   524: }
+
+--- CONTEXT 008 | lib/doctrine/doctrine-influence-contract.ts:513:34 | TS2345 ---
+lib/doctrine/doctrine-influence-contract.ts(513,34): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   501:   const hasDbExercise = runtimeContract?.doctrineCoverage?.exerciseSelectionRuleCount ?? 0 > 0
+   502:   const hasDbContraindication = readiness.hasContraindicationRules
+   503:   
+   504:   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0
+   505:   const codeMethodAvailable = Object.keys(METHOD_PROFILES || {}).length > 0
+   506:   const codeSkillSupportAvailable = Object.keys(SKILL_SUPPORT_MAPPINGS || {}).length > 0
+   507:   
+   508:   return {
+   509:     progression: determineOwner(dbAvailable && hasDbProgression, codeDoctrineAvailable),
+   510:     contraindications: determineOwner(dbAvailable && hasDbContraindication, false),
+   511:     methodSelection: determineOwner(dbAvailable && hasDbMethod, codeMethodAvailable),
+   512:     carryover: determineOwner(dbAvailable && hasDbCarryover, codeSkillSupportAvailable),
+>> 513:     prescription: determineOwner(dbAvailable && hasDbPrescription, false),
+   514:     skillSupport: determineOwner(false, codeSkillSupportAvailable), // Always code for now
+   515:     exerciseSelection: determineOwner(dbAvailable && hasDbExercise, false),
+   516:   }
+   517: }
+   518: 
+   519: function determineOwner(dbHasData: boolean, codeHasData: boolean): SourceOwner {
+   520:   if (dbHasData && codeHasData) return 'merged'
+   521:   if (dbHasData) return 'db'
+   522:   if (codeHasData) return 'code'
+   523:   return 'missing'
+   524: }
+   525: 
+
+--- CONTEXT 009 | lib/doctrine/doctrine-influence-contract.ts:515:39 | TS2345 ---
+lib/doctrine/doctrine-influence-contract.ts(515,39): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   503:   
+   504:   const codeDoctrineAvailable = Object.keys(DOCTRINE_REGISTRY || {}).length > 0
+   505:   const codeMethodAvailable = Object.keys(METHOD_PROFILES || {}).length > 0
+   506:   const codeSkillSupportAvailable = Object.keys(SKILL_SUPPORT_MAPPINGS || {}).length > 0
+   507:   
+   508:   return {
+   509:     progression: determineOwner(dbAvailable && hasDbProgression, codeDoctrineAvailable),
+   510:     contraindications: determineOwner(dbAvailable && hasDbContraindication, false),
+   511:     methodSelection: determineOwner(dbAvailable && hasDbMethod, codeMethodAvailable),
+   512:     carryover: determineOwner(dbAvailable && hasDbCarryover, codeSkillSupportAvailable),
+   513:     prescription: determineOwner(dbAvailable && hasDbPrescription, false),
+   514:     skillSupport: determineOwner(false, codeSkillSupportAvailable), // Always code for now
+>> 515:     exerciseSelection: determineOwner(dbAvailable && hasDbExercise, false),
+   516:   }
+   517: }
+   518: 
+   519: function determineOwner(dbHasData: boolean, codeHasData: boolean): SourceOwner {
+   520:   if (dbHasData && codeHasData) return 'merged'
+   521:   if (dbHasData) return 'db'
+   522:   if (codeHasData) return 'code'
+   523:   return 'missing'
+   524: }
+   525: 
+   526: function buildMergedInfluence(
+   527:   athleteTruth: AthleteTruth,
+
+--- CONTEXT 010 | lib/onboarding-service.ts:276:7 | TS2367 ---
+lib/onboarding-service.ts(276,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"skill"' have no overlap.
+Hint: Remove/gate impossible comparison to `"skill"`, or map to current literal only if type truth is obvious.
+   264: 
+   265: const WELCOME_MESSAGES = {
+   266:   skill_beginner: "Welcome to SpartanLab! Your program is built to safely introduce skill work while building your foundation strength.",
+   267:   skill_intermediate: "Welcome to SpartanLab! Your program balances skill progression with accessory work for consistent advancement.",
+   268:   skill_advanced: "Welcome to SpartanLab! Your program is optimized for advanced skill work with intelligent volume management.",
+   269:   strength: "Welcome to SpartanLab! Your program focuses on building raw strength with progressive overload principles.",
+   270:   general: "Welcome to SpartanLab! Your balanced program covers strength, skills, and conditioning for overall fitness.",
+   271: }
+   272: 
+   273: function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
+   274:   const goal = profile.primaryGoal
+   275:   
+>> 276:   if (goal === 'skill') {
+   277:     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
+   278:   }
+   279:   
+   280:   if (goal === 'strength') {
+   281:     return WELCOME_MESSAGES.strength
+   282:   }
+   283:   
+   284:   return WELCOME_MESSAGES.general
+   285: }
+   286: 
+   287: // =============================================================================
+   288: // MAIN FUNCTIONS
+
+--- CONTEXT 011 | lib/onboarding-service.ts:280:7 | TS2367 ---
+lib/onboarding-service.ts(280,7): error TS2367: This comparison appears to be unintentional because the types 'PrimaryGoalType | null' and '"strength"' have no overlap.
+Hint: Remove/gate impossible comparison to `"strength"`, or map to current literal only if type truth is obvious.
+   268:   skill_advanced: "Welcome to SpartanLab! Your program is optimized for advanced skill work with intelligent volume management.",
+   269:   strength: "Welcome to SpartanLab! Your program focuses on building raw strength with progressive overload principles.",
+   270:   general: "Welcome to SpartanLab! Your balanced program covers strength, skills, and conditioning for overall fitness.",
+   271: }
+   272: 
+   273: function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: ExperienceLevel): string {
+   274:   const goal = profile.primaryGoal
+   275:   
+   276:   if (goal === 'skill') {
+   277:     return WELCOME_MESSAGES[`skill_${experienceLevel}`] || WELCOME_MESSAGES.skill_intermediate
+   278:   }
+   279:   
+>> 280:   if (goal === 'strength') {
+   281:     return WELCOME_MESSAGES.strength
+   282:   }
+   283:   
+   284:   return WELCOME_MESSAGES.general
+   285: }
+   286: 
+   287: // =============================================================================
+   288: // MAIN FUNCTIONS
+   289: // =============================================================================
+   290: 
+   291: /**
+   292:  * Generate the first program for a new user
+
+--- CONTEXT 012 | lib/onboarding-service.ts:512:7 | TS2345 ---
+lib/onboarding-service.ts(512,7): error TS2345: Argument of type '"canonical_profile"' is not assignable to parameter of type '"fallback" | "engine" | "profile"'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   500:       experienceLevel: programInputs.experienceLevel,
+   501:       selectedSkillsCount: programInputs.selectedSkills?.length || 0,
+   502:       scheduleMode: programInputs.scheduleMode,
+   503:       trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+   504:       sessionLength: programInputs.sessionLength,
+   505:       entrySource: entryResult.entry?.__entrySource,
+   506:     })
+   507:     
+   508:     // ENGINE PROOF: Verify schedule mode resolution
+   509:     verifyScheduleModeResolution(
+   510:       programInputs.scheduleMode || 'static',
+   511:       programInputs.trainingDaysPerWeek,
+>> 512:       'canonical_profile'
+   513:     )
+   514:     
+   515:     // PRODUCTION SAFETY: Verify flexible mode semantics are intact
+   516:     assertFlexibleModeIntact({
+   517:       scheduleMode: programInputs.scheduleMode,
+   518:       trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+   519:     })
+   520:     
+   521:     markStage('entry_to_inputs_done')
+   522:     
+   523:     // [PHASE 16C] Yield before heavy generation
+   524:     await yieldToMainThread('pre_generation')
+
+--- CONTEXT 013 | lib/onboarding-service.ts:597:54 | TS2345 ---
+lib/onboarding-service.ts(597,54): error TS2345: Argument of type 'AdaptiveProgram' is not assignable to parameter of type 'ProgramToValidate'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   585:     // TASK 6: Verify generated program focus matches canonical primary goal
+   586:     console.log('[OnboardingService] First program generated:', {
+   587:       programPrimaryGoal: program.primaryGoal,
+   588:       programGoalLabel: program.goalLabel,
+   589:       programSecondaryGoal: program.secondaryGoal || 'none',
+   590:       inputPrimaryGoal: programInputs.primaryGoal,
+   591:       inputSecondaryGoal: programInputs.secondaryGoal || 'none',
+   592:       goalMatch: program.primaryGoal === programInputs.primaryGoal,
+   593:     })
+   594:     
+   595:     markStage('db_validation_start')
+   596:     // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
+>> 597:     const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+   598:     if (!dbValidationPassed) {
+   599:       console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
+   600:     }
+   601:     markStage('db_validation_done')
+   602:     
+   603:     // ENGINE PROOF: Count DB-backed exercises
+   604:     const totalExercises = program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0
+   605:     verifyDbResolverUsed(totalExercises, totalExercises, false)
+   606:     
+   607:     markStage('shape_validation_start')
+   608:     // Validate generated program has minimum required shape before saving
+   609:     // CRITICAL: Check ALL sessions, not just existence, to prevent downstream crashes
+
+--- CONTEXT 014 | lib/onboarding-service.ts:661:7 | TS2322 ---
+lib/onboarding-service.ts(661,7): error TS2322: Type 'number' is not assignable to type 'TrainingDays'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   649:       }
+   650:       // Ensure required session fields exist with safe defaults
+   651:       if (typeof session.estimatedMinutes !== 'number') {
+   652:         session.estimatedMinutes = 45 // Safe default
+   653:       }
+   654:       if (typeof session.focusLabel !== 'string' || !session.focusLabel) {
+   655:         session.focusLabel = `Session ${i + 1}`
+   656:       }
+   657:     }
+   658:     
+   659:     // Ensure top-level fields used by downstream UI exist
+   660:     if (typeof program.trainingDaysPerWeek !== 'number') {
+>> 661:       program.trainingDaysPerWeek = program.sessions.length
+   662:     }
+   663:     if (typeof program.goalLabel !== 'string' || !program.goalLabel) {
+   664:       program.goalLabel = 'Strength Training'
+   665:     }
+   666:     
+   667:     markStage('shape_validation_done')
+   668:     console.log('[OnboardingService] Strict validation passed:', {
+   669:       sessions: program.sessions.length,
+   670:       trainingDaysPerWeek: program.trainingDaysPerWeek,
+   671:       goalLabel: program.goalLabel,
+   672:     })
+   673:     
+
+--- CONTEXT 015 | lib/performance-envelope-engine.ts:152:14 | TS2741 ---
+lib/performance-envelope-engine.ts(152,14): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; horizontal_pull: { baseThreshold: number; recoveryMultiplier: number; description: string; }; straight_arm_pull: { ...; }; ... 22 more ...; hypertrophy_accessory: { ...; }; }' but required in type 'Record<MovementFamily, { baseThreshold: number; recoveryMultiplier: number; description: string; }>'.
+Hint: Usually hard. Only include if missing fields are complete and obvious from local context.
+   140:   dataQualityScore: number // 0-1, based on logging completeness
+   141:   
+   142:   // Learning metadata
+   143:   lastUpdated: Date
+   144:   createdAt: Date
+   145:   updateCount: number // How many times this envelope has been updated
+   146: }
+   147: 
+   148: /**
+   149:  * Movement-family-specific fatigue thresholds
+   150:  * Straight-arm work typically has lower thresholds than bent-arm
+   151:  */
+>> 152: export const MOVEMENT_FAMILY_FATIGUE_DEFAULTS: Record<MovementFamily, {
+   153:   baseThreshold: number
+   154:   recoveryMultiplier: number
+   155:   description: string
+   156: }> = {
+   157:   vertical_pull: { baseThreshold: 45, recoveryMultiplier: 1.0, description: 'Moderate recovery needs' },
+   158:   horizontal_pull: { baseThreshold: 50, recoveryMultiplier: 0.9, description: 'Good recovery' },
+   159:   straight_arm_pull: { baseThreshold: 25, recoveryMultiplier: 1.4, description: 'High recovery needs - connective tissue stress' },
+   160:   vertical_push: { baseThreshold: 45, recoveryMultiplier: 1.0, description: 'Moderate recovery needs' },
+   161:   horizontal_push: { baseThreshold: 50, recoveryMultiplier: 0.9, description: 'Good recovery' },
+   162:   straight_arm_push: { baseThreshold: 20, recoveryMultiplier: 1.5, description: 'Very high recovery needs - shoulder/wrist stress' },
+   163:   dip_pattern: { baseThreshold: 50, recoveryMultiplier: 0.9, description: 'Good recovery' },
+   164:   squat_pattern: { baseThreshold: 55, recoveryMultiplier: 0.8, description: 'Low recovery needs' },
+
+--- CONTEXT 016 | lib/performance-envelope-engine.ts:1393:9 | TS2741 ---
+lib/performance-envelope-engine.ts(1393,9): error TS2741: Property 'barbell_hinge' is missing in type '{ vertical_pull: string; horizontal_pull: string; straight_arm_pull: string; vertical_push: string; horizontal_push: string; straight_arm_push: string; dip_pattern: string; squat_pattern: string; ... 17 more ...; hypertrophy_accessory: string; }' but required in type 'Record<MovementFamily, string>'.
+Hint: Usually hard. Only include if missing fields are complete and obvious from local context.
+   1381:       return `Your best response in ${familyLabel}: ${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax} reps.`
+   1382:     }
+   1383:   }
+   1384:   
+   1385:   // Default insight
+   1386:   return `${familyLabel}: ${Math.round(envelope.preferredWeeklyVolumeMin)}-${Math.round(envelope.preferredWeeklyVolumeMax)} weekly sets optimal.`
+   1387: }
+   1388: 
+   1389: /**
+   1390:  * Format movement family for display
+   1391:  */
+   1392: function formatMovementFamily(family: MovementFamily): string {
+>> 1393:   const labels: Record<MovementFamily, string> = {
+   1394:     vertical_pull: 'Vertical pulling',
+   1395:     horizontal_pull: 'Horizontal pulling',
+   1396:     straight_arm_pull: 'Straight-arm pulling',
+   1397:     vertical_push: 'Vertical pushing',
+   1398:     horizontal_push: 'Horizontal pushing',
+   1399:     straight_arm_push: 'Straight-arm pushing',
+   1400:     dip_pattern: 'Dip work',
+   1401:     squat_pattern: 'Squat work',
+   1402:     hinge_pattern: 'Hip hinge',
+   1403:     unilateral_leg: 'Single-leg work',
+   1404:     compression_core: 'Compression core',
+   1405:     anti_extension_core: 'Anti-extension core',
+
+--- CONTEXT 017 | lib/planner-truth-audit.ts:499:9 | TS2322 ---
+lib/planner-truth-audit.ts(499,9): error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   487:       } else if (!eligible) {
+   488:         absence = 'justified'
+   489:         blockingReason = eligibilityReason
+   490:       } else if (hasLoad) {
+   491:         absence = 'not_applicable'
+   492:       }
+   493:       
+   494:       details.push({
+   495:         exerciseId: ex.id || 'unknown',
+   496:         exerciseName: ex.name,
+   497:         wasEligible: eligible,
+   498:         eligibilityReason,
+>> 499:         weightedAppeared: hasLoad,
+   500:         prescribedLoad: hasLoad ? `+${ex.prescribedLoad!.load}${ex.prescribedLoad!.unit}` : null,
+   501:         blockingReason,
+   502:         absenceClassification: absence,
+   503:       })
+   504:     }
+   505:   }
+   506:   
+   507:   const overallScore = eligibleCount > 0 
+   508:     ? Math.round((actuallyAppeared / eligibleCount) * 100)
+   509:     : 100 // No eligible opportunities means no failure
+   510:   
+   511:   console.log('[planner-truth-audit] Weighted eligibility audit:', {
+
+--- CONTEXT 018 | lib/prescription-contract.ts:168:7 | TS2322 ---
+lib/prescription-contract.ts(168,7): error TS2322: Type '"add_reps"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   156:       max: 8,
+   157:       recommended: 5,
+   158:       unit: 'reps',
+   159:     },
+   160:     rest: { min: 120, max: 240, recommended: 180, unit: 'seconds' },
+   161:     intensity: {
+   162:       model: 'rpe',
+   163:       target: 8,
+   164:       range: [7, 9],
+   165:     },
+   166:     progression: {
+   167:       primary: 'add_weight',
+>> 168:       secondary: 'add_reps',
+   169:       thresholdToProgress: 'Complete top of rep range at RPE 7-8',
+   170:     },
+   171:     coachingNotes: [
+   172:       'Focus on strength-building rep ranges',
+   173:       'Full recovery between sets for quality',
+   174:       'Progress load when all sets complete cleanly',
+   175:     ],
+   176:   },
+   177:   
+   178:   bodyweight_strength: {
+   179:     mode: 'bodyweight_strength',
+   180:     sets: { min: 3, max: 4, recommended: 3 },
+
+--- CONTEXT 019 | lib/prescription-contract.ts:252:7 | TS2322 ---
+lib/prescription-contract.ts(252,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   240:       max: 45,
+   241:       recommended: 30,
+   242:       unit: 's hold',
+   243:     },
+   244:     rest: { min: 30, max: 60, recommended: 45, unit: 'seconds' },
+   245:     intensity: {
+   246:       model: 'hold_quality',
+   247:       target: 7,
+   248:       range: [6, 8],
+   249:     },
+   250:     progression: {
+   251:       primary: 'add_hold_time',
+>> 252:       secondary: 'progress_variation',
+   253:       thresholdToProgress: 'Hold 45s+ with solid compression',
+   254:     },
+   255:     coachingNotes: [
+   256:       'Core compression is foundational for all skills',
+   257:       'Maintain posterior pelvic tilt throughout',
+   258:       'Progress to harder positions when time exceeds 45s',
+   259:     ],
+   260:   },
+   261:   
+   262:   mobility_prep: {
+   263:     mode: 'mobility_prep',
+   264:     sets: { min: 1, max: 3, recommended: 2 },
+
+--- CONTEXT 020 | lib/prescription-contract.ts:280:7 | TS2322 ---
+lib/prescription-contract.ts(280,7): error TS2322: Type '"progress_variation"' is not assignable to type '"add_sets" | "reduce_rest" | "add_accessory" | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   268:       max: 60,
+   269:       recommended: 30,
+   270:       unit: 's hold',
+   271:     },
+   272:     rest: { min: 0, max: 30, recommended: 15, unit: 'seconds' },
+   273:     intensity: {
+   274:       model: 'hold_quality',
+   275:       target: 5,
+   276:       range: [4, 6],
+   277:     },
+   278:     progression: {
+   279:       primary: 'add_hold_time',
+>> 280:       secondary: 'progress_variation',
+   281:       thresholdToProgress: 'Comfortable at position for 60s',
+   282:     },
+   283:     coachingNotes: [
+   284:       'Prep work should not be fatiguing',
+   285:       'Focus on position and activation',
+   286:       'Move slowly and with control',
+   287:     ],
+   288:   },
+   289:   
+   290:   density_block: {
+   291:     mode: 'density_block',
+   292:     sets: { min: 1, max: 3, recommended: 2 },
+
+--- CONTEXT 021 | lib/program-history-versioning.ts:383:5 | TS2322 ---
+lib/program-history-versioning.ts(383,5): error TS2322: Type '"kg" | "lb"' is not assignable to type '"lbs" | "kg" | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   371:     weightedPullUpLoad: number
+   372:     weightedDipLoad: number
+   373:     frontLeverLevel: string
+   374:     plancheLevel: string
+   375:     muscleUpReadiness: string
+   376:     hspuLevel: string
+   377:     sleepQuality: string
+   378:     stressLevel: string
+   379:     recoveryConfidence: string
+   380:   }>
+   381:   return {
+   382:     bodyweight: _legacyProfile.bodyweight || undefined,
+>> 383:     weightUnit: _legacyProfile.weightUnit || 'kg',
+   384:     // Note: fallback values here are for snapshot display, not generation truth
+   385:     experienceLevel: program.experienceLevel || 'intermediate',
+   386:     // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
+   387:     // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+   388:     trainingDaysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
+   389:       ? (program.sessions?.length || 4)
+   390:       : (program.trainingDaysPerWeek || 4),  // Snapshot display only
+   391:     sessionLengthMinutes,
+   392:     equipmentAvailable: program.equipmentProfile?.available || [],
+   393:     jointCautions: profile?.jointCautions || [],
+   394:     primaryGoal: program.primaryGoal,
+   395:     secondaryGoal: undefined, // Not directly in AdaptiveProgram
+
+--- CONTEXT 022 | lib/program-history-versioning.ts:397:5 | TS2322 ---
+lib/program-history-versioning.ts(397,5): error TS2322: Type 'PullUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Hint: Use local numeric fallback only for scores/counts/metadata; otherwise guard.
+   385:     experienceLevel: program.experienceLevel || 'intermediate',
+   386:     // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
+   387:     // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+   388:     trainingDaysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
+   389:       ? (program.sessions?.length || 4)
+   390:       : (program.trainingDaysPerWeek || 4),  // Snapshot display only
+   391:     sessionLengthMinutes,
+   392:     equipmentAvailable: program.equipmentProfile?.available || [],
+   393:     jointCautions: profile?.jointCautions || [],
+   394:     primaryGoal: program.primaryGoal,
+   395:     secondaryGoal: undefined, // Not directly in AdaptiveProgram
+   396:     selectedSkills: _legacyProfile.skillInterests || [],
+>> 397:     pullUpMax: profile?.pullUpMax,
+   398:     pushUpMax: profile?.pushUpMax,
+   399:     dipMax: profile?.dipMax,
+   400:     weightedPullUpLoad: _legacyProfile.weightedPullUpLoad,
+   401:     weightedDipLoad: _legacyProfile.weightedDipLoad,
+   402:     frontLeverProgression: _legacyProfile.frontLeverLevel,
+   403:     plancheProgression: _legacyProfile.plancheLevel,
+   404:     muscleUpReadiness: _legacyProfile.muscleUpReadiness,
+   405:     hspuProgression: _legacyProfile.hspuLevel,
+   406:     sleepQuality: _legacyProfile.sleepQuality,
+   407:     stressLevel: _legacyProfile.stressLevel,
+   408:     recoveryConfidence: _legacyProfile.recoveryConfidence,
+   409:     
+
+--- CONTEXT 023 | lib/program-history-versioning.ts:398:5 | TS2322 ---
+lib/program-history-versioning.ts(398,5): error TS2322: Type 'PushUpCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Hint: Use local numeric fallback only for scores/counts/metadata; otherwise guard.
+   386:     // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
+   387:     // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+   388:     trainingDaysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
+   389:       ? (program.sessions?.length || 4)
+   390:       : (program.trainingDaysPerWeek || 4),  // Snapshot display only
+   391:     sessionLengthMinutes,
+   392:     equipmentAvailable: program.equipmentProfile?.available || [],
+   393:     jointCautions: profile?.jointCautions || [],
+   394:     primaryGoal: program.primaryGoal,
+   395:     secondaryGoal: undefined, // Not directly in AdaptiveProgram
+   396:     selectedSkills: _legacyProfile.skillInterests || [],
+   397:     pullUpMax: profile?.pullUpMax,
+>> 398:     pushUpMax: profile?.pushUpMax,
+   399:     dipMax: profile?.dipMax,
+   400:     weightedPullUpLoad: _legacyProfile.weightedPullUpLoad,
+   401:     weightedDipLoad: _legacyProfile.weightedDipLoad,
+   402:     frontLeverProgression: _legacyProfile.frontLeverLevel,
+   403:     plancheProgression: _legacyProfile.plancheLevel,
+   404:     muscleUpReadiness: _legacyProfile.muscleUpReadiness,
+   405:     hspuProgression: _legacyProfile.hspuLevel,
+   406:     sleepQuality: _legacyProfile.sleepQuality,
+   407:     stressLevel: _legacyProfile.stressLevel,
+   408:     recoveryConfidence: _legacyProfile.recoveryConfidence,
+   409:     
+   410:     // Hybrid strength fields (Phase 2)
+
+--- CONTEXT 024 | lib/program-history-versioning.ts:399:5 | TS2322 ---
+lib/program-history-versioning.ts(399,5): error TS2322: Type 'DipCapacity | null | undefined' is not assignable to type 'number | undefined'.
+Hint: Use local numeric fallback only for scores/counts/metadata; otherwise guard.
+   387:     // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+   388:     trainingDaysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
+   389:       ? (program.sessions?.length || 4)
+   390:       : (program.trainingDaysPerWeek || 4),  // Snapshot display only
+   391:     sessionLengthMinutes,
+   392:     equipmentAvailable: program.equipmentProfile?.available || [],
+   393:     jointCautions: profile?.jointCautions || [],
+   394:     primaryGoal: program.primaryGoal,
+   395:     secondaryGoal: undefined, // Not directly in AdaptiveProgram
+   396:     selectedSkills: _legacyProfile.skillInterests || [],
+   397:     pullUpMax: profile?.pullUpMax,
+   398:     pushUpMax: profile?.pushUpMax,
+>> 399:     dipMax: profile?.dipMax,
+   400:     weightedPullUpLoad: _legacyProfile.weightedPullUpLoad,
+   401:     weightedDipLoad: _legacyProfile.weightedDipLoad,
+   402:     frontLeverProgression: _legacyProfile.frontLeverLevel,
+   403:     plancheProgression: _legacyProfile.plancheLevel,
+   404:     muscleUpReadiness: _legacyProfile.muscleUpReadiness,
+   405:     hspuProgression: _legacyProfile.hspuLevel,
+   406:     sleepQuality: _legacyProfile.sleepQuality,
+   407:     stressLevel: _legacyProfile.stressLevel,
+   408:     recoveryConfidence: _legacyProfile.recoveryConfidence,
+   409:     
+   410:     // Hybrid strength fields (Phase 2)
+   411:     deadlift1RM: (profile as unknown as { deadlift1RM?: number })?.deadlift1RM,
+
+--- CONTEXT 025 | lib/program-history-versioning.ts:485:5 | TS2322 ---
+lib/program-history-versioning.ts(485,5): error TS2322: Type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets: number; reps: string; hold: string | undefined; rest: string | number | undefined; notes: string | undefined; }[]; }[]' is not assignable to type '{ dayNumber: number; dayLabel: string; focus: string; exercises: { exerciseId: string; exerciseName: string; category: string; sets?: number | undefined; reps?: string | undefined; hold?: string | undefined; rest?: string | undefined; notes?: string | undefined; }[]; }[]'.
+Hint: Use local numeric fallback only for scores/counts/metadata; otherwise guard.
+   473:     programName: program.goalLabel || `${program.primaryGoal || 'General'} Program`,
+   474:     // [ADAPTIVE BASELINE FIX] Use actual session count for flexible users
+   475:     // [PROGRAM-HISTORY-FLEXIBLE-COMPARE-NORMALIZED] same string projection.
+   476:     daysPerWeek: String(program.trainingDaysPerWeek) === 'flexible'
+   477:       ? sessions.length
+   478:       : (program.trainingDaysPerWeek || 4),  // Snapshot display fallback only
+   479:     sessionLengthMinutes: typeof program.sessionLength === 'number' 
+   480:       ? program.sessionLength 
+   481:       : parseInt(String(program.sessionLength)) || 60,  // Snapshot display fallback only
+   482:     // [PROGRAM-HISTORY-WEEKLY-STRUCTURE-PATTERN-NARROW] WeeklyStructure
+   483:     // dropped the legacy `pattern` field; read via runtime narrow.
+   484:     blockStructure: (program.structure as unknown as { pattern?: string } | null | undefined)?.pattern || undefined,
+>> 485:     days: sessions.map((session, index) => ({
+   486:       dayNumber: session.dayNumber || index + 1,
+   487:       dayLabel: session.dayLabel || `Day ${index + 1}`,
+   488:       focus: session.focus || session.focusLabel || 'General',
+   489:       // [PROGRAM-HISTORY-EXERCISE-LEGACY-FIELDS-NARROW] AdaptiveExercise
+   490:       // canonical fields are `repsOrTime` and `note`; the legacy
+   491:       // `reps`/`hold`/`rest`/`notes` are still on persisted shapes.
+   492:       exercises: (session.exercises || []).map(ex => {
+   493:         const legacy = ex as unknown as { reps?: number | string; hold?: string; rest?: string | number; notes?: string }
+   494:         return {
+   495:           exerciseId: ex.id,
+   496:           exerciseName: ex.name,
+   497:           category: ex.category || 'strength',
+
+--- CONTEXT 026 | lib/program-history-versioning.ts:600:40 | TS2339 ---
+lib/program-history-versioning.ts(600,40): error TS2339: Property 'pattern' does not exist on type 'WeeklyStructure'.
+Hint: Map/remove stale `pattern` using local code context. Do not add shared type fields.
+   588:     const input: CreateProgramHistoryInput = {
+   589:       userId,
+   590:       versionNumber,
+   591:       programName: program.goalLabel || `${program.primaryGoal} Program v${versionNumber}`,
+   592:       generationReason,
+   593:       reasonSummary,
+   594:       goalsSnapshot,
+   595:       athleteInputsSnapshot,
+   596:       programStructureSnapshot,
+   597:       primaryGoal: program.primaryGoal,
+   598:       trainingDaysPerWeek: program.trainingDaysPerWeek,
+   599:       sessionLengthMinutes,
+>> 600:       blockSummary: program.structure?.pattern || program.programRationale,
+   601:     }
+   602:     
+   603:     const newEntry = await createProgramHistoryEntry(input)
+   604:     
+   605:     if (!newEntry) {
+   606:       return {
+   607:         success: false,
+   608:         programHistoryId: null,
+   609:         versionNumber,
+   610:         reasonSummary,
+   611:         error: 'Failed to create program history entry',
+   612:       }
+
+--- CONTEXT 027 | lib/program-state.ts:105:9 | TS2322 ---
+lib/program-state.ts(105,9): error TS2322: Type 'string[]' is not assignable to type 'TrainingMethodPreference[]'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   93:   // --------------------------------------------------------------------------
+   94:   // PRIORITY 1 - Authoritative builder styledGroups
+   95:   // --------------------------------------------------------------------------
+   96:   // If the builder already computed styledGroups, PRESERVE them exactly.
+   97:   if (existingMeta.styledGroups && Array.isArray(existingMeta.styledGroups) && existingMeta.styledGroups.length > 0) {
+   98:     // Builder truth exists - preserve it intact, only ensure structural fields
+   99:     return {
+   100:       ...session,
+   101:       styleMetadata: {
+   102:         ...existingMeta,
+   103:         // Ensure these fields exist but don't overwrite builder values
+   104:         hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
+>> 105:         appliedMethods: existingMeta.appliedMethods ?? ['straight_sets'],
+   106:       },
+   107:     }
+   108:   }
+   109:   
+   110:   // --------------------------------------------------------------------------
+   111:   // [BUILDER-TRUTH-PRESERVATION / PRIORITY 2] Exercise-level grouped truth
+   112:   // --------------------------------------------------------------------------
+   113:   // Builder styledGroups may be missing from an older save or from an upstream
+   114:   // serialization path that dropped the style metadata, BUT the per-exercise
+   115:   // grouped authority fields (`blockId` / non-straight `method`) can still be
+   116:   // present on `session.exercises[]`. Converting those to fallback straight
+   117:   // groups is destructive: it transforms RECOVERABLE grouped truth into
+
+--- CONTEXT 028 | lib/program-state.ts:161:7 | TS2739 ---
+lib/program-state.ts(161,7): error TS2739: Type '{ hasSupersetsApplied: boolean; structureDescription: string; styledGroups?: { groupType: string; }[] | undefined; hasCircuitsApplied?: boolean | undefined; hasDensityApplied?: boolean | undefined; appliedMethods?: string[] | undefined; }' is missing the following properties from type '{ primaryStyle: TrainingMethodPreference; hasSupersetsApplied: boolean; hasCircuitsApplied: boolean; hasDensityApplied: boolean; hasClusterApplied?: boolean | undefined; ... 7 more ...; methodMaterializationSummary?: MethodMaterializationSummary | undefined; }': primaryStyle, rejectedMethods
+Hint: Usually hard. Only include if missing fields are complete and obvious from local context.
+   149:       setExec !== 'straight' &&
+   150:       setExec !== 'straight_sets'
+   151:     const hasBlockId = typeof ex?.blockId === 'string' && ex.blockId.length > 0
+   152:     return hasBlockId || methodIsNonStraight || setExecIsNonStraight
+   153:   })
+   154: 
+   155:   if (hasExerciseLevelGroupedTruth) {
+   156:     // Preserve exercise-level grouped truth intact. Only set safe structural
+   157:     // defaults on styleMetadata -- do NOT invent styledGroups, do NOT override
+   158:     // appliedMethods, do NOT act as a shadow builder.
+   159:     return {
+   160:       ...session,
+>> 161:       styleMetadata: {
+   162:         ...existingMeta,
+   163:         // Keep whatever the upstream metadata already said; never force false.
+   164:         hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
+   165:         // Do NOT default appliedMethods here -- leaving it undefined signals
+   166:         // "metadata incomplete, defer to exercise-level truth" to downstream
+   167:         // consumers. Overriding with ['straight_sets'] would lie about intent.
+   168:         structureDescription: existingMeta.structureDescription || '',
+   169:       },
+   170:     }
+   171:   }
+   172:   
+   173:   // --------------------------------------------------------------------------
+
+--- CONTEXT 029 | lib/program-state.ts:192:7 | TS2322 ---
+lib/program-state.ts(192,7): error TS2322: Type '{ id: string; groupType: "straight"; exercises: { id: string; name: string; }[]; }[]' is not assignable to type '{ id: string; groupType: "superset" | "circuit" | "density_block" | "cluster" | "straight"; exercises: { id: string; name: string; prefix?: string | undefined; trainingMethod: string; methodRationale: string; }[]; instruction: string; restProtocol: string; }[]'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   180:   // --------------------------------------------------------------------------
+   181:   const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
+   182:     id: `straight-${idx}`,
+   183:     groupType: 'straight' as const,
+   184:     exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
+   185:   }))
+   186:   
+   187:   return {
+   188:     ...session,
+   189:     styleMetadata: {
+   190:       ...existingMeta,
+   191:       hasSupersetsApplied: false,
+>> 192:       styledGroups: fallbackStyledGroups,
+   193:       appliedMethods: ['straight_sets'],
+   194:       structureDescription: existingMeta.structureDescription || '',
+   195:     },
+   196:   }
+   197: }
+   198: 
+   199: // =============================================================================
+   200: // REBUILD RESULT CONTRACT - TASK 1
+   201: // =============================================================================
+   202: // This contract provides truthful, structured results for every build attempt.
+   203: // It answers all 7 questions from the PR goal without ambiguity.
+   204: 
+
+--- CONTEXT 030 | lib/program-state.ts:1282:7 | TS2322 ---
+lib/program-state.ts(1282,7): error TS2322: Type '{ adaptationNotes: string[]; available: EquipmentType[]; hasFullSetup: boolean; missingCritical: EquipmentType[]; missing: never[]; } | undefined' is not assignable to type 'EquipmentProfile'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   1270:       },
+   1271:       structure: {
+   1272:         ...DEFAULT_STRUCTURE,
+   1273:         ...(program.structure || {}),
+   1274:       },
+   1275:       engineContext: program.engineContext ? {
+   1276:         ...DEFAULT_ENGINE_CONTEXT,
+   1277:         ...program.engineContext,
+   1278:         recommendations: Array.isArray(program.engineContext.recommendations) 
+   1279:           ? program.engineContext.recommendations 
+   1280:           : [],
+   1281:       } : undefined,
+>> 1282:       equipmentProfile: program.equipmentProfile ? {
+   1283:         ...DEFAULT_EQUIPMENT_PROFILE,
+   1284:         ...program.equipmentProfile,
+   1285:         adaptationNotes: Array.isArray(program.equipmentProfile.adaptationNotes)
+   1286:           ? program.equipmentProfile.adaptationNotes
+   1287:           : [],
+   1288:       } : undefined,
+   1289:       
+   1290:     // [PHASE-X] Ensure sessions array exists and normalize each session
+   1291:     // This prevents downstream crashes from malformed session data
+   1292:     // [BUILDER-TRUTH-PRESERVATION] Preserve builder's grouped truth, don't rebuild
+   1293:       sessions: Array.isArray(program.sessions) 
+   1294:         ? program.sessions
+
+--- CONTEXT 031 | lib/program-state.ts:1421:7 | TS2322 ---
+lib/program-state.ts(1421,7): error TS2322: Type 'SafeSkillTrace | { readonly sourceSkillCount: 0; readonly weightedAllocationCount: 0; readonly primarySpineCount: 0; readonly secondaryAnchorCount: 0; readonly tertiaryCount: 0; ... 4 more ...; readonly finalWeekExpression: { ...; }; }' is not assignable to type 'SelectedSkillTraceContract | null | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   1409:           })
+   1410:         }
+   1411:         return preserved
+   1412:             })
+   1413:         : [],
+   1414:       
+   1415:       // ==========================================================================
+   1416:       // [CONTRACT NORMALIZATION] Ensure new truth contract fields always exist
+   1417:       // ==========================================================================
+   1418:       // These fields may be missing on older programs - provide safe defaults
+   1419:       
+   1420:       // selectedSkillTrace - Required for skill coverage display
+>> 1421:       selectedSkillTrace: program.selectedSkillTrace 
+   1422:         ? getSafeSkillTrace(program.selectedSkillTrace)
+   1423:         : EMPTY_SKILL_TRACE,
+   1424:       
+   1425:       // weeklyRepresentation - Required for schedule display  
+   1426:       weeklyRepresentation: program.weeklyRepresentation ?? {
+   1427:         sessions: [],
+   1428:         frequency: program.trainingDaysPerWeek ?? program.currentWeekFrequency ?? 4,
+   1429:         distribution: 'unknown',
+   1430:         weekNumber: 1,
+   1431:       },
+   1432:       
+   1433:       // [PROGRAM-STATE-MATERIAL-SKILL-INTENT-OWNER] Canonical
+
+--- CONTEXT 032 | lib/program-truth-extractor.ts:246:48 | TS2345 ---
+lib/program-truth-extractor.ts(246,48): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'Record<string, unknown>'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   234:     const isEmpty = Array.isArray(inputValue) ? inputValue.length === 0 : false
+   235:     if (!isEmpty) {
+   236:       return {
+   237:         field,
+   238:         status: 'present',
+   239:         value: inputValue,
+   240:         source: 'builder_inputs',
+   241:       }
+   242:     }
+   243:   }
+   244:   
+   245:   // Check profile
+>> 246:   const profileValue = profile ? getFieldValue(profile, field) : undefined
+   247:   if (profileValue !== undefined && profileValue !== null) {
+   248:     const isEmpty = Array.isArray(profileValue) ? profileValue.length === 0 : false
+   249:     if (!isEmpty) {
+   250:       return {
+   251:         field,
+   252:         status: 'present',
+   253:         value: profileValue,
+   254:         source: 'profile',
+   255:       }
+   256:     }
+   257:   }
+   258:   
+
+--- CONTEXT 033 | lib/program-truth-extractor.ts:325:5 | TS2322 ---
+lib/program-truth-extractor.ts(325,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   313: function buildNormalizedInputs(
+   314:   profile: CanonicalProgrammingProfile | null,
+   315:   inputs: Partial<AdaptiveProgramInputs> | null,
+   316:   presence: MaterialInputPresence[]
+   317: ): AdaptiveProgramInputs {
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+>> 325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+
+--- CONTEXT 034 | lib/program-truth-extractor.ts:326:5 | TS2322 ---
+lib/program-truth-extractor.ts(326,5): error TS2322: Type 'string | undefined' is not assignable to type 'PrimaryGoal | undefined'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   314:   profile: CanonicalProgrammingProfile | null,
+   315:   inputs: Partial<AdaptiveProgramInputs> | null,
+   316:   presence: MaterialInputPresence[]
+   317: ): AdaptiveProgramInputs {
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+>> 326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+
+--- CONTEXT 035 | lib/program-truth-extractor.ts:328:5 | TS2322 ---
+lib/program-truth-extractor.ts(328,5): error TS2322: Type 'string | undefined' is not assignable to type 'TrainingPathType | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   316:   presence: MaterialInputPresence[]
+   317: ): AdaptiveProgramInputs {
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+>> 328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+
+--- CONTEXT 036 | lib/program-truth-extractor.ts:330:5 | TS2322 ---
+lib/program-truth-extractor.ts(330,5): error TS2322: Type 'string' is not assignable to type 'ExperienceLevel'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   318:   // Helper to get resolved value
+   319:   const getValue = (field: string): unknown => {
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+>> 330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+
+--- CONTEXT 037 | lib/program-truth-extractor.ts:332:5 | TS2322 ---
+lib/program-truth-extractor.ts(332,5): error TS2322: Type 'number' is not assignable to type '"flexible" | TrainingDays'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   320:     const entry = presence.find(p => p.field === field)
+   321:     return entry?.value ?? DEFAULTS[field] ?? null
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+>> 332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+   343: // =============================================================================
+   344: 
+
+--- CONTEXT 038 | lib/program-truth-extractor.ts:334:5 | TS2322 ---
+lib/program-truth-extractor.ts(334,5): error TS2322: Type 'number' is not assignable to type 'SessionLength'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   322:   }
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+>> 334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+   335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+   343: // =============================================================================
+   344: 
+   345: function buildProfileSnapshot(
+   346:   profile: CanonicalProgrammingProfile | null
+
+--- CONTEXT 039 | lib/program-truth-extractor.ts:335:5 | TS2322 ---
+lib/program-truth-extractor.ts(335,5): error TS2322: Type 'string[]' is not assignable to type 'EquipmentType[]'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   323:   
+   324:   return {
+   325:     primaryGoal: getValue('primaryGoal') as string,
+   326:     secondaryGoal: getValue('secondaryGoal') as string | undefined,
+   327:     selectedSkills: (getValue('selectedSkills') as string[]) || [],
+   328:     trainingPathType: getValue('trainingPathType') as string | undefined,
+   329:     goalCategories: (getValue('goalCategories') as string[]) || [],
+   330:     experienceLevel: getValue('experienceLevel') as string,
+   331:     scheduleMode: (getValue('scheduleMode') as 'static' | 'flexible') || 'flexible',
+   332:     trainingDaysPerWeek: (getValue('trainingDaysPerWeek') as number) || 4,
+   333:     sessionDurationMode: (getValue('sessionDurationMode') as 'static' | 'adaptive') || 'adaptive',
+   334:     sessionLength: (getValue('sessionLengthMinutes') as number) || 60,
+>> 335:     equipment: (getValue('equipment') as string[]) || [],
+   336:     // Pass through any additional fields from inputs
+   337:     ...inputs,
+   338:   }
+   339: }
+   340: 
+   341: // =============================================================================
+   342: // PROFILE SNAPSHOT BUILDER
+   343: // =============================================================================
+   344: 
+   345: function buildProfileSnapshot(
+   346:   profile: CanonicalProgrammingProfile | null
+   347: ): Partial<CanonicalProgrammingProfile> {
+
+--- CONTEXT 040 | lib/program-truth-extractor.ts:487:7 | TS2353 ---
+lib/program-truth-extractor.ts(487,7): error TS2353: Object literal may only specify known properties, and 'authoritativeMultiSkillIntentContract' does not exist in type '{ identityPrimary: string | null; identitySecondary: string | null; identityLabel: string; selectedSkillsUsed: string[]; representedSkillsInWeek: string[]; underexpressedSkills: string[]; ... 30 more ...; dbTruthWinnerSummary?: { ...; } | ... 1 more ... | undefined; }'.
+Hint: Map/remove stale `authoritativeMultiSkillIntentContract` using local code context. Do not add shared type fields.
+   475: 
+   476:   return {
+   477:     ...program,
+   478:     truthExplanation: {
+   479:       ...explanation,
+   480:       generatedAt: new Date().toISOString(),
+   481:       triggerSource,
+   482:       // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
+   483:       materializationVerdict: program.materializationVerdict || null,
+   484:       // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
+   485:       dbTruthWinnerSummary,
+   486:       // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
+>> 487:       authoritativeMultiSkillIntentContract: authoritativeContract ? {
+   488:         selectedSkills: authoritativeContract.selectedSkills,
+   489:         primarySkill: authoritativeContract.primarySkill,
+   490:         secondarySkill: authoritativeContract.secondarySkill,
+   491:         supportSkills: authoritativeContract.supportSkills,
+   492:         deferredSkills: authoritativeContract.deferredSkills,
+   493:         materiallyExpressedSkills: authoritativeContract.materiallyExpressedSkills,
+   494:         reducedThisCycleSkills: authoritativeContract.reducedThisCycleSkills,
+   495:         skillPriorityOrder: authoritativeContract.skillPriorityOrder.map(s => ({
+   496:           skill: s.skill,
+   497:           role: s.role as 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred',
+   498:           priorityScore: s.priorityScore,
+   499:           exposureSessions: s.exposureSessions,
+
+--- CONTEXT 041 | lib/program-version-service.ts:339:7 | TS2322 ---
+lib/program-version-service.ts(339,7): error TS2322: Type '{ skill: SkillKey; currentLevel: number; readinessScore: number; limitingFactor: string | null; }[]' is not assignable to type '{ skill: string; currentLevel: string; readinessScore: number; limitingFactor: string | null; }[]'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   327:     athleteId,
+   328:     athleteProfileSnapshot: {
+   329:       primaryGoal: context.athlete.primaryGoal,
+   330:       secondaryGoals: context.athlete.secondaryGoals,
+   331:       trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+   332:       sessionDurationMinutes: context.athlete.sessionDurationMinutes,
+   333:       equipment: context.athlete.equipment,
+   334:       jointCautions: context.athlete.jointCautions,
+   335:       trainingAge: context.athlete.trainingAge,
+   336:       bodyWeight: context.athlete.weightKg,
+   337:     },
+   338:     skillStateSnapshot: {
+>> 339:       skills: context.skills.states.map(s => ({
+   340:         skill: s.skill,
+   341:         currentLevel: s.currentLevel,
+   342:         readinessScore: s.readinessScore || 50,
+   343:         limitingFactor: s.limitingFactor,
+   344:       })),
+   345:     },
+   346:     readinessSnapshot: context.skills.readinessBreakdown
+   347:       ? {
+   348:           overallReadiness: context.skills.readinessBreakdown.overallScore,
+   349:           pullStrengthScore: context.skills.readinessBreakdown.pullStrengthScore,
+   350:           pushStrengthScore: context.skills.readinessBreakdown.pushStrengthScore,
+   351:           compressionScore: context.skills.readinessBreakdown.compressionScore,
+
+--- CONTEXT 042 | lib/program-version-service.ts:650:5 | TS2322 ---
+lib/program-version-service.ts(650,5): error TS2322: Type 'string' is not assignable to type 'PrimaryGoal | undefined'.
+Hint: Validate/map scalar into target union only if union truth is known; otherwise block.
+   638:   }
+   639:   
+   640:   const newVersion = await createProgramVersion(
+   641:     athleteId,
+   642:     trigger.reason,
+   643:     summary,
+   644:     snapshotId
+   645:   )
+   646:   
+   647:   // Also create an entry in the program_history table for durable history
+   648:   // Build a minimal program-like object for the history versioning system
+   649:   const programForHistory: Partial<AdaptiveProgram> = {
+>> 650:     primaryGoal: context.athlete.primaryGoal,
+   651:     goalLabel: summary.primaryGoal,
+   652:     trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+   653:     sessionLengthMinutes: context.athlete.sessionDurationMinutes,
+   654:     sessionLength: context.athlete.sessionDurationMinutes,
+   655:     equipment: context.athlete.equipment,
+   656:     styleMode: context.athlete.trainingStyle,
+   657:     constraintFocus: context.constraints.primaryConstraint,
+   658:     primaryConstraint: context.constraints.primaryConstraint,
+   659:     experienceLevel: 'intermediate',
+   660:     sessions: [],
+   661:   }
+   662:   
+
+--- CONTEXT 043 | lib/program-version-service.ts:652:5 | TS2322 ---
+lib/program-version-service.ts(652,5): error TS2322: Type 'number' is not assignable to type 'TrainingDays | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   640:   const newVersion = await createProgramVersion(
+   641:     athleteId,
+   642:     trigger.reason,
+   643:     summary,
+   644:     snapshotId
+   645:   )
+   646:   
+   647:   // Also create an entry in the program_history table for durable history
+   648:   // Build a minimal program-like object for the history versioning system
+   649:   const programForHistory: Partial<AdaptiveProgram> = {
+   650:     primaryGoal: context.athlete.primaryGoal,
+   651:     goalLabel: summary.primaryGoal,
+>> 652:     trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+   653:     sessionLengthMinutes: context.athlete.sessionDurationMinutes,
+   654:     sessionLength: context.athlete.sessionDurationMinutes,
+   655:     equipment: context.athlete.equipment,
+   656:     styleMode: context.athlete.trainingStyle,
+   657:     constraintFocus: context.constraints.primaryConstraint,
+   658:     primaryConstraint: context.constraints.primaryConstraint,
+   659:     experienceLevel: 'intermediate',
+   660:     sessions: [],
+   661:   }
+   662:   
+   663:   try {
+   664:     await createHistoryVersion({
+
+--- CONTEXT 044 | lib/program-version-service.ts:654:5 | TS2322 ---
+lib/program-version-service.ts(654,5): error TS2322: Type 'number' is not assignable to type 'SessionLength | undefined'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   642:     trigger.reason,
+   643:     summary,
+   644:     snapshotId
+   645:   )
+   646:   
+   647:   // Also create an entry in the program_history table for durable history
+   648:   // Build a minimal program-like object for the history versioning system
+   649:   const programForHistory: Partial<AdaptiveProgram> = {
+   650:     primaryGoal: context.athlete.primaryGoal,
+   651:     goalLabel: summary.primaryGoal,
+   652:     trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+   653:     sessionLengthMinutes: context.athlete.sessionDurationMinutes,
+>> 654:     sessionLength: context.athlete.sessionDurationMinutes,
+   655:     equipment: context.athlete.equipment,
+   656:     styleMode: context.athlete.trainingStyle,
+   657:     constraintFocus: context.constraints.primaryConstraint,
+   658:     primaryConstraint: context.constraints.primaryConstraint,
+   659:     experienceLevel: 'intermediate',
+   660:     sessions: [],
+   661:   }
+   662:   
+   663:   try {
+   664:     await createHistoryVersion({
+   665:       userId: athleteId,
+   666:       program: programForHistory as AdaptiveProgram,
+
+--- CONTEXT 045 | lib/program/db-truth-scoring-bridge.ts:203:30 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(203,30): error TS18048: 'envelope.confidenceScore' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.confidenceScore`.
+   191:     // Check envelope data for tolerance signals
+   192:     const envelopes = bundle.performanceEnvelopes.byMovementFamily
+   193:     const families = Object.keys(envelopes)
+   194:     
+   195:     if (families.length > 0) {
+   196:       let totalConfidence = 0
+   197:       let avgDensity = 0
+   198:       let count = 0
+   199:       
+   200:       for (const family of families) {
+   201:         const envelope = envelopes[family]
+   202:         if (envelope.confidenceScore !== null) {
+>> 203:           totalConfidence += envelope.confidenceScore
+   204:           count++
+   205:         }
+   206:         if (envelope.preferredDensityLevel) {
+   207:           avgDensity += envelope.preferredDensityLevel === 'high' ? 3 : 
+   208:                         envelope.preferredDensityLevel === 'medium' ? 2 : 1
+   209:         }
+   210:       }
+   211:       
+   212:       if (count > 0) {
+   213:         const avgConfidence = totalConfidence / count
+   214:         // High confidence envelopes allow more aggressive selection
+   215:         modifiers.toleranceModifier = avgConfidence > 0.7 ? 10 : 
+
+--- CONTEXT 046 | lib/program/db-truth-scoring-bridge.ts:399:33 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,33): error TS18048: 'envelope.preferredRepRangeMin' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.preferredRepRangeMin`.
+   387:   const sourceSections: string[] = []
+   388:   
+   389:   // 1. ENVELOPE-BASED CALIBRATION
+   390:   if (bundle.performanceEnvelopes.meta.available && movementFamily) {
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+   408:       
+   409:       // Density calibration
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+
+--- CONTEXT 047 | lib/program/db-truth-scoring-bridge.ts:399:65 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(399,65): error TS18048: 'envelope.preferredRepRangeMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `envelope.preferredRepRangeMax`.
+   387:   const sourceSections: string[] = []
+   388:   
+   389:   // 1. ENVELOPE-BASED CALIBRATION
+   390:   if (bundle.performanceEnvelopes.meta.available && movementFamily) {
+   391:     const envelope = bundle.performanceEnvelopes.byMovementFamily[movementFamily]
+   392:     
+   393:     if (envelope) {
+   394:       sourceSections.push('performance_envelopes')
+   395:       
+   396:       // Volume calibration from preferred rep ranges
+   397:       if (envelope.preferredRepRangeMin !== null && envelope.preferredRepRangeMax !== null) {
+   398:         // Adjust volume target based on envelope preference
+>> 399:         const envelopeCenter = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+   400:         const templateCenter = 8  // Typical template center
+   401:         const diff = envelopeCenter - templateCenter
+   402:         
+   403:         calibration.volumeModifier = Math.round((diff / templateCenter) * 100)
+   404:         calibration.volumeModifier = Math.max(-20, Math.min(20, calibration.volumeModifier))
+   405:         calibration.volumeConfidence = envelope.confidenceScore && envelope.confidenceScore > 0.6 ? 'medium' : 'low'
+   406:         calibration.volumeReason = `envelope_preferred_range_${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax}`
+   407:       }
+   408:       
+   409:       // Density calibration
+   410:       if (envelope.preferredDensityLevel) {
+   411:         calibration.densityAggression = envelope.preferredDensityLevel as 'conservative' | 'moderate' | 'aggressive'
+
+--- CONTEXT 048 | lib/program/db-truth-scoring-bridge.ts:454:49 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(454,49): error TS18048: 'strengthBenchmarks.pullUpMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `strengthBenchmarks.pullUpMax`.
+   442:       (strengthBenchmarks.pullUpMax && strengthBenchmarks.pullUpMax > 12) ||
+   443:       (strengthBenchmarks.dipMax && strengthBenchmarks.dipMax > 15) ||
+   444:       (strengthBenchmarks.weightedPullUpLoad && strengthBenchmarks.weightedPullUpLoad > 20)
+   445:     
+   446:     if (hasStrongBenchmarks) {
+   447:       // Strong benchmarks allow slightly higher intensity
+   448:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   449:       calibration.intensityConfidence = 'medium'
+   450:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   451:     }
+   452:     
+   453:     const hasWeakBenchmarks = 
+>> 454:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+   455:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   456:     
+   457:     if (hasWeakBenchmarks) {
+   458:       // Weak benchmarks = be conservative
+   459:       calibration.intensityModifier = -0.5
+   460:       calibration.intensityConfidence = 'medium'
+   461:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   462:       calibration.setsModifier = -1
+   463:       calibration.setsConfidence = 'low'
+   464:       calibration.setsReason = 'reduced_sets_for_developing_strength'
+   465:     }
+   466:   }
+
+--- CONTEXT 049 | lib/program/db-truth-scoring-bridge.ts:455:46 | TS18048 ---
+lib/program/db-truth-scoring-bridge.ts(455,46): error TS18048: 'strengthBenchmarks.dipMax' is possibly 'undefined'.
+Hint: Add local guard/optional chaining/fallback for `strengthBenchmarks.dipMax`.
+   443:       (strengthBenchmarks.dipMax && strengthBenchmarks.dipMax > 15) ||
+   444:       (strengthBenchmarks.weightedPullUpLoad && strengthBenchmarks.weightedPullUpLoad > 20)
+   445:     
+   446:     if (hasStrongBenchmarks) {
+   447:       // Strong benchmarks allow slightly higher intensity
+   448:       calibration.intensityModifier = 0.5  // +0.5 RPE target
+   449:       calibration.intensityConfidence = 'medium'
+   450:       calibration.intensityReason = 'strong_benchmarks_allow_higher_intensity'
+   451:     }
+   452:     
+   453:     const hasWeakBenchmarks = 
+   454:       (strengthBenchmarks.pullUpMax !== null && strengthBenchmarks.pullUpMax < 5) ||
+>> 455:       (strengthBenchmarks.dipMax !== null && strengthBenchmarks.dipMax < 5)
+   456:     
+   457:     if (hasWeakBenchmarks) {
+   458:       // Weak benchmarks = be conservative
+   459:       calibration.intensityModifier = -0.5
+   460:       calibration.intensityConfidence = 'medium'
+   461:       calibration.intensityReason = 'developing_benchmarks_need_conservative_intensity'
+   462:       calibration.setsModifier = -1
+   463:       calibration.setsConfidence = 'low'
+   464:       calibration.setsReason = 'reduced_sets_for_developing_strength'
+   465:     }
+   466:   }
+   467:   
+
+--- CONTEXT 050 | lib/program/skill-specific-truth-resolution.ts:347:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(347,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   335:   
+   336:   if (!bundle) {
+   337:     return defaultResponse
+   338:   }
+   339:   
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+>> 347:       response.volumeTolerance = envelope.confidenceScore
+   348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+   356:         response.recentTolerance = 'moderate'
+   357:       }
+   358:       
+   359:       response.confidence = bundle.performanceEnvelopes.meta.confidence
+
+--- CONTEXT 051 | lib/program/skill-specific-truth-resolution.ts:348:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(348,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   336:   if (!bundle) {
+   337:     return defaultResponse
+   338:   }
+   339:   
+   340:   const response = { ...defaultResponse }
+   341:   const affectedFamilies = PATTERN_TO_FAMILIES[pattern] || []
+   342:   
+   343:   // Check envelope data for pattern-specific tolerance
+   344:   if (bundle.performanceEnvelopes?.meta?.available) {
+   345:     const envelope = bundle.performanceEnvelopes.byMovementFamily[pattern]
+   346:     if (envelope) {
+   347:       response.volumeTolerance = envelope.confidenceScore
+>> 348:       response.intensityTolerance = envelope.confidenceScore
+   349:       
+   350:       // Determine tolerance signal from envelope
+   351:       if (envelope.performanceTrend === 'declining') {
+   352:         response.recentTolerance = 'poor'
+   353:       } else if (envelope.performanceTrend === 'improving') {
+   354:         response.recentTolerance = 'good'
+   355:       } else if (envelope.confidenceScore && envelope.confidenceScore > 0.6) {
+   356:         response.recentTolerance = 'moderate'
+   357:       }
+   358:       
+   359:       response.confidence = bundle.performanceEnvelopes.meta.confidence
+   360:     }
+
+--- CONTEXT 052 | lib/program/skill-specific-truth-resolution.ts:581:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(581,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   569:   const constraints = bundle.constraintHistory?.recentConstraintPatterns || []
+   570:   const familyStr = family.replace(/_/g, ' ')
+   571:   return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+>> 581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+
+--- CONTEXT 053 | lib/program/skill-specific-truth-resolution.ts:583:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(583,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   571:   return constraints.some(c => c.constraint.toLowerCase().includes(familyStr) || c.constraint.toLowerCase().includes('pain'))
+   572: }
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+>> 583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+
+--- CONTEXT 054 | lib/program/skill-specific-truth-resolution.ts:585:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(585,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   573: 
+   574: function extractHistoricalLevel(bundle: ProgrammingTruthBundle, family: SkillFamily): number | null {
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+>> 585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+
+--- CONTEXT 055 | lib/program/skill-specific-truth-resolution.ts:587:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(587,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   575:   const benchmarks = bundle.benchmarks
+   576:   if (!benchmarks?.meta?.available) return null
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+>> 587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+
+--- CONTEXT 056 | lib/program/skill-specific-truth-resolution.ts:589:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(589,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   577:   
+   578:   // Map family to benchmark field
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+>> 589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+   591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+   600:   // Check current earned state first (highest precedence)
+   601:   if (truth.currentEarnedState.progressScore !== null) {
+
+--- CONTEXT 057 | lib/program/skill-specific-truth-resolution.ts:591:7 | TS2322 ---
+lib/program/skill-specific-truth-resolution.ts(591,7): error TS2322: Type 'number | null | undefined' is not assignable to type 'number | null'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   579:   switch (family) {
+   580:     case 'front_lever':
+   581:       return benchmarks.skills.frontLeverHoldSeconds
+   582:     case 'planche':
+   583:       return benchmarks.skills.plancheHoldSeconds
+   584:     case 'l_sit':
+   585:       return benchmarks.skills.lSitHoldSeconds
+   586:     case 'v_sit':
+   587:       return benchmarks.skills.vSitHoldSeconds
+   588:     case 'weighted_pull':
+   589:       return benchmarks.strength.weightedPullUpLoad
+   590:     case 'weighted_dip':
+>> 591:       return benchmarks.strength.weightedDipLoad
+   592:     default:
+   593:       return null
+   594:   }
+   595: }
+   596: 
+   597: function resolveWithPrecedence(truth: SkillFamilyTruth): SkillFamilyTruth['resolved'] {
+   598:   // PRECEDENCE: CURRENT > RESPONSE > HISTORICAL > DEFAULT
+   599:   
+   600:   // Check current earned state first (highest precedence)
+   601:   if (truth.currentEarnedState.progressScore !== null) {
+   602:     const score = truth.currentEarnedState.progressScore
+   603:     
+
+--- CONTEXT 058 | lib/readiness/canonical-readiness-engine.ts:549:3 | TS2322 ---
+lib/readiness/canonical-readiness-engine.ts(549,3): error TS2322: Type '"moderate" | "strong" | "weak" | "very_strong"' is not assignable to type '"moderate" | "strong" | "weak"'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   537:         maxDips: input.maxDips ?? 0,
+   538:         wallHandstandHold: input.wallHandstandHold ?? 0,
+   539:         overheadPressStrength: input.overheadPressStrength ?? 'none',
+   540:         hasWall: input.hasWall ?? true,
+   541:         hasParallettes: input.hasParallettes ?? false,
+   542:       })
+   543:     
+   544:   case 'l_sit':
+   545:   return calculateLSitReadiness({
+   546:   maxDips: input.maxDips ?? 0,
+   547:   hollowHoldTime: input.hollowHoldTime ?? 0,
+   548:   toePointQuality: input.toePointQuality ?? 'moderate',
+>> 549:   hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
+   550:   hasParallettes: input.hasParallettes ?? false,
+   551:   hasFloor: input.hasFloor ?? true,
+   552:   })
+   553:   
+   554:   case 'v_sit':
+   555:   return calculateVSitReadiness({
+   556:   maxPushUps: input.maxPushUps ?? 0,
+   557:   maxDips: input.maxDips ?? 0,
+   558:   lSitHoldTime: input.lSitHoldTime ?? 0,
+   559:   hollowHoldTime: input.hollowHoldTime ?? 0,
+   560:   pikeCompressionQuality: input.pikeCompressionQuality ?? 'moderate',
+   561:   hamstringFlexibility: input.hamstringFlexibility ?? 'moderate',
+
+--- CONTEXT 059 | lib/readiness/canonical-readiness-engine.ts:658:9 | TS2741 ---
+lib/readiness/canonical-readiness-engine.ts(658,9): error TS2741: Property 'tendonTolerance' is missing in type '{ pullStrength: number; pushStrength: number; compression: number; scapularControl: number; straightArmStrength: number; shoulderStability: number; wristTolerance: number; mobility: number; explosivePower: number; skillSpecific: number; }' but required in type 'ReadinessComponentScores'.
+Hint: Usually hard. Only include if missing fields are complete and obvious from local context.
+   646:     primaryLimiter: primary,
+   647:     secondaryLimiter: secondary,
+   648:     strongAreas: strong,
+   649:     recommendation: raw.recommendation,
+   650:     nextProgression: raw.nextProgression,
+   651:     limitingFactorExplanation: raw.limitingFactorExplanation,
+   652:     suggestedProtocol: raw.suggestedProtocol,
+   653:   }
+   654: }
+   655: 
+   656: function buildComponentScores(skill: SkillType, breakdown: ScoreBreakdown[]): ReadinessComponentScores {
+   657:   const mapping = SKILL_COMPONENT_MAPPINGS[skill]
+>> 658:   const scores: ReadinessComponentScores = {
+   659:     pullStrength: 50,
+   660:     pushStrength: 50,
+   661:     compression: 50,
+   662:     scapularControl: 50,
+   663:     straightArmStrength: 50,
+   664:     shoulderStability: 50,
+   665:     wristTolerance: 50,
+   666:     mobility: 50,
+   667:     explosivePower: 50,
+   668:     skillSpecific: 50,
+   669:   }
+   670:   
+
+--- CONTEXT 060 | lib/readiness/canonical-readiness-engine.ts:1219:7 | TS2322 ---
+lib/readiness/canonical-readiness-engine.ts(1219,7): error TS2322: Type 'ReadinessLevel | "Building"' is not assignable to type 'ReadinessLevel'.
+Hint: Only patch if local shape fix is obvious from context; otherwise block.
+   1207:   
+   1208:   // Build workout focus label
+   1209:   const workoutFocus = LIMITING_FACTOR_LABELS[primaryLimiter] !== 'No Limiting Factor'
+   1210:     ? LIMITING_FACTOR_LABELS[primaryLimiter]
+   1211:     : sessionType === 'skill' ? 'Skill Practice'
+   1212:     : sessionType === 'strength' ? 'Strength Development'
+   1213:     : 'Balanced Training'
+   1214:   
+   1215:   return {
+   1216:     skillReadiness: {
+   1217:       primarySkill,
+   1218:       readinessScore: readinessResult?.overallScore || 0,
+>> 1219:       readinessLevel: readinessResult?.level || 'Building',
+   1220:       trend: 'unknown', // Would come from skill state service
+   1221:     },
+   1222:     primaryLimiter: {
+   1223:       factor: primaryLimiter,
+   1224:       label: LIMITING_FACTOR_LABELS[primaryLimiter],
+   1225:       score: readinessResult?.components 
+   1226:         ? 100 - Math.min(...Object.values(readinessResult.components))
+   1227:         : 0,
+   1228:       explanation: readinessResult 
+   1229:         ? getLimiterExplanation(readinessResult.skill, primaryLimiter)
+   1230:         : 'Continue building your training foundation.',
+   1231:     },
+

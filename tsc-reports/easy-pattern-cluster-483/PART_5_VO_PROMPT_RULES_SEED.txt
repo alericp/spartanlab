@@ -1,0 +1,7 @@
+===== PART 5 — VO PROMPT RULES SEED =====
+VO should not diagnose. VO should execute.
+Use selected repeated/easy targets only. No broad repo cleanup.
+No scripts. No reports. No package/schema/env/auth/billing/Prisma. No as any. No ts-ignore. No union widening. No adding stale fields to shared types.
+Use exact file/line/error/anchors. If line drifted, same file only, ±80 lines max. If not found, block and move.
+Do not inspect type owners unless the required type truth is included in the prompt. Defer investigation-heavy targets.
+Attempt every selected target unless blocked. Stop and commit after exact selected-target pass.

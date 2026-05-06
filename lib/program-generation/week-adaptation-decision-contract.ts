@@ -381,9 +381,18 @@ function buildAdherenceContext(input: WeekAdaptationInput): AdherenceContext {
   // Determine consistency status
   let consistencyStatus: 'stable' | 'mixed' | 'disrupted' = 'stable'
   if (consistency) {
-    if (consistency.isInConsistentStreak && consistency.currentStreak >= 3) {
+    // [CONSISTENCY-STATUS-LEGACY-BRIDGE] Canonical ConsistencyStatus
+    // dropped `isInConsistentStreak`, `currentStreak`, and `gapDays`;
+    // legacy persisted shapes still carry them. Bridge the read
+    // through a structural slice so the contract type stays narrow.
+    const legacyConsistency = consistency as unknown as {
+      isInConsistentStreak?: boolean
+      currentStreak?: number
+      gapDays?: number
+    }
+    if (Boolean(legacyConsistency.isInConsistentStreak) && (legacyConsistency.currentStreak ?? 0) >= 3) {
       consistencyStatus = 'stable'
-    } else if (missed >= 2 || consistency.gapDays >= 5) {
+    } else if (missed >= 2 || (legacyConsistency.gapDays ?? 0) >= 5) {
       consistencyStatus = 'disrupted'
     } else if (missed >= 1 || partial >= 1) {
       consistencyStatus = 'mixed'
@@ -555,7 +564,11 @@ function buildLoadStrategy(
   }
   
   // Advanced athletes with stable adherence can handle more
-  if (input.experienceLevel === 'advanced' || input.experienceLevel === 'elite') {
+  // [WEEK-ADAPT-EXPERIENCE-LITERAL-DROPPED] The canonical
+  // `experienceLevel` union is `'beginner' | 'intermediate' | 'advanced'`.
+  // The legacy `'elite'` literal was dropped from the union; the arm
+  // is now unreachable.
+  if (input.experienceLevel === 'advanced') {
     if (adherence.consistencyStatus === 'stable' && recovery.recoveryRisk === 'low') {
       // Don't override governor, but allow normal/elevated if not constrained
       if (strategy.finisherBias === 'normal') {

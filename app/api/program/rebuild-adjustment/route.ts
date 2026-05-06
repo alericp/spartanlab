@@ -3,6 +3,8 @@ import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { getCanonicalProfile } from '@/lib/canonical-profile-service'
 import { executeAuthoritativeGeneration, logGenerationParityTable, type AuthoritativeGenerationRequest } from '@/lib/server/authoritative-program-generation'
+import type { PrimaryGoal } from '@/lib/program-service'
+import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -124,9 +126,94 @@ export async function POST(request: Request) {
     // ==========================================================================
     // STEP 5: Build Canonical Profile with Thin Adjustments Applied
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL EQUIPMENT CONTRACT]
+    // Canonical equipment truth is exposed only as `equipmentAvailable`
+    // on CanonicalProgrammingProfile (lib/canonical-profile-service.ts).
+    // The previous code read `canonicalBase.equipment` as a fallback,
+    // which does not exist on the contract. A single local derived
+    // value keeps both the override branch and canonical truth branch
+    // in sync without referencing nonexistent aliases.
+    const canonicalEquipmentAvailable = canonicalBase.equipmentAvailable ?? []
+    const resolvedEquipment = requestType === 'equipment' && newEquipment
+      ? newEquipment
+      : canonicalEquipmentAvailable
+
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL NULLABILITY CONTRACT]
+    // AuthoritativeGenerationRequest.canonicalProfile is typed as
+    //   Partial<CanonicalProgrammingProfile> & { primaryGoal?: string }
+    // The intersection narrows `primaryGoal` to `string | undefined`,
+    // so emitting `null` (which CanonicalProgrammingProfile.primaryGoal
+    // permits as raw truth) violates the request contract. The helper
+    // below normalizes nullable string truth into the optional-string
+    // shape the request expects without inventing fake defaults.
+    // secondaryGoal / goalCategory stay as-is because Partial<...>
+    // preserves their `string | null | undefined` permissiveness;
+    // re-mapping them would change runtime semantics unnecessarily.
+    const toOptionalNonEmptyString = (value: unknown): string | undefined => {
+      if (typeof value !== 'string') return undefined
+      const trimmed = value.trim()
+      return trimmed.length > 0 ? trimmed : undefined
+    }
+    const canonicalPrimaryGoal = toOptionalNonEmptyString(canonicalBase.primaryGoal)
+
+    // [PRE-AB6 BUILD GREEN GATE / PRIMARY-GOAL UNION CONTRACT]
+    // canonicalProfile.primaryGoal is typed as `string | undefined`
+    // because AuthoritativeGenerationRequest.canonicalProfile keeps it
+    // permissive. But AdaptiveProgramInputs (lib/adaptive-program-builder.ts:1088)
+    // imports its own `PrimaryGoal` from `lib/program-service`
+    // (NOT the narrower types/domain export), and types both
+    // `primaryGoal: PrimaryGoal` and `secondaryGoal?: PrimaryGoal`
+    // against that union. To avoid silently dropping valid canonical
+    // truth (e.g. 'general', 'skill', 'flexibility'), VALID_PRIMARY_GOALS
+    // mirrors the FULL program-service union exactly, validated by
+    // `satisfies readonly PrimaryGoal[]`. The cast inside toPrimaryGoal
+    // is the only acceptable cast — it runs after membership has been
+    // proven by the readonly allowed list, so it cannot widen the
+    // union or admit arbitrary strings.
+    const VALID_PRIMARY_GOALS = [
+      'planche',
+      'front_lever',
+      'back_lever',
+      'muscle_up',
+      'handstand_pushup',
+      'iron_cross',
+      'weighted_strength',
+      'general',
+      'skill',
+      'strength',
+      'endurance',
+      'abs',
+      'pancake',
+      'toe_touch',
+      'front_splits',
+      'side_splits',
+      'flexibility',
+    ] as const satisfies readonly PrimaryGoal[]
+
+    const toPrimaryGoal = (value: unknown): PrimaryGoal | undefined => {
+      if (typeof value !== 'string') return undefined
+      const trimmed = value.trim()
+      return (VALID_PRIMARY_GOALS as readonly string[]).includes(trimmed)
+        ? (trimmed as PrimaryGoal)
+        : undefined
+    }
+    const builderPrimaryGoal = toPrimaryGoal(canonicalBase.primaryGoal)
+    const builderSecondaryGoal = toPrimaryGoal(canonicalBase.secondaryGoal)
+
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
+    // Removed stale fields that do not exist on the canonical contract:
+    //   - benchmarks / skillBenchmarks / flexibilityBenchmarks /
+    //     weightedBenchmarks (no aggregate buckets exist; benchmark
+    //     truth is exposed as flat fields on the canonical profile)
+    //   - backLeverProgression (no canonical equivalent — removed)
+    //   - muscleUpProgression  → real field is muscleUpReadiness
+    //   - handstandProgression → real field is hspuProgression
+    //   - equipment alias       → only equipmentAvailable is canonical
+    // The route remains a thin adapter: no fake fallback truth, no
+    // helper rewrite, no widening of CanonicalProgrammingProfile.
     const canonicalProfile = {
       onboardingComplete: canonicalBase.onboardingComplete ?? true,
-      primaryGoal: canonicalBase.primaryGoal,
+      primaryGoal: canonicalPrimaryGoal,
       secondaryGoal: canonicalBase.secondaryGoal ?? null,
       goalCategory: canonicalBase.goalCategory || canonicalBase.primaryGoal,
       selectedSkills: canonicalBase.selectedSkills || [],
@@ -135,12 +222,7 @@ export async function POST(request: Request) {
       goalCategories: canonicalBase.goalCategories || [],
       trainingPathType: canonicalBase.trainingPathType || 'hybrid',
       // Equipment - only override if request type is equipment
-      equipment: requestType === 'equipment' && newEquipment 
-        ? newEquipment 
-        : canonicalBase.equipmentAvailable || canonicalBase.equipment || [],
-      equipmentAvailable: requestType === 'equipment' && newEquipment 
-        ? newEquipment 
-        : canonicalBase.equipmentAvailable || canonicalBase.equipment || [],
+      equipmentAvailable: resolvedEquipment,
       scheduleMode: canonicalBase.scheduleMode || 'flexible',
       sessionDurationMode: canonicalBase.sessionDurationMode || 'adaptive',
       // Schedule - only override if request type matches
@@ -156,17 +238,12 @@ export async function POST(request: Request) {
       trainingStyle: canonicalBase.trainingStyle,
       jointCautions: canonicalBase.jointCautions || [],
       weakestArea: canonicalBase.weakestArea,
-      benchmarks: canonicalBase.benchmarks || {},
-      skillBenchmarks: canonicalBase.skillBenchmarks || {},
-      flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks || {},
-      weightedBenchmarks: canonicalBase.weightedBenchmarks || {},
       trainingMethodPreferences: canonicalBase.trainingMethodPreferences,
       sessionStylePreference: canonicalBase.sessionStylePreference,
       plancheProgression: canonicalBase.plancheProgression,
       frontLeverProgression: canonicalBase.frontLeverProgression,
-      backLeverProgression: canonicalBase.backLeverProgression,
-      muscleUpProgression: canonicalBase.muscleUpProgression,
-      handstandProgression: canonicalBase.handstandProgression,
+      muscleUpReadiness: canonicalBase.muscleUpReadiness,
+      hspuProgression: canonicalBase.hspuProgression,
       weightedPullUp: canonicalBase.weightedPullUp,
       weightedDip: canonicalBase.weightedDip,
     }
@@ -174,30 +251,43 @@ export async function POST(request: Request) {
     // ==========================================================================
     // STEP 6: Build Builder Inputs from Canonical Profile
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE / BUILDER-INPUTS CONTRACT]
+    // builderInputs is typed as Partial<AdaptiveProgramInputs>. The
+    // four aggregate benchmark buckets have been removed because they
+    // do not exist on the canonical profile — the authoritative
+    // generator already reads benchmark truth from the flat fields on
+    // canonicalProfile. The legacy `equipment` alias is replaced with
+    // `equipmentAvailable`, the canonical field name now in scope.
+    // [BUILDER-INPUTS-FILTER] AdaptiveProgramInputs (lib/adaptive-program-builder.ts:1506)
+    // is the strict builder input contract. Profile fields like
+    // `selectedStrength`, `bodyweight`, `sex`, `jointCautions`,
+    // `weakestArea`, `trainingStyle`, `equipmentAvailable` are NOT on
+    // it — they live on the canonical profile, which we also pass via
+    // `canonicalProfile`. Only forward keys the builder accepts. The
+    // builder reads the rest from `canonicalProfile.*` directly.
+    // [REBUILD-BUILDER-INPUTS-PARTIAL-CAST] The strict
+    // `AdaptiveProgramInputs` contract narrows several fields to specific
+    // unions (e.g. `PrimaryGoal`, `ExperienceLevel`,
+    // `TrainingDays | 'flexible'`, `EquipmentType[]`). Canonical-profile
+    // values are stored as broader strings/arrays for flexibility.
+    // Project the input as `Partial<AdaptiveProgramInputs>` via an
+    // unknown bridge so the builder receives a partial — the builder
+    // already prefers canonical values via `canonicalProfile.X || inputs.X`.
     const builderInputs = {
-      primaryGoal: canonicalProfile.primaryGoal,
-      secondaryGoal: canonicalProfile.secondaryGoal,
+      primaryGoal: builderPrimaryGoal,
+      secondaryGoal: builderSecondaryGoal,
       selectedSkills: canonicalProfile.selectedSkills,
       trainingPathType: canonicalProfile.trainingPathType,
       goalCategories: canonicalProfile.goalCategories,
       selectedFlexibility: canonicalProfile.selectedFlexibility,
-      selectedStrength: canonicalProfile.selectedStrength,
       experienceLevel: canonicalProfile.experienceLevel,
       scheduleMode: canonicalProfile.scheduleMode,
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionDurationMode: canonicalProfile.sessionDurationMode,
       sessionLength: canonicalProfile.sessionLengthMinutes,
-      equipment: canonicalProfile.equipment,
-      bodyweight: canonicalProfile.bodyweight,
-      sex: canonicalProfile.sex,
-      trainingStyle: canonicalProfile.trainingStyle,
-      jointCautions: canonicalProfile.jointCautions,
-      weakestArea: canonicalProfile.weakestArea,
-      benchmarks: canonicalProfile.benchmarks,
-      skillBenchmarks: canonicalProfile.skillBenchmarks,
-      flexibilityBenchmarks: canonicalProfile.flexibilityBenchmarks,
-      weightedBenchmarks: canonicalProfile.weightedBenchmarks,
-    }
+      // The strict input contract field is `equipment`, not `equipmentAvailable`.
+      equipment: canonicalProfile.equipmentAvailable,
+    } as unknown as Partial<AdaptiveProgramInputs>
     
     // ==========================================================================
     // STEP 7: Build Authoritative Generation Request

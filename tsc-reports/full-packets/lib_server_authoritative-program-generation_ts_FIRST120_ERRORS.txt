@@ -1,0 +1,53 @@
+lib/server/authoritative-program-generation.ts(346,35): error TS2339: Property 'goalCategories' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(347,37): error TS2339: Property 'trainingPathType' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(351,37): error TS2339: Property 'selectedStrength' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(352,40): error TS2339: Property 'selectedFlexibility' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(355,60): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(360,40): error TS2339: Property 'sessionDurationMode' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(366,31): error TS2339: Property 'bodyweight' does not exist on type 'Partial<AdaptiveProgramInputs>'.
+lib/server/authoritative-program-generation.ts(375,34): error TS2339: Property 'benchmarks' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(376,39): error TS2339: Property 'skillBenchmarks' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(377,45): error TS2339: Property 'flexibilityBenchmarks' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(378,42): error TS2339: Property 'weightedBenchmarks' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(391,44): error TS2339: Property 'backLeverProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(392,43): error TS2339: Property 'muscleUpProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(393,44): error TS2339: Property 'handstandProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(704,56): error TS2345: Argument of type 'CanonicalProgrammingProfile' is not assignable to parameter of type 'CalibrationProfile'.
+lib/server/authoritative-program-generation.ts(854,11): error TS2740: Type 'Record<string, unknown>' is missing the following properties from type 'ProfileSnapshot': snapshotId, createdAt, primaryGoal, secondaryGoal, and 7 more.
+lib/server/authoritative-program-generation.ts(1033,54): error TS2339: Property 'equipment' does not exist on type 'Partial<CanonicalProgrammingProfile> & { primaryGoal?: string | undefined; }'.
+lib/server/authoritative-program-generation.ts(1116,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1118,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+lib/server/authoritative-program-generation.ts(1124,7): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1125,7): error TS2345: Argument of type 'TriggerSource' is not assignable to parameter of type 'TruthTriggerSource'.
+lib/server/authoritative-program-generation.ts(1146,35): error TS2352: Conversion of type 'Record<string, unknown>' to type 'CanonicalProgrammingProfile' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(1230,69): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1231,63): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1232,58): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1233,52): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1236,59): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1236,107): error TS2339: Property 'oneRepMax' does not exist on type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; }'.
+lib/server/authoritative-program-generation.ts(1252,53): error TS2339: Property 'backLeverProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1253,53): error TS2339: Property 'handstandProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1254,52): error TS2339: Property 'muscleUpProgression' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1267,40): error TS2339: Property 'equipment' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1316,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+lib/server/authoritative-program-generation.ts(1317,7): error TS2322: Type '{ addedWeight: number; reps: number; unit?: "lbs" | "kg" | undefined; } | null' is not assignable to type 'number | null | undefined'.
+lib/server/authoritative-program-generation.ts(1318,45): error TS2339: Property 'pullUpCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1318,85): error TS2339: Property 'pullUps' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1319,42): error TS2339: Property 'dipCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1319,79): error TS2339: Property 'dips' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1320,47): error TS2339: Property 'wallHspuCapacity' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1320,89): error TS2339: Property 'wallHSPU' does not exist on type 'CanonicalProgrammingProfile'.
+lib/server/authoritative-program-generation.ts(1369,15): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1378,66): error TS2339: Property 'flexibilityIntegration' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/server/authoritative-program-generation.ts(1385,59): error TS2339: Property 'methodPackaging' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/server/authoritative-program-generation.ts(1392,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/server/authoritative-program-generation.ts(1393,66): error TS2339: Property 'visibleDifferenceTargets' does not exist on type '{ sourceVerdict: "FULL_TRUTH_AVAILABLE" | "PARTIAL_TRUTH_AVAILABLE" | "MINIMAL_TRUTH_FALLBACK"; builtFromTruth: boolean; generationContext: { complexity: "low" | "moderate" | "high"; primaryGoal: string; secondaryGoal: string | null; totalSelectedSkills: number; trainingDaysPerWeek: number; }; ... 8 more ...; genera...'.
+lib/server/authoritative-program-generation.ts(1394,73): error TS2339: Property 'doctrineInfluenceLevel' does not exist on type '{ currentWorkingCapCount: number; historicalCeilingBlockedCount: number; }'.
+lib/server/authoritative-program-generation.ts(1410,44): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1411,39): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(1412,35): error TS2339: Property 'architectureTruthSnapshot' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(2552,13): error TS2352: Conversion of type 'AdaptiveProgram' to type 'ReconcilableProgram' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+lib/server/authoritative-program-generation.ts(3156,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+lib/server/authoritative-program-generation.ts(3160,38): error TS2339: Property 'rebuildFailureSummary' does not exist on type 'AdaptiveProgram'.
+lib/server/authoritative-program-generation.ts(3264,5): error TS2322: Type '"1.0.0"' is not assignable to type '"1.1.0"'.

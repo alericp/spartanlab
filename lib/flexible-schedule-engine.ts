@@ -59,12 +59,18 @@
  */
 
 import type { 
-  PrimaryGoal, 
-  ExperienceLevel,
   JointCaution,
   RecoveryProfile,
 } from './athlete-profile'
 import { recordIntegrationProof } from './engine-integration-proof'
+
+// [ATHLETE-PROFILE-LOCAL-ALIAS] PrimaryGoal and ExperienceLevel are no
+// longer exported from athlete-profile under those names; the canonical
+// goal/experience identifiers live elsewhere. Define local string-based
+// aliases so this engine's local types stay self-contained without
+// re-exporting through athlete-profile.
+type PrimaryGoal = string
+type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced' | 'elite' | string
 
 // =============================================================================
 // TYPES
@@ -836,6 +842,16 @@ function createStaticWeekStructure(days: number): FlexibleWeekStructure {
     wasModifiedFromBaseline: false,
     isModifierBasedAdjustment: false,  // [PHASE 7] Static mode has no modifiers
     modificationSteps: [`Static mode: using ${days} days as configured`],
+    // [STATIC-ROOT-CAUSE-COMPLEXITY-FIELDS] FlexibleFrequencyRootCauseAudit
+    // requires complexity / push-pull / adaptive-duration audit fields.
+    // Static mode does not claim adaptive complexity, so seed all five
+    // with zero/false defaults so the contract is satisfied without
+    // overstating the static path.
+    complexityScore: 0,
+    complexityElevation: 0,
+    selectedSkillsCount: 0,
+    hasPushAndPullSkills: false,
+    hasAdaptiveSessionDuration: false,
   }
   
   return {
@@ -961,12 +977,9 @@ export function getEffectiveFrequency(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export type {
-  FlexibleFrequencyInput,
-  FlexibleWeekStructure,
-  WeeklyAdaptationInput,
-  WeeklyAdaptationResult,
-  FlexibleFrequencyReasonCategory,
-  FlexibleFrequencyRootCauseAudit,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All six types are declared with inline
+// `export interface ...` / `export type ...` at lines 87, 139, 156, 199,
+// 225, 234. The previous bottom `export type { ... }` block re-listed all
+// six and produced TS2484. Inline declarations remain the single canonical
+// export style; public API is unchanged.

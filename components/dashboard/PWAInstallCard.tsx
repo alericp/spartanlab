@@ -51,8 +51,14 @@ export function PWAInstallCard() {
         </button>
         
         <div className="flex items-start gap-3 mb-4">
+          {/* [PRE-AB6 BUILD GREEN GATE / SPARTANICON PROP CONTRACT]
+            SpartanIcon (components/brand/SpartanLogo.tsx:132) is typed as
+            `Omit<SpartanLogoProps, 'color'>` — `color` is intentionally
+            removed because the icon's SVG paths use hardcoded brand fills
+            (`#E6E9EF` helmet + `#C1121F` eye slit), NOT `currentColor`.
+            The wrapping div already supplies the red-tinted backdrop. */}
           <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 flex items-center justify-center flex-shrink-0">
-            <SpartanIcon size={24} color="#C1121F" />
+            <SpartanIcon size={24} />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#E6E9EF]">Install on iPhone/iPad</h3>

@@ -727,7 +727,11 @@ export function selectTrainingMethod(
 
   // RULE 4: Short sessions (20-30 min) = allow density finishers
   if ((sessionLength === '20-30' || sessionLength === '30-45') && isEndOfSession) {
-    if (compatibility.density && exerciseCategory !== 'skill') {
+    // [EXERCISE-CATEGORY-SKILL-NOT-IN-UNION] exerciseCategory is
+    // 'strength' | 'flexibility' | 'accessory' | 'core' | 'warmup' |
+    // 'cooldown' — there is no 'skill' literal in the union, so the
+    // legacy guard was unreachable. Drop it.
+    if (compatibility.density) {
       return {
         recommendedMethod: 'superset',
         alternativeMethods: ['density_block', 'emom'],
@@ -2013,6 +2017,32 @@ export interface StyledExerciseGroup {
   restProtocol: string
 }
 
+/**
+ * [PHASE 3G NEON-BACKED METHOD MATERIALITY] Per-method decision evidence
+ * payload. Documents the bundle confidence, which signals were available,
+ * and per-method outcomes (applied / rejected / deferred) with the drivers
+ * and blockers that caused each decision. Survives every persistence and
+ * reload boundary by riding on `SessionStyleResult.methodDecisionEvidence`
+ * and being copied verbatim into `session.styleMetadata.methodDecisionEvidence`.
+ *
+ * Optional on SessionStyleResult because the legacy preference-only happy
+ * path does not produce evidence yet; the catch-fallback corridor and any
+ * future bundle-aware happy path emit a fully-populated payload.
+ */
+export interface MethodDecisionEvidence {
+  bundleConfidence: 'none' | 'low' | 'medium' | 'high'
+  bundleSignalsAvailable: string[]
+  decisions: Array<{
+    method: TrainingMethodPreference
+    outcome: 'applied' | 'rejected' | 'deferred'
+    drivers: string[]
+    blockers: string[]
+    evidenceConfidence: 'none' | 'low' | 'medium' | 'high'
+    bundleSignalsConsumed: string[]
+  }>
+  bundleMateriallyChangedOutcome: boolean
+}
+
 export interface SessionStyleResult {
   styledGroups: StyledExerciseGroup[]
   appliedMethods: TrainingMethodPreference[]
@@ -2024,6 +2054,12 @@ export interface SessionStyleResult {
     hasDensityApplied: boolean
     structureDescription: string
   }
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Optional per-method evidence
+  // payload. Present in the catch-fallback corridor today; the legacy
+  // happy path may omit it. Builders that consume it MUST handle the
+  // optional / null case honestly — never invent decisions or claim bundle
+  // truth that does not exist.
+  methodDecisionEvidence?: MethodDecisionEvidence
 }
 
 /**
@@ -2331,7 +2367,11 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
         id: e.id,
         name: e.name,
         prefix: `${i + 1}`,
-        trainingMethod: 'circuit',
+        // [TRAINING-METHOD-CIRCUIT-MAP] TrainingMethod union does not
+        // include `'circuit'`; `density_block` is the closest existing
+        // literal for round-based, minimal-rest conditioning work and
+        // matches the rationale below.
+        trainingMethod: 'density_block',
         methodRationale: 'Circuit for conditioning and efficiency',
       })),
       instruction: 'Move through exercises with minimal rest, rest after completing round',

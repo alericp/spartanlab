@@ -194,7 +194,7 @@ function ProfileUpdateBannerInner() {
             <Button 
               size="sm" 
               className="bg-blue-500 hover:bg-blue-600 text-white font-medium"
-              onClick={handleUpdateProfile}
+              onClick={() => handleUpdateProfile()}
             >
               <RefreshCw className="w-3.5 h-3.5 mr-1" />
               Update Profile

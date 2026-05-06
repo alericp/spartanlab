@@ -63,9 +63,11 @@ export function validateSkillCoverage(skill: SkillType): CoverageValidationResul
   }
 
   // Check exercises exist
+  // [MOVEMENT-FAMILY-VS-SKILL-NO-OVERLAP] primaryFamily is a
+  // MovementFamily; skill is a SkillType — the unions don't overlap,
+  // so the legacy equality is structurally impossible.
   const skillExercises = Object.values(EXERCISE_CLASSIFICATIONS).filter(
-    ex => ex.skillCarryover?.includes(skill) || 
-           (ex.primaryFamily === skill) ||
+    ex => ex.skillCarryover?.includes(skill) ||
            ex.id.includes(skill.toLowerCase())
   )
 

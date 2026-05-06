@@ -235,7 +235,10 @@ function generateGlobalSpartanScoreLeaderboard(timeScope: LeaderboardTimeScope =
   // Add current user with their actual subscription tier
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] AthleteProfile does not own
+    // a `username` field — display identity in the canonical contract is
+    // implicit. Fall back to `'You'` for the current-user entry.
+    displayName: 'You',
     rank: 1,
     score: score,
     scoreLabel: `${score} pts`,
@@ -282,7 +285,8 @@ function generateConsistencyLeaderboard(): LeaderboardData {
   
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] same fallback as above.
+    displayName: 'You',
     rank: 1,
     score: currentUser.streak,
     scoreLabel: `${currentUser.streak} day streak`,
@@ -318,7 +322,8 @@ function generateSkillLeaderboard(skillKey: string): LeaderboardData {
   const levelName = skillLevelNames[currentSkillLevel] || `Level ${currentSkillLevel}`
   allEntries.push({
     userId: 'current-user',
-    displayName: profile?.username || 'You',
+    // [LEADERBOARD-DISPLAY-NAME-NO-USERNAME] same fallback as above.
+    displayName: 'You',
     rank: 1,
     score: currentSkillLevel,
     scoreLabel: levelName,
@@ -501,5 +506,13 @@ export function getMotivationalMessage(
 // EXPORTS
 // =============================================================================
 
+// [DUPLICATE-EXPORT-CONTRACT-FIX] `BestScopeResult` is declared with
+// inline `export interface ...` at line 398. The previous
+// `export type { BestScopeResult }` re-export here produced TS2484 and has
+// been removed.
+//
+// `LEADERBOARD_CATEGORIES`, `SKILL_LEVEL_NAMES`, `TIME_SCOPE_CONFIGS` are
+// IMPORTED (lines 11-13) from another module, not declared in this file.
+// This single-line re-export is their sole local export site and is kept
+// to preserve the public API surface that callers of this service rely on.
 export { LEADERBOARD_CATEGORIES, SKILL_LEVEL_NAMES, TIME_SCOPE_CONFIGS }
-export type { BestScopeResult }

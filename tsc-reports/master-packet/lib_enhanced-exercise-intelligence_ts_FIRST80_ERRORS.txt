@@ -1,0 +1,37 @@
+lib/enhanced-exercise-intelligence.ts(17,15): error TS2724: '"./exercise-classification-registry"' has no exported member named 'ExerciseClassification'. Did you mean 'getExerciseClassification'?
+lib/enhanced-exercise-intelligence.ts(154,14): error TS2323: Cannot redeclare exported variable 'ENHANCED_EXERCISE_PROFILES'.
+lib/enhanced-exercise-intelligence.ts(816,17): error TS2323: Cannot redeclare exported variable 'getEnhancedExerciseProfile'.
+lib/enhanced-exercise-intelligence.ts(836,17): error TS2323: Cannot redeclare exported variable 'checkContraindications'.
+lib/enhanced-exercise-intelligence.ts(883,17): error TS2323: Cannot redeclare exported variable 'getExercisesForUseCase'.
+lib/enhanced-exercise-intelligence.ts(904,17): error TS2323: Cannot redeclare exported variable 'getExercisesForWeakPoint'.
+lib/enhanced-exercise-intelligence.ts(933,17): error TS2323: Cannot redeclare exported variable 'generateWhyThisExercise'.
+lib/enhanced-exercise-intelligence.ts(1032,17): error TS2323: Cannot redeclare exported variable 'scoreSubstitution'.
+lib/enhanced-exercise-intelligence.ts(1159,17): error TS2323: Cannot redeclare exported variable 'generateOverrideWarning'.
+lib/enhanced-exercise-intelligence.ts(1224,17): error TS2323: Cannot redeclare exported variable 'getExercisesForProgressionNode'.
+lib/enhanced-exercise-intelligence.ts(1260,17): error TS2323: Cannot redeclare exported variable 'getPrerequisiteExercises'.
+lib/enhanced-exercise-intelligence.ts(1320,17): error TS2323: Cannot redeclare exported variable 'getWeightedExercisesForSkillTarget'.
+lib/enhanced-exercise-intelligence.ts(1373,17): error TS2323: Cannot redeclare exported variable 'generateWhyThisWeightedExercise'.
+lib/enhanced-exercise-intelligence.ts(1416,3): error TS2323: Cannot redeclare exported variable 'ENHANCED_EXERCISE_PROFILES'.
+lib/enhanced-exercise-intelligence.ts(1416,3): error TS2484: Export declaration conflicts with exported declaration of 'ENHANCED_EXERCISE_PROFILES'.
+lib/enhanced-exercise-intelligence.ts(1417,3): error TS2323: Cannot redeclare exported variable 'getEnhancedExerciseProfile'.
+lib/enhanced-exercise-intelligence.ts(1417,3): error TS2484: Export declaration conflicts with exported declaration of 'getEnhancedExerciseProfile'.
+lib/enhanced-exercise-intelligence.ts(1418,3): error TS2323: Cannot redeclare exported variable 'checkContraindications'.
+lib/enhanced-exercise-intelligence.ts(1418,3): error TS2484: Export declaration conflicts with exported declaration of 'checkContraindications'.
+lib/enhanced-exercise-intelligence.ts(1419,3): error TS2323: Cannot redeclare exported variable 'getExercisesForUseCase'.
+lib/enhanced-exercise-intelligence.ts(1419,3): error TS2484: Export declaration conflicts with exported declaration of 'getExercisesForUseCase'.
+lib/enhanced-exercise-intelligence.ts(1420,3): error TS2323: Cannot redeclare exported variable 'getExercisesForWeakPoint'.
+lib/enhanced-exercise-intelligence.ts(1420,3): error TS2484: Export declaration conflicts with exported declaration of 'getExercisesForWeakPoint'.
+lib/enhanced-exercise-intelligence.ts(1421,3): error TS2323: Cannot redeclare exported variable 'generateWhyThisExercise'.
+lib/enhanced-exercise-intelligence.ts(1421,3): error TS2484: Export declaration conflicts with exported declaration of 'generateWhyThisExercise'.
+lib/enhanced-exercise-intelligence.ts(1422,3): error TS2323: Cannot redeclare exported variable 'scoreSubstitution'.
+lib/enhanced-exercise-intelligence.ts(1422,3): error TS2484: Export declaration conflicts with exported declaration of 'scoreSubstitution'.
+lib/enhanced-exercise-intelligence.ts(1423,3): error TS2323: Cannot redeclare exported variable 'generateOverrideWarning'.
+lib/enhanced-exercise-intelligence.ts(1423,3): error TS2484: Export declaration conflicts with exported declaration of 'generateOverrideWarning'.
+lib/enhanced-exercise-intelligence.ts(1424,3): error TS2323: Cannot redeclare exported variable 'getExercisesForProgressionNode'.
+lib/enhanced-exercise-intelligence.ts(1424,3): error TS2484: Export declaration conflicts with exported declaration of 'getExercisesForProgressionNode'.
+lib/enhanced-exercise-intelligence.ts(1425,3): error TS2323: Cannot redeclare exported variable 'getPrerequisiteExercises'.
+lib/enhanced-exercise-intelligence.ts(1425,3): error TS2484: Export declaration conflicts with exported declaration of 'getPrerequisiteExercises'.
+lib/enhanced-exercise-intelligence.ts(1427,3): error TS2323: Cannot redeclare exported variable 'getWeightedExercisesForSkillTarget'.
+lib/enhanced-exercise-intelligence.ts(1427,3): error TS2484: Export declaration conflicts with exported declaration of 'getWeightedExercisesForSkillTarget'.
+lib/enhanced-exercise-intelligence.ts(1428,3): error TS2323: Cannot redeclare exported variable 'generateWhyThisWeightedExercise'.
+lib/enhanced-exercise-intelligence.ts(1428,3): error TS2484: Export declaration conflicts with exported declaration of 'generateWhyThisWeightedExercise'.

@@ -1042,12 +1042,10 @@ export function validateMateriality(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export type {
-  IdentityTruth,
-  HistoryTruth,
-  BottleneckTruth,
-  PersonalizationLevers,
-  ProvenanceAudit,
-  LeverProvenance,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All six interfaces (IdentityTruth,
+// HistoryTruth, BottleneckTruth, PersonalizationLevers, LeverProvenance,
+// ProvenanceAudit) are declared with inline `export interface ...` at lines
+// 34, 76, 106, 138, 240, 248. The previous bottom `export type { ... }`
+// block re-listed all six and produced TS2484. Inline `export interface`
+// remains the single canonical export style; public API is unchanged.

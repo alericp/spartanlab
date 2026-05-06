@@ -722,34 +722,70 @@ export interface MobilityActivationContext {
 export function generateIntelligentMobilityBlock(context: MobilityActivationContext): SessionBlock {
   try {
     // Convert to prehab context
+    // [INTELLIGENT-PREHAB-CONTEXT-CURRENT-SHAPE] PrehabGenerationContext
+    // expects plannedExercises/sessionDuration/skillGoals/hasRings/
+    // hasWeights/hasBands. Map session-length buckets to a numeric
+    // duration before calling into the prehab engine.
+    const sessionDuration =
+      typeof context.sessionLength === 'number'
+        ? context.sessionLength
+        : context.sessionLength === '10-20'
+          ? 20
+          : context.sessionLength === '20-30'
+            ? 30
+            : context.sessionLength === '30-45'
+              ? 45
+              : context.sessionLength === '45-60'
+                ? 60
+                : 75
+
     const prehabContext: IntelligentPrehabContext = {
-      mainExercises: context.mainExercises.map((ex, idx) => ({
+      plannedExercises: context.mainExercises.map((ex, idx) => ({
         id: `ex_${idx}`,
         name: ex.name,
-        category: ex.category as any,
-        movementPattern: ex.movementPattern as any,
-        primaryMuscles: ex.primaryMuscles,
+        isSkillWork: ex.category === 'skill',
+        isWeighted: ex.category === 'strength' || ex.category === 'weighted',
+        isExplosive: ex.movementPattern?.includes('explosive') ?? false,
       })),
-      sessionLength: context.sessionLength,
-      athleteWeakPoints: context.athleteWeakPoints,
-      sessionFocus: 'skill',
+      sessionDuration,
+      skillGoals: [],
+      hasRings: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('ring')
+      ),
+      hasWeights: context.mainExercises.some(ex =>
+        ex.category === 'weighted' ||
+        ex.category === 'strength' ||
+        ex.name.toLowerCase().includes('weighted')
+      ),
+      hasBands: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('band')
+      ),
     }
     
     // Generate intelligent prehab
     const prehabResult = generateIntelligentPrehab(prehabContext)
     
     // Return as mobility_activation block
+    // [INTELLIGENT-PREHAB-CURRENT-SHAPE] IntelligentPrehabResult exposes
+    // `preSession` / `weakPointAdjustments` / `adaptationNotes` /
+    // `totalPrepTime`. The legacy fields
+    // (`estimatedDuration`/`prehabExercises`/`primaryJointsFocused`/
+    // `weakPointAdaptations`) were renamed; map locally to the
+    // current shape.
     return {
       type: 'mobility_activation',
       name: 'Intelligent Joint Preparation',
-      durationMinutes: prehabResult.estimatedDuration,
-      exercises: prehabResult.prehabExercises.length,
+      durationMinutes: prehabResult.totalPrepTime,
+      exercises: prehabResult.preSession.exercises.length,
       intensity: 'low',
       restBetweenSets: [30, 45],
       notes: [
-        `Focused on: ${prehabResult.primaryJointsFocused.join(', ')}`,
-        ...prehabResult.weakPointAdaptations,
-        prehabResult.prehabExercises.map(ex => `${ex.name} - ${ex.prescription}`).join('; '),
+        `Focused on: ${prehabResult.preSession.prepFocus}`,
+        ...prehabResult.weakPointAdjustments,
+        ...prehabResult.adaptationNotes,
+        prehabResult.preSession.exercises
+          .map((ex: { name: string; prescription: string }) => `${ex.name} - ${ex.prescription}`)
+          .join('; '),
       ],
     }
   } catch (error) {

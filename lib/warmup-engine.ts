@@ -1164,53 +1164,94 @@ export async function generateIntelligentWarmup(
 ): Promise<GeneratedWarmUp> {
   try {
     // Build prehab context from warmup context
+    // [INTELLIGENT-PREHAB-CONTEXT-CURRENT-SHAPE] same migration as
+    // session-assembly-engine.
+    const sessionDuration =
+      typeof context.sessionLength === 'number'
+        ? context.sessionLength
+        : context.sessionLength === '10-20'
+          ? 20
+          : context.sessionLength === '20-30'
+            ? 30
+            : context.sessionLength === '30-45'
+              ? 45
+              : context.sessionLength === '45-60'
+                ? 60
+                : 75
+
+    // [WEIGHTED-EXERCISE-NAME-DETECT] ExerciseCategory does not include
+    // a `'weighted'` literal; legacy comparisons against it are dead.
+    // Detect weighted/loaded work by id/name keywords instead.
+    const isWeightedExercise = (ex: { id?: string; name?: string; category?: string }): boolean => {
+      const text = `${ex.id ?? ''} ${ex.name ?? ''}`.toLowerCase()
+      return text.includes('weighted') || text.includes('barbell') || text.includes('load')
+    }
+
     const prehabContext: IntelligentPrehabContext = {
-      mainExercises: context.mainExercises.map(ex => ({
+      plannedExercises: context.mainExercises.map(ex => ({
         id: ex.id,
         name: ex.name,
-        category: ex.category,
-        movementPattern: ex.movementPattern,
-        primaryMuscles: ex.primaryMuscles,
+        isSkillWork: ex.category === 'skill',
+        isWeighted: ex.category === 'strength' || isWeightedExercise(ex),
+        isExplosive: ex.movementPattern?.includes('explosive') ?? false,
       })),
-      sessionLength: context.sessionLength,
-      athleteWeakPoints,
-      sessionFocus: sessionFocus || 'skill',
+      sessionDuration,
+      skillGoals: [],
+      hasRings: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('ring')
+      ),
+      hasWeights: context.mainExercises.some(ex =>
+        ex.category === 'strength' || isWeightedExercise(ex)
+      ),
+      hasBands: context.mainExercises.some(ex =>
+        ex.name.toLowerCase().includes('band')
+      ),
     }
     
     // Get intelligent prehab recommendation
     const prehabResult = generateIntelligentPrehab(prehabContext)
     
     // Convert to warmup format for compatibility
+    // [INTELLIGENT-PREHAB-CURRENT-SHAPE] Same field rename as the
+    // session-assembly-engine boundary: project from
+    // `preSession.exercises` / `totalPrepTime` /
+    // `weakPointAdjustments` / `adaptationNotes`.
     return {
       block: {
         focus: 'skill' as const,
-        exercises: prehabResult.prehabExercises.map(ex => ({
-          id: ex.id,
+        exercises: prehabResult.preSession.exercises.map((ex: { name: string; prescription: string; note?: string; targetArea: string }) => ({
+          id: ex.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
           name: ex.name,
           phase: 'general' as const,
-          targetPattern: ex.targetJoints as MovementPattern[],
-          targetMuscles: [],
-          equipment: ex.equipment as EquipmentType[],
+          targetPattern: [],
+          targetMuscles: [ex.targetArea],
+          equipment: [],
           reps: ex.prescription,
-          notes: ex.rationale,
+          notes: ex.note,
           priority: 2,
           intensity: 'low' as const,
         })),
-        durationMinutes: prehabResult.estimatedDuration,
-        rationale: `Intelligent preparation targeting ${prehabResult.primaryJointsFocused.join(', ')}. ${prehabResult.weakPointAdaptations.join(' ')}`,
+        durationMinutes: prehabResult.totalPrepTime,
+        rationale: `Intelligent preparation targeting ${prehabResult.preSession.prepFocus}. ${[
+          ...prehabResult.weakPointAdjustments,
+          ...prehabResult.adaptationNotes,
+        ].join(' ')}`,
       },
-      exercises: prehabResult.prehabExercises.map(ex => ({
+      exercises: prehabResult.preSession.exercises.map((ex: { name: string; prescription: string; note?: string }) => ({
         name: ex.name,
         prescription: ex.prescription,
-        note: ex.rationale,
+        note: ex.note,
       })),
-      totalMinutes: prehabResult.estimatedDuration,
+      totalMinutes: prehabResult.totalPrepTime,
       focusLabel: 'Session-Specific Preparation',
     }
   } catch (error) {
-    // Fallback to standard warmup if prehab fails
+    // [STANDARD-WARMUP-FALLBACK-RENAME] `generateStandardWarmup` was
+    // removed; the canonical generic warm-up generator is
+    // `generateWarmUp` (capital U), which returns `GeneratedWarmUp`
+    // matching this function's return type.
     console.warn('[warmup-engine] Falling back to standard warmup:', error)
-    return generateStandardWarmup(context)
+    return generateWarmUp(context)
   }
 }
 

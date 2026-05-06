@@ -669,7 +669,7 @@ function buildDerivedSignals(
     constraintInformedSelection,
     meta: {
       source: 'derived_from_available',
-      confidence: dosageConfidence === 'none' && progressionConfidence === 'none' ? 'low' : 'medium',
+      confidence: dosageConfidence === 'low' && progressionConfidence === 'low' ? 'low' : 'medium',
       available: true,
     },
   }

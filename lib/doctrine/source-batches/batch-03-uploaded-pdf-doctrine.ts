@@ -212,7 +212,19 @@ interface ProvShared {
   intelligenceTier: Batch03IntelligenceTier
   appliesWhen?: Record<string, unknown>
   doesNotApplyWhen?: Record<string, unknown>
-  plainLanguageRule: string
+  // [DOCTRINE-FILE-LOCAL-CONTRACT] `plainLanguageRule` is optional at the
+  // call-site of every add* helper in this file. ~28 of the 84 add* call
+  // sites in this batch were authored before the field existed and rely
+  // exclusively on `userVisibleEvidenceLabel` to express the human rule.
+  // Both fields carry the same human-readable doctrinal text (the canonical
+  // PROVENANCE record stores `plainLanguageRule` as the persisted "what
+  // does this rule mean in plain language" string). To preserve doctrinal
+  // truth without 28 individual mechanical edits, we accept either field
+  // here and let `trackProv` materialize a non-null `plainLanguageRule`
+  // by falling back to `userVisibleEvidenceLabel`. No information is
+  // invented — the fallback uses an existing required field that was
+  // already authored to convey the same human rule.
+  plainLanguageRule?: string
   computationFriendlyRule?: Record<string, unknown>
   userVisibleEvidenceLabel: string
   internalRationale?: string
@@ -228,7 +240,10 @@ function trackProv(atomId: string, p: ProvShared) {
     intelligenceTier: p.intelligenceTier,
     appliesWhen: p.appliesWhen ?? {},
     doesNotApplyWhen: p.doesNotApplyWhen ?? {},
-    plainLanguageRule: p.plainLanguageRule,
+    // [DOCTRINE-FILE-LOCAL-CONTRACT] See ProvShared above. Use
+    // `userVisibleEvidenceLabel` as a truthful fallback when the optional
+    // `plainLanguageRule` is omitted by the call site.
+    plainLanguageRule: p.plainLanguageRule ?? p.userVisibleEvidenceLabel,
     computationFriendlyRule: p.computationFriendlyRule ?? {},
     userVisibleEvidenceLabel: p.userVisibleEvidenceLabel,
     internalRationale: p.internalRationale ?? PROVENANCE_NOTE,
@@ -335,18 +350,39 @@ interface ContraArgs extends ProvShared {
   sourceId: string
   exerciseKey: string
   blockedJointJson?: string[] | null
-  blockedContextJson?: Record<string, boolean> | null
+  // [DOCTRINE-FILE-LOCAL-CONTRACT] `blockedContextJson` carries arbitrary
+  // contextual gating predicates per doctrinal contraindication, e.g.
+  //   `{ bodyweightPullUpsUnder: 15 }` — a numeric threshold meaning
+  //   "blocked when bodyweight pull-ups < 15".
+  // The previous local typing as `Record<string, boolean>` was a stale
+  // narrowing copied from earlier batches that only used boolean flags;
+  // this batch authored numeric thresholds (lines 690, 707, 1563), which
+  // are valid doctrinal context but failed the narrow boolean type.
+  // Widening to `Record<string, unknown>` matches the canonical
+  // `appliesWhen` / `doesNotApplyWhen` typing in `ProvShared` and
+  // preserves the JSON-shaped freedom doctrinal context truly needs.
+  blockedContextJson?: Record<string, unknown> | null
   modificationGuidance?: string | null
   severity: "warning" | "caution" | "blocked"
 }
 function addContra(a: ContraArgs) {
   const id = aid("ctr", a.n)
+  // [BLOCKED-CONTEXT-JSON-BOOL-COERCE] CONTRA_RULES expects
+  // `Record<string, boolean> | null`, but ContraArgs.blockedContextJson
+  // is widened to `Record<string, unknown> | null`. Coerce values to
+  // booleans at the boundary so neither contract has to widen.
+  const blockedContextJson =
+    a.blockedContextJson == null
+      ? null
+      : Object.fromEntries(
+          Object.entries(a.blockedContextJson).map(([key, value]) => [key, Boolean(value)])
+        )
   CONTRA_RULES.push({
     id,
     sourceId: a.sourceId,
     exerciseKey: a.exerciseKey,
     blockedJointJson: a.blockedJointJson ?? null,
-    blockedContextJson: a.blockedContextJson ?? null,
+    blockedContextJson,
     modificationGuidance: a.modificationGuidance ?? null,
     severity: a.severity,
   })

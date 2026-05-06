@@ -20,6 +20,21 @@ interface ProgressSignal {
   color: string
 }
 
+// [PRE-AB6 BUILD GREEN GATE / WORKOUTLOG TIMESTAMP CONTRACT]
+// WorkoutLog (lib/workout-log-service.ts:40) exposes `sessionDate: string`
+// and `createdAt: string` — there is no `date` field. Resolve a usable
+// timestamp from real fields only, falling back from the user-perceived
+// session date to the storage createdAt, and skip when neither parses.
+type DashboardWorkoutLog = ReturnType<typeof getWorkoutLogs>[number]
+
+function getWorkoutLogTime(log: DashboardWorkoutLog): number | null {
+  const rawDate = log.sessionDate ?? log.createdAt
+  if (!rawDate) return null
+
+  const time = new Date(rawDate).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
 function generateProgressSignals(): ProgressSignal[] {
   const signals: ProgressSignal[] = []
   
@@ -49,12 +64,25 @@ function generateProgressSignals(): ProgressSignal[] {
     }
     
     // Check strength progress
-    if (strengthRecords && Object.keys(strengthRecords).length > 0) {
-      const pullRecords = strengthRecords.weighted_pullup || strengthRecords.pullup
-      if (pullRecords && pullRecords.length >= 2) {
+    // [PRE-AB6 BUILD GREEN GATE / STRENGTHRECORD ARRAY CONTRACT]
+    // getStrengthRecords() returns StrengthRecord[] (lib/strength-service.ts:189),
+    // not an object map. The authoritative StrengthRecord shape (lib/strength-service.ts:29)
+    // owns { exercise, weightAdded, reps, estimatedOneRM, dateLogged, ... } —
+    // no `value` field, no object keys. The only pull-related ExerciseType is
+    // 'weighted_pull_up' (lib/strength-service.ts:5). Filter as an array, sort
+    // newest-first by dateLogged, and compare via estimatedOneRM.
+    if (strengthRecords.length > 0) {
+      const pullRecords = strengthRecords
+        .filter((record) => record.exercise === 'weighted_pull_up')
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
+        )
+      if (pullRecords.length >= 2) {
         const recent = pullRecords[0]
         const previous = pullRecords[1]
-        if (recent.value > previous.value) {
+        if (recent.estimatedOneRM > previous.estimatedOneRM) {
           signals.push({
             id: 'pull_strength',
             icon: TrendingUp,
@@ -80,17 +108,21 @@ function generateProgressSignals(): ProgressSignal[] {
     // Recovery signal (based on training frequency)
     if (workoutLogs.length >= 2) {
       const lastTwo = workoutLogs.slice(0, 2)
-      const daysBetween = Math.abs(
-        (new Date(lastTwo[0].date).getTime() - new Date(lastTwo[1].date).getTime()) / (1000 * 60 * 60 * 24)
-      )
-      if (daysBetween >= 1 && daysBetween <= 3) {
-        signals.push({
-          id: 'recovery',
-          icon: Shield,
-          message: 'Recovery balanced',
-          type: 'positive',
-          color: 'text-purple-400',
-        })
+      const firstTime = getWorkoutLogTime(lastTwo[0])
+      const secondTime = getWorkoutLogTime(lastTwo[1])
+
+      if (firstTime !== null && secondTime !== null) {
+        const daysBetween = Math.abs((firstTime - secondTime) / (1000 * 60 * 60 * 24))
+
+        if (daysBetween >= 1 && daysBetween <= 3) {
+          signals.push({
+            id: 'recovery',
+            icon: Shield,
+            message: 'Recovery balanced',
+            type: 'positive',
+            color: 'text-purple-400',
+          })
+        }
       }
     }
     

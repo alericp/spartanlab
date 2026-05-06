@@ -1031,36 +1031,13 @@ export function getConservativeEstimates(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  // Core functions
-  createBenchmark,
-  getLatestBenchmark,
-  getUserBenchmarks,
-  getBenchmarkHistory,
-  getBenchmarksByFamily,
-  
-  // Test definitions
-  getBaselineTests,
-  getEssentialBaselineTests,
-  getTestsForSkill,
-  
-  // Progress triggers
-  getProgressTestTriggers,
-  
-  // Plateau detection
-  detectPlateauFromHistory,
-  
-  // Trend analysis
-  analyzeBenchmarkTrend,
-  getAllBenchmarkTrends,
-  
-  // Feedback
-  generateProgressFeedback,
-  
-  // Integrations
-  calculateReadinessAdjustment,
-  detectLimiterFromBenchmarks,
-  getEnvelopeAdjustments,
-  getConservativeEstimates,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX]
+// All public symbols of this module are exported inline at their declaration
+// (`export function ...`, `export const ...`). The previous bottom
+// `export { ... }` re-export block redeclared every one of them, which
+// TypeScript reports as "Cannot redeclare exported variable" /
+// "Export declaration conflicts with exported declaration" (TS2300/TS2484).
+// We keep the inline declarations as the single canonical export style and
+// remove the duplicate block. Public API is unchanged: every symbol is
+// still exported with the same name and signature.

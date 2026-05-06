@@ -11,6 +11,10 @@
  */
 
 import { saveSessionFeedback } from './session-feedback'
+// [PHASE-L / AB10-CONTRACT-CLEANUP] CompletedSetEvidence is the canonical
+// per-set ledger shape — type-only import keeps the runtime acyclic while
+// pinning WorkoutLog and QuickLogInput to the authoritative contract.
+import type { CompletedSetEvidence } from './program/performance-feedback-adaptation-contract'
 
 export type SessionType = 'skill' | 'strength' | 'mixed' | 'recovery'
 export type FocusArea = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general'
@@ -83,6 +87,13 @@ export interface WorkoutLog {
     flags: string[]
     freeText: string
   }[]
+  // [PHASE-L / AB10-CONTRACT-CLEANUP] Per-set evidence ledger written by
+  // StreamlinedWorkoutSession.handleCompleteWorkout() and read by
+  // extractCompletedSetEvidence() in the performance-feedback contract.
+  // This is the authoritative source ownership — referenced by
+  // lib/server/workout-set-evidence-persistence.ts and
+  // lib/program/performance-feedback-adaptation-contract.ts.
+  completedSetEvidence?: CompletedSetEvidence[]
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -226,6 +237,11 @@ interface QuickLogInput {
   sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
   // [EXECUTION-TRUTH-FIX] Exercise-level notes and flags
   exerciseNotes?: WorkoutLog['exerciseNotes']
+  // [PHASE-L / AB10-CONTRACT-CLEANUP] Per-set evidence ledger forwarded from
+  // StreamlinedWorkoutSession into the canonical workout log so future
+  // prescription mutation can consume per-set RPE / reps / hold / reason
+  // tags. Optional because callers prior to AB10 may not provide it.
+  completedSetEvidence?: CompletedSetEvidence[]
 }
 
 /**
@@ -269,6 +285,11 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     completionStatus: input.completionStatus || 'completed',
     trusted,
     sourceRoute: input.sourceRoute || (isDemo ? 'demo' : 'workout_session'),
+    // [PHASE-L / AB10-CONTRACT-CLEANUP] Forward per-set evidence verbatim so
+    // the canonical workout log carries the ledger StreamlinedWorkoutSession
+    // built. Downstream readers (extractCompletedSetEvidence + persistence
+    // adapter) consume `log.completedSetEvidence` directly.
+    completedSetEvidence: input.completedSetEvidence,
   })
   
   // [PHASE 13] Dispatch event for active-week mutation evaluation

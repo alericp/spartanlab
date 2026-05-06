@@ -1,0 +1,51 @@
+lib/benchmark-testing-engine.ts(339,17): error TS2323: Cannot redeclare exported variable 'getBaselineTests'.
+lib/benchmark-testing-engine.ts(346,17): error TS2323: Cannot redeclare exported variable 'getEssentialBaselineTests'.
+lib/benchmark-testing-engine.ts(353,17): error TS2323: Cannot redeclare exported variable 'getTestsForSkill'.
+lib/benchmark-testing-engine.ts(364,23): error TS2323: Cannot redeclare exported variable 'createBenchmark'.
+lib/benchmark-testing-engine.ts(406,23): error TS2323: Cannot redeclare exported variable 'getLatestBenchmark'.
+lib/benchmark-testing-engine.ts(428,23): error TS2323: Cannot redeclare exported variable 'getUserBenchmarks'.
+lib/benchmark-testing-engine.ts(446,23): error TS2323: Cannot redeclare exported variable 'getBenchmarkHistory'.
+lib/benchmark-testing-engine.ts(470,23): error TS2323: Cannot redeclare exported variable 'getBenchmarksByFamily'.
+lib/benchmark-testing-engine.ts(525,23): error TS2323: Cannot redeclare exported variable 'getProgressTestTriggers'.
+lib/benchmark-testing-engine.ts(612,17): error TS2323: Cannot redeclare exported variable 'detectPlateauFromHistory'.
+lib/benchmark-testing-engine.ts(695,23): error TS2323: Cannot redeclare exported variable 'analyzeBenchmarkTrend'.
+lib/benchmark-testing-engine.ts(746,23): error TS2323: Cannot redeclare exported variable 'getAllBenchmarkTrends'.
+lib/benchmark-testing-engine.ts(769,17): error TS2323: Cannot redeclare exported variable 'generateProgressFeedback'.
+lib/benchmark-testing-engine.ts(865,17): error TS2323: Cannot redeclare exported variable 'calculateReadinessAdjustment'.
+lib/benchmark-testing-engine.ts(893,17): error TS2323: Cannot redeclare exported variable 'detectLimiterFromBenchmarks'.
+lib/benchmark-testing-engine.ts(968,17): error TS2323: Cannot redeclare exported variable 'getEnvelopeAdjustments'.
+lib/benchmark-testing-engine.ts(1009,17): error TS2323: Cannot redeclare exported variable 'getConservativeEstimates'.
+lib/benchmark-testing-engine.ts(1037,3): error TS2323: Cannot redeclare exported variable 'createBenchmark'.
+lib/benchmark-testing-engine.ts(1037,3): error TS2484: Export declaration conflicts with exported declaration of 'createBenchmark'.
+lib/benchmark-testing-engine.ts(1038,3): error TS2323: Cannot redeclare exported variable 'getLatestBenchmark'.
+lib/benchmark-testing-engine.ts(1038,3): error TS2484: Export declaration conflicts with exported declaration of 'getLatestBenchmark'.
+lib/benchmark-testing-engine.ts(1039,3): error TS2323: Cannot redeclare exported variable 'getUserBenchmarks'.
+lib/benchmark-testing-engine.ts(1039,3): error TS2484: Export declaration conflicts with exported declaration of 'getUserBenchmarks'.
+lib/benchmark-testing-engine.ts(1040,3): error TS2323: Cannot redeclare exported variable 'getBenchmarkHistory'.
+lib/benchmark-testing-engine.ts(1040,3): error TS2484: Export declaration conflicts with exported declaration of 'getBenchmarkHistory'.
+lib/benchmark-testing-engine.ts(1041,3): error TS2323: Cannot redeclare exported variable 'getBenchmarksByFamily'.
+lib/benchmark-testing-engine.ts(1041,3): error TS2484: Export declaration conflicts with exported declaration of 'getBenchmarksByFamily'.
+lib/benchmark-testing-engine.ts(1044,3): error TS2323: Cannot redeclare exported variable 'getBaselineTests'.
+lib/benchmark-testing-engine.ts(1044,3): error TS2484: Export declaration conflicts with exported declaration of 'getBaselineTests'.
+lib/benchmark-testing-engine.ts(1045,3): error TS2323: Cannot redeclare exported variable 'getEssentialBaselineTests'.
+lib/benchmark-testing-engine.ts(1045,3): error TS2484: Export declaration conflicts with exported declaration of 'getEssentialBaselineTests'.
+lib/benchmark-testing-engine.ts(1046,3): error TS2323: Cannot redeclare exported variable 'getTestsForSkill'.
+lib/benchmark-testing-engine.ts(1046,3): error TS2484: Export declaration conflicts with exported declaration of 'getTestsForSkill'.
+lib/benchmark-testing-engine.ts(1049,3): error TS2323: Cannot redeclare exported variable 'getProgressTestTriggers'.
+lib/benchmark-testing-engine.ts(1049,3): error TS2484: Export declaration conflicts with exported declaration of 'getProgressTestTriggers'.
+lib/benchmark-testing-engine.ts(1052,3): error TS2323: Cannot redeclare exported variable 'detectPlateauFromHistory'.
+lib/benchmark-testing-engine.ts(1052,3): error TS2484: Export declaration conflicts with exported declaration of 'detectPlateauFromHistory'.
+lib/benchmark-testing-engine.ts(1055,3): error TS2323: Cannot redeclare exported variable 'analyzeBenchmarkTrend'.
+lib/benchmark-testing-engine.ts(1055,3): error TS2484: Export declaration conflicts with exported declaration of 'analyzeBenchmarkTrend'.
+lib/benchmark-testing-engine.ts(1056,3): error TS2323: Cannot redeclare exported variable 'getAllBenchmarkTrends'.
+lib/benchmark-testing-engine.ts(1056,3): error TS2484: Export declaration conflicts with exported declaration of 'getAllBenchmarkTrends'.
+lib/benchmark-testing-engine.ts(1059,3): error TS2323: Cannot redeclare exported variable 'generateProgressFeedback'.
+lib/benchmark-testing-engine.ts(1059,3): error TS2484: Export declaration conflicts with exported declaration of 'generateProgressFeedback'.
+lib/benchmark-testing-engine.ts(1062,3): error TS2323: Cannot redeclare exported variable 'calculateReadinessAdjustment'.
+lib/benchmark-testing-engine.ts(1062,3): error TS2484: Export declaration conflicts with exported declaration of 'calculateReadinessAdjustment'.
+lib/benchmark-testing-engine.ts(1063,3): error TS2323: Cannot redeclare exported variable 'detectLimiterFromBenchmarks'.
+lib/benchmark-testing-engine.ts(1063,3): error TS2484: Export declaration conflicts with exported declaration of 'detectLimiterFromBenchmarks'.
+lib/benchmark-testing-engine.ts(1064,3): error TS2323: Cannot redeclare exported variable 'getEnvelopeAdjustments'.
+lib/benchmark-testing-engine.ts(1064,3): error TS2484: Export declaration conflicts with exported declaration of 'getEnvelopeAdjustments'.
+lib/benchmark-testing-engine.ts(1065,3): error TS2323: Cannot redeclare exported variable 'getConservativeEstimates'.
+lib/benchmark-testing-engine.ts(1065,3): error TS2484: Export declaration conflicts with exported declaration of 'getConservativeEstimates'.

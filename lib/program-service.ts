@@ -389,9 +389,22 @@ if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'i
   const profile = getAthleteProfile()
   const progressions = getSkillProgressions()
   
+  // [PROGRAM-SERVICE-PROFILE-NULL-GUARD] `getAthleteProfile()` may
+  // return null for a freshly-created session. Guard once and rely on
+  // canonical defaults so each property read below is safe.
+  if (!profile) {
+    return {
+      primaryGoal: 'planche',
+      experienceLevel: 'beginner',
+      trainingDaysPerWeek: 4 as TrainingDays,
+      secondaryEmphasis: 'none',
+      sessionLength: 45 as SessionLength,
+    }
+  }
+  
   // Determine primary goal from profile or first tracked skill
   let primaryGoal: PrimaryGoal = 'planche'
-  if (profile.primaryGoal && ['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
+  if (profile.primaryGoal && ['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(String(profile.primaryGoal))) {
     primaryGoal = profile.primaryGoal as PrimaryGoal
   } else if (progressions.length > 0) {
     const skillName = progressions[0].skillName
@@ -405,7 +418,11 @@ if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'i
   // sessionLength fallback to 45 only if profile field is genuinely missing
   
   // [ADAPTIVE BASELINE FIX] Do NOT convert flexible to 4 here - preserve the semantic
-  const resolvedDays = profile.trainingDaysPerWeek === 'flexible' 
+  // [PROGRAM-SERVICE-DAYS-COMPARE-NORMALIZED] String 'flexible' compare
+  // would be impossible if `trainingDaysPerWeek` is purely numeric; cast
+  // to string before the equality compare to make the legacy 'flexible'
+  // semantic survive on union-typed sources.
+  const resolvedDays = String(profile.trainingDaysPerWeek) === 'flexible' 
     ? 'flexible' as const
     : (profile.trainingDaysPerWeek as TrainingDays) || 4
   

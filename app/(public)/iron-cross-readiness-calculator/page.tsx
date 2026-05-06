@@ -97,7 +97,11 @@ export default function IronCrossReadinessCalculator() {
     setResult(calcResult)
     
     // Track tool usage
-    trackToolUsed('iron_cross_calculator', { readiness_score: calcResult.readinessScore })
+    // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+    // ReadinessResult exposes `score`, not `readinessScore`. Preserve the
+    // analytics payload key `readiness_score` (existing event schema)
+    // and source the value from the authoritative `calcResult.score`.
+    trackToolUsed('iron_cross_calculator', { readiness_score: calcResult.score })
   }
 
   const handleReset = () => {
@@ -536,11 +540,25 @@ export default function IronCrossReadinessCalculator() {
             context="iron-cross"
             toolData={result ? {
               ringSupport: ringSupportHold ? parseInt(ringSupportHold) : undefined,
-              maxDips: ringDips ? parseInt(ringDips) : undefined,
+              // [PRE-AB6 BUILD GREEN GATE / LOCAL VAR CONTRACT]
+              // The local input state for ring-dip count is declared as
+              // `maxDips` (see useState at L54, bound to the "Max Ring
+              // Dips" input at L217). The previous payload referenced an
+              // undefined variable `ringDips` — TypeScript correctly
+              // failed with `Cannot find name 'ringDips'`. Preserved the
+              // ToolDataPayload key `maxDips` and sourced from the real
+              // local state variable of the same name.
+              maxDips: maxDips ? parseInt(maxDips, 10) : undefined,
               weightedDip: weightedDipLoad ? parseFloat(weightedDipLoad) : undefined,
-              readinessScore: result.readinessScore,
-              classification: result.classification,
-              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+              // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+              // ReadinessResult exposes `score`, `level`, and a single
+              // `limitingFactor: string` (not `readinessScore`,
+              // `classification`, or `limitingFactors[]`). The
+              // ToolDataPayload keys are correct; only the *source*
+              // fields needed contract realignment.
+              readinessScore: result.score,
+              classification: result.level,
+              limitingFactors: result.limitingFactor ? [result.limitingFactor] : [],
             } : undefined}
           />
         </section>

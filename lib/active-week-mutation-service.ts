@@ -146,7 +146,10 @@ export function evaluateActiveWeekMutation(
   )
   
   const previousFutureSessionOrder: FutureSessionSummary[] = futureSessions.map(s => ({
-    sessionId: s.id || `session_${s.dayNumber}`,
+    // [ADAPTIVE-SESSION-ID-DROPPED] AdaptiveSession does not carry an
+    // `id`; derive a stable session identity from `dayNumber` (which
+    // is unique within a week and is already the migration key).
+    sessionId: `session_${s.dayNumber}`,
     dayNumber: s.dayNumber,
     focus: s.focus,
     isCompleted: false,
@@ -226,8 +229,9 @@ export function evaluateActiveWeekMutation(
   )
   
   console.log('[phase13-future-session-mutation-audit]', {
-    completedSessionIds: completedSessions.map(s => s.id || `session_${s.dayNumber}`),
-    candidateFutureSessionIds: futureSessions.map(s => s.id || `session_${s.dayNumber}`),
+    // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    completedSessionIds: completedSessions.map(s => `session_${s.dayNumber}`),
+    candidateFutureSessionIds: futureSessions.map(s => `session_${s.dayNumber}`),
     proposedMutationType: reevalResult.mutationType,
     appliedMutationType: mutationAttempt.appliedType,
     blockedReason: mutationAttempt.blockedReason,
@@ -396,7 +400,8 @@ function attemptFutureSessionMutation(
       return {
         appliedType: 'none',
         newFutureOrder: futureSessions.map(s => ({
-          sessionId: s.id || `session_${s.dayNumber}`,
+          // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    sessionId: `session_${s.dayNumber}`,
           dayNumber: s.dayNumber,
           focus: s.focus,
           isCompleted: false,
@@ -419,7 +424,8 @@ function attemptFutureSessionMutation(
       return {
         appliedType: 'none',
         newFutureOrder: futureSessions.map(s => ({
-          sessionId: s.id || `session_${s.dayNumber}`,
+          // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    sessionId: `session_${s.dayNumber}`,
           dayNumber: s.dayNumber,
           focus: s.focus,
           isCompleted: false,
@@ -433,7 +439,8 @@ function attemptFutureSessionMutation(
     return {
       appliedType: 'reduce_frequency',
       newFutureOrder: sessionsToKeep.map(s => ({
-        sessionId: s.id || `session_${s.dayNumber}`,
+        // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    sessionId: `session_${s.dayNumber}`,
         dayNumber: s.dayNumber,
         focus: s.focus,
         isCompleted: false,
@@ -450,7 +457,8 @@ function attemptFutureSessionMutation(
     return {
       appliedType: 'none',
       newFutureOrder: futureSessions.map(s => ({
-        sessionId: s.id || `session_${s.dayNumber}`,
+        // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    sessionId: `session_${s.dayNumber}`,
         dayNumber: s.dayNumber,
         focus: s.focus,
         isCompleted: false,
@@ -465,7 +473,8 @@ function attemptFutureSessionMutation(
   return {
     appliedType: 'none',
     newFutureOrder: futureSessions.map(s => ({
-      sessionId: s.id || `session_${s.dayNumber}`,
+      // [ADAPTIVE-SESSION-ID-DROPPED] derive from dayNumber.
+    sessionId: `session_${s.dayNumber}`,
       dayNumber: s.dayNumber,
       focus: s.focus,
       isCompleted: false,

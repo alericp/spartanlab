@@ -1,0 +1,18 @@
+===== NEXT MASS PACKET INDEX =====
+Current total diagnostics: 765
+Current builder diagnostics: 92
+Current selector diagnostics: 3
+
+Generated parts:
+1. PART_1_TOP_FILES_EXACT.txt
+2. PART_2_PROPERTY_STALE_FIELDS.txt
+3. PART_3_ASSIGNABILITY_ARGUMENTS.txt
+4. PART_4_NULL_COMPARE_CONVERT_MISSING.txt
+
+Recommended VO strategy:
+- Allowed files only from the listed exact diagnostics.
+- Prioritize highest-count files first.
+- No scripts.
+- No broad scan.
+- No helper-only work.
+- Commit after pass, then terminal-score again.

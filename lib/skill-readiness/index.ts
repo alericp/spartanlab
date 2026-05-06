@@ -105,3 +105,18 @@ export {
   type SkillReadinessAPIRequest,
   type SkillReadinessAPIResponse,
 } from './skillReadinessTypes'
+
+// =============================================================================
+// ENGINE API
+// =============================================================================
+// [SKILL-READINESS-ENGINE-RE-EXPORTS] Surface the engine-level helpers
+// (SkillReadinessEngine, quickReadinessCheck, getPrimaryLimiter,
+// meetsBaselineRequirements, getTrainingRecommendations) so the
+// `lib/engine/index.ts` barrel can keep its existing public surface.
+export {
+  SkillReadinessEngine,
+  quickReadinessCheck,
+  getPrimaryLimiter,
+  meetsBaselineRequirements,
+  getTrainingRecommendations,
+} from './skillReadinessEngine'

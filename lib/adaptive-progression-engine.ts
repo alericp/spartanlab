@@ -259,10 +259,13 @@ export function getExerciseHistory(
     )
     
     if (exercise) {
-      // Get RPE data if available
-      const rpeSession = rpeSessions.find(s => s.workoutId === log.id)
-      const rpeData = rpeSession?.exercises.find(e => 
-        e.exerciseId === exerciseId || e.exerciseName === exerciseName
+      // [ADAPTIVE-PROGRESSION-RPE-FIELD-CANONICAL] StoredRPESession owns
+      // `sessionId` (fatigue-score-calculator.ts L54-55), not the legacy
+      // `workoutId`. Inner exercises only carry `exerciseName` — no
+      // `exerciseId`. Match by name only.
+      const rpeSession = rpeSessions.find(s => s.sessionId === log.id)
+      const rpeData = rpeSession?.exercises.find(e =>
+        e.exerciseName === exerciseName
       )
       
       const avgRPE = rpeData?.sets.length 
@@ -1006,11 +1009,28 @@ function calculateAverageDaysPerWeek(logs: WorkoutLog[], weeks: number): number 
   return Math.round((recentLogs.length / weeks) * 10) / 10
 }
 
+// [TRAINING-DAYS-LITERAL-CLAMP] Math.max/min/round return plain
+// `number`, but `recommendedDays` is the literal TrainingDays union
+// (2|3|4|5|6|7). Clamp arithmetic results back into the union without
+// widening the schedule contract.
+function toTrainingDays(value: number): 2 | 3 | 4 | 5 | 6 | 7 {
+  const rounded = Math.round(value)
+  if (rounded <= 2) return 2
+  if (rounded === 3) return 3
+  if (rounded === 4) return 4
+  if (rounded === 5) return 5
+  if (rounded === 6) return 6
+  return 7
+}
+
 function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
   const profile = getOnboardingProfile()
-  const intendedDays = profile?.weeklyTraining 
-    ? mapWeeklyTrainingToDays(profile.weeklyTraining)
-    : 3
+  // [ADAPTIVE-PROGRESSION-TRAINING-DAYS-CANONICAL] Canonical
+  // OnboardingProfile owns `trainingDaysPerWeek: TrainingDaysPerWeek
+  // | null` (numeric or 'flexible'), not the legacy `weeklyTraining`
+  // string range.
+  const tdpw = profile?.trainingDaysPerWeek
+  const intendedDays = typeof tdpw === 'number' && tdpw > 0 ? tdpw : 3
   
   const actualDays = calculateAverageDaysPerWeek(logs, SCHEDULE_THRESHOLDS.weeksForPattern)
   const difference = intendedDays - actualDays
@@ -1040,7 +1060,7 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
     if (actualDays < intendedDays) {
       if (consistentPattern) {
         adaptation = 'reduce'
-        recommendedDays = Math.max(2, Math.round(actualDays))
+        recommendedDays = toTrainingDays(Math.max(2, Math.round(actualDays)))
         // ISSUE C FIX: Only use "actual pattern" wording when we have sufficient history
         if (historyConfidence === 'sufficient') {
           adaptationReason = `Based on your recent training history (${totalWorkouts} sessions over 3 weeks), adjusting to ${recommendedDays} sessions/week.`
@@ -1054,14 +1074,14 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
         }
       } else {
         adaptation = 'reduce'
-        recommendedDays = Math.max(2, intendedDays - 1)
+        recommendedDays = toTrainingDays(Math.max(2, intendedDays - 1))
         temporaryReduction = true
         adaptationReason = 'Reducing volume temporarily while you settle into a rhythm.'
         wordingSource = 'current_week_resolution'
       }
     } else {
       adaptation = 'increase'
-      recommendedDays = Math.min(6, Math.round(actualDays))
+      recommendedDays = toTrainingDays(Math.min(6, Math.round(actualDays)))
       // ISSUE C FIX: Clear wording for increased frequency
       if (historyConfidence === 'sufficient') {
         adaptationReason = `Based on your recent training history, you're training ${recommendedDays} days/week.`
@@ -1162,11 +1182,12 @@ function analyzeTimePatterns(logs: WorkoutLog[]): TimeConstraintAnalysis {
   const recentLogs = getWorkoutsInDateRange(logs, 14)
   
   let intendedDuration = 45
-  if (profile?.trainingTime) {
-    const timeMap: Record<string, number> = {
-      '15_30': 25, '30_45': 37, '45_60': 52, '60_plus': 70,
-    }
-    intendedDuration = timeMap[profile.trainingTime] || 45
+  // [ADAPTIVE-PROGRESSION-SESSION-LENGTH-CANONICAL] Canonical
+  // OnboardingProfile owns `sessionLengthMinutes:
+  // SessionLengthPreference | null` (numeric minutes), not the legacy
+  // `trainingTime` string buckets.
+  if (typeof profile?.sessionLengthMinutes === 'number' && profile.sessionLengthMinutes > 0) {
+    intendedDuration = profile.sessionLengthMinutes
   }
   
   if (recentLogs.length === 0) {

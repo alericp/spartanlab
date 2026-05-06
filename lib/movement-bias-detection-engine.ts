@@ -717,7 +717,11 @@ export function getBiasProgressionModifier(
   
   const pushFamilies: MovementFamily[] = ['vertical_push', 'horizontal_push', 'straight_arm_push']
   const pullFamilies: MovementFamily[] = ['vertical_pull', 'horizontal_pull', 'straight_arm_pull']
-  const compressionFamilies: MovementFamily[] = ['compression', 'hip_flexion']
+  // [MOVEMENT-FAMILY-MAPPING] Canonical MovementFamily owns
+  // 'compression_core' (which absorbs both abdominal compression and
+  // hip-flexion patterns); legacy 'compression' / 'hip_flexion'
+  // literals were not registered. Collapse to the canonical key.
+  const compressionFamilies: MovementFamily[] = ['compression_core']
   
   if (pushFamilies.includes(movementFamily)) {
     return recommendedAdjustments.pushProgressionModifier

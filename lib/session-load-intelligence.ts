@@ -926,11 +926,18 @@ export function buildSessionMetadata(
 // EXPORTS
 // =============================================================================
 
+// [DUPLICATE-EXPORT-CONTRACT-FIX] `TARGET_LOAD` is exported inline at
+// line 666 (`export const TARGET_LOAD = ...`). Re-listing it here produced
+// TS2300/TS2484 and has been removed.
+//
+// The other five constants are declared as `const` WITHOUT inline `export`
+// at lines 88, 102, 115, 133, 676. This block is their SOLE export site,
+// so they stay. Public API is unchanged: every previously-exported symbol
+// is still exported with the same name.
 export {
   SESSION_COUNT_WEIGHTS,
   DELIVERY_STYLE_MULTIPLIERS,
   FATIGUE_WEIGHT_VALUES,
   SESSION_LOAD_BUDGETS,
-  TARGET_LOAD,
   REMOVAL_PRIORITY,
 }

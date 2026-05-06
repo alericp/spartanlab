@@ -329,12 +329,20 @@ export function dedupe<T extends string | { id: string } | { name: string }>(arr
   
   const seen = new Set<string>()
   return arr.filter(item => {
-    const key = typeof item === 'string' 
-      ? item 
-      : 'id' in item 
-        ? item.id 
-        : item.name
+    // [DEDUPE-OBJECT-GUARD] T extends `string | {id} | {name}`. Without
+    // the `typeof === 'object' && item !== null` narrowing TS cannot
+    // prove `item` is indexable for `'id' in item`. Fall back to '' so
+    // unexpected shapes are filtered out rather than throwing.
+    const key =
+      typeof item === 'string'
+        ? item
+        : typeof item === 'object' && item !== null && 'id' in item
+          ? (item as { id: string }).id
+          : typeof item === 'object' && item !== null && 'name' in item
+            ? (item as { name: string }).name
+            : ''
     
+    if (!key) return false
     if (seen.has(key.toLowerCase())) return false
     seen.add(key.toLowerCase())
     return true

@@ -1,0 +1,37 @@
+lib/weighted-skill-systems-engine.ts(124,14): error TS2323: Cannot redeclare exported variable 'WEIGHTED_SKILL_PROFILES'.
+lib/weighted-skill-systems-engine.ts(744,14): error TS2323: Cannot redeclare exported variable 'WEIGHTED_PROGRESSION_LADDERS'.
+lib/weighted-skill-systems-engine.ts(998,17): error TS2323: Cannot redeclare exported variable 'checkWeightedSkillPrerequisites'.
+lib/weighted-skill-systems-engine.ts(1090,17): error TS2323: Cannot redeclare exported variable 'getTempoRecommendation'.
+lib/weighted-skill-systems-engine.ts(1117,5): error TS2367: This comparison appears to be unintentional because the types 'WeakPointType | undefined' and '"transition_control"' have no overlap.
+lib/weighted-skill-systems-engine.ts(1121,9): error TS2367: This comparison appears to be unintentional because the types 'WeakPointType | undefined' and '"transition_control"' have no overlap.
+lib/weighted-skill-systems-engine.ts(1188,17): error TS2323: Cannot redeclare exported variable 'getFrameworkWeightedGuidance'.
+lib/weighted-skill-systems-engine.ts(1302,17): error TS2323: Cannot redeclare exported variable 'getWeightedRecommendationsForWeakPoint'.
+lib/weighted-skill-systems-engine.ts(1307,7): error TS2322: Type '"explosive_pull"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1314,7): error TS2322: Type '"transition_control"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1328,7): error TS2322: Type '"lockout_strength"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1335,7): error TS2322: Type '"straight_arm_pull"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1349,7): error TS2322: Type '"compression"' is not assignable to type 'WeakPointType'.
+lib/weighted-skill-systems-engine.ts(1398,14): error TS2323: Cannot redeclare exported variable 'TENDON_SAFETY_RULES'.
+lib/weighted-skill-systems-engine.ts(1452,17): error TS2323: Cannot redeclare exported variable 'applyTendonSafetyRules'.
+lib/weighted-skill-systems-engine.ts(1524,17): error TS2323: Cannot redeclare exported variable 'generateWeightedSkillExplanation'.
+lib/weighted-skill-systems-engine.ts(1593,17): error TS2323: Cannot redeclare exported variable 'getAvailableWeightedSkillsForAthlete'.
+lib/weighted-skill-systems-engine.ts(1635,3): error TS2323: Cannot redeclare exported variable 'WEIGHTED_SKILL_PROFILES'.
+lib/weighted-skill-systems-engine.ts(1635,3): error TS2484: Export declaration conflicts with exported declaration of 'WEIGHTED_SKILL_PROFILES'.
+lib/weighted-skill-systems-engine.ts(1636,3): error TS2323: Cannot redeclare exported variable 'WEIGHTED_PROGRESSION_LADDERS'.
+lib/weighted-skill-systems-engine.ts(1636,3): error TS2484: Export declaration conflicts with exported declaration of 'WEIGHTED_PROGRESSION_LADDERS'.
+lib/weighted-skill-systems-engine.ts(1637,3): error TS2323: Cannot redeclare exported variable 'TENDON_SAFETY_RULES'.
+lib/weighted-skill-systems-engine.ts(1637,3): error TS2484: Export declaration conflicts with exported declaration of 'TENDON_SAFETY_RULES'.
+lib/weighted-skill-systems-engine.ts(1638,3): error TS2323: Cannot redeclare exported variable 'checkWeightedSkillPrerequisites'.
+lib/weighted-skill-systems-engine.ts(1638,3): error TS2484: Export declaration conflicts with exported declaration of 'checkWeightedSkillPrerequisites'.
+lib/weighted-skill-systems-engine.ts(1639,3): error TS2323: Cannot redeclare exported variable 'getTempoRecommendation'.
+lib/weighted-skill-systems-engine.ts(1639,3): error TS2484: Export declaration conflicts with exported declaration of 'getTempoRecommendation'.
+lib/weighted-skill-systems-engine.ts(1640,3): error TS2323: Cannot redeclare exported variable 'getFrameworkWeightedGuidance'.
+lib/weighted-skill-systems-engine.ts(1640,3): error TS2484: Export declaration conflicts with exported declaration of 'getFrameworkWeightedGuidance'.
+lib/weighted-skill-systems-engine.ts(1641,3): error TS2323: Cannot redeclare exported variable 'getWeightedRecommendationsForWeakPoint'.
+lib/weighted-skill-systems-engine.ts(1641,3): error TS2484: Export declaration conflicts with exported declaration of 'getWeightedRecommendationsForWeakPoint'.
+lib/weighted-skill-systems-engine.ts(1642,3): error TS2323: Cannot redeclare exported variable 'applyTendonSafetyRules'.
+lib/weighted-skill-systems-engine.ts(1642,3): error TS2484: Export declaration conflicts with exported declaration of 'applyTendonSafetyRules'.
+lib/weighted-skill-systems-engine.ts(1643,3): error TS2323: Cannot redeclare exported variable 'generateWeightedSkillExplanation'.
+lib/weighted-skill-systems-engine.ts(1643,3): error TS2484: Export declaration conflicts with exported declaration of 'generateWeightedSkillExplanation'.
+lib/weighted-skill-systems-engine.ts(1644,3): error TS2323: Cannot redeclare exported variable 'getAvailableWeightedSkillsForAthlete'.
+lib/weighted-skill-systems-engine.ts(1644,3): error TS2484: Export declaration conflicts with exported declaration of 'getAvailableWeightedSkillsForAthlete'.

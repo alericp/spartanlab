@@ -69,10 +69,17 @@ function getDailyContext(): DailyContext {
     // Get last workout info
     if (logs.length > 0) {
       const lastLog = logs[0]
-      defaultContext.lastWorkoutDate = lastLog.date
-      
+      // [PRE-AB6 BUILD GREEN GATE / WORKOUTLOG DATE CONTRACT]
+      // WorkoutLog (lib/workout-log-service.ts:40) exposes the canonical
+      // workout date as `sessionDate` (L45) and the persistence timestamp
+      // as `createdAt` (L42). There is no `date` field. Older or
+      // partially-migrated logs may be missing `sessionDate`, so
+      // `createdAt` is the safe fallback.
+      const lastWorkoutDate = lastLog.sessionDate || lastLog.createdAt
+      defaultContext.lastWorkoutDate = lastWorkoutDate
+
       // Calculate days since last workout
-      const lastDate = new Date(lastLog.date)
+      const lastDate = new Date(lastWorkoutDate)
       const today = new Date()
       const diffTime = Math.abs(today.getTime() - lastDate.getTime())
       defaultContext.daysSinceLastWorkout = Math.floor(diffTime / (1000 * 60 * 60 * 24))
@@ -100,10 +107,19 @@ function getDailyContext(): DailyContext {
     }
     
     // Determine next session focus
-    if (program?.sessions && program.sessions.length > 0) {
-      const nextIndex = logs.length % program.sessions.length
-      const nextSession = program.sessions[nextIndex]
-      defaultContext.nextSessionFocus = nextSession?.name || 'Training Session'
+    // [PRE-AB6 BUILD GREEN GATE / GENERATEDPROGRAM SESSION CONTRACT]
+    // GeneratedProgram (lib/program-service.ts:56) exposes the
+    // per-day plan as `generatedDays: DayTemplate[]`, not `sessions`.
+    // DayTemplate (lib/program-templates.ts:11) has only
+    // { dayLabel, emphasis, exercises } — no `name` field — so the
+    // focus label uses `emphasis` (e.g. "Push") with `dayLabel`
+    // (e.g. "Day 1") as the safe fallback before the literal default.
+    const generatedDays = program?.generatedDays
+    if (generatedDays && generatedDays.length > 0) {
+      const nextIndex = logs.length % generatedDays.length
+      const nextDay = generatedDays[nextIndex]
+      defaultContext.nextSessionFocus =
+        nextDay?.emphasis || nextDay?.dayLabel || 'Training Session'
     }
     
   } catch {

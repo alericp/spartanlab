@@ -1,0 +1,3 @@
+===== PART 4 — EASY BUILDER CONTEXT =====
+Local code context windows. Do not scan whole repo. Use exact file/line/anchors.
+

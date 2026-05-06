@@ -2474,10 +2474,22 @@ function ProgramDisplayWrapper({
           workoutSummary,
           inputAvailability: { workout: 'ok', benchmark: 'absent' },
         })
+        // [AB12-2] Read the generation-time influence stamp directly off
+        // the canonical program object. The authoritative service stamps
+        // this after Phase AA2 on every successful generation, so it
+        // reflects what was ACTUALLY applied (or honestly suppressed)
+        // when this program was built — distinct from the AB12-1 plan
+        // above, which is the live client-side recommendation. When the
+        // program was generated before AB12-2 shipped, this field is
+        // undefined and the strip is hidden silently. Field is typed
+        // directly on `AdaptiveProgram` (added by AB12-2) so no cast is
+        // needed.
+        const generationInfluence = program.evidenceCalibrationInfluence ?? null
         return (
           <FeedbackLoopProofCard
             workoutSummary={workoutSummary}
             calibrationPlan={calibrationPlan}
+            generationInfluence={generationInfluence}
           />
         )
       })()}

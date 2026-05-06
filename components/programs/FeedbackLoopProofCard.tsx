@@ -38,6 +38,13 @@ import type {
 // program is currently calibrated to". The plan derives from the same
 // AB11 inputs the card already trusts, so it cannot drift.
 import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
+// [AB12-2] Optional generation-time influence stamp from the
+// authoritative-program-generation service. Reflects what was actually
+// applied (or honestly suppressed) when this program was generated, as
+// opposed to AB12-1's `calibrationPlan` which reflects what the live
+// client-side governor currently recommends. Both can render side-by-
+// side: AB12-1 is "live recommendation", AB12-2 is "what shipped".
+import type { EvidenceCalibrationGenerationInfluence } from '@/lib/program/evidence-calibration-generation-influence'
 
 interface FeedbackLoopProofCardProps {
   /** Benchmark/calibration-only summary, optional. */
@@ -58,6 +65,14 @@ interface FeedbackLoopProofCardProps {
    * card omits the strip silently.
    */
   calibrationPlan?: ProgramEvidenceCalibrationPlan | null
+  /**
+   * [AB12-2] Optional generation-time influence stamp. When present and
+   * `status !== 'inactive'`, a SECOND compact label + chip strip is
+   * rendered below the AB12-1 strip showing what was actually applied
+   * (or honestly suppressed) at the moment this program was generated.
+   * When omitted or `'inactive'`, the strip is hidden silently.
+   */
+  generationInfluence?: EvidenceCalibrationGenerationInfluence | null
   className?: string
 }
 
@@ -159,9 +174,81 @@ function CalibrationPlanStrip({
   )
 }
 
+// [AB12-2] Compact generation-influence strip. Renders ONLY when the
+// authoritative service stamped a non-`inactive` influence on the
+// program. Hidden for `'inactive'` so we never claim influence on a
+// program that was generated without evidence inputs. Visually distinct
+// from the AB12-1 strip (uses `data-ab12-2-...` markers + bordered ring
+// rather than muted background) so a user can tell "what was applied to
+// this program" from "what the live recommendation currently is".
+function GenerationInfluenceStrip({
+  influence,
+}: {
+  influence: EvidenceCalibrationGenerationInfluence
+}) {
+  if (influence.status === 'inactive') return null
+  const variant: 'default' | 'secondary' | 'outline' =
+    influence.status === 'active'
+      ? 'default'
+      : influence.status === 'degraded'
+        ? 'outline'
+        : 'secondary'
+  return (
+    <div
+      className="mt-3 rounded-md border border-border bg-background p-3 ring-1 ring-border/40"
+      data-ab12-2-generation-influence={influence.status}
+      data-ab12-2-confidence={influence.confidence}
+      data-ab12-2-allowed-to-mutate={String(influence.allowedToMutateProgram)}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={variant}
+            className="text-[10px] font-medium uppercase tracking-wide"
+          >
+            {influence.proof.label}
+          </Badge>
+          {influence.status === 'active' && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-medium uppercase tracking-wide"
+            >
+              {influence.confidence} confidence
+            </Badge>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground text-pretty">
+        {influence.proof.summary}
+      </p>
+      {influence.proof.chips.length > 0 && (
+        <ul
+          className="mt-2 flex flex-wrap gap-1"
+          role="list"
+          aria-label="Generation-time calibration constraints"
+        >
+          {influence.proof.chips.map((chip, i) => (
+            <li key={`${i}-${chip}`}>
+              <Badge
+                variant={
+                  chip.includes('(suppressed)') ? 'outline' : 'secondary'
+                }
+                className="text-[10px] font-medium normal-case"
+              >
+                {chip}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const summary = pickDisplaySummary(props)
   const plan = props.calibrationPlan ?? null
+  const influence = props.generationInfluence ?? null
 
   // No summary at all — render compact no-evidence baseline.
   if (!summary) {
@@ -187,6 +274,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             baseline until you log tests or workouts.
           </p>
           {plan && <CalibrationPlanStrip plan={plan} />}
+          {influence && <GenerationInfluenceStrip influence={influence} />}
         </CardContent>
       </Card>
     )
@@ -218,6 +306,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             {summary.summaryText}
           </p>
           {plan && <CalibrationPlanStrip plan={plan} />}
+          {influence && <GenerationInfluenceStrip influence={influence} />}
         </CardContent>
       </Card>
     )
@@ -302,14 +391,17 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             </p>
           )}
           {plan && <CalibrationPlanStrip plan={plan} />}
+          {influence && <GenerationInfluenceStrip influence={influence} />}
         </CardContent>
       )}
       {/* When there are no proofLines we still render the plan strip
           inside its own minimal CardContent so the AB12-1 surface is
-          visible even when AB11 only produced summary text. */}
-      {summary.proofLines.length === 0 && plan && (
+          visible even when AB11 only produced summary text. AB12-2
+          influence rides on the same fallback content. */}
+      {summary.proofLines.length === 0 && (plan || influence) && (
         <CardContent className="pt-0">
-          <CalibrationPlanStrip plan={plan} />
+          {plan && <CalibrationPlanStrip plan={plan} />}
+          {influence && <GenerationInfluenceStrip influence={influence} />}
         </CardContent>
       )}
     </Card>

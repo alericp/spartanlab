@@ -611,6 +611,220 @@ function selectedSkillToRequiredFamily(
 }
 
 // =============================================================================
+// [V2] DB-TRUTH CANDIDATE PICKER + SAFE REPLACEMENT SLOT RESOLVER
+// =============================================================================
+
+/**
+ * [V2] Per-family preferred candidate id list, ordered easiest -> hardest
+ * within the same family. Names are NOT invented — every entry must exist
+ * in `getAllExercises()` (the canonical pool used by the rest of the
+ * builder). The picker walks this list, returning the FIRST candidate
+ * whose id resolves in the pool, so the list also doubles as a fallback
+ * chain when individual ids are renamed/removed in the pool.
+ *
+ * The lists are intentionally short and conservative. They cover only the
+ * families the prompt names as actionable: planche / HSPU / dragon flag /
+ * mobility-integrity. Other families (vertical pull / horizontal pull /
+ * transition pull / etc.) are not auto-corrected — they are typically
+ * already covered when their selected goal is present, and replacing a
+ * tail row with more pull volume would risk worsening tendon saturation.
+ */
+const FAMILY_PREFERRED_CANDIDATE_IDS: Partial<Record<GoalFamily, string[]>> = {
+  // straight-arm push / planche dynamic progression
+  straight_arm_push: [
+    'planche_lean_pushup', // dynamic planche-lean push-up (preferred — direct progression)
+    'pppu',                // pseudo planche push-up (preferred — broad eligibility)
+  ],
+  // horizontal push when planche is selected but no dynamic push exists
+  push_horizontal: [
+    'pppu',
+    'planche_lean_pushup',
+  ],
+  // vertical push / HSPU progression
+  push_vertical: [
+    'pike_pushup_elevated', // strongest direct progression that still scales
+    'pike_pushup',
+    'wall_hspu_negative',
+    'wall_hspu_partial',
+    'wall_hspu_full',
+    'wall_hspu',
+  ],
+  // compression core / dragon flag progression
+  compression_core: [
+    'dragon_flag_neg',
+    'dragon_flag_assisted',
+    'dragon_flag_tuck',
+    'hanging_leg_raise',
+    'hanging_knee_raise',
+    'hollow_body_rock',
+    'hollow_body',
+    'compression_work',
+  ],
+  // mobility / integrity rebalance under high tendon saturation
+  mobility_integrity: [
+    'face_pull',
+    'band_pull_apart',
+    'scap_pull_up',
+    'scap_pushup',
+    'scapular_retraction_hold',
+  ],
+}
+
+/**
+ * [V2] Resolve a single DB-truth candidate for a weak goal family.
+ *
+ * Strategy:
+ *   1. Walk the per-family preferred id list in order.
+ *   2. For each id, look it up in `getAllExercises()` (canonical pool).
+ *   3. Return the first id that resolves to a real `Exercise`.
+ *   4. If none resolve, return null (caller records
+ *      `protected_db_truth_pool_unavailable`).
+ *
+ * Returns `{ candidate, poolExercise, considered }` so callers can record
+ * how many candidates were examined.
+ */
+function pickDbTruthCandidateForFamily(
+  family: GoalFamily,
+):
+  | { candidate: GoalFamilySwapCandidate; poolExercise: PoolExercise; considered: number }
+  | { candidate: null; poolExercise: null; considered: number } {
+  const ids = FAMILY_PREFERRED_CANDIDATE_IDS[family]
+  if (!ids || ids.length === 0) {
+    return { candidate: null, poolExercise: null, considered: 0 }
+  }
+  const all = getAllExercises()
+  const byId: Map<string, PoolExercise> = new Map(all.map((e) => [e.id, e]))
+  let considered = 0
+  for (const id of ids) {
+    considered += 1
+    const ex = byId.get(id)
+    if (!ex) continue
+    return {
+      candidate: {
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        family,
+        reason: `DB-truth pool match for ${humanizeFamily(family)} (${ex.name}).`,
+        source: 'exercise_pool',
+      },
+      poolExercise: ex,
+      considered,
+    }
+  }
+  return { candidate: null, poolExercise: null, considered }
+}
+
+/**
+ * [V2] Walk a session's exercises looking for a low-priority accessory tail
+ * row that is safe to replace. ALL of the following must be true:
+ *
+ *   - day is NOT completed
+ *   - row is NOT in a grouped block (no `blockId`)
+ *   - row is NOT a cluster set (`setExecutionMethod !== 'cluster'`)
+ *   - row is NOT the primary skill of the day (NOT the first working slot,
+ *     and NOT a `category === 'skill'` row)
+ *   - row sits in the LAST 2 working slots of the session (the "accessory
+ *     tail")
+ *   - row is NOT the only direct exposure for ANOTHER selected goal family
+ *     (we never strip a selected-goal-required family in order to insert
+ *     a different one)
+ *
+ * Returns null when no safe slot exists. The caller records
+ * `protected_no_low_priority_swap_target` in that case.
+ */
+function findReplaceableSlot(
+  session: AdaptiveSession,
+  perDay: {
+    dayNumber: number
+    completed: boolean
+    counts: Record<GoalFamily, number>
+    classifiedRows: Array<{
+      exerciseName: string
+      families: GoalFamily[]
+      grouped: boolean
+    }>
+  },
+  weakFamily: GoalFamily,
+  protectedFamilies: ReadonlySet<GoalFamily>,
+): { rowIndex: number; row: AdaptiveExercise } | null {
+  if (perDay.completed) return null
+  const exercises = Array.isArray(session.exercises) ? session.exercises : []
+  if (exercises.length === 0) return null
+
+  // Build the list of working-row indices in original order. Warmups and
+  // cooldowns are excluded so the "tail" reflects training stress order,
+  // not file order.
+  const workingIndices: number[] = []
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i]
+    if (ex && isWorkingExercise(ex)) workingIndices.push(i)
+  }
+  if (workingIndices.length < 2) return null // no tail to replace
+
+  // Walk the last 2 working rows from the back forward.
+  const tailWindow = workingIndices.slice(-2)
+  for (let t = tailWindow.length - 1; t >= 0; t--) {
+    const idx = tailWindow[t]
+    const ex = exercises[idx]
+    if (!ex) continue
+    // Never replace the first working row (primary work).
+    if (idx === workingIndices[0]) continue
+    // Never replace a skill row.
+    if (lower(ex.category) === 'skill') continue
+    // Never touch grouped/cluster rows.
+    if (isGroupedOrClusterRow(ex)) continue
+    // Never replace a row that is the only direct exposure for a
+    // different selected-goal family.
+    const exFamilies = classifyExerciseFamilies(ex).families
+    let blocksProtected = false
+    for (const f of exFamilies) {
+      if (f === weakFamily) continue // overlap with target — fine to swap
+      if (protectedFamilies.has(f) && perDay.counts[f] <= 1) {
+        // This row is the only exposure for a protected family this day.
+        // Skip it — we cannot rob Peter to pay Paul.
+        blocksProtected = true
+        break
+      }
+    }
+    if (blocksProtected) continue
+    return { rowIndex: idx, row: ex }
+  }
+  return null
+}
+
+/**
+ * [V2] Build a typed `AdaptiveExercise` from a DB-truth `PoolExercise`,
+ * preserving every required AdaptiveExercise field. Optional fields
+ * (`method`, `blockId`, `setExecutionMethod`, `prescribedLoad`,
+ * `executionTruth`, `coachingMeta`, `progressionDecision`, `targetRPE`,
+ * `restSeconds`) are intentionally OMITTED — the live workout runner
+ * already null-guards each of them, and producing them here would
+ * require running Phase L/M/O/P heuristics again, which is out of scope
+ * for a bounded correction layer.
+ *
+ * `source: 'database'` is stamped so the AB10 live-runtime DB-truth
+ * parity check (`source === 'database'`) treats the row identically to
+ * a builder-emitted row.
+ */
+function buildAdaptiveExerciseFromPool(
+  pool: PoolExercise,
+  family: GoalFamily,
+  reasonCode: GoalFamilyBalanceReasonCode,
+): AdaptiveExercise {
+  return {
+    id: pool.id,
+    name: pool.name,
+    category: pool.category,
+    sets: typeof pool.defaultSets === 'number' ? pool.defaultSets : 3,
+    repsOrTime: typeof pool.defaultRepsOrTime === 'string' ? pool.defaultRepsOrTime : '8-10',
+    note: typeof pool.notes === 'string' && pool.notes.length > 0 ? pool.notes : undefined,
+    isOverrideable: true,
+    selectionReason: `goal_family_balance_guard:${family}:${reasonCode}`,
+    source: 'database',
+  }
+}
+
+// =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
 
@@ -618,8 +832,9 @@ function selectedSkillToRequiredFamily(
  * Run the Goal-Family Balance + Tissue-Load Saturation Guard on a
  * finalized program (post-Phase-P). Returns the same program reference
  * with `goalFamilyBalanceAudit` stamped on it, plus a structured audit
- * result. Does NOT mutate exercises, sets, RPE, rest, methods, ordering,
- * or any other prescription field. Failure must be absorbed by the
+ * result. V2 may apply at most one bounded `replace` per weak exposure,
+ * mutating only low-priority accessory tail rows in non-completed,
+ * non-grouped, non-cluster sessions. Failure must be absorbed by the
  * caller; this function never throws on its own happy path but defensive
  * input is checked.
  */
@@ -647,7 +862,8 @@ export function runGoalFamilyBalanceGuard<T extends AdaptiveProgram>(
   )
 
   const audit: GoalFamilyBalanceAudit = {
-    version: 'goal-family-balance-v1',
+    // [V2] DB-truth swap pool consulted -> bump version stamp.
+    version: 'goal-family-balance-v2',
     selectedSkills: [],
     weeklyCounts: emptyCounts(),
     weakExposures: [],
@@ -661,6 +877,8 @@ export function runGoalFamilyBalanceGuard<T extends AdaptiveProgram>(
       classifiedFromRegistry: 0,
       classifiedFromHeuristics: 0,
       completedSessionsSkipped: 0,
+      replacementsApplied: 0,
+      candidatesConsidered: 0,
     },
     reasonCodes: [],
   }
@@ -804,43 +1022,49 @@ export function runGoalFamilyBalanceGuard<T extends AdaptiveProgram>(
     if (!audit.reasonCodes.includes(code)) audit.reasonCodes.push(code)
   }
 
-  // ---- correction evaluation ----
-  // For each weak exposure, attempt to record a recommendation OR
-  // honest no-change reason. Actual mutation is intentionally bounded:
-  // v1 records preserve_no_change with a doctrine-true reason for every
-  // weak exposure, because synthesizing non-DB-truth rows would break
-  // the AB10 live workout runtime parity contract. The `correctionsApplied`
-  // array is still typed as `replace | insert | preserve_no_change` so
-  // future iterations can lift this bound without changing the contract.
+  // ---- [V2] correction evaluation with REAL DB-truth swaps ----
+  //
+  // For each weak exposure, the resolver walks the typed bridge:
+  //
+  //     weak exposure
+  //       -> tendon-overload gate (preserve_no_change | continue)
+  //       -> DB-truth candidate picker (canonical pool)
+  //          -> protected_db_truth_pool_unavailable on miss
+  //       -> safe replacement slot finder (non-completed,
+  //          non-grouped, non-cluster, non-primary, non-skill,
+  //          non-only-exposure-for-protected-family)
+  //          -> protected_no_low_priority_swap_target on miss
+  //       -> in-place AdaptiveExercise replacement (sets / repsOrTime
+  //          inherited from PoolExercise.defaultSets / defaultRepsOrTime;
+  //          source = 'database'; isOverrideable = true)
+  //       -> increment perDay counts so subsequent weak exposures
+  //          are evaluated against the corrected state
+  //
+  // Bounded to AT MOST one replace action per weak exposure. Programs
+  // with N weak exposures get up to N corrections, never more.
+
+  // Build the set of families that ARE protected against being stripped
+  // (i.e., the families required by other selected goals). When walking
+  // the tail looking for a swap target, we never replace a row that is
+  // the only exposure for a protected family on that day.
+  const protectedFamilies: Set<GoalFamily> = new Set<GoalFamily>()
+  for (const skill of selectedSkills) {
+    const required = selectedSkillToRequiredFamily(skill)
+    if (required) protectedFamilies.add(required.family)
+  }
+
   for (const weak of audit.weakExposures) {
-    const candidateDay = findCandidateDayForFamily(perDayCounts, weak.family, completedSet)
-    if (!candidateDay) {
-      audit.correctionsApplied.push({
-        dayNumber: 0,
-        action: 'preserve_no_change',
-        family: weak.family,
-        reason: `No non-completed day with a low-priority accessory tail was eligible for ${humanizeFamily(weak.family)} insertion.`,
-        reasonCode: 'protected_no_low_priority_swap_target',
-      })
-      if (!audit.reasonCodes.includes('protected_no_low_priority_swap_target')) {
-        audit.reasonCodes.push('protected_no_low_priority_swap_target')
-      }
-      continue
-    }
-    // Tendon overload protection: if the week is already saturated on
-    // biceps/elbow tendon stress AND the missing family is straight-arm
-    // push or vertical push, prefer preserving rather than adding more
-    // tension to the same shoulder/elbow chain.
+    // ---- 1. Tendon-overload protection (unchanged from v1) ----
     const tendonRiskCode: GoalFamilyBalanceReasonCode = 'protected_tendon_overload_risk'
     if (
       bicepsElbowSum >= bicepsElbowTendonSaturation &&
       (weak.family === 'straight_arm_push' || weak.family === 'straight_arm_pull')
     ) {
       audit.correctionsApplied.push({
-        dayNumber: candidateDay.dayNumber,
+        dayNumber: 0,
         action: 'preserve_no_change',
         family: weak.family,
-        reason: `Skipped adding ${humanizeFamily(weak.family)} on day ${candidateDay.dayNumber}: biceps/elbow tendon load is already saturated this week.`,
+        reason: `Skipped adding ${humanizeFamily(weak.family)}: biceps/elbow tendon load is already saturated this week.`,
         reasonCode: tendonRiskCode,
       })
       if (!audit.reasonCodes.includes(tendonRiskCode)) {
@@ -848,19 +1072,123 @@ export function runGoalFamilyBalanceGuard<T extends AdaptiveProgram>(
       }
       continue
     }
-    // DB-truth pool gate: v1 does not synthesize non-database rows.
-    // Future iterations can consult an injected DB pool and flip this
-    // to an actual `replace` action. The honest no-change reason is
-    // recorded so the audit cannot be mistaken for a silent skip.
-    audit.correctionsApplied.push({
-      dayNumber: candidateDay.dayNumber,
-      action: 'preserve_no_change',
-      family: weak.family,
-      reason: `${humanizeFamily(weak.family)} flagged for day ${candidateDay.dayNumber}; held until DB-truth swap pool is consulted to preserve live-runtime parity.`,
-      reasonCode: 'protected_db_truth_pool_unavailable',
-    })
-    if (!audit.reasonCodes.includes('protected_db_truth_pool_unavailable')) {
-      audit.reasonCodes.push('protected_db_truth_pool_unavailable')
+
+    // ---- 2. DB-truth candidate picker ----
+    const picked = pickDbTruthCandidateForFamily(weak.family)
+    audit.proof.candidatesConsidered += picked.considered
+    if (!picked.candidate || !picked.poolExercise) {
+      audit.correctionsApplied.push({
+        dayNumber: 0,
+        action: 'preserve_no_change',
+        family: weak.family,
+        reason: `No DB-truth candidate available for ${humanizeFamily(weak.family)} in the canonical exercise pool.`,
+        reasonCode: 'protected_db_truth_pool_unavailable',
+      })
+      if (!audit.reasonCodes.includes('protected_db_truth_pool_unavailable')) {
+        audit.reasonCodes.push('protected_db_truth_pool_unavailable')
+      }
+      continue
+    }
+
+    // ---- 3. Safe replacement slot finder ----
+    // Find the first non-completed, non-grouped, non-cluster session
+    // whose accessory tail has a swappable row. We attempt sessions in
+    // perDay order so day 1 swaps land before day 5 swaps when both
+    // are eligible (gives the user the corrected work earlier).
+    let appliedThisExposure = false
+    for (let i = 0; i < perDayCounts.length; i++) {
+      const perDay = perDayCounts[i]
+      if (perDay.completed) continue
+      if (completedSet.has(perDay.dayNumber)) continue
+      // Already covered on this day -> no need to swap here.
+      if (perDay.counts[weak.family] > 0) continue
+
+      const session = program.sessions[i]
+      if (!session) continue
+
+      const slot = findReplaceableSlot(session, perDay, weak.family, protectedFamilies)
+      if (!slot) continue
+
+      // ---- 4. Build the replacement AdaptiveExercise from the pool ----
+      // Map the weak family + selectedSkill back to a recommendation
+      // reason code so the audit's reason chain is doctrine-true.
+      const recommendCode: GoalFamilyBalanceReasonCode =
+        weak.family === 'straight_arm_push' || weak.family === 'push_horizontal'
+          ? 'recommend_dynamic_push_for_planche'
+          : weak.family === 'push_vertical'
+            ? 'recommend_vertical_press_for_hspu'
+            : weak.family === 'compression_core'
+              ? 'recommend_compression_core_for_dragon_flag'
+              : weak.family === 'transition_pull'
+                ? 'recommend_explosive_pull_for_muscle_up'
+                : weak.family === 'mobility_integrity'
+                  ? 'recommend_mobility_integrity_for_tendon_load'
+                  : 'recommend_horizontal_pull_for_lever'
+
+      const newRow = buildAdaptiveExerciseFromPool(picked.poolExercise, weak.family, recommendCode)
+
+      // Capture identity before mutation (the array is mutated in place
+      // so subsequent classifyExerciseFamilies(...) reads see the new
+      // row, keeping perDay.counts honest for the next exposure).
+      const fromName = typeof slot.row.name === 'string' ? slot.row.name : '(unnamed)'
+      const fromId = typeof slot.row.id === 'string' ? slot.row.id : ''
+
+      // ---- 5. In-place replacement on the live session ----
+      const exercises = session.exercises
+      if (!Array.isArray(exercises)) continue
+      exercises[slot.rowIndex] = newRow
+
+      // ---- 6. Update perDay counts so subsequent passes see the swap ----
+      // Decrement old families on the day; increment new families.
+      const oldFamilies = classifyExerciseFamilies(slot.row).families
+      const newFamilies = classifyExerciseFamilies(newRow).families
+      for (const f of oldFamilies) {
+        perDay.counts[f] = Math.max(0, perDay.counts[f] - 1)
+        audit.weeklyCounts[f] = Math.max(0, audit.weeklyCounts[f] - 1)
+      }
+      for (const f of newFamilies) {
+        perDay.counts[f] = (perDay.counts[f] ?? 0) + 1
+        audit.weeklyCounts[f] = (audit.weeklyCounts[f] ?? 0) + 1
+      }
+      // Refresh classifiedRows for diagnostic completeness.
+      perDay.classifiedRows.push({
+        exerciseName: newRow.name,
+        families: newFamilies,
+        grouped: false,
+      })
+
+      audit.correctionsApplied.push({
+        dayNumber: perDay.dayNumber,
+        action: 'replace',
+        family: weak.family,
+        fromExercise: fromName,
+        toExercise: newRow.name,
+        toExerciseId: newRow.id,
+        reason: `Day ${perDay.dayNumber}: replaced low-priority accessory "${fromName}"${
+          fromId ? ` (${fromId})` : ''
+        } with DB-truth ${humanizeFamily(weak.family)} progression "${newRow.name}" for selected ${humanizeSkill(weak.selectedSkill)}.`,
+        reasonCode: recommendCode,
+      })
+      if (!audit.reasonCodes.includes(recommendCode)) {
+        audit.reasonCodes.push(recommendCode)
+      }
+      audit.proof.replacementsApplied += 1
+      appliedThisExposure = true
+      break
+    }
+
+    if (!appliedThisExposure) {
+      // No safe slot found on any non-completed day.
+      audit.correctionsApplied.push({
+        dayNumber: 0,
+        action: 'preserve_no_change',
+        family: weak.family,
+        reason: `No non-completed day with a safe low-priority accessory tail was eligible for ${humanizeFamily(weak.family)} insertion.`,
+        reasonCode: 'protected_no_low_priority_swap_target',
+      })
+      if (!audit.reasonCodes.includes('protected_no_low_priority_swap_target')) {
+        audit.reasonCodes.push('protected_no_low_priority_swap_target')
+      }
     }
   }
 
@@ -894,58 +1222,42 @@ export function runGoalFamilyBalanceGuard<T extends AdaptiveProgram>(
 // =============================================================================
 
 /**
- * Find a non-completed day whose accessory tail (last 2 working slots)
- * contains at least one row that is NOT in a grouped/cluster block AND
- * does NOT already cover the missing family. Used to prove that a safe
- * swap target exists before recording a recommendation. Returns null
- * when no such day exists.
+ * [V2] `findCandidateDayForFamily` (the v1 helper) is no longer used: v2
+ * walks `perDayCounts` directly inside the correction loop and applies
+ * `findReplaceableSlot` against the live `AdaptiveSession` so it can
+ * actually mutate the row. Kept this comment as a marker so anyone
+ * grepping the v1 name knows where the logic moved.
  */
-function findCandidateDayForFamily(
-  perDayCounts: Array<{
-    dayNumber: number
-    completed: boolean
-    counts: Record<GoalFamily, number>
-    classifiedRows: Array<{
-      exerciseName: string
-      families: GoalFamily[]
-      grouped: boolean
-    }>
-  }>,
-  family: GoalFamily,
-  completedSet: Set<number>,
-): { dayNumber: number; targetExerciseName: string } | null {
-  for (const day of perDayCounts) {
-    if (day.completed) continue
-    if (completedSet.has(day.dayNumber)) continue
-    if (day.counts[family] > 0) continue // already covered, no need to swap
-    if (day.classifiedRows.length === 0) continue
-    // Walk the tail backwards to find a non-grouped accessory candidate.
-    const tail = day.classifiedRows.slice(-2)
-    for (let i = tail.length - 1; i >= 0; i--) {
-      const row = tail[i]
-      if (!row.grouped) {
-        return { dayNumber: day.dayNumber, targetExerciseName: row.exerciseName }
-      }
-    }
-  }
-  return null
-}
 
 /**
  * Compute the single visible summary line. Returns null when nothing is
  * worth surfacing, mirroring the user-facing rule:
  *   "Show only when it materially changed or protected the program."
+ *
+ * [V2] Priority order:
+ *   1. ≥1 actual replacement applied -> "corrected" message (highest signal)
+ *   2. Saturation crowding out weak push/core -> "protected" message
+ *   3. Weak exposures with NO replacement -> "flagged; protected by ..."
+ *   4. Saturation only, no weak -> "load is high"
+ *   5. Already balanced -> null
  */
 function computeVisibleSummary(audit: GoalFamilyBalanceAudit): string | null {
   const weak = audit.weakExposures
   const saturated = audit.saturatedExposures
+  const replacementsApplied = audit.proof.replacementsApplied ?? 0
   const recovered = audit.protectedNoChangeReasons.length > 0 && weak.length === 0 && saturated.length === 0
 
   if (recovered) {
     // Don't surface a chip when nothing happened — keep the UI clean.
     return null
   }
-  // Pull-family crowding out push/core
+
+  // ---- 1. [V2] real replacement applied ----
+  if (replacementsApplied > 0) {
+    return 'Balance Guard: corrected push/core exposure for selected goals.'
+  }
+
+  // ---- 2. saturation crowding out weak push/core ----
   const pullSaturated = saturated.some((s) => s.reasonCode === 'pull_family_saturated')
   const tendonSaturated = saturated.some((s) => s.reasonCode === 'biceps_elbow_tendon_saturated')
   const pushOrCoreWeak = weak.some(
@@ -962,10 +1274,29 @@ function computeVisibleSummary(audit: GoalFamilyBalanceAudit): string | null {
   if (tendonSaturated && pushOrCoreWeak) {
     return 'Balance Guard: biceps/elbow tendon load saturated; push/core exposure flagged for next cycle.'
   }
+
+  // ---- 3. [V2] meaningful protection without a swap ----
+  // When a weak exposure existed but was held back by tendon / pool /
+  // no-slot reasons, surface the honest "protected" sentence instead of
+  // the bare "flagged" sentence v1 used.
+  const protectedReasonHit = audit.correctionsApplied.some(
+    (c) =>
+      c.action === 'preserve_no_change' &&
+      (c.reasonCode === 'protected_tendon_overload_risk' ||
+        c.reasonCode === 'protected_db_truth_pool_unavailable' ||
+        c.reasonCode === 'protected_no_low_priority_swap_target'),
+  )
+  if (weak.length > 0 && protectedReasonHit) {
+    return 'Balance Guard: push/core exposure flagged; protected by recovery / tendon / session constraints.'
+  }
+
+  // ---- 4. weak exposures only, no protection (rare path) ----
   if (weak.length > 0) {
     const top = weak[0]
     return `Balance Guard: ${humanizeFamily(top.family)} exposure flagged for selected ${humanizeSkill(top.selectedSkill)}.`
   }
+
+  // ---- 5. saturation only ----
   if (saturated.length > 0) {
     const top = saturated[0]
     return `Balance Guard: ${humanizeFamily(top.family)} load is high this week (${top.count} contributing rows).`

@@ -800,6 +800,10 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 // ProgramDisplayWrapper, which is the single canonical render point for every
 // visible program surface, so a static import cannot widen the render graph.
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
+// [AB11-1] Calibration Checkpoint surface — additive, source-truth-only,
+// derives from the typed recommendation engine (no parallel cosmetic copy).
+import { CalibrationCheckpointCard } from '@/components/programs/CalibrationCheckpointCard'
+import { buildProgramCalibrationRecommendation } from '@/lib/program/program-calibration-recommendation'
 // [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
 // action. Lightweight, null-tolerant, hides on fresh programs, calls only the
 // existing canonical onRegenerate handler — no second route, no second builder.
@@ -2377,6 +2381,35 @@ function ProgramDisplayWrapper({
         goalFamilyBalanceAudit={
           (program as unknown as { goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] })?.goalFamilyBalanceAudit ?? null
         }
+      />
+
+        {/* ==========================================================================
+            [AB11-1] CALIBRATION CHECKPOINT
+            ----------------------------------------------------------------------
+            Additive, source-truth-only display. Derives 1–3 baseline / progress
+            tests from the user's canonical program inputs (primaryGoal /
+            secondaryGoal / selectedSkills / equipmentAvailable) by projecting
+            the canonical `BASELINE_TESTS` catalog from
+            `lib/benchmark-testing-engine.ts`. The card consumes ONLY the typed
+            `ProgramCalibrationRecommendation` object — there is no parallel
+            cosmetic copy that can drift from the recommendation engine. Result
+            capture continues to be owned by the existing `createBenchmark()`
+            server function; AB11-2 will wire the capture flow through this
+            surface.
+            ========================================================================== */}
+      <CalibrationCheckpointCard
+        recommendation={buildProgramCalibrationRecommendation({
+          primaryGoal: program.primaryGoal ?? null,
+          secondaryGoal:
+            (program as unknown as { secondaryGoal?: string | null })
+              ?.secondaryGoal ?? null,
+          selectedSkills:
+            (program as unknown as { selectedSkills?: string[] })
+              ?.selectedSkills ?? [],
+          equipmentAvailable:
+            (program as unknown as { equipmentAvailable?: string[] })
+              ?.equipmentAvailable ?? null,
+        })}
       />
 
         {/* ==========================================================================

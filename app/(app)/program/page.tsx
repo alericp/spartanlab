@@ -802,8 +802,10 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
 // [AB11-1] Calibration Checkpoint surface — additive, source-truth-only,
 // derives from the typed recommendation engine (no parallel cosmetic copy).
+// [AB11-2] The pure recommendation engine is now consumed INSIDE the card,
+// alongside the benchmarks fetch, so the page only forwards typed program
+// inputs. The engine helper is intentionally NOT imported here anymore.
 import { CalibrationCheckpointCard } from '@/components/programs/CalibrationCheckpointCard'
-import { buildProgramCalibrationRecommendation } from '@/lib/program/program-calibration-recommendation'
 // [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
 // action. Lightweight, null-tolerant, hides on fresh programs, calls only the
 // existing canonical onRegenerate handler — no second route, no second builder.
@@ -2384,21 +2386,32 @@ function ProgramDisplayWrapper({
       />
 
         {/* ==========================================================================
-            [AB11-1] CALIBRATION CHECKPOINT
+            [AB11-2] CALIBRATION CHECKPOINT (RESULT-ENTRY ENABLED)
             ----------------------------------------------------------------------
-            Additive, source-truth-only display. Derives 1–3 baseline / progress
-            tests from the user's canonical program inputs (primaryGoal /
-            secondaryGoal / selectedSkills / equipmentAvailable) by projecting
-            the canonical `BASELINE_TESTS` catalog from
-            `lib/benchmark-testing-engine.ts`. The card consumes ONLY the typed
-            `ProgramCalibrationRecommendation` object — there is no parallel
-            cosmetic copy that can drift from the recommendation engine. Result
-            capture continues to be owned by the existing `createBenchmark()`
-            server function; AB11-2 will wire the capture flow through this
-            surface.
+            Additive, source-truth-only display. Derives 1–3 baseline /
+            progress tests from the user's canonical program inputs
+            (primaryGoal / secondaryGoal / selectedSkills /
+            equipmentAvailable) by projecting the canonical `BASELINE_TESTS`
+            catalog from `lib/benchmark-testing-engine.ts`.
+            ----------------------------------------------------------------------
+            AB11-2 changes:
+              - The card now accepts the typed `input` directly and
+                fetches the user's persisted benchmark history through the
+                existing `GET /api/benchmarks?action=list` endpoint on
+                mount.
+              - Each recommended test exposes a compact "Log result"
+                affordance that POSTs to the canonical `/api/benchmarks`
+                capture path — there is NO parallel storage.
+              - Latest known result is rendered honestly per row when
+                benchmark evidence exists; otherwise the row simply omits
+                that line.
+              - The pure recommendation engine
+                (`buildProgramCalibrationRecommendation`) is now consumed
+                INSIDE the card, so the page is no longer responsible for
+                running it.
             ========================================================================== */}
       <CalibrationCheckpointCard
-        recommendation={buildProgramCalibrationRecommendation({
+        input={{
           primaryGoal: program.primaryGoal ?? null,
           secondaryGoal:
             (program as unknown as { secondaryGoal?: string | null })
@@ -2409,7 +2422,7 @@ function ProgramDisplayWrapper({
           equipmentAvailable:
             (program as unknown as { equipmentAvailable?: string[] })
               ?.equipmentAvailable ?? null,
-        })}
+        }}
       />
 
         {/* ==========================================================================

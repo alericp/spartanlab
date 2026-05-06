@@ -33,6 +33,8 @@ import {
   BASELINE_TESTS,
   type BaselineTestDefinition,
   type BenchmarkMovementFamily,
+  type TestCategory,
+  type TestUnit,
 } from '../benchmark-testing-engine'
 import type { SkillKey } from '../skill-state-service'
 
@@ -113,6 +115,20 @@ export interface CalibrationRecommendedTest {
   surfaceCategory: CalibrationTestSurfaceCategory
   /** Engine priority (`essential` | `recommended` | `optional`). */
   priority: BaselineTestDefinition['priority']
+  /**
+   * [AB11-2] Canonical test category from the catalog. Required by the
+   * result-entry payload for `POST /api/benchmarks` so the UI never
+   * guesses. Producer: this engine. Consumer: `CalibrationCheckpointCard`
+   * (submit) / `app/api/benchmarks/route.ts` (validation).
+   */
+  testCategory: TestCategory
+  /**
+   * [AB11-2] Canonical measurement unit from the catalog (`reps` |
+   * `seconds` | `kg` | `lbs` | `progression_level` | `percentage`).
+   * Required for the result-entry payload. Producer: this engine.
+   * Consumer: `CalibrationCheckpointCard` + benchmark API.
+   */
+  testUnit: TestUnit
   /** Estimated time-on-task in minutes (engine-canonical). */
   estimatedTimeMinutes: number
   /** One-line athlete-facing description (engine-canonical). */
@@ -136,6 +152,42 @@ export interface CalibrationRecommendedTest {
    * `movementFamily`.
    */
   programInfluenceNote: string
+  /**
+   * [AB11-2] Whether the user has at least one persisted benchmark for
+   * this `testName`. Computed from the optional
+   * `latestBenchmarksByTestName` map on the input. Used by the UI to
+   * default `isBaseline` to `false` on submit and to render a "Latest"
+   * line when a known result exists.
+   */
+  alreadyTested: boolean
+  /**
+   * [AB11-2] Latest known benchmark for this `testName`, if any. Pure
+   * projection from the input map — this engine never fetches. The shape
+   * is deliberately narrow (no internal `Benchmark` fields) so the
+   * engine stays I/O-free and the UI stays honest about what it knows.
+   */
+  latestKnownResult:
+    | {
+        value: number
+        unit: TestUnit
+        testedAt: string
+        changePercent: number | null
+      }
+    | null
+}
+
+/**
+ * [AB11-2] Narrow projection of a stored `Benchmark` row that the engine
+ * accepts as input. Producer: caller (e.g. `CalibrationCheckpointCard`
+ * after fetching `GET /api/benchmarks?action=list`). Consumer: this
+ * engine. Kept narrow so the engine cannot accidentally take a hard
+ * dependency on the wider `Benchmark` shape.
+ */
+export interface LatestBenchmarkSummary {
+  testValue: number
+  testUnit: TestUnit
+  testDate: string
+  changePercent: number | null
 }
 
 /**
@@ -163,8 +215,15 @@ export interface ProgramCalibrationRecommendation {
    * set so the UI never invents copy beyond the typed object.
    */
   programInfluenceNotes: string[]
-  /** Audit: which engine version produced this recommendation. */
-  engineVersion: 'ab11-1-baseline-progress-recommender'
+  /**
+   * Audit: which engine version produced this recommendation. AB11-2
+   * adds the `latestBenchmarksByTestName` input + `testCategory` /
+   * `testUnit` / `alreadyTested` / `latestKnownResult` outputs without
+   * removing any AB11-1 field.
+   */
+  engineVersion:
+    | 'ab11-1-baseline-progress-recommender'
+    | 'ab11-2-result-entry-recommender'
 }
 
 // =============================================================================
@@ -188,8 +247,26 @@ export interface ProgramCalibrationInput {
    * Whether the user has already logged at least one benchmark for a given
    * test name. We do NOT fetch the DB here — the page passes this set in
    * (or omits it). Absent set = treat all as un-tested.
+   *
+   * NOTE: When `latestBenchmarksByTestName` is supplied, the engine
+   * derives "already tested" from its keys and `alreadyTestedNames`
+   * becomes redundant. Either input is sufficient on its own.
    */
   alreadyTestedNames?: ReadonlySet<string> | null
+  /**
+   * [AB11-2] Optional map of the user's latest benchmark per `testName`,
+   * sourced by the caller from `GET /api/benchmarks?action=list` (or the
+   * in-process equivalent). The engine uses it for two things:
+   *   1. Computes `alreadyTested` per recommended test.
+   *   2. Projects `latestKnownResult` onto the recommended test row.
+   *
+   * The engine never reads any other field; it never fetches; it never
+   * mutates the map. Absent map = treat all as un-tested with no latest
+   * result, exactly as in AB11-1.
+   */
+  latestBenchmarksByTestName?:
+    | ReadonlyMap<string, LatestBenchmarkSummary>
+    | null
   /**
    * Optional contraindication signal from the readiness layer. If
    * provided and `kind === 'delay'`, the engine returns `delay` with the
@@ -420,7 +497,20 @@ export function buildProgramCalibrationRecommendation(
 
   // ----- 2. Map goals → SkillKey set ---------------------------------------
   const { primarySkill, allSkills } = mapSkillsFromInput(input)
-  const alreadyTested = input.alreadyTestedNames ?? new Set<string>()
+  // [AB11-2] Build the canonical "already tested" set from EITHER input.
+  // The benchmarks-by-name map is the richer source (also drives
+  // latestKnownResult); alreadyTestedNames is supported for backward
+  // compatibility with AB11-1 callers.
+  const benchmarksMap = input.latestBenchmarksByTestName ?? null
+  const alreadyTested: ReadonlySet<string> = (() => {
+    if (input.alreadyTestedNames && input.alreadyTestedNames.size > 0) {
+      const merged = new Set<string>(input.alreadyTestedNames)
+      if (benchmarksMap) for (const k of benchmarksMap.keys()) merged.add(k)
+      return merged
+    }
+    if (benchmarksMap) return new Set<string>(benchmarksMap.keys())
+    return new Set<string>()
+  })()
   const equipment = input.equipmentAvailable ?? null
 
   // ----- 3. Score each catalog test ----------------------------------------
@@ -429,6 +519,7 @@ export function buildProgramCalibrationRecommendation(
     score: number
     alignedSkills: SkillKey[]
     reasonCode: CalibrationRecommendationReasonCode
+    alreadyTested: boolean
   }
 
   const scored: Scored[] = []
@@ -436,7 +527,8 @@ export function buildProgramCalibrationRecommendation(
     if (!isTestEquipmentReachable(def, equipment)) continue
 
     const aligned = def.skillsAffected.filter((s) => allSkills.includes(s))
-    const isUnTested = !alreadyTested.has(def.testName)
+    const wasTested = alreadyTested.has(def.testName)
+    const isUnTested = !wasTested
 
     let score = 0
     let reasonCode: CalibrationRecommendationReasonCode = 'essential_baseline'
@@ -459,11 +551,32 @@ export function buildProgramCalibrationRecommendation(
       score += 20
       if (reasonCode === 'essential_baseline') reasonCode = 'no_baseline_yet'
     }
+    // [AB11-2] Already-tested deprioritization. Goal-aligned tests are
+    // still essential to retest, so they keep most of their score; plain
+    // essential baselines tested once are gently pushed below new tests
+    // so the checkpoint surfaces the next missing baseline first.
+    if (wasTested) {
+      if (reasonCode === 'goal_alignment') {
+        score -= 5
+        reasonCode = 'overdue_retest'
+      } else if (reasonCode === 'skill_alignment') {
+        score -= 10
+        reasonCode = 'overdue_retest'
+      } else {
+        score -= 20
+      }
+    }
     // Cheap tests beat expensive ones at the margin
     score += Math.max(0, 5 - def.estimatedTimeMinutes)
 
     if (score <= 0) continue
-    scored.push({ def, score, alignedSkills: aligned, reasonCode })
+    scored.push({
+      def,
+      score,
+      alignedSkills: aligned,
+      reasonCode,
+      alreadyTested: wasTested,
+    })
   }
 
   scored.sort((a, b) => b.score - a.score)
@@ -479,19 +592,38 @@ export function buildProgramCalibrationRecommendation(
   }
 
   // ----- 5. Project to public shape ----------------------------------------
-  const recommendedTests: CalibrationRecommendedTest[] = picks.map((s) => ({
-    testName: s.def.testName,
-    displayName: s.def.displayName,
-    movementFamily: s.def.movementFamily,
-    surfaceCategory: surfaceCategoryFor(s.def),
-    priority: s.def.priority,
-    estimatedTimeMinutes: s.def.estimatedTimeMinutes,
-    description: s.def.description,
-    reasonCode: s.reasonCode,
-    reasonText: reasonTextFor(s.def, s.reasonCode, s.alignedSkills),
-    influencesSkills: s.alignedSkills,
-    programInfluenceNote: programInfluenceNoteFor(s.def, s.alignedSkills),
-  }))
+  const recommendedTests: CalibrationRecommendedTest[] = picks.map((s) => {
+    // [AB11-2] Honest latest-result projection. Falls back to null when
+    // no map was provided OR the testName is missing — never invented.
+    const latest = benchmarksMap?.get(s.def.testName) ?? null
+    const latestKnownResult = latest
+      ? {
+          value: latest.testValue,
+          unit: latest.testUnit,
+          testedAt: latest.testDate,
+          changePercent: latest.changePercent,
+        }
+      : null
+    return {
+      testName: s.def.testName,
+      displayName: s.def.displayName,
+      movementFamily: s.def.movementFamily,
+      surfaceCategory: surfaceCategoryFor(s.def),
+      priority: s.def.priority,
+      // [AB11-2] Canonical category/unit projected from the catalog so
+      // the UI never guesses when building the `BenchmarkInput` payload.
+      testCategory: s.def.testCategory,
+      testUnit: s.def.testUnit,
+      estimatedTimeMinutes: s.def.estimatedTimeMinutes,
+      description: s.def.description,
+      reasonCode: s.reasonCode,
+      reasonText: reasonTextFor(s.def, s.reasonCode, s.alignedSkills),
+      influencesSkills: s.alignedSkills,
+      programInfluenceNote: programInfluenceNoteFor(s.def, s.alignedSkills),
+      alreadyTested: s.alreadyTested,
+      latestKnownResult,
+    }
+  })
 
   // ----- 6. Aggregate roll-up fields ---------------------------------------
   const primaryPick = picks[0] ?? null
@@ -534,6 +666,6 @@ export function buildProgramCalibrationRecommendation(
     safeToTestToday,
     blockedReasons,
     programInfluenceNotes,
-    engineVersion: 'ab11-1-baseline-progress-recommender',
+    engineVersion: 'ab11-2-result-entry-recommender',
   }
 }

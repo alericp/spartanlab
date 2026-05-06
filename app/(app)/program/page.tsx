@@ -2369,6 +2369,14 @@ function ProgramDisplayWrapper({
         rulePopulationLedger={
           (program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null
         }
+        // [GOAL-FAMILY-BALANCE-GUARD] Forward the post-Phase-P tissue-load
+        // saturation audit stamped on the program. The summary component
+        // renders exactly one compact line ONLY when `visibleSummary` is a
+        // non-empty string. Defensive cast: the audit is optional and
+        // missing on programs generated before this phase.
+        goalFamilyBalanceAudit={
+          (program as unknown as { goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] })?.goalFamilyBalanceAudit ?? null
+        }
       />
 
         {/* ==========================================================================
@@ -9491,7 +9499,7 @@ export default function ProgramPage() {
       
       // Build program inputs for server route
       // [STEP-4B] AdaptiveProgramInputs.trainingDaysPerWeek is
-      // `TrainingDays | 'flexible'` — builder shape carries the literal,
+      // `TrainingDays | 'flexible'` ��� builder shape carries the literal,
       // which the server route's adaptive builder knows how to interpret.
       const modifyProgramInputs = {
         primaryGoal: effectiveInputs.primaryGoal,

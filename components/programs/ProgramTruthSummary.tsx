@@ -12,6 +12,7 @@ import type {
   RulePopulationLedgerEntryState,
 } from '@/lib/program/rule-population-ledger-contract'
 import { RULE_LEDGER_CATEGORY_LABELS } from '@/lib/program/rule-population-ledger-contract'
+import type { GoalFamilyBalanceAudit } from '@/lib/program/goal-family-balance-guard'
 
 /**
  * PROGRAM TRUTH SUMMARY
@@ -346,6 +347,16 @@ interface ProgramTruthSummaryProps {
    * that case rather than fabricating counts.
    */
   rulePopulationLedger?: RulePopulationLedger | null
+  /**
+   * [GOAL-FAMILY-BALANCE-GUARD] Optional post-Phase-P tissue-load saturation
+   * audit stamped on the program by `runGoalFamilyBalanceGuard`. The
+   * component renders ONE compact line ONLY when `visibleSummary` is a
+   * non-empty string (the guard sets it to null when the week is already
+   * balanced). Older saved programs that predate this phase will not have
+   * it, and the component renders nothing in that case rather than
+   * fabricating content.
+   */
+  goalFamilyBalanceAudit?: GoalFamilyBalanceAudit | null
   className?: string
 }
 
@@ -431,7 +442,7 @@ function readSkillTraceSummaryRows(value: unknown): ReadonlyArray<SkillTraceSumm
   return value.filter(isSkillTraceSummaryRow)
 }
 
-export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rulePopulationLedger, className }: ProgramTruthSummaryProps) {
+export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rulePopulationLedger, goalFamilyBalanceAudit, className }: ProgramTruthSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!truthExplanation) {
@@ -713,6 +724,18 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
                   : `${underexpressedSkills.length} skills have limited direct work this cycle.`}
               </span>
             </div>
+          )}
+
+          {/* ---------------------------------------------------------------
+              [GOAL-FAMILY-BALANCE-GUARD] One compact line — visible ONLY when
+              the post-Phase-P guard found something materially worth saying
+              (visibleSummary is null for already-balanced weeks). No icon
+              clutter, no expandable tray — the guard speaks once or stays
+              silent. The string itself is computed from the typed audit, not
+              fabricated here.
+              --------------------------------------------------------------- */}
+          {goalFamilyBalanceAudit?.visibleSummary && (
+            <p className="text-xs text-[#A4ACB8] italic">{goalFamilyBalanceAudit.visibleSummary}</p>
           )}
         </div>
 

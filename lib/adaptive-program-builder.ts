@@ -2050,9 +2050,29 @@ export interface AdaptiveExercise {
   }
 }
 
+// [AB12-2] Stable typed field stamped post-Phase-AA2 by the
+// authoritative-program-generation service. The actual interface is
+// owned by `lib/program/evidence-calibration-generation-influence.ts`;
+// we import it as a type-only reference so the AdaptiveProgram
+// interface gains the field without any runtime coupling, and so the
+// builder file (already ~31k lines) does not need to import any AB12
+// runtime helper. Optional + non-destructive — older programs and
+// programs generated before AB12-2 simply omit it.
+import type { EvidenceCalibrationGenerationInfluence } from './program/evidence-calibration-generation-influence'
+
 export interface AdaptiveProgram {
   id: string
   createdAt: string
+  // [AB12-2] Optional, non-destructive evidence-calibration influence
+  // stamped post-Phase-AA2 by the authoritative-program-generation
+  // service. Older programs and programs generated before AB12-2 simply
+  // omit this field. The shape is owned by
+  // `lib/program/evidence-calibration-generation-influence.ts`; the
+  // field is the SINGLE place runtime AB12-2 truth surfaces on the
+  // canonical program object. UI consumers (FeedbackLoopProofCard)
+  // read it directly to render the "what was actually applied at
+  // generation time" strip — no client-side rebuild required.
+  evidenceCalibrationInfluence?: EvidenceCalibrationGenerationInfluence
   primaryGoal: PrimaryGoal
   secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   goalLabel: string

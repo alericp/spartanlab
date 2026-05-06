@@ -101,6 +101,28 @@ import { runGoalFamilyBalanceGuard } from '@/lib/program/goal-family-balance-gua
 // "is doctrine actually causal?" question — it does not become a builder.
 import { runDoctrineUtilizationContract } from '@/lib/program/doctrine-utilization-contract'
 import { runSessionLengthTruthContract } from '@/lib/program/session-length-truth-contract'
+// [AB12-2] Evidence-calibration generation influence. Pure typed helpers
+// — no I/O, no DB, no React. The service:
+//  1. Builds the AB12-1 plan server-side from the post-builder program's
+//     `performanceAdaptation` stamps (same source the page-level proof
+//     card already uses).
+//  2. Converts the plan into the AB12-2 generation influence object
+//     using `buildEvidenceCalibrationGenerationInfluence`. AB12-2 leaves
+//     every structural builder constraint as `suppressed` because the
+//     31k-line builder has no audited safe knob yet (AB12-3 wires those).
+//     Only the UI-level `benchmarkRetestPrompt` hook is active.
+//  3. Stamps the result on `program.evidenceCalibrationInfluence` so
+//     every successful generation carries the truthful audit object.
+import {
+  buildWorkoutEvidenceSignalsFromProgramStamps,
+  summarizeWorkoutEvidence,
+} from '@/lib/program/program-evidence-feedback-loop'
+import { buildEvidenceAwareCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
+import {
+  buildEvidenceCalibrationGenerationInfluence,
+  type EvidenceCalibrationGenerationInfluence,
+} from '@/lib/program/evidence-calibration-generation-influence'
+import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -169,6 +191,23 @@ export interface AuthoritativeGenerationRequest {
    * Untrusted/demo logs are filtered server-side regardless of caller intent.
    */
   recentWorkoutLogs?: ServerWorkoutLogInput[]
+
+  /**
+   * [AB12-2] Optional caller-supplied calibration plan. When the caller
+   * already has a typed `ProgramEvidenceCalibrationPlan` (e.g. built
+   * client-side from `/api/benchmarks?action=list` plus the live
+   * program's `performanceAdaptation` stamps), it can be passed here to
+   * have the authoritative service convert it into a generation
+   * influence and stamp it on the resulting program.
+   *
+   * When omitted (the default), the service builds a workout-only plan
+   * server-side from the post-builder program's `performanceAdaptation`
+   * stamps. This means EVERY successful generation carries an honest
+   * `program.evidenceCalibrationInfluence` audit object.
+   *
+   * Optional + safe defaults: never required; never fakes evidence.
+   */
+  evidenceCalibrationPlan?: ProgramEvidenceCalibrationPlan
 }
 
 export interface AuthoritativeGenerationResult {
@@ -3307,6 +3346,116 @@ export async function executeAuthoritativeGeneration(
       ...phaseAA2Diagnostic,
     })
     markStage('phase_aa2_doctrine_utilization_done')
+
+    // ==========================================================================
+    // [AB12-2] EVIDENCE CALIBRATION GENERATION INFLUENCE STAMP
+    // ----------------------------------------------------------------------
+    // Runs AFTER all builder + post-builder phases (Phase L/M/N/O/P/Q/AA2).
+    // Pure deterministic stamper that:
+    //   1. Resolves a `ProgramEvidenceCalibrationPlan` either from the
+    //      optional caller-supplied `request.evidenceCalibrationPlan`
+    //      OR by building a workout-only plan server-side from the
+    //      just-generated program's `performanceAdaptation` stamps.
+    //      (Same source AB11-4 / AB11-5 already use on the Program page.)
+    //   2. Converts the plan into the AB12-2 typed influence object via
+    //      `buildEvidenceCalibrationGenerationInfluence`. AB12-2 default
+    //      hooks: every structural builder constraint is suppressed
+    //      (no safe builder knob exists yet — AB12-3 wires those). Only
+    //      the UI-level `benchmarkRetestPrompt` hook is currently active.
+    //   3. Stamps `program.evidenceCalibrationInfluence` on the canonical
+    //      program object so the proof card consumer reads it directly.
+    //
+    // Failure here is non-blocking: this try/catch absorbs the error
+    // and the program is returned unstamped. We do NOT mutate any
+    // builder field other than the new optional `evidenceCalibrationInfluence`.
+    // ==========================================================================
+    const ab12_2Diagnostic: {
+      attempted: boolean
+      stamped: boolean
+      planSource: 'caller' | 'server_workout_only' | 'none'
+      planStatus: string
+      influenceStatus: string
+      appliedConstraints: number
+      suppressedConstraints: number
+      error?: string
+    } = {
+      attempted: false,
+      stamped: false,
+      planSource: 'none',
+      planStatus: 'unresolved',
+      influenceStatus: 'unresolved',
+      appliedConstraints: 0,
+      suppressedConstraints: 0,
+    }
+    try {
+      ab12_2Diagnostic.attempted = true
+      // Resolve plan: prefer caller-supplied, else build workout-only plan
+      // from the program's stamps. We never fetch benchmarks here — that
+      // path is owned by the page-level calibration card; AB12-3 may add
+      // a server-side benchmark loader if needed.
+      let plan: ProgramEvidenceCalibrationPlan | null = null
+      if (request.evidenceCalibrationPlan) {
+        plan = request.evidenceCalibrationPlan
+        ab12_2Diagnostic.planSource = 'caller'
+      } else {
+        // Same canonical path the Program page uses for the AB11-5
+        // workout-side proof card.
+        const workoutSignals = buildWorkoutEvidenceSignalsFromProgramStamps(
+          program as unknown as Parameters<
+            typeof buildWorkoutEvidenceSignalsFromProgramStamps
+          >[0],
+        )
+        const workoutSummary = summarizeWorkoutEvidence(workoutSignals)
+        plan = buildEvidenceAwareCalibrationPlan({
+          workoutSummary,
+          inputAvailability: { workout: 'ok', benchmark: 'absent' },
+        })
+        ab12_2Diagnostic.planSource = 'server_workout_only'
+        // Note: server-side benchmark loading is deferred to AB12-3.
+        // When AB12-3 adds a benchmark reader, it can import
+        // `buildBenchmarkEvidenceSignalsFromLatestMap` +
+        // `summarizeBenchmarkEvidence` from
+        // `@/lib/program/program-evidence-feedback-loop` and merge the
+        // benchmark summary into this same `buildEvidenceAwareCalibrationPlan`
+        // call.
+      }
+      ab12_2Diagnostic.planStatus = plan?.status ?? 'unresolved'
+
+      const influence: EvidenceCalibrationGenerationInfluence =
+        buildEvidenceCalibrationGenerationInfluence(plan, {
+          // AB12-2 hooks: only the UI-level retest prompt is wired.
+          // Every structural constraint is suppressed until AB12-3
+          // wires a real builder knob behind each.
+          structuralHooks: {
+            progressionAggressiveness: false,
+            volumeBias: false,
+            intensityBias: false,
+            recoveryBias: false,
+            benchmarkRetestPrompt: true,
+          },
+        })
+
+      // Non-destructive stamp. We mutate ONLY the new optional field.
+      program = { ...program, evidenceCalibrationInfluence: influence }
+      ab12_2Diagnostic.stamped = true
+      ab12_2Diagnostic.influenceStatus = influence.status
+      ab12_2Diagnostic.appliedConstraints = influence.appliedConstraints.length
+      ab12_2Diagnostic.suppressedConstraints =
+        influence.suppressedConstraints.length
+    } catch (ab12_2Err) {
+      ab12_2Diagnostic.error = String(ab12_2Err)
+      console.log('[ab12-2-evidence-calibration-stamp-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(ab12_2Err),
+      })
+    }
+    console.log('[ab12-2-evidence-calibration-stamp]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...ab12_2Diagnostic,
+    })
+    markStage('ab12_2_evidence_calibration_stamp_done')
 
     // ==========================================================================
     // STAGE: Success

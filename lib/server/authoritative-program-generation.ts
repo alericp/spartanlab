@@ -122,6 +122,14 @@ import {
   buildEvidenceCalibrationGenerationInfluence,
   type EvidenceCalibrationGenerationInfluence,
 } from '@/lib/program/evidence-calibration-generation-influence'
+// [AB13-4] First real structural shaping consumer. Pure helper that caps
+// `targetRPE` to 7 on prescribed working rows when (and only when) the
+// AB12-2 influence resolves to `active` + `conservative`. The helper is
+// fully gated and idempotent — see file-level comment for the contract.
+import {
+  applyConservativeProgressionShaping,
+  type EvidenceCalibrationShapingProof,
+} from '@/lib/program/evidence-calibration-program-shaping'
 import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
 
 // ==========================================================================
@@ -3423,11 +3431,17 @@ export async function executeAuthoritativeGeneration(
 
       const influence: EvidenceCalibrationGenerationInfluence =
         buildEvidenceCalibrationGenerationInfluence(plan, {
-          // AB12-2 hooks: only the UI-level retest prompt is wired.
-          // Every structural constraint is suppressed until AB12-3
-          // wires a real builder knob behind each.
+          // [AB13-4] First real structural hook is now wired:
+          // `progressionAggressiveness` flows through to
+          // `applyConservativeProgressionShaping` below, which caps
+          // `targetRPE` to 7 on prescribed working rows when (and only
+          // when) the influence resolves to `active` + `conservative`.
+          // Every other structural constraint remains suppressed
+          // because no audited builder consumer exists for them yet.
+          // Each future flip follows the same shape: wire ONE consumer,
+          // then flip ONE hook.
           structuralHooks: {
-            progressionAggressiveness: false,
+            progressionAggressiveness: true,
             volumeBias: false,
             intensityBias: false,
             recoveryBias: false,
@@ -3456,6 +3470,76 @@ export async function executeAuthoritativeGeneration(
       ...ab12_2Diagnostic,
     })
     markStage('ab12_2_evidence_calibration_stamp_done')
+
+    // ==========================================================================
+    // STAGE: AB13-4 — CONSERVATIVE PROGRESSION PROGRAM-SHAPING PASS
+    // ==========================================================================
+    // First real evidence-to-program structural mutation.
+    //
+    // Reads the influence we JUST stamped on `program.evidenceCalibrationInfluence`
+    // and runs `applyConservativeProgressionShaping`. The helper itself owns
+    // the gate (`status === 'active'` AND `allowedToMutateProgram === true`
+    // AND `progressionAggressiveness === 'conservative'`); when the gate is
+    // closed it returns the same program reference and a proof object whose
+    // `ranShapingPass` is `false` and `skippedReason` explains why.
+    //
+    // Effect when the gate is open: every `AdaptiveExercise` whose
+    // `targetRPE > 7` (and whose category is not warmup/cooldown/mobility/
+    // recovery/prehab/rehab) is capped at RPE 7. No selection, schedule,
+    // method, sets, reps, or skill changes — those are owned by other
+    // builder phases and are out of AB13-4 scope.
+    //
+    // The proof object is non-destructively stamped on
+    // `program.evidenceCalibrationShapingProof` so any consumer can audit
+    // the pass. Failure here is non-blocking: the try/catch absorbs the
+    // error and the program is returned without the shaping proof — but
+    // the AB12-2 influence stamp from the previous stage is preserved.
+    const ab13_4Diagnostic: {
+      ranShapingPass: boolean
+      appliedAtLeastOneMutation: boolean
+      cappedExerciseCount: number
+      skippedReason: string | null
+      error?: string
+    } = {
+      ranShapingPass: false,
+      appliedAtLeastOneMutation: false,
+      cappedExerciseCount: 0,
+      skippedReason: null,
+    }
+    try {
+      const shapingResult = applyConservativeProgressionShaping(
+        program,
+        program.evidenceCalibrationInfluence ?? null,
+      )
+      const shapingProof: EvidenceCalibrationShapingProof =
+        shapingResult.shapingProof
+      // Non-destructive stamp: shapingResult.program is either the SAME
+      // reference (gate closed) or a new shallow-cloned program with
+      // capped exercises (gate open). Either way we add only the
+      // optional shaping proof field.
+      program = {
+        ...shapingResult.program,
+        evidenceCalibrationShapingProof: shapingProof,
+      }
+      ab13_4Diagnostic.ranShapingPass = shapingProof.ranShapingPass
+      ab13_4Diagnostic.appliedAtLeastOneMutation =
+        shapingProof.appliedAtLeastOneMutation
+      ab13_4Diagnostic.cappedExerciseCount = shapingProof.cappedExerciseCount
+      ab13_4Diagnostic.skippedReason = shapingProof.skippedReason
+    } catch (ab13_4Err) {
+      ab13_4Diagnostic.error = String(ab13_4Err)
+      console.log('[ab13-4-conservative-progression-shaping-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(ab13_4Err),
+      })
+    }
+    console.log('[ab13-4-conservative-progression-shaping]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...ab13_4Diagnostic,
+    })
+    markStage('ab13_4_conservative_progression_shaping_done')
 
     // ==========================================================================
     // STAGE: Success

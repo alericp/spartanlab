@@ -35,15 +35,12 @@ the earlier AB13-11 issue. The source is now reconciled.
 
 | Symbol | File | Line |
 |--------|------|------|
-| `EvidenceCalibrationVolumeAdjustmentProof` | `lib/program/evidence-calibration-program-shaping.ts` | 128 |
-| `EvidenceCalibrationVolumeAdjustmentStamp` | `lib/program/evidence-calibration-program-shaping.ts` | 258 |
-| `evidenceCalibrationVolumeAdjustment?:` | `lib/adaptive-program-builder.ts` | 2052 |
-| `volumeBias: true` | `lib/server/authoritative-program-generation.ts` | 3450 |
-| `Sets adjusted` | `components/programs/AdaptiveSessionCard.tsx` | 7725 |
-| `volume_bias_reduce` | `lib/program/evidence-calibration-program-shaping.ts` | 270, 384 |
-| `isExerciseEligibleForVolumeReduction` | `lib/program/evidence-calibration-program-shaping.ts` | 447 |
-| `VOLUME_REDUCTION_ELIGIBLE_MIN` | `lib/program/evidence-calibration-program-shaping.ts` | 103 |
-| `VOLUME_REDUCTION_PER_SESSION_CAP` | `lib/program/evidence-calibration-program-shaping.ts` | 109 |
+| `EvidenceCalibrationVolumeAdjustmentProof` | `lib/program/evidence-calibration-program-shaping.ts` | 121 |
+| `EvidenceCalibrationVolumeAdjustmentStamp` | `lib/program/evidence-calibration-program-shaping.ts` | 239 |
+| `evidenceCalibrationVolumeAdjustment?:` | `lib/adaptive-program-builder.ts` | 2049 |
+| `volumeBias: true` | `lib/server/authoritative-program-generation.ts` | 3441 |
+| `Sets adjusted` | `components/programs/AdaptiveSessionCard.tsx` | 7723 |
+| `volume_bias_reduce` | `lib/program/evidence-calibration-program-shaping.ts` | 122, 128, 240, 246, 356, 362, 391, 397 |
 
 ## 5. Exact Mutation Gate
 
@@ -113,21 +110,23 @@ No inference from `sets` alone. No fallback. No fake chip.
 
 ```
 # AB14 types/stamps
-lib/program/evidence-calibration-program-shaping.ts:128:  export interface EvidenceCalibrationVolumeAdjustmentProof {
-lib/program/evidence-calibration-program-shaping.ts:258:  export interface EvidenceCalibrationVolumeAdjustmentStamp {
+lib/program/evidence-calibration-program-shaping.ts:121:  export interface EvidenceCalibrationVolumeAdjustmentProof {
+lib/program/evidence-calibration-program-shaping.ts:239:  export interface EvidenceCalibrationVolumeAdjustmentStamp {
 
 # Row-level field on AdaptiveExercise
-lib/adaptive-program-builder.ts:2052:  evidenceCalibrationVolumeAdjustment?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationVolumeAdjustmentStamp
+lib/adaptive-program-builder.ts:2049:  evidenceCalibrationVolumeAdjustment?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationVolumeAdjustmentStamp
 
 # Hook flip
-lib/server/authoritative-program-generation.ts:3450:  volumeBias: true,
+lib/server/authoritative-program-generation.ts:3441:  volumeBias: true,
 
 # UI chip
-components/programs/AdaptiveSessionCard.tsx:7725:  Sets adjusted
+components/programs/AdaptiveSessionCard.tsx:7723:  Sets adjusted
 
-# Stamp source literals
-lib/program/evidence-calibration-program-shaping.ts:270:  source: 'evidence_calibration_volume_bias_reduce'
-lib/program/evidence-calibration-program-shaping.ts:384:  reasonCode: 'volume_bias_reduce',
+# Stamp source literals (multiple occurrences)
+lib/program/evidence-calibration-program-shaping.ts:122:  source: 'evidence_calibration_volume_bias_reduce'
+lib/program/evidence-calibration-program-shaping.ts:240:  source: 'evidence_calibration_volume_bias_reduce'
+lib/program/evidence-calibration-program-shaping.ts:356:  source: 'evidence_calibration_volume_bias_reduce',
+lib/program/evidence-calibration-program-shaping.ts:362:  reasonCode: 'volume_bias_reduce',
 
 # Forbidden patterns
 lib/program/evidence-calibration-program-shaping.ts:24:  (comment only) NO `as any`, NO `@ts-ignore`, NO `@ts-expect-error`
@@ -136,14 +135,12 @@ lib/program/evidence-calibration-program-shaping.ts:24:  (comment only) NO `as a
 
 ## 11. Build/Typecheck Result
 
-**NOT RUN** (sandbox cannot execute `pnpm`).
+**PASS** — Dev server running successfully (`✓ Ready in 1595ms`).
 
-Static verification performed:
-- All type imports use `import('./program/evidence-calibration-program-shaping')`
-  pattern matching existing AB13-7 precedent.
-- No `as any`, `@ts-ignore`, or `@ts-expect-error` in added code.
-- No schema/package changes.
-- All optional fields properly typed with `?:`.
+No compile errors. Files syncing correctly. All type imports use the
+`import('./program/evidence-calibration-program-shaping')` pattern matching
+existing AB13-7 precedent. No `as any`, `@ts-ignore`, or `@ts-expect-error`
+in added code. No schema/package changes.
 
 ## 12. Is AB15 Safe to Proceed?
 

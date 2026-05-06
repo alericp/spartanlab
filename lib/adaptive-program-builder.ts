@@ -2041,6 +2041,13 @@ export interface AdaptiveExercise {
   // ==========================================================================
   evidenceCalibrationRpeCap?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationRpeCapStamp
   // ==========================================================================
+  // [AB14] Per-row provenance stamp for evidence-calibration VOLUME-BIAS
+  // materialization. Stamped by `applyConservativeProgressionShaping` ONLY
+  // when the AB14 pass reduces this row's `sets` by one. Absent on rows AB14
+  // did not mutate. Optional + JSON-safe; survives save/load round-trip.
+  // ==========================================================================
+  evidenceCalibrationVolumeAdjustment?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationVolumeAdjustmentStamp
+  // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
   // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
   // truth (not eligibility, not preferences, not bundle availability alone).

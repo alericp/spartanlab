@@ -253,8 +253,10 @@ import {
 import {
   computeLiveDeloadDecision,
   hasDecisionChanged,
+  applyLiveDeloadToExecutionContract,
   type LiveDeloadDecision,
-} from '@/lib/workout/live-deload-runtime'
+  type AB15ApplicationResult,
+  } from '@/lib/workout/live-deload-runtime'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -3393,13 +3395,17 @@ export function StreamlinedWorkoutSession({
   // No longer separate useState - they're part of the unified reducer
   const [coachingNote, setCoachingNote] = useState<string | null>(null)
 
-  // [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
+// [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
   // live deload decisions. Updated after each completed set. The decision is
   // re-computed on each update and displayed when it applies adjustments.
+  // [AB15B] Use ref to avoid stale closure issues when computing decision.
+  const ab15SessionReadinessRef = useRef<SessionAdaptiveReadiness>(createInitialSessionReadiness)
   const [ab15SessionReadiness, setAb15SessionReadiness] = useState<SessionAdaptiveReadiness>(
     createInitialSessionReadiness
   )
   const [ab15DeloadDecision, setAb15DeloadDecision] = useState<LiveDeloadDecision | null>(null)
+  // [AB15B] Track the actual applied execution adjustments (not just decision)
+  const [ab15AppliedResult, setAb15AppliedResult] = useState<AB15ApplicationResult | null>(null)
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Next session info - loaded dynamically when workout completes
   // This prevents the heavy adaptive-program-builder from being imported at module load
@@ -3731,14 +3737,47 @@ export function StreamlinedWorkoutSession({
     const effectiveRestSeconds = eff.weekScalingApplied
       ? eff.restPeriod
       : baseRestSeconds
-    return {
-      effectiveSets: eff.sets,
-      effectiveRepsOrTime: eff.repsOrTime,
-      effectiveTargetRPE: eff.targetRPE,
-      effectiveRestSeconds,
-      weekScalingApplied: eff.weekScalingApplied,
+
+    // =========================================================================
+    // [AB15B] APPLY LIVE DELOAD ADJUSTMENTS TO EXECUTION CONTRACT
+    // This is where AB15 decisions actually affect execution values.
+    // The helper is pure and returns unchanged values if no adjustment applies.
+    // =========================================================================
+    const completedSetsForExercise = normalizedCompletedSets?.length ?? 0
+    const ab15Result = applyLiveDeloadToExecutionContract({
+      baseEffectiveSets: eff.sets,
+      baseTargetRPE: eff.targetRPE,
+      baseRestSeconds: effectiveRestSeconds,
+      currentSetNumber: validatedSetNumber,
+      completedSetsForExercise,
+      decision: ab15DeloadDecision,
+    })
+
+    // Dev-only logging when AB15 actually applies changes
+    if (process.env.NODE_ENV === 'development' && ab15Result.applied) {
+      console.log('[v0] [AB15B] Applied to execution contract', {
+        baseEffectiveSets: eff.sets,
+        adjustedEffectiveSets: ab15Result.effectiveSets,
+        baseTargetRPE: eff.targetRPE,
+        adjustedTargetRPE: ab15Result.effectiveTargetRPE,
+        baseRestSeconds: effectiveRestSeconds,
+        adjustedRestSeconds: ab15Result.effectiveRestSeconds,
+        level: ab15DeloadDecision?.level,
+        appliedSummary: ab15Result.appliedSummary,
+      })
     }
-  }, [safeCurrentExercise])
+
+    return {
+      effectiveSets: ab15Result.effectiveSets,
+      effectiveRepsOrTime: eff.repsOrTime,
+      effectiveTargetRPE: ab15Result.effectiveTargetRPE,
+      effectiveRestSeconds: ab15Result.effectiveRestSeconds,
+      weekScalingApplied: eff.weekScalingApplied,
+      // [AB15B] Expose AB15 application result for UI proof
+      ab15Applied: ab15Result.applied,
+      ab15Result: ab15Result.applied ? ab15Result : null,
+    }
+  }, [safeCurrentExercise, validatedSetNumber, normalizedCompletedSets, ab15DeloadDecision])
   
   // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE CONTEXT PERSISTENCE
@@ -5322,9 +5361,11 @@ export function StreamlinedWorkoutSession({
       })
 
       // =====================================================================
-      // [AB15 — LIVE DELOAD RUNTIME] Update session readiness and compute
+      // [AB15B — LIVE DELOAD RUNTIME] Update session readiness and compute
       // live deload decision after each completed set. This is the LIVE
       // runtime adaptation path - not static program generation.
+      // [AB15B FIX] Removed nested setter anti-pattern. Now uses ref for
+      // synchronous readiness access and separate state updates.
       // =====================================================================
       try {
         // Build target prescription for adaptive summary
@@ -5342,33 +5383,35 @@ export function StreamlinedWorkoutSession({
           { completedSets: normalizedCompletedSets, exerciseIndex: currentIndex }
         )
 
-        // Update session readiness state
-        setAb15SessionReadiness((prev) => {
-          const updated = updateSessionReadiness(prev, ab15Summary)
+        // [AB15B] Compute updated readiness using ref for synchronous access
+        const currentReadiness = ab15SessionReadinessRef.current
+        const updatedReadiness = updateSessionReadiness(currentReadiness, ab15Summary)
 
-          // Compute new live deload decision from updated readiness
-          const newDecision = computeLiveDeloadDecision(updated, ab15Summary)
+        // Compute new live deload decision from updated readiness
+        const newDecision = computeLiveDeloadDecision(updatedReadiness, ab15Summary)
 
-          // Only update decision state if it actually changed
-          setAb15DeloadDecision((prevDecision) => {
-            if (hasDecisionChanged(prevDecision, newDecision)) {
-              console.log('[v0] [AB15] Live deload decision updated', {
-                level: newDecision.level,
-                applied: newDecision.applied,
-                reasons: newDecision.reasons,
-                visibleSummary: newDecision.visibleSummary,
-              })
-              return newDecision
-            }
-            return prevDecision
-          })
+        // [AB15B] Update ref synchronously for next computation
+        ab15SessionReadinessRef.current = updatedReadiness
 
-          return updated
-        })
+        // [AB15B] Update state separately - no nested setters
+        setAb15SessionReadiness(updatedReadiness)
+
+        // Only update decision state if it actually changed
+        if (hasDecisionChanged(ab15DeloadDecision, newDecision)) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[v0] [AB15B] Live deload decision updated', {
+              level: newDecision.level,
+              applied: newDecision.applied,
+              reasons: newDecision.reasons,
+              visibleSummary: newDecision.visibleSummary,
+            })
+          }
+          setAb15DeloadDecision(newDecision)
+        }
       } catch (ab15Error) {
         // [AB15 SAFE DEFAULT] If AB15 computation fails, log and continue.
         // Do not crash the workout. Do not show false "applied" UI.
-        console.warn('[v0] [AB15] Live deload computation failed, continuing without AB15', ab15Error)
+        console.warn('[v0] [AB15B] Live deload computation failed, continuing without AB15', ab15Error)
       }
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
@@ -8376,37 +8419,49 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           r === 'METHOD_STRUCTURE_STATUS_NOT_APPLIED',
       ) ?? 'GUIDANCE_ONLY_PRESERVED'
 
-    // [AB15 — LIVE DELOAD RUNTIME] Visible proof banner.
-    // Only shown when AB15 applied an adjustment (not for "watch" or "none").
-    // Derives text from the decision object - never shows false "applied".
-    const showAB15Banner = ab15DeloadDecision?.applied && ab15DeloadDecision.visibleSummary
-
-    return (
-      <>
-        {/* [AB15 — LIVE DELOAD RUNTIME] Live deload proof banner */}
-        {showAB15Banner && (
-          <div
-            className="mx-3 mt-3 mb-2 rounded-md border border-[#3B2F26] bg-[#1A1510] px-3 py-2 flex items-start gap-2"
-            role="status"
-            aria-live="polite"
-            data-ab15-level={ab15DeloadDecision.level}
-            data-ab15-applied="true"
-          >
-            <span className="mt-0.5 text-[#F59E0B] text-xs font-semibold tracking-wide whitespace-nowrap">
-              {ab15DeloadDecision.level === 'recovery_mode' ? 'RECOVERY MODE' : 'LIVE ADAPTATION'}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#E6E9EF] leading-relaxed">
-                {ab15DeloadDecision.visibleSummary}
-              </p>
-              {process.env.NODE_ENV === 'development' && (
-                <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
-                  AB15 · level: {ab15DeloadDecision.level} · reasons: {ab15DeloadDecision.reasons.join(', ')}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+// [AB15B — LIVE DELOAD RUNTIME] Visible proof banner.
+  // [AB15B FIX] Now shows actual applied execution values from activeEffectiveContract,
+  // not just the decision object. Only shown when AB15 actually changed execution values.
+  const ab15Res = activeEffectiveContract.ab15Result
+  const showAB15Banner = ab15Res?.applied && ab15Res.appliedSummary
+  
+  return (
+  <>
+  {/* [AB15B — LIVE DELOAD RUNTIME] Live deload proof banner with actual applied values */}
+  {showAB15Banner && ab15DeloadDecision && (
+  <div
+    className="mx-3 mt-3 mb-2 rounded-md border border-[#3B2F26] bg-[#1A1510] px-3 py-2 flex items-start gap-2"
+    role="status"
+    aria-live="polite"
+    data-ab15-level={ab15DeloadDecision.level}
+    data-ab15-applied="true"
+    data-ab15-effective-sets={ab15Res.remainingSetsReducedBy > 0 ? ab15Res.effectiveSets : undefined}
+    data-ab15-effective-rpe={ab15Res.targetRPECappedTo ?? undefined}
+    data-ab15-effective-rest={ab15Res.restExtendedTo ?? undefined}
+  >
+    <span className="mt-0.5 text-[#F59E0B] text-xs font-semibold tracking-wide whitespace-nowrap">
+      {ab15Res.recoveryMode ? 'RECOVERY MODE' : 'LIVE ADAPTATION'}
+    </span>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs text-[#E6E9EF] leading-relaxed">
+        {ab15Res.appliedSummary}
+      </p>
+      {ab15Res.markRemainingAsOptional && (
+        <p className="text-xs text-[#D4A045] mt-1">
+          Remaining high-stress work is optional.
+        </p>
+      )}
+      {process.env.NODE_ENV === 'development' && (
+        <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
+          AB15B · level: {ab15DeloadDecision.level} · 
+          sets: {ab15Res.remainingSetsReducedBy > 0 ? `−${ab15Res.remainingSetsReducedBy}` : 'unchanged'} · 
+          rpe: {ab15Res.targetRPECappedTo ? `${ab15Res.targetRPECappedFrom}→${ab15Res.targetRPECappedTo}` : 'unchanged'} · 
+          rest: {ab15Res.restExtendedTo ? `${ab15Res.restExtendedFrom}→${ab15Res.restExtendedTo}s` : 'unchanged'}
+        </p>
+      )}
+    </div>
+  </div>
+  )}
         {showGuidanceBanner && (
           <div
             className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"

@@ -351,6 +351,175 @@ export function hasDecisionChanged(
 }
 
 // =============================================================================
+// AB15B APPLICATION CONTRACT — WIRE DECISION INTO EXECUTION VALUES
+// =============================================================================
+
+/**
+ * Input for applying AB15 decision to execution contract.
+ */
+export interface AB15ApplicationInput {
+  baseEffectiveSets: number
+  baseTargetRPE: number | undefined
+  baseRestSeconds: number | undefined
+  currentSetNumber: number
+  completedSetsForExercise: number
+  decision: LiveDeloadDecision | null
+}
+
+/**
+ * Output of AB15 application — adjusted execution values.
+ */
+export interface AB15ApplicationResult {
+  effectiveSets: number
+  effectiveTargetRPE: number | undefined
+  effectiveRestSeconds: number | undefined
+  /** Whether any actual adjustment was made */
+  applied: boolean
+  /** How many sets were reduced */
+  remainingSetsReducedBy: number
+  /** Original RPE before cap (null if not capped) */
+  targetRPECappedFrom: number | null
+  /** Capped RPE value (null if not capped) */
+  targetRPECappedTo: number | null
+  /** Original rest before extension (null if not extended) */
+  restExtendedFrom: number | null
+  /** Extended rest value (null if not extended) */
+  restExtendedTo: number | null
+  /** Whether remaining work is marked optional */
+  markRemainingAsOptional: boolean
+  /** Recovery mode active */
+  recoveryMode: boolean
+  /** Summary of what was applied */
+  appliedSummary: string | null
+}
+
+/**
+ * Apply AB15 live deload decision to execution contract values.
+ *
+ * This is a PURE function that takes base execution values and a decision,
+ * and returns adjusted values suitable for the active session.
+ *
+ * SAFETY RULES:
+ * - Never increase sets
+ * - Never increase RPE
+ * - Never reduce rest
+ * - Never reduce effectiveSets below completedSetsForExercise
+ * - Never reduce effectiveSets below currentSetNumber (would break in-progress set)
+ * - If decision is null/none/watch, return original values unchanged
+ * - If inputs are invalid, return original values unchanged
+ */
+export function applyLiveDeloadToExecutionContract(
+  input: AB15ApplicationInput
+): AB15ApplicationResult {
+  const {
+    baseEffectiveSets,
+    baseTargetRPE,
+    baseRestSeconds,
+    currentSetNumber,
+    completedSetsForExercise,
+    decision,
+  } = input
+
+  // Default result with no changes
+  const noChangeResult: AB15ApplicationResult = {
+    effectiveSets: baseEffectiveSets,
+    effectiveTargetRPE: baseTargetRPE,
+    effectiveRestSeconds: baseRestSeconds,
+    applied: false,
+    remainingSetsReducedBy: 0,
+    targetRPECappedFrom: null,
+    targetRPECappedTo: null,
+    restExtendedFrom: null,
+    restExtendedTo: null,
+    markRemainingAsOptional: false,
+    recoveryMode: false,
+    appliedSummary: null,
+  }
+
+  // Gate: no decision or non-actionable level
+  if (!decision) return noChangeResult
+  if (decision.level === 'none' || decision.level === 'watch') return noChangeResult
+  if (!decision.applied) return noChangeResult
+
+  // Validate inputs
+  if (typeof baseEffectiveSets !== 'number' || !Number.isFinite(baseEffectiveSets)) {
+    return noChangeResult
+  }
+
+  const { adjustments } = decision
+
+  let effectiveSets = baseEffectiveSets
+  let effectiveTargetRPE = baseTargetRPE
+  let effectiveRestSeconds = baseRestSeconds
+  let remainingSetsReducedBy = 0
+  let targetRPECappedFrom: number | null = null
+  let targetRPECappedTo: number | null = null
+  let restExtendedFrom: number | null = null
+  let restExtendedTo: number | null = null
+  const appliedParts: string[] = []
+
+  // ---------------------------------------------------------------------------
+  // APPLY SETS REDUCTION
+  // ---------------------------------------------------------------------------
+  if (adjustments.reduceRemainingSetsBy > 0) {
+    // Calculate minimum safe sets: cannot go below current set or completed sets
+    const minSafeSets = Math.max(currentSetNumber, completedSetsForExercise, 1)
+    const proposedSets = baseEffectiveSets - adjustments.reduceRemainingSetsBy
+
+    if (proposedSets >= minSafeSets && proposedSets < baseEffectiveSets) {
+      effectiveSets = proposedSets
+      remainingSetsReducedBy = baseEffectiveSets - proposedSets
+      appliedParts.push(`sets reduced by ${remainingSetsReducedBy}`)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // APPLY RPE CAP
+  // ---------------------------------------------------------------------------
+  if (adjustments.capTargetRpeAt !== null && typeof baseTargetRPE === 'number') {
+    if (baseTargetRPE > adjustments.capTargetRpeAt) {
+      targetRPECappedFrom = baseTargetRPE
+      targetRPECappedTo = adjustments.capTargetRpeAt
+      effectiveTargetRPE = adjustments.capTargetRpeAt
+      appliedParts.push(`RPE capped from ${baseTargetRPE} to ${adjustments.capTargetRpeAt}`)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // APPLY REST MULTIPLIER
+  // ---------------------------------------------------------------------------
+  if (adjustments.restMultiplier > 1 && typeof baseRestSeconds === 'number') {
+    const proposedRest = Math.round(baseRestSeconds * adjustments.restMultiplier)
+    // Cap at reasonable max (5 minutes)
+    const cappedRest = Math.min(proposedRest, 300)
+    if (cappedRest > baseRestSeconds) {
+      restExtendedFrom = baseRestSeconds
+      restExtendedTo = cappedRest
+      effectiveRestSeconds = cappedRest
+      appliedParts.push(`rest extended from ${baseRestSeconds}s to ${cappedRest}s`)
+    }
+  }
+
+  // Determine if anything was actually applied
+  const applied = remainingSetsReducedBy > 0 || targetRPECappedTo !== null || restExtendedTo !== null
+
+  return {
+    effectiveSets,
+    effectiveTargetRPE,
+    effectiveRestSeconds,
+    applied,
+    remainingSetsReducedBy,
+    targetRPECappedFrom,
+    targetRPECappedTo,
+    restExtendedFrom,
+    restExtendedTo,
+    markRemainingAsOptional: adjustments.markRemainingAsOptional,
+    recoveryMode: adjustments.recoveryMode,
+    appliedSummary: applied ? `Live adaptation: ${appliedParts.join(', ')}.` : null,
+  }
+}
+
+// =============================================================================
 // SESSION METADATA FOR PERSISTENCE
 // =============================================================================
 

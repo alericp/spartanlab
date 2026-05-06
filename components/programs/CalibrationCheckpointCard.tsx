@@ -65,6 +65,14 @@ import {
   type ProgramEvidenceFeedbackSummary,
 } from '@/lib/program/program-evidence-feedback-loop'
 import { FeedbackLoopProofCard } from './FeedbackLoopProofCard'
+// [AB12-1] Evidence-aware governor — consumes the benchmark summary +
+// the calibration recommendation we already build, produces a typed
+// bounded plan, and renders it as a compact strip inside the existing
+// FeedbackLoopProofCard. No new fetch, no new storage, no UI redesign.
+import {
+  buildEvidenceAwareCalibrationPlan,
+  type ProgramEvidenceCalibrationPlan,
+} from '@/lib/program/evidence-aware-program-calibration-governor'
 
 // =============================================================================
 // PROPS
@@ -272,6 +280,36 @@ export function CalibrationCheckpointCard({
     return summarizeBenchmarkEvidence(signals)
   }, [latestMap])
 
+  // [AB12-1] Evidence-aware calibration plan. Consumes the benchmark
+  // summary + the recommendation engine output we already have. The
+  // governor handles all degraded/no-evidence/applied states honestly;
+  // we just render the result.
+  //
+  // Availability is wired explicitly: when `fetchError` is set the
+  // benchmark side genuinely failed and the plan should report
+  // `degraded` instead of `no_evidence`. When `latestMap === null`
+  // we are still loading — treat as `absent` so the strip stays quiet.
+  const calibrationPlan: ProgramEvidenceCalibrationPlan = useMemo(
+    () =>
+      buildEvidenceAwareCalibrationPlan({
+        benchmarkSummary,
+        calibrationRecommendation: recommendation,
+        inputAvailability: {
+          benchmark:
+            fetchError !== null
+              ? 'failed'
+              : latestMap === null
+                ? 'absent'
+                : 'ok',
+          // The card has no view into workout evidence; the page-level
+          // workout proof card builds its own plan. Mark absent here
+          // so the governor does not pretend to speak for workouts.
+          workout: 'absent',
+        },
+      }),
+    [benchmarkSummary, recommendation, fetchError, latestMap],
+  )
+
   if (recommendation.recommendedTests.length === 0) {
     return (
       <>
@@ -311,8 +349,13 @@ export function CalibrationCheckpointCard({
         </Card>
         {/* [AB11-5] Honest benchmark-side proof even when no tests are
             recommended (e.g. user has no goals selected). Shows the
-            baseline copy via summarizeNoEvidence when latestMap is empty. */}
-        <FeedbackLoopProofCard benchmarkSummary={benchmarkSummary} />
+            baseline copy via summarizeNoEvidence when latestMap is empty.
+            [AB12-1] Also surfaces the evidence-aware calibration plan as
+            a compact strip below the proof body. */}
+        <FeedbackLoopProofCard
+          benchmarkSummary={benchmarkSummary}
+          calibrationPlan={calibrationPlan}
+        />
       </>
     )
   }
@@ -397,8 +440,14 @@ export function CalibrationCheckpointCard({
     {/* [AB11-5] Benchmark-side feedback proof. Renders directly off the
         same `latestMap` the calibration engine consumed, so the proof
         cannot drift from the recommendation. The card itself handles
-        no-evidence and considered/no-change states honestly. */}
-    <FeedbackLoopProofCard benchmarkSummary={benchmarkSummary} />
+        no-evidence and considered/no-change states honestly.
+        [AB12-1] The same proof card now also renders the evidence-aware
+        calibration plan strip, derived from the benchmark summary +
+        recommendation already in scope. */}
+    <FeedbackLoopProofCard
+      benchmarkSummary={benchmarkSummary}
+      calibrationPlan={calibrationPlan}
+    />
     </>
   )
 }

@@ -815,6 +815,12 @@ import {
   buildWorkoutEvidenceSignalsFromProgramStamps,
   summarizeWorkoutEvidence,
 } from '@/lib/program/program-evidence-feedback-loop'
+// [AB12-1] Evidence-aware governor — pure, typed bridge from the AB11
+// summary the IIFE below already builds into a bounded calibration
+// plan. We do NOT pass it as a structural builder input in AB12-1; it
+// surfaces only as visible proof on the existing FeedbackLoopProofCard.
+// AB12-2 will wire the constraint dial into the actual program builder.
+import { buildEvidenceAwareCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
 // [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
 // action. Lightweight, null-tolerant, hides on fresh programs, calls only the
 // existing canonical onRegenerate handler — no second route, no second builder.
@@ -2459,7 +2465,21 @@ function ProgramDisplayWrapper({
           >[0],
         )
         const workoutSummary = summarizeWorkoutEvidence(workoutSignals)
-        return <FeedbackLoopProofCard workoutSummary={workoutSummary} />
+        // [AB12-1] Build the evidence-aware calibration plan from the
+        // SAME workout summary the proof card renders. The governor
+        // sees `benchmarkSummary` as absent here (the page does not
+        // fetch benchmark evidence — that lives in the calibration
+        // card) and degrades honestly.
+        const calibrationPlan = buildEvidenceAwareCalibrationPlan({
+          workoutSummary,
+          inputAvailability: { workout: 'ok', benchmark: 'absent' },
+        })
+        return (
+          <FeedbackLoopProofCard
+            workoutSummary={workoutSummary}
+            calibrationPlan={calibrationPlan}
+          />
+        )
       })()}
 
         {/* ==========================================================================

@@ -32,6 +32,12 @@ import type {
   ProgramEvidenceDomain,
   ProgramEvidenceFeedbackSummary,
 } from '@/lib/program/program-evidence-feedback-loop'
+// [AB12-1] Optional bounded calibration plan. When supplied, the card
+// renders a compact label + chip strip ABOVE the AB11-5 proof body so
+// the user sees not just "what evidence was used" but also "what the
+// program is currently calibrated to". The plan derives from the same
+// AB11 inputs the card already trusts, so it cannot drift.
+import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
 
 interface FeedbackLoopProofCardProps {
   /** Benchmark/calibration-only summary, optional. */
@@ -45,6 +51,13 @@ interface FeedbackLoopProofCardProps {
    * non-null.
    */
   mergedSummary?: ProgramEvidenceFeedbackSummary | null
+  /**
+   * [AB12-1] Optional calibration plan from the evidence-aware governor.
+   * When present and `status !== 'not_applicable'`, a small label + chip
+   * strip is rendered. When `null`/absent OR `'not_applicable'`, the
+   * card omits the strip silently.
+   */
+  calibrationPlan?: ProgramEvidenceCalibrationPlan | null
   className?: string
 }
 
@@ -82,8 +95,73 @@ function pickDisplaySummary(
   return b ?? w
 }
 
+// [AB12-1] Compact plan strip. Renders ONLY when the governor produced a
+// speakable status. Hidden for `'not_applicable'` so we never claim
+// calibration on a surface where AB11 was never wired.
+function CalibrationPlanStrip({
+  plan,
+}: {
+  plan: ProgramEvidenceCalibrationPlan
+}) {
+  if (plan.status === 'not_applicable') return null
+  const variant: 'default' | 'secondary' | 'outline' =
+    plan.status === 'applied'
+      ? 'default'
+      : plan.status === 'degraded'
+        ? 'outline'
+        : 'secondary'
+  return (
+    <div
+      className="mt-3 rounded-md border border-border/60 bg-muted/30 p-3"
+      data-ab12-1-calibration-plan={plan.status}
+      data-ab12-1-confidence={plan.confidence}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={variant}
+            className="text-[10px] font-medium uppercase tracking-wide"
+          >
+            {plan.visibleProof.label}
+          </Badge>
+          {plan.status === 'applied' && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-medium uppercase tracking-wide"
+            >
+              {plan.confidence} confidence
+            </Badge>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground text-pretty">
+        {plan.visibleProof.summary}
+      </p>
+      {plan.visibleProof.chips.length > 0 && (
+        <ul
+          className="mt-2 flex flex-wrap gap-1"
+          role="list"
+          aria-label="Calibration constraints"
+        >
+          {plan.visibleProof.chips.map((chip, i) => (
+            <li key={`${i}-${chip}`}>
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-medium normal-case"
+              >
+                {chip}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const summary = pickDisplaySummary(props)
+  const plan = props.calibrationPlan ?? null
 
   // No summary at all — render compact no-evidence baseline.
   if (!summary) {
@@ -108,6 +186,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             No benchmark or workout evidence yet — using your onboarding
             baseline until you log tests or workouts.
           </p>
+          {plan && <CalibrationPlanStrip plan={plan} />}
         </CardContent>
       </Card>
     )
@@ -138,6 +217,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
           <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
             {summary.summaryText}
           </p>
+          {plan && <CalibrationPlanStrip plan={plan} />}
         </CardContent>
       </Card>
     )
@@ -221,6 +301,15 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                 .join(', ') || 'general'}
             </p>
           )}
+          {plan && <CalibrationPlanStrip plan={plan} />}
+        </CardContent>
+      )}
+      {/* When there are no proofLines we still render the plan strip
+          inside its own minimal CardContent so the AB12-1 surface is
+          visible even when AB11 only produced summary text. */}
+      {summary.proofLines.length === 0 && plan && (
+        <CardContent className="pt-0">
+          <CalibrationPlanStrip plan={plan} />
         </CardContent>
       )}
     </Card>

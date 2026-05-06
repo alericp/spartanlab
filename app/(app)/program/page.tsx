@@ -816,6 +816,16 @@ import { FeedbackLoopProofCard } from '@/components/programs/FeedbackLoopProofCa
 // consume them. Imports placed next to the FeedbackLoopProofCard
 // import so the proof corridor is visually grouped in one place.
 import { EvidenceCoachRecommendationCard } from '@/components/programs/EvidenceCoachRecommendationCard'
+// [AB13-10] V0-compatible visual proof overlay. Renders nothing unless the
+// explicit URL query flag `?ab13ProofOverlay=force-rpe-cap` is present, so
+// normal users on every other URL are unaffected. When active, it runs the
+// REAL `applyConservativeProgressionShaping` helper against the loaded
+// program with a synthetic active+conservative+allowed influence and renders
+// the resulting program-level shaping proof and row-level RPE cap stamps
+// through the same components a real account would use. The user's saved
+// program is never mutated by the overlay. See the file header in
+// `components/programs/AB13VisualProofOverlay.tsx` for full safety contract.
+import { AB13VisualProofOverlay } from '@/components/programs/AB13VisualProofOverlay'
 import { deriveEvidenceCoachRecommendations } from '@/lib/program/evidence-derived-coach-recommendations'
 import {
   buildWorkoutEvidenceSignalsFromProgramStamps,
@@ -2517,6 +2527,17 @@ function ProgramDisplayWrapper({
               generationInfluence={generationInfluence}
             />
             <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
+            {/* [AB13-10] Gated visual proof overlay. Renders absolutely
+                nothing for normal users — only activates when the URL
+                contains `?ab13ProofOverlay=force-rpe-cap`. When active, it
+                runs the REAL conservative-progression shaping helper against
+                the currently loaded program with a synthetic active +
+                conservative + allowed influence, then renders the resulting
+                program-level shaping proof and row-level RPE cap stamps
+                through the same `EvidenceCoachRecommendationCard` and the
+                same chip styling `AdaptiveSessionCard` uses. The user's
+                saved `program` state is never written. */}
+            <AB13VisualProofOverlay program={program} />
           </div>
         )
       })()}

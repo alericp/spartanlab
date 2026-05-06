@@ -231,6 +231,20 @@ export interface GroupedMethodSemantics {
     totalMembers: number
     partnerName?: string
   }) => string | null
+  /**
+   * [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Optional in-body cue strip rendered
+   * beneath grouped exercise rows by AdaptiveSessionCard's `getMethodBodyCue`.
+   * Populated only for methods that do NOT structurally self-express through
+   * row prefixes — `cluster` and `density_block`. `superset` and `circuit`
+   * deliberately leave this undefined so the strip is omitted (their A1/A2/B1/B2
+   * row prefixes already convey the structure visually). The lucide icon is
+   * selected at the call site (cluster -> Repeat, density -> Timer) because
+   * React component refs cannot be serialised into this data table.
+   */
+  bodyCue?: {
+    primary: string
+    secondary: string
+  }
 }
 
 const GROUPED_METHOD_SEMANTICS: Record<Exclude<GroupType, 'straight'>, GroupedMethodSemantics> = {
@@ -269,12 +283,26 @@ const GROUPED_METHOD_SEMANTICS: Record<Exclude<GroupType, 'straight'>, GroupedMe
     headerTagline: 'time-capped quality work',
     restProtocol: 'Rest as needed to maintain quality',
     memberLine: () => 'AMRAP — keep form, stop short of failure',
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Density does not self-express
+    // through row prefixes (no A1/B1 letters), so the in-body cue strip
+    // surfaces the work-capacity-vs-time framing the method requires.
+    bodyCue: {
+      primary: 'Work inside the time cap',
+      secondary: 'Maintain controlled pace and repeatable quality across the block.',
+    },
   },
   cluster: {
     label: 'Cluster',
     headerTagline: 'intra-set rest, high quality reps',
     restProtocol: '10–15s between cluster reps, 2–3 min between cluster sets',
     memberLine: () => 'Rest 10–15s between cluster reps',
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Clusters often emit as a single
+    // row, so without an in-body cue the row would look like an ordinary
+    // straight set. The strip explicitly names the cluster pattern.
+    bodyCue: {
+      primary: 'Cluster set — short pauses inside the set',
+      secondary: 'Use 10–15s intra-set rests to keep reps powerful and technically clean.',
+    },
   },
 }
 

@@ -3399,7 +3399,7 @@ export function StreamlinedWorkoutSession({
   // live deload decisions. Updated after each completed set. The decision is
   // re-computed on each update and displayed when it applies adjustments.
   // [AB15B] Use ref to avoid stale closure issues when computing decision.
-  const ab15SessionReadinessRef = useRef<SessionAdaptiveReadiness>(createInitialSessionReadiness)
+  const ab15SessionReadinessRef = useRef<SessionAdaptiveReadiness>(createInitialSessionReadiness())
   const [ab15SessionReadiness, setAb15SessionReadiness] = useState<SessionAdaptiveReadiness>(
     createInitialSessionReadiness
   )

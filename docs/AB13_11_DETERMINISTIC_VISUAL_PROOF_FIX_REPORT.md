@@ -1,8 +1,19 @@
 # AB13-11 — DETERMINISTIC VISUAL PROOF FIX REPORT
 
+> **SUPERSEDED BY AB13-11B.** A subsequent source audit confirmed that the
+> code described in this report (the `buildFixtureProgram` helper, the
+> `fixture-fallback` proof mode, and the `data-ab13-11-*` attributes) was
+> NOT actually present in
+> `components/programs/AB13VisualProofOverlay.tsx`; that file remained the
+> AB13-10 implementation. This report is therefore not valid proof on its
+> own. The actual source changes were shipped in AB13-11B — see
+> `docs/AB13_11B_SOURCE_RECONCILIATION_REPORT.md` for the corrected
+> truth-of-source.
+
 ## 1. Status
 
-**COMPLETE.**
+**SUPERSEDED — see AB13-11B.** (Originally claimed COMPLETE, but the
+underlying source was the AB13-10 implementation at the time of audit.)
 
 ## 2. Code changed
 

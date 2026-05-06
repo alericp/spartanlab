@@ -2073,6 +2073,18 @@ export interface AdaptiveProgram {
   // read it directly to render the "what was actually applied at
   // generation time" strip — no client-side rebuild required.
   evidenceCalibrationInfluence?: EvidenceCalibrationGenerationInfluence
+  // [AB13-4] Optional, non-destructive evidence-calibration program-shaping
+  // proof. Stamped immediately AFTER `evidenceCalibrationInfluence` by the
+  // authoritative-program-generation service when the AB13-4 conservative
+  // progression hook fires. The shape is owned by
+  // `lib/program/evidence-calibration-program-shaping.ts`. Older programs
+  // and programs generated before AB13-4 simply omit this field.
+  // `ranShapingPass: true` proves the gate was open;
+  // `appliedAtLeastOneMutation: true` proves at least one exercise had its
+  // `targetRPE` capped. Type imported lazily via a typeof-style import to
+  // avoid creating a circular dependency between the builder and the
+  // shaping helper.
+  evidenceCalibrationShapingProof?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationShapingProof
   primaryGoal: PrimaryGoal
   secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   goalLabel: string

@@ -403,8 +403,20 @@ export function buildWeeklyMethodMaterializationPlan(
     oneLine = 'Method spine is straight-sets correct for skill priority'
   }
 
+// ---------------------------------------------------------------------------
+  // [AB16] Extract training style influence from intent vector if available.
+  // ---------------------------------------------------------------------------
+  const styleInfluence = (program.trainingIntentVector as {
+    trainingStyleInfluence?: {
+      resolvedStyleMode: string
+      favoredMethods: string[]
+      discouragedMethodsOnSkillWork: string[]
+      visibleExplanation: string
+    }
+  } | null | undefined)?.trainingStyleInfluence
+
   return {
-    version: 'phase-aa1.weekly-mat-plan.v1',
+    version: 'phase-ab16.weekly-mat-plan.v1',
     generatedAt,
     userPreferredMethods: explicitPrefs,
     doctrineEarnedMethods: doctrineEarned,
@@ -418,5 +430,11 @@ export function buildWeeklyMethodMaterializationPlan(
       methodsDoctrineEarnedAndApplied,
     },
     oneLineExplanation: oneLine,
+    trainingStyleMaterializationInfluence: styleInfluence ? {
+      resolvedStyleMode: styleInfluence.resolvedStyleMode,
+      methodsFavoredByStyle: styleInfluence.favoredMethods,
+      methodsBlockedOnSkillWorkByStyle: styleInfluence.discouragedMethodsOnSkillWork,
+      visibleExplanation: styleInfluence.visibleExplanation,
+    } : undefined,
   }
 }

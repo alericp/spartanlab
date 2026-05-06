@@ -71,6 +71,61 @@ function extractRepresentation(
 }
 
 // =============================================================================
+// [AB16] TRAINING STYLE INFLUENCE EXTRACTION
+// =============================================================================
+
+interface TrainingStyleInfluenceDisplay {
+  resolvedStyleMode: string
+  methodsFavoredByStyle: string[]
+  methodsBlockedOnSkillWorkByStyle: string[]
+  visibleExplanation: string
+}
+
+function extractTrainingStyleInfluence(
+  program: AdaptiveProgram | null | undefined,
+): TrainingStyleInfluenceDisplay | null {
+  if (!program) return null
+  
+  // Try the weekly materialization plan first (authoritative AB16 source)
+  const matPlan = (program as unknown as {
+    weeklyMethodMaterializationPlan?: {
+      trainingStyleMaterializationInfluence?: TrainingStyleInfluenceDisplay
+    }
+  }).weeklyMethodMaterializationPlan
+  
+  if (matPlan?.trainingStyleMaterializationInfluence) {
+    return matPlan.trainingStyleMaterializationInfluence
+  }
+  
+  // Fallback to intent vector
+  const vector = (program as unknown as {
+    trainingIntentVector?: {
+      trainingStyleInfluence?: {
+        resolvedStyleMode: string
+        favoredMethods: string[]
+        discouragedMethodsOnSkillWork: string[]
+        visibleExplanation: string
+      }
+    }
+  }).trainingIntentVector
+  
+  if (vector?.trainingStyleInfluence) {
+    return {
+      resolvedStyleMode: vector.trainingStyleInfluence.resolvedStyleMode,
+      methodsFavoredByStyle: vector.trainingStyleInfluence.favoredMethods,
+      methodsBlockedOnSkillWorkByStyle: vector.trainingStyleInfluence.discouragedMethodsOnSkillWork,
+      visibleExplanation: vector.trainingStyleInfluence.visibleExplanation,
+    }
+  }
+  
+  return null
+}
+
+function formatStyleMode(mode: string): string {
+  return mode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// =============================================================================
 // PRESENTATION HELPERS
 // =============================================================================
 
@@ -309,6 +364,9 @@ export function WeeklyMethodDecisionAccordion({
   const { usedCount, daysWithMethods, preferredNotHonoredCount, runtimeGapCount } =
     summaryHeaderCounts(summary)
   const totalDays = summary.days.length
+  
+  // [AB16] Extract training style influence for visible proof
+  const styleInfluence = extractTrainingStyleInfluence(program)
 
   return (
     <details className="group rounded-lg border border-[#2B313A] bg-[#0F1115] mb-3">
@@ -360,6 +418,37 @@ export function WeeklyMethodDecisionAccordion({
             {summary.weekStrategy}
           </p>
         </section>
+
+        {/* [AB16] Training style influence proof */}
+        {styleInfluence && styleInfluence.resolvedStyleMode !== 'unknown' && (
+          <section className="rounded-md border border-sky-500/20 bg-sky-500/5 p-2.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="rounded-sm border border-sky-500/30 bg-sky-500/10 px-1.5 py-px text-[10px] font-medium text-sky-400">
+                {formatStyleMode(styleInfluence.resolvedStyleMode)}
+              </span>
+              <span className="text-[10px] text-[#6B7280]">style-shaped methods</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-[#A4ACB8]">
+              {styleInfluence.visibleExplanation}
+            </p>
+            {(styleInfluence.methodsFavoredByStyle.length > 0 || styleInfluence.methodsBlockedOnSkillWorkByStyle.length > 0) && (
+              <div className="flex flex-wrap gap-3 mt-1.5 text-[10px] text-[#6B7280]">
+                {styleInfluence.methodsFavoredByStyle.length > 0 && (
+                  <span>
+                    <span className="text-emerald-400">Favored:</span>{' '}
+                    {styleInfluence.methodsFavoredByStyle.map(m => m.replace(/_/g, ' ')).join(', ')}
+                  </span>
+                )}
+                {styleInfluence.methodsBlockedOnSkillWorkByStyle.length > 0 && (
+                  <span>
+                    <span className="text-amber-400">Limited on skill work:</span>{' '}
+                    {styleInfluence.methodsBlockedOnSkillWorkByStyle.map(m => m.replace(/_/g, ' ')).join(', ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Day-by-day breakdown */}
         <section className="space-y-2">

@@ -7661,20 +7661,25 @@ function ExerciseRow({
             `!isWarmupCooldown` gate matches the surrounding chip strip's
             posture). Single-line, never wraps the row container. */}
         {!isWarmupCooldown && (() => {
-          const rpeCap = (exercise as unknown as {
-            evidenceCalibrationRpeCap?: {
-              source?: string
-              applied?: boolean
-              rpeBefore?: number
-              rpeAfter?: number
-              ceilingRpe?: number
-              reasonCoachLine?: string
-            }
-          }).evidenceCalibrationRpeCap
+          // [AB13-8] Direct typed access. `exercise` is typed as
+          // `AdaptiveExercise`, which carries the optional
+          // `evidenceCalibrationRpeCap?: EvidenceCalibrationRpeCapStamp`
+          // field added in AB13-7 (`lib/adaptive-program-builder.ts`),
+          // wired to the producer's exported type via a type-only
+          // `import('./program/evidence-calibration-program-shaping')`
+          // — so reading the field directly is type-safe and stays in
+          // lockstep with the producer contract without any runtime
+          // coupling (no value import, no circular risk). The previous
+          // `(exercise as unknown as { ... }).evidenceCalibrationRpeCap`
+          // local shape was duplicative and could drift from the
+          // canonical `EvidenceCalibrationRpeCapStamp`; AB13-8 removes it.
+          const rpeCap = exercise.evidenceCalibrationRpeCap
           if (!rpeCap) return null
-          // Defense-in-depth: only render when the producer's contract
-          // (`applied: true` + numeric before/after) is actually present.
-          // No inference, no fallback to "would have applied".
+          // Defense-in-depth: even though the producer guarantees
+          // `applied: true` and numeric `rpeBefore` / `rpeAfter` whenever
+          // the stamp is present, the runtime guards stay so any
+          // hand-edited JSON or future producer drift cannot leak fake
+          // chips. No inference, no fallback to "would have applied".
           if (rpeCap.applied !== true) return null
           if (typeof rpeCap.rpeBefore !== 'number') return null
           if (typeof rpeCap.rpeAfter !== 'number') return null

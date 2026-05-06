@@ -239,6 +239,22 @@ import {
     type LiveExecutionContract,
     type GroupedBlockContext,
   } from '@/lib/workout/live-execution-contract'
+// [AB15 — LIVE DELOAD RUNTIME] Adaptive session readiness and live deload
+// decisions during active workout. Observes set-level signals (RPE, fatigue,
+// pain) and can apply conservative adjustments (rest, volume, intensity caps)
+// immediately WITHOUT requiring program regeneration or restart.
+import {
+  createInitialSessionReadiness,
+  updateSessionReadiness,
+  buildAdaptiveExecutionSummary,
+  type SessionAdaptiveReadiness,
+  type TargetPrescription,
+} from '@/lib/workout/live-workout-adaptive-signals'
+import {
+  computeLiveDeloadDecision,
+  hasDecisionChanged,
+  type LiveDeloadDecision,
+} from '@/lib/workout/live-deload-runtime'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -3376,6 +3392,14 @@ export function StreamlinedWorkoutSession({
   // [UNIFIED-HANDOFF] showInterExerciseRest and interExerciseRestSeconds now come from liveSession
   // No longer separate useState - they're part of the unified reducer
   const [coachingNote, setCoachingNote] = useState<string | null>(null)
+
+  // [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
+  // live deload decisions. Updated after each completed set. The decision is
+  // re-computed on each update and displayed when it applies adjustments.
+  const [ab15SessionReadiness, setAb15SessionReadiness] = useState<SessionAdaptiveReadiness>(
+    createInitialSessionReadiness
+  )
+  const [ab15DeloadDecision, setAb15DeloadDecision] = useState<LiveDeloadDecision | null>(null)
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Next session info - loaded dynamically when workout completes
   // This prevents the heavy adaptive-program-builder from being imported at module load
@@ -5296,6 +5320,56 @@ export function StreamlinedWorkoutSession({
         // fatigue). Undefined when no RPE was logged; machine falls back to 120s.
         interExerciseRestSeconds: computedInterExerciseRest,
       })
+
+      // =====================================================================
+      // [AB15 — LIVE DELOAD RUNTIME] Update session readiness and compute
+      // live deload decision after each completed set. This is the LIVE
+      // runtime adaptation path - not static program generation.
+      // =====================================================================
+      try {
+        // Build target prescription for adaptive summary
+        const ab15TargetPrescription: TargetPrescription = {
+          targetReps: isHoldForPersist ? undefined : prescriptionSeedValue,
+          targetHoldSeconds: isHoldForPersist ? prescriptionSeedValue : undefined,
+          targetRPE: activeEffectiveContract.effectiveTargetRPE,
+          recommendedBand: localRecommendedBand ?? undefined,
+        }
+
+        // Build adaptive execution summary from the completed set
+        const ab15Summary = buildAdaptiveExecutionSummary(
+          setData,
+          ab15TargetPrescription,
+          { completedSets: normalizedCompletedSets, exerciseIndex: currentIndex }
+        )
+
+        // Update session readiness state
+        setAb15SessionReadiness((prev) => {
+          const updated = updateSessionReadiness(prev, ab15Summary)
+
+          // Compute new live deload decision from updated readiness
+          const newDecision = computeLiveDeloadDecision(updated, ab15Summary)
+
+          // Only update decision state if it actually changed
+          setAb15DeloadDecision((prevDecision) => {
+            if (hasDecisionChanged(prevDecision, newDecision)) {
+              console.log('[v0] [AB15] Live deload decision updated', {
+                level: newDecision.level,
+                applied: newDecision.applied,
+                reasons: newDecision.reasons,
+                visibleSummary: newDecision.visibleSummary,
+              })
+              return newDecision
+            }
+            return prevDecision
+          })
+
+          return updated
+        })
+      } catch (ab15Error) {
+        // [AB15 SAFE DEFAULT] If AB15 computation fails, log and continue.
+        // Do not crash the workout. Do not show false "applied" UI.
+        console.warn('[v0] [AB15] Live deload computation failed, continuing without AB15', ab15Error)
+      }
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
     // [ACTIVE-WEEK-PARITY] activeEffectiveContract feeds the seed parse source
@@ -8302,8 +8376,37 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           r === 'METHOD_STRUCTURE_STATUS_NOT_APPLIED',
       ) ?? 'GUIDANCE_ONLY_PRESERVED'
 
+    // [AB15 — LIVE DELOAD RUNTIME] Visible proof banner.
+    // Only shown when AB15 applied an adjustment (not for "watch" or "none").
+    // Derives text from the decision object - never shows false "applied".
+    const showAB15Banner = ab15DeloadDecision?.applied && ab15DeloadDecision.visibleSummary
+
     return (
       <>
+        {/* [AB15 — LIVE DELOAD RUNTIME] Live deload proof banner */}
+        {showAB15Banner && (
+          <div
+            className="mx-3 mt-3 mb-2 rounded-md border border-[#3B2F26] bg-[#1A1510] px-3 py-2 flex items-start gap-2"
+            role="status"
+            aria-live="polite"
+            data-ab15-level={ab15DeloadDecision.level}
+            data-ab15-applied="true"
+          >
+            <span className="mt-0.5 text-[#F59E0B] text-xs font-semibold tracking-wide whitespace-nowrap">
+              {ab15DeloadDecision.level === 'recovery_mode' ? 'RECOVERY MODE' : 'LIVE ADAPTATION'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[#E6E9EF] leading-relaxed">
+                {ab15DeloadDecision.visibleSummary}
+              </p>
+              {process.env.NODE_ENV === 'development' && (
+                <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
+                  AB15 · level: {ab15DeloadDecision.level} · reasons: {ab15DeloadDecision.reasons.join(', ')}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         {showGuidanceBanner && (
           <div
             className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"

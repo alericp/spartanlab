@@ -2491,13 +2491,23 @@ function ProgramDisplayWrapper({
         // directly on `AdaptiveProgram` (added by AB12-2) so no cast is
         // needed.
         const generationInfluence = program.evidenceCalibrationInfluence ?? null
-        // [AB13-1B] Derive the coach recommendation bundle from the SAME
-        // `calibrationPlan` + `generationInfluence` the proof card
-        // already trusts. Pure helper, no I/O. Bundle is `{primary: null}`
-        // for inactive states, in which case the card hides itself.
+        // [AB13-6] Read the AB13-4 shaping proof verbatim off the same
+        // canonical program object the influence stamp lives on. The
+        // proof is optional — programs generated before AB13-4 simply
+        // omit it, and the helper silently skips the proof line. The
+        // Program page does NOT inspect/derive proof from exercises;
+        // `program.evidenceCalibrationShapingProof` is the only source.
+        const generationShapingProof =
+          program.evidenceCalibrationShapingProof ?? null
+        // [AB13-1B / AB13-6] Derive the coach recommendation bundle from
+        // the SAME `calibrationPlan` + `generationInfluence` +
+        // `generationShapingProof` the proof card already trusts. Pure
+        // helper, no I/O. Bundle is `{primary: null}` for inactive
+        // states, in which case the card hides itself.
         const coachRecommendationBundle = deriveEvidenceCoachRecommendations({
           plan: calibrationPlan,
           influence: generationInfluence,
+          shapingProof: generationShapingProof,
         })
         return (
           <div className="flex flex-col gap-3">

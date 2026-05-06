@@ -416,7 +416,7 @@ export function buildWeeklyMethodMaterializationPlan(
   } | null | undefined)?.trainingStyleInfluence
 
   return {
-    version: 'phase-ab16.weekly-mat-plan.v1',
+    version: 'phase-aa1.weekly-mat-plan.v1',
     generatedAt,
     userPreferredMethods: explicitPrefs,
     doctrineEarnedMethods: doctrineEarned,

@@ -38,6 +38,10 @@ import {
   type TestCategory,
   type TestUnit,
 } from '../benchmark-testing-engine'
+// Reuse the canonical narrow projection the calibration recommender
+// already owns. The map key supplies `testName`, so this is the SAME
+// shape the calibration card constructs from `GET /api/benchmarks?action=list`.
+import type { LatestBenchmarkSummary } from './program-calibration-recommendation'
 import type {
   CompletedSetEvidence,
   ExerciseClass,
@@ -430,19 +434,30 @@ export function buildBenchmarkEvidenceSignals(
  * Build typed signals from the narrow `LatestBenchmarkSummary` projection
  * the calibration card already constructs client-side. We don't have the
  * benchmark id, isBaseline, or testCategory directly — we resolve them
- * via the catalog by `testName` so the signal still carries canonical
- * fields. Tests not in the catalog are skipped (rather than guessed).
+ * via the catalog by `testName` (taken from the map KEY) so the signal
+ * still carries canonical fields. Tests not in the catalog are skipped
+ * (rather than guessed).
+ *
+ * Input contract: the SAME `Map<string, LatestBenchmarkSummary>` shape
+ * that `program-calibration-recommendation.ts` already documents and
+ * `CalibrationCheckpointCard` already builds via `buildLatestMap`. The
+ * helper derives `testName` from the map key, so the value type does
+ * NOT need to repeat it.
+ *
+ * `LatestBenchmarkSummaryRow` (kept exported for back-compat with
+ * callers who already have a `testName`-bearing row) is now structurally
+ * compatible: it adds `testName` on top of `LatestBenchmarkSummary`, so
+ * existing callers that pass it continue to type-check.
  */
-export interface LatestBenchmarkSummaryRow {
+export interface LatestBenchmarkSummaryRow extends LatestBenchmarkSummary {
   testName: string
-  testValue: number
-  testUnit: TestUnit
-  testDate: string
-  changePercent: number | null
 }
 
 export function buildBenchmarkEvidenceSignalsFromLatestMap(
-  latest: ReadonlyMap<string, LatestBenchmarkSummaryRow> | null | undefined,
+  latest:
+    | ReadonlyMap<string, LatestBenchmarkSummary>
+    | null
+    | undefined,
 ): BenchmarkEvidenceSignal[] {
   if (!latest || latest.size === 0) return []
   const signals: BenchmarkEvidenceSignal[] = []

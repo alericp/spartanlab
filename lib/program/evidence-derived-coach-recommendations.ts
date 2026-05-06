@@ -1,18 +1,29 @@
 /**
  * ============================================================================
- * AB13-1 — EVIDENCE-DERIVED COACH RECOMMENDATIONS
+ * AB13-1 / AB13-2 — EVIDENCE-DERIVED COACH RECOMMENDATIONS
  * ============================================================================
  *
  * Pure, typed derivation that turns the existing AB12-1 calibration plan
  * + the AB12-2 generation-influence stamp into a small bundle of honest
  * "AI Coach" recommendations the Program page can render verbatim.
  *
+ * AB13-2 upgrade:
+ *   - Adds a deterministic actionability layer on top of every status
+ *     branch (active / observe / suppressed / waiting / degraded).
+ *   - New fields are derived from the SAME canonical AB11/AB12 truth
+ *     this helper already consumes — no new evidence source, no new
+ *     storage, no fake AI.
+ *   - Active state still requires `influence.status === 'active'` AND
+ *     `influence.allowedToMutateProgram === true`, so the new
+ *     `truthStatusLabel: 'Applied to this program'` line cannot fire
+ *     under AB12-2 default hooks. Same gate, more clarity.
+ *
  * Truth source funnel (MUST NOT diverge):
  *
  *   AB11 evidence summary (program.performanceAdaptation stamps)
  *     -> AB12-1 ProgramEvidenceCalibrationPlan
  *     -> AB12-2 EvidenceCalibrationGenerationInfluence
- *     -> AB13-1 EvidenceCoachRecommendationBundle (this file)
+ *     -> AB13-1/AB13-2 EvidenceCoachRecommendationBundle (this file)
  *     -> Program page passes the bundle to the renderer
  *     -> EvidenceCoachRecommendationCard renders verbatim
  *
@@ -22,33 +33,18 @@
  *   2. Pure function — no I/O, no DB, no React, no fetch, no localStorage.
  *      Safe to call inside server actions and inside a render path.
  *   3. The helper NEVER fabricates evidence. If `influence` is null, or
- *      `inactive`, the bundle is empty (`primary === null`). The component
- *      then renders nothing.
+ *      `inactive`, the bundle is empty (`primary === null`).
  *   4. The helper NEVER claims `appliedToProgram: true` unless
  *      `influence.status === 'active'` AND
- *      `influence.allowedToMutateProgram === true`. These two flags
- *      are themselves gated upstream by the AB12-2 `hasStructuralApplied`
- *      check, so under AB12-2 default hooks (every structural hook
- *      `false`) this branch is unreachable. That is intentional: the
- *      recommendation must reflect real shipped state, not aspiration.
+ *      `influence.allowedToMutateProgram === true`.
  *   5. Every visible string the renderer shows is computed here. The
- *      renderer is dumb — it cannot invent labels or chips.
- *   6. Stable audit stamp via `helperVersion`.
- *
- * AB13-1 scope boundary:
- *   - This helper is the ONLY producer of `EvidenceCoachRecommendation`.
- *   - There is no second helper, no parallel template engine, no LLM.
- *   - All copy is deterministic, derived from the typed unions in the
- *     governor (`ProgressionAggressiveness`, `VolumeBias`, etc.).
- *
- * This file consumes ONLY:
- *   - `ProgramEvidenceCalibrationPlan` (AB12-1)
- *   - `EvidenceCalibrationGenerationInfluence` (AB12-2)
- * It exports ONLY pure functions and types.
+ *      renderer is dumb — it cannot invent labels, chips, or actions.
+ *   6. AB13-2 helperVersion stamp.
  */
 
 import type {
   ProgramEvidenceCalibrationPlan,
+  ProgramCalibrationPlanConfidence,
   ProgressionAggressiveness,
   VolumeBias,
   IntensityBias,
@@ -60,11 +56,6 @@ import type { EvidenceCalibrationGenerationInfluence } from './evidence-calibrat
 // Types
 // ---------------------------------------------------------------------------
 
-/**
- * Honest 5-state ladder for a single coach recommendation. Maps from
- * AB12-2 influence status + AB12-1 plan status, never from generic
- * heuristics.
- */
 export type EvidenceCoachRecommendationStatus =
   | 'active'
   | 'observe'
@@ -72,93 +63,110 @@ export type EvidenceCoachRecommendationStatus =
   | 'waiting'
   | 'degraded'
 
-/**
- * Visual severity hint for the renderer. `info` is the default;
- * `notice` raises attention without alarm; `caution` is reserved for
- * recovery-protection or evidence-degraded states. Never `warning`,
- * never `danger`, never medical language.
- */
 export type EvidenceCoachRecommendationSeverity = 'info' | 'notice' | 'caution'
 
-/**
- * Confidence label for the renderer chip. `insufficient` is reserved
- * for waiting/inactive states where there is no signal to be confident
- * about. The other three mirror AB12-1's `ProgramCalibrationPlanConfidence`.
- */
 export type EvidenceCoachRecommendationConfidence =
   | 'high'
   | 'medium'
   | 'low'
   | 'insufficient'
 
+/**
+ * AB13-2: deterministic actionability ladder. Mirrors the status ladder
+ * but expresses it in user-action terms so the renderer can show a
+ * single chip without re-deriving anything.
+ *   - `ready`            : a real applied adjustment is in effect.
+ *   - `monitor`          : evidence exists but no structural change.
+ *   - `collect_evidence` : nothing to act on yet — log/test more.
+ *   - `blocked`          : a constraint was detected but suppressed.
+ *   - `degraded`         : evidence source is temporarily unavailable.
+ */
+export type EvidenceCoachActionability =
+  | 'ready'
+  | 'monitor'
+  | 'collect_evidence'
+  | 'blocked'
+  | 'degraded'
+
+/**
+ * AB13-2: mirrors AB12-1 confidence into a renderer-friendly evidence
+ * quality label so the card can show an honest data-quality chip
+ * without inventing thresholds.
+ */
+export type EvidenceCoachEvidenceQuality =
+  | 'strong'
+  | 'moderate'
+  | 'limited'
+  | 'insufficient'
+
 export interface EvidenceCoachRecommendation {
-  /** Stable id; useful as a React key and for analytics. */
+  // AB13-1 contract (preserved verbatim) ---------------------------------
   id: string
   status: EvidenceCoachRecommendationStatus
   severity: EvidenceCoachRecommendationSeverity
-  /** Card title. e.g. "AI Coach Recommendation - Active". */
   title: string
-  /** One-sentence summary of what the system is doing. ≤140 chars. */
   summary: string
-  /** Imperative coach line. e.g. "Stay with the conservative progression this cycle." */
   recommendation: string
-  /**
-   * Reasons array, derived from `plan.reasons` (which itself derives
-   * from AB11 proofLines). Never invented copy.
-   */
   why: string[]
-  /**
-   * Audit-style list of which canonical sources fed this recommendation.
-   * e.g. ["AB11 workout adaptation stamps", "AB12-1 calibration governor"].
-   * Renderer shows this as small text so the user can verify lineage.
-   */
   evidenceSource: string[]
-  /**
-   * Compact chips the renderer shows under the recommendation. Mirrors
-   * `influence.proof.chips` for consistency with the FeedbackLoopProofCard.
-   * Each chip is already self-describing (e.g. "progression: conservative").
-   */
   visibleProof: string[]
   confidenceLabel: EvidenceCoachRecommendationConfidence
-  /**
-   * True iff `influence.status === 'active'` AND
-   * `influence.allowedToMutateProgram === true`. Under AB12-2 default
-   * hooks, this is always `false` — that is the honest contract.
-   */
   appliedToProgram: boolean
-  /**
-   * Set ONLY when `status === 'suppressed'`. Explains why the
-   * detected adjustment was not applied (so the user does not
-   * misread the surface as a bug).
-   */
   suppressedReason?: string
+
+  // AB13-2 actionability layer (always populated) ------------------------
+  /**
+   * Short imperative coach label, e.g. "Follow the calibrated
+   * adjustment", "Stay the course", "Use safe baseline". Always set.
+   */
+  coachActionLabel: string
+  /**
+   * One-sentence coach detail expanding `coachActionLabel`. Always set.
+   */
+  coachActionDetail: string
+  /**
+   * What the user should do next, in concrete behavioral terms. Always
+   * set. Never fluff — derived from AB11/AB12 truth or a deterministic
+   * default per status.
+   */
+  userNextStep: string
+  /**
+   * What SpartanLab will do next on its own. Always set. Used to make
+   * the loop feel reciprocal without claiming new behavior.
+   */
+  systemNextStep: string
+  /**
+   * Truth-status chip, e.g. "Applied to this program",
+   * "Detected, not applied", "Monitoring trend", "Needs evidence",
+   * "Evidence unavailable". Always set.
+   */
+  truthStatusLabel: string
+  /**
+   * Same string as `suppressedReason` when present — exposed under a
+   * second name so the renderer can show it as a "Why it is not
+   * applied yet" note without coupling to the suppressedReason field.
+   */
+  blockedReason?: string
+  /**
+   * Renderer-friendly evidence-quality chip. Mirrors `confidenceLabel`
+   * for non-waiting states; `insufficient` for waiting/degraded.
+   */
+  evidenceQualityLabel: EvidenceCoachEvidenceQuality
+  /**
+   * Single-word actionability chip the renderer can show as-is.
+   */
+  actionability: EvidenceCoachActionability
 }
 
 export interface EvidenceCoachRecommendationBundle {
-  /**
-   * The single primary recommendation the renderer shows above the
-   * fold. `null` means "do not render the card at all" (state is
-   * `inactive` — nothing to show).
-   */
   primary: EvidenceCoachRecommendation | null
-  /**
-   * Up to 2 supporting notes. Used today only for the "other
-   * adjustments pending" entry under an active state. Capped at 2 by
-   * design to keep the card compact.
-   */
   supporting: EvidenceCoachRecommendation[]
-  /**
-   * Audit hint for the renderer. Tells the UI which truth source
-   * actually drove the bundle (so we can verify in dev-tools that
-   * AB13-1 read AB11+AB12 correctly, not just one of them).
-   */
   derivedFrom: 'ab11+ab12' | 'ab12-only' | 'inactive'
-  /** Stable audit stamp. */
-  helperVersion: 'ab13-1-evidence-derived-coach-recommendations'
+  helperVersion: 'ab13-2-evidence-coach-actionability'
 }
 
 const HELPER_VERSION =
-  'ab13-1-evidence-derived-coach-recommendations' as const
+  'ab13-2-evidence-coach-actionability' as const
 
 const EMPTY_BUNDLE: EvidenceCoachRecommendationBundle = {
   primary: null,
@@ -171,23 +179,6 @@ const EMPTY_BUNDLE: EvidenceCoachRecommendationBundle = {
 // Public derivation
 // ---------------------------------------------------------------------------
 
-/**
- * Convert (plan + influence) into a bundle. First-match-wins ladder:
- *
- *   1. influence is null/undefined OR `inactive` → empty bundle.
- *   2. influence `degraded` → degraded notice.
- *   3. influence `active` AND `allowedToMutateProgram` → active card.
- *      Optional supporting note for any pending suppressed constraints.
- *   4. influence `metadata_only`:
- *      a. plan `no_evidence` → waiting card.
- *      b. plan `applied` AND has suppressed structural constraints →
- *         suppressed notice (the AB12-2 default state today).
- *      c. plan `applied` AND no suppressed structural constraints →
- *         observe card (a UI-level retest may be the only signal).
- *   5. fallback → empty bundle.
- *
- * Pure. Safe to call from RSC and client components.
- */
 export function deriveEvidenceCoachRecommendations(args: {
   plan: ProgramEvidenceCalibrationPlan | null
   influence: EvidenceCalibrationGenerationInfluence | null
@@ -201,6 +192,10 @@ export function deriveEvidenceCoachRecommendations(args: {
 
   // Rule 2: degraded.
   if (influence.status === 'degraded') {
+    const action = buildCoachActionFields('degraded', {
+      influence,
+      plan,
+    })
     const primary: EvidenceCoachRecommendation = {
       id: 'evidence-coach-degraded',
       status: 'degraded',
@@ -218,6 +213,7 @@ export function deriveEvidenceCoachRecommendations(args: {
       visibleProof: influence.proof.chips,
       confidenceLabel: 'low',
       appliedToProgram: false,
+      ...action,
     }
     return {
       primary,
@@ -254,6 +250,8 @@ export function deriveEvidenceCoachRecommendations(args: {
         ? 'notice'
         : 'info'
 
+    const action = buildCoachActionFields('active', { influence, plan })
+
     const primary: EvidenceCoachRecommendation = {
       id: 'evidence-coach-active',
       status: 'active',
@@ -270,10 +268,15 @@ export function deriveEvidenceCoachRecommendations(args: {
       visibleProof: influence.appliedConstraints,
       confidenceLabel: influence.confidence,
       appliedToProgram: true,
+      ...action,
     }
 
     const supporting: EvidenceCoachRecommendation[] = []
     if (influence.suppressedConstraints.length > 0) {
+      const supportingAction = buildCoachActionFields('suppressed', {
+        influence,
+        plan,
+      })
       supporting.push({
         id: 'evidence-coach-active-pending',
         status: 'suppressed',
@@ -288,6 +291,10 @@ export function deriveEvidenceCoachRecommendations(args: {
         confidenceLabel: influence.confidence,
         appliedToProgram: false,
         suppressedReason:
+          'No audited builder hook for this constraint yet (deferred to a future AB phase).',
+        ...supportingAction,
+        blockedReason:
+          supportingAction.blockedReason ??
           'No audited builder hook for this constraint yet (deferred to a future AB phase).',
       })
     }
@@ -304,6 +311,7 @@ export function deriveEvidenceCoachRecommendations(args: {
   if (influence.status === 'metadata_only') {
     // 4a: no evidence yet.
     if (plan?.status === 'no_evidence') {
+      const action = buildCoachActionFields('waiting', { influence, plan })
       const primary: EvidenceCoachRecommendation = {
         id: 'evidence-coach-waiting',
         status: 'waiting',
@@ -319,6 +327,7 @@ export function deriveEvidenceCoachRecommendations(args: {
         visibleProof: [],
         confidenceLabel: 'insufficient',
         appliedToProgram: false,
+        ...action,
       }
       return {
         primary,
@@ -329,8 +338,8 @@ export function deriveEvidenceCoachRecommendations(args: {
     }
 
     // 4b: applied plan, but every structural constraint suppressed.
-    // (This is the AB12-2 default state today.)
     if (influence.suppressedConstraints.length > 0) {
+      const action = buildCoachActionFields('suppressed', { influence, plan })
       const primary: EvidenceCoachRecommendation = {
         id: 'evidence-coach-suppressed',
         status: 'suppressed',
@@ -354,6 +363,10 @@ export function deriveEvidenceCoachRecommendations(args: {
         appliedToProgram: false,
         suppressedReason:
           'Structural builder constraints are suppressed by default in AB12-2 until each is wired by a future AB phase.',
+        ...action,
+        blockedReason:
+          action.blockedReason ??
+          'Structural builder constraints are suppressed by default in AB12-2 until each is wired by a future AB phase.',
       }
       return {
         primary,
@@ -364,8 +377,7 @@ export function deriveEvidenceCoachRecommendations(args: {
     }
 
     // 4c: applied plan with zero suppressed structural constraints.
-    // The only signal is a UI-level retest prompt or no actionable
-    // constraints at all → observing.
+    const action = buildCoachActionFields('observe', { influence, plan })
     const primary: EvidenceCoachRecommendation = {
       id: 'evidence-coach-observe',
       status: 'observe',
@@ -383,6 +395,7 @@ export function deriveEvidenceCoachRecommendations(args: {
       visibleProof: influence.proof.chips,
       confidenceLabel: influence.confidence,
       appliedToProgram: false,
+      ...action,
     }
     return {
       primary,
@@ -392,12 +405,193 @@ export function deriveEvidenceCoachRecommendations(args: {
     }
   }
 
-  // Rule 5: fallback (defensive — should be unreachable).
+  // Rule 5: fallback (defensive).
   return EMPTY_BUNDLE
 }
 
 // ---------------------------------------------------------------------------
-// Internal copy helpers — pure
+// AB13-2 actionability builders — pure
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolved AB13-2 action layer for a given status. Returned as a
+ * partial so callers can spread it onto a recommendation literal and
+ * keep their AB13-1 fields without repetition.
+ */
+type AB13_2Fields = Pick<
+  EvidenceCoachRecommendation,
+  | 'coachActionLabel'
+  | 'coachActionDetail'
+  | 'userNextStep'
+  | 'systemNextStep'
+  | 'truthStatusLabel'
+  | 'evidenceQualityLabel'
+  | 'actionability'
+> & { blockedReason?: string }
+
+function buildCoachActionFields(
+  status: EvidenceCoachRecommendationStatus,
+  ctx: {
+    influence: EvidenceCalibrationGenerationInfluence
+    plan: ProgramEvidenceCalibrationPlan | null
+  },
+): AB13_2Fields {
+  const { influence } = ctx
+  const evidenceQualityLabel = mapConfidenceToEvidenceQuality(
+    status,
+    influence.confidence,
+  )
+  const truthStatusLabel = buildTruthStatusLabel(status)
+
+  switch (status) {
+    case 'active': {
+      return {
+        coachActionLabel: 'Follow the calibrated adjustment',
+        coachActionDetail:
+          'SpartanLab updated this program based on recent training evidence. The adjustment is in effect now.',
+        userNextStep: buildUserNextStep('active', ctx),
+        systemNextStep: buildSystemNextStep('active'),
+        truthStatusLabel,
+        evidenceQualityLabel,
+        actionability: 'ready',
+      }
+    }
+    case 'observe': {
+      return {
+        coachActionLabel: 'Stay the course',
+        coachActionDetail:
+          'SpartanLab is watching the current trend and waiting for stronger evidence before changing the plan.',
+        userNextStep: buildUserNextStep('observe', ctx),
+        systemNextStep: buildSystemNextStep('observe'),
+        truthStatusLabel,
+        evidenceQualityLabel,
+        actionability: 'monitor',
+      }
+    }
+    case 'suppressed': {
+      const blockedReason =
+        'A safe builder hook for this constraint has not shipped yet, so the detected adjustment is held back instead of applied automatically.'
+      return {
+        coachActionLabel: 'Keep training as written',
+        coachActionDetail:
+          'SpartanLab detected an adjustment but has not applied it. The suggestion will switch on once the matching builder hook is audited and shipped.',
+        userNextStep: buildUserNextStep('suppressed', ctx),
+        systemNextStep: buildSystemNextStep('suppressed'),
+        truthStatusLabel,
+        evidenceQualityLabel,
+        actionability: 'blocked',
+        blockedReason,
+      }
+    }
+    case 'waiting': {
+      return {
+        coachActionLabel: 'Create the first signal',
+        coachActionDetail:
+          'SpartanLab needs a benchmark retest or a few logged workouts before it can calibrate. Until then, train as planned.',
+        userNextStep: buildUserNextStep('waiting', ctx),
+        systemNextStep: buildSystemNextStep('waiting'),
+        truthStatusLabel,
+        evidenceQualityLabel,
+        actionability: 'collect_evidence',
+      }
+    }
+    case 'degraded': {
+      return {
+        coachActionLabel: 'Use safe baseline',
+        coachActionDetail:
+          'Evidence is temporarily unavailable, so SpartanLab is holding the conservative baseline and not making program changes from incomplete data.',
+        userNextStep: buildUserNextStep('degraded', ctx),
+        systemNextStep: buildSystemNextStep('degraded'),
+        truthStatusLabel,
+        evidenceQualityLabel,
+        actionability: 'degraded',
+      }
+    }
+  }
+}
+
+/**
+ * Confidence mapping. Waiting and degraded force `insufficient` /
+ * `limited` so the chip cannot lie about data quality.
+ */
+function mapConfidenceToEvidenceQuality(
+  status: EvidenceCoachRecommendationStatus,
+  confidence: ProgramCalibrationPlanConfidence,
+): EvidenceCoachEvidenceQuality {
+  if (status === 'waiting') return 'insufficient'
+  if (status === 'degraded') return 'limited'
+  switch (confidence) {
+    case 'high':
+      return 'strong'
+    case 'medium':
+      return 'moderate'
+    case 'low':
+      return 'limited'
+    default:
+      return 'insufficient'
+  }
+}
+
+function buildTruthStatusLabel(
+  status: EvidenceCoachRecommendationStatus,
+): string {
+  switch (status) {
+    case 'active':
+      return 'Applied to this program'
+    case 'observe':
+      return 'Monitoring trend'
+    case 'suppressed':
+      return 'Detected, not applied'
+    case 'waiting':
+      return 'Needs evidence'
+    case 'degraded':
+      return 'Evidence unavailable'
+  }
+}
+
+function buildUserNextStep(
+  status: EvidenceCoachRecommendationStatus,
+  ctx: {
+    influence: EvidenceCalibrationGenerationInfluence
+    plan: ProgramEvidenceCalibrationPlan | null
+  },
+): string {
+  const { influence } = ctx
+  switch (status) {
+    case 'active':
+      return 'Train this week as written and log session difficulty so the next calibration cycle has fresh data.'
+    case 'observe':
+      return 'Log your next sessions with RPE, completion, and notes so the trend can mature into a real adjustment.'
+    case 'suppressed':
+      return 'Keep logging workouts so the recommendation stays calibrated for the moment the builder hook ships.'
+    case 'waiting':
+      return influence.benchmarkRetestPrompt
+        ? 'Complete a benchmark retest so SpartanLab can calibrate from a known reference point.'
+        : 'Log two or three workouts so SpartanLab has enough signal to begin calibrating.'
+    case 'degraded':
+      return 'Continue training as written and avoid manual overcorrection while evidence is unavailable.'
+  }
+}
+
+function buildSystemNextStep(
+  status: EvidenceCoachRecommendationStatus,
+): string {
+  switch (status) {
+    case 'active':
+      return 'SpartanLab will compare upcoming sessions against this adjustment and re-evaluate next cycle.'
+    case 'observe':
+      return 'SpartanLab will wait for stronger evidence before escalating into a structural adjustment.'
+    case 'suppressed':
+      return 'A future AB phase will wire this suppressed constraint into program generation once the builder hook is audited.'
+    case 'waiting':
+      return 'SpartanLab will begin calibration automatically as soon as enough evidence exists.'
+    case 'degraded':
+      return 'SpartanLab will resume calibration the moment the evidence source is reachable again.'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AB13-1 copy helpers — pure (preserved verbatim)
 // ---------------------------------------------------------------------------
 
 function buildActiveSummary(appliedCount: number): string {
@@ -412,11 +606,6 @@ function buildSuppressedSummary(suppressedCount: number): string {
   return `Recent evidence suggests ${suppressedCount} adjustment${suppressedCount === 1 ? '' : 's'}, but the safe builder hook is not yet active.`
 }
 
-/**
- * Build a deterministic recommendation sentence from the resolved
- * structural constraint values. Each branch mirrors a real bounded dial
- * in the generation influence — no generic copy is allowed.
- */
 function buildActiveRecommendationCopy(inputs: {
   progressionAggressiveness: ProgressionAggressiveness | null
   volumeBias: VolumeBias | null
@@ -470,15 +659,10 @@ function buildActiveRecommendationCopy(inputs: {
   if (parts.length === 0) {
     return 'Continue with the calibrated program as generated.'
   }
-  // Capitalize the first part; lower-case the joining clauses.
   const [head, ...tail] = parts
   return tail.length === 0 ? `${head}.` : `${head}; ${tail.join('; ')}.`
 }
 
-/**
- * Optional "what to watch next" line. Only emitted when a real
- * protective dial is active.
- */
 function buildWatchNextCopy(inputs: {
   progressionAggressiveness: ProgressionAggressiveness | null
   recoveryBias: RecoveryBias | null

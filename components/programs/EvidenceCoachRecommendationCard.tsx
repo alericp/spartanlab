@@ -1,21 +1,32 @@
 'use client'
 
 // =============================================================================
-// [AB13-1] EVIDENCE COACH RECOMMENDATION CARD — RENDERER ONLY
+// [AB13-1 / AB13-2] EVIDENCE COACH RECOMMENDATION CARD — RENDERER ONLY
 // =============================================================================
 //
 // Compact Program-page surface that displays the
 // `EvidenceCoachRecommendationBundle` produced by
 // `lib/program/evidence-derived-coach-recommendations.ts`.
 //
+// AB13-2 upgrade:
+//   - Adds a deterministic "What to do now" block (coach action label,
+//     coach action detail, user next step, system next step).
+//   - Adds compact chips for truth-status, evidence-quality, and
+//     actionability — every chip string comes from the bundle.
+//   - When `blockedReason` exists, renders a small honest "Why it is
+//     not applied yet" note (no scary medical/legal copy).
+//   - Renderer-only contract preserved: zero business logic, zero
+//     hardcoded "active"/"applied" claims.
+//
 // CONTRACTS:
 //   - Renderer-only. Every visible string comes from the bundle.
-//   - Hides itself silently when `bundle.primary === null` (inactive /
-//     nothing to show). Never shows a placeholder card.
-//   - Never invents chips, severity, confidence, or "applied" claims.
+//   - Hides itself silently when `bundle.primary === null`.
+//   - The renderer NEVER claims `applied` unless
+//     `primary.appliedToProgram === true` AND
+//     `primary.status === 'active'`. Both are gated upstream.
 //   - Reuses the same Card / Badge primitives the FeedbackLoopProofCard
-//     uses, so it sits visually consistent next to the AB11-5 / AB12-2
-//     proof surface.
+//     uses, so the AB11-5 / AB12-2 / AB13-2 cards sit visually
+//     consistent next to each other.
 //   - At most 1 primary recommendation + 2 supporting notes.
 // =============================================================================
 
@@ -29,6 +40,8 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { Sparkles, Eye, Hourglass, AlertTriangle, CircleSlash } from 'lucide-react'
 import type {
+  EvidenceCoachActionability,
+  EvidenceCoachEvidenceQuality,
   EvidenceCoachRecommendation,
   EvidenceCoachRecommendationBundle,
   EvidenceCoachRecommendationStatus,
@@ -57,9 +70,12 @@ export function EvidenceCoachRecommendationCard({
   return (
     <Card
       className={cn('border-border bg-card', className)}
-      data-ab13-1-status={primary.status}
-      data-ab13-1-applied={String(primary.appliedToProgram)}
-      data-ab13-1-derived-from={derivedFrom}
+      data-ab13-2-status={primary.status}
+      data-ab13-2-applied={String(primary.appliedToProgram)}
+      data-ab13-2-derived-from={derivedFrom}
+      data-ab13-2-actionability={primary.actionability}
+      data-ab13-2-evidence-quality={primary.evidenceQualityLabel}
+      data-ab13-2-truth-status={primary.truthStatusLabel}
     >
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -71,6 +87,11 @@ export function EvidenceCoachRecommendationCard({
             <StatusBadge status={primary.status} severity={primary.severity} />
             <ConfidenceBadge confidence={primary.confidenceLabel} />
           </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <TruthStatusBadge label={primary.truthStatusLabel} />
+          <EvidenceQualityBadge quality={primary.evidenceQualityLabel} />
+          <ActionabilityBadge actionability={primary.actionability} />
         </div>
       </CardHeader>
 
@@ -90,6 +111,37 @@ export function EvidenceCoachRecommendationCard({
           <p className="text-sm font-medium leading-relaxed text-foreground text-pretty">
             {primary.recommendation}
           </p>
+        </div>
+
+        {/* AB13-2: What to do now */}
+        <div className="rounded-md border border-border bg-background p-3">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            What to do now
+          </p>
+          <p className="text-sm font-medium leading-relaxed text-foreground text-pretty">
+            {primary.coachActionLabel}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+            {primary.coachActionDetail}
+          </p>
+          <dl className="mt-3 flex flex-col gap-2">
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Your next step
+              </dt>
+              <dd className="text-xs leading-relaxed text-foreground text-pretty">
+                {primary.userNextStep}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                What SpartanLab will do
+              </dt>
+              <dd className="text-xs leading-relaxed text-muted-foreground text-pretty">
+                {primary.systemNextStep}
+              </dd>
+            </div>
+          </dl>
         </div>
 
         {primary.why.length > 0 && (
@@ -131,11 +183,15 @@ export function EvidenceCoachRecommendationCard({
           </ul>
         )}
 
-        {primary.suppressedReason && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground text-pretty">
-            <span className="font-medium">Why not applied:</span>{' '}
-            {primary.suppressedReason}
-          </p>
+        {primary.blockedReason && (
+          <div className="rounded-md border border-border bg-background p-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Why it is not applied yet
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+              {primary.blockedReason}
+            </p>
+          </div>
         )}
 
         {primary.evidenceSource.length > 0 && (
@@ -164,7 +220,8 @@ function SupportingNote({ note }: { note: EvidenceCoachRecommendation }) {
   return (
     <div
       className="flex flex-col gap-1.5"
-      data-ab13-1-supporting-status={note.status}
+      data-ab13-2-supporting-status={note.status}
+      data-ab13-2-supporting-actionability={note.actionability}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusIcon status={note.status} small />
@@ -172,9 +229,14 @@ function SupportingNote({ note }: { note: EvidenceCoachRecommendation }) {
           {note.title}
         </p>
         <StatusBadge status={note.status} severity={note.severity} />
+        <TruthStatusBadge label={note.truthStatusLabel} />
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground text-pretty">
         {note.summary}
+      </p>
+      <p className="text-xs leading-relaxed text-foreground text-pretty">
+        <span className="font-medium">{note.coachActionLabel}.</span>{' '}
+        {note.userNextStep}
       </p>
       {note.visibleProof.length > 0 && (
         <ul className="flex flex-wrap gap-1" role="list">
@@ -190,9 +252,9 @@ function SupportingNote({ note }: { note: EvidenceCoachRecommendation }) {
           ))}
         </ul>
       )}
-      {note.suppressedReason && (
+      {note.blockedReason && (
         <p className="text-[11px] leading-relaxed text-muted-foreground/90 text-pretty">
-          {note.suppressedReason}
+          {note.blockedReason}
         </p>
       )}
     </div>
@@ -295,10 +357,66 @@ function ConfidenceBadge({
   )
 }
 
+function TruthStatusBadge({ label }: { label: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className="text-[10px] font-medium normal-case"
+    >
+      {label}
+    </Badge>
+  )
+}
+
+function EvidenceQualityBadge({
+  quality,
+}: {
+  quality: EvidenceCoachEvidenceQuality
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className="text-[10px] font-medium uppercase tracking-wide"
+    >
+      {EVIDENCE_QUALITY_LABEL[quality]}
+    </Badge>
+  )
+}
+
+function ActionabilityBadge({
+  actionability,
+}: {
+  actionability: EvidenceCoachActionability
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className="text-[10px] font-medium uppercase tracking-wide"
+    >
+      {ACTIONABILITY_LABEL[actionability]}
+    </Badge>
+  )
+}
+
 const STATUS_LABEL: Record<EvidenceCoachRecommendationStatus, string> = {
   active: 'Active',
   observe: 'Observing',
   suppressed: 'Adjustment suppressed',
   waiting: 'Waiting for evidence',
   degraded: 'Safe baseline',
+}
+
+const EVIDENCE_QUALITY_LABEL: Record<EvidenceCoachEvidenceQuality, string> = {
+  strong: 'Strong evidence',
+  moderate: 'Moderate evidence',
+  limited: 'Limited evidence',
+  insufficient: 'Insufficient evidence',
+}
+
+const ACTIONABILITY_LABEL: Record<EvidenceCoachActionability, string> = {
+  ready: 'Ready',
+  monitor: 'Monitor',
+  collect_evidence: 'Collect evidence',
+  blocked: 'Blocked',
+  degraded: 'Degraded',
 }

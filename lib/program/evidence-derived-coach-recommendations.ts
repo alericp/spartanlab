@@ -1,11 +1,12 @@
 /**
  * ============================================================================
- * AB13-1 / AB13-2 — EVIDENCE-DERIVED COACH RECOMMENDATIONS
+ * AB13-1 / AB13-2 / AB13-6 — EVIDENCE-DERIVED COACH RECOMMENDATIONS
  * ============================================================================
  *
  * Pure, typed derivation that turns the existing AB12-1 calibration plan
- * + the AB12-2 generation-influence stamp into a small bundle of honest
- * "AI Coach" recommendations the Program page can render verbatim.
+ * + the AB12-2 generation-influence stamp + (AB13-6) the AB13-4 shaping
+ * proof into a small bundle of honest "AI Coach" recommendations the
+ * Program page can render verbatim.
  *
  * AB13-2 upgrade:
  *   - Adds a deterministic actionability layer on top of every status
@@ -18,12 +19,33 @@
  *     `truthStatusLabel: 'Applied to this program'` line cannot fire
  *     under AB12-2 default hooks. Same gate, more clarity.
  *
+ * AB13-6 upgrade (renderer-only proof surfacing):
+ *   - Accepts an optional `shapingProof` input sourced verbatim from
+ *     `program.evidenceCalibrationShapingProof` (stamped by the AB13-4
+ *     pass in `lib/program/evidence-calibration-program-shaping.ts`).
+ *   - Derives THREE optional renderer-friendly fields on the primary
+ *     recommendation: `programShapingProofStatus`,
+ *     `programShapingProofLabel`, `programShapingProofDetail`. The
+ *     renderer (EvidenceCoachRecommendationCard) reads these verbatim
+ *     and shows ONE subtle line so the user can distinguish:
+ *        - applied + capped N exercises,
+ *        - active + no exercise required capping,
+ *        - skipped (safe reason),
+ *        - unavailable (older program — line is omitted).
+ *   - Adds NO new structural hook, NO new shaping behavior, NO new
+ *     storage. The proof is read-only canonical AB13-4 truth.
+ *   - Active gate is unchanged: the existing `appliedToProgram` rule
+ *     still requires `influence.status === 'active'` AND
+ *     `influence.allowedToMutateProgram === true`. Shaping proof
+ *     CANNOT promote a non-active recommendation to applied.
+ *
  * Truth source funnel (MUST NOT diverge):
  *
  *   AB11 evidence summary (program.performanceAdaptation stamps)
  *     -> AB12-1 ProgramEvidenceCalibrationPlan
  *     -> AB12-2 EvidenceCalibrationGenerationInfluence
- *     -> AB13-1/AB13-2 EvidenceCoachRecommendationBundle (this file)
+ *     -> AB13-4 EvidenceCalibrationShapingProof (optional)
+ *     -> AB13-1/AB13-2/AB13-6 EvidenceCoachRecommendationBundle (this file)
  *     -> Program page passes the bundle to the renderer
  *     -> EvidenceCoachRecommendationCard renders verbatim
  *
@@ -39,7 +61,7 @@
  *      `influence.allowedToMutateProgram === true`.
  *   5. Every visible string the renderer shows is computed here. The
  *      renderer is dumb — it cannot invent labels, chips, or actions.
- *   6. AB13-2 helperVersion stamp.
+ *   6. AB13-6 helperVersion stamp.
  */
 
 import type {
@@ -51,6 +73,7 @@ import type {
   RecoveryBias,
 } from './evidence-aware-program-calibration-governor'
 import type { EvidenceCalibrationGenerationInfluence } from './evidence-calibration-generation-influence'
+import type { EvidenceCalibrationShapingProof } from './evidence-calibration-program-shaping'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -98,6 +121,30 @@ export type EvidenceCoachEvidenceQuality =
   | 'moderate'
   | 'limited'
   | 'insufficient'
+
+/**
+ * AB13-6: renderer-friendly summary of the AB13-4 shaping proof.
+ *   - `applied`           : shaping pass ran AND mutated at least one
+ *                           exercise (e.g. capped N RPE targets at 7).
+ *   - `checked_no_change` : shaping pass ran but every prescribed RPE
+ *                           was already at/below the conservative
+ *                           ceiling — nothing in the program needed
+ *                           capping. Honest "active, no-op" state.
+ *   - `skipped`           : shaping gate was closed for a safe reason
+ *                           (status not active, not allowed to mutate,
+ *                           or plan did not request the conservative
+ *                           direction). User-facing copy avoids raw
+ *                           enum names.
+ *   - `unavailable`       : no proof was passed to the helper (older
+ *                           program generated before AB13-4, or proof
+ *                           dropped during normalization). Renderer
+ *                           silently omits the line.
+ */
+export type EvidenceCoachShapingProofStatus =
+  | 'applied'
+  | 'checked_no_change'
+  | 'skipped'
+  | 'unavailable'
 
 export interface EvidenceCoachRecommendation {
   // AB13-1 contract (preserved verbatim) ---------------------------------
@@ -156,17 +203,36 @@ export interface EvidenceCoachRecommendation {
    * Single-word actionability chip the renderer can show as-is.
    */
   actionability: EvidenceCoachActionability
+
+  // AB13-6 shaping-proof surface (optional; only present on the primary) ---
+  /**
+   * Honest summary status of the AB13-4 shaping pass for THIS program.
+   * Omitted when no proof is available (older programs / unavailable).
+   */
+  programShapingProofStatus?: EvidenceCoachShapingProofStatus
+  /**
+   * Short user-facing label, e.g. "Program shaping applied",
+   * "Program shaping checked", "Program shaping not applied". Always
+   * paired with `programShapingProofDetail` when present.
+   */
+  programShapingProofLabel?: string
+  /**
+   * One-sentence honest detail derived from the AB13-4 shaping proof.
+   * Never references raw enum names like `ranShapingPass`,
+   * `cappedExerciseCount`, or `skippedReason`.
+   */
+  programShapingProofDetail?: string
 }
 
 export interface EvidenceCoachRecommendationBundle {
   primary: EvidenceCoachRecommendation | null
   supporting: EvidenceCoachRecommendation[]
   derivedFrom: 'ab11+ab12' | 'ab12-only' | 'inactive'
-  helperVersion: 'ab13-2-evidence-coach-actionability'
+  helperVersion: 'ab13-6-evidence-coach-shaping-proof'
 }
 
 const HELPER_VERSION =
-  'ab13-2-evidence-coach-actionability' as const
+  'ab13-6-evidence-coach-shaping-proof' as const
 
 const EMPTY_BUNDLE: EvidenceCoachRecommendationBundle = {
   primary: null,
@@ -182,8 +248,23 @@ const EMPTY_BUNDLE: EvidenceCoachRecommendationBundle = {
 export function deriveEvidenceCoachRecommendations(args: {
   plan: ProgramEvidenceCalibrationPlan | null
   influence: EvidenceCalibrationGenerationInfluence | null
+  /**
+   * AB13-6: optional shaping proof read verbatim from
+   * `program.evidenceCalibrationShapingProof`. When omitted/null the
+   * helper derives no shaping-proof line and the renderer silently
+   * skips that surface (existing behavior preserved). When present the
+   * helper produces ONE honest user-facing line per the rules in
+   * `buildProgramShapingProofFields`.
+   */
+  shapingProof?: EvidenceCalibrationShapingProof | null
 }): EvidenceCoachRecommendationBundle {
-  const { plan, influence } = args
+  const { plan, influence, shapingProof } = args
+
+  // AB13-6: pre-derive the shaping-proof fields ONCE so every primary
+  // literal below can spread them uniformly. Returns `undefined` when
+  // there is nothing user-facing to show, keeping the AB13-1 contract
+  // (every existing primary literal stays valid).
+  const shapingFields = buildProgramShapingProofFields(shapingProof ?? null)
 
   // Rule 1: nothing to show.
   if (!influence || influence.status === 'inactive') {
@@ -214,6 +295,7 @@ export function deriveEvidenceCoachRecommendations(args: {
       confidenceLabel: 'low',
       appliedToProgram: false,
       ...action,
+      ...(shapingFields ?? {}),
     }
     return {
       primary,
@@ -269,6 +351,7 @@ export function deriveEvidenceCoachRecommendations(args: {
       confidenceLabel: influence.confidence,
       appliedToProgram: true,
       ...action,
+      ...(shapingFields ?? {}),
     }
 
     const supporting: EvidenceCoachRecommendation[] = []
@@ -328,6 +411,7 @@ export function deriveEvidenceCoachRecommendations(args: {
         confidenceLabel: 'insufficient',
         appliedToProgram: false,
         ...action,
+        ...(shapingFields ?? {}),
       }
       return {
         primary,
@@ -367,6 +451,7 @@ export function deriveEvidenceCoachRecommendations(args: {
         blockedReason:
           action.blockedReason ??
           'Structural builder constraints are suppressed by default in AB12-2 until each is wired by a future AB phase.',
+        ...(shapingFields ?? {}),
       }
       return {
         primary,
@@ -396,6 +481,7 @@ export function deriveEvidenceCoachRecommendations(args: {
       confidenceLabel: influence.confidence,
       appliedToProgram: false,
       ...action,
+      ...(shapingFields ?? {}),
     }
     return {
       primary,
@@ -674,4 +760,97 @@ function buildWatchNextCopy(inputs: {
     return 'Watch how the next two sessions feel before pushing further.'
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// AB13-6 program shaping proof — pure
+// ---------------------------------------------------------------------------
+
+/**
+ * AB13-6 fields produced by `buildProgramShapingProofFields`. Returns
+ * `undefined` instead of a partial when the proof is not present
+ * (older programs / unavailable) so spreading `...(fields ?? {})`
+ * preserves the existing AB13-1 / AB13-2 contract verbatim.
+ */
+type AB13_6ShapingFields = Pick<
+  EvidenceCoachRecommendation,
+  | 'programShapingProofStatus'
+  | 'programShapingProofLabel'
+  | 'programShapingProofDetail'
+>
+
+/**
+ * Derive the AB13-6 user-facing shaping-proof fields from the canonical
+ * AB13-4 `EvidenceCalibrationShapingProof`. Pure, deterministic, never
+ * fabricates evidence:
+ *
+ *   - `null` / `undefined`     -> returns `undefined` (renderer omits line).
+ *   - `appliedAtLeastOneMutation === true`
+ *                              -> 'applied' + capped-count detail.
+ *   - `ranShapingPass === true && appliedAtLeastOneMutation === false`
+ *                              -> 'checked_no_change' + honest no-op detail.
+ *   - `skippedReason !== null` -> 'skipped' + safe user-facing reason.
+ *
+ * Never references raw enum names like `ranShapingPass`,
+ * `cappedExerciseCount`, `skippedReason`, or `ceilingRpe` in user-facing
+ * copy. Detail strings are short and coaching-toned.
+ */
+function buildProgramShapingProofFields(
+  proof: EvidenceCalibrationShapingProof | null,
+): AB13_6ShapingFields | undefined {
+  // AB13-1 contract preservation: when there is nothing to surface, the
+  // helper returns `undefined`, the spread is a no-op, and every
+  // existing field on the recommendation literal stays unchanged.
+  if (!proof) return undefined
+
+  // Applied: the AB13-4 pass actually mutated at least one exercise.
+  if (proof.ranShapingPass && proof.appliedAtLeastOneMutation) {
+    const n = proof.cappedExerciseCount
+    const ceiling = proof.ceilingRpe
+    const noun = `working-set RPE target${n === 1 ? '' : 's'}`
+    return {
+      programShapingProofStatus: 'applied',
+      programShapingProofLabel: 'Program shaping applied',
+      programShapingProofDetail: `Capped ${n} ${noun} at RPE ${ceiling} this cycle.`,
+    }
+  }
+
+  // Checked, no change: gate was open but nothing in the program needed
+  // capping. Honest "active no-op" — does NOT claim a mutation occurred.
+  if (proof.ranShapingPass && !proof.appliedAtLeastOneMutation) {
+    return {
+      programShapingProofStatus: 'checked_no_change',
+      programShapingProofLabel: 'Program shaping checked',
+      programShapingProofDetail: `Conservative progression is active, but no exercise needed an RPE cap (every prescribed RPE was already at or below ${proof.ceilingRpe}).`,
+    }
+  }
+
+  // Skipped: gate was closed for one of the safe AB13-4 reasons. Map
+  // each enum to a coaching-toned sentence that never leaks the enum.
+  if (proof.skippedReason !== null) {
+    return {
+      programShapingProofStatus: 'skipped',
+      programShapingProofLabel: 'Program shaping not applied',
+      programShapingProofDetail: buildShapingSkippedDetail(proof.skippedReason),
+    }
+  }
+
+  // Defensive: proof object exists but matches none of the known shapes.
+  // Treat as unavailable rather than inventing a status.
+  return undefined
+}
+
+function buildShapingSkippedDetail(
+  reason: NonNullable<EvidenceCalibrationShapingProof['skippedReason']>,
+): string {
+  switch (reason) {
+    case 'progression_not_conservative':
+      return 'Current evidence does not call for conservative progression on this program.'
+    case 'status_not_active':
+      return 'The recommendation is being monitored, not applied to this program.'
+    case 'not_allowed_to_mutate':
+      return 'The recommendation is held back from mutating this program for safety.'
+    case 'no_influence':
+      return 'No evidence influence was available when this program was generated.'
+  }
 }

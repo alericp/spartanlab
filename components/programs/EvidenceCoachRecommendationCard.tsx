@@ -47,6 +47,7 @@ import type {
   EvidenceCoachRecommendationStatus,
   EvidenceCoachRecommendationSeverity,
   EvidenceCoachRecommendationConfidence,
+  EvidenceCoachShapingProofStatus,
 } from '@/lib/program/evidence-derived-coach-recommendations'
 
 interface EvidenceCoachRecommendationCardProps {
@@ -76,6 +77,9 @@ export function EvidenceCoachRecommendationCard({
       data-ab13-2-actionability={primary.actionability}
       data-ab13-2-evidence-quality={primary.evidenceQualityLabel}
       data-ab13-2-truth-status={primary.truthStatusLabel}
+      data-ab13-6-shaping-proof-status={
+        primary.programShapingProofStatus ?? 'unavailable'
+      }
     >
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -142,6 +146,15 @@ export function EvidenceCoachRecommendationCard({
               </dd>
             </div>
           </dl>
+          {/* AB13-6: subtle program-shaping proof line. Helper-derived,
+              renderer-only. Hidden silently when proof is unavailable
+              (older program / no AB13-4 stamp). NEVER references raw
+              enum names — copy is fully owned by the helper. */}
+          <ProgramShapingProofLine
+            label={primary.programShapingProofLabel}
+            detail={primary.programShapingProofDetail}
+            status={primary.programShapingProofStatus}
+          />
         </div>
 
         {primary.why.length > 0 && (
@@ -419,4 +432,40 @@ const ACTIONABILITY_LABEL: Record<EvidenceCoachActionability, string> = {
   collect_evidence: 'Collect evidence',
   blocked: 'Blocked',
   degraded: 'Degraded',
+}
+
+// ---------------------------------------------------------------------------
+// AB13-6: program-shaping proof line — pure renderer
+// ---------------------------------------------------------------------------
+
+/**
+ * Subtle one-line surface for the helper-derived AB13-6 shaping proof.
+ *
+ * Renders nothing when `label` and `detail` are undefined (older
+ * programs, or shaping proof unavailable). Never invents copy — every
+ * visible string comes from the helper.
+ */
+function ProgramShapingProofLine({
+  label,
+  detail,
+  status,
+}: {
+  label: string | undefined
+  detail: string | undefined
+  status: EvidenceCoachShapingProofStatus | undefined
+}) {
+  if (!label || !detail) return null
+  return (
+    <div
+      className="mt-3 border-t border-border pt-2"
+      data-ab13-6-shaping-proof-line={status ?? 'unavailable'}
+    >
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground text-pretty">
+        {detail}
+      </p>
+    </div>
+  )
 }

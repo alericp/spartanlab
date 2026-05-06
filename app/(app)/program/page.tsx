@@ -806,6 +806,15 @@ import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
 // alongside the benchmarks fetch, so the page only forwards typed program
 // inputs. The engine helper is intentionally NOT imported here anymore.
 import { CalibrationCheckpointCard } from '@/components/programs/CalibrationCheckpointCard'
+// [AB11-4 / AB11-5] Workout-side proof. Reads ONLY the canonical
+// `performanceAdaptation` stamps already attached to the program by
+// `applyFuturePrescriptionMutations`, so the proof cannot drift from the
+// executable mutations. No new fetch, no new storage, no Phase-L rewrite.
+import { FeedbackLoopProofCard } from '@/components/programs/FeedbackLoopProofCard'
+import {
+  buildWorkoutEvidenceSignalsFromProgramStamps,
+  summarizeWorkoutEvidence,
+} from '@/lib/program/program-evidence-feedback-loop'
 // [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
 // action. Lightweight, null-tolerant, hides on fresh programs, calls only the
 // existing canonical onRegenerate handler — no second route, no second builder.
@@ -2424,6 +2433,34 @@ function ProgramDisplayWrapper({
               ?.equipmentAvailable ?? null,
         }}
       />
+
+      {/* ==========================================================================
+          [AB11-4 / AB11-5] WORKOUT-SIDE FEEDBACK LOOP PROOF
+          ----------------------------------------------------------------------
+          Reads ONLY the canonical `performanceAdaptation` stamps that the
+          existing Phase-L resolver
+          (`lib/program/performance-feedback-adaptation-contract.ts` →
+          `applyFuturePrescriptionMutations`) already attached to the program
+          via `lib/program/performance-feedback-integration.ts`. We never
+          re-run mutation logic here, never re-fetch workout logs, and never
+          synthesize evidence — the proof is a typed projection of the
+          executable mutations the user is already seeing reflected in their
+          prescription on `AdaptiveSessionCard`. When no stamps exist (fresh
+          program / first-run / no completed evidence) the card renders the
+          honest "no completed workouts to learn from yet" baseline copy
+          rather than a failure state.
+          ========================================================================== */}
+      {(() => {
+        // Inline derivation: cheap, deterministic, no hooks needed at this
+        // depth of the (already very large) page component.
+        const workoutSignals = buildWorkoutEvidenceSignalsFromProgramStamps(
+          program as unknown as Parameters<
+            typeof buildWorkoutEvidenceSignalsFromProgramStamps
+          >[0],
+        )
+        const workoutSummary = summarizeWorkoutEvidence(workoutSignals)
+        return <FeedbackLoopProofCard workoutSummary={workoutSummary} />
+      })()}
 
         {/* ==========================================================================
             [PHASE X] PROGRAM TRUST ACCORDION

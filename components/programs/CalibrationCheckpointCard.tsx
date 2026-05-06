@@ -58,6 +58,13 @@ import {
   type ProgramCalibrationInput,
 } from '@/lib/program/program-calibration-recommendation'
 import type { TestUnit } from '@/lib/benchmark-testing-engine'
+import {
+  buildBenchmarkEvidenceSignalsFromLatestMap,
+  summarizeBenchmarkEvidence,
+  summarizeNoEvidence,
+  type ProgramEvidenceFeedbackSummary,
+} from '@/lib/program/program-evidence-feedback-loop'
+import { FeedbackLoopProofCard } from './FeedbackLoopProofCard'
 
 // =============================================================================
 // PROPS
@@ -254,42 +261,59 @@ export function CalibrationCheckpointCard({
     [input, latestMap],
   )
 
+  // [AB11-3] Compute the typed benchmark evidence summary from the SAME
+  // latest map the engine consumed. We only build it once the fetch has
+  // resolved; while loading we hold null so the proof card renders the
+  // honest baseline copy instead of inventing claims.
+  const benchmarkSummary: ProgramEvidenceFeedbackSummary | null = useMemo(() => {
+    if (latestMap === null) return null
+    if (latestMap.size === 0) return summarizeNoEvidence('benchmark')
+    const signals = buildBenchmarkEvidenceSignalsFromLatestMap(latestMap)
+    return summarizeBenchmarkEvidence(signals)
+  }, [latestMap])
+
   if (recommendation.recommendedTests.length === 0) {
     return (
-      <Card
-        className="mt-4"
-        data-ab11-2-calibration-checkpoint="empty"
-        data-engine-version={recommendation.engineVersion}
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Target
-              className="h-4 w-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <CardTitle className="text-base font-semibold">
-              Calibration Checkpoint
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-            {recommendation.reasonSummary}
-          </p>
-          {fetchError && (
-            <p
-              className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-              role="note"
-            >
-              <AlertTriangle
-                className="mt-[2px] h-3 w-3 shrink-0"
+      <>
+        <Card
+          className="mt-4"
+          data-ab11-2-calibration-checkpoint="empty"
+          data-engine-version={recommendation.engineVersion}
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Target
+                className="h-4 w-4 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span>{fetchError}</span>
+              <CardTitle className="text-base font-semibold">
+                Calibration Checkpoint
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+              {recommendation.reasonSummary}
             </p>
-          )}
-        </CardContent>
-      </Card>
+            {fetchError && (
+              <p
+                className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
+                role="note"
+              >
+                <AlertTriangle
+                  className="mt-[2px] h-3 w-3 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>{fetchError}</span>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        {/* [AB11-5] Honest benchmark-side proof even when no tests are
+            recommended (e.g. user has no goals selected). Shows the
+            baseline copy via summarizeNoEvidence when latestMap is empty. */}
+        <FeedbackLoopProofCard benchmarkSummary={benchmarkSummary} />
+      </>
     )
   }
 
@@ -298,6 +322,7 @@ export function CalibrationCheckpointCard({
   const showSafetyNote = safety !== 'safe' || fetchError !== null
 
   return (
+    <>
     <Card
       className="mt-4"
       data-ab11-2-calibration-checkpoint="present"
@@ -369,6 +394,12 @@ export function CalibrationCheckpointCard({
         )}
       </CardContent>
     </Card>
+    {/* [AB11-5] Benchmark-side feedback proof. Renders directly off the
+        same `latestMap` the calibration engine consumed, so the proof
+        cannot drift from the recommendation. The card itself handles
+        no-evidence and considered/no-change states honestly. */}
+    <FeedbackLoopProofCard benchmarkSummary={benchmarkSummary} />
+    </>
   )
 }
 

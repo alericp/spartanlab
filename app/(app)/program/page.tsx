@@ -811,6 +811,12 @@ import { CalibrationCheckpointCard } from '@/components/programs/CalibrationChec
 // `applyFuturePrescriptionMutations`, so the proof cannot drift from the
 // executable mutations. No new fetch, no new storage, no Phase-L rewrite.
 import { FeedbackLoopProofCard } from '@/components/programs/FeedbackLoopProofCard'
+// [AB13-1B] Restore the wiring lost in the previous snapshot. The
+// helper + component already exist; the Program page just needs to
+// consume them. Imports placed next to the FeedbackLoopProofCard
+// import so the proof corridor is visually grouped in one place.
+import { EvidenceCoachRecommendationCard } from '@/components/programs/EvidenceCoachRecommendationCard'
+import { deriveEvidenceCoachRecommendations } from '@/lib/program/evidence-derived-coach-recommendations'
 import {
   buildWorkoutEvidenceSignalsFromProgramStamps,
   summarizeWorkoutEvidence,
@@ -2485,12 +2491,23 @@ function ProgramDisplayWrapper({
         // directly on `AdaptiveProgram` (added by AB12-2) so no cast is
         // needed.
         const generationInfluence = program.evidenceCalibrationInfluence ?? null
+        // [AB13-1B] Derive the coach recommendation bundle from the SAME
+        // `calibrationPlan` + `generationInfluence` the proof card
+        // already trusts. Pure helper, no I/O. Bundle is `{primary: null}`
+        // for inactive states, in which case the card hides itself.
+        const coachRecommendationBundle = deriveEvidenceCoachRecommendations({
+          plan: calibrationPlan,
+          influence: generationInfluence,
+        })
         return (
-          <FeedbackLoopProofCard
-            workoutSummary={workoutSummary}
-            calibrationPlan={calibrationPlan}
-            generationInfluence={generationInfluence}
-          />
+          <div className="flex flex-col gap-3">
+            <FeedbackLoopProofCard
+              workoutSummary={workoutSummary}
+              calibrationPlan={calibrationPlan}
+              generationInfluence={generationInfluence}
+            />
+            <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
+          </div>
         )
       })()}
 

@@ -233,7 +233,7 @@ once truth, source, and display are locked.
 
 ---
 
-## Phase J — Product Cleanup / Trust Polish — `ACTIVE/PARTIAL`
+## Phase J — Product Cleanup / Trust Polish — `PARTIAL`
 
 **Purpose:** strip debug clutter; the final UI feels like an AI coach, not a
 debug report.

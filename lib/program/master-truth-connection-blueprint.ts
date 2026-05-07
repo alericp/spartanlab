@@ -2031,9 +2031,9 @@ function step22(): BlueprintPhase {
     title: 'Injury Substitution Advisory-First Layer (Step 22)',
     purpose:
       'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Step 22.1-22.7 COMPLETE. T.T7-T.T13 all complete. Program Page shows injury advisory preview. Live workout shows per-exercise advisory warning. Post-workout proposal queue renders in pre-save completion UI. Step 22.6 second-confirmation flow allows user to explicitly apply substitution to saved program with exact target matching and reload verification. No automatic mutation. Remaining: reversal/undo for saved-program changes (optional future work).',
+      'Step 22 COMPLETE. Injury substitution advisory-first chain is closed: Program Page preview (T.T7), Live Workout warning (T.T8), current-session apply (T.T9), live workout UI proof (T.T10-T.T11), post-workout proposal queue (T.T12), and explicit saved-program apply with second confirmation and reload verification (T.T13). All safety contracts enforced — no automatic mutation, exact target matching, ambiguity blocking. Optional future enhancement: reversal/undo for saved-program changes (non-blocking backlog). Next recommended: Step 23 missed-day recomposition advisory-first layer.',
     subtasks: [
       {
         id: 'T.T1',
@@ -2216,8 +2216,9 @@ function step22(): BlueprintPhase {
           'Pre-save completion UI: renders proposal review card with dismiss/defer actions',
           'Saved program is NEVER auto-mutated — canApplyToSavedProgramNow: false, blockedReason explains',
         ],
-        remainingWork: [
-          'T.T13 COMPLETE: Explicit saved-program substitution apply execution after user approval',
+        remainingWork: [],
+        // [OPTIONAL FUTURE BACKLOG]
+        optionalFutureEnhancements: [
           'Track repeated substitutions across multiple workout sessions (requires persistence)',
         ],
       },
@@ -2264,8 +2265,16 @@ function step22(): BlueprintPhase {
           'Step 22.3 live workout safer-option badge preserved',
           'Step 22.4 post-workout proposal queue preserved',
         ],
-        remainingWork: [
-          'Reversal/undo for saved-program changes (future)',
+        remainingWork: [],
+        // [OPTIONAL FUTURE BACKLOG] Reversal/undo for saved-program changes
+        // Not required for Step 22 closure — all safety contracts enforced:
+        // - Second confirmation required before apply
+        // - Exact target matching blocks ambiguity
+        // - Only one exercise updated per apply
+        // - Save + reload verification gates success
+        // - originalName/originalId preserved for potential future undo/audit
+        optionalFutureEnhancements: [
+          'Reversal/undo for saved-program changes (non-blocking future backlog)',
         ],
       },
     ],
@@ -2391,7 +2400,7 @@ export function buildMasterTruthConnectionBlueprintStatus(
   )
 
   // Derive the overall verdict from the active phase id. This is more useful
-  // for the proof line than a generic "PARTIAL" — it tells the user exactly
+  // for the proof line than a generic "PARTIAL" ��� it tells the user exactly
   // which gate is currently the limiter.
   let overallVerdict: MasterBlueprintOverallVerdict
   if (!active) {

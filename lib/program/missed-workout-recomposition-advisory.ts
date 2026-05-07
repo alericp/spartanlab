@@ -726,3 +726,189 @@ export function isUrgentMissedWorkoutAdvisory(
 ): boolean {
   return advisory.severity === 'high' && !advisory.nonBlocking
 }
+
+// =============================================================================
+// STEP 23.6 — PUSH SESSION FORWARD MUTATION HELPER
+// =============================================================================
+
+/**
+ * Result status for push session forward operation.
+ */
+export type PushSessionForwardStatus = 'success' | 'blocked' | 'no_change'
+
+/**
+ * Result of a push session forward operation.
+ * Pure typed output — no side effects.
+ */
+export interface PushSessionForwardResult {
+  status: PushSessionForwardStatus
+  /** Updated program (only on success) */
+  updatedProgram?: {
+    sessions: unknown[]
+    [key: string]: unknown
+  }
+  /** Title of the moved session (on success) */
+  movedSessionTitle?: string
+  /** Original index of the moved session (0-based) */
+  fromIndex?: number
+  /** New index of the moved session (0-based) */
+  toIndex?: number
+  /** Human-readable summary */
+  visibleSummary: string
+  /** Machine-readable evidence for audit */
+  evidence: string[]
+  /** Reason code when blocked */
+  reasonCode?: string
+}
+
+/**
+ * Input for push session forward operation.
+ */
+export interface PushSessionForwardInput {
+  /** Current program — must have sessions array */
+  program: {
+    sessions?: Array<{
+      dayNumber: number
+      dayLabel: string
+      focus?: string
+      focusLabel?: string
+      [key: string]: unknown
+    }>
+    [key: string]: unknown
+  }
+  /** Index of the missed session (0-based) */
+  missedSessionIndex: number
+  /** Advisory that recommended this action */
+  advisory: MissedWorkoutRecompositionAdvisory
+}
+
+/**
+ * Pure helper to push a missed workout session forward one position.
+ * 
+ * CRITICAL INVARIANTS:
+ * - Pure function — no side effects, no storage, no hooks
+ * - Does NOT mutate the original program object
+ * - Returns a cloned program with sessions reordered
+ * - Only allows push_session_forward action
+ * - Preserves all session fields and content
+ * - Minimal reorder: swaps missed session with next session only
+ * - Re-numbers dayNumber sequentially after swap
+ * 
+ * @step 23.6
+ */
+export function pushMissedWorkoutSessionForward(
+  input: PushSessionForwardInput
+): PushSessionForwardResult {
+  const { program, missedSessionIndex, advisory } = input
+  const evidence: string[] = []
+  
+  // ==========================================================================
+  // GUARD 1: Advisory action must be push_session_forward
+  // ==========================================================================
+  if (advisory.action !== 'push_session_forward') {
+    evidence.push(`Advisory action is "${advisory.action}", not "push_session_forward"`)
+    return {
+      status: 'blocked',
+      visibleSummary: 'This action is only available for push-forward recommendations.',
+      evidence,
+      reasonCode: 'action_mismatch',
+    }
+  }
+  evidence.push('Advisory action is push_session_forward')
+  
+  // ==========================================================================
+  // GUARD 2: Program must exist with sessions
+  // ==========================================================================
+  if (!program || !Array.isArray(program.sessions)) {
+    evidence.push('Program or sessions array is missing')
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available to modify.',
+      evidence,
+      reasonCode: 'program_missing',
+    }
+  }
+  
+  const sessions = program.sessions
+  evidence.push(`Program has ${sessions.length} sessions`)
+  
+  // ==========================================================================
+  // GUARD 3: Must have at least 2 sessions to swap
+  // ==========================================================================
+  if (sessions.length < 2) {
+    evidence.push('Program has fewer than 2 sessions — cannot swap')
+    return {
+      status: 'blocked',
+      visibleSummary: 'Your program needs at least 2 sessions to reschedule.',
+      evidence,
+      reasonCode: 'insufficient_sessions',
+    }
+  }
+  
+  // ==========================================================================
+  // GUARD 4: Missed session index must be valid
+  // ==========================================================================
+  if (missedSessionIndex < 0 || missedSessionIndex >= sessions.length) {
+    evidence.push(`Invalid session index: ${missedSessionIndex}`)
+    return {
+      status: 'blocked',
+      visibleSummary: 'Could not identify the session to move.',
+      evidence,
+      reasonCode: 'invalid_session_index',
+    }
+  }
+  evidence.push(`Missed session index: ${missedSessionIndex}`)
+  
+  // ==========================================================================
+  // GUARD 5: Cannot push last session forward (no session after it)
+  // ==========================================================================
+  if (missedSessionIndex >= sessions.length - 1) {
+    evidence.push('Missed session is already the last session — cannot push forward')
+    return {
+      status: 'blocked',
+      visibleSummary: 'This is already the last session in your program.',
+      evidence,
+      reasonCode: 'already_last_session',
+    }
+  }
+  
+  // ==========================================================================
+  // PERFORM SWAP: Move missed session one position forward
+  // ==========================================================================
+  const missedSession = sessions[missedSessionIndex]
+  const nextSession = sessions[missedSessionIndex + 1]
+  
+  const missedSessionTitle = missedSession.dayLabel || missedSession.focusLabel || `Day ${missedSession.dayNumber}`
+  const nextSessionTitle = nextSession.dayLabel || nextSession.focusLabel || `Day ${nextSession.dayNumber}`
+  
+  evidence.push(`Moving "${missedSessionTitle}" from position ${missedSessionIndex + 1} to ${missedSessionIndex + 2}`)
+  evidence.push(`Swapping with "${nextSessionTitle}"`)
+  
+  // Deep clone the program to avoid mutation
+  const updatedProgram = JSON.parse(JSON.stringify(program)) as typeof program
+  const updatedSessions = updatedProgram.sessions!
+  
+  // Swap the two sessions
+  const temp = updatedSessions[missedSessionIndex]
+  updatedSessions[missedSessionIndex] = updatedSessions[missedSessionIndex + 1]
+  updatedSessions[missedSessionIndex + 1] = temp
+  
+  // Re-number dayNumber sequentially to maintain consistency
+  updatedSessions.forEach((session, idx) => {
+    session.dayNumber = idx + 1
+  })
+  evidence.push('Re-numbered dayNumber fields sequentially')
+  
+  // ==========================================================================
+  // SUCCESS: Return updated program
+  // ==========================================================================
+  return {
+    status: 'success',
+    updatedProgram,
+    movedSessionTitle: missedSessionTitle,
+    fromIndex: missedSessionIndex,
+    toIndex: missedSessionIndex + 1,
+    visibleSummary: `Moved "${missedSessionTitle}" from Day ${missedSessionIndex + 1} to Day ${missedSessionIndex + 2}.`,
+    evidence,
+  }
+}

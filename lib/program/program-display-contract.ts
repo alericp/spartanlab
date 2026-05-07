@@ -32,7 +32,7 @@ import {
 // invokes builder/classifier logic. The card surface becomes a pass-through of
 // these typed structures so downstream consumers (AdaptiveSessionCard) cannot
 // re-derive method/doctrine truth from raw legacy fields.
-import type { CanonicalMethodStructure } from '@/lib/program/method-structure-contract'
+import type { CanonicalMethodStructure, MethodAwareCompositionReceipt } from '@/lib/program/method-structure-contract'
 import type { DoctrineBlockResolutionEntry } from '@/lib/program/doctrine-block-resolution-contract'
 
 // =============================================================================
@@ -701,6 +701,8 @@ export interface SessionCardSurface {
   methodStructures?: CanonicalMethodStructure[] | null
   /** Phase 4Q classified resolution per method structure entry. Null on legacy. */
   doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
+  /** [PHASE E.E4.1] Multi-structure composition receipt. Null on legacy. */
+  methodAwareCompositionReceipt?: MethodAwareCompositionReceipt | null
   }
 
 /**
@@ -782,6 +784,8 @@ export function buildSessionCardSurface(
     // these as opaque arrays; null/empty means "use legacy fallback".
     methodStructures?: CanonicalMethodStructure[] | null
     doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
+    /** [PHASE E.E4.1] Multi-structure composition receipt */
+    methodAwareCompositionReceipt?: MethodAwareCompositionReceipt | null
   },
   weekContext: {
     isFirstWeek?: boolean
@@ -1159,9 +1163,14 @@ export function buildSessionCardSurface(
   // crashing on malformed saved programs.
   const methodStructuresPassthrough: CanonicalMethodStructure[] | null =
     Array.isArray(session.methodStructures) ? session.methodStructures : null
-  const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null =
-    Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : null
-
+const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null =
+  Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : null
+  // [PHASE E.E4.1] Pass-through composition receipt
+  const compositionReceiptPassthrough: MethodAwareCompositionReceipt | null =
+  (session.methodAwareCompositionReceipt && typeof session.methodAwareCompositionReceipt === 'object')
+    ? session.methodAwareCompositionReceipt
+    : null
+  
   return {
     sessionHeadline,
     sessionSubheadline,
@@ -1183,11 +1192,13 @@ export function buildSessionCardSurface(
     spineExpression,
     materialAdaptations,
     adaptationVerdict,
-    // [PHASE 4S] Canonical Phase 4P/4Q truth — pass-through, no rebuild.
-    methodStructures: methodStructuresPassthrough,
-    doctrineBlockResolution: doctrineBlockResolutionPassthrough,
+  // [PHASE 4S] Canonical Phase 4P/4Q truth — pass-through, no rebuild.
+  methodStructures: methodStructuresPassthrough,
+  doctrineBlockResolution: doctrineBlockResolutionPassthrough,
+  // [PHASE E.E4.1] Multi-structure composition receipt
+  methodAwareCompositionReceipt: compositionReceiptPassthrough,
   }
-}
+  }
 
 // =============================================================================
 // [PHASE 4S] PURE HELPERS for consumers of `SessionCardSurface`.

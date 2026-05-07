@@ -3914,6 +3914,28 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             )}
 
             {/* ==========================================================================
+                [PHASE E.E4.1] MULTI-STRUCTURE COMPOSITION COACH LINE
+                Short proof line when multi-structure composition was achieved or
+                meaningfully suppressed. Only renders when the composition receipt
+                exists AND has something interesting to say (multi-structure applied
+                OR safety-suppressed). Single-structure and straight-sets-intentional
+                are NOT shown to avoid cluttering every card with obvious info.
+                ========================================================================== */}
+            {cardSurface?.methodAwareCompositionReceipt && (() => {
+              const receipt = cardSurface.methodAwareCompositionReceipt
+              // Only show for multi-structure or safety-suppressed (interesting cases)
+              const isInteresting = receipt.status === 'MULTI_STRUCTURE' ||
+                (receipt.status === 'STRAIGHT_SETS' && receipt.compositionMode === 'straight_sets_by_safety')
+              if (!isInteresting) return null
+              return (
+                <div className="mt-1.5 text-[11px] text-[#8A8A8A] leading-tight">
+                  <span className="text-[#6A6A6A]">Composition:</span>{' '}
+                  {receipt.coachLine}
+                </div>
+              )
+            })()}
+
+            {/* ==========================================================================
                 [CARD-LOCAL-GROUPED-MISMATCH-PROBE]
                 [FINAL-VISIBLE-OWNERSHIP-LOCK] Diagnostic strip moved off the
                 athlete-facing card surface. Gated behind the existing

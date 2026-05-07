@@ -45,7 +45,9 @@ import {
   type CanonicalMethodFamily,
   type CanonicalMethodStructure,
   type CanonicalMethodStatus,
+  type MethodAwareCompositionReceipt,
   familyLabel,
+  buildMethodAwareCompositionReceipt,
 } from './method-structure-contract'
 
 // =============================================================================
@@ -88,6 +90,8 @@ interface CorridorSessionLike {
     primaryStyle?: string
   } | null
   methodStructures?: CanonicalMethodStructure[] | null
+  /** [PHASE E.E4.1] Multi-structure composition receipt */
+  methodAwareCompositionReceipt?: MethodAwareCompositionReceipt | null
 }
 
 interface CorridorBudgetEntry {
@@ -119,6 +123,8 @@ export interface StructuralMaterializationResult {
   noSafeTargetCount: number
   /** True if the corridor wrote at least one NEW styledGroups entry this run. */
   newStructuralGroupWritten: boolean
+  /** [PHASE E.E4.1] Multi-structure composition receipt */
+  compositionReceipt: MethodAwareCompositionReceipt
   warnings: string[]
 }
 
@@ -882,7 +888,12 @@ export function runStructuralMethodMaterializationCorridor(
   // 3. Stamp the canonical array onto the session.
   session.methodStructures = out
 
-  // 4. Build the per-session result.
+  // 4. [PHASE E.E4.1] Build and attach the composition receipt.
+  // This proves whether multi-structure composition was achieved or suppressed.
+  const compositionReceipt = buildMethodAwareCompositionReceipt(out)
+  session.methodAwareCompositionReceipt = compositionReceipt
+
+  // 5. Build the per-session result.
   const counts = {
     appliedCount: 0,
     alreadyAppliedCount: 0,
@@ -903,6 +914,7 @@ export function runStructuralMethodMaterializationCorridor(
     ...counts,
     newStructuralGroupWritten:
       supersetVerdict.wroteNewGroup || circuitVerdict.wroteNewGroup || densityVerdict.wroteNewGroup,
+    compositionReceipt,
     warnings,
   }
 }

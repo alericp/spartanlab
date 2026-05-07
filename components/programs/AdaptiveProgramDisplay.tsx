@@ -9,6 +9,7 @@ import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   RotateCcw,
   RefreshCw,
@@ -2418,17 +2419,36 @@ export function AdaptiveProgramDisplay({
                 </details>
               )}
               
+              {/* [STEP 23.5] Final action boundary — truthful blocked state
+                  No safe push_session_forward mutation corridor exists yet.
+                  This is honest: the feature is advisory-only until session
+                  reorder logic is implemented in a future step. */}
+              <div 
+                className="p-3 bg-[#2A2A35]/50 rounded-lg border border-[#3A3A4A]"
+                data-step-23-5-final-action-boundary="true"
+                data-action-blocked="true"
+                data-blocked-reason="missing-safe-mutation-corridor"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400/70 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-[#9A9AAA]">
+                      Plan adjustment not available yet
+                    </p>
+                    <p className="text-[11px] text-[#6A6A7A] mt-1">
+                      This recommendation is ready for review, but automatic schedule changes are not yet connected. Use this guidance to manually adjust your training if needed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               {/* No-mutation notice */}
               <div className="p-2 bg-emerald-500/5 rounded border border-emerald-500/20">
                 <p className="text-[10px] text-emerald-400/80 flex items-center gap-1.5">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>Preview only — your schedule has not been changed</span>
+                  <span>Your current plan has not been changed</span>
                 </p>
               </div>
-              
-              <p className="text-[10px] text-[#5A5A6A] text-center">
-                Schedule adjustment coming soon. For now, use this as guidance.
-              </p>
             </div>
           )}
           

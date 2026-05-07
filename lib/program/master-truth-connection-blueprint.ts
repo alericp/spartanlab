@@ -1768,7 +1768,7 @@ function phaseS(): BlueprintPhase {
     title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + M1 Bridge (Steps 21.1-21.5.1)',
     purpose:
       'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3). S.S9 is M1.1 Recovery-to-Program Awareness Bridge contract (Step 21.5.1) — typed non-mutating advisory object for Program/Workout surfaces.',
-    status: 'IN_PROGRESS',
+    status: 'PARTIAL',
     nextAction:
       'Phase M mini-chain in progress. M1.1 COMPLETE (bridge contract). Remaining: M1.2 (consume bridge on Program surfaces), M1.3 (runtime acceptance).',
     subtasks: [

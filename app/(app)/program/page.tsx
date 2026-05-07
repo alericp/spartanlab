@@ -2321,8 +2321,8 @@ function ProgramDisplayWrapper({
       
       // Save the updated program through the authoritative save path
       try {
-        const updatedProgram = result.updatedProgram as AdaptiveProgram
-        const savedProgram = saveAdaptiveProgram(updatedProgram)
+        // [STEP 23.6A] No cast needed — result.updatedProgram is now typed as AdaptiveProgram
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram)
         
         // Update Program Page state with the saved program
         setProgram(savedProgram)

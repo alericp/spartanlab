@@ -1761,16 +1761,16 @@ function phaseR(): BlueprintPhase {
   }
 }
 
-/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (COMPLETE). */
+/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + M1 Bridge. */
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.3 COMPLETE)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + M1 Bridge (Steps 21.1-21.5.1)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3) — advisory-only recommendation with no mutation, visible on Recovery page, runtime acceptance verified.',
-    status: 'COMPLETE',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3). S.S9 is M1.1 Recovery-to-Program Awareness Bridge contract (Step 21.5.1) — typed non-mutating advisory object for Program/Workout surfaces.',
+    status: 'IN_PROGRESS',
     nextAction:
-      'Phase S (Steps 21.1-21.4.3) COMPLETE. Phase L4 closed. Foundation contract, user input capture, deload recommendation layer, user-facing display, and runtime acceptance all verified. Next phases: injury-aware substitution gates, missed-day recomposition, live workout adaptive coaching.',
+      'Phase M mini-chain in progress. M1.1 COMPLETE (bridge contract). Remaining: M1.2 (consume bridge on Program surfaces), M1.3 (runtime acceptance).',
     subtasks: [
       {
         id: 'S.S1',
@@ -1885,6 +1885,28 @@ function phaseS(): BlueprintPhase {
           'Build passes: pnpm exec tsc --noEmit + pnpm run build green.',
         ],
         remainingWork: [],
+      },
+      // S.S9: M1.1 — Recovery-to-Program Awareness Bridge Contract
+      {
+        id: 'S.S9',
+        title: 'M1.1: Recovery-to-Program Awareness Bridge Contract (Step 21.5.1)',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/recovery-program-awareness-bridge.ts created with typed M1 bridge contract.',
+          'RecoveryProgramAwarenessLevel type: "none" | "monitor" | "reduce_load" | "deload_recommended".',
+          'RecoveryProgramAwarenessBridge interface with: phase, source, available, level, headline, summary, programMutationApplied (false), workoutMutationApplied (false), automaticDeloadApplied (false), advisoryOnly (true), reasonCodes, sourceSignals, proof, generatedAt.',
+          'BridgeSourceSignals tracks: hasRecoverySnapshot, hasDeloadRecommendation, l4RecommendationLevel, recoveryReadinessLevel, deloadSignal, fatigueLevel, sourceQuality.',
+          'BridgeProof confirms: consumedL4Recommendation, recomputedDeloadLogic (always false), mutationAllowed (always false), safeForProgramSurface.',
+          'deriveRecoveryProgramAwarenessBridge(input) is the pure M1 helper — consumes L4 truth, does NOT recompute deload logic.',
+          'mapL4LevelToAwarenessLevel() conservatively maps L4 DeloadRecommendationLevel to RecoveryProgramAwarenessLevel.',
+          'Utility helpers: createEmptyAwarenessBridge(), hasRecoveryConcern(), getBridgeDisplayChip().',
+          'All mutation flags hardcoded false — no program/workout mutation ever occurs through this bridge.',
+          'No localStorage reads, no window usage, no side effects — pure function only.',
+        ],
+        remainingWork: [
+          'M1.2: Consume bridge on Program/session decision surfaces as advisory-only UI.',
+          'M1.3: Runtime acceptance check for M1 mini-chain.',
+        ],
       },
     ],
   }

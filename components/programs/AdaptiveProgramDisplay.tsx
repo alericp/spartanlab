@@ -1266,6 +1266,31 @@ export function AdaptiveProgramDisplay({
                 </p>
               </div>
             )}
+            
+            {/* [STEP 25.2] Coach Signals — surfaces real computed generation decisions */}
+            {programSurfaceSignals && programSurfaceSignals.signals.length > 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sparkles className="w-3 h-3 text-[#E63946]/50" />
+                  <span className="text-[10px] text-[#7A7A7A] font-medium">Coach signals</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {programSurfaceSignals.signals.map((signal, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-[9px] bg-[#1A1A1A]/60 border border-[#333]/40 text-[#9A9A9A]"
+                    >
+                      {signal}
+                    </span>
+                  ))}
+                </div>
+                {programSurfaceSignals.dosageMessage && (
+                  <p className="mt-1.5 text-[9px] text-[#6A6A6A] leading-relaxed">
+                    {programSurfaceSignals.dosageMessage}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
         

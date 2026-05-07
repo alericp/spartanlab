@@ -2554,7 +2554,7 @@ function step25(): BlueprintPhase {
       'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
     status: 'PARTIAL',
     nextAction:
-      'Step 25.1 COMPLETE — Intelligence/Coaching/Usability/Performance Audit Lock. Inventory of real vs cosmetic intelligence complete. Step 24 parked as final validation. Official Step 25 checklist created. Next: Step 25.2 Existing Intelligence Visibility Repair.',
+      'Step 25.2 COMPLETE — Existing Intelligence Visibility Repair. Coach Signals strip added to Program Page that surfaces real computed generation decisions (volume reduced, intensity capped, finishers limited, straight-arm protected, etc.) from getProgramSurfaceSignals. Next: Step 25.3 Program Decision Explanation Upgrade.',
     subtasks: [
       {
         id: 'W.W1',
@@ -2574,14 +2574,17 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W2',
         title: 'Existing Intelligence Visibility Repair',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Surface already-computed doctrine decisions in concise UI',
-          'Connect weekly method summary to visible session cards',
-          'Show performance envelope state without technical jargon',
-          'Display fatigue/readiness signals in actionable format',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 25.2] Coach Signals strip added to AdaptiveProgramDisplay.tsx',
+          '[STEP 25.2] Surfaces programSurfaceSignals.signals array that was computed but not rendered',
+          '[STEP 25.2] Signals derived from real generation decisions: prescription propagation, week adaptation, generation truth',
+          '[STEP 25.2] Visible signals include: volume reduced, intensity capped, finishers limited, density reduced, secondary work simplified, first-week protection, straight-arm stress managed',
+          '[STEP 25.2] dosageMessage displayed when available for additional context',
+          '[STEP 25.2] No fake intelligence added — all signals trace to getProgramSurfaceSignals pure helper',
+          '[STEP 25.2] Compact UI uses existing design language (chips, muted colors, small text)',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W3',

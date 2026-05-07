@@ -2217,10 +2217,8 @@ function step22(): BlueprintPhase {
           'Saved program is NEVER auto-mutated — canApplyToSavedProgramNow: false, blockedReason explains',
         ],
         remainingWork: [],
-        // [OPTIONAL FUTURE BACKLOG]
-        optionalFutureEnhancements: [
-          'Track repeated substitutions across multiple workout sessions (requires persistence)',
-        ],
+        // [OPTIONAL FUTURE BACKLOG — non-blocking, does not prevent Step 22 closure]
+        // - Track repeated substitutions across multiple workout sessions (requires persistence)
       },
       // [T.T13] Step 22.6 — Explicit saved-program substitution apply (COMPLETE)
       {
@@ -2266,16 +2264,14 @@ function step22(): BlueprintPhase {
           'Step 22.4 post-workout proposal queue preserved',
         ],
         remainingWork: [],
-        // [OPTIONAL FUTURE BACKLOG] Reversal/undo for saved-program changes
+        // [OPTIONAL FUTURE BACKLOG — non-blocking, does not prevent Step 22 closure]
+        // Reversal/undo for saved-program changes
         // Not required for Step 22 closure — all safety contracts enforced:
         // - Second confirmation required before apply
         // - Exact target matching blocks ambiguity
         // - Only one exercise updated per apply
         // - Save + reload verification gates success
         // - originalName/originalId preserved for potential future undo/audit
-        optionalFutureEnhancements: [
-          'Reversal/undo for saved-program changes (non-blocking future backlog)',
-        ],
       },
     ],
   }
@@ -2436,7 +2432,7 @@ export function buildMasterTruthConnectionBlueprintStatus(
 
 /**
  * Convenience: count subtasks across a blueprint by status. Used by the
- * Program page proof line to render counts like "8 complete · 6 partial · 5
+ * Program page proof line to render counts like "8 complete �� 6 partial · 5
  * not started" without having to walk the phases on the client.
  */
 export function summarizeBlueprintStatusCounts(

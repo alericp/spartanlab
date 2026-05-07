@@ -116,6 +116,10 @@ import {
   type LaunchFingerprintPayload,
   type SnapshotValidation,
 } from '@/lib/workout/selected-variant-session-contract'
+// [STEP 21.6] Recovery adjustment handoff from Program Page
+import {
+  type ExerciseAdjustmentDetail,
+} from '@/lib/program/recovery-program-awareness-bridge'
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
@@ -777,8 +781,16 @@ function WorkoutSessionContent() {
   // Forwarded into StreamlinedWorkoutSession so the live workout can render
   // a compact visible chip and stamp `data-ab10-*` DOM proof attributes.
   // Built once per session boot, after the snapshot/fallback decision.
-  const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
-    useState<AB10RuntimeParityProof | null>(null)
+const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
+  useState<AB10RuntimeParityProof | null>(null)
+  // [STEP 21.6] Recovery adjustment applied state - tracks whether this session
+  // is using recovery-adjusted values (current-session-only)
+  const [recoveryAdjustmentApplied, setRecoveryAdjustmentApplied] = useState<{
+    applied: boolean
+    previewId: string | null
+    totalExercisesAffected: number
+    scope: 'current-session-only'
+  } | null>(null)
   // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
@@ -1324,9 +1336,113 @@ function WorkoutSessionContent() {
         })
       }
 
-      // Set session and meta - GUARANTEED to have valid session
-      setSession(finalSession)
-      setSessionMeta(result.meta)
+// =====================================================================
+  // [STEP 21.6] Recovery Adjustment Handoff
+  // 
+  // Check if Program Page applied a recovery adjustment for this session.
+  // If valid, apply the adjustment to the cloned finalSession exercises.
+  // This is current-session-only and does NOT modify saved program.
+  // =====================================================================
+  let recoveryAdjustmentHandoff: {
+    applied: boolean
+    previewId: string | null
+    totalExercisesAffected: number
+    scope: 'current-session-only'
+  } | null = null
+  
+  try {
+    const adjustmentRaw = localStorage.getItem('spartanlab_recovery_adjustment_applied')
+    if (adjustmentRaw) {
+      const adjustment = JSON.parse(adjustmentRaw) as {
+        previewId?: string
+        appliedAt?: string
+        scope?: string
+        totalExercisesAffected?: number
+        exerciseAdjustments?: ExerciseAdjustmentDetail[]
+      }
+      
+      // Validate the adjustment is current-session-only and recent (within 1 hour)
+      const appliedAt = adjustment.appliedAt ? new Date(adjustment.appliedAt).getTime() : 0
+      const ageMs = Date.now() - appliedAt
+      const isRecent = ageMs > 0 && ageMs < 60 * 60 * 1000 // 1 hour
+      const isCurrentSessionOnly = adjustment.scope === 'current-session-only'
+      const hasAdjustments = Array.isArray(adjustment.exerciseAdjustments) && adjustment.exerciseAdjustments.length > 0
+      
+      if (isRecent && isCurrentSessionOnly && hasAdjustments) {
+        // Apply adjustments to finalSession.exercises (clone to avoid mutation)
+        const adjustedExercises = finalSession.exercises.map(exercise => {
+          const exerciseAdj = adjustment.exerciseAdjustments?.find(
+            ea => ea.exerciseId === exercise.id || ea.exerciseName === exercise.name
+          )
+          if (!exerciseAdj || exerciseAdj.changes.length === 0) {
+            return exercise
+          }
+          
+          // Clone exercise and apply changes
+          const adjusted = { ...exercise }
+          for (const change of exerciseAdj.changes) {
+            if (change.path === 'sets' && typeof change.after === 'number') {
+              adjusted.sets = change.after
+            } else if (change.path === 'targetRPE' && typeof change.after === 'string') {
+              const rpeMatch = change.after.match(/RPE\s*(\d+\.?\d*)/)
+              if (rpeMatch) {
+                adjusted.targetRPE = parseFloat(rpeMatch[1])
+              }
+            } else if (change.path === 'restSeconds' && typeof change.after === 'string') {
+              const restMatch = change.after.match(/(\d+)s/)
+              if (restMatch) {
+                adjusted.restSeconds = parseInt(restMatch[1], 10)
+              }
+            }
+          }
+          return adjusted
+        })
+        
+        // Update finalSession with adjusted exercises
+        finalSession = {
+          ...finalSession,
+          exercises: adjustedExercises,
+        }
+        
+        recoveryAdjustmentHandoff = {
+          applied: true,
+          previewId: adjustment.previewId ?? null,
+          totalExercisesAffected: adjustment.totalExercisesAffected ?? 0,
+          scope: 'current-session-only',
+        }
+        
+        console.log('[step-21.6-workout-handoff-applied]', {
+          previewId: adjustment.previewId,
+          totalExercisesAffected: adjustment.totalExercisesAffected,
+          exerciseCount: finalSession.exercises.length,
+          adjustedCount: adjustedExercises.filter((e, i) => e !== finalSession.exercises[i]).length,
+          scope: 'current-session-only',
+          savedProgramMutated: false,
+        })
+        
+        // Clear the adjustment after consumption to prevent re-application
+        // on subsequent sessions (current-session-only boundary)
+        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+      } else {
+        console.log('[step-21.6-workout-handoff-skipped]', {
+          reason: !isRecent ? 'stale_adjustment' : !isCurrentSessionOnly ? 'wrong_scope' : 'no_adjustments',
+          ageMs,
+          scope: adjustment.scope,
+          hasAdjustments,
+        })
+        // Clear stale/invalid adjustment
+        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+      }
+    }
+  } catch (error) {
+    console.error('[step-21.6-workout-handoff-error]', error)
+    // On error, proceed without adjustment - fail safe
+  }
+  
+  // Set session and meta - GUARANTEED to have valid session
+  setSession(finalSession)
+  setSessionMeta(result.meta)
+  setRecoveryAdjustmentApplied(recoveryAdjustmentHandoff)
 
       // =======================================================================
       // [SELECTED-VARIANT-SESSION-CONTRACT] Parity diagnostic.
@@ -1804,7 +1920,21 @@ function WorkoutSessionContent() {
         // Optional — legacy saved sessions may receive `null`, and the
         // live UI uses `safeAB10RuntimeParityProof` so it never crashes.
         ab10RuntimeParityProof={ab10RuntimeParityProof}
+        // [STEP 21.6] Recovery adjustment handoff - tells the live workout
+        // whether this session is using recovery-adjusted values
+        recoveryAdjustmentApplied={recoveryAdjustmentApplied}
       />
+      {/* [STEP 21.6] Recovery adjustment badge - shows when session is adjusted */}
+      {recoveryAdjustmentApplied?.applied && (
+        <div 
+          className="fixed bottom-4 right-4 bg-emerald-500/20 border border-emerald-500/50 rounded px-3 py-1.5 text-xs text-emerald-400 flex items-center gap-2"
+          data-step-21-6-recovery-adjusted="true"
+          data-recovery-adjustment-scope={recoveryAdjustmentApplied.scope}
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          Recovery-adjusted today only
+        </div>
+      )}
       {/* [PHASE-X+1] Dev badge for session source - only in development */}
       {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (
         <div className="fixed bottom-4 left-4 bg-amber-500/20 border border-amber-500/50 rounded px-2 py-1 text-xs text-amber-400">

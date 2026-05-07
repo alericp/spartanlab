@@ -2044,6 +2044,15 @@ interface StreamlinedWorkoutSessionProps {
   // page-supplied proof is authoritative when present — the component
   // never invents matched-parity values when the proof is absent.
   ab10RuntimeParityProof?: AB10RuntimeParityProof | null
+  // [STEP 21.6] Recovery adjustment handoff from workout session page.
+  // When present and applied=true, indicates this session is using
+  // recovery-adjusted values (current-session-only, no saved program mutation).
+  recoveryAdjustmentApplied?: {
+    applied: boolean
+    previewId: string | null
+    totalExercisesAffected: number
+    scope: 'current-session-only'
+  } | null
 }
 
 // [WEEK-TRUTH-CORRIDOR / OPTIONAL-FIELD-READER]

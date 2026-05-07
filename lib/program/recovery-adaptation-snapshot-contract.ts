@@ -1002,3 +1002,292 @@ export function getRecoveryStatusLabel(snapshot: RecoveryAdaptationSnapshot): st
   }
   return null
 }
+
+// =============================================================================
+// PHASE L4 — DELOAD RECOMMENDATION DECISION LAYER (Step 21.4.1)
+// =============================================================================
+
+/**
+ * Deload recommendation level — a ladder of increasingly strong recommendations.
+ * This is ADVISORY ONLY in L4 — no automatic program mutation occurs.
+ */
+export type DeloadRecommendationLevel =
+  | 'NONE'                      // No deload needed
+  | 'WATCH'                     // Mild strain, monitor recovery
+  | 'CONSIDER_DELOAD'           // Moderate strain, consider lighter training
+  | 'STRONGLY_RECOMMEND_DELOAD' // High strain, deload strongly recommended
+
+/**
+ * Reason codes explaining WHY a deload recommendation was made.
+ * Machine-readable, stable tokens for debugging/testing/future rule consumption.
+ */
+export type DeloadReasonCode =
+  | 'LOW_READINESS'
+  | 'HIGH_FATIGUE'
+  | 'VERY_HIGH_FATIGUE'
+  | 'HIGH_SORENESS'
+  | 'SEVERE_SORENESS'
+  | 'POOR_SLEEP'
+  | 'JOINT_PAIN_REPORTED'
+  | 'INJURY_CONSTRAINT_ACTIVE'
+  | 'MISSED_OR_PARTIAL_SESSION'
+  | 'HIGH_WEEKLY_STRESS'
+  | 'CONSECUTIVE_HARD_DAYS'
+  | 'WEEKS_SINCE_DELOAD_HIGH'
+  | 'PERFORMANCE_STAGNATION'
+  | 'MULTIPLE_STRAIN_FACTORS'
+  | 'RED_READINESS'
+  | 'ORANGE_READINESS'
+  | 'DELOAD_SIGNAL_REQUIRED'
+  | 'DELOAD_SIGNAL_RECOMMENDED'
+  | 'NO_DELOAD_FACTORS'
+
+/**
+ * Source signal snapshot for the deload recommendation — tracks what inputs
+ * were used to make the decision.
+ */
+export interface DeloadSourceSignals {
+  readinessLevel: ReadinessLevel | null
+  fatigueLevel: FatigueLevel | null
+  sorenessLevel: string | null
+  sleepQuality: string | null
+  jointPainReported: boolean
+  jointPainAreas: string[]
+  injuryConstraintLevel: InjuryConstraintLevel | null
+  missedSessionSignal: MissedSessionSignal | null
+  deloadSignalFromSnapshot: DeloadSignal | null
+  weeklyStressSignal: string | null
+  daysSinceDeload: number | null
+  sourceQuality: SourceQuality | null
+}
+
+/**
+ * DeloadRecommendationDecision — the L4 canonical deload recommendation object.
+ *
+ * This is ADVISORY ONLY. It computes and exposes a deload recommendation
+ * based on L1/L2/L3 signals but does NOT mutate workouts, programs, or sessions.
+ *
+ * Future phases (L6+) may consume this decision to actually apply deloads.
+ */
+export interface DeloadRecommendationDecision {
+  // ----- Recommendation state -----
+  active: boolean
+  recommendationLevel: DeloadRecommendationLevel
+  recommendationLabel: string
+  
+  // ----- Reason tracing -----
+  recommendationReasonCodes: DeloadReasonCode[]
+  primaryDrivers: string[]
+  
+  // ----- Source signals -----
+  sourceSignals: DeloadSourceSignals
+  
+  // ----- User-facing output -----
+  userFacingSummary: string
+  
+  // ----- Non-mutation guarantees (L4 is advisory only) -----
+  appliedToProgram: false
+  mutationAllowed: false
+  recommendationOnly: true
+  
+  // ----- Timestamp -----
+  generatedAt: string
+}
+
+/**
+ * Derive a DeloadRecommendationDecision from a RecoveryAdaptationSnapshot
+ * and optional L2 check-in data.
+ *
+ * This is the SINGLE pure L4 helper. It:
+ *   - Reads existing L1 snapshot fields
+ *   - Optionally incorporates L2 check-in signals
+ *   - Produces a recommendation level with reason codes
+ *   - Returns user-facing summary text
+ *   - Guarantees appliedToProgram=false and mutationAllowed=false
+ *
+ * Pure function — no side effects, safe on server/client/build.
+ */
+export function deriveDeloadRecommendation(
+  snapshot: RecoveryAdaptationSnapshot | null,
+  checkIn: RecoveryReadinessCheckIn | null = null,
+): DeloadRecommendationDecision {
+  const reasonCodes: DeloadReasonCode[] = []
+  const primaryDrivers: string[] = []
+  const now = new Date().toISOString()
+  
+  // Build source signals snapshot
+  const sourceSignals: DeloadSourceSignals = {
+    readinessLevel: snapshot?.readinessLevel ?? null,
+    fatigueLevel: snapshot?.fatigueLevel ?? null,
+    sorenessLevel: checkIn?.sorenessLevel ?? null,
+    sleepQuality: checkIn?.sleepQuality ?? null,
+    jointPainReported: checkIn?.jointPainReported ?? false,
+    jointPainAreas: checkIn?.jointPainAreas ?? [],
+    injuryConstraintLevel: snapshot?.injuryConstraintLevel ?? null,
+    missedSessionSignal: snapshot?.missedSessionSignal ?? null,
+    deloadSignalFromSnapshot: snapshot?.deloadSignal ?? null,
+    weeklyStressSignal: null, // Can be extended with Phase K data
+    daysSinceDeload: null,    // Can be extended with workout log data
+    sourceQuality: snapshot?.sourceQuality ?? null,
+  }
+  
+  // ----- No snapshot = no recommendation -----
+  if (!snapshot) {
+    return {
+      active: false,
+      recommendationLevel: 'NONE',
+      recommendationLabel: 'No data',
+      recommendationReasonCodes: ['NO_DELOAD_FACTORS'],
+      primaryDrivers: ['Insufficient recovery data'],
+      sourceSignals,
+      userFacingSummary: 'Not enough recovery data to make a recommendation.',
+      appliedToProgram: false,
+      mutationAllowed: false,
+      recommendationOnly: true,
+      generatedAt: now,
+    }
+  }
+  
+  // ----- Collect strain factors -----
+  let strainScore = 0
+  
+  // Readiness factors
+  if (snapshot.readinessLevel === 'red') {
+    reasonCodes.push('RED_READINESS')
+    reasonCodes.push('LOW_READINESS')
+    primaryDrivers.push('Low readiness')
+    strainScore += 3
+  } else if (snapshot.readinessLevel === 'orange') {
+    reasonCodes.push('ORANGE_READINESS')
+    primaryDrivers.push('Reduced readiness')
+    strainScore += 2
+  }
+  
+  // Fatigue factors
+  if (snapshot.fatigueLevel === 'very_high') {
+    reasonCodes.push('VERY_HIGH_FATIGUE')
+    primaryDrivers.push('Very high fatigue')
+    strainScore += 3
+  } else if (snapshot.fatigueLevel === 'high') {
+    reasonCodes.push('HIGH_FATIGUE')
+    primaryDrivers.push('High fatigue')
+    strainScore += 2
+  }
+  
+  // Soreness factors (from check-in)
+  if (checkIn?.sorenessLevel === 'severe') {
+    reasonCodes.push('SEVERE_SORENESS')
+    primaryDrivers.push('Severe soreness')
+    strainScore += 3
+  } else if (checkIn?.sorenessLevel === 'moderate') {
+    reasonCodes.push('HIGH_SORENESS')
+    primaryDrivers.push('Moderate soreness')
+    strainScore += 1
+  }
+  
+  // Sleep factors (from check-in)
+  if (checkIn?.sleepQuality === 'very_poor' || checkIn?.sleepQuality === 'poor') {
+    reasonCodes.push('POOR_SLEEP')
+    primaryDrivers.push('Poor sleep quality')
+    strainScore += 1
+  }
+  
+  // Joint pain factors
+  if (checkIn?.jointPainReported || snapshot.jointRiskLevel === 'high') {
+    reasonCodes.push('JOINT_PAIN_REPORTED')
+    primaryDrivers.push('Joint pain reported')
+    strainScore += 2
+  }
+  
+  // Injury constraint factors
+  if (snapshot.injuryConstraintLevel === 'avoid') {
+    reasonCodes.push('INJURY_CONSTRAINT_ACTIVE')
+    primaryDrivers.push('Injury constraint active')
+    strainScore += 2
+  } else if (snapshot.injuryConstraintLevel === 'limit') {
+    strainScore += 1
+  }
+  
+  // Missed session factors
+  if (snapshot.missedSessionSignal === 'missed' || snapshot.missedSessionSignal === 'partial') {
+    reasonCodes.push('MISSED_OR_PARTIAL_SESSION')
+    primaryDrivers.push('Missed or partial session')
+    strainScore += 1
+  }
+  
+  // Existing deload signal from L1 snapshot
+  if (snapshot.deloadSignal === 'required') {
+    reasonCodes.push('DELOAD_SIGNAL_REQUIRED')
+    strainScore += 2
+  } else if (snapshot.deloadSignal === 'recommended') {
+    reasonCodes.push('DELOAD_SIGNAL_RECOMMENDED')
+    strainScore += 1
+  }
+  
+  // Check for multiple strain factors
+  if (reasonCodes.length >= 3) {
+    reasonCodes.push('MULTIPLE_STRAIN_FACTORS')
+  }
+  
+  // ----- Derive recommendation level from strain score -----
+  let recommendationLevel: DeloadRecommendationLevel
+  let recommendationLabel: string
+  let userFacingSummary: string
+  
+  if (strainScore >= 5) {
+    recommendationLevel = 'STRONGLY_RECOMMEND_DELOAD'
+    recommendationLabel = 'Deload strongly recommended'
+    userFacingSummary = 'Multiple strain signals are elevated. A deload is strongly recommended before pushing intensity.'
+  } else if (strainScore >= 3) {
+    recommendationLevel = 'CONSIDER_DELOAD'
+    recommendationLabel = 'Consider a deload'
+    userFacingSummary = 'Recovery signals suggest considering a lighter training day or deload.'
+  } else if (strainScore >= 1) {
+    recommendationLevel = 'WATCH'
+    recommendationLabel = 'Recovery watch'
+    userFacingSummary = 'Some recovery strain is showing. Train carefully and monitor performance.'
+  } else {
+    recommendationLevel = 'NONE'
+    recommendationLabel = 'Recovery acceptable'
+    userFacingSummary = 'Recovery looks acceptable today. Continue as planned.'
+    reasonCodes.push('NO_DELOAD_FACTORS')
+  }
+  
+  const active = recommendationLevel !== 'NONE'
+  
+  return {
+    active,
+    recommendationLevel,
+    recommendationLabel,
+    recommendationReasonCodes: reasonCodes,
+    primaryDrivers: primaryDrivers.length > 0 ? primaryDrivers : ['No significant strain factors'],
+    sourceSignals,
+    userFacingSummary,
+    appliedToProgram: false,
+    mutationAllowed: false,
+    recommendationOnly: true,
+    generatedAt: now,
+  }
+}
+
+/**
+ * Get a compact display object for the deload recommendation.
+ * For use in UI proof chips and data attributes.
+ */
+export function getDeloadRecommendationDisplay(decision: DeloadRecommendationDecision): {
+  level: DeloadRecommendationLevel
+  label: string
+  summary: string
+  active: boolean
+  reasonCount: number
+  appliedToProgram: boolean
+} {
+  return {
+    level: decision.recommendationLevel,
+    label: decision.recommendationLabel,
+    summary: decision.userFacingSummary,
+    active: decision.active,
+    reasonCount: decision.recommendationReasonCodes.length,
+    appliedToProgram: decision.appliedToProgram,
+  }
+}

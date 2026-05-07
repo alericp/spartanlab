@@ -735,14 +735,33 @@ function phaseK(): BlueprintPhase {
 
 /** Phase L: Post-Workout Performance Feedback Adaptation Lock. */
 function phaseL(): BlueprintPhase {
+  // [PHASE L RECONCILIATION] Phase L status advanced PARTIAL → COMPLETE.
+  // The original nextAction ("move per-set evidence ledger to canonical store")
+  // was closed by Phase N (workout_log_set_evidence Neon table + writer +
+  // reader) and Phase M (generator reads persisted evidence via
+  // getRecentWorkoutSetEvidenceForGeneration, merges with route-payload logs,
+  // dedupes by workout log id). All L.L1-L.L9 subtasks are complete. The
+  // corridor is now end-to-end:
+  //   live workout completed sets
+  //   → completedSetEvidence captured (StreamlinedWorkoutSession)
+  //   → workout log save (saveWorkoutLog + /api/workout-log/save-evidence)
+  //   → Neon persistence (persistWorkoutLogSetEvidence)
+  //   → server-readable read (getRecentWorkoutSetEvidenceForGeneration)
+  //   → generator input (executeAuthoritativeGeneration merge + dedupe)
+  //   → Phase L/M resolver (resolvePerformanceFeedbackAdaptation)
+  //   → future-only bounded prescription mutation (applyFuturePrescriptionMutations)
+  //   → exercise.performanceAdaptation stamp (appliedBy + evidenceHash)
+  //   → save/load/normalize preservation (existing ...ex spreads)
+  //   → Program UI proof (AdaptiveSessionCard chip)
+  //   → no double-apply (programHasServerAdaptationForHash guard)
   return {
     id: 'L',
     title: 'Post-Workout Performance Feedback Adaptation Lock',
     purpose:
       'Convert logged workout performance (actual reps/hold/RPE/notes) into safe, bounded, future-only prescription mutations that flow through the same canonical session object the Program card and live workout already consume. The product remembers what happened and adjusts intelligently — never rewriting completed work, never erasing selected skills, never adding cosmetic-only labels.',
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Move per-set evidence ledger from completion-time client-side capture to a canonical store accessible to the server generator so fresh regenerate paths can also read recent performance, not only the in-memory display overlay.',
+      'Phase L complete. Canonical server-readable evidence store is closed (Phase N Neon persistence + Phase M generator merge). Next roadmap target is Step 22 injury substitution advisory-first, or expand mutation surface (Phase Q/R).',
     subtasks: [
       {
         id: 'L.L1',
@@ -839,6 +858,23 @@ function phaseL(): BlueprintPhase {
           'Live workout reducer untouched. Resume routing (StreamlinedWorkoutSession.getResumableSessionSummary / buildResumeWorkoutUrl) untouched.',
           'Phase K canonical fields (session.stressRole / stressLevel / recoveryCost / nextDayRisk / stressDistributionProof; program.weeklyStressDistributionPlan; exercise.stressAdjustmentDelta) all flow through the same `...program` / `...s` / `...ex` spreads applyFuturePrescriptionMutations uses, so the overlay never strips Phase K state.',
           'Phase L mutations only write sets / repsOrTime / targetRPE / restSeconds + performanceAdaptation; methodStructures / styledGroups / blockId / setExecutionMethod / numericPrescriptionDelta untouched.',
+        ],
+        remainingWork: [],
+      },
+      // [L.L10] Roadmap reconciliation closure. Added after Phase M/N
+      // completed the durable persistence corridor that the original Phase L
+      // nextAction was waiting for.
+      {
+        id: 'L.L10',
+        title: 'Canonical server-readable evidence store closed (roadmap reconciliation)',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase N: workout_log_set_evidence Neon table (scripts/100-phase-n-workout-set-evidence.sql), writer (lib/server/workout-set-evidence-persistence.ts.persistWorkoutLogSetEvidence), reader (lib/server/workout-set-evidence-reader.ts.getRecentWorkoutSetEvidenceForGeneration)',
+          'Phase N: saveWorkoutLog → POST /api/workout-log/save-evidence → persistWorkoutLogSetEvidence fire-and-forget persistence corridor',
+          'Phase M: executeAuthoritativeGeneration reads Neon evidence (getRecentWorkoutSetEvidenceForGeneration) + merges with route-payload recentWorkoutLogs, deduped by workout log id',
+          'Phase M: fresh build / regenerate / modify / rebuild paths all feed recentWorkoutLogs → authoritative generator → Phase L resolver',
+          'Idempotency: programHasServerAdaptationForHash guard prevents double-apply between server stamp and client overlay',
+          'This subtask formalizes that the original Phase L "move per-set evidence ledger to a canonical store" gap is now closed',
         ],
         remainingWork: [],
       },

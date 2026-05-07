@@ -233,7 +233,7 @@ once truth, source, and display are locked.
 
 ---
 
-## Phase J — Product Cleanup / Trust Polish — `PARTIAL`
+## Phase J — Product Cleanup / Trust Polish — `COMPLETE`
 
 **Purpose:** strip debug clutter; the final UI feels like an AI coach, not a
 debug report.
@@ -244,7 +244,7 @@ debug report.
 | J2 | Keep only useful doctrine explanations | `COMPLETE` |
 | J3 | Preserve compact product-grade UI | `COMPLETE` |
 | J4 | Keep diagnostics available where needed | `COMPLETE` |
-| J5 | Final result feels like an AI coach | `NOT_STARTED` |
+| J5 | Final result feels like an AI coach | `COMPLETE` |
 
 **J1 Evidence (COMPLETE):**
 - Live workout "Shell proof" and "Runtime parity" strips behind
@@ -293,6 +293,21 @@ debug report.
 - Dev-only render guards (`process.env.NODE_ENV === 'development'`) expose
   full proof strips to developers without cluttering normal user view.
 - Console logs preserved for AB18 coaching proof debugging.
+
+**J5 Evidence (COMPLETE):**
+- "Why this plan?" expandable section with insight counts provides coach-like
+  reasoning access.
+- AB18 coaching line renders in live workout (blue-themed coach focus box)
+  when session coaching is active.
+- "Today's Plan" heading in workout overview card.
+- "Coach reasons" sections in session cards for method-level explanations.
+- Compact coaching chips with product-grade language (e.g., "Training method",
+  "Tendon RPE protected", "Safety-limited").
+- All internal/debug/proof language hidden from normal users via dev-only
+  guards and data attributes.
+- Start Workout action prominent and clear (h-10 full-width red button).
+- Program page and session cards read like AI coach guidance, not debug
+  reports.
 
 ---
 

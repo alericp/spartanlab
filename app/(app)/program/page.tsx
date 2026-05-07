@@ -2353,7 +2353,7 @@ function ProgramDisplayWrapper({
         }
       }
     },
-    [program]
+    [program, onProgramUpdate] // [STEP 23.7] Include onProgramUpdate in deps for closure correctness
   )
 
   // ==========================================================================
@@ -2754,7 +2754,7 @@ function ProgramDisplayWrapper({
           flagged the build as `allSessionsFlat`. Provides a single
           "Regenerate with Doctrine" action that calls the EXISTING canonical
           `onRegenerate` handler (handleRegenerate → /api/program/regenerate
-          → executeAuthoritativeGeneration). On success, the page calls
+          ��� executeAuthoritativeGeneration). On success, the page calls
           setProgram(newProgram) which causes this notice to re-evaluate its
           state and hide itself. No new route, no new builder, no second
           normalizer. Hides entirely on fresh, materialized programs so it
@@ -15361,7 +15361,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // ==========================================================================
       // [PRE-AB6 BUILD GREEN GATE] `overrides` is a Partial-shape object
       //   (the canonical adjustment override map produced upstream at
-      //   L13593-area), not an array — `.length` does not exist on its
+      //   L13593-area), not an array ��� `.length` does not exist on its
       //   type. The adjacent `overridesWereApplied` line already uses the
       //   correct `Object.keys(overrides).length` pattern, matching the
       //   same pattern at L13554 and L13623 elsewhere in this file.

@@ -2321,7 +2321,9 @@ function ProgramDisplayWrapper({
       
       // Save the updated program through the authoritative save path
       try {
-        // [STEP 23.6A] No cast needed — result.updatedProgram is now typed as AdaptiveProgram
+        // [STEP 23.6B] Dynamic import to access canonical save function
+        // This preserves Program Page's dynamic-module isolation pattern
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
         const savedProgram = saveAdaptiveProgram(result.updatedProgram)
         
         // Update Program Page state with the saved program

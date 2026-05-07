@@ -20,6 +20,14 @@ import { generateTrainingInsights, type TrainingInsight } from '@/lib/training-i
 import { Activity } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { RecoveryEmptyState } from '@/components/shared/EmptyStates'
+// [PHASE L4.2] Deload recommendation card
+import { DeloadRecommendationCard } from '@/components/recovery/DeloadRecommendationCard'
+import { 
+  deriveRecoveryAdaptationSnapshot,
+  buildCheckInSignalsFromUserInput,
+  type RecoveryAdaptationSnapshot,
+  type RecoveryReadinessCheckIn,
+} from '@/lib/program/recovery-adaptation-snapshot-contract'
 
 export default function RecoveryPage() {
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumeSummary | null>(null)
@@ -28,6 +36,9 @@ export default function RecoveryPage() {
   const [recoverySignal, setRecoverySignal] = useState<RecoverySignal | null>(null)
   const [insights, setInsights] = useState<TrainingInsight[]>([])
   const [mounted, setMounted] = useState(false)
+  // [PHASE L4.2] Recovery adaptation snapshot for deload recommendation
+  const [l4Snapshot, setL4Snapshot] = useState<RecoveryAdaptationSnapshot | null>(null)
+  const [l4CheckIn, setL4CheckIn] = useState<RecoveryReadinessCheckIn | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -36,6 +47,27 @@ export default function RecoveryPage() {
     setMovementBalance(calculateMovementBalance())
     setRecoverySignal(calculateRecoverySignal())
     setInsights(generateTrainingInsights())
+    
+    // [PHASE L4.2] Load saved check-in if available and derive snapshot
+    try {
+      const savedCheckIn = localStorage.getItem('spartanlab_l2_recovery_checkin')
+      if (savedCheckIn) {
+        const checkIn = JSON.parse(savedCheckIn) as RecoveryReadinessCheckIn
+        setL4CheckIn(checkIn)
+        // Derive L1 snapshot from L2 check-in
+        const signals = buildCheckInSignalsFromUserInput(checkIn)
+        const snapshot = deriveRecoveryAdaptationSnapshot(signals, null, null)
+        setL4Snapshot(snapshot)
+      } else {
+        // No check-in: derive empty snapshot
+        const snapshot = deriveRecoveryAdaptationSnapshot(null, null, null)
+        setL4Snapshot(snapshot)
+      }
+    } catch {
+      // Fallback: derive empty snapshot
+      const snapshot = deriveRecoveryAdaptationSnapshot(null, null, null)
+      setL4Snapshot(snapshot)
+    }
   }, [])
 
   // Check for meaningful data
@@ -90,6 +122,12 @@ export default function RecoveryPage() {
               {movementBalance && <MovementBalanceCard balance={movementBalance} />}
             </div>
           )}
+
+          {/* [PHASE L4.2] Deload Recommendation Card — always visible when data available */}
+          <DeloadRecommendationCard
+            snapshot={l4Snapshot}
+            checkIn={l4CheckIn}
+          />
 
           {/* Recovery and Insights */}
           {hasData && (

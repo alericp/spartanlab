@@ -233,18 +233,34 @@ once truth, source, and display are locked.
 
 ---
 
-## Phase J — Product Cleanup / Trust Polish — `NOT_STARTED`
+## Phase J — Product Cleanup / Trust Polish — `ACTIVE/PARTIAL`
 
 **Purpose:** strip debug clutter; the final UI feels like an AI coach, not a
 debug report.
 
 | ID | Subtask | Status |
 |----|---------|--------|
-| J1 | Hide stale/internal audit clutter from normal user view | `NOT_STARTED` |
+| J1 | Hide stale/internal audit clutter from normal user view | `PARTIAL` |
 | J2 | Keep only useful doctrine explanations | `NOT_STARTED` |
 | J3 | Preserve compact product-grade UI | `NOT_STARTED` |
-| J4 | Keep diagnostics available where needed | `NOT_STARTED` |
+| J4 | Keep diagnostics available where needed | `COMPLETE` |
 | J5 | Final result feels like an AI coach | `NOT_STARTED` |
+
+**J1 Evidence (PARTIAL):**
+- Live workout "Shell proof" and "Runtime parity" strips moved to dev-only
+  (`process.env.NODE_ENV === 'development'`) — normal users no longer see
+  internal corridor/parity tokens.
+- AB18 session coaching line preserved as user-facing (KEEP_USER_COACHING).
+- `data-ab10-*` and `data-ab18-*` DOM proof attributes preserved on outer
+  wrapper for QA/regression scanning.
+- Session card launch proof strip was already behind `probeActive` flag
+  (production-disabled).
+
+**J4 Evidence (COMPLETE):**
+- Diagnostics preserved via `data-*` attributes on DOM elements.
+- Dev-only render guards (`process.env.NODE_ENV === 'development'`) expose
+  full proof strips to developers without cluttering normal user view.
+- Console logs preserved for AB18 coaching proof debugging.
 
 ---
 

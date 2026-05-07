@@ -569,13 +569,13 @@ function phaseJ(): BlueprintPhase {
     id: 'J',
     title: 'Product Cleanup / Trust Polish',
     purpose: 'Remove debug clutter; the final UI feels like an AI coach, not a debug report.',
-    status: 'NOT_STARTED',
-    nextAction: 'After Phases F.F3, G.G5, H.H5, and I are COMPLETE, audit the proof strip and demote internal-only lines behind a debug flag.',
+    status: 'ACTIVE/PARTIAL',
+    nextAction: 'J1 partial: live workout proof strips moved to dev-only. Continue J1 on Program page surfaces, then J2 doctrine explanations.',
     subtasks: [
-      { id: 'J.J1', title: 'Hide stale/internal audit clutter from normal user view', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
+      { id: 'J.J1', title: 'Hide stale/internal audit clutter from normal user view', status: 'PARTIAL', evidence: ['Live workout Shell proof + Runtime parity strips moved behind process.env.NODE_ENV === development guard', 'AB18 coaching line preserved (KEEP_USER_COACHING)', 'data-ab10-* and data-ab18-* attributes preserved on outer wrapper for QA'], remainingWork: ['Audit Program page AdaptiveProgramDisplay / session card for remaining internal clutter'] },
       { id: 'J.J2', title: 'Keep only useful doctrine explanations', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
       { id: 'J.J3', title: 'Preserve compact product-grade UI', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
-      { id: 'J.J4', title: 'Keep diagnostics available where needed', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
+      { id: 'J.J4', title: 'Keep diagnostics available where needed', status: 'COMPLETE', evidence: ['data-* attributes preserved on DOM elements', 'Dev-only render guards expose full proof strips to developers', 'Console logs preserved for AB18 coaching proof debugging'], remainingWork: [] },
       { id: 'J.J5', title: 'Final result feels like an AI coach', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
     ],
   }

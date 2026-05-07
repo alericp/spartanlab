@@ -7012,17 +7012,12 @@ if (shouldShowLocalFallback) {
               )}
             </div>
             {/* [SELECTED-SESSION-CONTRACT-PROOF] Pre-start shell proof strip.
-                PRODUCTION-VISIBLE (was dev-only). Sits directly above the
-                Today's Plan rows so the user can see, at a glance, whether
-                the shell is reading the SAME session prop the route already
-                variant-narrowed. If `mode` / `variant` here agree with the
-                Card's Launch proof but the CORRIDOR token below flips to
-                `MISMATCH`, the URL requested 45/30 but the live session still
-                carries full-session dimensions -- exactly the silent full-
-                session fallback [SELECTED-SESSION-OWNERSHIP-LOCK] blocks at
-                the route layer.
+                [PHASE-J1] DEV-ONLY. Normal users should not see internal
+                proof strips with mode/variant/corridor tokens. Data attributes
+                preserved on outer wrapper for QA. Diagnostics available in
+                dev mode for debugging session/variant parity issues.
 
-                CORRIDOR token semantics here:
+                CORRIDOR token semantics (dev-only):
                   OK        -> URL mode is 45/30, variant > 0, AND the live
                                session's estimatedMinutes is consistent with
                                the declared mode (<= 50 for 45_min, <= 35
@@ -7034,7 +7029,7 @@ if (shouldShowLocalFallback) {
                                session, OR variant was requested (idx > 0)
                                but the route did not narrow (see route-level
                                CRITICAL console.error for upstream cause). */}
-            {(() => {
+            {process.env.NODE_ENV === 'development' && (() => {
               const exCount = safeSession.exercises?.length ?? 0
               const min = typeof safeSession.estimatedMinutes === 'number'
                 ? safeSession.estimatedMinutes
@@ -7086,14 +7081,11 @@ if (shouldShowLocalFallback) {
               )
             })()}
             {/* [AB10 — START WORKOUT RUNTIME PARITY LOCK] Compact runtime
-                parity proof. Production-visible (not dev-only). Sits next to
-                the Shell proof and reports whether the live runtime matched
-                the body the Program card promised at launch. Honest fallback:
-                when bootSource is fallback, snapshot reason is shown instead
-                of a green "matched" message. The companion `data-ab10-*` DOM
-                proof attributes on the outer wrapper carry the same truth in
-                a non-UI surface for QA / regression scanning. */}
-            <div
+                parity proof. [PHASE-J1] DEV-ONLY. Normal users should not see
+                internal runtime parity proof strips. The companion `data-ab10-*`
+                DOM proof attributes on the outer wrapper carry the same truth
+                in a non-UI surface for QA / regression scanning. */}
+            {process.env.NODE_ENV === 'development' && <div
               className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight"
               data-ab10-chip="runtime-parity"
             >
@@ -7131,7 +7123,7 @@ if (shouldShowLocalFallback) {
                   </span>
                 )}
               </div>
-            </div>
+            </div>}
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
             {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
             {renderTodayPlanRows()}

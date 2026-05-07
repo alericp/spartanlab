@@ -108,6 +108,8 @@ import {
   // proof attributes. Sits on top of the existing snapshot/fingerprint
   // diagnostics — does not replace any owner.
   buildAB10RuntimeParityProof,
+  // [AB18] Read the launch proof for session coaching handoff
+  readAB10LaunchProof,
   type AB10RuntimeParityProof,
   type SessionFingerprint,
   type FingerprintComparison,
@@ -1162,6 +1164,9 @@ function WorkoutSessionContent() {
           : (finalSession.dayNumber ?? 1)
       const expectedPayload = readLaunchFingerprint(keyDay, variantIndex)
       setExpectedLaunchPayload(expectedPayload)
+      
+      // [AB18] Read the AB10 launch proof to get session coaching handoff
+      const ab10LaunchProof = readAB10LaunchProof(keyDay, variantIndex)
 
       const validation = validateSelectedBodySnapshot(expectedPayload)
       setSnapshotValidation(validation)
@@ -1460,11 +1465,13 @@ function WorkoutSessionContent() {
         weekNumber: ab10WeekNumber,
         expectedExercises: expectedExercisesForProof,
         actualExercises: actualExercisesForProof,
-        parityComparison: report,
-        groupedRuntimeExpected: ab10GroupedRuntimeExpected,
-        groupedRuntimeBuilt: ab10GroupedRuntimeBuilt,
-        styleMetadataSource: ab10StyleMetadataSource,
-      })
+  parityComparison: report,
+  groupedRuntimeExpected: ab10GroupedRuntimeExpected,
+  groupedRuntimeBuilt: ab10GroupedRuntimeBuilt,
+  styleMetadataSource: ab10StyleMetadataSource,
+  // [AB18] Pass session coaching from AB10LaunchProof for live workout display
+  sessionCoaching: ab10LaunchProof?.sessionCoaching ?? null,
+  })
       setAB10RuntimeParityProof(ab10Proof)
       console.log('[AB10] runtime_parity_proof', ab10Proof)
 

@@ -35,6 +35,8 @@ import {
   // sole source of truth for the booted body.
   stampAB10LaunchProof,
   AB10_RUNTIME_PARITY_VERSION,
+  // [AB18] Session coaching handoff type for live workout parity
+  type AB18SessionCoachingHandoff,
 } from '@/lib/workout/selected-variant-session-contract'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
@@ -209,6 +211,10 @@ interface AdaptiveSessionCardProps {
   // [PREVIEW-VISIBLE-PROBE] Enable visible truth probe via ?programProbe=1 query param
   // This bypasses NODE_ENV checks to show diagnostics in Preview/production
   showProbe?: boolean
+  // [AB18] Session-level training style coaching. Passed from the Program page
+  // per-day method summary and handed off to live workout via AB10LaunchProof.
+  // Optional for backward compatibility — older callers render without coaching.
+  sessionTrainingStyleCoaching?: AB18SessionCoachingHandoff | null
   // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
   forceProbe?: boolean
   // [WEEK-AUTHORITY-HANDOFF] Authoritative selected week from the Program page.
@@ -563,7 +569,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion, displayProjectionSession }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion, displayProjectionSession, sessionTrainingStyleCoaching }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -1047,6 +1053,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         groupedMethodCount: ab10GroupedMethodCount,
         rowLevelMethodCount: ab10RowLevelMethodCount,
         stampedAt: new Date().toISOString(),
+        // [AB18] Session coaching handoff for live workout display parity
+        sessionCoaching: sessionTrainingStyleCoaching ?? null,
       })
     }
 

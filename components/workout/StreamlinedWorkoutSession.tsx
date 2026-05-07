@@ -8804,22 +8804,38 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             </p>
             {/* [PHASE K8] Stress-aware rest guidance — derives from Phase K session stress context */}
             {(() => {
+              // [K8-BUILD-FIX] Normalize optional rest seconds to definite number or null upfront
+              // This prevents TypeScript errors from optional chaining not narrowing across branches
+              const prescribedRestSeconds =
+                typeof safeCurrentExercise?.restSeconds === 'number' &&
+                Number.isFinite(safeCurrentExercise.restSeconds) &&
+                safeCurrentExercise.restSeconds > 0
+                  ? safeCurrentExercise.restSeconds
+                  : null
+              
+              const isRestGuidanceExercise =
+                exerciseCategory === 'skill' ||
+                exerciseCategory === 'strength' ||
+                exerciseCategory === 'pull' ||
+                exerciseCategory === 'push'
+              
+              // Early exit if no valid rest seconds or not a rest-guidance-relevant exercise
+              if (prescribedRestSeconds === null || prescribedRestSeconds < 90 || !isRestGuidanceExercise) {
+                return null
+              }
+              
+              // Now TypeScript knows prescribedRestSeconds is a definite number >= 90
+              const restSeconds = prescribedRestSeconds
+              
               // Derive stress-aware rest guidance from Phase K session context
               const stressGuidance = deriveLiveStressRestGuidance({
                 stressLevel: safeSession.stressLevel,
                 recoveryCost: safeSession.recoveryCost,
                 stressRole: safeSession.stressRole,
                 stressProofLabel: safeSession.stressDistributionProof?.label,
-                baseRestSeconds: safeCurrentExercise?.restSeconds,
+                baseRestSeconds: restSeconds,
                 exerciseCategory,
               })
-              
-              // Only show rest guidance for meaningful exercises with rest >= 90s
-              const showRestGuidance = safeCurrentExercise?.restSeconds && 
-                safeCurrentExercise.restSeconds >= 90 && 
-                (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push')
-              
-              if (!showRestGuidance) return null
               
               // If stress-aware with a recovery/conservative tone, show enhanced guidance
               if (stressGuidance.isStressAware && stressGuidance.displayTone === 'recovery') {
@@ -8838,8 +8854,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 )
               }
               
-              // Default rest guidance (neutral or legacy)
-              const restSeconds = safeCurrentExercise.restSeconds
+              // Default rest guidance (neutral or legacy) — restSeconds is definitively a number here
               return (
                 <p className="text-[10px] text-[#6B7280]/80 mt-1">
                   {restSeconds >= 180 

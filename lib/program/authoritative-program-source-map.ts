@@ -918,3 +918,214 @@ export function runLiveWorkoutSourceMap(
     warnings,
   }
 }
+
+// =============================================================================
+// [PHASE G.G3] STALE-SOURCE DISPLAY GUARD
+// =============================================================================
+//
+// Pure guard that decides whether a display projection is allowed to control
+// visible Program cards when canonical session truth exists. This is the narrow
+// runtime guard required by G.G3 to ensure stale/fallback sources cannot
+// override healthy canonical session truth at display time.
+//
+// Call site: Program page when rendering AdaptiveProgramDisplay. If the guard
+// rejects a stale projection, the page must prefer the canonical session object.
+// =============================================================================
+
+/**
+ * Stable reason codes for G.G3 stale-source rejection. These are stable strings
+ * for logging/filtering, not localized prose.
+ */
+export type StaleSourceGuardReason =
+  | 'CANONICAL_PROGRAM_CONTROLS_DISPLAY'
+  | 'FALLBACK_ALLOWED_CANONICAL_MISSING'
+  | 'STALE_PROJECTION_REJECTED'
+  | 'FALLBACK_REJECTED_CANONICAL_HEALTHY'
+  | 'PROJECTION_SESSION_COUNT_MISMATCH'
+  | 'PROJECTION_SESSION_IDS_MISMATCH'
+  | 'PROJECTION_OLDER_THAN_CANONICAL'
+  | 'BUG_STALE_SOURCE_WOULD_HAVE_WON'
+
+export interface StaleSourceGuardInput {
+  /**
+   * The canonical program object (from generation or getProgramState).
+   * Must carry sessions[] with canonical truth.
+   */
+  canonicalProgram: {
+    id?: string
+    generatedAt?: string
+    sessions?: Array<{
+      id?: string
+      dayNumber?: number
+      methodStructures?: unknown[]
+    }>
+  } | null
+  /**
+   * The display projection (from buildProgramDisplayProjection).
+   * May carry stale exercise selections / session structures.
+   */
+  displayProjection: {
+    programId?: string
+    generatedAt?: string
+    visibleSessionCards?: Array<{
+      sessionId?: string
+      dayNumber?: number
+    }>
+  } | null
+  /**
+   * The authoritative source map for the canonical program. When present,
+   * the guard uses canonicalControlsDisplay / fallbackControlsDisplay flags
+   * to make the decision without re-inspecting per-session fields.
+   */
+  sourceMap?: AuthoritativeProgramSourceMap | null
+}
+
+export interface StaleSourceGuardResult {
+  /**
+   * True when the display projection is allowed to control visible Program
+   * cards. False when canonical session truth must be preferred.
+   */
+  projectionAllowedToControlDisplay: boolean
+  /** Stable reason code explaining the decision. */
+  reason: StaleSourceGuardReason
+  /** True when the guard detected a stale projection that was successfully blocked. */
+  staleProjectionBlocked: boolean
+  /** True when fallback is legitimately in control (no canonical truth exists). */
+  legitimateFallback: boolean
+  /** Plain English notes for dev/diagnostic logging. */
+  notes: string
+}
+
+/**
+ * [PHASE G.G3] Pure guard that decides whether a display projection can control
+ * visible Program cards. When canonical session truth exists and the projection
+ * is stale/mismatched, the guard rejects the projection so canonical truth wins.
+ *
+ * Decision priority:
+ * 1. If sourceMap reports canonicalControlsDisplay=true → canonical wins.
+ * 2. Else if canonical program has sessions with methodStructures → canonical wins.
+ * 3. Else if projection is missing → projection rejected (degenerate case).
+ * 4. Else if projection.programId !== canonical.id → stale projection rejected.
+ * 5. Else if projection.generatedAt < canonical.generatedAt → older projection rejected.
+ * 6. Else if projection session count differs from canonical → mismatch rejected.
+ * 7. Else: legitimate fallback allowed (no canonical truth available).
+ */
+export function canDisplayProjectionControlProgramCards(
+  input: StaleSourceGuardInput,
+): StaleSourceGuardResult {
+  const { canonicalProgram, displayProjection, sourceMap } = input
+
+  // Fast path: if source map already computed canonical-controls-display, trust it
+  if (sourceMap?.canonicalControlsDisplay === true) {
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: 'CANONICAL_PROGRAM_CONTROLS_DISPLAY',
+      staleProjectionBlocked: displayProjection !== null,
+      legitimateFallback: false,
+      notes: `sourceMap.canonicalControlsDisplay=true; canonical session truth wins over any projection`,
+    }
+  }
+
+  // If canonical program is missing, projection is allowed (fallback case)
+  if (!canonicalProgram || !Array.isArray(canonicalProgram.sessions)) {
+    return {
+      projectionAllowedToControlDisplay: true,
+      reason: 'FALLBACK_ALLOWED_CANONICAL_MISSING',
+      staleProjectionBlocked: false,
+      legitimateFallback: true,
+      notes: 'no canonical program or sessions; projection allowed as fallback',
+    }
+  }
+
+  // Check for canonical truth presence: sessions with methodStructures
+  const sessionsWithCanonicalTruth = canonicalProgram.sessions.filter(
+    (s) => Array.isArray(s.methodStructures) && s.methodStructures.length > 0,
+  ).length
+
+  if (sessionsWithCanonicalTruth > 0) {
+    // Canonical truth exists - projection must not control display
+    const wasProjectionAttempted = displayProjection !== null
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: wasProjectionAttempted
+        ? 'STALE_PROJECTION_REJECTED'
+        : 'CANONICAL_PROGRAM_CONTROLS_DISPLAY',
+      staleProjectionBlocked: wasProjectionAttempted,
+      legitimateFallback: false,
+      notes: `${sessionsWithCanonicalTruth}/${canonicalProgram.sessions.length} sessions have canonical methodStructures; projection blocked`,
+    }
+  }
+
+  // No methodStructures, but source map says fallback is controlling - check if stale
+  if (sourceMap?.fallbackControlsDisplay === true) {
+    // Fallback is legitimately in control - no canonical truth to protect
+    return {
+      projectionAllowedToControlDisplay: true,
+      reason: 'FALLBACK_ALLOWED_CANONICAL_MISSING',
+      staleProjectionBlocked: false,
+      legitimateFallback: true,
+      notes: `sourceMap.fallbackControlsDisplay=true (reason: ${sourceMap.fallbackDisplayReason}); no canonical truth to protect`,
+    }
+  }
+
+  // If projection is missing, canonical wins by default
+  if (!displayProjection) {
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: 'CANONICAL_PROGRAM_CONTROLS_DISPLAY',
+      staleProjectionBlocked: false,
+      legitimateFallback: false,
+      notes: 'no display projection provided; canonical program wins by default',
+    }
+  }
+
+  // Projection exists but no canonical truth - check for staleness indicators
+  const projectionId = displayProjection.programId ?? ''
+  const canonicalId = canonicalProgram.id ?? ''
+  const projectionTime = displayProjection.generatedAt ?? ''
+  const canonicalTime = canonicalProgram.generatedAt ?? ''
+
+  // ID mismatch - different programs entirely
+  if (projectionId && canonicalId && projectionId !== canonicalId) {
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: 'STALE_PROJECTION_REJECTED',
+      staleProjectionBlocked: true,
+      legitimateFallback: false,
+      notes: `projection.programId (${projectionId}) !== canonical.id (${canonicalId}); stale projection rejected`,
+    }
+  }
+
+  // Timestamp comparison - older projection loses
+  if (projectionTime && canonicalTime && projectionTime < canonicalTime) {
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: 'PROJECTION_OLDER_THAN_CANONICAL',
+      staleProjectionBlocked: true,
+      legitimateFallback: false,
+      notes: `projection.generatedAt (${projectionTime}) < canonical.generatedAt (${canonicalTime}); older projection rejected`,
+    }
+  }
+
+  // Session count mismatch
+  const canonicalSessionCount = canonicalProgram.sessions.length
+  const projectionSessionCount = displayProjection.visibleSessionCards?.length ?? 0
+  if (projectionSessionCount > 0 && projectionSessionCount !== canonicalSessionCount) {
+    return {
+      projectionAllowedToControlDisplay: false,
+      reason: 'PROJECTION_SESSION_COUNT_MISMATCH',
+      staleProjectionBlocked: true,
+      legitimateFallback: false,
+      notes: `projection has ${projectionSessionCount} cards but canonical has ${canonicalSessionCount} sessions; mismatch rejected`,
+    }
+  }
+
+  // No canonical truth, projection matches on available indicators - allow fallback
+  return {
+    projectionAllowedToControlDisplay: true,
+    reason: 'FALLBACK_ALLOWED_CANONICAL_MISSING',
+    staleProjectionBlocked: false,
+    legitimateFallback: true,
+    notes: 'no canonical methodStructures; projection allowed as compatible fallback',
+  }
+}

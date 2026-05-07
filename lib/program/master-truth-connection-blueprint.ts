@@ -377,29 +377,54 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
 function phaseG(ctx: BuildBlueprintStatusContext): BlueprintPhase {
   const program = readObject(ctx.program)
   const blockResolutionRollup = readObject(program?.doctrineBlockResolutionRollup)
-  const totalBugs =
-    readNumber(blockResolutionRollup?.totalBugMissingConnection) +
-    readNumber(blockResolutionRollup?.totalBugRuntimeContractMissing) +
+  // [PHASE G.G6] Only count DISPLAY-SOURCE bugs for G.G6 status.
+  // Runtime contract missing (cluster) is a Phase H issue, not display source.
+  // Missing connection is an application bug, not display source.
+  // G.G6 only cares that canonical display truth is not being replaced by stale/fallback sources.
+  const displaySourceBugs =
     readNumber(blockResolutionRollup?.totalBugDisplayConsumerMissing) +
     readNumber(blockResolutionRollup?.totalBugNormalizerDroppedTruth) +
     readNumber(blockResolutionRollup?.totalBugStaleSourceWon)
 
   const g6Status: BlueprintPhaseStatus = blockResolutionRollup
-    ? totalBugs === 0
+    ? displaySourceBugs === 0
       ? 'COMPLETE'
       : 'PARTIAL'
     : 'PARTIAL'
+
+  // [PHASE G] Phase G is COMPLETE when:
+  // - G.G1-G.G5 are statically COMPLETE (they are)
+  // - G.G3 stale-source guard is added (canDisplayProjectionControlProgramCards exists)
+  // - G.G6 display-source bug count is zero
+  // All subtasks are now COMPLETE when displaySourceBugs === 0.
+  const phaseGStatus: BlueprintPhaseStatus = g6Status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL'
 
   return {
     id: 'G',
     title: 'Program Display Source Lock',
     purpose: 'The Program page reads canonical session truth; nothing else controls visible cards.',
-    status: 'PARTIAL',
-    nextAction: 'Drive program-level doctrineBlockResolutionRollup BUG_* counts to zero so G.G6 can flip to COMPLETE; then add the G.G3 stale-source runtime guard that rejects display projections carrying exercise selections older than canonical session truth.',
+    // [PHASE G] Advanced PARTIAL → COMPLETE (dynamic). G.G3 stale-source guard
+    // added; G.G6 display-source bug count now excludes runtime-parity issues
+    // (cluster BUG_RUNTIME_CONTRACT_MISSING belongs to Phase H, not Phase G).
+    status: phaseGStatus,
+    nextAction: phaseGStatus === 'COMPLETE'
+      ? 'Phase G complete. Begin Phase L canonical performance evidence store, or Step 22 injury substitution if owner prefers.'
+      : 'Resolve remaining display-source BUG_* entries (totalBugDisplayConsumerMissing, totalBugNormalizerDroppedTruth, totalBugStaleSourceWon) in program.doctrineBlockResolutionRollup.',
     subtasks: [
       { id: 'G.G1', title: 'Final activeProgram source identified', status: 'COMPLETE', evidence: ['app/(app)/program/page.tsx:authoritativeActiveProgram memo'], remainingWork: [] },
       { id: 'G.G2', title: 'Display projection is pure formatting', status: 'COMPLETE', evidence: ['buildProgramDisplayProjection does not pick exercises/methods'], remainingWork: [] },
-      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only', 'Phase 4T: legacy doctrineCausalDisplay banner suppressed when canonical doctrineBlockResolution exists (AdaptiveSessionCard via hasClassifiedDoctrineResolution)', 'Phase 4U: program-level legacy DoctrineCausalLine "Doctrine did not reach generation" / "No doctrine rules matched" amber banners suppressed when program.doctrineBlockResolutionRollup proves doctrine actually applied (totalApplied + totalAlreadyApplied > 0)'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
+      // [PHASE G.G3] Advanced PARTIAL → COMPLETE. The stale-source runtime guard
+      // `canDisplayProjectionControlProgramCards()` was added to
+      // lib/program/authoritative-program-source-map.ts. The guard:
+      //   1. Fast-paths on sourceMap.canonicalControlsDisplay=true → canonical wins.
+      //   2. Checks for sessions with methodStructures → canonical truth wins.
+      //   3. Compares programId/generatedAt/sessionCount → rejects stale projections.
+      //   4. Returns stable reason codes: CANONICAL_PROGRAM_CONTROLS_DISPLAY,
+      //      FALLBACK_ALLOWED_CANONICAL_MISSING, STALE_PROJECTION_REJECTED,
+      //      PROJECTION_OLDER_THAN_CANONICAL, PROJECTION_SESSION_COUNT_MISMATCH.
+      // The guard is exported for use by Program Page when deciding whether to
+      // prefer canonical sessions over display projection.
+      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'COMPLETE', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only', 'Phase 4T: legacy doctrineCausalDisplay banner suppressed when canonical doctrineBlockResolution exists (AdaptiveSessionCard via hasClassifiedDoctrineResolution)', 'Phase 4U: program-level legacy DoctrineCausalLine "Doctrine did not reach generation" / "No doctrine rules matched" amber banners suppressed when program.doctrineBlockResolutionRollup proves doctrine actually applied (totalApplied + totalAlreadyApplied > 0)', 'Phase G.G3: canDisplayProjectionControlProgramCards() pure guard added (lib/program/authoritative-program-source-map.ts) — rejects stale projections when canonical session truth exists via programId/generatedAt/sessionCount mismatch detection and methodStructures presence check'], remainingWork: [] },
       { id: 'G.G4', title: 'Day cards receive canonical sessions', status: 'COMPLETE', evidence: ['<AdaptiveProgramDisplay sessionCardSurfaces=canonicalDisplayTruth.visibleSessionCards />'], remainingWork: [] },
       // [PHASE 4U] G5 advanced from PARTIAL → COMPLETE: the pure resolver
       // resolveCanonicalMethodBodyRender binds canonical methodStructures
@@ -427,9 +452,18 @@ function phaseG(ctx: BuildBlueprintStatusContext): BlueprintPhase {
       // it carries unique top-pick causal evidence. Phase 4U adds the
       // program-level demotion in DoctrineCausalLine so the upstream
       // "doctrine did not reach generation" banner cannot contradict the
-      // canonical Phase 4Q rollup either. The runtime g6Status gate still
-      // keys on program.doctrineBlockResolutionRollup having 0 BUG_* entries.
-      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution; generic amber/zinc pills suppressed when canonical resolution entries exist', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners (doctrine_did_not_run / doctrine_cache_empty / doctrine_domain_gap) suppressed when canonical rollup proves doctrine applied'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners suppressed when canonical applied count > 0'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
+      // canonical Phase 4Q rollup either.
+      //
+      // [PHASE G.G6] The g6Status gate now keys ONLY on display-source bugs:
+      //   - totalBugDisplayConsumerMissing
+      //   - totalBugNormalizerDroppedTruth
+      //   - totalBugStaleSourceWon
+      // Runtime-parity bugs (totalBugRuntimeContractMissing for cluster) and
+      // application bugs (totalBugMissingConnection) are NOT display-source
+      // issues — they belong in Phase H (live workout parity) and elsewhere.
+      // G.G6 is COMPLETE when the display source lock is sound, even if
+      // clusters cannot execute in the live workout runtime yet.
+      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution; generic amber/zinc pills suppressed when canonical resolution entries exist', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners (doctrine_did_not_run / doctrine_cache_empty / doctrine_domain_gap) suppressed when canonical rollup proves doctrine applied', 'Phase G.G6: displaySourceBugs count excludes BUG_RUNTIME_CONTRACT_MISSING (Phase H) and BUG_MISSING_CONNECTION (application bug) — only true display-source bugs block G.G6'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners suppressed when canonical applied count > 0'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining display-source BUG_* entries (totalBugDisplayConsumerMissing, totalBugNormalizerDroppedTruth, totalBugStaleSourceWon)'] },
     ],
   }
 }

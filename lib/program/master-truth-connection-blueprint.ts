@@ -543,7 +543,7 @@ function phaseI(): BlueprintPhase {
     //     'final_skill_obligation') cannot receive upward sets/reps/holds.
     //   - RPE max is 8 in Phase I (7 for protected/skill rows). Phase I
     //     never prescribes RPE 9-10.
-    //   - Density / unsupported method types remain guidanceOnly ����� no fake
+    //   - Density / unsupported method types remain guidanceOnly ������ no fake
     //     numeric mutation, deferred to a future engine-quality task.
     //   - Total session sets cap: at most +1 set per session in Phase I.
     //
@@ -1761,6 +1761,83 @@ function phaseR(): BlueprintPhase {
   }
 }
 
+/** Phase S: Recovery Adaptation Snapshot Foundation Contract. */
+function phaseS(): BlueprintPhase {
+  return {
+    id: 'S',
+    title: 'Recovery Adaptation Snapshot Foundation Contract (Step 21.1)',
+    purpose:
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). Phase S.S1 is foundation-only — it defines the contract and single pure derivation helper but does NOT mutate programs or sessions yet.',
+    status: 'COMPLETE',
+    nextAction:
+      'No remaining Phase S.S1 work. Recommended next steps: S.S2 (wire derivation into program generation and attach snapshot to program/session), S.S3 (injury-aware substitution gates), S.S4 (deload recommendation decision layer), S.S5 (missed-day recomposition contract), S.S6+ (live workout adaptive coaching from recovery signals).',
+    subtasks: [
+      {
+        id: 'S.S1',
+        title: 'Single authoritative RecoveryAdaptationSnapshot contract exists',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/recovery-adaptation-snapshot-contract.ts defines RecoveryAdaptationSnapshot as the canonical unified shape with readinessLevel / fatigueLevel / jointRiskLevel / injuryConstraintLevel / deloadSignal / missedSessionSignal / recoveryLimiterCodes / decisionReasonCodes / sourceQuality / visibleSummaryLabel / visibleCoachLine / canMutateProgramNow / canMutateSessionNow / shouldOnlyExplainNow / derivedAt.',
+          'Type vocabulary is explicit: ReadinessLevel (unknown/green/yellow/orange/red), FatigueLevel (unknown/low/moderate/high/very_high), JointRiskLevel (unknown/low/moderate/high), InjuryConstraintLevel (none/watch/limit/avoid), DeloadSignal (none/monitor/recommended/required), MissedSessionSignal (none/missed/partial/skipped_for_recovery), SourceQuality (empty/profile_only/settings/workout_log/check_in/mixed).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S2',
+        title: 'Single pure derivation helper exists',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveRecoveryAdaptationSnapshot(input: RecoveryAdaptationInput) is the single pure helper. It accepts profileRecovery / workoutStress / checkIn / weeklyStressSummary inputs, produces a normalized snapshot, and returns "unknown"/empty states when data is missing.',
+          'Helper is pure — no React, no hooks, no localStorage, no fetch, no DB, no clock side effects. Safe on server/client/build.',
+          'Helper utilities buildProfileRecoverySignals() and buildWorkoutStressSignalsFromPhaseK() extract relevant fields from canonical profile and Phase K outputs.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S3',
+        title: 'Phase K fields are input, not overwritten',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase S reads Phase K weeklyStressSummary (highStressDays, highRiskAdjacencies) as input via buildWorkoutStressSignalsFromPhaseK(). It does NOT write to stressRole, stressLevel, recoveryCost, nextDayRisk, stressDistributionProof, or stressAdjustmentDelta.',
+          'Phase K stress classification remains the authoritative owner of per-session stress; Phase S aggregates those signals into a higher-level recovery snapshot.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S4',
+        title: 'Missing data returns honest "unknown" not fake certainty',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveSourceQuality returns "empty" when no profile/workout/check-in data exists. ReadinessLevel / FatigueLevel / JointRiskLevel all have "unknown" as an explicit enum value.',
+          'visibleCoachLine returns "Recovery status: not enough recent data yet" when sourceQuality is empty. visibleSummaryLabel returns null when no notable signal exists.',
+          'Decision gates canMutateProgramNow / canMutateSessionNow are false in S.S1 (foundation-only); shouldOnlyExplainNow is true so no fake mutations occur.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S5',
+        title: 'Visible output derives from real reason codes',
+        status: 'COMPLETE',
+        evidence: [
+          'visibleSummaryLabel and visibleCoachLine are derived deterministically from readinessLevel, deloadSignal, jointRiskLevel, sourceQuality, and recoveryLimiterCodes. No hardcoded marketing text that contradicts computed state.',
+          'When readinessLevel is "green" and no notable signals exist, visibleSummaryLabel returns null (no chip) and visibleCoachLine returns null (no clutter).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S6',
+        title: 'No mutation in S.S1 foundation pass',
+        status: 'COMPLETE',
+        evidence: [
+          'canMutateProgramNow and canMutateSessionNow are both false. shouldOnlyExplainNow is true. The contract is foundation-only; actual mutation logic is deferred to S.S7+.',
+          'No claim that deloads, injury substitutions, missed-day recomposition, or plan mutations occurred unless they truly occurred.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
 // =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
@@ -1854,6 +1931,16 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // exposing the structural compression that was already happening
     // upstream, never by inventing it.
     phaseR(),
+    // [PHASE-S] Recovery Adaptation Snapshot Foundation Contract (Step 21.1).
+    // Single canonical typed contract that consolidates readiness, fatigue,
+    // soreness, joint risk, injury constraints, deload signals, and
+    // missed-session state into one normalized snapshot. The snapshot
+    // derives from existing profile/settings/log/session inputs, returns
+    // honest "unknown" states when data is missing, and provides decision
+    // gates for future layers (deload automation, injury substitution,
+    // missed-day recomposition, live coaching). S.S1 is foundation-only —
+    // defines contract and derivation helper but does NOT mutate yet.
+    phaseS(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

@@ -1761,16 +1761,16 @@ function phaseR(): BlueprintPhase {
   }
 }
 
-/** Phase S: Recovery Adaptation Snapshot Foundation Contract + User Input Capture. */
+/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation. */
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation + Input Capture (Steps 21.1-21.2)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.1)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2) — wiring real user-facing recovery/readiness check-in into the L1 contract.',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4.1 deload recommendation decision layer (Step 21.4.1) — advisory-only recommendation with no mutation.',
     status: 'COMPLETE',
     nextAction:
-      'Phase S (Steps 21.1-21.2) complete. Foundation contract and user input capture both done. Recommended next steps: S.S8 (wire derivation into program generation and attach snapshot to program/session), S.S9 (injury-aware substitution gates), S.S10 (deload recommendation decision layer), S.S11 (missed-day recomposition contract), S.S12+ (live workout adaptive coaching from recovery signals).',
+      'Phase S (Steps 21.1-21.4.1) complete. Foundation contract, user input capture, and deload recommendation layer done. Remaining L4 mini-chain: L4.2 (wire recommendation into Program page or dedicated surface), L4.3 (runtime acceptance). Then: S.S9 (injury-aware substitution gates), S.S10 (missed-day recomposition), S.S11+ (live workout adaptive coaching).',
     subtasks: [
       {
         id: 'S.S1',
@@ -1849,6 +1849,27 @@ function phaseS(): BlueprintPhase {
           'Skipped check-in does not fake data — returns honest empty/unknown state. Saved check-in flows through buildCheckInSignalsFromUserInput → deriveRecoveryAdaptationSnapshot → getRecoveryStatusLabel → visible UI.',
         ],
         remainingWork: [],
+      },
+      {
+        id: 'S.S8',
+        title: 'L4.1: Deload recommendation decision layer — advisory only (Step 21.4.1)',
+        status: 'COMPLETE',
+        evidence: [
+          'DeloadRecommendationLevel type added: "NONE" | "WATCH" | "CONSIDER_DELOAD" | "STRONGLY_RECOMMEND_DELOAD".',
+          'DeloadReasonCode type with 18 stable machine-readable reason codes (LOW_READINESS, HIGH_FATIGUE, SEVERE_SORENESS, JOINT_PAIN_REPORTED, etc.).',
+          'DeloadSourceSignals interface captures all input signals used for the decision (readiness, fatigue, soreness, sleep, joint pain, injury constraint, missed session, deload signal from snapshot).',
+          'DeloadRecommendationDecision interface is the L4 canonical object with: active, recommendationLevel, recommendationLabel, recommendationReasonCodes, primaryDrivers, sourceSignals, userFacingSummary, appliedToProgram (always false), mutationAllowed (always false), recommendationOnly (always true), generatedAt.',
+          'deriveDeloadRecommendation(snapshot, checkIn) is the single pure L4 helper. Consumes L1 snapshot + L2 check-in. Returns recommendation with conservative strain-score-based ladder. No side effects, no mutations.',
+          'getDeloadRecommendationDisplay() helper provides compact display object for UI proof chips.',
+          'RecoveryCheckInStatus component updated to derive and display L4 deload recommendation with data-phase-l4-* QA attributes.',
+          'Visible output uses coach-like language: "Recovery looks acceptable today", "Some recovery strain is showing", "Recovery signals suggest considering a lighter training day", "A deload is strongly recommended".',
+          'Explicit "Recommendation only — no automatic changes applied" text ensures no fake adaptive claims.',
+          'L4 is strictly advisory: appliedToProgram=false, mutationAllowed=false, recommendationOnly=true. No workout/program/session changes occur.',
+        ],
+        remainingWork: [
+          'L4.2: Wire deload recommendation into Program page or dedicated recovery surface.',
+          'L4.3: Runtime acceptance and corridor cleanup.',
+        ],
       },
     ],
   }

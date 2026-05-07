@@ -28,7 +28,9 @@ import {
   buildCheckInSignalsFromUserInput,
   deriveRecoveryAdaptationSnapshot,
   getRecoveryStatusLabel,
+  deriveDeloadRecommendation,
   type RecoveryAdaptationSnapshot,
+  type DeloadRecommendationDecision,
 } from '@/lib/program/recovery-adaptation-snapshot-contract'
 
 // =============================================================================
@@ -298,6 +300,10 @@ export function RecoveryCheckInStatus({
   }
 
   const statusLabel = snapshot ? getRecoveryStatusLabel(snapshot) : null
+  
+  // [PHASE L4] Derive deload recommendation from L1 snapshot + L2 check-in
+  const deloadDecision = deriveDeloadRecommendation(snapshot, checkIn)
+  const showDeloadRecommendation = deloadDecision.active && deloadDecision.recommendationLevel !== 'NONE'
 
   return (
     <div
@@ -308,6 +314,14 @@ export function RecoveryCheckInStatus({
       data-joint-risk-level={snapshot?.jointRiskLevel || 'unknown'}
       data-deload-signal={snapshot?.deloadSignal || 'none'}
       data-recovery-source-quality={snapshot?.sourceQuality || 'empty'}
+      // [PHASE L4] Deload recommendation data attributes
+      data-phase-l4-deload-recommendation={showDeloadRecommendation ? 'true' : 'false'}
+      data-l4-deload-level={deloadDecision.recommendationLevel}
+      data-l4-deload-active={deloadDecision.active ? 'true' : 'false'}
+      data-l4-reason-count={deloadDecision.recommendationReasonCodes.length}
+      data-l4-applied-to-program={deloadDecision.appliedToProgram ? 'true' : 'false'}
+      data-l4-mutation-allowed={deloadDecision.mutationAllowed ? 'true' : 'false'}
+      data-l4-recommendation-only={deloadDecision.recommendationOnly ? 'true' : 'false'}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -337,6 +351,34 @@ export function RecoveryCheckInStatus({
         <p className="text-[10px] text-[#6B7280] mt-1">
           {snapshot.visibleCoachLine}
         </p>
+      )}
+      
+      {/* [PHASE L4] Deload recommendation display — advisory only, no mutation */}
+      {showDeloadRecommendation && (
+        <div className="mt-2 pt-2 border-t border-[#2B313A]/50">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-1.5 h-1.5 rounded-full ${
+                deloadDecision.recommendationLevel === 'STRONGLY_RECOMMEND_DELOAD' ? 'bg-red-500' :
+                deloadDecision.recommendationLevel === 'CONSIDER_DELOAD' ? 'bg-amber-500' :
+                'bg-sky-400'
+              }`}
+            />
+            <p className={`text-[10px] ${
+              deloadDecision.recommendationLevel === 'STRONGLY_RECOMMEND_DELOAD' ? 'text-red-400/90' :
+              deloadDecision.recommendationLevel === 'CONSIDER_DELOAD' ? 'text-amber-400/90' :
+              'text-sky-400/80'
+            }`}>
+              {deloadDecision.recommendationLabel}
+            </p>
+          </div>
+          <p className="text-[9px] text-[#6B7280] mt-0.5 ml-3.5">
+            {deloadDecision.userFacingSummary}
+          </p>
+          <p className="text-[8px] text-[#4B5563] mt-1 ml-3.5 italic">
+            Recommendation only — no automatic changes applied
+          </p>
+        </div>
       )}
     </div>
   )

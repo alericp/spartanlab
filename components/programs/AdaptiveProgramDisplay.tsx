@@ -384,6 +384,8 @@ export function AdaptiveProgramDisplay({
   // [STEP 23.3] Local UI state for dismissing missed-workout advisory
   // Non-persistent — does not mutate program, session, or storage
   const [missedWorkoutAdvisoryDismissed, setMissedWorkoutAdvisoryDismissed] = useState(false)
+  // [STEP 23.4] Modal state for "I can't train today" confirmation
+  const [showCantTrainModal, setShowCantTrainModal] = useState(false)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -1605,29 +1607,46 @@ export function AdaptiveProgramDisplay({
                     </p>
                   )}
                   
-                  {/* [STEP 23.3] Action buttons — non-mutating, user-controlled */}
-                  <div className="flex gap-2 mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
-                      className="flex-1 h-7 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
-                      data-action="keep-plan"
-                      data-no-mutation="true"
-                    >
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Keep Plan
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
-                      className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
-                      data-action="dismiss"
-                      data-no-mutation="true"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
+                  {/* [STEP 23.3/23.4] Action buttons — user-controlled */}
+                  <div className="flex flex-col gap-2 mt-3">
+                    {/* [STEP 23.4] "I can't train today" button */}
+                    {missedWorkoutAdvisory.action !== 'continue_as_planned' && 
+                     missedWorkoutAdvisory.action !== 'insufficient_context' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => setShowCantTrainModal(true)}
+                        className="h-8 text-xs bg-[#E63946]/10 border border-[#E63946]/30 text-[#E63946] hover:bg-[#E63946]/20"
+                        data-action="cant-train-today"
+                        data-step-23-4="true"
+                      >
+                        <Calendar className="w-3 h-3 mr-1.5" />
+                        I Can&apos;t Train Today
+                      </Button>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="flex-1 h-7 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
+                        data-action="keep-plan"
+                        data-no-mutation="true"
+                      >
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Keep Plan
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                        data-action="dismiss"
+                        data-no-mutation="true"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
                   
                   {/* Advisory-only proof line */}
@@ -2328,6 +2347,110 @@ export function AdaptiveProgramDisplay({
               className="w-full border-[#3A3A3A] text-[#A4ACB8] hover:bg-[#2A2A2A]"
             >
               Keep Current Program
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* [STEP 23.4] "I Can't Train Today" Confirmation Modal
+          Shows advisory reasoning and preview before any schedule change.
+          Mutation is confirm-gated — nothing changes until user confirms. */}
+      <Dialog open={showCantTrainModal} onOpenChange={setShowCantTrainModal}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-[#E63946]" />
+              Can&apos;t Train Today?
+            </DialogTitle>
+            <DialogDescription className="text-[#A4ACB8] pt-2">
+              Review what the system recommends based on your current schedule.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {missedWorkoutAdvisory && (
+            <div className="space-y-4 py-2">
+              {/* Advisory summary */}
+              <div className="p-3 bg-[#151A20] rounded-lg border border-[#2A2A35]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                    missedWorkoutAdvisory.severity === 'high'
+                      ? "bg-amber-500/20 text-amber-400"
+                      : missedWorkoutAdvisory.severity === 'caution'
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-[#2A2A35] text-[#7A7A8A]"
+                  )}>
+                    {getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory).badgeLabel}
+                  </span>
+                  <span className="text-sm font-medium text-[#B5B5C5]">
+                    {missedWorkoutAdvisory.title}
+                  </span>
+                </div>
+                <p className="text-xs text-[#8A8A9A] leading-relaxed">
+                  {missedWorkoutAdvisory.summary}
+                </p>
+              </div>
+              
+              {/* Recommendation */}
+              {missedWorkoutAdvisory.userFacingRecommendation && (
+                <div className="p-3 bg-[#E63946]/5 rounded-lg border border-[#E63946]/20">
+                  <p className="text-xs font-medium text-[#E63946] mb-1">Recommendation</p>
+                  <p className="text-xs text-[#B5B5C5]">
+                    {missedWorkoutAdvisory.userFacingRecommendation}
+                  </p>
+                </div>
+              )}
+              
+              {/* Reasoning (collapsible) */}
+              {missedWorkoutAdvisory.reasoning.length > 0 && (
+                <details className="group">
+                  <summary className="flex items-center gap-1 cursor-pointer text-[11px] text-[#6A6A8A] hover:text-[#8A8AAA] select-none">
+                    <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                    <span>View full reasoning ({missedWorkoutAdvisory.reasoning.length} points)</span>
+                  </summary>
+                  <div className="mt-2 ml-4 space-y-1 border-l border-[#2A2A35] pl-2">
+                    {missedWorkoutAdvisory.reasoning.map((reason, idx) => (
+                      <p key={idx} className="text-[11px] text-[#6A6A7A]">
+                        {reason}
+                      </p>
+                    ))}
+                  </div>
+                </details>
+              )}
+              
+              {/* No-mutation notice */}
+              <div className="p-2 bg-emerald-500/5 rounded border border-emerald-500/20">
+                <p className="text-[10px] text-emerald-400/80 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Preview only — your schedule has not been changed</span>
+                </p>
+              </div>
+              
+              <p className="text-[10px] text-[#5A5A6A] text-center">
+                Schedule adjustment coming soon. For now, use this as guidance.
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCantTrainModal(false)
+                setMissedWorkoutAdvisoryDismissed(true)
+              }}
+              className="flex-1 border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#2A2A2A]"
+              data-action="acknowledge-and-dismiss"
+            >
+              Got It
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowCantTrainModal(false)}
+              className="text-[#6A6A7A] hover:text-[#8A8A9A]"
+              data-action="close-modal"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

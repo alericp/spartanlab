@@ -240,21 +240,24 @@ debug report.
 
 | ID | Subtask | Status |
 |----|---------|--------|
-| J1 | Hide stale/internal audit clutter from normal user view | `PARTIAL` |
+| J1 | Hide stale/internal audit clutter from normal user view | `COMPLETE` |
 | J2 | Keep only useful doctrine explanations | `NOT_STARTED` |
 | J3 | Preserve compact product-grade UI | `NOT_STARTED` |
 | J4 | Keep diagnostics available where needed | `COMPLETE` |
 | J5 | Final result feels like an AI coach | `NOT_STARTED` |
 
-**J1 Evidence (PARTIAL):**
-- Live workout "Shell proof" and "Runtime parity" strips moved to dev-only
-  (`process.env.NODE_ENV === 'development'`) — normal users no longer see
+**J1 Evidence (COMPLETE):**
+- Live workout "Shell proof" and "Runtime parity" strips behind
+  `process.env.NODE_ENV === 'development'` guard — normal users no longer see
   internal corridor/parity tokens.
+- Program page scanner/parity probes behind `showProbe || forceProbe` gate
+  (default false, only enabled via `?programProbe=1`).
+- `AB13VisualProofOverlay` gated by `?ab13ProofOverlay=force-rpe-cap` query
+  param — renders nothing for normal users.
+- Session card "Launch proof" strip behind `probeActive` flag (hard-disabled:
+  `const probeActive = false as boolean`).
 - AB18 session coaching line preserved as user-facing (KEEP_USER_COACHING).
-- `data-ab10-*` and `data-ab18-*` DOM proof attributes preserved on outer
-  wrapper for QA/regression scanning.
-- Session card launch proof strip was already behind `probeActive` flag
-  (production-disabled).
+- `data-ab10-*` and `data-ab18-*` DOM proof attributes preserved for QA.
 
 **J4 Evidence (COMPLETE):**
 - Diagnostics preserved via `data-*` attributes on DOM elements.

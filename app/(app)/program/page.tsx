@@ -120,6 +120,14 @@ import {
   type InjurySubstitutionAdvisorySnapshot,
   type ExerciseInfo,
 } from '@/lib/program/injury-substitution-advisory'
+// [STEP 23.2] Missed-workout recomposition advisory for Program Page
+import {
+  buildMissedWorkoutRecompositionAdvisory,
+  getMissedWorkoutAdvisoryDisplayInfo,
+  hasActionableMissedWorkoutAdvisory,
+  type MissedWorkoutRecompositionAdvisory,
+  type MissedWorkoutRecompositionInput,
+} from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -2222,6 +2230,47 @@ function ProgramDisplayWrapper({
       setInjuryAdvisory(null)
     }
   }, [program])
+
+  // ==========================================================================
+  // [STEP 23.2] Missed-Workout Recomposition Advisory for Program Page
+  // Computes advisory from available program/session context.
+  // Advisory-only — no mutation. No schedule rewrite. No saved-program changes.
+  // ==========================================================================
+  const missedWorkoutAdvisory = useMemo<MissedWorkoutRecompositionAdvisory | null>(() => {
+    if (!program?.sessions?.length) return null
+    
+    try {
+      // Build input from available program context
+      // Step 23.2 uses minimal evidence — session count, program ID, source
+      // Real missed-workout signals (skip events, last workout date) come later
+      const input: MissedWorkoutRecompositionInput = {
+        currentProgramId: program.id || undefined,
+        upcomingSessionCount: program.sessions.length,
+        source: 'program_page',
+        // Note: Without real missed-workout evidence, the advisory will return
+        // 'continue_as_planned' or 'insufficient_context' — which is honest
+      }
+      
+      const advisory = buildMissedWorkoutRecompositionAdvisory(input)
+      
+      // Only surface if there's actionable guidance
+      if (hasActionableMissedWorkoutAdvisory(advisory)) {
+        console.log('[step-23.2-missed-workout-advisory]', {
+          action: advisory.action,
+          severity: advisory.severity,
+          title: advisory.title,
+          canAutoApplyNow: advisory.canAutoApplyNow,
+          savedProgramMutationAllowed: advisory.savedProgramMutationAllowed,
+        })
+        return advisory
+      }
+      
+      return null
+    } catch (error) {
+      console.error('[step-23.2-missed-workout-advisory-error]', error)
+      return null
+    }
+  }, [program])
   
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
@@ -2949,6 +2998,9 @@ function ProgramDisplayWrapper({
   /* [STEP 22.7 / T.T7] Injury advisory preview — read-only, no mutation.
      Shows which exercises may be affected by joint cautions. */
   injuryAdvisory={injuryAdvisory}
+  /* [STEP 23.2] Missed-workout recomposition advisory — advisory-only.
+     No schedule rewrite, no saved-program mutation, no live workout mutation. */
+  missedWorkoutAdvisory={missedWorkoutAdvisory}
   />
       </ErrorBoundary>
     </div>

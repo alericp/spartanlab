@@ -105,6 +105,12 @@ import {
   hasActionableInjuryAdvisory,
   getRecommendationsForSession,
 } from '@/lib/program/injury-substitution-advisory'
+// [STEP 23.2] Missed-workout recomposition advisory — advisory-only, no mutation
+import type { MissedWorkoutRecompositionAdvisory } from '@/lib/program/missed-workout-recomposition-advisory'
+import { 
+  getMissedWorkoutAdvisoryDisplayInfo, 
+  hasActionableMissedWorkoutAdvisory 
+} from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
 interface AB18TrainingStyleInfluence {
@@ -204,6 +210,9 @@ interface AdaptiveProgramDisplayProps {
   // Read-only, advisory-only — no mutation. Preview shows which exercises
   // may be affected by joint cautions, without changing the program.
   injuryAdvisory?: InjurySubstitutionAdvisorySnapshot | null
+  // [STEP 23.2] Missed-workout recomposition advisory for display
+  // Advisory-only — no mutation, no schedule rewrite, no saved-program changes.
+  missedWorkoutAdvisory?: MissedWorkoutRecompositionAdvisory | null
   }
 
 // =============================================================================
@@ -350,6 +359,8 @@ export function AdaptiveProgramDisplay({
   onDismissAdjustment,
   // [STEP 22.7 / T.T7] Injury advisory preview
   injuryAdvisory,
+  // [STEP 23.2] Missed-workout recomposition advisory
+  missedWorkoutAdvisory,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1508,6 +1519,82 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
       )}
+
+      {/* [STEP 23.2] Missed-Workout Recomposition Advisory Card
+          Displays advisory when there's actionable guidance about schedule.
+          Advisory only — no mutation. No saved-program rewrite. */}
+      {missedWorkoutAdvisory && hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && (() => {
+        const displayInfo = getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory)
+        return (
+          <div 
+            className="rounded-lg border bg-gradient-to-r from-[#1A1A25]/50 to-[#1A1A20]/50 border-[#2A2A35] overflow-hidden"
+            data-step-23-2-missed-workout-advisory="true"
+            data-advisory-action={missedWorkoutAdvisory.action}
+            data-advisory-severity={missedWorkoutAdvisory.severity}
+            data-no-program-mutation="true"
+          >
+            <div className="p-3">
+              <div className="flex items-start gap-3">
+                {/* Icon based on severity */}
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                  missedWorkoutAdvisory.severity === 'high' 
+                    ? "bg-amber-500/15"
+                    : missedWorkoutAdvisory.severity === 'caution'
+                    ? "bg-blue-500/15"
+                    : "bg-[#2A2A35]"
+                )}>
+                  <Info className={cn(
+                    "w-3.5 h-3.5",
+                    missedWorkoutAdvisory.severity === 'high'
+                      ? "text-amber-400/80"
+                      : missedWorkoutAdvisory.severity === 'caution'
+                      ? "text-blue-400/80"
+                      : "text-[#6A6A7A]"
+                  )} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {/* Badge + Headline */}
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                      missedWorkoutAdvisory.severity === 'high'
+                        ? "bg-amber-500/20 text-amber-400"
+                        : missedWorkoutAdvisory.severity === 'caution'
+                        ? "bg-blue-500/20 text-blue-400"
+                        : "bg-[#2A2A35] text-[#7A7A8A]"
+                    )}>
+                      {displayInfo.badgeLabel}
+                    </span>
+                    <p className="text-sm font-medium text-[#B5B5C5]">
+                      {displayInfo.title}
+                    </p>
+                  </div>
+                  {/* Summary */}
+                  <p className="text-xs text-[#8A8A9A] mt-1 leading-relaxed">
+                    {displayInfo.description}
+                  </p>
+                  {/* Evidence / Reasoning (max 2 lines) */}
+                  {missedWorkoutAdvisory.reasoning.length > 0 && (
+                    <div className="mt-1.5 space-y-0.5">
+                      {missedWorkoutAdvisory.reasoning.slice(0, 2).map((reason, idx) => (
+                        <p key={idx} className="text-[11px] text-[#6A6A7A]">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {/* Advisory-only proof line */}
+                  <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                    <span>{displayInfo.secondaryNote}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       
       <div className="space-y-3">
       {/* [MAIN-PAGE-AI-VISIBILITY] Section header with session count and structure hint */}

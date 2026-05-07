@@ -484,6 +484,18 @@ export interface ActiveWorkoutCorridorProps {
   // Back navigation
   onGoBack?: () => void
   canGoBack?: boolean // True if user can navigate backward (not at first set of first exercise)
+
+  // [STEP 22.3 / T.T11] Injury substitution state for current exercise
+  // When present and applied=true, indicates this exercise is a safer
+  // substitute for the current session only. Saved program is unchanged.
+  injurySubstitution?: {
+    applied: boolean
+    originalExerciseName: string
+    substituteExerciseName: string
+    reason: string
+    region: string
+    scope: 'current_session_only'
+  } | null
 }
 
 // =============================================================================
@@ -996,6 +1008,8 @@ export function ActiveWorkoutStartCorridor({
   onRestComplete,
   onGoBack,
   canGoBack = false,
+  // [STEP 22.3 / T.T11] Injury substitution state
+  injurySubstitution,
 }: ActiveWorkoutCorridorProps) {
 
   // [ACTIVE-SET-SAVE-PARITY] Prefer authoritative parent-owned truth. The
@@ -2122,6 +2136,28 @@ export function ActiveWorkoutStartCorridor({
                     })()}
                   </div>
                 </div>
+
+                {/* [STEP 22.3 / T.T11] Injury substitution badge — shows when exercise
+                    was substituted for a safer option in this current session only.
+                    Renders compact note with original exercise and reason. Badge uses
+                    teal color to distinguish from category badge. */}
+                {injurySubstitution?.applied && (
+                  <div className="mt-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded text-xs">
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-teal-400 font-medium shrink-0">Safer option</span>
+                      <span className="text-[#A4ACB8]">·</span>
+                      <span className="text-[#A4ACB8] truncate">
+                        replaces {injurySubstitution.originalExerciseName}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[#6B7280] leading-tight">
+                      {injurySubstitution.reason} · {injurySubstitution.region.replace(/_/g, ' ')}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-[#6B7280]">
+                      Current workout only · Saved program unchanged
+                    </div>
+                  </div>
+                )}
 
             {/* Target prescription */}
             {/* [BAND-TRUTH-R6] When the authoritative contract marks this

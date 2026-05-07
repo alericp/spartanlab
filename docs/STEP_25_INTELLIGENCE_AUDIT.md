@@ -198,11 +198,15 @@ Answering as a real paying SpartanLab user, with code evidence:
 - [x] Park Step 24 as final validation
 - [x] Produce official checklist
 
-### Step 25.2 — Existing Intelligence Visibility Repair [NOT_STARTED]
-- [ ] Surface already-computed doctrine decisions in concise UI
-- [ ] Connect weekly method summary to visible session cards
-- [ ] Show performance envelope state without technical jargon
-- [ ] Display fatigue/readiness signals in actionable format
+### Step 25.2 — Existing Intelligence Visibility Repair [COMPLETE]
+- [x] Surface already-computed doctrine decisions in concise UI
+  - **Implementation:** Coach Signals strip added to AdaptiveProgramDisplay.tsx
+  - **Source:** `programSurfaceSignals.signals` from `getProgramSurfaceSignals(program)`
+  - **Signals surfaced:** Volume reduced for acclimation, Intensity capped, Finishers limited, Density reduced, Secondary work simplified, First-week protection active, Recovery-protected workload, Rebuilding after disruption, Straight-arm stress managed, Finisher work limited
+  - **All signals trace to real generation decisions:** prescription propagation audit, week adaptation decision, generation truth snapshot
+- [x] Connect weekly method summary to visible session cards (existing via microSignals)
+- [x] Show performance envelope state without technical jargon (via surface signals)
+- [x] Display fatigue/readiness signals in actionable format (via protective week context + signals)
 
 ### Step 25.3 — Program Decision Explanation Upgrade [NOT_STARTED]
 - [ ] Derive why-this-program reasoning from canonical builder truth

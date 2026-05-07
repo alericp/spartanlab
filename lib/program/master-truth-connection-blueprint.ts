@@ -2291,7 +2291,7 @@ function step23(): BlueprintPhase {
       'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
     status: 'PARTIAL',
     nextAction:
-      'Step 23.1-23.5 PARTIAL. Advisory foundation complete through final action boundary. "I Can\'t Train Today" modal shows preview with truthful blocked state: "Plan adjustment not available yet." No fake applied state. User can review guidance manually. Next: Build pushSessionForward() session reorder helper and wire through saveAdaptiveProgram, or close Step 23 as advisory-only and proceed to Step 24.',
+      'Step 23.1-23.6 U.U8 COMPLETE. pushMissedWorkoutSessionForward helper implemented, wired through saveAdaptiveProgram via Program Page callback. Two-step confirmation UI complete. push_session_forward action has real mutation path. Other actions remain advisory-only. Next: U.U9 persistence/reload proof — verify pushed session persists across reload, verify no stale schedule after schedule change, verify Step 22 injury substitution unchanged, blueprint closeout.',
     subtasks: [
       {
         id: 'U.U1',
@@ -2377,7 +2377,7 @@ function step23(): BlueprintPhase {
       {
         id: 'U.U8',
         title: 'User action corridor for "I can\'t train today" implemented',
-        status: 'PARTIAL',
+        status: 'COMPLETE',
         evidence: [
           'Step 23.3 adds non-mutating user controls to missed-workout advisory card',
           '"Keep Plan" button dismisses advisory without mutation — local UI state only',
@@ -2393,19 +2393,24 @@ function step23(): BlueprintPhase {
           '[STEP 23.4] "Preview only — your schedule has not been changed" notice',
           '[STEP 23.4] "Got It" button dismisses modal and advisory',
           '[STEP 23.4] showCantTrainModal state controls modal visibility',
-          '[STEP 23.5] Final action boundary added — truthful blocked state',
+          '[STEP 23.5] Final action boundary added — truthful blocked state for unsupported actions',
           '[STEP 23.5] data-step-23-5-final-action-boundary="true" marker',
-          '[STEP 23.5] data-action-blocked="true" and data-blocked-reason="missing-safe-mutation-corridor"',
-          '[STEP 23.5] "Plan adjustment not available yet" message with clear explanation',
-          '[STEP 23.5] No fake "applied" state — honest that feature is advisory-only',
-          '[STEP 23.5] "Your current plan has not been changed" confirmation',
+          '[STEP 23.6] pushMissedWorkoutSessionForward() pure helper implemented',
+          '[STEP 23.6] Helper: pure function, no side effects, clones program, swaps sessions, re-numbers dayNumber',
+          '[STEP 23.6] Helper guards: action must be push_session_forward, program must exist, at least 2 sessions, valid index, not last session',
+          '[STEP 23.6] Helper returns typed PushSessionForwardResult with status, updatedProgram, evidence',
+          '[STEP 23.6] Program Page handleConfirmMissedWorkoutPushForward callback implemented',
+          '[STEP 23.6] Callback calls helper, then saveAdaptiveProgram, then setProgram',
+          '[STEP 23.6] AdaptiveProgramDisplay receives onConfirmMissedWorkoutPushForward prop',
+          '[STEP 23.6] Modal shows conditional final action: push_session_forward enabled, others blocked',
+          '[STEP 23.6] Two-step confirmation: "Review & Confirm" → "Confirm Push Forward"',
+          '[STEP 23.6] pushForwardState tracks: idle | confirming | applying | applied | failed',
+          '[STEP 23.6] Applied state shows "Plan updated" with visible summary',
+          '[STEP 23.6] Failed/blocked state shows "Plan was not changed" with reason',
+          '[STEP 23.6] data-step-23-6-push-forward-enabled, data-step-23-6-confirmation, data-step-23-6-applied markers',
+          '[STEP 23.6] No auto-apply, no live workout mutation, explicit user confirmation required',
         ],
-        remainingWork: [
-          'Build pushSessionForward() helper with session reorder logic',
-          'Wire push_session_forward mutation through saveAdaptiveProgram',
-          'Add confirmation step before actual mutation',
-          'Verify persistence across reload after mutation',
-        ],
+        remainingWork: [],
       },
       {
         id: 'U.U9',

@@ -107,8 +107,11 @@ import {
   hasActionableInjuryAdvisory,
   getRecommendationsForSession,
 } from '@/lib/program/injury-substitution-advisory'
-// [STEP 23.2] Missed-workout recomposition advisory — advisory-only, no mutation
-import type { MissedWorkoutRecompositionAdvisory } from '@/lib/program/missed-workout-recomposition-advisory'
+// [STEP 23.2 / 23.6] Missed-workout recomposition advisory — advisory-only, no mutation
+import type { 
+  MissedWorkoutRecompositionAdvisory,
+  PushSessionForwardResult,
+} from '@/lib/program/missed-workout-recomposition-advisory'
 import { 
   getMissedWorkoutAdvisoryDisplayInfo, 
   hasActionableMissedWorkoutAdvisory 
@@ -215,6 +218,12 @@ interface AdaptiveProgramDisplayProps {
   // [STEP 23.2] Missed-workout recomposition advisory for display
   // Advisory-only — no mutation, no schedule rewrite, no saved-program changes.
   missedWorkoutAdvisory?: MissedWorkoutRecompositionAdvisory | null
+  // [STEP 23.6] Callback for push session forward — user-confirmed mutation only.
+  // Program Page owns the save path. Display requests, Page persists.
+  onConfirmMissedWorkoutPushForward?: (
+    advisory: MissedWorkoutRecompositionAdvisory,
+    missedSessionIndex: number
+  ) => Promise<PushSessionForwardResult> | PushSessionForwardResult
   }
 
 // =============================================================================
@@ -363,6 +372,8 @@ export function AdaptiveProgramDisplay({
   injuryAdvisory,
   // [STEP 23.2] Missed-workout recomposition advisory
   missedWorkoutAdvisory,
+  // [STEP 23.6] Push session forward callback
+  onConfirmMissedWorkoutPushForward,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -387,6 +398,10 @@ export function AdaptiveProgramDisplay({
   const [missedWorkoutAdvisoryDismissed, setMissedWorkoutAdvisoryDismissed] = useState(false)
   // [STEP 23.4] Modal state for "I can't train today" confirmation
   const [showCantTrainModal, setShowCantTrainModal] = useState(false)
+  // [STEP 23.6] Push session forward action state
+  type PushForwardState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed'
+  const [pushForwardState, setPushForwardState] = useState<PushForwardState>('idle')
+  const [pushForwardResult, setPushForwardResult] = useState<PushSessionForwardResult | null>(null)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -2419,36 +2434,187 @@ export function AdaptiveProgramDisplay({
                 </details>
               )}
               
-              {/* [STEP 23.5] Final action boundary — truthful blocked state
-                  No safe push_session_forward mutation corridor exists yet.
-                  This is honest: the feature is advisory-only until session
-                  reorder logic is implemented in a future step. */}
-              <div 
-                className="p-3 bg-[#2A2A35]/50 rounded-lg border border-[#3A3A4A]"
-                data-step-23-5-final-action-boundary="true"
-                data-action-blocked="true"
-                data-blocked-reason="missing-safe-mutation-corridor"
-              >
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400/70 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium text-[#9A9AAA]">
-                      Plan adjustment not available yet
-                    </p>
-                    <p className="text-[11px] text-[#6A6A7A] mt-1">
-                      This recommendation is ready for review, but automatic schedule changes are not yet connected. Use this guidance to manually adjust your training if needed.
+              {/* [STEP 23.5/23.6] Final action boundary — conditional based on callback availability */}
+              {/* Applied state */}
+              {pushForwardState === 'applied' && pushForwardResult?.status === 'success' && (
+                <div 
+                  className="p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/30"
+                  data-step-23-6-applied="true"
+                  data-missed-workout-update-applied="true"
+                >
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-emerald-300">
+                        Plan updated
+                      </p>
+                      <p className="text-[11px] text-emerald-400/80 mt-1">
+                        {pushForwardResult.visibleSummary}
+                      </p>
+                      <p className="text-[10px] text-[#6A6A7A] mt-2">
+                        Saved program updated. Live workout unchanged.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Failed/blocked state */}
+              {(pushForwardState === 'failed' || (pushForwardResult && pushForwardResult.status !== 'success' && pushForwardState !== 'idle')) && (
+                <div 
+                  className="p-3 bg-red-500/10 rounded-lg border border-red-500/30"
+                  data-step-23-6-failed="true"
+                  data-missed-workout-update-failed="true"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400/70 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-red-300">
+                        Plan was not changed
+                      </p>
+                      <p className="text-[11px] text-red-400/70 mt-1">
+                        {pushForwardResult?.visibleSummary || 'An error occurred.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Confirmation step — only for push_session_forward with callback */}
+              {missedWorkoutAdvisory.action === 'push_session_forward' && 
+               onConfirmMissedWorkoutPushForward && 
+               pushForwardState === 'idle' && (
+                <div 
+                  className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30"
+                  data-step-23-6-push-forward-enabled="true"
+                  data-advisory-action="push_session_forward"
+                >
+                  <p className="text-xs font-medium text-blue-300 mb-2">
+                    Push This Workout Forward
+                  </p>
+                  <p className="text-[11px] text-[#8A8A9A] mb-3">
+                    This will move the missed workout one slot forward in your schedule. Your saved program will be updated. No live workout changes.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setPushForwardState('confirming')}
+                    className="w-full h-8 text-xs bg-blue-600/80 hover:bg-blue-600 text-white"
+                    data-action="initiate-push-forward"
+                  >
+                    Review & Confirm
+                  </Button>
+                </div>
+              )}
+              
+              {/* Second confirmation step */}
+              {pushForwardState === 'confirming' && (
+                <div 
+                  className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30"
+                  data-step-23-6-confirmation="true"
+                  data-no-live-workout-mutation="true"
+                >
+                  <p className="text-xs font-medium text-amber-300 mb-2">
+                    Confirm Schedule Adjustment?
+                  </p>
+                  <p className="text-[11px] text-[#8A8A9A] mb-3">
+                    This will move the missed workout one position forward using the saved-program update path. No live workout will be changed. No automatic changes happen unless you confirm.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!onConfirmMissedWorkoutPushForward || !missedWorkoutAdvisory) return
+                        setPushForwardState('applying')
+                        try {
+                          // Use index 0 as default — the first session is the "missed" one in this context
+                          const result = await onConfirmMissedWorkoutPushForward(missedWorkoutAdvisory, 0)
+                          setPushForwardResult(result)
+                          setPushForwardState(result.status === 'success' ? 'applied' : 'failed')
+                        } catch (error) {
+                          setPushForwardResult({
+                            status: 'blocked',
+                            visibleSummary: 'An unexpected error occurred.',
+                            evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+                            reasonCode: 'unexpected_error',
+                          })
+                          setPushForwardState('failed')
+                        }
+                      }}
+                      disabled={pushForwardState === 'applying'}
+                      className="flex-1 h-8 text-xs bg-amber-600/80 hover:bg-amber-600 text-white"
+                      data-action="confirm-missed-workout-recomposition"
+                      data-advisory-action={missedWorkoutAdvisory.action}
+                    >
+                      {pushForwardState === 'applying' ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Applying...
+                        </>
+                      ) : (
+                        'Confirm Push Forward'
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPushForwardState('idle')}
+                      disabled={pushForwardState === 'applying'}
+                      className="h-8 text-xs text-[#6A6A7A] hover:text-[#8A8A9A]"
+                      data-action="cancel-confirmation"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Applying state */}
+              {pushForwardState === 'applying' && (
+                <div 
+                  className="p-3 bg-[#2A2A35]/50 rounded-lg border border-[#3A3A4A]"
+                  data-step-23-6-applying="true"
+                >
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    <p className="text-xs text-[#9A9AAA]">
+                      Updating your schedule...
                     </p>
                   </div>
                 </div>
-              </div>
+              )}
               
-              {/* No-mutation notice */}
-              <div className="p-2 bg-emerald-500/5 rounded border border-emerald-500/20">
-                <p className="text-[10px] text-emerald-400/80 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>Your current plan has not been changed</span>
-                </p>
-              </div>
+              {/* Blocked state for unsupported actions or missing callback */}
+              {(missedWorkoutAdvisory.action !== 'push_session_forward' || !onConfirmMissedWorkoutPushForward) && 
+               pushForwardState === 'idle' && (
+                <div 
+                  className="p-3 bg-[#2A2A35]/50 rounded-lg border border-[#3A3A4A]"
+                  data-step-23-5-final-action-boundary="true"
+                  data-action-blocked="true"
+                  data-blocked-reason={!onConfirmMissedWorkoutPushForward ? 'missing-callback' : 'unsupported-action'}
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400/70 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-[#9A9AAA]">
+                        Advisory only
+                      </p>
+                      <p className="text-[11px] text-[#6A6A7A] mt-1">
+                        This recommendation is for review only. Use this guidance to manually adjust your training if needed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* No-mutation notice — show when not applied */}
+              {pushForwardState !== 'applied' && (
+                <div className="p-2 bg-emerald-500/5 rounded border border-emerald-500/20">
+                  <p className="text-[10px] text-emerald-400/80 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Your current plan has not been changed</span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
           
@@ -2458,15 +2624,23 @@ export function AdaptiveProgramDisplay({
               onClick={() => {
                 setShowCantTrainModal(false)
                 setMissedWorkoutAdvisoryDismissed(true)
+                // Reset push forward state for next open
+                setPushForwardState('idle')
+                setPushForwardResult(null)
               }}
               className="flex-1 border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#2A2A2A]"
               data-action="acknowledge-and-dismiss"
             >
-              Got It
+              {pushForwardState === 'applied' ? 'Done' : 'Got It'}
             </Button>
             <Button
               variant="ghost"
-              onClick={() => setShowCantTrainModal(false)}
+              onClick={() => {
+                setShowCantTrainModal(false)
+                // Reset push forward state for next open
+                setPushForwardState('idle')
+                setPushForwardResult(null)
+              }}
               className="text-[#6A6A7A] hover:text-[#8A8A9A]"
               data-action="close-modal"
             >

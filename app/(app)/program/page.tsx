@@ -120,13 +120,15 @@ import {
   type InjurySubstitutionAdvisorySnapshot,
   type ExerciseInfo,
 } from '@/lib/program/injury-substitution-advisory'
-// [STEP 23.2] Missed-workout recomposition advisory for Program Page
+// [STEP 23.2 / 23.6] Missed-workout recomposition advisory for Program Page
 import {
   buildMissedWorkoutRecompositionAdvisory,
   getMissedWorkoutAdvisoryDisplayInfo,
   hasActionableMissedWorkoutAdvisory,
+  pushMissedWorkoutSessionForward,
   type MissedWorkoutRecompositionAdvisory,
   type MissedWorkoutRecompositionInput,
+  type PushSessionForwardResult,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2273,6 +2275,81 @@ function ProgramDisplayWrapper({
   }, [program])
   
   // ==========================================================================
+  // [STEP 23.6] Push Session Forward Callback
+  // Program Page owns the mutation path through saveAdaptiveProgram.
+  // This callback is passed to AdaptiveProgramDisplay for the final action.
+  // ==========================================================================
+  const handleConfirmMissedWorkoutPushForward = useCallback(
+    async (
+      advisory: MissedWorkoutRecompositionAdvisory,
+      missedSessionIndex: number
+    ): Promise<PushSessionForwardResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          evidence: ['program is null or undefined'],
+          reasonCode: 'no_program',
+        }
+      }
+      
+      console.log('[step-23.6-push-forward] Starting push session forward', {
+        missedSessionIndex,
+        advisoryAction: advisory.action,
+        programId: program.id,
+        sessionCount: program.sessions?.length,
+      })
+      
+      // Call the pure helper
+      const result = pushMissedWorkoutSessionForward({
+        program,
+        missedSessionIndex,
+        advisory,
+      })
+      
+      console.log('[step-23.6-push-forward] Helper result', {
+        status: result.status,
+        visibleSummary: result.visibleSummary,
+        evidence: result.evidence,
+      })
+      
+      // If blocked or no_change, return early — do not save
+      if (result.status !== 'success' || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        const updatedProgram = result.updatedProgram as AdaptiveProgram
+        const savedProgram = saveAdaptiveProgram(updatedProgram)
+        
+        // Update Program Page state with the saved program
+        setProgram(savedProgram)
+        
+        console.log('[step-23.6-push-forward] Program saved successfully', {
+          programId: savedProgram.id,
+          sessionCount: savedProgram.sessions?.length,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+        }
+      } catch (saveError) {
+        console.error('[step-23.6-push-forward] Save failed', saveError)
+        return {
+          status: 'blocked',
+          visibleSummary: 'Failed to save the updated program.',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+          reasonCode: 'save_failed',
+        }
+      }
+    },
+    [program]
+  )
+
+  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -3001,6 +3078,9 @@ function ProgramDisplayWrapper({
   /* [STEP 23.2] Missed-workout recomposition advisory — advisory-only.
      No schedule rewrite, no saved-program mutation, no live workout mutation. */
   missedWorkoutAdvisory={missedWorkoutAdvisory}
+  /* [STEP 23.6] Push session forward callback — user-confirmed mutation only.
+     Program Page owns saveAdaptiveProgram. Display requests, Page persists. */
+  onConfirmMissedWorkoutPushForward={handleConfirmMissedWorkoutPushForward}
   />
       </ErrorBoundary>
     </div>

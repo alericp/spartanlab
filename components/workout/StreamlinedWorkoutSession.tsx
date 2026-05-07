@@ -6865,6 +6865,17 @@ if (shouldShowLocalFallback) {
     const ab10ProofRender: AB10RuntimeParityProof = safeAB10RuntimeParityProof(
       ab10RuntimeParityProof
     )
+    // [AB18-D] Log session coaching proof for debugging
+    console.log('[AB18] session_coaching_proof', {
+      ab18Present: !!ab10ProofRender.sessionCoaching,
+      ab18ActiveOnSession: ab10ProofRender.sessionCoaching?.activeOnThisSession ?? false,
+      ab18StyleMode: ab10ProofRender.sessionCoaching?.styleMode ?? null,
+      ab18HasCoachingLine: !!ab10ProofRender.sessionCoaching?.coachingLine,
+      ab18Source: ab10RuntimeParityProof ? 'launch_proof' : 'missing',
+      dayNumber: ab10ProofRender.dayNumber,
+      variantIndex: ab10ProofRender.variantIndex,
+      parityOk: ab10ProofRender.parityOk,
+    })
     const ab10ChipTone =
       ab10ProofRender.bootSource === 'visible_snapshot' && ab10ProofRender.parityOk
         ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
@@ -6911,6 +6922,10 @@ if (shouldShowLocalFallback) {
         data-ab10-grouped-built={String(ab10ProofRender.groupedRuntimeBuilt)}
         data-ab10-row-method-count={String(ab10ProofRender.rowLevelMethodCount)}
         data-ab10-style-meta-source={ab10ProofRender.styleMetadataSource}
+        data-ab18-coaching-present={String(!!ab10ProofRender.sessionCoaching)}
+        data-ab18-active-on-session={String(ab10ProofRender.sessionCoaching?.activeOnThisSession ?? false)}
+        data-ab18-style-mode={ab10ProofRender.sessionCoaching?.styleMode ?? 'none'}
+        data-ab18-has-coaching-line={String(!!ab10ProofRender.sessionCoaching?.coachingLine)}
       >
         <div className="max-w-lg mx-auto space-y-4">
           {/* Compact Header */}

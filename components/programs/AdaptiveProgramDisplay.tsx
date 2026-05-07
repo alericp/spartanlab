@@ -77,6 +77,56 @@ import { type WeeklyMethodRepresentationContract } from '@/lib/program/weekly-me
 // [AB18] Import the handoff type for AdaptiveSessionCard prop
 import { type AB18SessionCoachingHandoff } from '@/lib/workout/selected-variant-session-contract'
 
+// [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
+interface AB18TrainingStyleInfluence {
+  resolvedStyleMode: string
+  methodsFavoredByStyle: string[]
+  methodsBlockedOnSkillWorkByStyle: string[]
+  visibleExplanation: string
+}
+
+// [AB18-D] Extract training style influence from program (same pattern as WeeklyMethodDecisionAccordion)
+function extractAB18TrainingStyleInfluence(
+  program: AdaptiveProgram | null | undefined
+): AB18TrainingStyleInfluence | null {
+  if (!program) return null
+  
+  // Try the weekly materialization plan first (authoritative AB16 source)
+  const matPlan = (program as unknown as {
+    weeklyMethodMaterializationPlan?: {
+      trainingStyleMaterializationInfluence?: AB18TrainingStyleInfluence
+    }
+  }).weeklyMethodMaterializationPlan
+  
+  if (matPlan?.trainingStyleMaterializationInfluence) {
+    return matPlan.trainingStyleMaterializationInfluence
+  }
+  
+  // Fallback to intent vector
+  const vector = (program as unknown as {
+    trainingIntentVector?: {
+      trainingStyleInfluence?: {
+        resolvedStyleMode: string
+        favoredMethods: string[]
+        discouragedMethodsOnSkillWork: string[]
+        visibleExplanation: string
+      }
+    }
+  }).trainingIntentVector
+  
+  if (vector?.trainingStyleInfluence) {
+    const tsi = vector.trainingStyleInfluence
+    return {
+      resolvedStyleMode: tsi.resolvedStyleMode,
+      methodsFavoredByStyle: tsi.favoredMethods ?? [],
+      methodsBlockedOnSkillWorkByStyle: tsi.discouragedMethodsOnSkillWork ?? [],
+      visibleExplanation: tsi.visibleExplanation ?? '',
+    }
+  }
+  
+  return null
+}
+
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
   onDelete?: () => void
@@ -392,6 +442,9 @@ export function AdaptiveProgramDisplay({
         : []
   )
   
+  // [AB18-D] Extract training style influence for proper session coaching
+  const ab18StyleInfluence = extractAB18TrainingStyleInfluence(program)
+  
   // [AB18] Build per-day session coaching for live workout handoff
   // The summary is computed once; each session looks up its coaching by dayNumber
   // Note: weeklyMethodRepresentation is not a typed field on AdaptiveProgram,
@@ -410,8 +463,13 @@ export function AdaptiveProgramDisplay({
       return buildPerWeekMethodCoachSummary({
         program,
         representation,
-        // Note: trainingStyleInfluence is optional; omitted here as AB18 focuses
-        // on handoff parity, not duplicating AB17 style influence extraction
+        // [AB18-D] Pass style influence for proper session-level coaching generation
+        trainingStyleInfluence: ab18StyleInfluence ? {
+          resolvedStyleMode: ab18StyleInfluence.resolvedStyleMode,
+          favoredMethods: ab18StyleInfluence.methodsFavoredByStyle,
+          discouragedMethodsOnSkillWork: ab18StyleInfluence.methodsBlockedOnSkillWorkByStyle,
+          visibleExplanation: ab18StyleInfluence.visibleExplanation,
+        } : null,
       })
     } catch {
       return null

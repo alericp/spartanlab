@@ -74,6 +74,7 @@ import {
   Target,
   Zap,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
@@ -92,6 +93,13 @@ import {
   applySavedProgramSubstitutionToProgram,
   getApplyConfirmationDisplayInfo,
   verifySavedProgramSubstitutionApplied,
+  // [STEP 22.7 / T.T8] Live workout advisory helpers
+  deriveInjurySubstitutionAdvisory,
+  hasActionableInjuryAdvisory,
+  getRecommendationsForExercise,
+  type InjurySubstitutionAdvisorySnapshot,
+  type InjurySubstitutionRecommendation,
+  type ExerciseInfo,
   type PostWorkoutSubstitutionProposalQueue,
   type ScopedPostWorkoutSubstitutionProposalQueue,
   type ProposalQueueScope,
@@ -3464,6 +3472,11 @@ export function StreamlinedWorkoutSession({
   } | null>(null)
   const [applyResultMessage, setApplyResultMessage] = useState<string | null>(null)
 
+  // [STEP 22.7 / T.T8] Live workout injury advisory state.
+  // Derived from profile jointCautions and session exercises.
+  // Advisory-only, no mutation. Shows per-exercise warnings.
+  const [liveInjuryAdvisory, setLiveInjuryAdvisory] = useState<InjurySubstitutionAdvisorySnapshot | null>(null)
+
 // [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
   // live deload decisions. Updated after each completed set. The decision is
   // re-computed on each update and displayed when it applies adjustments.
@@ -3513,6 +3526,69 @@ export function StreamlinedWorkoutSession({
   // explicit Discard action wins against autosave.
   // ==========================================================================
   const discardIntentRef = useRef<boolean>(false)
+  
+  // ==========================================================================
+  // [STEP 22.7 / T.T8] LIVE INJURY ADVISORY DERIVATION EFFECT
+  // Derives the advisory from profile jointCautions and session exercises.
+  // Runs on mount — advisory is read-only, no mutation.
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!safeSession?.exercises?.length) {
+      setLiveInjuryAdvisory(null)
+      return
+    }
+    
+    try {
+      // Build exercise info from session
+      const exerciseInfos: ExerciseInfo[] = safeSession.exercises.map((ex, idx) => ({
+        id: ex.id || `ex_${idx}`,
+        name: ex.name || 'Unknown Exercise',
+        sessionDayNumber: safeSession.dayNumber,
+        movementFamily: (ex as unknown as { movementFamily?: string }).movementFamily as ExerciseInfo['movementFamily'],
+      }))
+      
+      // Read profile jointCautions from localStorage
+      let profileJointCautions: string[] = []
+      try {
+        const profileRaw = localStorage.getItem('spartanlab_canonical_profile')
+        if (profileRaw) {
+          const profile = JSON.parse(profileRaw)
+          profileJointCautions = Array.isArray(profile?.jointCautions) ? profile.jointCautions : []
+        }
+      } catch {
+        // Silent fallback
+      }
+      
+      // If no joint cautions, no advisory needed
+      if (profileJointCautions.length === 0) {
+        setLiveInjuryAdvisory(null)
+        return
+      }
+      
+      // Derive the advisory
+      const advisory = deriveInjurySubstitutionAdvisory({
+        profileJointCautions: profileJointCautions as Parameters<typeof deriveInjurySubstitutionAdvisory>[0]['profileJointCautions'],
+        exercises: exerciseInfos,
+      })
+      
+      // Only set if there are actionable recommendations
+      if (hasActionableInjuryAdvisory(advisory)) {
+        setLiveInjuryAdvisory(advisory)
+        console.log('[step-22.7-live-injury-advisory-derived]', {
+          status: advisory.status,
+          affectedExerciseCount: advisory.affectedExerciseCount,
+          recommendationCount: advisory.recommendations.length,
+          advisoryOnly: advisory.advisoryOnly,
+        })
+      } else {
+        setLiveInjuryAdvisory(null)
+      }
+    } catch (error) {
+      console.error('[step-22.7-live-injury-advisory-error]', error)
+      setLiveInjuryAdvisory(null)
+    }
+  }, [safeSession])
   
   // ==========================================================================
   // [PHASE LW3] AUTHORITATIVE SESSION HYDRATION EFFECT
@@ -9166,6 +9242,45 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </div>
             </div>
             <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{exerciseName}</h2>
+            {/* [STEP 22.7 / T.T8] Per-exercise joint caution advisory warning */}
+            {(() => {
+              // Check if current exercise has injury advisory recommendations
+              const currentExId = safeCurrentExercise?.id || ''
+              const recommendations = liveInjuryAdvisory 
+                ? getRecommendationsForExercise(liveInjuryAdvisory, currentExId)
+                : []
+              
+              if (recommendations.length === 0) return null
+              
+              const rec = recommendations[0]
+              return (
+                <div 
+                  className="mt-1.5 px-2 py-1.5 rounded bg-amber-500/10 border border-amber-500/20"
+                  data-step-22-7-exercise-advisory="true"
+                  data-joint-region={rec.jointOrRegion}
+                  data-risk-level={rec.riskLevel}
+                  data-no-mutation="true"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400/80 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-amber-300/90">
+                        {rec.jointOrRegion.replace(/_/g, ' ')} caution
+                      </p>
+                      <p className="text-[10px] text-[#8A8A9A] mt-0.5 leading-snug">
+                        {rec.suggestedAlternativeName 
+                          ? `Safer option available: ${rec.suggestedAlternativeName}`
+                          : 'Consider reduced range or intensity'}
+                      </p>
+                      <p className="text-[9px] text-[#5A5A6A] mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span>Not applied unless you confirm</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
             {/* [PHASE-MICROCOPY] Reason-first microcopy using authoritative buildExercisePurposeLine */}
             {(() => {
               const purposeLine = safeCurrentExercise ? buildExercisePurposeLine(

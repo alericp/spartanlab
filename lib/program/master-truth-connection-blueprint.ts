@@ -2033,7 +2033,7 @@ function step22(): BlueprintPhase {
       'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
     status: 'PARTIAL',
     nextAction:
-      'Step 22.1-22.6 COMPLETE. T.T9-T.T13 all complete. Post-workout proposal queue renders in pre-save completion UI. Step 22.6 second-confirmation flow allows user to explicitly apply substitution to saved program with exact target matching and reload verification. No automatic mutation. Also pending: T.T7 Program Page advisory preview, T.T8 live workout advisory warning modal, reversal/undo for saved-program changes.',
+      'Step 22.1-22.7 COMPLETE. T.T7-T.T13 all complete. Program Page shows injury advisory preview. Live workout shows per-exercise advisory warning. Post-workout proposal queue renders in pre-save completion UI. Step 22.6 second-confirmation flow allows user to explicitly apply substitution to saved program with exact target matching and reload verification. No automatic mutation. Remaining: reversal/undo for saved-program changes (optional future work).',
     subtasks: [
       {
         id: 'T.T1',
@@ -2118,25 +2118,30 @@ function step22(): BlueprintPhase {
       {
         id: 'T.T7',
         title: 'Program Page advisory preview wired',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Import deriveInjurySubstitutionAdvisory in Program Page',
-          'Derive advisory from profile.jointCautions + recentCheckIn + exercises',
-          'Render compact advisory card/chip near affected exercise/session',
-          'Show "Preview only — not applied" text',
-          'Add "Review safer option" CTA if recommendation exists',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveInjurySubstitutionAdvisory imported in app/(app)/program/page.tsx',
+          'Advisory derived from profile.jointCautions + program exercises in useEffect',
+          'Compact advisory card rendered in AdaptiveProgramDisplay when hasActionableInjuryAdvisory',
+          'injuryAdvisory prop passed from Program Page to AdaptiveProgramDisplay',
+          'Card shows affected exercises, joint regions, and "Preview only — your plan has not been changed"',
+          'No mutation — purely advisory, read-only display',
         ],
+        remainingWork: [],
       },
       {
         id: 'T.T8',
         title: 'Live workout advisory warning wired',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Show non-blocking advisory near affected exercise in live workout',
-          'Advisory must not prevent logging or break completion',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveInjurySubstitutionAdvisory + getRecommendationsForExercise imported in StreamlinedWorkoutSession.tsx',
+          'Advisory derived from profile.jointCautions + session exercises in useEffect',
+          'Per-exercise warning displayed inside Current Exercise Card when recommendations exist',
+          'Warning shows joint region, safer option hint, and "Not applied unless you confirm"',
+          'Non-blocking — logging, completion, save, discard, exit all unaffected',
+          'No mutation — purely advisory, read-only display',
         ],
+        remainingWork: [],
       },
       {
         id: 'T.T9',

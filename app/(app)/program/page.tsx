@@ -113,6 +113,13 @@ import {
   deriveRecoveryAdaptationSnapshot,
   buildCheckInSignalsFromUserInput,
 } from '@/lib/program/recovery-adaptation-snapshot-contract'
+// [STEP 22.7 / T.T7] Injury advisory preview for Program Page
+import {
+  deriveInjurySubstitutionAdvisory,
+  hasActionableInjuryAdvisory,
+  type InjurySubstitutionAdvisorySnapshot,
+  type ExerciseInfo,
+} from '@/lib/program/injury-substitution-advisory'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -2127,6 +2134,95 @@ function ProgramDisplayWrapper({
       originalSessionPreserved: true,
     })
   }, [recoveryAdjustmentPreview])
+
+  // ==========================================================================
+  // [STEP 22.7 / T.T7] Injury Advisory Preview for Program Page
+  // Derives the advisory from profile jointCautions and program exercises.
+  // Preview only — no mutation. Shows which exercises may be affected.
+  // ==========================================================================
+  const [injuryAdvisory, setInjuryAdvisory] = useState<InjurySubstitutionAdvisorySnapshot | null>(null)
+  
+  // Derive injury advisory from profile and program
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!program?.sessions?.length) {
+      setInjuryAdvisory(null)
+      return
+    }
+    
+    try {
+      // Build exercise info from all sessions
+      const exercises: ExerciseInfo[] = []
+      for (const session of program.sessions) {
+        const sessionRaw = session as unknown as {
+          dayNumber?: number
+          exercises?: Array<{
+            id?: string
+            exerciseId?: string
+            name?: string
+            exerciseName?: string
+            movementFamily?: string
+          }>
+        }
+        const sessionDayNumber = sessionRaw.dayNumber
+        const sessionExercises = sessionRaw.exercises || []
+        
+        for (const ex of sessionExercises) {
+          const exId = ex.id || ex.exerciseId || `ex_${Math.random().toString(36).slice(2, 9)}`
+          const exName = ex.name || ex.exerciseName || 'Unknown Exercise'
+          exercises.push({
+            id: exId,
+            name: exName,
+            sessionDayNumber,
+            movementFamily: ex.movementFamily as ExerciseInfo['movementFamily'],
+          })
+        }
+      }
+      
+      // Read profile jointCautions from localStorage canonical profile
+      let profileJointCautions: string[] = []
+      try {
+        const profileRaw = localStorage.getItem('spartanlab_canonical_profile')
+        if (profileRaw) {
+          const profile = JSON.parse(profileRaw)
+          profileJointCautions = Array.isArray(profile?.jointCautions) ? profile.jointCautions : []
+        }
+      } catch {
+        // Silent fallback
+      }
+      
+      // If no joint cautions, no advisory needed
+      if (profileJointCautions.length === 0) {
+        setInjuryAdvisory(null)
+        return
+      }
+      
+      // Derive the advisory
+      const advisory = deriveInjurySubstitutionAdvisory({
+        profileJointCautions: profileJointCautions as Parameters<typeof deriveInjurySubstitutionAdvisory>[0]['profileJointCautions'],
+        exercises,
+      })
+      
+      // Only set if there are actionable recommendations
+      if (hasActionableInjuryAdvisory(advisory)) {
+        setInjuryAdvisory(advisory)
+        console.log('[step-22.7-injury-advisory-derived]', {
+          status: advisory.status,
+          affectedExerciseCount: advisory.affectedExerciseCount,
+          affectedSessionCount: advisory.affectedSessionCount,
+          recommendationCount: advisory.recommendations.length,
+          advisoryOnly: advisory.advisoryOnly,
+          programMutation: advisory.programMutation,
+        })
+      } else {
+        setInjuryAdvisory(null)
+      }
+    } catch (error) {
+      console.error('[step-22.7-injury-advisory-error]', error)
+      setInjuryAdvisory(null)
+    }
+  }, [program])
+  
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
@@ -2850,6 +2946,9 @@ function ProgramDisplayWrapper({
   onRequestAdjustmentPreview={handleRequestAdjustmentPreview}
   onApplyAdjustment={handleApplyAdjustment}
   onDismissAdjustment={handleDismissAdjustment}
+  /* [STEP 22.7 / T.T7] Injury advisory preview — read-only, no mutation.
+     Shows which exercises may be affected by joint cautions. */
+  injuryAdvisory={injuryAdvisory}
   />
       </ErrorBoundary>
     </div>

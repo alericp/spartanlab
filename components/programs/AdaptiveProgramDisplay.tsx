@@ -96,6 +96,15 @@ import {
   deriveRecoverySessionAdjustmentPreview,
   applyRecoveryAdjustmentToSession,
 } from '@/lib/program/recovery-program-awareness-bridge'
+// [STEP 22.7 / T.T7] Injury advisory preview — read-only, no mutation
+import type { 
+  InjurySubstitutionAdvisorySnapshot,
+  InjurySubstitutionRecommendation,
+} from '@/lib/program/injury-substitution-advisory'
+import {
+  hasActionableInjuryAdvisory,
+  getRecommendationsForSession,
+} from '@/lib/program/injury-substitution-advisory'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
 interface AB18TrainingStyleInfluence {
@@ -191,6 +200,10 @@ interface AdaptiveProgramDisplayProps {
   onApplyAdjustment?: () => void
   // Callback when user dismisses/keeps original
   onDismissAdjustment?: () => void
+  // [STEP 22.7 / T.T7] Injury advisory snapshot for preview display
+  // Read-only, advisory-only — no mutation. Preview shows which exercises
+  // may be affected by joint cautions, without changing the program.
+  injuryAdvisory?: InjurySubstitutionAdvisorySnapshot | null
   }
 
 // =============================================================================
@@ -335,6 +348,8 @@ export function AdaptiveProgramDisplay({
   onRequestAdjustmentPreview,
   onApplyAdjustment,
   onDismissAdjustment,
+  // [STEP 22.7 / T.T7] Injury advisory preview
+  injuryAdvisory,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1419,6 +1434,78 @@ export function AdaptiveProgramDisplay({
               </div>
             )
           )}
+        </div>
+      )}
+
+      {/* [STEP 22.7 / T.T7] Injury Advisory Preview Card
+          Displays compact joint caution advisory when recommendations exist.
+          Preview only — no mutation. Shows which exercises may be affected
+          by joint cautions, without changing the program. */}
+      {injuryAdvisory && hasActionableInjuryAdvisory(injuryAdvisory) && (
+        <div 
+          className="rounded-lg border bg-gradient-to-r from-[#2A1A1A]/50 to-[#1A1A20]/50 border-[#3A2A2A] overflow-hidden"
+          data-step-22-7-injury-advisory-preview="true"
+          data-advisory-status={injuryAdvisory.status}
+          data-affected-exercises={injuryAdvisory.affectedExerciseCount}
+          data-no-program-mutation="true"
+        >
+          <div className="p-3">
+            <div className="flex items-start gap-3">
+              {/* Icon based on status */}
+              <div className={cn(
+                "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                injuryAdvisory.status === 'urgent_block' 
+                  ? "bg-red-500/20"
+                  : "bg-amber-500/15"
+              )}>
+                <AlertTriangle className={cn(
+                  "w-3.5 h-3.5",
+                  injuryAdvisory.status === 'urgent_block'
+                    ? "text-red-400"
+                    : "text-amber-400/80"
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                {/* Headline */}
+                <p className={cn(
+                  "text-sm font-medium",
+                  injuryAdvisory.status === 'urgent_block'
+                    ? "text-red-300/90"
+                    : "text-amber-300/80"
+                )}>
+                  {injuryAdvisory.visibleHeadline || 'Joint caution advisory'}
+                </p>
+                {/* Summary */}
+                <p className="text-xs text-[#8A8A9A] mt-0.5 leading-relaxed">
+                  {injuryAdvisory.visibleSummary || `${injuryAdvisory.affectedExerciseCount} exercise${injuryAdvisory.affectedExerciseCount !== 1 ? 's' : ''} may be affected by your joint concerns.`}
+                </p>
+                {/* Affected exercises list (max 3) */}
+                {injuryAdvisory.recommendations.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {injuryAdvisory.recommendations.slice(0, 3).map(rec => (
+                      <div key={rec.recommendationId} className="flex items-center gap-2 text-[11px]">
+                        <span className="text-[#7A7A8A] truncate flex-1">{rec.affectedExerciseName}</span>
+                        <span className="text-[#5A5A6A]">—</span>
+                        <span className="text-amber-400/70 shrink-0">
+                          {rec.jointOrRegion.replace(/_/g, ' ')} caution
+                        </span>
+                      </div>
+                    ))}
+                    {injuryAdvisory.recommendations.length > 3 && (
+                      <p className="text-[10px] text-[#5A5A6A]">
+                        +{injuryAdvisory.recommendations.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                )}
+                {/* Non-mutation proof line */}
+                <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                  <span>Preview only — your plan has not been changed</span>
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       

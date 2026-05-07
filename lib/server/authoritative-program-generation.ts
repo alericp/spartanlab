@@ -1914,8 +1914,8 @@ export async function executeAuthoritativeGeneration(
           profile: profileSnapshot,
         })
 
-        ;(program as unknown as { weeklyMethodRepresentation?: unknown }).weeklyMethodRepresentation =
-          weeklyMethodRep
+        // [AB18-E] Typed assignment now that AdaptiveProgram owns the field
+        program.weeklyMethodRepresentation = weeklyMethodRep
 
         console.log('[PHASE4J-WEEKLY-METHOD-REPRESENTATION]', {
           generationIntent: request.generationIntent,

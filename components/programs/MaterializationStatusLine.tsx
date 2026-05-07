@@ -471,8 +471,8 @@ function statusShortLabel(status: WeeklyMethodStatus): string {
 export function WeeklyMethodChallengeLine({ program }: Props) {
   if (!program) return null
 
-  const weeklyRep = (program as unknown as { weeklyMethodRepresentation?: WeeklyMethodRepView | null })
-    .weeklyMethodRepresentation ?? null
+  // [AB18-E] Direct typed access now that AdaptiveProgram owns the field
+  const weeklyRep = program.weeklyMethodRepresentation ?? null
 
   // Hidden on legacy / pre-Phase-4J programs.
   if (!weeklyRep || !Array.isArray(weeklyRep.byMethod) || weeklyRep.byMethod.length === 0) return null

@@ -17,6 +17,16 @@ import {
   Calendar,
   Dumbbell,
   TrendingUp,
+  Info,
+  Sparkles,
+  Shield,
+  Scale,
+  Layers,
+  ChevronRight,
+  ArrowRight,
+  Loader2,
+  ChevronLeft,
+  Zap,
 } from 'lucide-react'
 import {
   Dialog,
@@ -57,7 +67,6 @@ import {
   type WeekProgressionState,
   type WeekAdvancementResult,
 } from '@/lib/week-advancement-service'
-import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2, ChevronLeft, Zap, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { 
   getWeekDosageScaling, 

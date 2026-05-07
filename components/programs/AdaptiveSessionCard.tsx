@@ -4096,7 +4096,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-4 pb-4 space-y-4">
+        <div className="px-4 pb-3 space-y-3">
           {/* ==========================================================================
               [OUTER-BODY-DISPATCH] Single consumer of `chosenOuterBodyMode`.
               Priority enforced: GROUPED_PROGRAM_BODY wins over completed / active /

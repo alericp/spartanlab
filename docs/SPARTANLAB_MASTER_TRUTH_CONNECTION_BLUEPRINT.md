@@ -242,7 +242,7 @@ debug report.
 |----|---------|--------|
 | J1 | Hide stale/internal audit clutter from normal user view | `COMPLETE` |
 | J2 | Keep only useful doctrine explanations | `COMPLETE` |
-| J3 | Preserve compact product-grade UI | `NOT_STARTED` |
+| J3 | Preserve compact product-grade UI | `COMPLETE` |
 | J4 | Keep diagnostics available where needed | `COMPLETE` |
 | J5 | Final result feels like an AI coach | `NOT_STARTED` |
 
@@ -277,6 +277,16 @@ debug report.
 - ProgramTrustAccordion "AI changed your plan" labels preserved (already
   coach-like).
 - Deeper doctrine surfaces in trust accordions preserved for detail view.
+
+**J3 Evidence (COMPLETE):**
+- Session card expanded content compacted from `space-y-4 pb-4` to `space-y-3
+  pb-3` for tighter vertical rhythm.
+- Header padding already optimal (`p-4` / `px-4 pt-4 pb-3`).
+- Method chips already use compact sizing (`px-2 py-0.5 text-[10px]`).
+- Start Workout button already prominent (`h-10` full-width red).
+- Details already behind expansion/accordion patterns.
+- Mobile flex-wrap already enabled for chips (`flex-wrap gap-1.5`).
+- Program page sections use appropriate `space-y-4` for major blocks.
 
 **J4 Evidence (COMPLETE):**
 - Diagnostics preserved via `data-*` attributes on DOM elements.

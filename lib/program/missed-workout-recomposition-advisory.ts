@@ -4,6 +4,12 @@
  * =============================================================================
  * ADVISORY-FIRST MISSED-WORKOUT RECOMPOSITION DECISION LAYER
  * =============================================================================
+ */
+
+// [STEP 23.6A] Import real AdaptiveProgram/AdaptiveSession types for helper contract
+import type { AdaptiveProgram, AdaptiveSession } from '@/lib/adaptive-program-builder'
+
+/**
  *
  * PURPOSE
  * -------
@@ -739,14 +745,12 @@ export type PushSessionForwardStatus = 'success' | 'blocked' | 'no_change'
 /**
  * Result of a push session forward operation.
  * Pure typed output — no side effects.
+ * [STEP 23.6A] Uses real AdaptiveProgram type, not pseudo-structural type.
  */
 export interface PushSessionForwardResult {
   status: PushSessionForwardStatus
-  /** Updated program (only on success) */
-  updatedProgram?: {
-    sessions: unknown[]
-    [key: string]: unknown
-  }
+  /** Updated program (only on success) — real AdaptiveProgram type */
+  updatedProgram?: AdaptiveProgram
   /** Title of the moved session (on success) */
   movedSessionTitle?: string
   /** Original index of the moved session (0-based) */
@@ -763,19 +767,11 @@ export interface PushSessionForwardResult {
 
 /**
  * Input for push session forward operation.
+ * [STEP 23.6A] Uses real AdaptiveProgram type, not pseudo-structural type.
  */
 export interface PushSessionForwardInput {
-  /** Current program — must have sessions array */
-  program: {
-    sessions?: Array<{
-      dayNumber: number
-      dayLabel: string
-      focus?: string
-      focusLabel?: string
-      [key: string]: unknown
-    }>
-    [key: string]: unknown
-  }
+  /** Current program — real AdaptiveProgram type */
+  program: AdaptiveProgram
   /** Index of the missed session (0-based) */
   missedSessionIndex: number
   /** Advisory that recommended this action */
@@ -885,8 +881,9 @@ export function pushMissedWorkoutSessionForward(
   evidence.push(`Swapping with "${nextSessionTitle}"`)
   
   // Deep clone the program to avoid mutation
-  const updatedProgram = JSON.parse(JSON.stringify(program)) as typeof program
-  const updatedSessions = updatedProgram.sessions!
+  // [STEP 23.6A] Cast to AdaptiveProgram since JSON.parse returns unknown
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  const updatedSessions = updatedProgram.sessions
   
   // Swap the two sessions
   const temp = updatedSessions[missedSessionIndex]

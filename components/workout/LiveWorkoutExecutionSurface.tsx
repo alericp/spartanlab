@@ -204,6 +204,18 @@ export interface LiveWorkoutSnapshot {
 
   // Back nav
   canGoBack?: boolean
+
+  // [STEP 22.3 / T.T11] Injury substitution state for current exercise
+  // When present, indicates this exercise has an applied injury substitution
+  // for the CURRENT SESSION ONLY. Saved program is unchanged.
+  injurySubstitution?: {
+    applied: boolean
+    originalExerciseName: string
+    substituteExerciseName: string
+    reason: string
+    region: string
+    scope: 'current_session_only'
+  } | null
 }
 
 export interface LiveWorkoutHandlers {
@@ -694,6 +706,8 @@ export function LiveWorkoutExecutionSurface({
         onRestComplete={handlers.onRestComplete}
         onGoBack={handlers.onGoBack}
         canGoBack={snapshot.canGoBack}
+        // [STEP 22.3 / T.T11] Injury substitution state for current exercise
+        injurySubstitution={snapshot.injurySubstitution}
       />
     </LiveCorridorErrorBoundary>
   )

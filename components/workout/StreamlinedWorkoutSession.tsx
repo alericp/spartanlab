@@ -8441,6 +8441,29 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           parentBuildChip: SWS_BUILD_CHIP,
           // Back nav
           canGoBack,
+          // [STEP 22.3 / T.T11] Injury substitution state for current exercise.
+          // When the exercise has injurySubstitution metadata attached (from
+          // Step 22.2 apply flow), forward it to the corridor for visible proof.
+          // Safe field access: if the field doesn't exist, evaluates to undefined.
+          injurySubstitution: (() => {
+            const subst = (safeCurrentExercise as { injurySubstitution?: {
+              applied: boolean
+              originalExerciseName: string
+              substituteExerciseName: string
+              reason: string
+              affectedJointOrRegion: string
+              scope: 'current_session_only'
+            } })?.injurySubstitution
+            if (!subst?.applied) return null
+            return {
+              applied: true,
+              originalExerciseName: subst.originalExerciseName,
+              substituteExerciseName: subst.substituteExerciseName,
+              reason: subst.reason,
+              region: subst.affectedJointOrRegion,
+              scope: 'current_session_only' as const,
+            }
+          })(),
         }
         
         // [log-corridor] Stage 6: snapshot passed to corridor. Proves the

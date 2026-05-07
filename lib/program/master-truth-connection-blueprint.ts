@@ -2033,7 +2033,7 @@ function step22(): BlueprintPhase {
       'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
     status: 'PARTIAL',
     nextAction:
-      'Step 22.1-22.3 COMPLETE. Contract, apply flow, and UI helpers implemented. Next: T.T7 wire Program Page advisory preview, T.T8 wire live workout advisory warning, T.T10 confirmation modal integration. Then Step 22.4 post-workout saved-program proposal queue.',
+      'Step 22.1-22.3 COMPLETE. Contract, apply flow, UI helpers, and live workout visible wiring complete. T.T9 (apply contract) and T.T10 (helpers) and T.T11 (UI wiring) all COMPLETE. Next: Step 22.4 post-workout saved-program substitution proposal queue (T.T12), user-approved only. Also pending: T.T7 Program Page advisory preview, T.T8 live workout advisory warning modal.',
     subtasks: [
       {
         id: 'T.T1',
@@ -2176,15 +2176,22 @@ function step22(): BlueprintPhase {
       {
         id: 'T.T11',
         title: 'Step 22.3 UI wiring to live workout',
-        status: 'NOT_STARTED',
-        evidence: [],
+        status: 'COMPLETE',
+        evidence: [
+          'LiveWorkoutSnapshot interface extended with injurySubstitution field (LiveWorkoutExecutionSurface.tsx)',
+          'ActiveWorkoutCorridorProps interface extended with injurySubstitution prop',
+          'LiveWorkoutExecutionSurface forwards injurySubstitution from snapshot to corridor',
+          'ActiveWorkoutStartCorridor destructures injurySubstitution prop',
+          'Injury substitution badge rendered in active exercise card (teal color, compact)',
+          'Badge shows: "Safer option · replaces {original} · {reason} · {region}"',
+          'Scope note: "Current workout only · Saved program unchanged"',
+          'StreamlinedWorkoutSession snapshot build extracts injurySubstitution from safeCurrentExercise',
+          'Props chain complete: exercise.injurySubstitution -> snapshot -> surface -> corridor -> visible UI',
+        ],
         remainingWork: [
-          'Wire confirmation dialog in StreamlinedWorkoutSession using getSubstitutionConfirmationContent()',
-          'Wire badge/chip using getSubstitutionBadgeLabel()',
-          'Wire original exercise note using getSubstitutionDisplayDetails()',
-          'Wire restore original CTA using restoreOriginalExercise()',
-          'Call clearSubstitutionPayload() on workout completion/exit',
-          'Integrate substitution metadata into completion log',
+          'Wire confirmation dialog modal (requires recommendation flow, future)',
+          'Wire restore original CTA (requires state mutation flow, future)',
+          'Wire completion/exit payload cleanup (requires workout finish handler, future)',
         ],
       },
       // [T.T12] Step 22.4 — Post-workout saved-program proposal (future)

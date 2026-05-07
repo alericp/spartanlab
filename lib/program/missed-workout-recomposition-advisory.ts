@@ -246,6 +246,30 @@ export function normalizeTrainingPriority(value: unknown): MissedWorkoutTraining
   return 'unknown'
 }
 
+/**
+ * Format a missed workout reason for display.
+ * Pure function — safe to call regardless of TypeScript narrowing.
+ * Must be called BEFORE control flow narrows the reason type.
+ */
+export function formatMissedWorkoutReasonLabel(reason: MissedWorkoutReason): string {
+  switch (reason) {
+    case 'user_unavailable':
+      return 'user unavailable'
+    case 'fatigue':
+      return 'fatigue'
+    case 'soreness':
+      return 'soreness'
+    case 'pain_or_discomfort':
+      return 'pain or discomfort'
+    case 'schedule_conflict':
+      return 'schedule conflict'
+    case 'travel':
+      return 'travel'
+    case 'unknown':
+      return 'unknown'
+  }
+}
+
 // =============================================================================
 // ADVISORY BUILDER — CORE LOGIC
 // =============================================================================
@@ -417,8 +441,10 @@ export function buildMissedWorkoutRecompositionAdvisory(
   // ==========================================================================
   // CASE 4: SCHEDULE CONFLICT / TRAVEL / USER UNAVAILABLE
   // ==========================================================================
+  // Precompute label before narrowing (reason is still full union here)
+  const scheduleConflictReasonLabel = formatMissedWorkoutReasonLabel(reason)
   if (isScheduleConflict) {
-    evidence.push(`Reason: ${reason.replace(/_/g, ' ')}`)
+    evidence.push(`Reason: ${scheduleConflictReasonLabel}`)
     
     // Check for fixed schedule constraint
     if (isFixedSchedule) {
@@ -604,10 +630,12 @@ export function buildMissedWorkoutRecompositionAdvisory(
   
   // ==========================================================================
   // DEFAULT: CONTINUE AS PLANNED
+  // At this point, all non-unknown reason cases have returned above.
+  // TypeScript correctly narrows reason to 'unknown' here.
   // ==========================================================================
   evidence.push('No critical signals detected')
   if (input.sessionTitle) evidence.push(`Session: ${input.sessionTitle}`)
-  if (reason !== 'unknown') evidence.push(`Reason: ${reason.replace(/_/g, ' ')}`)
+  // Note: reason is 'unknown' at this point (all other cases returned above)
   
   reasoning.push('No pain, fatigue, or critical scheduling conflicts detected')
   reasoning.push('The program can likely continue as planned')

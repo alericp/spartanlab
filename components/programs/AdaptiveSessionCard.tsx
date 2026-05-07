@@ -3471,7 +3471,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 ? labelParts[0]
                 : labelParts.length > 1
                   ? `${labelParts.length} method${labelParts.length === 1 ? '' : 's'} applied`
-                  : 'Doctrine method'
+                  : 'Training method'
 
               const driverLine = md.profileInfluence?.primaryDriverLine
               const avoidedLine = md.prescriptionIntent?.whyNotOtherMethods?.[0] ?? null
@@ -4538,15 +4538,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     {showAsPreserved && (
                       <p className="mt-1 text-[10px] text-[#6A6A6A]">
                         {truth.engine === 'no_safe_mutation'
-                          ? 'Doctrine evaluated this body and found no safe causal mutation. Every row is either a protected anchor or already fatigue-managed; the compression seed was kept intact to protect quality.'
-                          : 'Doctrine evaluated this body and intentionally preserved the compression seed. No additional set / RPE / rest mutation crossed the safety threshold for this variant.'}
+                          ? 'All exercises are protected or already optimized. Session preserved as-is to maintain quality.'
+                          : 'Session preserved as-is. No additional changes crossed the safety threshold for this variant.'}
                       </p>
                     )}
                   </div>
                 )}
                 {isFallback && (
                   <p className="mt-1 text-[10px] text-amber-200/80">
-                    Doctrine recomposition was unavailable for this variant. The body was produced by compression only and is not labelled as doctrine-recomposed.
+                    Optimization unavailable for this variant. Session built with compression only.
                   </p>
                 )}
               </div>
@@ -7804,7 +7804,7 @@ function ExerciseRow({
         const dominant: string = (() => {
           if (corrections.includes('tendon_rpe_capped') && qa.rpeCap) {
             const after = typeof qa.rpeCap.after === 'number' ? qa.rpeCap.after : null
-            return after !== null ? `Doctrine: tendon RPE held at ${after}` : 'Doctrine: tendon RPE protected'
+            return after !== null ? `Tendon RPE held at ${after}` : 'Tendon RPE protected'
           }
           if (corrections.includes('skill_carryover_attributed') && qa.skillCarryover?.skill) {
             const niceSkill = qa.skillCarryover.skill.replace(/_/g, ' ')

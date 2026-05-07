@@ -570,10 +570,10 @@ function phaseJ(): BlueprintPhase {
     title: 'Product Cleanup / Trust Polish',
     purpose: 'Remove debug clutter; the final UI feels like an AI coach, not a debug report.',
     status: 'PARTIAL',
-    nextAction: 'J1 complete. Continue to J2: audit doctrine explanation surfaces for user-useful vs. internal clutter.',
+    nextAction: 'J2 complete. Continue to J3: preserve compact product-grade UI.',
     subtasks: [
       { id: 'J.J1', title: 'Hide stale/internal audit clutter from normal user view', status: 'COMPLETE', evidence: ['Live workout Shell proof + Runtime parity strips behind NODE_ENV === development guard', 'Program page scanner/parity probes behind showProbe || forceProbe gate (default false)', 'AB13VisualProofOverlay gated by ?ab13ProofOverlay=force-rpe-cap query param', 'Session card Launch proof behind probeActive (hard-disabled: false)', 'AB18 coaching line preserved (KEEP_USER_COACHING)', 'data-ab10-* and data-ab18-* attributes preserved for QA'], remainingWork: [] },
-      { id: 'J.J2', title: 'Keep only useful doctrine explanations', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
+      { id: 'J.J2', title: 'Keep only useful doctrine explanations', status: 'COMPLETE', evidence: ['Renamed "Doctrine materialized/loaded/selected" to "Training rules applied/loaded/selected"', 'Renamed "Doctrine blocks/participation" to "Rule blocks/participation"', 'Renamed "Doctrine deltas/application" to "Prescription changes/Training rules"', 'Session card "Doctrine method" renamed to "Training method"', 'Session card "Doctrine:" tendon RPE labels cleaned to "Tendon RPE"', 'Stale notice "Doctrine materialization" renamed to "optimization engine"', 'ProgramTrustAccordion kept "AI changed your plan" (already coach-like)', 'Deeper doctrine surfaces in accordions preserved for detail view'], remainingWork: [] },
       { id: 'J.J3', title: 'Preserve compact product-grade UI', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
       { id: 'J.J4', title: 'Keep diagnostics available where needed', status: 'COMPLETE', evidence: ['data-* attributes preserved on DOM elements', 'Dev-only render guards expose full proof strips to developers', 'Console logs preserved for AB18 coaching proof debugging'], remainingWork: [] },
       { id: 'J.J5', title: 'Final result feels like an AI coach', status: 'NOT_STARTED', evidence: [], remainingWork: [] },

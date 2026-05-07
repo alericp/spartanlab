@@ -67,6 +67,14 @@ import {
   type ScaledSession,
   type WeekPhaseContext
 } from '@/lib/week-dosage-scaling'
+// [AB18] Per-day method summary for session coaching handoff
+import { 
+  buildPerWeekMethodCoachSummary, 
+  type PerWeekMethodCoachSummary,
+  type SessionTrainingStyleCoaching,
+} from '@/lib/program/per-day-method-summary'
+// [AB18] Import the handoff type for AdaptiveSessionCard prop
+import { type AB18SessionCoachingHandoff } from '@/lib/workout/selected-variant-session-contract'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -382,6 +390,19 @@ export function AdaptiveProgramDisplay({
           )
         : []
   )
+  
+  // [AB18] Build per-day session coaching for live workout handoff
+  // The summary is computed once; each session looks up its coaching by dayNumber
+  const perDayCoachingSummary: PerWeekMethodCoachSummary | null = (() => {
+    try {
+      return buildPerWeekMethodCoachSummary(
+        program,
+        program.weeklyMethodRepresentation as Parameters<typeof buildPerWeekMethodCoachSummary>[1]
+      )
+    } catch {
+      return null
+    }
+  })()
   
   // Build render context for skills
   const renderPrimaryGoal = program.primaryGoal
@@ -1472,6 +1493,24 @@ export function AdaptiveProgramDisplay({
         ) ?? null
       : null
   }
+  // [AB18] Session training style coaching for live workout handoff.
+  // Looked up by dayNumber from the per-day coaching summary. When present,
+  // the card stamps it into AB10LaunchProof so live workout can display parity.
+  sessionTrainingStyleCoaching={(() => {
+    if (!perDayCoachingSummary) return null
+    const sessionDayNumber = (session as unknown as { dayNumber?: number }).dayNumber
+    const dayCoaching = perDayCoachingSummary.days.find(d => d.dayNumber === sessionDayNumber)
+    if (!dayCoaching?.trainingStyleCoaching) return null
+    const tsc = dayCoaching.trainingStyleCoaching
+    // Convert SessionTrainingStyleCoaching to AB18SessionCoachingHandoff
+    return {
+      styleMode: tsc.styleMode,
+      coachingLine: tsc.coachingLine,
+      activeOnThisSession: tsc.activeOnThisSession,
+      favoredMethodsApplied: tsc.favoredMethodsApplied,
+      methodsLimitedForProtection: tsc.methodsLimitedForProtection,
+    } satisfies AB18SessionCoachingHandoff
+  })()}
   />
               </div>
             )

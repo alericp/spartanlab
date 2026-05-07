@@ -6969,6 +6969,15 @@ if (shouldShowLocalFallback) {
                 </>
               )
             })()}
+            
+            {/* [AB18] Session coaching focus - derives from AB17 truth */}
+            {ab10ProofRender.sessionCoaching?.activeOnThisSession && ab10ProofRender.sessionCoaching?.coachingLine && (
+              <div className="mt-3 mx-4 rounded-md border border-sky-500/20 bg-sky-500/5 px-3 py-2">
+                <p className="text-[11px] leading-relaxed text-sky-300">
+                  {ab10ProofRender.sessionCoaching.coachingLine}
+                </p>
+              </div>
+            )}
           </div>
           
           {/* Session Overview Card - Compact */}

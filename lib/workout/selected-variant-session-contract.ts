@@ -706,6 +706,12 @@ export interface AB10RuntimeParityProof {
     | 'absent'
     | 'unknown'
   createdAt: string
+  /**
+   * [AB18] Session coaching handoff from AB10LaunchProof. When present,
+   * the live workout displays a compact coaching focus derived from the
+   * same AB17 truth the Program day card shows. Read-only display only.
+   */
+  sessionCoaching?: AB18SessionCoachingHandoff | null
 }
 
 export interface BuildAB10RuntimeParityProofInput {
@@ -728,6 +734,8 @@ export interface BuildAB10RuntimeParityProofInput {
   groupedRuntimeExpected: boolean
   groupedRuntimeBuilt: boolean
   styleMetadataSource: AB10RuntimeParityProof['styleMetadataSource']
+  /** [AB18] Session coaching from AB10LaunchProof.sessionCoaching */
+  sessionCoaching?: AB18SessionCoachingHandoff | null
 }
 
 /**
@@ -797,6 +805,8 @@ export function buildAB10RuntimeParityProof(
     rowLevelMethodCount,
     styleMetadataSource: input.styleMetadataSource,
     createdAt: new Date().toISOString(),
+    // [AB18] Pass through session coaching for live workout display
+    sessionCoaching: input.sessionCoaching ?? null,
   }
 }
 
@@ -863,6 +873,25 @@ function ab10LaunchProofKey(dayNumber: number | string, variantIndex: number): s
   return `${AB10_LAUNCH_PROOF_PREFIX}:${dayNumber}:${variantIndex}`
 }
 
+/**
+ * [AB18] Session-level training style coaching handoff shape.
+ * Passed through AB10LaunchProof so live workout can display the same
+ * session coaching truth that the Program day card shows. Read-only
+ * display — never affects live adaptation decisions.
+ */
+export interface AB18SessionCoachingHandoff {
+  /** The resolved training style mode (e.g., "skill_focused"). */
+  styleMode: string
+  /** One-line coaching explanation derived from AB17 per-day coaching. */
+  coachingLine: string
+  /** True when style actively shaped this specific session. */
+  activeOnThisSession: boolean
+  /** Methods the style favored that were applied on this session. */
+  favoredMethodsApplied?: string[]
+  /** Methods limited due to style-driven skill protection. */
+  methodsLimitedForProtection?: string[]
+}
+
 export interface AB10LaunchProof {
   version: typeof AB10_RUNTIME_PARITY_VERSION
   dayNumber: number | string
@@ -879,6 +908,12 @@ export interface AB10LaunchProof {
   groupedMethodCount: number
   rowLevelMethodCount: number
   stampedAt: string
+  /**
+   * [AB18] Session-level training style coaching. Optional for backward
+   * compatibility with older stamps. When present, live workout displays
+   * this as a compact coaching focus line.
+   */
+  sessionCoaching?: AB18SessionCoachingHandoff | null
 }
 
 export function stampAB10LaunchProof(proof: AB10LaunchProof): void {

@@ -1761,16 +1761,16 @@ function phaseR(): BlueprintPhase {
   }
 }
 
-/** Phase S: Recovery Adaptation Snapshot Foundation Contract. */
+/** Phase S: Recovery Adaptation Snapshot Foundation Contract + User Input Capture. */
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation Contract (Step 21.1)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture (Steps 21.1-21.2)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). Phase S.S1 is foundation-only — it defines the contract and single pure derivation helper but does NOT mutate programs or sessions yet.',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2) — wiring real user-facing recovery/readiness check-in into the L1 contract.',
     status: 'COMPLETE',
     nextAction:
-      'No remaining Phase S.S1 work. Recommended next steps: S.S2 (wire derivation into program generation and attach snapshot to program/session), S.S3 (injury-aware substitution gates), S.S4 (deload recommendation decision layer), S.S5 (missed-day recomposition contract), S.S6+ (live workout adaptive coaching from recovery signals).',
+      'Phase S (Steps 21.1-21.2) complete. Foundation contract and user input capture both done. Recommended next steps: S.S8 (wire derivation into program generation and attach snapshot to program/session), S.S9 (injury-aware substitution gates), S.S10 (deload recommendation decision layer), S.S11 (missed-day recomposition contract), S.S12+ (live workout adaptive coaching from recovery signals).',
     subtasks: [
       {
         id: 'S.S1',
@@ -1829,8 +1829,24 @@ function phaseS(): BlueprintPhase {
         title: 'No mutation in S.S1 foundation pass',
         status: 'COMPLETE',
         evidence: [
-          'canMutateProgramNow and canMutateSessionNow are both false. shouldOnlyExplainNow is true. The contract is foundation-only; actual mutation logic is deferred to S.S7+.',
+          'canMutateProgramNow and canMutateSessionNow are both false. shouldOnlyExplainNow is true. The contract is foundation-only; actual mutation logic is deferred to S.S8+.',
           'No claim that deloads, injury substitutions, missed-day recomposition, or plan mutations occurred unless they truly occurred.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'S.S7',
+        title: 'L2: Recovery/readiness input capture wired to L1 snapshot (Step 21.2)',
+        status: 'COMPLETE',
+        evidence: [
+          'RecoveryReadinessCheckIn type added to recovery-adaptation-snapshot-contract.ts with readinessToday / sorenessLevel / sleepQuality / jointPainReported / jointPainAreas / notes / capturedAt fields.',
+          'buildCheckInSignalsFromUserInput() adapter converts user check-in into CheckInSignals for deriveRecoveryAdaptationSnapshot().',
+          'adaptLegacyRecoveryInput() bridges existing UserRecoveryInput from recovery-fatigue-engine.ts to the new L2 type.',
+          'getRecoveryStatusLabel() derives visible status labels from the snapshot for UI display.',
+          'RecoveryReadinessCheckIn component in components/workout/RecoveryReadinessCheckIn.tsx provides compact mobile-friendly pre-workout capture with readiness/soreness/sleep/joint pain inputs.',
+          'RecoveryCheckInStatus component shows saved check-in status with snapshot-derived labels and data-phase-l2-* QA attributes.',
+          'StreamlinedWorkoutSession integrates check-in in the pre-start shell — optional, skippable, captures real signals into l2RecoveryCheckIn / l2RecoverySnapshot state.',
+          'Skipped check-in does not fake data — returns honest empty/unknown state. Saved check-in flows through buildCheckInSignalsFromUserInput → deriveRecoveryAdaptationSnapshot → getRecoveryStatusLabel → visible UI.',
         ],
         remainingWork: [],
       },

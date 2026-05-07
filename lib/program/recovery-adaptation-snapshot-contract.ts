@@ -841,3 +841,164 @@ export function buildWorkoutStressSignalsFromPhaseK(
     daysSinceDeload: additionalContext?.daysSinceDeload ?? null,
   }
 }
+
+// =============================================================================
+// PHASE L2 — USER CHECK-IN INPUT TYPES AND ADAPTERS
+// =============================================================================
+
+/**
+ * User-entered readiness check-in input (L2). This is captured via UI and
+ * converted into CheckInSignals for the L1 snapshot derivation.
+ */
+export interface RecoveryReadinessCheckIn {
+  /** How ready does the user feel to train today? */
+  readinessToday: 'great' | 'normal' | 'low' | 'very_low' | null
+  /** Current soreness level */
+  sorenessLevel: 'none' | 'mild' | 'moderate' | 'severe' | null
+  /** Sleep/recovery quality last night */
+  sleepQuality: 'good' | 'normal' | 'poor' | 'very_poor' | null
+  /** Any joint pain? */
+  jointPainReported: boolean
+  /** Which joints hurt (if any) */
+  jointPainAreas: string[]
+  /** Free-text notes */
+  notes: string | null
+  /** When this check-in was captured */
+  capturedAt: string
+}
+
+/**
+ * Create an empty/default check-in (user skipped or hasn't checked in).
+ */
+export function createEmptyCheckIn(): RecoveryReadinessCheckIn {
+  return {
+    readinessToday: null,
+    sorenessLevel: null,
+    sleepQuality: null,
+    jointPainReported: false,
+    jointPainAreas: [],
+    notes: null,
+    capturedAt: new Date().toISOString(),
+  }
+}
+
+/**
+ * Convert user check-in input into CheckInSignals for the L1 snapshot.
+ * This adapter normalizes the UI input shape into the contract's expected shape.
+ */
+export function buildCheckInSignalsFromUserInput(
+  checkIn: RecoveryReadinessCheckIn | null,
+  lastCheckInDaysAgo?: number,
+): CheckInSignals {
+  if (!checkIn || (!checkIn.readinessToday && !checkIn.sorenessLevel && !checkIn.sleepQuality)) {
+    return {
+      hasRecentCheckIn: false,
+      lastCheckInDaysAgo: null,
+      sorenessLevel: null,
+      motivationLevel: null,
+      jointPainReported: false,
+      jointPainAreas: [],
+    }
+  }
+
+  // Map readiness to motivation (rough equivalence for L1 contract)
+  const motivationLevel: 'low' | 'moderate' | 'high' | null =
+    checkIn.readinessToday === 'great' ? 'high' :
+    checkIn.readinessToday === 'normal' ? 'moderate' :
+    checkIn.readinessToday === 'low' ? 'low' :
+    checkIn.readinessToday === 'very_low' ? 'low' :
+    null
+
+  return {
+    hasRecentCheckIn: true,
+    lastCheckInDaysAgo: lastCheckInDaysAgo ?? 0,
+    sorenessLevel: checkIn.sorenessLevel,
+    motivationLevel,
+    jointPainReported: checkIn.jointPainReported,
+    jointPainAreas: checkIn.jointPainAreas,
+  }
+}
+
+/**
+ * Adapter from existing recovery-fatigue-engine's UserRecoveryInput format
+ * to our L1/L2 RecoveryReadinessCheckIn. Allows reusing existing localStorage
+ * data if available.
+ */
+export function adaptLegacyRecoveryInput(
+  legacyInput: {
+    date: string
+    sleepQuality?: 'poor' | 'moderate' | 'good'
+    soreness?: 'none' | 'mild' | 'moderate' | 'severe'
+    motivation?: 'low' | 'moderate' | 'high'
+    notes?: string
+  } | null,
+): RecoveryReadinessCheckIn | null {
+  if (!legacyInput) return null
+
+  // Map legacy sleep quality
+  const sleepQuality: RecoveryReadinessCheckIn['sleepQuality'] =
+    legacyInput.sleepQuality === 'good' ? 'good' :
+    legacyInput.sleepQuality === 'moderate' ? 'normal' :
+    legacyInput.sleepQuality === 'poor' ? 'poor' :
+    null
+
+  // Map legacy motivation to readiness
+  const readinessToday: RecoveryReadinessCheckIn['readinessToday'] =
+    legacyInput.motivation === 'high' ? 'great' :
+    legacyInput.motivation === 'moderate' ? 'normal' :
+    legacyInput.motivation === 'low' ? 'low' :
+    null
+
+  // Detect joint pain from notes (basic keyword scan)
+  const notesLower = (legacyInput.notes || '').toLowerCase()
+  const jointKeywords = ['joint', 'wrist', 'elbow', 'shoulder', 'back', 'hip', 'knee', 'ankle', 'pain']
+  const jointPainReported = jointKeywords.some(kw => notesLower.includes(kw))
+  const jointPainAreas: string[] = []
+  if (notesLower.includes('wrist')) jointPainAreas.push('wrist')
+  if (notesLower.includes('elbow')) jointPainAreas.push('elbow')
+  if (notesLower.includes('shoulder')) jointPainAreas.push('shoulder')
+  if (notesLower.includes('back')) jointPainAreas.push('back')
+  if (notesLower.includes('hip')) jointPainAreas.push('hip')
+  if (notesLower.includes('knee')) jointPainAreas.push('knee')
+  if (notesLower.includes('ankle')) jointPainAreas.push('ankle')
+
+  return {
+    readinessToday,
+    sorenessLevel: legacyInput.soreness ?? null,
+    sleepQuality,
+    jointPainReported,
+    jointPainAreas,
+    notes: legacyInput.notes ?? null,
+    capturedAt: new Date(legacyInput.date).toISOString(),
+  }
+}
+
+/**
+ * Derive visible recovery status label from the snapshot — for UI display.
+ * Returns a compact, truthful label or null when nothing notable.
+ */
+export function getRecoveryStatusLabel(snapshot: RecoveryAdaptationSnapshot): string | null {
+  // Priority: deload > injury > readiness
+  if (snapshot.deloadSignal === 'required') {
+    return 'Deload recommended'
+  }
+  if (snapshot.injuryConstraintLevel === 'avoid') {
+    return 'Injury watch — limit painful movements'
+  }
+  if (snapshot.injuryConstraintLevel === 'limit') {
+    return 'Joint watch — conservative progressions'
+  }
+  if (snapshot.readinessLevel === 'red') {
+    return 'Low readiness — recovery focus'
+  }
+  if (snapshot.readinessLevel === 'orange') {
+    return 'Reduced readiness — maintain quality'
+  }
+  if (snapshot.sourceQuality === 'empty') {
+    return null // Don't show "no data" label, just hide
+  }
+  if (snapshot.readinessLevel === 'green' && snapshot.fatigueLevel === 'low') {
+    return 'Ready to push'
+  }
+  return null
+}

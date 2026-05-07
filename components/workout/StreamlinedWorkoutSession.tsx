@@ -255,6 +255,15 @@ import {
   deriveLiveStressRestGuidance,
   buildSessionStressSummary,
 } from '@/lib/workout/live-stress-rest-guidance'
+// [PHASE L2] Recovery readiness check-in — captures user readiness signals
+import {
+  RecoveryReadinessCheckIn,
+  RecoveryCheckInStatus,
+} from '@/components/workout/RecoveryReadinessCheckIn'
+import {
+  type RecoveryReadinessCheckIn as CheckInType,
+  type RecoveryAdaptationSnapshot,
+} from '@/lib/program/recovery-adaptation-snapshot-contract'
 import {
   computeLiveDeloadDecision,
   hasDecisionChanged,
@@ -3424,6 +3433,11 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-CORRIDOR-FIX] Next session info - loaded dynamically when workout completes
   // This prevents the heavy adaptive-program-builder from being imported at module load
   const [nextSessionInfo, setNextSessionInfo] = useState<{ dayLabel: string; focusLabel: string; estimatedMinutes?: number } | null>(null)
+  
+  // [PHASE L2] Recovery readiness check-in state
+  const [l2RecoveryCheckIn, setL2RecoveryCheckIn] = useState<CheckInType | null>(null)
+  const [l2RecoverySnapshot, setL2RecoverySnapshot] = useState<RecoveryAdaptationSnapshot | null>(null)
+  const [l2CheckInDismissed, setL2CheckInDismissed] = useState(false)
   
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -7187,6 +7201,34 @@ if (shouldShowLocalFallback) {
                 variant="card"
               />
             </SafeOptionalSubtree>
+          )}
+          
+          {/* [PHASE L2] Recovery Readiness Check-in — optional pre-workout signal capture */}
+          {!l2CheckInDismissed && !l2RecoveryCheckIn && (
+            <div className="mb-4">
+              <RecoveryReadinessCheckIn
+                onCheckInComplete={(checkIn, snapshot) => {
+                  setL2RecoveryCheckIn(checkIn)
+                  setL2RecoverySnapshot(snapshot)
+                }}
+                onSkip={() => setL2CheckInDismissed(true)}
+                compact={true}
+              />
+            </div>
+          )}
+          
+          {/* [PHASE L2] Show saved check-in status if completed */}
+          {l2RecoveryCheckIn && l2RecoverySnapshot && (
+            <div className="mb-4">
+              <RecoveryCheckInStatus
+                checkIn={l2RecoveryCheckIn}
+                snapshot={l2RecoverySnapshot}
+                onEdit={() => {
+                  setL2RecoveryCheckIn(null)
+                  setL2RecoverySnapshot(null)
+                }}
+              />
+            </div>
           )}
           
           {/* Start Button - Primary CTA */}

@@ -543,7 +543,7 @@ function phaseI(): BlueprintPhase {
     //     'final_skill_obligation') cannot receive upward sets/reps/holds.
     //   - RPE max is 8 in Phase I (7 for protected/skill rows). Phase I
     //     never prescribes RPE 9-10.
-    //   - Density / unsupported method types remain guidanceOnly ������� no fake
+    //   - Density / unsupported method types remain guidanceOnly �������� no fake
     //     numeric mutation, deferred to a future engine-quality task.
     //   - Total session sets cap: at most +1 set per session in Phase I.
     //
@@ -1770,7 +1770,7 @@ function phaseS(): BlueprintPhase {
       'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3). S.S9 is M1 Recovery-to-Program Awareness Bridge mini-chain (Steps 21.5.1-21.5.3) — advisory-only bridge from recovery truth to Program surface, no program mutation.',
     status: 'COMPLETE',
     nextAction:
-      'Phase S COMPLETE. M1 mini-chain COMPLETE. Step 21.6 IN PROGRESS: bounded, user-approved, current-session-only recovery adjustment layer. Preview/apply flow added to Program page. AdaptiveProgramDisplay consumes bridge + adjustment props.',
+      'Phase S COMPLETE. M1 mini-chain COMPLETE. Step 21.6 COMPLETE: bounded, user-approved, current-session-only recovery adjustment layer runtime-accepted. Program Page shows preview/apply flow, Start Workout consumes adjustment payload, live workout shows "Recovery-adjusted today only" badge when active. Next roadmap options: (1) Phase E/G/L PARTIAL cleanup — drive remaining method-aware selection and stale-source guards to COMPLETE; (2) Step 22 injury substitution — add injury-aware exercise replacement suggestions (advisory-first, preview-first, user-approved only); (3) Step 23 missed-day recomposition — detect missed sessions and offer bounded schedule adjustment (advisory-first). Owner direction recommended before proceeding.',
     subtasks: [
       {
         id: 'S.S1',

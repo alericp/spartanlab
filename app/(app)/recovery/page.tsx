@@ -54,18 +54,33 @@ export default function RecoveryPage() {
       if (savedCheckIn) {
         const checkIn = JSON.parse(savedCheckIn) as RecoveryReadinessCheckIn
         setL4CheckIn(checkIn)
-        // Derive L1 snapshot from L2 check-in
+        // Derive L1 snapshot from L2 check-in using correct RecoveryAdaptationInput shape
         const signals = buildCheckInSignalsFromUserInput(checkIn)
-        const snapshot = deriveRecoveryAdaptationSnapshot(signals, null, null)
+        const snapshot = deriveRecoveryAdaptationSnapshot({
+          profileRecovery: null,
+          workoutStress: null,
+          checkIn: signals,
+          weeklyStressSummary: null,
+        })
         setL4Snapshot(snapshot)
       } else {
-        // No check-in: derive empty snapshot
-        const snapshot = deriveRecoveryAdaptationSnapshot(null, null, null)
+        // No check-in: derive empty snapshot with correct RecoveryAdaptationInput shape
+        const snapshot = deriveRecoveryAdaptationSnapshot({
+          profileRecovery: null,
+          workoutStress: null,
+          checkIn: null,
+          weeklyStressSummary: null,
+        })
         setL4Snapshot(snapshot)
       }
     } catch {
-      // Fallback: derive empty snapshot
-      const snapshot = deriveRecoveryAdaptationSnapshot(null, null, null)
+      // Fallback: derive empty snapshot with correct RecoveryAdaptationInput shape
+      const snapshot = deriveRecoveryAdaptationSnapshot({
+        profileRecovery: null,
+        workoutStress: null,
+        checkIn: null,
+        weeklyStressSummary: null,
+      })
       setL4Snapshot(snapshot)
     }
   }, [])

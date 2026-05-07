@@ -893,3 +893,548 @@ export function getRecommendationsForSession(
   if (!advisory) return []
   return advisory.recommendations.filter((r) => r.affectedSessionId === sessionId)
 }
+
+// =============================================================================
+// STEP 22.2 — USER-CONFIRMED CURRENT-SESSION INJURY SUBSTITUTION APPLY
+// =============================================================================
+
+/**
+ * STEP 22.2 CONTRACT
+ *
+ * After Step 22.1 generates advisory recommendations, Step 22.2 allows the user
+ * to explicitly confirm and apply a substitution for the CURRENT SESSION ONLY.
+ *
+ * CRITICAL INVARIANTS:
+ *   - User must explicitly confirm (confirmedByUser: true)
+ *   - Scope is ALWAYS current_session_only
+ *   - Saved program is NEVER mutated (programMutation: false)
+ *   - Payload is timestamped and expires
+ *   - Payload is consumed once and cleared
+ *   - Original exercise metadata preserved for reversal
+ *
+ * @step 22.2 of 22.4
+ */
+
+/**
+ * The user-confirmed substitution payload for current session.
+ * Created when user confirms a recommendation, consumed by workout session.
+ */
+export interface CurrentSessionInjurySubstitutionPayload {
+  /** Unique payload ID for tracking */
+  payloadId: string
+  /** When this payload was created */
+  createdAt: string
+  /** When this payload expires (recommended: 1 hour) */
+  expiresAt: string
+  /** ALWAYS 'current_session_only' */
+  scope: 'current_session_only'
+  /** Source of the recommendation */
+  source: 'injury_substitution_advisory'
+  /** ID of the recommendation being applied */
+  recommendationId: string
+  /** Session ID if available */
+  sessionId?: string
+  /** Day number if available */
+  dayNumber?: number
+  /** Week number if available */
+  weekNumber?: number
+  /** Variant index if available */
+  variantIndex?: number
+  /** Original exercise ID */
+  originalExerciseId?: string
+  /** Original exercise name */
+  originalExerciseName: string
+  /** Substitute exercise ID (generated) */
+  substituteExerciseId?: string
+  /** Substitute exercise name */
+  substituteExerciseName: string
+  /** Why this substitution was recommended */
+  substitutionReason: string
+  /** Affected joint/region */
+  affectedJointOrRegion: string
+  /** Recommended action from advisory */
+  recommendedAction: InjuryRecommendedAction
+  /** Risk level from advisory */
+  riskLevel: InjuryRiskLevel
+  /** ALWAYS TRUE — user explicitly confirmed */
+  confirmedByUser: true
+  /** ALWAYS FALSE — no runtime/global program mutation */
+  programMutation: false
+  /** ALWAYS FALSE — saved program is never touched */
+  savedProgramMutation: false
+  /** TRUE — can be reversed during current session */
+  reversible: true
+}
+
+/**
+ * Applied substitution metadata attached to runtime exercise.
+ */
+export interface AppliedCurrentSessionInjurySubstitution {
+  /** TRUE when applied */
+  applied: true
+  /** Payload ID for tracking */
+  payloadId: string
+  /** Recommendation ID from advisory */
+  recommendationId: string
+  /** Original exercise name (preserved for display/reversal) */
+  originalExerciseName: string
+  /** Original exercise ID (preserved for reversal) */
+  originalExerciseId?: string
+  /** Substitute exercise name */
+  substituteExerciseName: string
+  /** Affected joint/region */
+  affectedJointOrRegion: string
+  /** Reason for substitution */
+  reason: string
+  /** When this was applied */
+  appliedAt: string
+  /** ALWAYS 'current_session_only' */
+  scope: 'current_session_only'
+  /** TRUE if user restored original */
+  restoredOriginal?: boolean
+}
+
+// =============================================================================
+// STORAGE KEYS
+// =============================================================================
+
+const SUBSTITUTION_STORAGE_KEY = 'spartanlab:injury_substitution_payload'
+const SUBSTITUTION_FRESHNESS_MS = 60 * 60 * 1000 // 1 hour
+
+// =============================================================================
+// PAYLOAD CREATION
+// =============================================================================
+
+/**
+ * Create a current-session substitution payload from a confirmed recommendation.
+ */
+export function createSubstitutionPayload(
+  recommendation: InjurySubstitutionRecommendation,
+  sessionContext?: {
+    sessionId?: string
+    dayNumber?: number
+    weekNumber?: number
+    variantIndex?: number
+  },
+): CurrentSessionInjurySubstitutionPayload {
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + SUBSTITUTION_FRESHNESS_MS)
+  
+  return {
+    payloadId: `subst_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    scope: 'current_session_only',
+    source: 'injury_substitution_advisory',
+    recommendationId: recommendation.recommendationId,
+    sessionId: sessionContext?.sessionId ?? recommendation.affectedSessionId,
+    dayNumber: sessionContext?.dayNumber ?? recommendation.affectedSessionDayNumber,
+    weekNumber: sessionContext?.weekNumber,
+    variantIndex: sessionContext?.variantIndex,
+    originalExerciseId: recommendation.affectedExerciseId,
+    originalExerciseName: recommendation.affectedExerciseName,
+    substituteExerciseId: recommendation.suggestedAlternativeName
+      ? `subst_${recommendation.affectedExerciseId ?? 'unknown'}`
+      : undefined,
+    substituteExerciseName: recommendation.suggestedAlternativeName ?? recommendation.affectedExerciseName,
+    substitutionReason: recommendation.reason,
+    affectedJointOrRegion: recommendation.jointOrRegion,
+    recommendedAction: recommendation.recommendedAction,
+    riskLevel: recommendation.riskLevel,
+    confirmedByUser: true,
+    programMutation: false,
+    savedProgramMutation: false,
+    reversible: true,
+  }
+}
+
+// =============================================================================
+// STORAGE BRIDGE — STAMP / READ / CLEAR
+// =============================================================================
+
+/**
+ * Stamp the confirmed substitution payload to sessionStorage.
+ * Called by Program Page / session card after user confirms.
+ */
+export function stampSubstitutionPayload(payload: CurrentSessionInjurySubstitutionPayload): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(SUBSTITUTION_STORAGE_KEY, JSON.stringify(payload))
+  } catch (e) {
+    console.warn('[injury-substitution] Failed to stamp payload:', e)
+  }
+}
+
+/**
+ * Read the substitution payload from sessionStorage.
+ * Called by workout session page on mount.
+ */
+export function readSubstitutionPayload(): CurrentSessionInjurySubstitutionPayload | null {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(SUBSTITUTION_STORAGE_KEY)
+    if (!raw) return null
+    const payload = JSON.parse(raw) as CurrentSessionInjurySubstitutionPayload
+    return payload
+  } catch (e) {
+    console.warn('[injury-substitution] Failed to read payload:', e)
+    return null
+  }
+}
+
+/**
+ * Clear the substitution payload from sessionStorage.
+ * Called after successful application, restore, or session end.
+ */
+export function clearSubstitutionPayload(): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.removeItem(SUBSTITUTION_STORAGE_KEY)
+  } catch {}
+}
+
+// =============================================================================
+// VALIDATION — PAYLOAD FRESHNESS AND CONTEXT
+// =============================================================================
+
+/**
+ * Validate a substitution payload for application.
+ */
+export function validateSubstitutionPayload(
+  payload: CurrentSessionInjurySubstitutionPayload | null,
+  currentContext?: {
+    sessionId?: string
+    dayNumber?: number
+    variantIndex?: number
+  },
+): { valid: boolean; reason?: string } {
+  if (!payload) {
+    return { valid: false, reason: 'no_payload' }
+  }
+  
+  // Check confirmation
+  if (!payload.confirmedByUser) {
+    return { valid: false, reason: 'not_confirmed' }
+  }
+  
+  // Check scope
+  if (payload.scope !== 'current_session_only') {
+    return { valid: false, reason: 'invalid_scope' }
+  }
+  
+  // Check mutation flags
+  if (payload.programMutation !== false || payload.savedProgramMutation !== false) {
+    return { valid: false, reason: 'mutation_flags_invalid' }
+  }
+  
+  // Check freshness
+  const now = Date.now()
+  const expiresAt = new Date(payload.expiresAt).getTime()
+  if (now > expiresAt) {
+    return { valid: false, reason: 'expired' }
+  }
+  
+  // Check context match if provided (loose match — allow missing fields)
+  if (currentContext) {
+    // Day number must match if both present
+    if (
+      currentContext.dayNumber !== undefined &&
+      payload.dayNumber !== undefined &&
+      currentContext.dayNumber !== payload.dayNumber
+    ) {
+      return { valid: false, reason: 'day_mismatch' }
+    }
+    // Variant must match if both present
+    if (
+      currentContext.variantIndex !== undefined &&
+      payload.variantIndex !== undefined &&
+      currentContext.variantIndex !== payload.variantIndex
+    ) {
+      return { valid: false, reason: 'variant_mismatch' }
+    }
+  }
+  
+  // Check required fields
+  if (!payload.originalExerciseName || !payload.substituteExerciseName) {
+    return { valid: false, reason: 'missing_exercise_names' }
+  }
+  
+  return { valid: true }
+}
+
+// =============================================================================
+// RUNTIME APPLICATION — APPLY TO CLONED SESSION
+// =============================================================================
+
+/**
+ * Apply a validated substitution to a cloned exercise array.
+ * NEVER mutates the original — always returns a new array.
+ *
+ * @param exercises - The session exercises (will be cloned)
+ * @param payload - Validated substitution payload
+ * @returns New exercise array with substitution applied + metadata
+ */
+export function applySubstitutionToExercises<T extends { id?: string; name?: string }>(
+  exercises: T[],
+  payload: CurrentSessionInjurySubstitutionPayload,
+): {
+  exercises: (T & { injurySubstitution?: AppliedCurrentSessionInjurySubstitution })[]
+  applied: boolean
+  appliedToIndex: number | null
+} {
+  // Clone exercises
+  const cloned = exercises.map((ex) => ({ ...ex }))
+  
+  // Find the target exercise
+  let appliedToIndex: number | null = null
+  
+  for (let i = 0; i < cloned.length; i++) {
+    const ex = cloned[i]
+    const matchesId = payload.originalExerciseId && ex.id === payload.originalExerciseId
+    const matchesName =
+      ex.name?.toLowerCase().trim() === payload.originalExerciseName.toLowerCase().trim()
+    
+    if (matchesId || matchesName) {
+      // Apply substitution
+      const appliedMeta: AppliedCurrentSessionInjurySubstitution = {
+        applied: true,
+        payloadId: payload.payloadId,
+        recommendationId: payload.recommendationId,
+        originalExerciseName: payload.originalExerciseName,
+        originalExerciseId: payload.originalExerciseId,
+        substituteExerciseName: payload.substituteExerciseName,
+        affectedJointOrRegion: payload.affectedJointOrRegion,
+        reason: payload.substitutionReason,
+        appliedAt: new Date().toISOString(),
+        scope: 'current_session_only',
+      }
+      
+      // If substitute has a different name, update the display name
+      if (payload.substituteExerciseName !== payload.originalExerciseName) {
+        ;(cloned[i] as unknown as { name: string }).name = payload.substituteExerciseName
+      }
+      
+      // Attach substitution metadata
+      ;(cloned[i] as T & { injurySubstitution?: AppliedCurrentSessionInjurySubstitution }).injurySubstitution = appliedMeta
+      
+      appliedToIndex = i
+      break // Only apply to first matching exercise
+    }
+  }
+  
+  return {
+    exercises: cloned as (T & { injurySubstitution?: AppliedCurrentSessionInjurySubstitution })[],
+    applied: appliedToIndex !== null,
+    appliedToIndex,
+  }
+}
+
+// =============================================================================
+// RESTORE ORIGINAL — REVERT SUBSTITUTION IN RUNTIME
+// =============================================================================
+
+/**
+ * Restore the original exercise in a runtime session.
+ * NEVER mutates the original — always returns a new array.
+ */
+export function restoreOriginalExercise<T extends { id?: string; name?: string; injurySubstitution?: AppliedCurrentSessionInjurySubstitution }>(
+  exercises: T[],
+  payloadId: string,
+): {
+  exercises: T[]
+  restored: boolean
+  restoredIndex: number | null
+} {
+  const cloned = exercises.map((ex) => ({ ...ex }))
+  
+  let restoredIndex: number | null = null
+  
+  for (let i = 0; i < cloned.length; i++) {
+    const subst = cloned[i].injurySubstitution
+    if (subst?.applied && subst.payloadId === payloadId) {
+      // Restore original name
+      ;(cloned[i] as unknown as { name: string }).name = subst.originalExerciseName
+      
+      // Mark as restored
+      ;(cloned[i] as { injurySubstitution?: AppliedCurrentSessionInjurySubstitution }).injurySubstitution = {
+        ...subst,
+        restoredOriginal: true,
+      }
+      
+      restoredIndex = i
+      break
+    }
+  }
+  
+  return {
+    exercises: cloned,
+    restored: restoredIndex !== null,
+    restoredIndex,
+  }
+}
+
+// =============================================================================
+// STEP 22.3 — LIVE WORKOUT UI HELPERS
+// =============================================================================
+
+/**
+ * STEP 22.3 — USER-VISIBLE PROOF + FLOW HARDENING
+ *
+ * These helpers support the live workout UI in showing:
+ *   - Why a substitution was recommended
+ *   - What original exercise is being replaced
+ *   - What replacement is being applied
+ *   - That it affects current session only
+ *   - That saved program remains unchanged
+ *
+ * @step 22.3 of 22.4
+ */
+
+/**
+ * Check if any exercise in the array has an active (not restored) substitution.
+ */
+export function hasActiveSubstitution<T extends { injurySubstitution?: AppliedCurrentSessionInjurySubstitution }>(
+  exercises: T[],
+): boolean {
+  return exercises.some(
+    (ex) => ex.injurySubstitution?.applied && !ex.injurySubstitution.restoredOriginal,
+  )
+}
+
+/**
+ * Get the active substitution metadata from an exercise, if any.
+ */
+export function getActiveSubstitution<T extends { injurySubstitution?: AppliedCurrentSessionInjurySubstitution }>(
+  exercise: T,
+): AppliedCurrentSessionInjurySubstitution | null {
+  const subst = exercise.injurySubstitution
+  if (subst?.applied && !subst.restoredOriginal) {
+    return subst
+  }
+  return null
+}
+
+/**
+ * Get visible label for substitution badge.
+ * Example: "Safer option for shoulder"
+ */
+export function getSubstitutionBadgeLabel(
+  substitution: AppliedCurrentSessionInjurySubstitution | null,
+): string | null {
+  if (!substitution || substitution.restoredOriginal) return null
+  const region = substitution.affectedJointOrRegion.replace(/_/g, ' ')
+  return `Safer option for ${region}`
+}
+
+/**
+ * Get user-friendly display details for a substitution.
+ */
+export function getSubstitutionDisplayDetails(
+  substitution: AppliedCurrentSessionInjurySubstitution | null,
+): {
+  visible: boolean
+  originalExercise: string
+  substituteExercise: string
+  reason: string
+  region: string
+  scopeLabel: string
+  savedProgramNote: string
+} | null {
+  if (!substitution || substitution.restoredOriginal) return null
+  
+  return {
+    visible: true,
+    originalExercise: substitution.originalExerciseName,
+    substituteExercise: substitution.substituteExerciseName,
+    reason: substitution.reason,
+    region: substitution.affectedJointOrRegion.replace(/_/g, ' '),
+    scopeLabel: 'Current workout only',
+    savedProgramNote: 'Your saved program is unchanged',
+  }
+}
+
+/**
+ * Get confirmation dialog content for a pending substitution.
+ */
+export function getSubstitutionConfirmationContent(
+  recommendation: InjurySubstitutionRecommendation,
+): {
+  title: string
+  originalExercise: string
+  substituteExercise: string
+  reason: string
+  region: string
+  actionLabel: string
+  declineLabel: string
+  scopeNote: string
+  savedProgramNote: string
+  cautionNote: string
+} {
+  return {
+    title: 'Safer Exercise Option',
+    originalExercise: recommendation.affectedExerciseName,
+    substituteExercise: recommendation.suggestedAlternativeName ?? recommendation.affectedExerciseName,
+    reason: recommendation.reason,
+    region: recommendation.jointOrRegion.replace(/_/g, ' '),
+    actionLabel: 'Use safer option for this workout',
+    declineLabel: 'Keep original',
+    scopeNote: 'This change applies only to today\'s workout.',
+    savedProgramNote: 'Your saved program will not be changed.',
+    cautionNote: 'This is not medical advice. Stop if pain worsens.',
+  }
+}
+
+/**
+ * Check if a recommendation can be safely applied right now.
+ */
+export function canApplyRecommendation(
+  recommendation: InjurySubstitutionRecommendation,
+  currentExerciseName?: string,
+): { canApply: boolean; reason?: string } {
+  // Must have a suggested alternative
+  if (!recommendation.suggestedAlternativeName) {
+    return { canApply: false, reason: 'no_alternative_available' }
+  }
+  
+  // If current exercise is provided, it must match
+  if (currentExerciseName) {
+    const matches = currentExerciseName.toLowerCase().trim() === 
+      recommendation.affectedExerciseName.toLowerCase().trim()
+    if (!matches) {
+      return { canApply: false, reason: 'exercise_mismatch' }
+    }
+  }
+  
+  // Must require user confirmation (should always be true in Step 22.1)
+  if (!recommendation.requiresUserConfirmation) {
+    return { canApply: false, reason: 'auto_apply_blocked' }
+  }
+  
+  return { canApply: true }
+}
+
+/**
+ * Build completion log metadata for a substituted exercise.
+ * Does NOT require schema changes — uses existing metadata patterns.
+ */
+export function buildSubstitutionLogMetadata(
+  substitution: AppliedCurrentSessionInjurySubstitution,
+): {
+  wasSubstituted: true
+  originalExerciseName: string
+  substituteExerciseName: string
+  substitutionReason: string
+  affectedRegion: string
+  appliedAt: string
+  scope: 'current_session_only'
+} {
+  return {
+    wasSubstituted: true,
+    originalExerciseName: substitution.originalExerciseName,
+    substituteExerciseName: substitution.substituteExerciseName,
+    substitutionReason: substitution.reason,
+    affectedRegion: substitution.affectedJointOrRegion,
+    appliedAt: substitution.appliedAt,
+    scope: 'current_session_only',
+  }
+}

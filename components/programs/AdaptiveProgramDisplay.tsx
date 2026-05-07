@@ -395,10 +395,12 @@ export function AdaptiveProgramDisplay({
   // The summary is computed once; each session looks up its coaching by dayNumber
   const perDayCoachingSummary: PerWeekMethodCoachSummary | null = (() => {
     try {
-      return buildPerWeekMethodCoachSummary(
+      return buildPerWeekMethodCoachSummary({
         program,
-        program.weeklyMethodRepresentation as Parameters<typeof buildPerWeekMethodCoachSummary>[1]
-      )
+        representation: program.weeklyMethodRepresentation ?? null,
+        // Note: trainingStyleInfluence is optional; omitted here as AB18 focuses
+        // on handoff parity, not duplicating AB17 style influence extraction
+      })
     } catch {
       return null
     }
@@ -1628,7 +1630,7 @@ export function AdaptiveProgramDisplay({
                     <ul className="mt-1.5 space-y-1">
                       {intelligenceContract.weeklyDecisionLogic.architecturalDecisions.slice(0, 3).map((decision, i) => (
                         <li key={i} className="text-[11px] text-[#6A6A6A] flex items-start gap-1.5">
-                          <span className="text-[#E63946] mt-0.5">·</span>
+                          <span className="text-[#E63946] mt-0.5">��</span>
                           {decision}
                         </li>
                       ))}

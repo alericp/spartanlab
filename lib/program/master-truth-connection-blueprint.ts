@@ -2289,9 +2289,9 @@ function step23(): BlueprintPhase {
     title: 'Missed-Workout Recomposition Advisory-First Layer (Step 23)',
     purpose:
       'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Step 23.1-23.6 U.U8 COMPLETE. pushMissedWorkoutSessionForward helper implemented, wired through saveAdaptiveProgram via Program Page callback. Two-step confirmation UI complete. push_session_forward action has real mutation path. Other actions remain advisory-only. Next: U.U9 persistence/reload proof — verify pushed session persists across reload, verify no stale schedule after schedule change, verify Step 22 injury substitution unchanged, blueprint closeout.',
+      'Step 23 COMPLETE. All substeps U.U1-U.U9 finished. Advisory-first missed-workout recomposition layer is closed: advisory types, input/output contracts, decision logic, Program Page display, user action corridor with two-step confirmation, push_session_forward mutation via saveAdaptiveProgram, persistence/reload proof verified. Other actions (reduce_intensity, protect_recovery_spacing, etc.) remain advisory-only for future roadmap. Next roadmap: owner direction for Step 24 or cleanup passes.',
     subtasks: [
       {
         id: 'U.U1',
@@ -2415,14 +2415,18 @@ function step23(): BlueprintPhase {
       {
         id: 'U.U9',
         title: 'Persistence/reload proof and regression lock',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Verify pushed session persists across reload',
-          'Verify no stale schedule after schedule change',
-          'Verify Step 22 injury substitution unchanged',
-          'Blueprint closeout',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 23.7] saveAdaptiveProgram(result.updatedProgram) persists to canonical spartanlab_active_program localStorage key',
+          '[STEP 23.7] onProgramUpdate(savedProgram) updates visible Program Page state from saved result',
+          '[STEP 23.7] Dependency array includes [program, onProgramUpdate] for closure correctness',
+          '[STEP 23.7] Reload reads from same spartanlab_active_program key via mount effect',
+          '[STEP 23.7] Normalize/load preserves pushed-forward session structure',
+          '[STEP 23.7] No localStorage/sessionStorage new source of truth introduced',
+          '[STEP 23.7] Step 22 injury substitution unchanged',
+          '[STEP 23.7] No schema/package/generator/live-workout changes',
         ],
+        remainingWork: [],
       },
     ],
   }

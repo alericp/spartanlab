@@ -2291,7 +2291,7 @@ function step23(): BlueprintPhase {
       'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
     status: 'PARTIAL',
     nextAction:
-      'Step 23.1-23.3 PARTIAL. Advisory foundation created, wired into Program Page, and has non-mutating user controls. "Keep Plan" and dismiss buttons work without mutation. Expandable reasoning section shows full details. Next: Add "I can\'t train today" button with confirmation modal and safe schedule-change path if existing mutation corridor is available.',
+      'Step 23.1-23.5 PARTIAL. Advisory foundation complete through final action boundary. "I Can\'t Train Today" modal shows preview with truthful blocked state: "Plan adjustment not available yet." No fake applied state. User can review guidance manually. Next: Build pushSessionForward() session reorder helper and wire through saveAdaptiveProgram, or close Step 23 as advisory-only and proceed to Step 24.',
     subtasks: [
       {
         id: 'U.U1',
@@ -2393,10 +2393,18 @@ function step23(): BlueprintPhase {
           '[STEP 23.4] "Preview only — your schedule has not been changed" notice',
           '[STEP 23.4] "Got It" button dismisses modal and advisory',
           '[STEP 23.4] showCantTrainModal state controls modal visibility',
+          '[STEP 23.5] Final action boundary added — truthful blocked state',
+          '[STEP 23.5] data-step-23-5-final-action-boundary="true" marker',
+          '[STEP 23.5] data-action-blocked="true" and data-blocked-reason="missing-safe-mutation-corridor"',
+          '[STEP 23.5] "Plan adjustment not available yet" message with clear explanation',
+          '[STEP 23.5] No fake "applied" state — honest that feature is advisory-only',
+          '[STEP 23.5] "Your current plan has not been changed" confirmation',
         ],
         remainingWork: [
-          'Implement push_session_forward mutation with explicit user confirmation',
-          'Persist schedule change only after confirmation — requires safe mutation path',
+          'Build pushSessionForward() helper with session reorder logic',
+          'Wire push_session_forward mutation through saveAdaptiveProgram',
+          'Add confirmation step before actual mutation',
+          'Verify persistence across reload after mutation',
         ],
       },
       {

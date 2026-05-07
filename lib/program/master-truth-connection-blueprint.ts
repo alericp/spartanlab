@@ -2554,7 +2554,7 @@ function step25(): BlueprintPhase {
       'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
     status: 'PARTIAL',
     nextAction:
-      'Step 25.2 COMPLETE — Existing Intelligence Visibility Repair. Coach Signals strip added to Program Page that surfaces real computed generation decisions (volume reduced, intensity capped, finishers limited, straight-arm protected, etc.) from getProgramSurfaceSignals. Next: Step 25.3 Program Decision Explanation Upgrade.',
+      'Step 25.3 COMPLETE — Program Decision Explanation Upgrade. "Why this program" section added using buildProgramDecisionsNarrative that derives topLevelStrategyLabel, supportingSentence, perDayStressBreakdown, safetyTag, and densityVisibleLine from Y2 trainingDifferentiationCalibration. All explanations trace to real computed fields. Next: Step 25.4 Performance Progression Clarity.',
     subtasks: [
       {
         id: 'W.W1',
@@ -2589,14 +2589,19 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W3',
         title: 'Program Decision Explanation Upgrade',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Derive why-this-program reasoning from canonical builder truth',
-          'Show which onboarding selections influenced which decisions',
-          'Explain method selection in user-friendly terms',
-          'No fake reasoning copy — must trace to real computation',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 25.3] "Why this program" section added to AdaptiveProgramDisplay.tsx',
+          '[STEP 25.3] Uses buildProgramDecisionsNarrative from lib/program/program-decisions-narrative.ts',
+          '[STEP 25.3] Derives topLevelStrategyLabel from Y2 trainingDifferentiationCalibration',
+          '[STEP 25.3] Derives supportingSentence from lived weekly role truth',
+          '[STEP 25.3] Shows perDayStressBreakdown (e.g. "2 high · 3 moderate · 1 low")',
+          '[STEP 25.3] Shows safetyTag (e.g. "Skill-protected week", "Acclimation week")',
+          '[STEP 25.3] Shows densityVisibleLine when applicable',
+          '[STEP 25.3] All explanations trace to real computed Y2/calibration fields',
+          '[STEP 25.3] No fake AI copy — available: false when truth is missing',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W4',

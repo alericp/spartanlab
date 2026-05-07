@@ -100,6 +100,25 @@ export interface PerDayMethodInfluence {
   notRequested: number
 }
 
+/**
+ * [AB17] Training style coaching translation for a single session.
+ * Translates the week-level AB16 style influence into session-specific
+ * coaching language that explains how the user's training style preference
+ * affected this particular session's method choices.
+ */
+export interface SessionTrainingStyleCoaching {
+  /** The resolved training style mode from the user's profile. */
+  styleMode: string
+  /** One-line coaching translation for this session's style influence. */
+  coachingLine: string
+  /** True when the style actively shaped method decisions on THIS session. */
+  activeOnThisSession: boolean
+  /** Methods from the style's favored list that were applied on this session. */
+  favoredMethodsApplied: string[]
+  /** Methods that were limited on this session due to style-driven skill protection. */
+  methodsLimitedForProtection: string[]
+}
+
 export interface PerDayMethodSummary {
   dayNumber: number
   dayLabel: string
@@ -116,6 +135,12 @@ export interface PerDayMethodSummary {
   preferredHonored: WeeklyMethodId[]
   /** User-preferred methods that were NOT honored on this day. */
   preferredNotHonored: WeeklyMethodId[]
+  /**
+   * [AB17] Session-level training style coaching. Translates the week-level
+   * style influence (AB16) into session-specific coaching language. Optional
+   * for backward compatibility with summaries built before AB17.
+   */
+  trainingStyleCoaching?: SessionTrainingStyleCoaching | null
 }
 
 export interface PerWeekMethodCoachSummary {
@@ -635,14 +660,104 @@ function buildDayStrategy(args: {
 }
 
 // =============================================================================
+// [AB17] SESSION-LEVEL TRAINING STYLE COACHING BUILDER
+// Translates the week-level AB16 style influence into session-specific
+// coaching language. This is the per-session translation layer.
+// =============================================================================
+
+function formatStyleModeForCoaching(mode: string): string {
+  // Format "skill_focused" -> "skill-focused" for coaching text
+  return mode.replace(/_/g, '-')
+}
+
+function buildSessionStyleCoaching(args: {
+  trainingStyleInfluence: TrainingStyleInfluenceInput | null
+  methodsUsed: DayMethodUsedEntry[]
+  methodsNotUsed: DayMethodNotUsedEntry[]
+  evidence: SessionMethodEvidence
+}): SessionTrainingStyleCoaching | null {
+  const { trainingStyleInfluence, methodsUsed, methodsNotUsed, evidence } = args
+
+  // No style influence available — return null (backward compatible)
+  if (!trainingStyleInfluence || !trainingStyleInfluence.resolvedStyleMode) {
+    return null
+  }
+
+  const styleMode = trainingStyleInfluence.resolvedStyleMode
+  const favoredMethods = trainingStyleInfluence.favoredMethods || []
+  const discouragedMethods = trainingStyleInfluence.discouragedMethodsOnSkillWork || []
+
+  // Check which favored methods were actually applied on this session
+  const usedMethodIds = new Set(methodsUsed.map(m => m.methodId))
+  const favoredMethodsApplied = favoredMethods.filter(m => {
+    // Normalize method names for comparison
+    const normalized = m.toLowerCase().replace(/[_-]/g, '_')
+    return usedMethodIds.has(normalized as WeeklyMethodId)
+  })
+
+  // Check which methods were limited due to skill protection
+  const methodsLimitedForProtection = methodsNotUsed
+    .filter(m =>
+      m.reasonCategory === 'role_skill_priority' &&
+      discouragedMethods.some(d => d.toLowerCase().includes(m.methodId))
+    )
+    .map(m => m.label)
+
+  // Determine if style is actively shaping this session
+  const isSkillProtectionActive = (evidence.roleId || '').toLowerCase().includes('skill')
+  const hasStyleFavoredMethodApplied = favoredMethodsApplied.length > 0
+  const hasStyleLimitedMethod = methodsLimitedForProtection.length > 0
+  const activeOnThisSession = hasStyleFavoredMethodApplied || (isSkillProtectionActive && hasStyleLimitedMethod)
+
+  // Build coaching line based on actual session evidence
+  let coachingLine: string
+
+  if (!activeOnThisSession && styleMode === 'unknown') {
+    // No style set, nothing to say
+    return null
+  }
+
+  const styledName = formatStyleModeForCoaching(styleMode)
+
+  if (isSkillProtectionActive && hasStyleLimitedMethod) {
+    // Style limited methods on a skill day
+    coachingLine = `${styledName.charAt(0).toUpperCase() + styledName.slice(1)} style: skill quality protected here — density methods limited to preserve technical precision.`
+  } else if (hasStyleFavoredMethodApplied && favoredMethodsApplied.length > 0) {
+    // Style-favored methods were applied
+    const appliedLabel = favoredMethodsApplied.map(m => m.replace(/_/g, ' ')).join(', ')
+    coachingLine = `${styledName.charAt(0).toUpperCase() + styledName.slice(1)} style shaped this session: favored ${appliedLabel} where safe.`
+  } else if (isSkillProtectionActive) {
+    // Skill day but style influence is implicit in the protection
+    coachingLine = `${styledName.charAt(0).toUpperCase() + styledName.slice(1)} style: straight sets preserved here for skill quality — methods deferred to accessory days.`
+  } else if (styleMode === 'unknown' || styleMode === 'balanced_hybrid') {
+    // Neutral style — minimal coaching
+    coachingLine = methodsUsed.length > 0
+      ? 'Balanced method mix applied where the session role allowed.'
+      : 'Straight sets used — methods would not improve this session.'
+  } else {
+    // Style set but didn't actively shape this particular session
+    coachingLine = `${styledName.charAt(0).toUpperCase() + styledName.slice(1)} style: no specific method influence on this session's role.`
+  }
+
+  return {
+    styleMode,
+    coachingLine,
+    activeOnThisSession,
+    favoredMethodsApplied,
+    methodsLimitedForProtection,
+  }
+}
+
+// =============================================================================
 // PER-DAY BUILDER
 // =============================================================================
 
 function buildPerDaySummary(args: {
   session: AdaptiveSession
   preferred: Set<WeeklyMethodId>
+  trainingStyleInfluence: TrainingStyleInfluenceInput | null
 }): PerDayMethodSummary {
-  const { session, preferred } = args
+  const { session, preferred, trainingStyleInfluence } = args
   const evidence = readSessionEvidence(session)
 
   const methodsUsed: DayMethodUsedEntry[] = []
@@ -702,6 +817,14 @@ function buildPerDaySummary(args: {
     if (isUserPreference) preferredNotHonored.push(methodId)
   }
 
+  // [AB17] Build session-level training style coaching.
+  const trainingStyleCoaching = buildSessionStyleCoaching({
+    trainingStyleInfluence,
+    methodsUsed,
+    methodsNotUsed,
+    evidence,
+  })
+
   return {
     dayNumber: session.dayNumber,
     dayLabel: session.dayLabel,
@@ -723,6 +846,7 @@ function buildPerDaySummary(args: {
     },
     preferredHonored,
     preferredNotHonored,
+    trainingStyleCoaching,
   }
 }
 
@@ -730,15 +854,32 @@ function buildPerDaySummary(args: {
 // PUBLIC: BUILD PER-WEEK COACH SUMMARY
 // =============================================================================
 
+/**
+ * [AB17] Training style influence shape for session-level coaching generation.
+ * This is the minimal subset of AB16's TrainingStyleInfluence needed to
+ * generate per-session coaching text without importing the full intent vector.
+ */
+export interface TrainingStyleInfluenceInput {
+  resolvedStyleMode: string
+  favoredMethods: string[]
+  discouragedMethodsOnSkillWork: string[]
+  visibleExplanation: string
+}
+
 export interface BuildPerWeekMethodCoachSummaryArgs {
   program: AdaptiveProgram | null | undefined
   representation: WeeklyMethodRepresentationContract | null | undefined
+  /**
+   * [AB17] Training style influence from the AB16 chain. When provided,
+   * enables session-level coaching translation in the per-day summaries.
+   */
+  trainingStyleInfluence?: TrainingStyleInfluenceInput | null
 }
 
 export function buildPerWeekMethodCoachSummary(
   args: BuildPerWeekMethodCoachSummaryArgs,
 ): PerWeekMethodCoachSummary | null {
-  const { program } = args
+  const { program, trainingStyleInfluence } = args
   if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
     return null
   }
@@ -751,7 +892,7 @@ export function buildPerWeekMethodCoachSummary(
   const days: PerDayMethodSummary[] = program.sessions
     .slice()
     .sort((a, b) => (a.dayNumber || 0) - (b.dayNumber || 0))
-    .map(session => buildPerDaySummary({ session, preferred }))
+    .map(session => buildPerDaySummary({ session, preferred, trainingStyleInfluence: trainingStyleInfluence ?? null }))
 
   // Aggregate week-level totals.
   const methodsUsedAcrossWeek = new Set<WeeklyMethodId>()
@@ -834,7 +975,7 @@ function buildWeekStrategy(args: {
       parts.push(`Every method style your profile prefers appears at least once this week.`)
     } else {
       parts.push(
-        `${preferredNeverHonoredCount} of your preferred method style${preferredNeverHonoredCount === 1 ? '' : 's'} did not appear this week — the per-day breakdown explains why.`,
+        `${preferredNeverHonoredCount} of your preferred method style${preferredNeverHonoredCount === 1 ? '' : 's'} did not appear this week �� the per-day breakdown explains why.`,
       )
     }
   }

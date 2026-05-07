@@ -266,6 +266,15 @@ function DayCard({ day }: { day: PerDayMethodSummary }) {
         {day.strategy}
       </p>
 
+      {/* [AB17] Session-level training style coaching */}
+      {day.trainingStyleCoaching && day.trainingStyleCoaching.activeOnThisSession && (
+        <div className="mb-2.5 rounded border border-sky-500/20 bg-sky-500/5 px-2 py-1.5">
+          <p className="text-[10px] leading-relaxed text-sky-300">
+            {day.trainingStyleCoaching.coachingLine}
+          </p>
+        </div>
+      )}
+
       {/* Methods used today */}
       {day.methodsUsed.length > 0 && (
         <div className="mb-3">
@@ -334,9 +343,19 @@ export function WeeklyMethodDecisionAccordion({
   program,
 }: WeeklyMethodDecisionAccordionProps) {
   const representation = extractRepresentation(program)
+  // [AB16/AB17] Extract training style influence early so we can pass it to
+  // the per-week builder for session-level coaching translation.
+  const styleInfluence = extractTrainingStyleInfluence(program)
   const summary = buildPerWeekMethodCoachSummary({
     program,
     representation,
+    // [AB17] Pass style influence for session-level coaching generation
+    trainingStyleInfluence: styleInfluence ? {
+      resolvedStyleMode: styleInfluence.resolvedStyleMode,
+      favoredMethods: styleInfluence.methodsFavoredByStyle,
+      discouragedMethodsOnSkillWork: styleInfluence.methodsBlockedOnSkillWorkByStyle,
+      visibleExplanation: styleInfluence.visibleExplanation,
+    } : null,
   })
 
   // Hard fallback — program is missing or has no sessions.
@@ -364,9 +383,6 @@ export function WeeklyMethodDecisionAccordion({
   const { usedCount, daysWithMethods, preferredNotHonoredCount, runtimeGapCount } =
     summaryHeaderCounts(summary)
   const totalDays = summary.days.length
-  
-  // [AB16] Extract training style influence for visible proof
-  const styleInfluence = extractTrainingStyleInfluence(program)
 
   return (
     <details className="group rounded-lg border border-[#2B313A] bg-[#0F1115] mb-3">

@@ -847,6 +847,8 @@ export function safeAB10RuntimeParityProof(
     rowLevelMethodCount: 0,
     styleMetadataSource: 'unknown',
     createdAt: new Date(0).toISOString(),
+    // [AB18-D] Default to null for missing/legacy proofs
+    sessionCoaching: null,
   }
 }
 
@@ -930,6 +932,17 @@ export function stampAB10LaunchProof(proof: AB10LaunchProof): void {
   }
 }
 
+// [AB18-D] Validate sessionCoaching shape defensively
+function isValidAB18SessionCoaching(candidate: unknown): candidate is AB18SessionCoachingHandoff {
+  if (!candidate || typeof candidate !== 'object') return false
+  const c = candidate as Record<string, unknown>
+  return (
+    typeof c.styleMode === 'string' &&
+    typeof c.coachingLine === 'string' &&
+    typeof c.activeOnThisSession === 'boolean'
+  )
+}
+
 export function readAB10LaunchProof(
   dayNumber: number | string,
   variantIndex: number
@@ -941,6 +954,10 @@ export function readAB10LaunchProof(
     const parsed = JSON.parse(raw) as AB10LaunchProof
     if (!parsed || typeof parsed !== 'object') return null
     if (parsed.version !== AB10_RUNTIME_PARITY_VERSION) return null
+    // [AB18-D] Validate sessionCoaching shape - nullify if malformed
+    if (parsed.sessionCoaching && !isValidAB18SessionCoaching(parsed.sessionCoaching)) {
+      parsed.sessionCoaching = null
+    }
     return parsed
   } catch {
     return null

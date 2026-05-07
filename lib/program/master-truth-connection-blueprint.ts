@@ -2003,6 +2003,154 @@ function phaseS(): BlueprintPhase {
 }
 
 // =============================================================================
+// [STEP 22] INJURY SUBSTITUTION ADVISORY-FIRST LAYER
+// =============================================================================
+
+/**
+ * Step 22: Injury Substitution Advisory-First Layer
+ *
+ * Advisory-only injury substitution decision layer. Reads existing injury/pain/
+ * limitation signals from profile (jointCautions, jointDiscomfortFlags),
+ * readiness check-ins (jointPainAreas), workout logs (notes mentioning pain),
+ * and existing recovery snapshot (injuryConstraintLevel). Normalizes into a
+ * bounded advisory context. Generates substitution recommendations for affected
+ * exercises WITHOUT mutating the saved program automatically. Requires explicit
+ * user confirmation before any actual substitution is applied.
+ *
+ * Step 22.1: Advisory contract + derivation helper (this step)
+ * Step 22.2: User-confirmed current-session substitution apply (future)
+ * Step 22.3: Program-wide injury-aware adjustment (future, advisory-first)
+ */
+function step22(): BlueprintPhase {
+  return {
+    id: 'T',
+    title: 'Injury Substitution Advisory-First Layer (Step 22)',
+    purpose:
+      'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
+    status: 'PARTIAL',
+    nextAction:
+      'Step 22.1 advisory contract and derivation helper implemented (lib/program/injury-substitution-advisory.ts). Next: wire advisory into Program Page as a preview/advisory card for affected exercises, then implement Step 22.2 user-confirmed current-session substitution apply flow.',
+    subtasks: [
+      {
+        id: 'T.T1',
+        title: 'Injury signal sources identified and normalized',
+        status: 'COMPLETE',
+        evidence: [
+          'Profile jointCautions: shoulders | elbows | wrists | lower_back | knees (lib/athlete-profile.ts)',
+          'Profile jointDiscomfortFlags: wrist_irritation | elbow_tendon_pain | shoulder_instability | knee_discomfort | ankle_stiffness | hip_tightness | scapular_weakness (lib/athlete-profile.ts)',
+          'Readiness check-in: jointPainReported + jointPainAreas[] (lib/program/recovery-adaptation-snapshot-contract.ts)',
+          'Workout log notes: pain keyword detection (lib/program/injury-substitution-advisory.ts)',
+          'Recovery snapshot: injuryConstraintLevel (none | watch | limit | avoid) (lib/program/recovery-adaptation-snapshot-contract.ts)',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T2',
+        title: 'Joint-to-movement-pattern mapping implemented',
+        status: 'COMPLETE',
+        evidence: [
+          'JOINT_TO_MOVEMENT_PATTERNS maps each joint/region to potentially affected MovementFamily patterns (lib/program/injury-substitution-advisory.ts)',
+          'Wrist → horizontal_push, straight_arm_push, vertical_push (planche, HSPU)',
+          'Elbow → vertical_pull, straight_arm_pull, dip_pattern, explosive_pull (pull-ups, muscle-up)',
+          'Shoulder → vertical_push, dip_pattern, rings_strength, straight_arm_push/pull',
+          'Lower back → compression_core, hinge_pattern (dragon flag, deadlift)',
+          'Knee → squat_pattern, unilateral_leg (pistols, lunges)',
+          'Conservative mapping — errs on the side of flagging affected exercises',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T3',
+        title: 'Advisory-only substitution recommendations generated',
+        status: 'COMPLETE',
+        evidence: [
+          'InjurySubstitutionRecommendation type with requiresUserConfirmation=true and mutationAllowedNow=false',
+          'recommendedAction: keep_with_caution | reduce_range | reduce_load | swap_exercise | skip_and_replace_pattern | seek_professional_guidance',
+          'riskLevel: low | medium | high based on signal severity and confidence',
+          'suggestedAlternativeName + suggestedAlternativeReason with equipment-aware alternatives',
+          'visibleLabel + proofCode for UI rendering and debugging',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T4',
+        title: 'deriveInjurySubstitutionAdvisory pure helper exists',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/injury-substitution-advisory.ts exports deriveInjurySubstitutionAdvisory()',
+          'Pure function — no side effects, safe on server/client/build',
+          'Accepts InjurySubstitutionAdvisoryInput (profile signals, check-in, exercises)',
+          'Returns InjurySubstitutionAdvisorySnapshot with status, recommendations, sourceSignals, proof',
+          'Always sets applied=false, advisoryOnly=true, programMutation=false',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T5',
+        title: 'No program mutation in Step 22.1',
+        status: 'COMPLETE',
+        evidence: [
+          'Advisory contract NEVER mutates program.days',
+          'Advisory contract NEVER changes exercise.name / exercise.id',
+          'Advisory contract NEVER modifies sets/reps/rest/methods',
+          'Advisory contract NEVER changes selected skills',
+          'All mutations require Step 22.2 user confirmation (future step)',
+          'proof.mutationAllowed=false on every advisory snapshot',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T6',
+        title: 'Helper functions exported for UI consumption',
+        status: 'COMPLETE',
+        evidence: [
+          'hasActionableInjuryAdvisory() — quick check if advisory has recommendations',
+          'getHighestRiskLevel() — returns highest risk level across recommendations',
+          'getRecommendationsForExercise() — filter by exerciseId',
+          'getRecommendationsForSession() — filter by sessionId',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'T.T7',
+        title: 'Program Page advisory preview wired',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Import deriveInjurySubstitutionAdvisory in Program Page',
+          'Derive advisory from profile.jointCautions + recentCheckIn + exercises',
+          'Render compact advisory card/chip near affected exercise/session',
+          'Show "Preview only — not applied" text',
+          'Add "Review safer option" CTA if recommendation exists',
+        ],
+      },
+      {
+        id: 'T.T8',
+        title: 'Live workout advisory warning wired',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Show non-blocking advisory near affected exercise in live workout',
+          'Advisory must not prevent logging or break completion',
+        ],
+      },
+      {
+        id: 'T.T9',
+        title: 'Step 22.2 user-confirmed substitution apply',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Add explicit "Apply safer option for this session" CTA',
+          'Apply substitution to current session only (not global)',
+          'Mark substitution as user-confirmed',
+          'Preserve exercise identity for undo/revert',
+        ],
+      },
+    ],
+  }
+}
+
+// =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
 
@@ -2105,6 +2253,13 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // missed-day recomposition, live coaching). S.S1 is foundation-only —
     // defines contract and derivation helper but does NOT mutate yet.
     phaseS(),
+    // [STEP 22] Injury Substitution Advisory-First Layer
+    // Advisory-only injury substitution decision layer. Reads existing
+    // injury/pain/limitation signals from profile, readiness check-ins,
+    // workout logs, and joint caution fields. Normalizes into bounded
+    // advisory context. Generates recommendations WITHOUT mutating saved
+    // program. Requires explicit user confirmation before any apply.
+    step22(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

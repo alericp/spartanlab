@@ -2205,33 +2205,361 @@ export function buildSavedProgramSubstitutionConfirmation(
   }
 }
 
+// =============================================================================
+// STEP 22.6 — SAFE TARGET MATCHING AND APPLY CORRIDOR
+// =============================================================================
+
+/**
+ * Internal structural type for exercise-like objects in the saved program.
+ * Allows safe structural typing without unsafe casts.
+ */
+interface ExerciseLikeStructure {
+  id?: string
+  exerciseId?: string
+  name?: string
+  exerciseName?: string
+  title?: string
+  originalName?: string
+  injurySubstitutionApplied?: InjurySubstitutionAppliedMetadata
+}
+
+/**
+ * Metadata stamped on an exercise when an injury substitution is applied.
+ */
+export interface InjurySubstitutionAppliedMetadata {
+  source: 'step_22_6_saved_program_apply'
+  originalExerciseName: string
+  substituteExerciseName: string
+  proposalId: string
+  appliedAt: string
+  userApproved: true
+  exactExerciseOnly: true
+  currentWorkoutUnchanged: true
+}
+
+/**
+ * Internal structural type for session-like objects in the saved program.
+ */
+interface SessionLikeStructure {
+  id?: string
+  sessionId?: string
+  dayLabel?: string
+  day?: string
+  title?: string
+  name?: string
+  exercises?: ExerciseLikeStructure[]
+  warmup?: ExerciseLikeStructure[]
+  cooldown?: ExerciseLikeStructure[]
+}
+
+/**
+ * Internal structural type for program-like objects.
+ */
+interface ProgramLikeStructure {
+  id?: string
+  programId?: string
+  sessions?: SessionLikeStructure[]
+}
+
+/**
+ * Result of finding a substitution target in the saved program.
+ */
+export interface SavedProgramSubstitutionTargetResult {
+  matched: boolean
+  blockedReason?: string
+  sessionIndex?: number
+  exerciseIndex?: number
+  exerciseArrayKey?: 'exercises' | 'warmup' | 'cooldown'
+  sessionLabel?: string
+  exerciseName?: string
+  matchConfidence: 'exact-id' | 'exact-session-and-name' | 'day-and-name' | 'name-only-blocked' | 'none'
+  proof: {
+    programIdMatched: boolean
+    sessionMatched: boolean
+    exerciseIdMatched: boolean
+    exerciseNameMatched: boolean
+    ambiguousMatches: number
+  }
+}
+
+/**
+ * Normalize exercise name for exact matching.
+ */
+function normalizeExerciseName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+/**
+ * Get the display name from an exercise-like structure.
+ */
+function getExerciseDisplayName(exercise: ExerciseLikeStructure): string | undefined {
+  return exercise.name || exercise.exerciseName || exercise.title
+}
+
+/**
+ * Get the ID from an exercise-like structure.
+ */
+function getExerciseId(exercise: ExerciseLikeStructure): string | undefined {
+  return exercise.id || exercise.exerciseId
+}
+
+/**
+ * Get the session label from a session-like structure.
+ */
+function getSessionLabel(session: SessionLikeStructure): string | undefined {
+  return session.dayLabel || session.day || session.title || session.name
+}
+
+/**
+ * Get the session ID from a session-like structure.
+ */
+function getSessionId(session: SessionLikeStructure): string | undefined {
+  return session.id || session.sessionId
+}
+
+/**
+ * Find the exact target exercise in a saved program for substitution.
+ * [STEP 22.6] Safe exact-target matching with ambiguity blocking.
+ */
+export function findSavedProgramSubstitutionTarget(
+  program: unknown,
+  candidate: SavedProgramSubstitutionApplyCandidate,
+): SavedProgramSubstitutionTargetResult {
+  const blockedResult = (reason: string): SavedProgramSubstitutionTargetResult => ({
+    matched: false,
+    blockedReason: reason,
+    matchConfidence: 'none',
+    proof: {
+      programIdMatched: false,
+      sessionMatched: false,
+      exerciseIdMatched: false,
+      exerciseNameMatched: false,
+      ambiguousMatches: 0,
+    },
+  })
+
+  // Type guard: check if program has sessions array
+  if (!program || typeof program !== 'object') {
+    return blockedResult('Invalid program structure')
+  }
+
+  const prog = program as ProgramLikeStructure
+  if (!prog.sessions || !Array.isArray(prog.sessions)) {
+    return blockedResult('Program has no sessions array')
+  }
+
+  // Check program ID match if candidate specifies one
+  const programId = prog.id || prog.programId
+  const programIdMatched = !candidate.programId || candidate.programId === programId
+
+  if (candidate.programId && !programIdMatched) {
+    return blockedResult(`Program ID mismatch: expected ${candidate.programId}, found ${programId || 'none'}`)
+  }
+
+  // Normalize candidate original exercise name
+  const candidateOriginalName = normalizeExerciseName(candidate.originalExerciseName)
+
+  // Track all matches across the program
+  interface MatchCandidate {
+    sessionIndex: number
+    exerciseIndex: number
+    exerciseArrayKey: 'exercises' | 'warmup' | 'cooldown'
+    sessionLabel: string
+    exerciseName: string
+    matchedById: boolean
+    matchedBySession: boolean
+  }
+  const allMatches: MatchCandidate[] = []
+
+  // Iterate through sessions
+  for (let sIdx = 0; sIdx < prog.sessions.length; sIdx++) {
+    const session = prog.sessions[sIdx]
+    if (!session) continue
+
+    const sessionLabel = getSessionLabel(session) || `Session ${sIdx + 1}`
+    const sessionId = getSessionId(session)
+
+    // Check if session matches candidate's session/day scope
+    const sessionMatches =
+      (candidate.sessionId && sessionId === candidate.sessionId) ||
+      (candidate.dayKey && sessionLabel === candidate.dayKey) ||
+      (!candidate.sessionId && !candidate.dayKey) // No session scope = match all
+
+    // Search in exercises, warmup, and cooldown arrays
+    const arrayKeys: Array<'exercises' | 'warmup' | 'cooldown'> = ['exercises', 'warmup', 'cooldown']
+    
+    for (const arrayKey of arrayKeys) {
+      const exerciseArray = session[arrayKey]
+      if (!exerciseArray || !Array.isArray(exerciseArray)) continue
+
+      for (let eIdx = 0; eIdx < exerciseArray.length; eIdx++) {
+        const exercise = exerciseArray[eIdx] as ExerciseLikeStructure
+        if (!exercise) continue
+
+        const exerciseDisplayName = getExerciseDisplayName(exercise)
+        if (!exerciseDisplayName) continue
+
+        const exerciseId = getExerciseId(exercise)
+        const normalizedName = normalizeExerciseName(exerciseDisplayName)
+
+        // Check if exercise matches by ID
+        const matchedById = !!candidate.originalExerciseId && exerciseId === candidate.originalExerciseId
+
+        // Check if exercise matches by normalized name
+        const matchedByName = normalizedName === candidateOriginalName
+
+        if (matchedById || matchedByName) {
+          allMatches.push({
+            sessionIndex: sIdx,
+            exerciseIndex: eIdx,
+            exerciseArrayKey: arrayKey,
+            sessionLabel,
+            exerciseName: exerciseDisplayName,
+            matchedById,
+            matchedBySession: sessionMatches,
+          })
+        }
+      }
+    }
+  }
+
+  // No matches found
+  if (allMatches.length === 0) {
+    return blockedResult(`Exercise "${candidate.originalExerciseName}" not found in saved program`)
+  }
+
+  // Prioritize matches: ID match > session-scoped match > name-only
+  const idMatches = allMatches.filter(m => m.matchedById)
+  const sessionScopedMatches = allMatches.filter(m => m.matchedBySession)
+
+  // If we have an exact ID match, use it
+  if (idMatches.length === 1) {
+    const match = idMatches[0]
+    return {
+      matched: true,
+      sessionIndex: match.sessionIndex,
+      exerciseIndex: match.exerciseIndex,
+      exerciseArrayKey: match.exerciseArrayKey,
+      sessionLabel: match.sessionLabel,
+      exerciseName: match.exerciseName,
+      matchConfidence: 'exact-id',
+      proof: {
+        programIdMatched,
+        sessionMatched: match.matchedBySession,
+        exerciseIdMatched: true,
+        exerciseNameMatched: true,
+        ambiguousMatches: 0,
+      },
+    }
+  }
+
+  // If we have multiple ID matches (should not happen), block as ambiguous
+  if (idMatches.length > 1) {
+    return blockedResult(`Ambiguous: ${idMatches.length} exercises match by ID`)
+  }
+
+  // If we have session-scoped matches, check for uniqueness within the session
+  if (sessionScopedMatches.length === 1) {
+    const match = sessionScopedMatches[0]
+    return {
+      matched: true,
+      sessionIndex: match.sessionIndex,
+      exerciseIndex: match.exerciseIndex,
+      exerciseArrayKey: match.exerciseArrayKey,
+      sessionLabel: match.sessionLabel,
+      exerciseName: match.exerciseName,
+      matchConfidence: candidate.sessionId || candidate.dayKey ? 'exact-session-and-name' : 'day-and-name',
+      proof: {
+        programIdMatched,
+        sessionMatched: true,
+        exerciseIdMatched: false,
+        exerciseNameMatched: true,
+        ambiguousMatches: 0,
+      },
+    }
+  }
+
+  // If we have multiple session-scoped matches, block as ambiguous
+  if (sessionScopedMatches.length > 1) {
+    return blockedResult(
+      `Ambiguous: ${sessionScopedMatches.length} exercises named "${candidate.originalExerciseName}" found in target session`,
+    )
+  }
+
+  // If we only have name-only matches across multiple sessions, block as ambiguous
+  if (allMatches.length > 1) {
+    return {
+      matched: false,
+      blockedReason: `Ambiguous: "${candidate.originalExerciseName}" appears in ${allMatches.length} sessions. Specify session/day to narrow target.`,
+      matchConfidence: 'name-only-blocked',
+      proof: {
+        programIdMatched,
+        sessionMatched: false,
+        exerciseIdMatched: false,
+        exerciseNameMatched: true,
+        ambiguousMatches: allMatches.length,
+      },
+    }
+  }
+
+  // Single name-only match across program - still block for safety
+  return blockedResult(
+    `Name-only match without session scope is blocked for safety. Specify session/day to confirm target.`,
+  )
+}
+
 /**
  * Check if a candidate can be applied to the saved program.
- * For this build, returns blocked with reason since safe update corridor is not yet verified.
+ * [STEP 22.6] Uses real target matching instead of always-blocked placeholder.
  */
 export function canApplySavedProgramSubstitution<TProgram>(
   candidate: SavedProgramSubstitutionApplyCandidate,
   savedProgram: TProgram | null,
-): { canApply: boolean; blockedReason?: string } {
+): { canApply: boolean; blockedReason?: string; targetResult?: SavedProgramSubstitutionTargetResult } {
   if (!savedProgram) {
     return { canApply: false, blockedReason: 'No saved program found' }
   }
   if (!candidate.canApply) {
     return { canApply: false, blockedReason: candidate.blockedReason }
   }
-  // For now, block until safe update corridor is verified
-  return { canApply: false, blockedReason: 'Safe saved-program update corridor not yet implemented' }
+
+  // Use real target matching
+  const targetResult = findSavedProgramSubstitutionTarget(savedProgram, candidate)
+
+  if (!targetResult.matched) {
+    return { canApply: false, blockedReason: targetResult.blockedReason, targetResult }
+  }
+
+  // Ambiguous matches are blocked
+  if (targetResult.proof.ambiguousMatches > 1) {
+    return { canApply: false, blockedReason: targetResult.blockedReason, targetResult }
+  }
+
+  // Name-only matches without session scope are blocked
+  if (targetResult.matchConfidence === 'name-only-blocked') {
+    return { canApply: false, blockedReason: targetResult.blockedReason, targetResult }
+  }
+
+  return { canApply: true, targetResult }
 }
 
 /**
  * Apply saved-program substitution to the program.
- * For this build, returns blocked since safe update corridor is not yet verified.
+ * [STEP 22.6] Real safe immutable update with exact target matching.
  */
 export function applySavedProgramSubstitutionToProgram<TProgram>(
   savedProgram: TProgram,
   candidate: SavedProgramSubstitutionApplyCandidate,
   confirmation: SavedProgramSubstitutionApplyConfirmation,
 ): { result: SavedProgramSubstitutionApplyResult; updatedProgram?: TProgram } {
+  const baseProof = {
+    source: 'step_22_5_saved_program_substitution_apply' as const,
+    exactExerciseOnly: true,
+    wholeProgramRebuilt: false as const,
+    schemaChanged: false as const,
+    generatorChanged: false as const,
+  }
+
   // Block if not confirmed
   if (!confirmation.userConfirmed) {
     return {
@@ -2243,40 +2571,299 @@ export function applySavedProgramSubstitutionToProgram<TProgram>(
         substituteExerciseName: candidate.substituteExerciseName,
         savedProgramMutation: false,
         userApprovedSavedProgramMutation: false,
-        proof: {
-          source: 'step_22_5_saved_program_substitution_apply',
-          targetMatched: false,
-          exactExerciseOnly: true,
-          wholeProgramRebuilt: false,
-          schemaChanged: false,
-          generatorChanged: false,
-        },
+        proof: { ...baseProof, targetMatched: false },
         blockedReason: 'User has not confirmed — second confirmation required',
       },
     }
   }
 
-  // For now, return no_safe_update_corridor until the corridor is verified
-  return {
-    result: {
-      status: 'no_safe_update_corridor',
-      proposalId: candidate.proposalId,
-      programId: candidate.programId,
-      originalExerciseName: candidate.originalExerciseName,
-      substituteExerciseName: candidate.substituteExerciseName,
-      savedProgramMutation: false,
-      userApprovedSavedProgramMutation: true,
-      proof: {
-        source: 'step_22_5_saved_program_substitution_apply',
-        targetMatched: false,
-        exactExerciseOnly: true,
-        wholeProgramRebuilt: false,
-        schemaChanged: false,
-        generatorChanged: false,
+  // Find the exact target
+  const targetResult = findSavedProgramSubstitutionTarget(savedProgram, candidate)
+
+  if (!targetResult.matched) {
+    return {
+      result: {
+        status: 'target_not_found',
+        proposalId: candidate.proposalId,
+        programId: candidate.programId,
+        originalExerciseName: candidate.originalExerciseName,
+        substituteExerciseName: candidate.substituteExerciseName,
+        savedProgramMutation: false,
+        userApprovedSavedProgramMutation: true,
+        proof: { ...baseProof, targetMatched: false },
+        blockedReason: targetResult.blockedReason,
       },
-      blockedReason: 'Safe saved-program update corridor not yet implemented — proposal saved for review',
-    },
+    }
   }
+
+  // Validate we have the necessary indices
+  if (
+    targetResult.sessionIndex === undefined ||
+    targetResult.exerciseIndex === undefined ||
+    !targetResult.exerciseArrayKey
+  ) {
+    return {
+      result: {
+        status: 'blocked',
+        proposalId: candidate.proposalId,
+        programId: candidate.programId,
+        originalExerciseName: candidate.originalExerciseName,
+        substituteExerciseName: candidate.substituteExerciseName,
+        savedProgramMutation: false,
+        userApprovedSavedProgramMutation: true,
+        proof: { ...baseProof, targetMatched: false },
+        blockedReason: 'Target indices missing from match result',
+      },
+    }
+  }
+
+  // Safe immutable update: deep copy only the path that changes
+  try {
+    const prog = savedProgram as ProgramLikeStructure
+    if (!prog.sessions) {
+      return {
+        result: {
+          status: 'blocked',
+          proposalId: candidate.proposalId,
+          programId: candidate.programId,
+          originalExerciseName: candidate.originalExerciseName,
+          substituteExerciseName: candidate.substituteExerciseName,
+          savedProgramMutation: false,
+          userApprovedSavedProgramMutation: true,
+          proof: { ...baseProof, targetMatched: false },
+          blockedReason: 'Program structure invalid',
+        },
+      }
+    }
+
+    const targetSession = prog.sessions[targetResult.sessionIndex]
+    if (!targetSession) {
+      return {
+        result: {
+          status: 'target_not_found',
+          proposalId: candidate.proposalId,
+          programId: candidate.programId,
+          originalExerciseName: candidate.originalExerciseName,
+          substituteExerciseName: candidate.substituteExerciseName,
+          savedProgramMutation: false,
+          userApprovedSavedProgramMutation: true,
+          proof: { ...baseProof, targetMatched: false },
+          blockedReason: 'Target session not found at expected index',
+        },
+      }
+    }
+
+    const targetArray = targetSession[targetResult.exerciseArrayKey]
+    if (!targetArray || !Array.isArray(targetArray)) {
+      return {
+        result: {
+          status: 'target_not_found',
+          proposalId: candidate.proposalId,
+          programId: candidate.programId,
+          originalExerciseName: candidate.originalExerciseName,
+          substituteExerciseName: candidate.substituteExerciseName,
+          savedProgramMutation: false,
+          userApprovedSavedProgramMutation: true,
+          proof: { ...baseProof, targetMatched: false },
+          blockedReason: `Target array "${targetResult.exerciseArrayKey}" not found`,
+        },
+      }
+    }
+
+    const targetExercise = targetArray[targetResult.exerciseIndex] as ExerciseLikeStructure
+    if (!targetExercise) {
+      return {
+        result: {
+          status: 'target_not_found',
+          proposalId: candidate.proposalId,
+          programId: candidate.programId,
+          originalExerciseName: candidate.originalExerciseName,
+          substituteExerciseName: candidate.substituteExerciseName,
+          savedProgramMutation: false,
+          userApprovedSavedProgramMutation: true,
+          proof: { ...baseProof, targetMatched: false },
+          blockedReason: 'Target exercise not found at expected index',
+        },
+      }
+    }
+
+    // Determine which field to update based on existing exercise structure
+    const originalDisplayName = getExerciseDisplayName(targetExercise) || candidate.originalExerciseName
+    const nameField: 'name' | 'exerciseName' | 'title' = targetExercise.name
+      ? 'name'
+      : targetExercise.exerciseName
+        ? 'exerciseName'
+        : 'title'
+
+    // Create metadata stamp
+    const metadata: InjurySubstitutionAppliedMetadata = {
+      source: 'step_22_6_saved_program_apply',
+      originalExerciseName: originalDisplayName,
+      substituteExerciseName: candidate.substituteExerciseName,
+      proposalId: candidate.proposalId,
+      appliedAt: new Date().toISOString(),
+      userApproved: true,
+      exactExerciseOnly: true,
+      currentWorkoutUnchanged: true,
+    }
+
+    // Build updated exercise (immutable)
+    const updatedExercise = {
+      ...targetExercise,
+      [nameField]: candidate.substituteExerciseName,
+      originalName: originalDisplayName, // Preserve original for potential undo
+      injurySubstitutionApplied: metadata,
+    }
+
+    // Build updated array (immutable)
+    const updatedArray = [
+      ...targetArray.slice(0, targetResult.exerciseIndex),
+      updatedExercise,
+      ...targetArray.slice(targetResult.exerciseIndex + 1),
+    ]
+
+    // Build updated session (immutable)
+    const updatedSession = {
+      ...targetSession,
+      [targetResult.exerciseArrayKey]: updatedArray,
+    }
+
+    // Build updated sessions array (immutable)
+    const updatedSessions = [
+      ...prog.sessions.slice(0, targetResult.sessionIndex),
+      updatedSession,
+      ...prog.sessions.slice(targetResult.sessionIndex + 1),
+    ]
+
+    // Build updated program (immutable)
+    const updatedProgram = {
+      ...prog,
+      sessions: updatedSessions,
+    } as TProgram
+
+    return {
+      result: {
+        status: 'applied',
+        proposalId: candidate.proposalId,
+        programId: candidate.programId,
+        originalExerciseName: candidate.originalExerciseName,
+        substituteExerciseName: candidate.substituteExerciseName,
+        savedProgramMutation: true,
+        userApprovedSavedProgramMutation: true,
+        proof: {
+          ...baseProof,
+          targetMatched: true,
+          appliedAt: metadata.appliedAt,
+        },
+      },
+      updatedProgram,
+    }
+  } catch (err) {
+    return {
+      result: {
+        status: 'failed',
+        proposalId: candidate.proposalId,
+        programId: candidate.programId,
+        originalExerciseName: candidate.originalExerciseName,
+        substituteExerciseName: candidate.substituteExerciseName,
+        savedProgramMutation: false,
+        userApprovedSavedProgramMutation: true,
+        proof: { ...baseProof, targetMatched: false },
+        errorMessage: err instanceof Error ? err.message : 'Unknown error during apply',
+      },
+    }
+  }
+}
+
+/**
+ * Verify that a saved-program substitution was successfully applied after reload.
+ * [STEP 22.6] Reload verification helper.
+ */
+export function verifySavedProgramSubstitutionApplied(
+  program: unknown,
+  candidate: SavedProgramSubstitutionApplyCandidate,
+): {
+  verified: boolean
+  blockedReason?: string
+  proof: {
+    targetMatched: boolean
+    substituteNamePresent: boolean
+    originalNamePreservedInMetadata: boolean
+    exactExerciseOnly: boolean
+  }
+} {
+  const failedResult = (reason: string) => ({
+    verified: false,
+    blockedReason: reason,
+    proof: {
+      targetMatched: false,
+      substituteNamePresent: false,
+      originalNamePreservedInMetadata: false,
+      exactExerciseOnly: true,
+    },
+  })
+
+  if (!program || typeof program !== 'object') {
+    return failedResult('Invalid program structure after reload')
+  }
+
+  const prog = program as ProgramLikeStructure
+  if (!prog.sessions || !Array.isArray(prog.sessions)) {
+    return failedResult('Program has no sessions array after reload')
+  }
+
+  // Look for the substituted exercise with the new name
+  const normalizedSubstituteName = normalizeExerciseName(candidate.substituteExerciseName)
+
+  for (const session of prog.sessions) {
+    if (!session) continue
+
+    const sessionLabel = getSessionLabel(session)
+    const sessionMatches =
+      (candidate.sessionId && getSessionId(session) === candidate.sessionId) ||
+      (candidate.dayKey && sessionLabel === candidate.dayKey) ||
+      (!candidate.sessionId && !candidate.dayKey)
+
+    if (!sessionMatches) continue
+
+    const arrayKeys: Array<'exercises' | 'warmup' | 'cooldown'> = ['exercises', 'warmup', 'cooldown']
+
+    for (const arrayKey of arrayKeys) {
+      const exerciseArray = session[arrayKey]
+      if (!exerciseArray || !Array.isArray(exerciseArray)) continue
+
+      for (const exercise of exerciseArray) {
+        const ex = exercise as ExerciseLikeStructure
+        if (!ex) continue
+
+        const displayName = getExerciseDisplayName(ex)
+        if (!displayName) continue
+
+        const normalizedName = normalizeExerciseName(displayName)
+
+        // Check if this exercise now has the substitute name
+        if (normalizedName === normalizedSubstituteName) {
+          // Check if it has the metadata proving it was our substitution
+          const metadata = ex.injurySubstitutionApplied
+          const hasCorrectMetadata =
+            metadata?.proposalId === candidate.proposalId &&
+            metadata?.originalExerciseName !== undefined
+
+          return {
+            verified: true,
+            proof: {
+              targetMatched: true,
+              substituteNamePresent: true,
+              originalNamePreservedInMetadata: hasCorrectMetadata,
+              exactExerciseOnly: true,
+            },
+          }
+        }
+      }
+    }
+  }
+
+  return failedResult('Substitute exercise not found after reload — verification failed')
 }
 
 /**

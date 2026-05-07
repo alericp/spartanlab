@@ -91,6 +91,7 @@ import {
   canApplySavedProgramSubstitution,
   applySavedProgramSubstitutionToProgram,
   getApplyConfirmationDisplayInfo,
+  verifySavedProgramSubstitutionApplied,
   type PostWorkoutSubstitutionProposalQueue,
   type ScopedPostWorkoutSubstitutionProposalQueue,
   type ProposalQueueScope,
@@ -7715,7 +7716,24 @@ if (shouldShowLocalFallback) {
                         // Persist the updated program
                         try {
                           saveAdaptiveProgram(updatedProgram)
-                          setApplyResultMessage('Saved program updated successfully.')
+                          
+                          // [STEP 22.6] Reload and verify the substitution was persisted
+                          const reloadedProgram = getLatestAdaptiveProgram()
+                          const verification = verifySavedProgramSubstitutionApplied(
+                            reloadedProgram,
+                            applyConfirmation.candidate,
+                          )
+                          
+                          if (!verification.verified) {
+                            // Save succeeded but reload verification failed
+                            setApplyResultMessage(
+                              'Saved program save could not be verified — check program before relying on this change.',
+                            )
+                            return
+                          }
+                          
+                          // Verified success
+                          setApplyResultMessage('Saved program updated for future workouts.')
                           
                           // Update proposal status to accepted
                           if (substitutionProposalQueue) {

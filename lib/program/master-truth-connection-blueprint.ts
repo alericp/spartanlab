@@ -2433,20 +2433,24 @@ function step23(): BlueprintPhase {
 }
 
 // =============================================================================
-// STEP 24: MISSED-WORKOUT RECOMPOSITION EXPANSION
+// STEP 24: MISSED-WORKOUT RECOMPOSITION EXPANSION [PARKED]
 // =============================================================================
 
 function step24(): BlueprintPhase {
-  // [STEP 24] Owner-directed expansion of missed-workout recomposition.
+  // [STEP 24] PARKED — Owner-directed expansion of missed-workout recomposition.
   // Multi-missed context detection + additional safe user actions.
+  // PARKED REASON: Missed-workout multi-action expansion is validation/edge-case
+  // work, not the immediate highest-value active branch. Step 24.1 is complete.
+  // Remaining V.V2-V.V7 subtasks are parked until the core Intelligence/Coaching/
+  // Usability/Performance branch (Step 25) is stronger.
   return {
     id: 'V',
-    title: 'Missed-Workout Recomposition Expansion: Multi-Missed Context + Additional Safe User Actions (Step 24)',
+    title: '[PARKED] Missed-Workout Recomposition Expansion (Step 24) — Return After Step 25',
     purpose:
-      'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure.',
-    status: 'PARTIAL',
+      'PARKED: Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. PARKED until Step 25 Intelligence branch is complete.',
+    status: 'DO_NOT_REDO',
     nextAction:
-      'Step 24.1 COMPLETE. Multi-missed-workout context advisory foundation added. buildMultiMissedWorkoutContextAdvisory helper detects patterns from existing single-session advisory and available program context. Advisory-only — no mutation. Next: Step 24.2 additional action readiness audit for reduce_next_session_intensity.',
+      'PARKED. Step 24.1 COMPLETE. Remaining V.V2-V.V7 subtasks deferred. Return to this branch after Step 25 Intelligence/Coaching/Usability/Performance Enhancement is stronger. Do not continue missed-workout multi-action expansion until core intelligence delivery is proven.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2530,6 +2534,173 @@ function step24(): BlueprintPhase {
           'Verify reload preserves applied changes',
           'Verify Step 22/23 preserved',
           'Blueprint closeout',
+        ],
+      },
+    ],
+  }
+}
+
+// =============================================================================
+// STEP 25: INTELLIGENCE, COACHING, USABILITY, AND PERFORMANCE ENHANCEMENT
+// =============================================================================
+
+function step25(): BlueprintPhase {
+  // [STEP 25] Active branch — Intelligence/Coaching/Usability/Performance audit
+  // and enhancement. This is the immediate next work after Step 24 was parked.
+  return {
+    id: 'W',
+    title: 'Intelligence, Coaching, Usability, and Performance Enhancement (Step 25)',
+    purpose:
+      'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
+    status: 'PARTIAL',
+    nextAction:
+      'Step 25.1 COMPLETE — Intelligence/Coaching/Usability/Performance Audit Lock. Inventory of real vs cosmetic intelligence complete. Step 24 parked as final validation. Official Step 25 checklist created. Next: Step 25.2 Existing Intelligence Visibility Repair.',
+    subtasks: [
+      {
+        id: 'W.W1',
+        title: 'Intelligence/Coaching/Usability/Performance Audit Lock',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 25.1] Full codebase audit of intelligence systems completed',
+          '[STEP 25.1] Step 24 reclassified as PARKED/DO_NOT_REDO final validation branch',
+          '[STEP 25.1] Official Step 25 checklist created with 12 substeps',
+          '[STEP 25.1] docs/STEP_25_INTELLIGENCE_AUDIT.md created with capability inventory',
+          '[STEP 25.1] Real computed intelligence identified: unified-coaching-engine, evidence-derived-coach-recommendations, doctrine system, fatigue/readiness engines, performance-envelope, skill-readiness, constraint-engine, training-principles-engine',
+          '[STEP 25.1] Weakly visible intelligence identified: doctrine-to-output-verification, weekly-method-decision-summary, training-differentiation-calibrator',
+          '[STEP 25.1] Missing necessary identified: progressive overload visibility, week-to-week progression clarity, exercise-level coaching context',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'W.W2',
+        title: 'Existing Intelligence Visibility Repair',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Surface already-computed doctrine decisions in concise UI',
+          'Connect weekly method summary to visible session cards',
+          'Show performance envelope state without technical jargon',
+          'Display fatigue/readiness signals in actionable format',
+        ],
+      },
+      {
+        id: 'W.W3',
+        title: 'Program Decision Explanation Upgrade',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Derive why-this-program reasoning from canonical builder truth',
+          'Show which onboarding selections influenced which decisions',
+          'Explain method selection in user-friendly terms',
+          'No fake reasoning copy — must trace to real computation',
+        ],
+      },
+      {
+        id: 'W.W4',
+        title: 'Performance Progression Clarity',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Show week-to-week progression status (advancing/holding/capped/reduced)',
+          'Display session-to-session load progression',
+          'Explain why progression is happening or being constrained',
+          'Must derive from real program/performance evidence',
+        ],
+      },
+      {
+        id: 'W.W5',
+        title: 'Adaptive Session Readiness / Today Guidance Upgrade',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Improve today guidance based on readiness, soreness, time, fatigue',
+          'Connect skill-readiness-engine output to visible suggestions',
+          'Make guidance actionable without being noisy',
+          'Integrate with existing constraint/pain signals',
+        ],
+      },
+      {
+        id: 'W.W6',
+        title: 'Exercise-Level Coaching Upgrade',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Add per-exercise "why this" context from builder truth',
+          'Show skill carryover, method expression, pain risk context',
+          'Keep explanations short and contextual',
+          'Derive from exercise-intelligence-engine and doctrine',
+        ],
+      },
+      {
+        id: 'W.W7',
+        title: 'Rest / RPE / Effort Intelligence Usability',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Explain rest period reasoning in user terms',
+          'Clarify RPE targets and why they are set',
+          'Make effort guidance actionable without overwhelming',
+          'Connect to existing rest-intelligence and rpe-adjustment-engine',
+        ],
+      },
+      {
+        id: 'W.W8',
+        title: 'Selected Skill Representation Truth',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Audit whether selected skills appear directly or via carryover',
+          'Explain why a skill is represented indirectly if applicable',
+          'No selected priority should silently disappear',
+          'Connect to skill-specific-truth-resolution',
+        ],
+      },
+      {
+        id: 'W.W9',
+        title: 'Recovery / Injury / Substitution Coaching Integration',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Integrate injury-substitution-advisory into visible coaching',
+          'Show recovery guidance from recovery-fatigue-engine',
+          'Keep safety guidance advisory-first without bloating UI',
+          'Preserve Step 22 injury substitution behavior',
+        ],
+      },
+      {
+        id: 'W.W10',
+        title: 'User Control Without Breaking Intelligence',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Identify safe user override points',
+          'Add gentle warnings when choices are less optimal',
+          'Preserve program logic when users make adjustments',
+          'Connect to existing override-signal-service',
+        ],
+      },
+      {
+        id: 'W.W11',
+        title: 'Coaching Noise Reduction / Premium UX Polish',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Audit coaching surfaces for duplicated/confusing content',
+          'Remove technical proof clutter from user-facing UI',
+          'Keep high-value explanations, remove low-value noise',
+          'Ensure premium feel without information overload',
+        ],
+      },
+      {
+        id: 'W.W12',
+        title: 'End-to-End Intelligence Truth-to-UI Lock',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Verify truth survives: builder → adaptation → normalization → persistence → API → client → UI',
+          'Audit Program UI, Today UI, Live Workout UI for intelligence delivery',
+          'Confirm no intelligence loss at any stage',
+          'Close Step 25 only after visible user proof',
         ],
       },
     ],
@@ -2654,12 +2825,16 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // protect spacing, regenerate). No automatic mutation. No saved-program
     // rewrite. Requires explicit user confirmation before any schedule change.
     step23(),
-    // [STEP 24] Missed-Workout Recomposition Expansion
+    // [STEP 24] PARKED — Missed-Workout Recomposition Expansion
     // Multi-missed context detection + additional safe user actions.
-    // Step 24.1 is advisory-only foundation. Future substeps add mutation
-    // corridors for reduce_intensity, protect_recovery_spacing, and
-    // multi-session push-forward, each requiring explicit confirmation.
+    // Step 24.1 is advisory-only foundation. Future substeps parked until
+    // Step 25 Intelligence branch is complete.
     step24(),
+    // [STEP 25] ACTIVE — Intelligence, Coaching, Usability, Performance Enhancement
+    // Make existing computed intelligence visible and actionable. Improve
+    // program decision explanations. Clarify performance progression.
+    // This is the immediate active branch after Step 24 was parked.
+    step25(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

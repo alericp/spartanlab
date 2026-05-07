@@ -120,7 +120,7 @@ export function MaterializationStatusLine({ program }: Props) {
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400/90" aria-hidden />
-        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Doctrine materialized</span>
+        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Training rules applied</span>
         <span className="text-[12px] text-emerald-200/70 break-words [overflow-wrap:anywhere] min-w-0">
           {parts.join(' · ')}
         </span>
@@ -137,7 +137,7 @@ export function MaterializationStatusLine({ program }: Props) {
       className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-zinc-700/40 bg-zinc-900/40 px-3 py-2 max-w-full min-w-0 overflow-hidden"
     >
       <MinusCircle className="w-3.5 h-3.5 shrink-0 text-zinc-400/80" aria-hidden />
-      <span className="text-[12px] font-medium text-zinc-300 shrink-0">Doctrine loaded</span>
+      <span className="text-[12px] font-medium text-zinc-300 shrink-0">Training rules loaded</span>
       <span className="text-[12px] text-zinc-400/80 break-words [overflow-wrap:anywhere] min-w-0">
         no structural changes applied — sessions remain straight-set for this profile
       </span>
@@ -265,7 +265,7 @@ export function DoctrineCausalLine({ program }: Props) {
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400/90" aria-hidden />
-        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Doctrine selected exercises</span>
+        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Training rules selected exercises</span>
         <span className="text-[12px] text-emerald-200/70 break-words [overflow-wrap:anywhere] min-w-0">
           changed {sessionsChanged} session{sessionsChanged === 1 ? '' : 's'} of {sessionsWithAudit} evaluated
         </span>
@@ -284,7 +284,7 @@ export function DoctrineCausalLine({ program }: Props) {
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-500/30 bg-amber-500/[0.05] px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400/90" aria-hidden />
-        <span className="text-[12px] font-medium text-amber-200 shrink-0">Doctrine did not reach generation</span>
+        <span className="text-[12px] font-medium text-amber-200 shrink-0">Training rules unavailable</span>
         <span className="text-[12px] text-amber-200/70 break-words [overflow-wrap:anywhere] min-w-0">
           {verdict === 'doctrine_cache_empty'
             ? 'rules cache was unavailable when this program was built'
@@ -304,7 +304,7 @@ export function DoctrineCausalLine({ program }: Props) {
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-500/30 bg-amber-500/[0.05] px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400/90" aria-hidden />
-        <span className="text-[12px] font-medium text-amber-200 shrink-0">No doctrine rules matched</span>
+        <span className="text-[12px] font-medium text-amber-200 shrink-0">No matching rules for profile</span>
         <span className="text-[12px] text-amber-200/70 break-words [overflow-wrap:anywhere] min-w-0">
           rules were loaded but none applied to your profile&apos;s candidates
         </span>
@@ -324,7 +324,7 @@ export function DoctrineCausalLine({ program }: Props) {
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-zinc-700/40 bg-zinc-900/40 px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <MinusCircle className="w-3.5 h-3.5 shrink-0 text-zinc-400/80" aria-hidden />
-        <span className="text-[12px] font-medium text-zinc-300 shrink-0">Doctrine evaluated alternatives</span>
+        <span className="text-[12px] font-medium text-zinc-300 shrink-0">Alternatives evaluated</span>
         <span className="text-[12px] text-zinc-400/80 break-words [overflow-wrap:anywhere] min-w-0">
           base ranking already optimal — no exercise selection changed across {sessionsWithAudit} session{sessionsWithAudit === 1 ? '' : 's'}
         </span>
@@ -580,7 +580,7 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-400/80">
           <span className="font-medium text-zinc-300">Prescription bounds</span>
           <span>
-            {mutatorRollup?.rowsWithinBounds ?? 0}/{totalRows} rows within doctrine bounds
+            {mutatorRollup?.rowsWithinBounds ?? 0}/{totalRows} rows within prescription bounds
             {(mutatorRollup?.rowsOutOfBounds ?? 0) > 0 &&
               ` · ${mutatorRollup?.rowsOutOfBounds} out-of-bounds (not mutated)`}
             {(mutatorRollup?.rowsMissingBounds ?? 0) > 0 &&
@@ -595,7 +595,7 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
           applied a real mutation (count > 0). */}
       {mutatorRollup && ((mutatorRollup.prescriptionRestApplied ?? 0) > 0 || (mutatorRollup.prescriptionRpeApplied ?? 0) > 0) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-400/80">
-          <span className="font-medium text-zinc-300">Doctrine deltas</span>
+          <span className="font-medium text-zinc-300">Prescription changes</span>
           <span>
             {(mutatorRollup.prescriptionRestApplied ?? 0) > 0 &&
               `${mutatorRollup.prescriptionRestApplied} rest adjustment${(mutatorRollup.prescriptionRestApplied ?? 0) === 1 ? '' : 's'}`}
@@ -611,7 +611,7 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
           rollup. Hidden when the corridor never ran (no rollup attached). */}
       {mutatorRollup?.programFinalVerdict && (
         <div className="mt-1 flex items-center gap-2 text-[11px]">
-          <span className="font-medium text-zinc-300">Doctrine application</span>
+          <span className="font-medium text-zinc-300">Training rules</span>
           <span
             className={
               mutatorRollup.programFinalVerdict === 'DOCTRINE_DECISIVELY_APPLIED'
@@ -825,7 +825,7 @@ function Phase4QDoctrineBlockResolutionLine({
         className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
         style={{ overflowWrap: 'anywhere' }}
       >
-        <span className="font-medium text-zinc-300">Doctrine blocks</span>
+        <span className="font-medium text-zinc-300">Rule blocks</span>
         <span className={tone} title={sampleTooltip}>
           {label}
         </span>
@@ -901,7 +901,7 @@ function Phase4QDoctrineParticipationLine({
         className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
         style={{ overflowWrap: 'anywhere' }}
       >
-        <span className="font-medium text-zinc-300">Doctrine participation</span>
+        <span className="font-medium text-zinc-300">Rule participation</span>
         <span className={tone} title={tooltip}>
           {label}
         </span>

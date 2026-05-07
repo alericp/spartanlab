@@ -241,7 +241,7 @@ debug report.
 | ID | Subtask | Status |
 |----|---------|--------|
 | J1 | Hide stale/internal audit clutter from normal user view | `COMPLETE` |
-| J2 | Keep only useful doctrine explanations | `NOT_STARTED` |
+| J2 | Keep only useful doctrine explanations | `COMPLETE` |
 | J3 | Preserve compact product-grade UI | `NOT_STARTED` |
 | J4 | Keep diagnostics available where needed | `COMPLETE` |
 | J5 | Final result feels like an AI coach | `NOT_STARTED` |
@@ -258,6 +258,25 @@ debug report.
   `const probeActive = false as boolean`).
 - AB18 session coaching line preserved as user-facing (KEEP_USER_COACHING).
 - `data-ab10-*` and `data-ab18-*` DOM proof attributes preserved for QA.
+
+**J2 Evidence (COMPLETE):**
+- MaterializationStatusLine: "Doctrine materialized/loaded" → "Training rules
+  applied/loaded", "Doctrine selected exercises" → "Training rules selected
+  exercises", "Doctrine did not reach generation" → "Training rules
+  unavailable", "No doctrine rules matched" → "No matching rules for profile",
+  "Doctrine evaluated alternatives" → "Alternatives evaluated", "within
+  doctrine bounds" → "within prescription bounds", "Doctrine deltas" →
+  "Prescription changes", "Doctrine application" → "Training rules", "Doctrine
+  blocks" → "Rule blocks", "Doctrine participation" → "Rule participation".
+- AdaptiveSessionCard: "Doctrine method" → "Training method", "Doctrine:
+  tendon RPE" → "Tendon RPE", verbose doctrine explanations shortened.
+- ProgramMaterializationStaleNotice: "Doctrine materialization not applied" →
+  "Program generated before optimization engine", "Doctrine selected zero
+  structural changes" → "No structural changes applied", internal doctrine
+  engine references renamed to "optimization engine" or "training rules".
+- ProgramTrustAccordion "AI changed your plan" labels preserved (already
+  coach-like).
+- Deeper doctrine surfaces in trust accordions preserved for detail view.
 
 **J4 Evidence (COMPLETE):**
 - Diagnostics preserved via `data-*` attributes on DOM elements.

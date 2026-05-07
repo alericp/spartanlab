@@ -174,26 +174,26 @@ export function ProgramMaterializationStaleNotice({ program, onRegenerate }: Pro
     // [PHASE 4D] Highest-priority message — the program was generated under
     // the broken causal path. The user MUST regenerate to receive doctrine
     // influence on selection, materiality, and method packaging.
-    title = 'This program was generated before the doctrine engine ran end-to-end'
+    title = 'Program generated before optimization engine ran end-to-end'
     body =
       state.foundCausalVersion
-        ? `Program causal version "${state.foundCausalVersion}" predates the current engine "${DOCTRINE_CAUSAL_VERSION_CURRENT}". Regenerate so doctrine can actually shape exercise selection, grouping, and method packaging — the previous generation only counted rules without applying them.`
-        : 'A silent ordering bug in the previous generation pipeline meant doctrine rules were detected but never applied to your program. Regenerate so doctrine influence can shape exercise selection, grouping, and method packaging.'
+        ? `Program version "${state.foundCausalVersion}" predates the current engine "${DOCTRINE_CAUSAL_VERSION_CURRENT}". Regenerate to apply training rules to exercise selection, grouping, and method packaging — the previous generation only counted rules without applying them.`
+        : 'A silent ordering bug in the previous generation pipeline meant training rules were detected but never applied to your program. Regenerate so rule influence can shape exercise selection, grouping, and method packaging.'
     ariaTag = 'pre_causal_fix'
   } else if (state.kind === 'legacy_no_stamp') {
-    title = 'Doctrine materialization not applied to this program'
+    title = 'Program generated before optimization engine'
     body =
-      'This saved program was generated before doctrine materialization was wired. Regenerate to receive a profile-aware program with grouped blocks, set-execution methods, and skill-quality protections.'
+      'This saved program was generated before the optimization engine was enabled. Regenerate to receive a profile-aware program with grouped blocks, set-execution methods, and skill-quality protections.'
     ariaTag = 'legacy_no_stamp'
   } else if (state.kind === 'stale_stamp_version') {
     title = 'Program was stamped by an older engine version'
-    body = `Doctrine engine has advanced since this program was built (found ${state.foundVersion}, current ${METHOD_DECISION_VERSION}). Regenerate to apply the latest profile-aware decisions.`
+    body = `Optimization engine has advanced since this program was built (found ${state.foundVersion}, current ${METHOD_DECISION_VERSION}). Regenerate to apply the latest profile-aware decisions.`
     ariaTag = 'stale_stamp_version'
   } else {
     // all_sessions_flat
-    title = 'Doctrine selected zero structural changes for this program'
+    title = 'No structural changes applied to this program'
     body =
-      'The current generation produced no grouped blocks, supersets, density work, or row-level set-execution methods. This usually means the doctrine engine and your profile produced an all-straight-set program. Regenerate to give doctrine a fresh pass with your latest settings.'
+      'The current generation produced no grouped blocks, supersets, density work, or row-level set-execution methods. This usually means your profile produced an all-straight-set program. Regenerate to apply the latest training rules with your current settings.'
     ariaTag = 'all_sessions_flat'
   }
 

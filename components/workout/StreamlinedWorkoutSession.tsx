@@ -73,6 +73,7 @@ import {
   Crown,
   Target,
   Zap,
+  AlertCircle,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
@@ -82,10 +83,21 @@ import {
   hasPendingProposals,
   getPendingProposals,
   getProposalDisplayInfo,
-  markProposalDismissed,
-  markProposalDeferred,
+  // Step 22.5: Scoped proposal queue and apply helpers
+  saveScopedProposalQueue,
+  updateAndPersistProposalStatus,
+  buildSavedProgramSubstitutionApplyCandidate,
+  buildSavedProgramSubstitutionConfirmation,
+  canApplySavedProgramSubstitution,
+  applySavedProgramSubstitutionToProgram,
+  getApplyConfirmationDisplayInfo,
   type PostWorkoutSubstitutionProposalQueue,
+  type ScopedPostWorkoutSubstitutionProposalQueue,
+  type ProposalQueueScope,
+  type SavedProgramSubstitutionApplyCandidate,
+  type SavedProgramSubstitutionApplyConfirmation,
 } from '@/lib/program/injury-substitution-advisory'
+import { saveAdaptiveProgram, getLatestAdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [WEEK-PROGRESSION-TRUTH] Import scaled exercise type for week-aware dosage in live workout
 // [LIVE-UNIT-CONTRACT] Canonical hold-vs-reps detector - single source of truth
@@ -3440,7 +3452,16 @@ export function StreamlinedWorkoutSession({
   // [STEP 22.4 / T.T12] Post-workout substitution proposal queue state.
   // Built from exercises with applied injury substitutions after workout completion.
   // User can dismiss, defer, or mark for future review. Saved program is NEVER auto-mutated.
-  const [substitutionProposalQueue, setSubstitutionProposalQueue] = useState<PostWorkoutSubstitutionProposalQueue | null>(null)
+  const [substitutionProposalQueue, setSubstitutionProposalQueue] = useState<ScopedPostWorkoutSubstitutionProposalQueue | null>(null)
+
+  // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
+  // When user clicks "Use as planned substitute", we show a second confirmation
+  // before actually mutating the saved program. No automatic mutation.
+  const [applyConfirmation, setApplyConfirmation] = useState<{
+    candidate: SavedProgramSubstitutionApplyCandidate
+    confirmation: SavedProgramSubstitutionApplyConfirmation
+  } | null>(null)
+  const [applyResultMessage, setApplyResultMessage] = useState<string | null>(null)
 
 // [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
   // live deload decisions. Updated after each completed set. The decision is
@@ -7277,27 +7298,51 @@ if (shouldShowLocalFallback) {
   }
   
   // ==========================================================================
-  // [STEP 22.4 / T.T12] BUILD POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE
+  // [STEP 22.4 / T.T12 + STEP 22.5 / T.T13] BUILD POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE
   // ==========================================================================
   // When entering completed state, collect evidence from exercises that had
   // injury substitutions applied and build the proposal queue. This happens
   // once when status transitions to 'completed' and exercises are available.
   // The queue is used in the pre-save completion UI to show proposals.
+  // [STEP 22.5] Queue is now scoped by program/session to prevent stale leaks.
   
   // Build proposal queue when entering completed state
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
+      // Get program ID for scoping
+      const savedProgram = getLatestAdaptiveProgram()
+      const programId = savedProgram?.id
+      
+      // Build scope for this proposal queue
+      const scope: ProposalQueueScope = {
+        programId,
+        sessionId: safeSession.dayLabel,
+        dayKey: safeSession.dayLabel,
+      }
+      
       // Collect evidence from exercises with applied substitutions
       const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
         sessionId: safeSession.dayLabel,
+        programId,
         dayKey: safeSession.dayLabel,
       })
       
       if (evidence.length > 0) {
         // Build proposals from evidence
-        const queue = buildSavedProgramSubstitutionProposals(evidence)
-        setSubstitutionProposalQueue(queue)
+        const baseQueue = buildSavedProgramSubstitutionProposals(evidence)
+        
+        // Create scoped queue with eligibility info
+        const scopedQueue: ScopedPostWorkoutSubstitutionProposalQueue = {
+          ...baseQueue,
+          scope,
+          safeForSavedProgramApply: !!programId,
+          applyBlockedReason: programId ? undefined : 'Missing program ID — cannot apply to saved program',
+        }
+        
+        // Persist scoped queue to sessionStorage
+        saveScopedProposalQueue(scopedQueue, scope)
+        setSubstitutionProposalQueue(scopedQueue)
       }
     }
   }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
@@ -7468,9 +7513,10 @@ if (shouldShowLocalFallback) {
               />
             </Card>
 
-            {/* [STEP 22.4 / T.T12] Post-workout substitution proposal review */}
+            {/* [STEP 22.4 / T.T12 + STEP 22.5 / T.T13] Post-workout substitution proposal review */}
             {/* Shows when exercises had injury substitutions applied during the workout */}
-            {hasPendingProposals(substitutionProposalQueue) && (
+            {/* Step 22.5 adds second confirmation for saved-program apply */}
+            {hasPendingProposals(substitutionProposalQueue) && !applyConfirmation && (
               <Card className="bg-[#1A1F26] border-teal-500/30 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 rounded-full bg-teal-500/10 flex items-center justify-center">
@@ -7481,6 +7527,12 @@ if (shouldShowLocalFallback) {
                 
                 {getPendingProposals(substitutionProposalQueue).map((proposal) => {
                   const display = getProposalDisplayInfo(proposal)
+                  const queueScope: ProposalQueueScope = substitutionProposalQueue?.scope || {
+                    sessionId: safeSession.dayLabel,
+                    dayKey: safeSession.dayLabel,
+                  }
+                  const canApplyToProgram = substitutionProposalQueue?.safeForSavedProgramApply ?? false
+                  
                   return (
                     <div key={proposal.proposalId} className="mb-3 last:mb-0">
                       <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
@@ -7511,15 +7563,19 @@ if (shouldShowLocalFallback) {
                         </div>
                         
                         {/* Action buttons */}
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
                               if (substitutionProposalQueue) {
-                                setSubstitutionProposalQueue(
-                                  markProposalDismissed(substitutionProposalQueue, proposal.proposalId)
+                                const updated = updateAndPersistProposalStatus(
+                                  substitutionProposalQueue,
+                                  proposal.proposalId,
+                                  'dismissed',
+                                  queueScope,
                                 )
+                                setSubstitutionProposalQueue(updated)
                               }
                             }}
                             className="h-7 px-2 text-xs text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2B313A]"
@@ -7531,15 +7587,35 @@ if (shouldShowLocalFallback) {
                             size="sm"
                             onClick={() => {
                               if (substitutionProposalQueue) {
-                                setSubstitutionProposalQueue(
-                                  markProposalDeferred(substitutionProposalQueue, proposal.proposalId)
+                                const updated = updateAndPersistProposalStatus(
+                                  substitutionProposalQueue,
+                                  proposal.proposalId,
+                                  'deferred',
+                                  queueScope,
                                 )
+                                setSubstitutionProposalQueue(updated)
                               }
                             }}
                             className="h-7 px-2 text-xs text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#2B313A]"
                           >
                             Remind Later
                           </Button>
+                          {/* [STEP 22.5] Apply to saved program — requires second confirmation */}
+                          {canApplyToProgram && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // Build candidate and confirmation for second step
+                                const candidate = buildSavedProgramSubstitutionApplyCandidate(proposal, queueScope)
+                                const confirmation = buildSavedProgramSubstitutionConfirmation(candidate)
+                                setApplyConfirmation({ candidate, confirmation })
+                              }}
+                              className="h-7 px-2 text-xs text-teal-400 hover:text-teal-300 hover:bg-teal-500/10"
+                            >
+                              Use as Planned
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -7550,6 +7626,131 @@ if (shouldShowLocalFallback) {
                 <p className="text-[10px] text-[#6B7280] mt-2 text-center">
                   Not medical advice. Stop if pain worsens.
                 </p>
+              </Card>
+            )}
+
+            {/* [STEP 22.5 / T.T13] Second confirmation card for saved-program apply */}
+            {applyConfirmation && (
+              <Card className="bg-[#1A1F26] border-amber-500/30 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <p className="text-sm font-medium text-[#E6E9EF]">Confirm Program Update</p>
+                </div>
+                
+                <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-3">
+                  {(() => {
+                    const displayInfo = getApplyConfirmationDisplayInfo(
+                      applyConfirmation.confirmation,
+                      applyConfirmation.candidate,
+                    )
+                    return (
+                      <>
+                        <p className="text-sm text-[#E6E9EF] mb-2">
+                          Change <span className="text-[#A4ACB8]">{displayInfo.originalExercise}</span> to{' '}
+                          <span className="font-medium text-teal-400">{displayInfo.substituteExercise}</span>?
+                        </p>
+                        <p className="text-xs text-[#6B7280] mb-2">{displayInfo.targetScope}</p>
+                        <p className="text-xs text-amber-400/80 mb-2">{displayInfo.warning}</p>
+                        <p className="text-[10px] text-[#6B7280]">{displayInfo.safetyCopy}</p>
+                      </>
+                    )
+                  })()}
+                </div>
+                
+                {/* Apply result message */}
+                {applyResultMessage && (
+                  <p className="text-xs text-center mb-3 text-[#A4ACB8]">{applyResultMessage}</p>
+                )}
+                
+                {/* Confirmation buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setApplyConfirmation(null)
+                      setApplyResultMessage(null)
+                    }}
+                    className="flex-1 h-8 text-xs text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#2B313A]"
+                  >
+                    Keep Unchanged
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // [STEP 22.5] Execute saved-program apply with second confirmation
+                      const savedProgram = getLatestAdaptiveProgram()
+                      
+                      // Check if we can apply
+                      const canApplyCheck = canApplySavedProgramSubstitution(
+                        applyConfirmation.candidate,
+                        savedProgram,
+                      )
+                      
+                      if (!canApplyCheck.canApply) {
+                        setApplyResultMessage(
+                          canApplyCheck.blockedReason || 'Cannot apply — target not found',
+                        )
+                        return
+                      }
+                      
+                      // Mark confirmation as user-confirmed
+                      const confirmedConfirmation: SavedProgramSubstitutionApplyConfirmation = {
+                        ...applyConfirmation.confirmation,
+                        userConfirmed: true,
+                        confirmedAt: new Date().toISOString(),
+                      }
+                      
+                      // Apply the substitution
+                      const { result, updatedProgram } = applySavedProgramSubstitutionToProgram(
+                        savedProgram!,
+                        applyConfirmation.candidate,
+                        confirmedConfirmation,
+                      )
+                      
+                      if (result.status === 'applied' && updatedProgram) {
+                        // Persist the updated program
+                        try {
+                          saveAdaptiveProgram(updatedProgram)
+                          setApplyResultMessage('Saved program updated successfully.')
+                          
+                          // Update proposal status to accepted
+                          if (substitutionProposalQueue) {
+                            const queueScope = substitutionProposalQueue.scope || {
+                              sessionId: safeSession.dayLabel,
+                              dayKey: safeSession.dayLabel,
+                            }
+                            const updated = updateAndPersistProposalStatus(
+                              substitutionProposalQueue,
+                              applyConfirmation.candidate.proposalId,
+                              'accepted_for_review',
+                              queueScope,
+                            )
+                            setSubstitutionProposalQueue(updated)
+                          }
+                          
+                          // Clear confirmation after short delay
+                          setTimeout(() => {
+                            setApplyConfirmation(null)
+                            setApplyResultMessage(null)
+                          }, 2000)
+                        } catch (err) {
+                          setApplyResultMessage('Failed to save — program unchanged.')
+                        }
+                      } else {
+                        setApplyResultMessage(
+                          result.blockedReason || result.errorMessage || 'Saved program unchanged.',
+                        )
+                      }
+                    }}
+                    className="flex-1 h-8 text-xs text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 border border-teal-500/30"
+                  >
+                    Update Saved Program
+                  </Button>
+                </div>
               </Card>
             )}
             

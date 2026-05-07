@@ -2314,6 +2314,13 @@ export interface AdaptiveProgram {
       filtered_out_by_constraints: number
     }
   }
+  // [AB18-E] Phase 4J weekly method representation auditor contract.
+  // Stamped by authoritative-program-generation after session methods are
+  // decided. Answers "where are top sets / drop sets / circuits / density?"
+  // per method with APPLIED / BLOCKED_BY_SAFETY / NOT_NEEDED_FOR_PROFILE /
+  // MATERIALIZER_NOT_CONNECTED status. Optional for backwards compatibility
+  // with programs generated before Phase 4J.
+  weeklyMethodRepresentation?: import('./program/weekly-method-representation').WeeklyMethodRepresentationContract | null
   // Adaptive Athlete Engine context
   engineContext?: {
     plateauStatus: string

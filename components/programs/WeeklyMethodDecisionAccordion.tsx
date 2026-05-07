@@ -57,17 +57,13 @@ interface WeeklyMethodDecisionAccordionProps {
 // SAFE EXTRACTOR
 // =============================================================================
 
+// [AB18-E] Extract weeklyMethodRepresentation using typed AdaptiveProgram field
 function extractRepresentation(
   program: AdaptiveProgram | null | undefined,
 ): WeeklyMethodRepresentationContract | null {
   if (!program) return null
-  const raw = (program as unknown as {
-    weeklyMethodRepresentation?: unknown
-  }).weeklyMethodRepresentation
-  if (!raw || typeof raw !== 'object') return null
-  const r = raw as Partial<WeeklyMethodRepresentationContract>
-  if (!Array.isArray(r.byMethod)) return null
-  return r as WeeklyMethodRepresentationContract
+  // Direct typed access now that AdaptiveProgram owns the field
+  return program.weeklyMethodRepresentation ?? null
 }
 
 // =============================================================================

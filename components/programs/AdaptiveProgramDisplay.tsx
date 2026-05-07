@@ -73,7 +73,7 @@ import {
   type PerWeekMethodCoachSummary,
   type SessionTrainingStyleCoaching,
 } from '@/lib/program/per-day-method-summary'
-import { type WeeklyMethodRepresentationContract } from '@/lib/program/weekly-method-representation'
+// [AB18-E] WeeklyMethodRepresentationContract import removed - now accessed via typed AdaptiveProgram field
 // [AB18] Import the handoff type for AdaptiveSessionCard prop
 import { type AB18SessionCoachingHandoff } from '@/lib/workout/selected-variant-session-contract'
 
@@ -445,21 +445,13 @@ export function AdaptiveProgramDisplay({
   // [AB18-D] Extract training style influence for proper session coaching
   const ab18StyleInfluence = extractAB18TrainingStyleInfluence(program)
   
-  // [AB18] Build per-day session coaching for live workout handoff
+  // [AB18-E] Build per-day session coaching for live workout handoff
   // The summary is computed once; each session looks up its coaching by dayNumber
-  // Note: weeklyMethodRepresentation is not a typed field on AdaptiveProgram,
-  // so we use the same safe extraction pattern as WeeklyMethodDecisionAccordion
+  // Now uses typed AdaptiveProgram.weeklyMethodRepresentation field (no unknown bridge)
   const perDayCoachingSummary: PerWeekMethodCoachSummary | null = (() => {
     try {
-      // Safe extraction of weeklyMethodRepresentation (same pattern as WeeklyMethodDecisionAccordion)
-      const rawRep = (program as unknown as { weeklyMethodRepresentation?: unknown }).weeklyMethodRepresentation
-      let representation: WeeklyMethodRepresentationContract | null = null
-      if (rawRep && typeof rawRep === 'object') {
-        const r = rawRep as Partial<WeeklyMethodRepresentationContract>
-        if (Array.isArray(r.byMethod)) {
-          representation = r as WeeklyMethodRepresentationContract
-        }
-      }
+      // [AB18-E] Direct typed access now that AdaptiveProgram owns the field
+      const representation = program.weeklyMethodRepresentation ?? null
       return buildPerWeekMethodCoachSummary({
         program,
         representation,

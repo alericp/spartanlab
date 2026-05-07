@@ -2033,7 +2033,7 @@ function step22(): BlueprintPhase {
       'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
     status: 'PARTIAL',
     nextAction:
-      'Step 22.1-22.3 COMPLETE. Contract, apply flow, UI helpers, and live workout visible wiring complete. T.T9 (apply contract) and T.T10 (helpers) and T.T11 (UI wiring) all COMPLETE. Next: Step 22.4 post-workout saved-program substitution proposal queue (T.T12), user-approved only. Also pending: T.T7 Program Page advisory preview, T.T8 live workout advisory warning modal.',
+      'Step 22.1-22.4 COMPLETE. T.T9-T.T12 all complete. Post-workout proposal queue renders in pre-save completion UI. Saved program is NEVER auto-mutated. Next: T.T13 Step 22.5 explicit saved-program substitution apply (future, requires safe update corridor). Also pending: T.T7 Program Page advisory preview, T.T8 live workout advisory warning modal.',
     subtasks: [
       {
         id: 'T.T1',
@@ -2194,18 +2194,42 @@ function step22(): BlueprintPhase {
           'Wire completion/exit payload cleanup (requires workout finish handler, future)',
         ],
       },
-      // [T.T12] Step 22.4 — Post-workout saved-program proposal (future)
+      // [T.T12] Step 22.4 — Post-workout saved-program proposal queue (COMPLETE)
       {
         id: 'T.T12',
         title: 'Step 22.4 post-workout saved-program proposal queue',
+        status: 'COMPLETE',
+        evidence: [
+          'PostWorkoutSubstitutionEvidence type: captures applied substitutions after workout completion',
+          'SavedProgramSubstitutionProposal type: proposal with confidence, review copy, safety copy',
+          'PostWorkoutSubstitutionProposalQueue type: queue with pending_review status, proposals, evidence',
+          'collectPostWorkoutSubstitutionEvidence(): collects evidence from exercises with applied (not restored) substitutions',
+          'buildSavedProgramSubstitutionProposals(): groups evidence, builds proposals with confidence levels',
+          'markProposalDismissed() / markProposalDeferred() / markProposalAcceptedForReview(): user action handlers',
+          'hasPendingProposals() / getPendingProposals() / getProposalDisplayInfo(): UI helpers',
+          'StreamlinedWorkoutSession: useEffect builds queue when status=completed and exercises have substitutions',
+          'Pre-save completion UI: renders proposal review card with dismiss/defer actions',
+          'Saved program is NEVER auto-mutated — canApplyToSavedProgramNow: false, blockedReason explains',
+        ],
+        remainingWork: [
+          'T.T13 (future): Explicit saved-program substitution apply execution after user approval',
+          'Track repeated substitutions across multiple workout sessions (requires persistence)',
+          'Program-level update corridor with second confirmation step',
+        ],
+      },
+      // [T.T13] Step 22.5 — Explicit saved-program mutation execution (future)
+      {
+        id: 'T.T13',
+        title: 'Step 22.5 explicit saved-program substitution apply',
         status: 'NOT_STARTED',
         evidence: [],
         remainingWork: [
-          'After workout completion, if substitution was used, offer to save it to program',
-          'User must explicitly confirm saved-program update',
-          'Track repeated substitutions across sessions',
-          'Allow bulk acceptance of repeated safe alternatives',
-          'Saved program mutation ONLY with explicit user approval',
+          'Safe saved-program update corridor (requires existing program mutation function)',
+          'Second confirmation step before applying to saved program',
+          'Apply only exact affected exercise replacement',
+          'Do not rebuild whole program',
+          'Stamp proof after successful update',
+          'Reversal/undo for saved-program changes if supported',
         ],
       },
     ],

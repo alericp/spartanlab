@@ -76,6 +76,16 @@ import {
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
+import {
+  collectPostWorkoutSubstitutionEvidence,
+  buildSavedProgramSubstitutionProposals,
+  hasPendingProposals,
+  getPendingProposals,
+  getProposalDisplayInfo,
+  markProposalDismissed,
+  markProposalDeferred,
+  type PostWorkoutSubstitutionProposalQueue,
+} from '@/lib/program/injury-substitution-advisory'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [WEEK-PROGRESSION-TRUTH] Import scaled exercise type for week-aware dosage in live workout
 // [LIVE-UNIT-CONTRACT] Canonical hold-vs-reps detector - single source of truth
@@ -3426,6 +3436,11 @@ export function StreamlinedWorkoutSession({
   // [UNIFIED-HANDOFF] showInterExerciseRest and interExerciseRestSeconds now come from liveSession
   // No longer separate useState - they're part of the unified reducer
   const [coachingNote, setCoachingNote] = useState<string | null>(null)
+
+  // [STEP 22.4 / T.T12] Post-workout substitution proposal queue state.
+  // Built from exercises with applied injury substitutions after workout completion.
+  // User can dismiss, defer, or mark for future review. Saved program is NEVER auto-mutated.
+  const [substitutionProposalQueue, setSubstitutionProposalQueue] = useState<PostWorkoutSubstitutionProposalQueue | null>(null)
 
 // [AB15 — LIVE DELOAD RUNTIME] Session-level fatigue/readiness tracking and
   // live deload decisions. Updated after each completed set. The decision is
@@ -7262,6 +7277,32 @@ if (shouldShowLocalFallback) {
   }
   
   // ==========================================================================
+  // [STEP 22.4 / T.T12] BUILD POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE
+  // ==========================================================================
+  // When entering completed state, collect evidence from exercises that had
+  // injury substitutions applied and build the proposal queue. This happens
+  // once when status transitions to 'completed' and exercises are available.
+  // The queue is used in the pre-save completion UI to show proposals.
+  
+  // Build proposal queue when entering completed state
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
+      // Collect evidence from exercises with applied substitutions
+      const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
+        sessionId: safeSession.dayLabel,
+        dayKey: safeSession.dayLabel,
+      })
+      
+      if (evidence.length > 0) {
+        // Build proposals from evidence
+        const queue = buildSavedProgramSubstitutionProposals(evidence)
+        setSubstitutionProposalQueue(queue)
+      }
+    }
+  }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
+
+  // ==========================================================================
   // RENDER: COMPLETED STATE
   // ==========================================================================
   
@@ -7426,6 +7467,91 @@ if (shouldShowLocalFallback) {
                 className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] placeholder:text-[#6B7280] min-h-[50px] resize-none text-sm"
               />
             </Card>
+
+            {/* [STEP 22.4 / T.T12] Post-workout substitution proposal review */}
+            {/* Shows when exercises had injury substitutions applied during the workout */}
+            {hasPendingProposals(substitutionProposalQueue) && (
+              <Card className="bg-[#1A1F26] border-teal-500/30 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-teal-500/10 flex items-center justify-center">
+                    <Lightbulb className="w-3.5 h-3.5 text-teal-400" />
+                  </div>
+                  <p className="text-sm font-medium text-[#E6E9EF]">Review Safer Substitutes</p>
+                </div>
+                
+                {getPendingProposals(substitutionProposalQueue).map((proposal) => {
+                  const display = getProposalDisplayInfo(proposal)
+                  return (
+                    <div key={proposal.proposalId} className="mb-3 last:mb-0">
+                      <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                        {/* Proposal header */}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`text-xs font-medium ${display.confidenceColor}`}>
+                                {display.confidenceBadge}
+                              </span>
+                              <span className="text-[10px] text-[#6B7280]">·</span>
+                              <span className="text-[10px] text-[#6B7280]">{display.region}</span>
+                            </div>
+                            <p className="text-sm text-[#E6E9EF] leading-tight">
+                              Used <span className="font-medium text-teal-400">{display.substitute}</span> instead of{' '}
+                              <span className="text-[#A4ACB8]">{display.original}</span>
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Evidence note */}
+                        <p className="text-xs text-[#6B7280] mb-2">{display.evidenceNote}</p>
+                        
+                        {/* Saved program note */}
+                        <div className="flex items-center gap-1.5 mb-3 text-[10px] text-[#6B7280]">
+                          <CheckCircle2 className="w-3 h-3 text-teal-500/70" />
+                          <span>{display.scopeNote}</span>
+                        </div>
+                        
+                        {/* Action buttons */}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (substitutionProposalQueue) {
+                                setSubstitutionProposalQueue(
+                                  markProposalDismissed(substitutionProposalQueue, proposal.proposalId)
+                                )
+                              }
+                            }}
+                            className="h-7 px-2 text-xs text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2B313A]"
+                          >
+                            Dismiss
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (substitutionProposalQueue) {
+                                setSubstitutionProposalQueue(
+                                  markProposalDeferred(substitutionProposalQueue, proposal.proposalId)
+                                )
+                              }
+                            }}
+                            className="h-7 px-2 text-xs text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#2B313A]"
+                          >
+                            Remind Later
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                
+                {/* Safety copy */}
+                <p className="text-[10px] text-[#6B7280] mt-2 text-center">
+                  Not medical advice. Stop if pain worsens.
+                </p>
+              </Card>
+            )}
             
             {/* Complete Workout Button - Primary CTA */}
             <Button

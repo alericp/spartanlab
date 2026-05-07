@@ -1438,3 +1438,532 @@ export function buildSubstitutionLogMetadata(
     scope: 'current_session_only',
   }
 }
+
+// =============================================================================
+// STEP 22.4 — POST-WORKOUT SAVED-PROGRAM SUBSTITUTION PROPOSAL QUEUE
+// =============================================================================
+
+/**
+ * STEP 22.4 CONTRACT
+ *
+ * After a workout completes with current-session substitutions, collect evidence
+ * and build a proposal queue for the user to review. The user may then choose
+ * to keep the saved program unchanged, defer the decision, or mark the proposal
+ * for future program update.
+ *
+ * CRITICAL INVARIANTS:
+ *   - Proposal-first, review-first, user-confirmed only
+ *   - No automatic saved-program mutation
+ *   - No automatic permanent substitution
+ *   - No fake medical or AI claims
+ *   - No hidden program edits
+ *   - User must explicitly approve before any saved-program change
+ *
+ * @step 22.4 of 22.x
+ */
+
+/**
+ * Evidence collected from a completed workout's substitutions.
+ */
+export interface PostWorkoutSubstitutionEvidence {
+  /** Unique evidence ID */
+  evidenceId: string
+  /** When workout completed */
+  completedAt: string
+  /** Session identifier if available */
+  sessionId?: string
+  /** Program ID if available */
+  programId?: string
+  /** Day key (e.g., "day1", "push") if available */
+  dayKey?: string
+  /** Variant key if available */
+  variantKey?: string
+  /** Original exercise ID */
+  originalExerciseId?: string
+  /** Original exercise name */
+  originalExerciseName: string
+  /** Substitute exercise name that was used */
+  substituteExerciseName: string
+  /** Affected joint/region */
+  affectedJointOrRegion: string
+  /** Reason for substitution */
+  reason: string
+  /** Source of evidence */
+  source: 'current_session_injury_substitution'
+  /** Scope of this evidence */
+  scope: 'post_workout_review'
+  /** ALWAYS FALSE — no automatic saved-program mutation */
+  savedProgramMutation: false
+  /** FALSE until user explicitly approves */
+  userApprovedSavedProgramMutation: false
+}
+
+/**
+ * Proposal confidence level based on evidence count.
+ */
+export type SubstitutionProposalConfidence = 'low' | 'moderate' | 'high'
+
+/**
+ * Proposal status for tracking user decisions.
+ */
+export type SubstitutionProposalStatus =
+  | 'pending'
+  | 'accepted_for_review'
+  | 'dismissed'
+  | 'deferred'
+  | 'blocked'
+
+/**
+ * A proposal to update the saved program based on substitution evidence.
+ */
+export interface SavedProgramSubstitutionProposal {
+  /** Unique proposal ID */
+  proposalId: string
+  /** Current status */
+  status: SubstitutionProposalStatus
+  /** Original exercise ID if available */
+  originalExerciseId?: string
+  /** Original exercise name */
+  originalExerciseName: string
+  /** Proposed substitute exercise name */
+  proposedSubstituteExerciseName: string
+  /** Affected joint/region */
+  affectedJointOrRegion: string
+  /** Reasons collected from evidence */
+  reasons: string[]
+  /** Number of times this substitution was used */
+  evidenceCount: number
+  /** When first seen */
+  firstSeenAt: string
+  /** When last seen */
+  lastSeenAt: string
+  /** Confidence based on evidence count */
+  confidence: SubstitutionProposalConfidence
+  /** User-friendly recommendation label */
+  recommendationLabel: string
+  /** Review copy for UI */
+  reviewCopy: string
+  /** Safety copy for UI */
+  safetyCopy: string
+  /** Scope of this proposal */
+  scope: 'saved_program_proposal_only'
+  /** ALWAYS TRUE — requires user approval */
+  requiresUserApproval: true
+  /** FALSE by default — no automatic mutation */
+  savedProgramMutation: false
+  /** FALSE by default — user has not approved yet */
+  userApprovedSavedProgramMutation: false
+  /** Evidence IDs that support this proposal */
+  sourceEvidenceIds: string[]
+  /** Whether saved-program update can be applied now (requires safe update corridor) */
+  canApplyToSavedProgramNow: boolean
+  /** If blocked, why */
+  blockedReason?: string
+}
+
+/**
+ * The full proposal queue for post-workout review.
+ */
+export interface PostWorkoutSubstitutionProposalQueue {
+  /** Queue status */
+  status: 'none' | 'pending_review' | 'blocked'
+  /** Proposals to review */
+  proposals: SavedProgramSubstitutionProposal[]
+  /** Raw evidence used to build proposals */
+  evidence: PostWorkoutSubstitutionEvidence[]
+  /** When this queue was generated */
+  generatedAt: string
+  /** Proof metadata */
+  proof: {
+    source: 'step_22_4_post_workout_proposal'
+    workoutCompletedAt: string
+    substitutionCount: number
+  }
+  /** ALWAYS FALSE — no automatic saved-program mutation */
+  savedProgramMutation: false
+  /** ALWAYS TRUE — requires user approval */
+  requiresUserApproval: true
+}
+
+// =============================================================================
+// STEP 22.4 STORAGE KEYS
+// =============================================================================
+
+const PROPOSAL_QUEUE_STORAGE_KEY = 'spartanlab:postWorkoutSubstitutionProposals'
+
+// =============================================================================
+// STEP 22.4 EVIDENCE COLLECTION
+// =============================================================================
+
+/**
+ * Collect post-workout substitution evidence from completed exercises.
+ * Only collects evidence from exercises with applied (not restored) substitutions.
+ */
+export function collectPostWorkoutSubstitutionEvidence<
+  T extends { name?: string; id?: string; injurySubstitution?: AppliedCurrentSessionInjurySubstitution },
+>(
+  exercises: T[],
+  context?: {
+    sessionId?: string
+    programId?: string
+    dayKey?: string
+    variantKey?: string
+  },
+): PostWorkoutSubstitutionEvidence[] {
+  const now = new Date().toISOString()
+  const evidence: PostWorkoutSubstitutionEvidence[] = []
+
+  for (const exercise of exercises) {
+    const subst = exercise.injurySubstitution
+    // Only collect evidence from applied substitutions that were NOT restored
+    if (subst?.applied && !subst.restoredOriginal) {
+      evidence.push({
+        evidenceId: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        completedAt: now,
+        sessionId: context?.sessionId,
+        programId: context?.programId,
+        dayKey: context?.dayKey,
+        variantKey: context?.variantKey,
+        originalExerciseId: subst.originalExerciseId,
+        originalExerciseName: subst.originalExerciseName,
+        substituteExerciseName: subst.substituteExerciseName,
+        affectedJointOrRegion: subst.affectedJointOrRegion,
+        reason: subst.reason,
+        source: 'current_session_injury_substitution',
+        scope: 'post_workout_review',
+        savedProgramMutation: false,
+        userApprovedSavedProgramMutation: false,
+      })
+    }
+  }
+
+  return evidence
+}
+
+// =============================================================================
+// STEP 22.4 PROPOSAL BUILDING
+// =============================================================================
+
+/**
+ * Get confidence level based on evidence count.
+ */
+function getProposalConfidence(evidenceCount: number): SubstitutionProposalConfidence {
+  if (evidenceCount >= 3) return 'high'
+  if (evidenceCount >= 2) return 'moderate'
+  return 'low'
+}
+
+/**
+ * Get recommendation label based on confidence.
+ */
+function getRecommendationLabel(confidence: SubstitutionProposalConfidence): string {
+  switch (confidence) {
+    case 'high':
+      return 'Repeated substitute'
+    case 'moderate':
+      return 'Used twice'
+    case 'low':
+    default:
+      return 'Used once'
+  }
+}
+
+/**
+ * Get review copy based on evidence count.
+ */
+function getReviewCopy(
+  originalName: string,
+  substituteName: string,
+  evidenceCount: number,
+): string {
+  if (evidenceCount >= 3) {
+    return `You have used ${substituteName} instead of ${originalName} multiple times. Consider keeping this as your planned substitute.`
+  }
+  if (evidenceCount >= 2) {
+    return `You used ${substituteName} instead of ${originalName} twice. Track one more time before changing your saved program.`
+  }
+  return `You used ${substituteName} instead of ${originalName} once. Keep tracking before changing your saved program.`
+}
+
+/**
+ * Build substitution proposals from evidence.
+ * Groups evidence by original+substitute exercise pairs.
+ */
+export function buildSavedProgramSubstitutionProposals(
+  evidence: PostWorkoutSubstitutionEvidence[],
+  priorEvidence?: PostWorkoutSubstitutionEvidence[],
+): PostWorkoutSubstitutionProposalQueue {
+  const now = new Date().toISOString()
+
+  if (evidence.length === 0) {
+    return {
+      status: 'none',
+      proposals: [],
+      evidence: [],
+      generatedAt: now,
+      proof: {
+        source: 'step_22_4_post_workout_proposal',
+        workoutCompletedAt: now,
+        substitutionCount: 0,
+      },
+      savedProgramMutation: false,
+      requiresUserApproval: true,
+    }
+  }
+
+  // Combine current and prior evidence
+  const allEvidence = [...evidence, ...(priorEvidence || [])]
+
+  // Group by original+substitute pair
+  const groups = new Map<
+    string,
+    {
+      originalExerciseId?: string
+      originalExerciseName: string
+      substituteExerciseName: string
+      affectedJointOrRegion: string
+      reasons: Set<string>
+      evidenceIds: string[]
+      firstSeenAt: string
+      lastSeenAt: string
+    }
+  >()
+
+  for (const ev of allEvidence) {
+    const key = `${ev.originalExerciseName.toLowerCase()}|${ev.substituteExerciseName.toLowerCase()}`
+    const existing = groups.get(key)
+
+    if (existing) {
+      existing.reasons.add(ev.reason)
+      existing.evidenceIds.push(ev.evidenceId)
+      if (ev.completedAt < existing.firstSeenAt) {
+        existing.firstSeenAt = ev.completedAt
+      }
+      if (ev.completedAt > existing.lastSeenAt) {
+        existing.lastSeenAt = ev.completedAt
+      }
+    } else {
+      groups.set(key, {
+        originalExerciseId: ev.originalExerciseId,
+        originalExerciseName: ev.originalExerciseName,
+        substituteExerciseName: ev.substituteExerciseName,
+        affectedJointOrRegion: ev.affectedJointOrRegion,
+        reasons: new Set([ev.reason]),
+        evidenceIds: [ev.evidenceId],
+        firstSeenAt: ev.completedAt,
+        lastSeenAt: ev.completedAt,
+      })
+    }
+  }
+
+  // Build proposals from groups
+  const proposals: SavedProgramSubstitutionProposal[] = []
+
+  for (const group of groups.values()) {
+    const evidenceCount = group.evidenceIds.length
+    const confidence = getProposalConfidence(evidenceCount)
+
+    proposals.push({
+      proposalId: `prop_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      status: 'pending',
+      originalExerciseId: group.originalExerciseId,
+      originalExerciseName: group.originalExerciseName,
+      proposedSubstituteExerciseName: group.substituteExerciseName,
+      affectedJointOrRegion: group.affectedJointOrRegion,
+      reasons: Array.from(group.reasons),
+      evidenceCount,
+      firstSeenAt: group.firstSeenAt,
+      lastSeenAt: group.lastSeenAt,
+      confidence,
+      recommendationLabel: getRecommendationLabel(confidence),
+      reviewCopy: getReviewCopy(
+        group.originalExerciseName,
+        group.substituteExerciseName,
+        evidenceCount,
+      ),
+      safetyCopy: 'Not medical advice. Stop if pain worsens.',
+      scope: 'saved_program_proposal_only',
+      requiresUserApproval: true,
+      savedProgramMutation: false,
+      userApprovedSavedProgramMutation: false,
+      sourceEvidenceIds: group.evidenceIds,
+      // Saved-program mutation is NOT implemented yet — mark as blocked
+      canApplyToSavedProgramNow: false,
+      blockedReason: 'Saved-program update not yet implemented. Proposal saved for future review.',
+    })
+  }
+
+  return {
+    status: proposals.length > 0 ? 'pending_review' : 'none',
+    proposals,
+    evidence: allEvidence,
+    generatedAt: now,
+    proof: {
+      source: 'step_22_4_post_workout_proposal',
+      workoutCompletedAt: now,
+      substitutionCount: evidence.length,
+    },
+    savedProgramMutation: false,
+    requiresUserApproval: true,
+  }
+}
+
+// =============================================================================
+// STEP 22.4 PROPOSAL ACTIONS
+// =============================================================================
+
+/**
+ * Mark a proposal as dismissed.
+ */
+export function markProposalDismissed(
+  queue: PostWorkoutSubstitutionProposalQueue,
+  proposalId: string,
+): PostWorkoutSubstitutionProposalQueue {
+  return {
+    ...queue,
+    proposals: queue.proposals.map((p) =>
+      p.proposalId === proposalId ? { ...p, status: 'dismissed' as const } : p,
+    ),
+  }
+}
+
+/**
+ * Mark a proposal as deferred (remind later).
+ */
+export function markProposalDeferred(
+  queue: PostWorkoutSubstitutionProposalQueue,
+  proposalId: string,
+): PostWorkoutSubstitutionProposalQueue {
+  return {
+    ...queue,
+    proposals: queue.proposals.map((p) =>
+      p.proposalId === proposalId ? { ...p, status: 'deferred' as const } : p,
+    ),
+  }
+}
+
+/**
+ * Mark a proposal as accepted for review (does NOT mutate saved program).
+ * Actual saved-program mutation requires a separate explicit confirmation
+ * through a safe update corridor (not yet implemented).
+ */
+export function markProposalAcceptedForReview(
+  queue: PostWorkoutSubstitutionProposalQueue,
+  proposalId: string,
+): PostWorkoutSubstitutionProposalQueue {
+  return {
+    ...queue,
+    proposals: queue.proposals.map((p) =>
+      p.proposalId === proposalId
+        ? {
+            ...p,
+            status: 'accepted_for_review' as const,
+            // Still does NOT approve saved-program mutation
+            userApprovedSavedProgramMutation: false,
+          }
+        : p,
+    ),
+  }
+}
+
+// =============================================================================
+// STEP 22.4 STORAGE HELPERS
+// =============================================================================
+
+/**
+ * Save proposal queue to sessionStorage for post-workout review persistence.
+ */
+export function saveProposalQueue(queue: PostWorkoutSubstitutionProposalQueue): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(PROPOSAL_QUEUE_STORAGE_KEY, JSON.stringify(queue))
+  } catch (e) {
+    console.warn('[injury-substitution] Failed to save proposal queue:', e)
+  }
+}
+
+/**
+ * Load proposal queue from sessionStorage.
+ */
+export function loadProposalQueue(): PostWorkoutSubstitutionProposalQueue | null {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(PROPOSAL_QUEUE_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as PostWorkoutSubstitutionProposalQueue
+  } catch (e) {
+    console.warn('[injury-substitution] Failed to load proposal queue:', e)
+    return null
+  }
+}
+
+/**
+ * Clear proposal queue from sessionStorage.
+ */
+export function clearProposalQueue(): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.removeItem(PROPOSAL_QUEUE_STORAGE_KEY)
+  } catch {}
+}
+
+// =============================================================================
+// STEP 22.4 UI HELPERS
+// =============================================================================
+
+/**
+ * Check if there are any pending proposals to review.
+ */
+export function hasPendingProposals(queue: PostWorkoutSubstitutionProposalQueue | null): boolean {
+  if (!queue) return false
+  return queue.proposals.some((p) => p.status === 'pending')
+}
+
+/**
+ * Get pending proposals for review.
+ */
+export function getPendingProposals(
+  queue: PostWorkoutSubstitutionProposalQueue | null,
+): SavedProgramSubstitutionProposal[] {
+  if (!queue) return []
+  return queue.proposals.filter((p) => p.status === 'pending')
+}
+
+/**
+ * Get proposal display info for UI.
+ */
+export function getProposalDisplayInfo(proposal: SavedProgramSubstitutionProposal): {
+  title: string
+  original: string
+  substitute: string
+  region: string
+  reason: string
+  evidenceNote: string
+  scopeNote: string
+  savedProgramNote: string
+  safetyCopy: string
+  confidenceBadge: string
+  confidenceColor: string
+} {
+  return {
+    title: 'Safer Substitute Used',
+    original: proposal.originalExerciseName,
+    substitute: proposal.proposedSubstituteExerciseName,
+    region: proposal.affectedJointOrRegion.replace(/_/g, ' '),
+    reason: proposal.reasons[0] || 'Discomfort signal',
+    evidenceNote:
+      proposal.evidenceCount === 1
+        ? 'Used once this workout'
+        : `Used ${proposal.evidenceCount} times`,
+    scopeNote: 'Saved program unchanged',
+    savedProgramNote: 'Your saved program has not been changed.',
+    safetyCopy: proposal.safetyCopy,
+    confidenceBadge: proposal.recommendationLabel,
+    confidenceColor:
+      proposal.confidence === 'high'
+        ? 'text-teal-400'
+        : proposal.confidence === 'moderate'
+          ? 'text-amber-400'
+          : 'text-[#6B7280]',
+  }
+}

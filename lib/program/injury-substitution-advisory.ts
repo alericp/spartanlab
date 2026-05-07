@@ -1967,3 +1967,336 @@ export function getProposalDisplayInfo(proposal: SavedProgramSubstitutionProposa
           : 'text-[#6B7280]',
   }
 }
+
+// =============================================================================
+// STEP 22.5 — SCOPED PROPOSAL QUEUE AND SAVED-PROGRAM APPLY CONTRACT
+// =============================================================================
+
+/**
+ * Scope for proposal queue storage to prevent stale/cross-session leaks.
+ */
+export interface ProposalQueueScope {
+  userId?: string
+  programId?: string
+  sessionId?: string
+  dayKey?: string
+  variantKey?: string
+}
+
+/**
+ * Extended proposal queue with scope metadata for Step 22.5.
+ */
+export interface ScopedPostWorkoutSubstitutionProposalQueue extends PostWorkoutSubstitutionProposalQueue {
+  scope?: ProposalQueueScope
+  safeForSavedProgramApply?: boolean
+  applyBlockedReason?: string
+}
+
+/**
+ * Candidate for saved-program substitution apply.
+ */
+export interface SavedProgramSubstitutionApplyCandidate {
+  candidateId: string
+  proposalId: string
+  programId?: string
+  sessionId?: string
+  dayKey?: string
+  variantKey?: string
+  originalExerciseId?: string
+  originalExerciseName: string
+  substituteExerciseName: string
+  affectedJointOrRegion?: string
+  reason?: string
+  evidenceCount?: number
+  confidence?: SubstitutionProposalConfidence
+  sourceEvidenceIds?: string[]
+  canApply: boolean
+  blockedReason?: string
+  requiresSecondConfirmation: true
+  savedProgramMutation: false
+  userApprovedSavedProgramMutation: false
+}
+
+/**
+ * Second confirmation for saved-program apply.
+ */
+export interface SavedProgramSubstitutionApplyConfirmation {
+  confirmationId: string
+  candidateId: string
+  proposalId: string
+  originalExerciseName: string
+  substituteExerciseName: string
+  targetScopeCopy: string
+  warningCopy: string
+  secondConfirmationRequired: true
+  userConfirmed: boolean
+  confirmedAt?: string
+}
+
+/**
+ * Result of saved-program substitution apply.
+ */
+export interface SavedProgramSubstitutionApplyResult {
+  status: 'applied' | 'blocked' | 'failed' | 'no_safe_update_corridor' | 'target_not_found'
+  proposalId: string
+  programId?: string
+  originalExerciseName: string
+  substituteExerciseName: string
+  savedProgramMutation: boolean
+  userApprovedSavedProgramMutation: boolean
+  proof: {
+    source: 'step_22_5_saved_program_substitution_apply'
+    targetMatched: boolean
+    exactExerciseOnly: boolean
+    wholeProgramRebuilt: false
+    schemaChanged: false
+    generatorChanged: false
+    appliedAt?: string
+  }
+  blockedReason?: string
+  errorMessage?: string
+}
+
+/**
+ * Build a scoped storage key for proposal queue.
+ */
+export function buildProposalQueueStorageKey(scope?: ProposalQueueScope): string {
+  if (!scope) return PROPOSAL_QUEUE_STORAGE_KEY
+  const parts = [PROPOSAL_QUEUE_STORAGE_KEY]
+  if (scope.programId) parts.push(`prog:${scope.programId}`)
+  if (scope.sessionId) parts.push(`sess:${scope.sessionId}`)
+  if (scope.dayKey) parts.push(`day:${scope.dayKey}`)
+  return parts.join(':')
+}
+
+/**
+ * Save scoped proposal queue to sessionStorage.
+ */
+export function saveScopedProposalQueue(
+  queue: ScopedPostWorkoutSubstitutionProposalQueue,
+  scope?: ProposalQueueScope,
+): void {
+  if (typeof window === 'undefined') return
+  try {
+    const key = buildProposalQueueStorageKey(scope)
+    sessionStorage.setItem(key, JSON.stringify(queue))
+    // Also save to legacy key for backward display compatibility
+    sessionStorage.setItem(PROPOSAL_QUEUE_STORAGE_KEY, JSON.stringify(queue))
+  } catch {
+    // Silently fail - storage may be unavailable
+  }
+}
+
+/**
+ * Load scoped proposal queue from sessionStorage.
+ */
+export function loadScopedProposalQueue(
+  scope?: ProposalQueueScope,
+): ScopedPostWorkoutSubstitutionProposalQueue | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const key = buildProposalQueueStorageKey(scope)
+    const raw = sessionStorage.getItem(key)
+    if (!raw) {
+      // Try legacy key
+      const legacyRaw = sessionStorage.getItem(PROPOSAL_QUEUE_STORAGE_KEY)
+      if (!legacyRaw) return null
+      const legacyQueue = JSON.parse(legacyRaw) as ScopedPostWorkoutSubstitutionProposalQueue
+      // Legacy queue is NOT safe for apply
+      return { ...legacyQueue, safeForSavedProgramApply: false, applyBlockedReason: 'Legacy unscoped queue' }
+    }
+    return JSON.parse(raw) as ScopedPostWorkoutSubstitutionProposalQueue
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Clear scoped proposal queue from sessionStorage.
+ */
+export function clearScopedProposalQueue(scope?: ProposalQueueScope): void {
+  if (typeof window === 'undefined') return
+  try {
+    const key = buildProposalQueueStorageKey(scope)
+    sessionStorage.removeItem(key)
+    sessionStorage.removeItem(PROPOSAL_QUEUE_STORAGE_KEY)
+  } catch {
+    // Silently fail
+  }
+}
+
+/**
+ * Update and persist a proposal's status in the scoped queue.
+ */
+export function updateAndPersistProposalStatus(
+  queue: ScopedPostWorkoutSubstitutionProposalQueue,
+  proposalId: string,
+  status: SubstitutionProposalStatus,
+  scope?: ProposalQueueScope,
+): ScopedPostWorkoutSubstitutionProposalQueue {
+  const updated: ScopedPostWorkoutSubstitutionProposalQueue = {
+    ...queue,
+    proposals: queue.proposals.map((p) =>
+      p.proposalId === proposalId ? { ...p, status } : p,
+    ),
+  }
+  saveScopedProposalQueue(updated, scope)
+  return updated
+}
+
+/**
+ * Build an apply candidate from a proposal and scope.
+ */
+export function buildSavedProgramSubstitutionApplyCandidate(
+  proposal: SavedProgramSubstitutionProposal,
+  scope?: ProposalQueueScope,
+): SavedProgramSubstitutionApplyCandidate {
+  const hasProgramId = !!scope?.programId
+  const hasTargetIdentity = hasProgramId && (!!proposal.originalExerciseId || !!proposal.originalExerciseName)
+
+  let blockedReason: string | undefined
+  if (!hasProgramId) {
+    blockedReason = 'Missing program ID — cannot identify target program'
+  } else if (!hasTargetIdentity) {
+    blockedReason = 'Missing exercise identity — cannot match target'
+  }
+
+  return {
+    candidateId: `cand_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    proposalId: proposal.proposalId,
+    programId: scope?.programId,
+    sessionId: scope?.sessionId,
+    dayKey: scope?.dayKey,
+    variantKey: scope?.variantKey,
+    originalExerciseId: proposal.originalExerciseId,
+    originalExerciseName: proposal.originalExerciseName,
+    substituteExerciseName: proposal.proposedSubstituteExerciseName,
+    affectedJointOrRegion: proposal.affectedJointOrRegion,
+    reason: proposal.reasons[0],
+    evidenceCount: proposal.evidenceCount,
+    confidence: proposal.confidence,
+    sourceEvidenceIds: proposal.sourceEvidenceIds,
+    canApply: hasProgramId && hasTargetIdentity,
+    blockedReason,
+    requiresSecondConfirmation: true,
+    savedProgramMutation: false,
+    userApprovedSavedProgramMutation: false,
+  }
+}
+
+/**
+ * Build second confirmation content for the apply candidate.
+ */
+export function buildSavedProgramSubstitutionConfirmation(
+  candidate: SavedProgramSubstitutionApplyCandidate,
+): SavedProgramSubstitutionApplyConfirmation {
+  return {
+    confirmationId: `conf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    candidateId: candidate.candidateId,
+    proposalId: candidate.proposalId,
+    originalExerciseName: candidate.originalExerciseName,
+    substituteExerciseName: candidate.substituteExerciseName,
+    targetScopeCopy: candidate.dayKey
+      ? `This changes ${candidate.originalExerciseName} to ${candidate.substituteExerciseName} in ${candidate.dayKey}`
+      : `This changes ${candidate.originalExerciseName} to ${candidate.substituteExerciseName} in your saved program`,
+    warningCopy: 'This updates future planned workouts. Past workouts are not affected.',
+    secondConfirmationRequired: true,
+    userConfirmed: false,
+  }
+}
+
+/**
+ * Check if a candidate can be applied to the saved program.
+ * For this build, returns blocked with reason since safe update corridor is not yet verified.
+ */
+export function canApplySavedProgramSubstitution<TProgram>(
+  candidate: SavedProgramSubstitutionApplyCandidate,
+  savedProgram: TProgram | null,
+): { canApply: boolean; blockedReason?: string } {
+  if (!savedProgram) {
+    return { canApply: false, blockedReason: 'No saved program found' }
+  }
+  if (!candidate.canApply) {
+    return { canApply: false, blockedReason: candidate.blockedReason }
+  }
+  // For now, block until safe update corridor is verified
+  return { canApply: false, blockedReason: 'Safe saved-program update corridor not yet implemented' }
+}
+
+/**
+ * Apply saved-program substitution to the program.
+ * For this build, returns blocked since safe update corridor is not yet verified.
+ */
+export function applySavedProgramSubstitutionToProgram<TProgram>(
+  savedProgram: TProgram,
+  candidate: SavedProgramSubstitutionApplyCandidate,
+  confirmation: SavedProgramSubstitutionApplyConfirmation,
+): { result: SavedProgramSubstitutionApplyResult; updatedProgram?: TProgram } {
+  // Block if not confirmed
+  if (!confirmation.userConfirmed) {
+    return {
+      result: {
+        status: 'blocked',
+        proposalId: candidate.proposalId,
+        programId: candidate.programId,
+        originalExerciseName: candidate.originalExerciseName,
+        substituteExerciseName: candidate.substituteExerciseName,
+        savedProgramMutation: false,
+        userApprovedSavedProgramMutation: false,
+        proof: {
+          source: 'step_22_5_saved_program_substitution_apply',
+          targetMatched: false,
+          exactExerciseOnly: true,
+          wholeProgramRebuilt: false,
+          schemaChanged: false,
+          generatorChanged: false,
+        },
+        blockedReason: 'User has not confirmed — second confirmation required',
+      },
+    }
+  }
+
+  // For now, return no_safe_update_corridor until the corridor is verified
+  return {
+    result: {
+      status: 'no_safe_update_corridor',
+      proposalId: candidate.proposalId,
+      programId: candidate.programId,
+      originalExerciseName: candidate.originalExerciseName,
+      substituteExerciseName: candidate.substituteExerciseName,
+      savedProgramMutation: false,
+      userApprovedSavedProgramMutation: true,
+      proof: {
+        source: 'step_22_5_saved_program_substitution_apply',
+        targetMatched: false,
+        exactExerciseOnly: true,
+        wholeProgramRebuilt: false,
+        schemaChanged: false,
+        generatorChanged: false,
+      },
+      blockedReason: 'Safe saved-program update corridor not yet implemented — proposal saved for review',
+    },
+  }
+}
+
+/**
+ * Get display info for apply confirmation UI.
+ */
+export function getApplyConfirmationDisplayInfo(
+  confirmation: SavedProgramSubstitutionApplyConfirmation,
+  candidate: SavedProgramSubstitutionApplyCandidate,
+): {
+  originalExercise: string
+  substituteExercise: string
+  targetScope: string
+  warning: string
+  safetyCopy: string
+} {
+  return {
+    originalExercise: confirmation.originalExerciseName,
+    substituteExercise: confirmation.substituteExerciseName,
+    targetScope: confirmation.targetScopeCopy,
+    warning: confirmation.warningCopy,
+    safetyCopy: 'Not medical advice. Stop if pain worsens.',
+  }
+}

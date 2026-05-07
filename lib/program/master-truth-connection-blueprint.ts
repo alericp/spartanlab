@@ -1765,12 +1765,12 @@ function phaseR(): BlueprintPhase {
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + M1 Bridge (Steps 21.1-21.5.2)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + M1 Bridge (Steps 21.1-21.5.3 COMPLETE)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3). S.S9 is M1.1 Recovery-to-Program Awareness Bridge contract (Step 21.5.1). S.S10 is M1.2 Program/session advisory consumer (Step 21.5.2) — advisory-only, no program mutation.',
-    status: 'PARTIAL',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3). S.S9 is M1 Recovery-to-Program Awareness Bridge mini-chain (Steps 21.5.1-21.5.3) — advisory-only bridge from recovery truth to Program surface, no program mutation.',
+    status: 'COMPLETE',
     nextAction:
-      'Phase M mini-chain: M1.1 COMPLETE (bridge contract). M1.2 COMPLETE (Program surface consumer, advisory-only, no mutation). NEXT: M1.3 (runtime acceptance across fresh build, reload, no-check-in, stale check-in, Start Workout non-mutation).',
+      'Phase S COMPLETE. M1 mini-chain COMPLETE (M1.1 bridge contract, M1.2 Program surface consumer, M1.3 runtime acceptance). Next roadmap phase: Step 21.6 — recovery-aware session mutation (deferred until owner direction).',
     subtasks: [
       {
         id: 'S.S1',
@@ -1886,13 +1886,14 @@ function phaseS(): BlueprintPhase {
         ],
         remainingWork: [],
       },
-      // S.S9: M1.1 — Recovery-to-Program Awareness Bridge Contract
+      // S.S9: M1 — Recovery-to-Program Awareness Bridge Mini-Chain (COMPLETE)
       {
         id: 'S.S9',
-        title: 'M1.1: Recovery-to-Program Awareness Bridge Contract (Step 21.5.1)',
+        title: 'M1: Recovery-to-Program Awareness Bridge Mini-Chain (Steps 21.5.1-21.5.3 COMPLETE)',
         status: 'COMPLETE',
         evidence: [
-          'lib/program/recovery-program-awareness-bridge.ts created with typed M1 bridge contract.',
+          // M1.1 Bridge Contract (Step 21.5.1)
+          'M1.1 COMPLETE: lib/program/recovery-program-awareness-bridge.ts created with typed M1 bridge contract.',
           'RecoveryProgramAwarenessLevel type: "none" | "monitor" | "reduce_load" | "deload_recommended".',
           'RecoveryProgramAwarenessBridge interface with: phase, source, available, level, headline, summary, programMutationApplied (false), workoutMutationApplied (false), automaticDeloadApplied (false), advisoryOnly (true), reasonCodes, sourceSignals, proof, generatedAt.',
           'BridgeSourceSignals tracks: hasRecoverySnapshot, hasDeloadRecommendation, l4RecommendationLevel, recoveryReadinessLevel, deloadSignal, fatigueLevel, sourceQuality.',
@@ -1902,11 +1903,30 @@ function phaseS(): BlueprintPhase {
           'Utility helpers: createEmptyAwarenessBridge(), hasRecoveryConcern(), getBridgeDisplayChip().',
           'All mutation flags hardcoded false — no program/workout mutation ever occurs through this bridge.',
           'No localStorage reads, no window usage, no side effects — pure function only.',
+          // M1.2 Program/Session Advisory Display (Step 21.5.2)
+          'M1.2 COMPLETE: AdaptiveProgramDisplay.tsx updated with recoveryAwarenessBridge prop.',
+          'Import added: RecoveryProgramAwarenessBridge type, hasRecoveryConcern from recovery-program-awareness-bridge.ts.',
+          'Recovery advisory card renders only when hasRecoveryConcern(bridge) returns true — no advisory for "none" level.',
+          'Card displays: headline (from bridge), summary (from bridge), non-mutation proof line ("Advisory only — no automatic program changes applied").',
+          'Visual severity: deload_recommended uses amber/AlertTriangle, reduce_load uses yellow/Shield, monitor uses blue/Shield.',
+          'Data attributes: data-m1-recovery-program-awareness, data-m1-advisory-level, data-m1-no-program-mutation.',
+          'app/(app)/program/page.tsx updated with M1 bridge derivation useEffect.',
+          'Bridge derived from localStorage L2 check-in → buildCheckInSignalsFromUserInput → deriveRecoveryAdaptationSnapshot → deriveDeloadRecommendation → deriveRecoveryProgramAwarenessBridge.',
+          'recoveryAwarenessBridge state passed to AdaptiveProgramDisplay component.',
+          'No-check-in path: empty bridge → no advisory card rendered.',
+          'Corrupt localStorage caught: fallback empty bridge → no crash.',
+          // M1.3 Runtime Acceptance (Step 21.5.3)
+          'M1.3 COMPLETE: Runtime acceptance verified across all scenarios.',
+          'No-check-in: Program loads, no crash, advisory absent or "unavailable", Start Workout works.',
+          'Active check-in: Bridge derives advisory, Program surface shows advisory card, text is advisory-only.',
+          'Stale check-in: UI handles gracefully without pretending stale is current.',
+          'Saved reload/refresh: Program reloads without corruption, advisory recomputed from localStorage.',
+          'Start Workout: Opens correct session, exercises/sets unchanged, reducer untouched.',
+          'Non-mutation verified: programMutationApplied=false, workoutMutationApplied=false, automaticDeloadApplied=false.',
+          'No duplicate recovery truth: single bridge derivation path in Program page.',
+          'Build passes: pnpm exec tsc --noEmit + pnpm run build green.',
         ],
-        remainingWork: [
-          'M1.2: Consume bridge on Program/session decision surfaces as advisory-only UI.',
-          'M1.3: Runtime acceptance check for M1 mini-chain.',
-        ],
+        remainingWork: [],
       },
     ],
   }

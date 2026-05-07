@@ -588,9 +588,9 @@ function phaseK(): BlueprintPhase {
     title: 'Recovery / Intensity / Weekly Distribution Materialization Lock',
     purpose:
       "Make whole-week stress / recovery / exposure logic computable, attached to canonical program/session truth, preserved through save/load/normalize/live, and visibly reflected on the Program page. The week stops feeling like six near-copy days because at least one repeated high-stress exposure can be conservatively softened with attached audit proof.",
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Expand mutation surface beyond sets/RPE on adjacent (i, i+1) pairs once acceptance signal is confirmed (method eligibility downgrades, accessory volume trims, density block on tendon-followups). Until then the contract is conservative-by-design.',
+      'Phase K complete. All subtasks (K1-K9) are done. Live workout now consumes Phase K stress/recovery context for adaptive rest guidance. Next phase is L (Post-Workout Performance Feedback Adaptation Lock) or expand mutation surface.',
     subtasks: [
       {
         id: 'K.K1',
@@ -674,13 +674,16 @@ function phaseK(): BlueprintPhase {
       {
         id: 'K.K8',
         title: 'Live workout does not lose stress/adaptive context',
-        status: 'PARTIAL',
+        status: 'COMPLETE',
         evidence: [
           'Hoisted session.stressRole / stressLevel / recoveryCost / nextDayRisk fields are part of the canonical session object the live workout loader receives via the existing snapshot path; nothing in the live reducer flattens them.',
+          'safeWorkoutSessionContract now explicitly preserves stressRole / stressLevel / recoveryCost / stressDistributionProof fields for live workout consumption.',
+          'lib/workout/live-stress-rest-guidance.ts provides deriveLiveStressRestGuidance() and buildSessionStressSummary() helpers that consume Phase K session context.',
+          'StreamlinedWorkoutSession renders stress-aware rest guidance in the exercise view (amber for recovery, sky for conservative, neutral fallback for legacy).',
+          'Pre-start overview shows session stress summary for HIGH/VERY_HIGH stress sessions with coaching line.',
+          'data-phase-k8-stress-context / data-stress-level / data-recovery-cost attributes preserved for QA.',
         ],
-        remainingWork: [
-          'Live reducer does not yet consume stressLevel / recoveryCost for adaptive rest beyond the existing RPE-driven path. Hookup is intentionally deferred until Phase K mutation surface stabilises.',
-        ],
+        remainingWork: [],
       },
       {
         id: 'K.K9',

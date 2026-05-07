@@ -250,6 +250,11 @@ import {
   type SessionAdaptiveReadiness,
   type TargetPrescription,
 } from '@/lib/workout/live-workout-adaptive-signals'
+// [PHASE K8] Live stress rest guidance — derives rest guidance from session stress context
+import {
+  deriveLiveStressRestGuidance,
+  buildSessionStressSummary,
+} from '@/lib/workout/live-stress-rest-guidance'
 import {
   computeLiveDeloadDecision,
   hasDecisionChanged,
@@ -2304,6 +2309,15 @@ export function StreamlinedWorkoutSession({
       prescriptionPropagationAudit: prescriptionPropagationAuditValue as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       compositionMetadata: compositionMetadataValue as any,
+      
+      // [PHASE K8] Preserve Phase K stress/recovery context for live rest guidance.
+      // These fields are stamped by weekly-stress-distribution-contract during
+      // program generation and survive through load-authoritative-session spread.
+      // We preserve them here so deriveLiveStressRestGuidance can consume them.
+      stressRole: typeof session.stressRole === 'string' ? session.stressRole : undefined,
+      stressLevel: typeof session.stressLevel === 'string' ? session.stressLevel : undefined,
+      recoveryCost: typeof session.recoveryCost === 'string' ? session.recoveryCost : undefined,
+      stressDistributionProof: session.stressDistributionProof ?? undefined,
     }
   }, [session, sessionIsValid])
   
@@ -6993,6 +7007,40 @@ if (shouldShowLocalFallback) {
                 </p>
               </div>
             )}
+            
+            {/* [PHASE K8] Session stress context — shows recovery guidance for high-stress sessions */}
+            {(() => {
+              const stressSummary = buildSessionStressSummary({
+                stressLevel: safeSession.stressLevel,
+                recoveryCost: safeSession.recoveryCost,
+                stressRole: safeSession.stressRole,
+                stressProofLabel: safeSession.stressDistributionProof?.label,
+              })
+              
+              // Only show for recovery or conservative tone sessions
+              if (!stressSummary.hasStressContext || stressSummary.displayTone === 'neutral') {
+                return null
+              }
+              
+              return (
+                <div 
+                  className={`mt-3 mx-4 rounded-md border px-3 py-2 ${
+                    stressSummary.displayTone === 'recovery'
+                      ? 'border-amber-500/20 bg-amber-500/5'
+                      : 'border-sky-500/15 bg-sky-500/5'
+                  }`}
+                  data-phase-k8-stress-context="true"
+                  data-stress-level={safeSession.stressLevel || 'unknown'}
+                  data-recovery-cost={safeSession.recoveryCost || 'unknown'}
+                >
+                  <p className={`text-[11px] leading-relaxed ${
+                    stressSummary.displayTone === 'recovery' ? 'text-amber-300' : 'text-sky-300/80'
+                  }`}>
+                    {stressSummary.coachingLine}
+                  </p>
+                </div>
+              )
+            })()}
           </div>
           
           {/* Session Overview Card - Compact */}
@@ -8754,17 +8802,55 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 }
               )}
             </p>
-            {/* [PHASE-MICROCOPY] Rest guidance as supporting line only when meaningful */}
-            {safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds >= 90 && (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push') && (
-              <p className="text-[10px] text-[#6B7280]/80 mt-1">
-                {safeCurrentExercise.restSeconds >= 180 
-                  ? `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)}+ min to preserve output quality`
-                  : safeCurrentExercise.restSeconds >= 120
-                  ? `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)} min for quality recovery`
-                  : `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)}:${String(safeCurrentExercise.restSeconds % 60).padStart(2, '0')} between sets`
-                }
-              </p>
-            )}
+            {/* [PHASE K8] Stress-aware rest guidance — derives from Phase K session stress context */}
+            {(() => {
+              // Derive stress-aware rest guidance from Phase K session context
+              const stressGuidance = deriveLiveStressRestGuidance({
+                stressLevel: safeSession.stressLevel,
+                recoveryCost: safeSession.recoveryCost,
+                stressRole: safeSession.stressRole,
+                stressProofLabel: safeSession.stressDistributionProof?.label,
+                baseRestSeconds: safeCurrentExercise?.restSeconds,
+                exerciseCategory,
+              })
+              
+              // Only show rest guidance for meaningful exercises with rest >= 90s
+              const showRestGuidance = safeCurrentExercise?.restSeconds && 
+                safeCurrentExercise.restSeconds >= 90 && 
+                (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push')
+              
+              if (!showRestGuidance) return null
+              
+              // If stress-aware with a recovery/conservative tone, show enhanced guidance
+              if (stressGuidance.isStressAware && stressGuidance.displayTone === 'recovery') {
+                return (
+                  <p className="text-[10px] text-amber-400/80 mt-1">
+                    {stressGuidance.restLabel || 'Full recovery recommended'} — {stressGuidance.reason || 'high-stress session'}
+                  </p>
+                )
+              }
+              
+              if (stressGuidance.isStressAware && stressGuidance.displayTone === 'conservative') {
+                return (
+                  <p className="text-[10px] text-sky-400/70 mt-1">
+                    {stressGuidance.reason || 'Maintain quality rest periods'}
+                  </p>
+                )
+              }
+              
+              // Default rest guidance (neutral or legacy)
+              const restSeconds = safeCurrentExercise.restSeconds
+              return (
+                <p className="text-[10px] text-[#6B7280]/80 mt-1">
+                  {restSeconds >= 180 
+                    ? `Rest ${Math.floor(restSeconds / 60)}+ min to preserve output quality`
+                    : restSeconds >= 120
+                    ? `Rest ${Math.floor(restSeconds / 60)} min for quality recovery`
+                    : `Rest ${Math.floor(restSeconds / 60)}:${String(restSeconds % 60).padStart(2, '0')} between sets`
+                  }
+                </p>
+              )
+            })()}
             {/* Set progress for grouped: shows round progress instead of linear sets */}
             <div className="flex items-center gap-3 mt-3">
               <div className="flex items-center gap-1.5 flex-1">

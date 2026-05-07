@@ -1990,6 +1990,7 @@ function ProgramDisplayWrapper({
   onRestart,
   onRegenerate,
   onRecoveryNeeded,
+  onProgramUpdate, // [STEP 23.6C] Callback to update parent program state
   unifiedStaleness, // [TASK 1] Pass through unified staleness
   showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility via ?programProbe=1
   forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
@@ -1999,6 +2000,7 @@ function ProgramDisplayWrapper({
   onRestart: () => void
   onRegenerate: () => void
   onRecoveryNeeded: () => void
+  onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void // [STEP 23.6C] Parent state setter
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
   showProbe?: boolean // [PREVIEW-VISIBLE-PROBE] Enable truth probe on session cards
   forceProbe?: boolean // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
@@ -2326,8 +2328,11 @@ function ProgramDisplayWrapper({
         const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
         const savedProgram = saveAdaptiveProgram(result.updatedProgram)
         
-        // Update Program Page state with the saved program
-        setProgram(savedProgram)
+        // [STEP 23.6C] Update Program Page state via parent callback
+        // onProgramUpdate is passed from parent, which owns setProgram
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
         
         console.log('[step-23.6-push-forward] Program saved successfully', {
           programId: savedProgram.id,
@@ -18578,6 +18583,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   console.log('[v0] Display render failed, showing recovery state')
   setLoadStage('display-render-error')
   }}
+  onProgramUpdate={setProgram} // [STEP 23.6C] Pass parent's setProgram for missed-workout update
   unifiedStaleness={unifiedStaleness}
   showProbe={showProbe}
   forceProbe={FORCE_VISIBLE_SESSION_PROBE}

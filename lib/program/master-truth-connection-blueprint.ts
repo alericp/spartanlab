@@ -2433,6 +2433,110 @@ function step23(): BlueprintPhase {
 }
 
 // =============================================================================
+// STEP 24: MISSED-WORKOUT RECOMPOSITION EXPANSION
+// =============================================================================
+
+function step24(): BlueprintPhase {
+  // [STEP 24] Owner-directed expansion of missed-workout recomposition.
+  // Multi-missed context detection + additional safe user actions.
+  return {
+    id: 'V',
+    title: 'Missed-Workout Recomposition Expansion: Multi-Missed Context + Additional Safe User Actions (Step 24)',
+    purpose:
+      'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure.',
+    status: 'PARTIAL',
+    nextAction:
+      'Step 24.1 COMPLETE. Multi-missed-workout context advisory foundation added. buildMultiMissedWorkoutContextAdvisory helper detects patterns from existing single-session advisory and available program context. Advisory-only — no mutation. Next: Step 24.2 additional action readiness audit for reduce_next_session_intensity.',
+    subtasks: [
+      {
+        id: 'V.V1',
+        title: 'Multi-missed-workout context advisory foundation',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 24.1] MultiMissedWorkoutContextAdvisory interface with hasMultiMissedContext, missedSessionCount, confidence, severity, title, summary, reasoning[], recommendedNextAction, mutationAllowedNow (always false), source, step',
+          '[STEP 24.1] buildMultiMissedWorkoutContextAdvisory pure helper — no mutation, no storage, no side effects',
+          '[STEP 24.1] Detects multi-missed patterns from existing single-session advisory + program session count context',
+          '[STEP 24.1] Returns neutral advisory when insufficient context (hasMultiMissedContext: false)',
+          '[STEP 24.1] Preserves all Step 23 behavior unchanged',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'V.V2',
+        title: 'Additional action readiness audit for reduce_next_session_intensity',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Audit existing reduce_next_session_intensity advisory path',
+          'Identify mutation requirements if user confirms',
+          'Document safety bounds for intensity reduction',
+        ],
+      },
+      {
+        id: 'V.V3',
+        title: 'Protect recovery spacing preview-only action',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Design preview UI for recovery spacing adjustment',
+          'Identify sessions that would shift',
+          'No mutation until V.V5',
+        ],
+      },
+      {
+        id: 'V.V4',
+        title: 'User-confirmed reduce-intensity mutation corridor',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Two-step confirmation UI',
+          'Pure helper for intensity reduction',
+          'saveAdaptiveProgram persistence',
+          'Reload proof',
+        ],
+      },
+      {
+        id: 'V.V5',
+        title: 'User-confirmed recovery-spacing mutation corridor',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Two-step confirmation UI',
+          'Pure helper for recovery spacing adjustment',
+          'saveAdaptiveProgram persistence',
+          'Reload proof',
+        ],
+      },
+      {
+        id: 'V.V6',
+        title: 'Multi-session push-forward mutation guardrail',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Audit multi-session push-forward safety bounds',
+          'Extend push helper if needed',
+          'Two-step confirmation UI',
+          'saveAdaptiveProgram persistence',
+          'Reload proof',
+        ],
+      },
+      {
+        id: 'V.V7',
+        title: 'Persistence/reload proof for any new mutation action',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Verify all new mutation actions persist correctly',
+          'Verify reload preserves applied changes',
+          'Verify Step 22/23 preserved',
+          'Blueprint closeout',
+        ],
+      },
+    ],
+  }
+}
+
+// =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
 
@@ -2550,6 +2654,12 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // protect spacing, regenerate). No automatic mutation. No saved-program
     // rewrite. Requires explicit user confirmation before any schedule change.
     step23(),
+    // [STEP 24] Missed-Workout Recomposition Expansion
+    // Multi-missed context detection + additional safe user actions.
+    // Step 24.1 is advisory-only foundation. Future substeps add mutation
+    // corridors for reduce_intensity, protect_recovery_spacing, and
+    // multi-session push-forward, each requiring explicit confirmation.
+    step24(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

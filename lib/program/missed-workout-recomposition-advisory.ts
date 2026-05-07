@@ -909,3 +909,260 @@ export function pushMissedWorkoutSessionForward(
     evidence,
   }
 }
+
+// =============================================================================
+// STEP 24.1 — MULTI-MISSED-WORKOUT CONTEXT ADVISORY FOUNDATION
+// =============================================================================
+
+/**
+ * Confidence level for multi-missed detection.
+ */
+export type MultiMissedConfidence = 'none' | 'low' | 'moderate' | 'high'
+
+/**
+ * Severity level for multi-missed context.
+ */
+export type MultiMissedSeverity = 'none' | 'watch' | 'moderate' | 'high'
+
+/**
+ * Recommended next action based on multi-missed context.
+ */
+export type MultiMissedRecommendedAction =
+  | 'continue_single_session_flow'
+  | 'review_before_mutation'
+  | 'recommend_regeneration_review'
+  | 'insufficient_context'
+
+/**
+ * Source of the multi-missed context detection.
+ */
+export type MultiMissedSource =
+  | 'program_sessions'
+  | 'existing_advisory'
+  | 'mixed'
+  | 'insufficient_context'
+
+/**
+ * Input for multi-missed workout context advisory derivation.
+ * Uses existing available context without requiring schema changes.
+ */
+export interface MultiMissedWorkoutContextInput {
+  /** Existing single-session missed workout advisory (from Step 23) */
+  existingAdvisory?: MissedWorkoutRecompositionAdvisory
+  /** Total number of sessions in the program */
+  totalSessionCount?: number
+  /** Index of the currently identified missed session (0-based) */
+  currentMissedSessionIndex?: number
+  /** Known indices of missed sessions if multiple are detected (0-based) */
+  missedSessionIndices?: number[]
+  /** Whether this is a repeated advisory (user dismissed before and issue recurs) */
+  isRepeatedAdvisory?: boolean
+  /** Days since the program started */
+  daysSinceProgramStart?: number
+  /** Number of sessions that should have been completed by now */
+  expectedCompletedSessions?: number
+  /** Number of sessions actually completed */
+  actualCompletedSessions?: number
+}
+
+/**
+ * Multi-missed workout context advisory output.
+ * Advisory-only — no mutation. All flags prevent automatic changes.
+ *
+ * @step 24.1
+ */
+export interface MultiMissedWorkoutContextAdvisory {
+  /** Whether multi-missed context was detected */
+  hasMultiMissedContext: boolean
+  /** Number of missed sessions detected (0 if none or insufficient context) */
+  missedSessionCount: number
+  /** Confidence in the multi-missed detection */
+  confidence: MultiMissedConfidence
+  /** Severity of the multi-missed situation */
+  severity: MultiMissedSeverity
+  /** Short title for display */
+  title: string
+  /** Summary description */
+  summary: string
+  /** Detailed reasoning for the detection */
+  reasoning: string[]
+  /** Recommended next action */
+  recommendedNextAction: MultiMissedRecommendedAction
+  /** Whether mutation is allowed now (always false in Step 24.1) */
+  mutationAllowedNow: false
+  /** Source of the detection */
+  source: MultiMissedSource
+  /** Step identifier */
+  step: '24.1'
+}
+
+/**
+ * Build a multi-missed workout context advisory from available inputs.
+ *
+ * PURE FUNCTION — no side effects, no storage, no mutation.
+ *
+ * This helper detects multi-missed patterns from:
+ * 1. Existing single-session advisory (Step 23) if it suggests broader issues
+ * 2. Explicitly provided missed session indices
+ * 3. Comparison of expected vs actual completed sessions
+ * 4. Repeated advisory patterns
+ *
+ * Returns neutral advisory when insufficient context exists.
+ *
+ * @step 24.1
+ */
+export function buildMultiMissedWorkoutContextAdvisory(
+  input: MultiMissedWorkoutContextInput
+): MultiMissedWorkoutContextAdvisory {
+  const {
+    existingAdvisory,
+    totalSessionCount,
+    currentMissedSessionIndex,
+    missedSessionIndices,
+    isRepeatedAdvisory,
+    daysSinceProgramStart,
+    expectedCompletedSessions,
+    actualCompletedSessions,
+  } = input
+
+  const reasoning: string[] = []
+  let missedCount = 0
+  let confidence: MultiMissedConfidence = 'none'
+  let severity: MultiMissedSeverity = 'none'
+  let source: MultiMissedSource = 'insufficient_context'
+
+  // ==========================================================================
+  // DETECTION PATH 1: Explicit missed session indices
+  // ==========================================================================
+  if (missedSessionIndices && missedSessionIndices.length > 1) {
+    missedCount = missedSessionIndices.length
+    confidence = 'high'
+    source = 'program_sessions'
+    reasoning.push(`${missedCount} missed sessions explicitly identified at indices: ${missedSessionIndices.join(', ')}`)
+  }
+
+  // ==========================================================================
+  // DETECTION PATH 2: Expected vs actual completed sessions
+  // ==========================================================================
+  if (
+    missedCount === 0 &&
+    typeof expectedCompletedSessions === 'number' &&
+    typeof actualCompletedSessions === 'number' &&
+    expectedCompletedSessions > 0
+  ) {
+    const gap = expectedCompletedSessions - actualCompletedSessions
+    if (gap > 1) {
+      missedCount = gap
+      confidence = 'moderate'
+      source = 'program_sessions'
+      reasoning.push(`Expected ${expectedCompletedSessions} completed sessions, found ${actualCompletedSessions} (gap: ${gap})`)
+    }
+  }
+
+  // ==========================================================================
+  // DETECTION PATH 3: Existing advisory suggests broader pattern
+  // ==========================================================================
+  if (missedCount <= 1 && existingAdvisory) {
+    // Check if the existing advisory suggests a pattern beyond single session
+    const advisorySuggestsBroaderPattern =
+      existingAdvisory.action === 'recommend_regeneration' ||
+      existingAdvisory.action === 'recommend_full_rest' ||
+      existingAdvisory.severity === 'high'
+
+    if (advisorySuggestsBroaderPattern && isRepeatedAdvisory) {
+      // Repeated high-severity advisory suggests accumulating missed pattern
+      missedCount = Math.max(missedCount, 2) // At least 2 if repeated high-severity
+      confidence = confidence === 'none' ? 'low' : confidence
+      source = source === 'insufficient_context' ? 'existing_advisory' : 'mixed'
+      reasoning.push('Repeated high-severity advisory suggests accumulating missed workout pattern')
+    } else if (advisorySuggestsBroaderPattern) {
+      // Single high-severity advisory — watch but don't claim multi-missed yet
+      confidence = confidence === 'none' ? 'low' : confidence
+      source = source === 'insufficient_context' ? 'existing_advisory' : 'mixed'
+      reasoning.push('Current advisory severity suggests potential for broader adjustment needs')
+    }
+  }
+
+  // ==========================================================================
+  // DETECTION PATH 4: Program progression context
+  // ==========================================================================
+  if (
+    missedCount <= 1 &&
+    typeof daysSinceProgramStart === 'number' &&
+    typeof totalSessionCount === 'number' &&
+    typeof currentMissedSessionIndex === 'number'
+  ) {
+    // If user is early in program but already hitting missed-workout scenarios,
+    // this is a watch signal but not necessarily multi-missed
+    const progressRatio = currentMissedSessionIndex / totalSessionCount
+    const earlyProgramThreshold = 0.2 // First 20% of program
+
+    if (progressRatio < earlyProgramThreshold && daysSinceProgramStart > 7) {
+      confidence = confidence === 'none' ? 'low' : confidence
+      reasoning.push('Early program stage with missed workout — monitor for pattern development')
+    }
+  }
+
+  // ==========================================================================
+  // SEVERITY CLASSIFICATION
+  // ==========================================================================
+  if (missedCount >= 3) {
+    severity = 'high'
+  } else if (missedCount === 2) {
+    severity = 'moderate'
+  } else if (missedCount === 1 && isRepeatedAdvisory) {
+    severity = 'watch'
+  } else if (confidence !== 'none') {
+    severity = 'watch'
+  }
+
+  // ==========================================================================
+  // RECOMMENDED ACTION
+  // ==========================================================================
+  let recommendedNextAction: MultiMissedRecommendedAction
+  if (missedCount === 0 && confidence === 'none') {
+    recommendedNextAction = 'insufficient_context'
+  } else if (missedCount >= 3 || severity === 'high') {
+    recommendedNextAction = 'recommend_regeneration_review'
+  } else if (missedCount >= 2 || severity === 'moderate') {
+    recommendedNextAction = 'review_before_mutation'
+  } else {
+    recommendedNextAction = 'continue_single_session_flow'
+  }
+
+  // ==========================================================================
+  // OUTPUT GENERATION
+  // ==========================================================================
+  const hasMultiMissedContext = missedCount > 1 || (missedCount === 1 && severity !== 'none')
+
+  let title: string
+  let summary: string
+
+  if (missedCount >= 3) {
+    title = 'Multiple missed sessions detected'
+    summary = `${missedCount} sessions appear to have been missed. Consider reviewing or regenerating your program to better match your current schedule.`
+  } else if (missedCount === 2) {
+    title = 'Two missed sessions detected'
+    summary = 'This may need a broader adjustment than pushing one session forward. Review the plan before applying more schedule changes.'
+  } else if (hasMultiMissedContext) {
+    title = 'Potential schedule pattern issue'
+    summary = 'Monitor your schedule — if missed workouts continue, a broader adjustment may help.'
+  } else {
+    title = 'Single session context'
+    summary = 'No multi-missed pattern detected. Continue with single-session flow.'
+  }
+
+  return {
+    hasMultiMissedContext,
+    missedSessionCount: missedCount,
+    confidence,
+    severity,
+    title,
+    summary,
+    reasoning: reasoning.length > 0 ? reasoning : ['No multi-missed indicators found'],
+    recommendedNextAction,
+    mutationAllowedNow: false,
+    source,
+    step: '24.1',
+  }
+}

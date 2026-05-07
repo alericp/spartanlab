@@ -220,11 +220,11 @@ function phaseE(): BlueprintPhase {
     title: 'Actual Program Mutation Lock',
     purpose: 'Doctrine changes the actual workout program, not just labels.',
     status: 'PARTIAL',
-    nextAction: 'Selection-pass for method-aware exercise picking and multi-structure composition rules (deferred to Phase I; Phase 4S already wired methodStructures + doctrineBlockResolution through SessionCardSurface into AdaptiveSessionCard).',
+    nextAction: 'E.E3 COMPLETE: method-aware exercise selection via scoreMethodCompatibility in exercise-selection-materiality.ts. E.E4 remains PARTIAL: multi-structure composition rules (multiple method structures per session) deferred to Phase I. Phase 4S already wired methodStructures + doctrineBlockResolution through SessionCardSurface into AdaptiveSessionCard.',
     subtasks: [
       { id: 'E.E1', title: 'Structural methods create real grouped sessions where safe', status: 'COMPLETE', evidence: ['lib/program/structural-method-materialization-corridor.ts'], remainingWork: [] },
       { id: 'E.E2', title: 'Row-level methods mutate real exercise rows where safe', status: 'COMPLETE', evidence: ['lib/program/row-level-method-prescription-mutator.ts'], remainingWork: [] },
-      { id: 'E.E3', title: 'Method decisions can affect exercise selection/order/grouping', status: 'PARTIAL', evidence: ['structural corridor handles grouping'], remainingWork: ['Selection-pass for method-aware exercise picking (deferred to Phase I)'] },
+      { id: 'E.E3', title: 'Method decisions can affect exercise selection/order/grouping', status: 'COMPLETE', evidence: ['structural corridor handles grouping', 'lib/program-generation/exercise-selection-materiality.ts:scoreMethodCompatibility provides 0-12 method compatibility boost when session has decided method', 'ExerciseMaterialityContext.sessionMethodDecision enables method-aware selection', 'MaterialityScoreBreakdown.methodCompatibilityBoost included in total score and slot suitability', 'MaterialityReasonCode method_compatible_selection tracks when method influenced selection', 'SlotMaterialityRanking.auditSummary.methodCompatibilityInfluencedRanking tracks causal influence'], remainingWork: [] },
       { id: 'E.E4', title: 'Method decisions can affect session composition', status: 'PARTIAL', evidence: ['max one new structural group per session'], remainingWork: ['Multi-structure composition rules'] },
       { id: 'E.E5', title: 'No-change cases are legitimate and explained', status: 'COMPLETE', evidence: ['lib/program/session-doctrine-participation-contract.ts'], remainingWork: [] },
       { id: 'E.E6', title: 'Doctrine is not only producing chips/banners', status: 'COMPLETE', evidence: ['row methods + grouped blocks visible'], remainingWork: [] },

@@ -55,6 +55,7 @@ export type MaterialityReasonCode =
   | 'flexibility_support_choice'
   | 'current_progression_aligned'
   | 'prerequisite_skill_builder'
+  | 'method_compatible_selection'  // [PHASE-E.E3] Method-aware selection boost
   | 'generic_fallback'
 
 export interface MaterialityScoreBreakdown {
@@ -69,6 +70,7 @@ export interface MaterialityScoreBreakdown {
   scheduleComplexityFit: number     // 0-10: Appropriate for weekly volume
   trainingStyleMatch: number        // 0-10: Matches hybrid/pure/weighted style
   doctrineBoost: number             // 0-15: Doctrine DB preference boost
+  methodCompatibilityBoost: number  // 0-12: [PHASE-E.E3] Method-aware selection boost
 }
 
 export interface ExerciseMaterialityScore {
@@ -96,6 +98,7 @@ export interface SlotMaterialityRanking {
     jointCautionInfluencedRanking: boolean
     progressionInfluencedRanking: boolean
     doctrineInfluencedRanking: boolean
+    methodCompatibilityInfluencedRanking: boolean  // [PHASE-E.E3]
   }
 }
 
@@ -134,6 +137,15 @@ export interface ExerciseMaterialityContext {
     carryoverType: 'direct' | 'indirect' | 'prerequisite'
     preferredExercises: string[]
   }>
+  
+  // [PHASE-E.E3] Method-aware selection context
+  // When a session has a decided method (superset, circuit, density_block, etc.),
+  // exercises that are compatible with that method should receive a boost.
+  // This enables method decisions to materially influence exercise selection.
+  sessionMethodDecision?: {
+    selectedMethodId: string | null  // e.g., 'superset', 'circuit', 'density_block'
+    methodCompatibilityPreference: 'preferred' | 'allowed' | null  // only boost preferred/allowed
+  } | null
 }
 
 // =============================================================================
@@ -211,6 +223,7 @@ export function scoreExerciseMateriality(
     scheduleComplexityFit: 0,
     trainingStyleMatch: 0,
     doctrineBoost: 0,
+    methodCompatibilityBoost: 0,  // [PHASE-E.E3]
   }
   
   const auditNotes: string[] = []
@@ -435,6 +448,21 @@ export function scoreExerciseMateriality(
   }
   
   // =========================================================================
+  // 11. METHOD COMPATIBILITY BOOST (0-12) [PHASE-E.E3]
+  // When a session has a decided method (superset, circuit, density_block),
+  // exercises compatible with that method receive a selection boost.
+  // This causally connects method decisions to exercise selection.
+  // =========================================================================
+  const methodCompatScore = scoreMethodCompatibility(exercise, context)
+  breakdown.methodCompatibilityBoost = methodCompatScore.score
+  if (methodCompatScore.notes.length > 0) {
+    auditNotes.push(...methodCompatScore.notes)
+  }
+  if (methodCompatScore.isMethodCompatible) {
+    reasonCodes.push('method_compatible_selection')
+  }
+  
+  // =========================================================================
   // CALCULATE TOTAL SCORE
   // [EXERCISE-SELECTION-TRUTH-DOMINANCE] Now includes additionalSkillsSupport
   // =========================================================================
@@ -449,7 +477,8 @@ export function scoreExerciseMateriality(
     breakdown.recentHistoryPenalty +
     breakdown.scheduleComplexityFit +
     breakdown.trainingStyleMatch +
-    breakdown.doctrineBoost
+    breakdown.doctrineBoost +
+    breakdown.methodCompatibilityBoost  // [PHASE-E.E3] Method-aware selection
   
   // Determine primary reason code
   const primaryReasonCode = reasonCodes.length > 0 ? reasonCodes[0] : 'generic_fallback'
@@ -525,6 +554,10 @@ export function rankCandidatesForSlot(
   const progressionInfluenced = rankedCandidates.some(c => 
     c.secondaryReasonCodes.includes('current_progression_aligned'))
   const doctrineInfluenced = rankedCandidates.some(c => c.breakdown.doctrineBoost >= 8)
+  // [PHASE-E.E3] Track when method compatibility influenced selection
+  const methodCompatibilityInfluenced = rankedCandidates.some(c => 
+    c.breakdown.methodCompatibilityBoost >= 8 || 
+    c.secondaryReasonCodes.includes('method_compatible_selection'))
   
   const selectionConfidence = 
     rankedCandidates.length > 0 && rankedCandidates[0].totalScore >= 50 ? 'high' :
@@ -543,6 +576,7 @@ export function rankCandidatesForSlot(
       jointCautionInfluencedRanking: jointCautionInfluenced,
       progressionInfluencedRanking: progressionInfluenced,
       doctrineInfluencedRanking: doctrineInfluenced,
+      methodCompatibilityInfluencedRanking: methodCompatibilityInfluenced,  // [PHASE-E.E3]
     },
   }
 }
@@ -1009,6 +1043,130 @@ function scoreDoctrinePreference(
   return { score, notes }
 }
 
+/**
+ * [PHASE-E.E3] Score method compatibility for exercise selection.
+ * 
+ * When a session has a decided method (superset, circuit, density_block, etc.),
+ * exercises that are compatible with that method receive a selection boost.
+ * This causally connects method decisions to exercise selection.
+ * 
+ * Compatibility is determined by exercise category and the method's requirements:
+ * - Supersets: prefer exercises that can pair without excessive fatigue overlap
+ * - Circuits: prefer exercises with moderate complexity and safe transitions
+ * - Density blocks: prefer exercises with quick setup and fatigue tolerance
+ * - Skill practice: prefer exercises with high technique value
+ * 
+ * Returns 0-12 boost based on compatibility level.
+ */
+function scoreMethodCompatibility(
+  exercise: Exercise,
+  context: ExerciseMaterialityContext
+): { score: number; notes: string[]; isMethodCompatible: boolean } {
+  const notes: string[] = []
+  let score = 0
+  let isMethodCompatible = false
+  
+  // Guard: no method decision context
+  if (!context.sessionMethodDecision?.selectedMethodId) {
+    return { score: 0, notes: [], isMethodCompatible: false }
+  }
+  
+  const methodId = context.sessionMethodDecision.selectedMethodId
+  const exerciseCategory = exercise.category || 'accessory'
+  
+  // Method compatibility scoring based on exercise characteristics
+  // This is a bounded influence (0-12), not a hard filter
+  switch (methodId) {
+    case 'superset':
+    case 'accessory_pairing': {
+      // Supersets work well with stable accessories and hypertrophy work
+      // Avoid high-skill moves that need full CNS focus
+      if (exerciseCategory === 'accessory' || exerciseCategory === 'strength') {
+        score = 10
+        notes.push('Good superset candidate (stable accessory/strength)')
+        isMethodCompatible = true
+      } else if (exerciseCategory === 'skill') {
+        // Skill work is less ideal for supersets due to technique demands
+        score = 4
+        notes.push('Skill exercises are superset-caution (technique priority)')
+      } else {
+        score = 6
+        notes.push('Moderate superset compatibility')
+      }
+      break
+    }
+    
+    case 'circuit':
+    case 'density_block':
+    case 'endurance_density': {
+      // Circuits/density prefer moderate complexity, quick transitions
+      // Avoid heavy loaded exercises that need extensive setup/rest
+      const isHeavyLoaded = exercise.id.includes('weighted') || 
+                           exercise.id.includes('heavy') ||
+                           exercise.name.toLowerCase().includes('heavy')
+      
+      if (exerciseCategory === 'accessory' && !isHeavyLoaded) {
+        score = 12
+        notes.push('Excellent circuit/density candidate (light accessory)')
+        isMethodCompatible = true
+      } else if (exerciseCategory === 'strength' && !isHeavyLoaded) {
+        score = 8
+        notes.push('Good circuit/density candidate (moderate strength)')
+        isMethodCompatible = true
+      } else if (isHeavyLoaded) {
+        score = 2
+        notes.push('Heavy loaded exercises need caution in circuits')
+      } else {
+        score = 6
+        notes.push('Moderate circuit/density compatibility')
+      }
+      break
+    }
+    
+    case 'skill_practice':
+    case 'straight_sets': {
+      // Skill practice prefers high technique value exercises
+      // Straight sets are neutral — no particular compatibility boost
+      if (methodId === 'skill_practice' && exerciseCategory === 'skill') {
+        score = 10
+        notes.push('Optimal for skill practice method')
+        isMethodCompatible = true
+      } else if (methodId === 'straight_sets') {
+        score = 5
+        notes.push('Straight sets neutral compatibility')
+      }
+      break
+    }
+    
+    case 'top_set_backoff':
+    case 'backoff_sets':
+    case 'drop_set': {
+      // These methods work best with compound strength exercises
+      if (exerciseCategory === 'strength' || 
+          exercise.id.includes('compound') ||
+          exercise.name.toLowerCase().includes('squat') ||
+          exercise.name.toLowerCase().includes('press') ||
+          exercise.name.toLowerCase().includes('row') ||
+          exercise.name.toLowerCase().includes('pull')) {
+        score = 10
+        notes.push(`Good ${methodId.replace('_', ' ')} candidate (compound strength)`)
+        isMethodCompatible = true
+      } else {
+        score = 4
+        notes.push(`${methodId.replace('_', ' ')} methods prefer compound exercises`)
+      }
+      break
+    }
+    
+    default: {
+      // Unknown method — no boost
+      score = 0
+    }
+  }
+  
+  return { score, notes, isMethodCompatible }
+}
+
 function calculateSlotSuitability(
   breakdown: MaterialityScoreBreakdown
 ): Record<SlotType, number> {
@@ -1038,7 +1196,8 @@ function calculateSlotSuitability(
                         key === 'additionalSkillsSupport' ? 12 :  // NEW: tertiary skills max
                         key === 'equipmentOptimality' ? 15 :
                         key === 'carryoverValue' ? 15 :
-                        key === 'doctrineBoost' ? 15 : 10
+                        key === 'doctrineBoost' ? 15 :
+                        key === 'methodCompatibilityBoost' ? 12 : 10  // [PHASE-E.E3]
       maxPossible += maxForKey * weight
     }
     

@@ -110,6 +110,8 @@ import {
 } from '@/lib/program/recovery-program-awareness-bridge'
 import {
   deriveDeloadRecommendation,
+  deriveRecoveryAdaptationSnapshot,
+  buildCheckInSignalsFromUserInput,
 } from '@/lib/program/recovery-adaptation-snapshot-contract'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2006,15 +2008,23 @@ function ProgramDisplayWrapper({
       
       const checkIn = JSON.parse(checkInRaw)
       
-      // Compute L4 deload recommendation
-      const deloadRecommendation = deriveDeloadRecommendation({
-        checkIn,
-        snapshot: null, // We don't have the full snapshot in this context
+      // Build check-in signals for L1 snapshot
+      const checkInSignals = buildCheckInSignalsFromUserInput(checkIn)
+      
+      // Derive L1 recovery adaptation snapshot
+      const recoverySnapshot = deriveRecoveryAdaptationSnapshot({
+        profileRecovery: null,
+        workoutStress: null,
+        checkIn: checkInSignals,
+        weeklyStressSummary: null,
       })
+      
+      // Compute L4 deload recommendation with positional args
+      const deloadRecommendation = deriveDeloadRecommendation(recoverySnapshot, checkIn)
       
       // Derive the M1 bridge
       const bridge = deriveRecoveryProgramAwarenessBridge({
-        snapshot: null,
+        snapshot: recoverySnapshot,
         deloadRecommendation,
         checkIn,
       })

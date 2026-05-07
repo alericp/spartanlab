@@ -2540,25 +2540,18 @@ export function AdaptiveProgramDisplay({
                           setPushForwardState('failed')
                         }
                       }}
-                      disabled={pushForwardState === 'applying'}
                       className="flex-1 h-8 text-xs bg-amber-600/80 hover:bg-amber-600 text-white"
                       data-action="confirm-missed-workout-recomposition"
                       data-advisory-action={missedWorkoutAdvisory.action}
                     >
-                      {pushForwardState === 'applying' ? (
-                        <>
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          Applying...
-                        </>
-                      ) : (
-                        'Confirm Push Forward'
-                      )}
+                      {/* [STEP 23.6D] In confirming branch, show confirm text. 
+                          Applying state renders its own separate branch. */}
+                      Confirm Push Forward
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setPushForwardState('idle')}
-                      disabled={pushForwardState === 'applying'}
                       className="h-8 text-xs text-[#6A6A7A] hover:text-[#8A8A9A]"
                       data-action="cancel-confirmation"
                     >

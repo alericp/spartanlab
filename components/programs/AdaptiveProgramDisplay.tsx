@@ -27,6 +27,7 @@ import {
   Loader2,
   ChevronLeft,
   Zap,
+  X,
 } from 'lucide-react'
 import {
   Dialog,
@@ -380,6 +381,9 @@ export function AdaptiveProgramDisplay({
   })
   const [isAdvancingWeek, setIsAdvancingWeek] = useState(false)
   const [weekAdvancementResult, setWeekAdvancementResult] = useState<WeekAdvancementResult | null>(null)
+  // [STEP 23.3] Local UI state for dismissing missed-workout advisory
+  // Non-persistent — does not mutate program, session, or storage
+  const [missedWorkoutAdvisoryDismissed, setMissedWorkoutAdvisoryDismissed] = useState(false)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -1520,15 +1524,17 @@ export function AdaptiveProgramDisplay({
         </div>
       )}
 
-      {/* [STEP 23.2] Missed-Workout Recomposition Advisory Card
+      {/* [STEP 23.2/23.3] Missed-Workout Recomposition Advisory Card
           Displays advisory when there's actionable guidance about schedule.
-          Advisory only — no mutation. No saved-program rewrite. */}
-      {missedWorkoutAdvisory && hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && (() => {
+          Advisory only — no mutation. No saved-program rewrite.
+          [STEP 23.3] Adds user-controlled action buttons — non-mutating. */}
+      {missedWorkoutAdvisory && hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && !missedWorkoutAdvisoryDismissed && (() => {
         const displayInfo = getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory)
         return (
           <div 
             className="rounded-lg border bg-gradient-to-r from-[#1A1A25]/50 to-[#1A1A20]/50 border-[#2A2A35] overflow-hidden"
             data-step-23-2-missed-workout-advisory="true"
+            data-step-23-3-user-actions="true"
             data-advisory-action={missedWorkoutAdvisory.action}
             data-advisory-severity={missedWorkoutAdvisory.severity}
             data-no-program-mutation="true"
@@ -1574,16 +1580,56 @@ export function AdaptiveProgramDisplay({
                   <p className="text-xs text-[#8A8A9A] mt-1 leading-relaxed">
                     {displayInfo.description}
                   </p>
-                  {/* Evidence / Reasoning (max 2 lines) */}
+                  
+                  {/* [STEP 23.3] Expandable reasoning section */}
                   {missedWorkoutAdvisory.reasoning.length > 0 && (
-                    <div className="mt-1.5 space-y-0.5">
-                      {missedWorkoutAdvisory.reasoning.slice(0, 2).map((reason, idx) => (
-                        <p key={idx} className="text-[11px] text-[#6A6A7A]">
-                          {reason}
-                        </p>
-                      ))}
-                    </div>
+                    <details className="mt-2 group">
+                      <summary className="flex items-center gap-1 cursor-pointer text-[11px] text-[#6A6A8A] hover:text-[#8A8AAA] transition-colors select-none">
+                        <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                        <span>View reasoning ({missedWorkoutAdvisory.reasoning.length} points)</span>
+                      </summary>
+                      <div className="mt-1.5 ml-4 space-y-0.5 border-l border-[#2A2A35] pl-2">
+                        {missedWorkoutAdvisory.reasoning.map((reason, idx) => (
+                          <p key={idx} className="text-[11px] text-[#6A6A7A]">
+                            {reason}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
                   )}
+                  
+                  {/* User-facing recommendation */}
+                  {missedWorkoutAdvisory.userFacingRecommendation && (
+                    <p className="text-xs text-[#9A9AAA] mt-2 italic">
+                      {missedWorkoutAdvisory.userFacingRecommendation}
+                    </p>
+                  )}
+                  
+                  {/* [STEP 23.3] Action buttons — non-mutating, user-controlled */}
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                      className="flex-1 h-7 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
+                      data-action="keep-plan"
+                      data-no-mutation="true"
+                    >
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Keep Plan
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                      className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                      data-action="dismiss"
+                      data-no-mutation="true"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  
                   {/* Advisory-only proof line */}
                   <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />

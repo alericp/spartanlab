@@ -2291,7 +2291,7 @@ function step23(): BlueprintPhase {
       'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
     status: 'PARTIAL',
     nextAction:
-      'Step 23.1-23.2 COMPLETE. Advisory foundation created and wired into Program Page. AdaptiveProgramDisplay shows compact advisory card when hasActionableMissedWorkoutAdvisory is true. Card displays badge, title, summary, reasoning, and advisory-only proof line. No automatic mutation — canAutoApplyNow/savedProgramMutationAllowed/liveWorkoutMutationAllowed always false. Next: Step 23.3 user action corridor for "I can\'t train today" with confirmation.',
+      'Step 23.1-23.3 PARTIAL. Advisory foundation created, wired into Program Page, and has non-mutating user controls. "Keep Plan" and dismiss buttons work without mutation. Expandable reasoning section shows full details. Next: Add "I can\'t train today" button with confirmation modal and safe schedule-change path if existing mutation corridor is available.',
     subtasks: [
       {
         id: 'U.U1',
@@ -2377,13 +2377,22 @@ function step23(): BlueprintPhase {
       {
         id: 'U.U8',
         title: 'User action corridor for "I can\'t train today" implemented',
-        status: 'NOT_STARTED',
-        evidence: [],
+        status: 'PARTIAL',
+        evidence: [
+          'Step 23.3 adds non-mutating user controls to missed-workout advisory card',
+          '"Keep Plan" button dismisses advisory without mutation — local UI state only',
+          '"X" dismiss button hides advisory for current session — no persistence',
+          'Expandable reasoning section with details click',
+          'userFacingRecommendation displayed from helper output',
+          'data-action="keep-plan" and data-no-mutation="true" markers added',
+          'missedWorkoutAdvisoryDismissed state is component-local only',
+          'No saved program mutation, no live workout mutation, no storage writes',
+        ],
         remainingWork: [
-          'Add "I can\'t train today" or "Push workout" action button',
-          'Show confirmation modal with advisory reasoning',
-          'Implement push_session_forward with user confirmation',
-          'Persist schedule change only after confirmation',
+          'Add "I can\'t train today" button that opens confirmation modal',
+          'Show confirmation modal with advisory reasoning and preview',
+          'Implement push_session_forward with explicit user confirmation',
+          'Persist schedule change only after confirmation — requires safe mutation path',
         ],
       },
       {

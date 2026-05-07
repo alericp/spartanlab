@@ -1787,9 +1787,9 @@ export function buildSavedProgramSubstitutionProposals(
       savedProgramMutation: false,
       userApprovedSavedProgramMutation: false,
       sourceEvidenceIds: group.evidenceIds,
-      // Saved-program mutation is NOT implemented yet — mark as blocked
-      canApplyToSavedProgramNow: false,
-      blockedReason: 'Saved-program update not yet implemented. Proposal saved for future review.',
+      // Proposal eligibility determined by target matching at apply time (Step 22.6)
+      canApplyToSavedProgramNow: true,
+      blockedReason: undefined,
     })
   }
 
@@ -1845,7 +1845,8 @@ export function markProposalDeferred(
 /**
  * Mark a proposal as accepted for review (does NOT mutate saved program).
  * Actual saved-program mutation requires a separate explicit confirmation
- * through a safe update corridor (not yet implemented).
+ * through the Step 22.6 safe update corridor (buildSavedProgramSubstitutionApplyCandidate,
+ * buildSavedProgramSubstitutionConfirmation, applySavedProgramSubstitutionToProgram).
  */
 export function markProposalAcceptedForReview(
   queue: PostWorkoutSubstitutionProposalQueue,

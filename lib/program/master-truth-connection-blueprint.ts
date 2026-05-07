@@ -2017,11 +2017,15 @@ function phaseS(): BlueprintPhase {
  * exercises WITHOUT mutating the saved program automatically. Requires explicit
  * user confirmation before any actual substitution is applied.
  *
- * Step 22.1: Advisory contract + derivation helper (this step)
- * Step 22.2: User-confirmed current-session substitution apply (future)
- * Step 22.3: Program-wide injury-aware adjustment (future, advisory-first)
+ * Step 22.1: Advisory contract + derivation helper (COMPLETE)
+ * Step 22.2: User-confirmed current-session substitution apply (COMPLETE)
+ * Step 22.3: Live workout UI proof + flow hardening (COMPLETE)
+ * Step 22.4: Post-workout saved-program proposal queue (future, user-approved)
  */
 function step22(): BlueprintPhase {
+  // [STEP 22.2 + 22.3 COMPLETE] Current-session injury substitution apply flow
+  // implemented with user confirmation, payload storage bridge, validation,
+  // apply/restore helpers, and UI display helpers. Saved program is NEVER mutated.
   return {
     id: 'T',
     title: 'Injury Substitution Advisory-First Layer (Step 22)',
@@ -2029,7 +2033,7 @@ function step22(): BlueprintPhase {
       'Read existing injury/pain/limitation signals from profile, readiness check-ins, workout logs, and joint caution fields. Normalize into bounded advisory context. Generate substitution recommendations for affected exercises WITHOUT mutating saved program. Require explicit user confirmation before any substitution is applied. No diagnosis. No medical advice beyond conservative training guidance.',
     status: 'PARTIAL',
     nextAction:
-      'Step 22.1 advisory contract and derivation helper implemented (lib/program/injury-substitution-advisory.ts). Next: wire advisory into Program Page as a preview/advisory card for affected exercises, then implement Step 22.2 user-confirmed current-session substitution apply flow.',
+      'Step 22.1-22.3 COMPLETE. Contract, apply flow, and UI helpers implemented. Next: T.T7 wire Program Page advisory preview, T.T8 wire live workout advisory warning, T.T10 confirmation modal integration. Then Step 22.4 post-workout saved-program proposal queue.',
     subtasks: [
       {
         id: 'T.T1',
@@ -2136,14 +2140,65 @@ function step22(): BlueprintPhase {
       },
       {
         id: 'T.T9',
-        title: 'Step 22.2 user-confirmed substitution apply',
+        title: 'Step 22.2 user-confirmed substitution apply contract',
+        status: 'COMPLETE',
+        evidence: [
+          'CurrentSessionInjurySubstitutionPayload type: scope=current_session_only, confirmedByUser=true, programMutation=false, savedProgramMutation=false',
+          'createSubstitutionPayload() builds timestamped payload from recommendation',
+          'stampSubstitutionPayload() / readSubstitutionPayload() / clearSubstitutionPayload() sessionStorage bridge (1hr freshness)',
+          'validateSubstitutionPayload() checks confirmation, scope, mutation flags, freshness, context match',
+          'applySubstitutionToExercises() clones exercises, applies substitution, attaches injurySubstitution metadata',
+          'restoreOriginalExercise() reverts substitution in runtime clone',
+          'AppliedCurrentSessionInjurySubstitution metadata preserves originalExerciseName/Id for reversal',
+          'NEVER mutates original exercises — always returns new cloned array',
+          'Payload expires after 1 hour, rejected if wrong day/variant/session context',
+        ],
+        remainingWork: [],
+      },
+      // [T.T10] Step 22.3 — Live workout UI proof + flow hardening helpers
+      {
+        id: 'T.T10',
+        title: 'Step 22.3 live workout UI proof helpers',
+        status: 'COMPLETE',
+        evidence: [
+          'hasActiveSubstitution() checks if any exercise has active (not restored) substitution',
+          'getActiveSubstitution() returns substitution metadata for a single exercise',
+          'getSubstitutionBadgeLabel() returns "Safer option for {region}" label',
+          'getSubstitutionDisplayDetails() returns full display info: original, substitute, reason, region, scope, savedProgramNote',
+          'getSubstitutionConfirmationContent() builds confirmation dialog content with title, labels, scope note, caution note',
+          'canApplyRecommendation() validates recommendation can be applied to current exercise',
+          'buildSubstitutionLogMetadata() builds completion log metadata without schema changes',
+          'All helpers are pure functions — safe on server/client/build-time',
+        ],
+        remainingWork: [],
+      },
+      // [T.T11] Step 22.3 UI wiring — connects helpers to visible surfaces
+      {
+        id: 'T.T11',
+        title: 'Step 22.3 UI wiring to live workout',
         status: 'NOT_STARTED',
         evidence: [],
         remainingWork: [
-          'Add explicit "Apply safer option for this session" CTA',
-          'Apply substitution to current session only (not global)',
-          'Mark substitution as user-confirmed',
-          'Preserve exercise identity for undo/revert',
+          'Wire confirmation dialog in StreamlinedWorkoutSession using getSubstitutionConfirmationContent()',
+          'Wire badge/chip using getSubstitutionBadgeLabel()',
+          'Wire original exercise note using getSubstitutionDisplayDetails()',
+          'Wire restore original CTA using restoreOriginalExercise()',
+          'Call clearSubstitutionPayload() on workout completion/exit',
+          'Integrate substitution metadata into completion log',
+        ],
+      },
+      // [T.T12] Step 22.4 — Post-workout saved-program proposal (future)
+      {
+        id: 'T.T12',
+        title: 'Step 22.4 post-workout saved-program proposal queue',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'After workout completion, if substitution was used, offer to save it to program',
+          'User must explicitly confirm saved-program update',
+          'Track repeated substitutions across sessions',
+          'Allow bulk acceptance of repeated safe alternatives',
+          'Saved program mutation ONLY with explicit user approval',
         ],
       },
     ],

@@ -1761,16 +1761,16 @@ function phaseR(): BlueprintPhase {
   }
 }
 
-/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + Display. */
+/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (COMPLETE). */
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.2)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.3 COMPLETE)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4.1-L4.2 deload recommendation decision layer + user-facing display (Steps 21.4.1-21.4.2) — advisory-only recommendation with no mutation, now visible on Recovery page.',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4 deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3) — advisory-only recommendation with no mutation, visible on Recovery page, runtime acceptance verified.',
     status: 'COMPLETE',
     nextAction:
-      'Phase S (Steps 21.1-21.4.2) complete. Foundation contract, user input capture, deload recommendation layer, and user-facing display done. Remaining: L4.3 (runtime acceptance). Then: S.S9 (injury-aware substitution gates), S.S10 (missed-day recomposition), S.S11+ (live workout adaptive coaching).',
+      'Phase S (Steps 21.1-21.4.3) COMPLETE. Phase L4 closed. Foundation contract, user input capture, deload recommendation layer, user-facing display, and runtime acceptance all verified. Next phases: injury-aware substitution gates, missed-day recomposition, live workout adaptive coaching.',
     subtasks: [
       {
         id: 'S.S1',
@@ -1852,7 +1852,7 @@ function phaseS(): BlueprintPhase {
       },
       {
         id: 'S.S8',
-        title: 'L4.1-L4.2: Deload recommendation decision layer + user-facing display (Steps 21.4.1-21.4.2)',
+        title: 'L4: Deload recommendation decision layer + user-facing display + acceptance (Steps 21.4.1-21.4.3)',
         status: 'COMPLETE',
         evidence: [
           // L4.1 evidence
@@ -1874,10 +1874,17 @@ function phaseS(): BlueprintPhase {
           'Card reads L4.1 decision via deriveDeloadRecommendation() — does NOT recompute or create parallel decision.',
           'Legacy safety: missing snapshot/check-in shows neutral fallback with no crash and no fake recommendation.',
           'Data attributes: data-phase-l4-deload-card, data-l4-card-status, data-l4-deload-level, data-l4-applied-to-program="false", data-l4-mutation-allowed="false", data-l4-recommendation-only="true".',
+          // L4.3 acceptance evidence
+          'L4.3 runtime acceptance verified: deriveRecoveryAdaptationSnapshot uses correct 1-object input contract.',
+          'Valid saved check-in path → buildCheckInSignalsFromUserInput → deriveRecoveryAdaptationSnapshot({checkIn: signals}) → deriveDeloadRecommendation → DeloadRecommendationCard.',
+          'No-check-in path → deriveRecoveryAdaptationSnapshot({checkIn: null}) → neutral recommendation displayed.',
+          'Invalid/corrupt localStorage caught → fallback snapshot → stable UI.',
+          'No program/workout mutation APIs called in L4 recovery display corridor.',
+          'No stale 3-arg deriveRecoveryAdaptationSnapshot calls remain in recovery page.',
+          'No fake "deload applied" or "program changed" messaging exists.',
+          'Build passes: pnpm exec tsc --noEmit + pnpm run build green.',
         ],
-        remainingWork: [
-          'L4.3: Runtime acceptance and corridor cleanup.',
-        ],
+        remainingWork: [],
       },
     ],
   }

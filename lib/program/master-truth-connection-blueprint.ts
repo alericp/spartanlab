@@ -1761,16 +1761,16 @@ function phaseR(): BlueprintPhase {
   }
 }
 
-/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation. */
+/** Phase S: Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation + Display. */
 function phaseS(): BlueprintPhase {
   return {
     id: 'S',
-    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.1)',
+    title: 'Recovery Adaptation Snapshot Foundation + Input Capture + Deload Recommendation (Steps 21.1-21.4.2)',
     purpose:
-      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4.1 deload recommendation decision layer (Step 21.4.1) — advisory-only recommendation with no mutation.',
+      'Create a single canonical typed recovery/adaptation signal contract that consolidates readiness, fatigue, soreness, joint risk, injury constraints, deload signals, and missed-session state into one normalized snapshot. The snapshot derives from existing profile/settings/log/session inputs, returns honest "unknown" states when data is missing, and provides decision gates for future layers (deload automation, injury substitution, missed-day recomposition, live coaching). S.S1-S.S6 is foundation-only (Step 21.1). S.S7 is L2 user input capture (Step 21.2). S.S8 is L4.1-L4.2 deload recommendation decision layer + user-facing display (Steps 21.4.1-21.4.2) — advisory-only recommendation with no mutation, now visible on Recovery page.',
     status: 'COMPLETE',
     nextAction:
-      'Phase S (Steps 21.1-21.4.1) complete. Foundation contract, user input capture, and deload recommendation layer done. Remaining L4 mini-chain: L4.2 (wire recommendation into Program page or dedicated surface), L4.3 (runtime acceptance). Then: S.S9 (injury-aware substitution gates), S.S10 (missed-day recomposition), S.S11+ (live workout adaptive coaching).',
+      'Phase S (Steps 21.1-21.4.2) complete. Foundation contract, user input capture, deload recommendation layer, and user-facing display done. Remaining: L4.3 (runtime acceptance). Then: S.S9 (injury-aware substitution gates), S.S10 (missed-day recomposition), S.S11+ (live workout adaptive coaching).',
     subtasks: [
       {
         id: 'S.S1',
@@ -1852,9 +1852,10 @@ function phaseS(): BlueprintPhase {
       },
       {
         id: 'S.S8',
-        title: 'L4.1: Deload recommendation decision layer — advisory only (Step 21.4.1)',
+        title: 'L4.1-L4.2: Deload recommendation decision layer + user-facing display (Steps 21.4.1-21.4.2)',
         status: 'COMPLETE',
         evidence: [
+          // L4.1 evidence
           'DeloadRecommendationLevel type added: "NONE" | "WATCH" | "CONSIDER_DELOAD" | "STRONGLY_RECOMMEND_DELOAD".',
           'DeloadReasonCode type with 18 stable machine-readable reason codes (LOW_READINESS, HIGH_FATIGUE, SEVERE_SORENESS, JOINT_PAIN_REPORTED, etc.).',
           'DeloadSourceSignals interface captures all input signals used for the decision (readiness, fatigue, soreness, sleep, joint pain, injury constraint, missed session, deload signal from snapshot).',
@@ -1865,9 +1866,16 @@ function phaseS(): BlueprintPhase {
           'Visible output uses coach-like language: "Recovery looks acceptable today", "Some recovery strain is showing", "Recovery signals suggest considering a lighter training day", "A deload is strongly recommended".',
           'Explicit "Recommendation only — no automatic changes applied" text ensures no fake adaptive claims.',
           'L4 is strictly advisory: appliedToProgram=false, mutationAllowed=false, recommendationOnly=true. No workout/program/session changes occur.',
+          // L4.2 evidence
+          'DeloadRecommendationCard component created in components/recovery/DeloadRecommendationCard.tsx.',
+          'Card displays recommendation level, user-facing summary, contributing factor chips (up to 4), and non-mutation guarantee text.',
+          'DeloadRecommendationInline component provides compact inline status for headers/summaries.',
+          'Recovery page (app/(app)/recovery/page.tsx) integrates DeloadRecommendationCard prominently.',
+          'Card reads L4.1 decision via deriveDeloadRecommendation() — does NOT recompute or create parallel decision.',
+          'Legacy safety: missing snapshot/check-in shows neutral fallback with no crash and no fake recommendation.',
+          'Data attributes: data-phase-l4-deload-card, data-l4-card-status, data-l4-deload-level, data-l4-applied-to-program="false", data-l4-mutation-allowed="false", data-l4-recommendation-only="true".',
         ],
         remainingWork: [
-          'L4.2: Wire deload recommendation into Program page or dedicated recovery surface.',
           'L4.3: Runtime acceptance and corridor cleanup.',
         ],
       },

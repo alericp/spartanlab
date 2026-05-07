@@ -570,9 +570,9 @@ function phaseJ(): BlueprintPhase {
     title: 'Product Cleanup / Trust Polish',
     purpose: 'Remove debug clutter; the final UI feels like an AI coach, not a debug report.',
     status: 'PARTIAL',
-    nextAction: 'J1 partial: live workout proof strips moved to dev-only. Continue J1 on Program page surfaces, then J2 doctrine explanations.',
+    nextAction: 'J1 complete. Continue to J2: audit doctrine explanation surfaces for user-useful vs. internal clutter.',
     subtasks: [
-      { id: 'J.J1', title: 'Hide stale/internal audit clutter from normal user view', status: 'PARTIAL', evidence: ['Live workout Shell proof + Runtime parity strips moved behind process.env.NODE_ENV === development guard', 'AB18 coaching line preserved (KEEP_USER_COACHING)', 'data-ab10-* and data-ab18-* attributes preserved on outer wrapper for QA'], remainingWork: ['Audit Program page AdaptiveProgramDisplay / session card for remaining internal clutter'] },
+      { id: 'J.J1', title: 'Hide stale/internal audit clutter from normal user view', status: 'COMPLETE', evidence: ['Live workout Shell proof + Runtime parity strips behind NODE_ENV === development guard', 'Program page scanner/parity probes behind showProbe || forceProbe gate (default false)', 'AB13VisualProofOverlay gated by ?ab13ProofOverlay=force-rpe-cap query param', 'Session card Launch proof behind probeActive (hard-disabled: false)', 'AB18 coaching line preserved (KEEP_USER_COACHING)', 'data-ab10-* and data-ab18-* attributes preserved for QA'], remainingWork: [] },
       { id: 'J.J2', title: 'Keep only useful doctrine explanations', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
       { id: 'J.J3', title: 'Preserve compact product-grade UI', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
       { id: 'J.J4', title: 'Keep diagnostics available where needed', status: 'COMPLETE', evidence: ['data-* attributes preserved on DOM elements', 'Dev-only render guards expose full proof strips to developers', 'Console logs preserved for AB18 coaching proof debugging'], remainingWork: [] },

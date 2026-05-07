@@ -57,7 +57,8 @@ import {
   type WeekProgressionState,
   type WeekAdvancementResult,
 } from '@/lib/week-advancement-service'
-import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2, ChevronLeft, Zap } from 'lucide-react'
+import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2, ChevronLeft, Zap, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { 
   getWeekDosageScaling, 
   scaleSessionsForWeek, 
@@ -76,6 +77,16 @@ import {
 // [AB18-E] WeeklyMethodRepresentationContract import removed - now accessed via typed AdaptiveProgram field
 // [AB18] Import the handoff type for AdaptiveSessionCard prop
 import { type AB18SessionCoachingHandoff } from '@/lib/workout/selected-variant-session-contract'
+// [PHASE M1.2 + STEP 21.6] Recovery-to-Program Awareness Bridge + Session Adjustment
+import type { 
+  RecoveryProgramAwarenessBridge,
+  RecoverySessionAdjustmentPreview,
+} from '@/lib/program/recovery-program-awareness-bridge'
+import { 
+  hasRecoveryConcern,
+  deriveRecoverySessionAdjustmentPreview,
+  applyRecoveryAdjustmentToSession,
+} from '@/lib/program/recovery-program-awareness-bridge'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
 interface AB18TrainingStyleInfluence {
@@ -158,6 +169,19 @@ interface AdaptiveProgramDisplayProps {
   // Optional + null-safe: when null/undefined the day cards render exactly
   // as before, with no Phase 4F line.
   programDisplayProjection?: ProgramDisplayProjection | null
+  // [PHASE M1.2] Recovery-to-Program Awareness Bridge
+  // Advisory-only recovery guidance. When provided, displays a small
+  // recovery-aware status card at the top of the program.
+  recoveryAwarenessBridge?: RecoveryProgramAwarenessBridge | null
+  // [STEP 21.6] Recovery Session Adjustment State
+  // Tracks the current adjustment preview and applied state for today's session.
+  recoveryAdjustmentPreview?: RecoverySessionAdjustmentPreview | null
+  // Callback when user requests adjustment preview
+  onRequestAdjustmentPreview?: () => void
+  // Callback when user applies the adjustment
+  onApplyAdjustment?: () => void
+  // Callback when user dismisses/keeps original
+  onDismissAdjustment?: () => void
   }
 
 // =============================================================================
@@ -296,6 +320,12 @@ export function AdaptiveProgramDisplay({
   sessionCardSurfaces: injectedSessionCardSurfaces,
   // [PHASE 4F] Page-built read-only program display projection
   programDisplayProjection,
+  // [PHASE M1.2 + STEP 21.6] Recovery awareness and adjustment props
+  recoveryAwarenessBridge,
+  recoveryAdjustmentPreview,
+  onRequestAdjustmentPreview,
+  onApplyAdjustment,
+  onDismissAdjustment,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1227,14 +1257,167 @@ export function AdaptiveProgramDisplay({
               </svg>
             </button>
           </div>
-        </div>
+      </div>
       )}
 
+      {/* [PHASE M1.2 + STEP 21.6] Recovery-to-Program Awareness Bridge with Adjustment Preview
+          Displays recovery-aware guidance and adjustment CTA when bridge indicates concern.
+          Step 21.6 adds user-approved, preview-first, current-session-only adjustment. */}
+      {recoveryAwarenessBridge && hasRecoveryConcern(recoveryAwarenessBridge) && (
+        <div 
+          className="rounded-lg border bg-gradient-to-r from-[#1A1A2A]/50 to-[#1A2020]/50 border-[#2A3040] overflow-hidden"
+          data-m1-recovery-program-awareness="true"
+          data-m1-advisory-level={recoveryAwarenessBridge.level}
+          data-m1-no-program-mutation="true"
+        >
+          {/* Main advisory content */}
+          <div className="p-3">
+            <div className="flex items-start gap-3">
+              {/* Icon based on severity */}
+              <div className={cn(
+                "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                recoveryAwarenessBridge.level === 'deload_recommended' 
+                  ? "bg-amber-500/20"
+                  : recoveryAwarenessBridge.level === 'reduce_load'
+                    ? "bg-yellow-500/15"
+                    : "bg-blue-500/15"
+              )}>
+                {recoveryAwarenessBridge.level === 'deload_recommended' ? (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <Shield className="w-3.5 h-3.5 text-blue-400/80" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {/* Headline */}
+                <p className={cn(
+                  "text-sm font-medium",
+                  recoveryAwarenessBridge.level === 'deload_recommended'
+                    ? "text-amber-300/90"
+                    : recoveryAwarenessBridge.level === 'reduce_load'
+                      ? "text-yellow-300/80"
+                      : "text-blue-300/80"
+                )}>
+                  {recoveryAwarenessBridge.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-xs text-[#8A8A9A] mt-0.5 leading-relaxed">
+                  {recoveryAwarenessBridge.summary}
+                </p>
+                {/* Non-mutation proof line */}
+                <p className="text-[10px] text-[#5A5A6A] mt-1.5 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                  <span>Advisory only — no automatic program changes applied</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* [STEP 21.6] Adjustment Preview Section */}
+          {recoveryAdjustmentPreview ? (
+            <div 
+              className="border-t border-[#2A3040] bg-[#0D0D15]/50 p-3"
+              data-step-21-6-adjustment-preview="true"
+              data-adjustment-status={recoveryAdjustmentPreview.status}
+            >
+              {recoveryAdjustmentPreview.status === 'preview' && (
+                <>
+                  {/* Preview header */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-400/70" />
+                    <span className="text-xs font-medium text-blue-300/80">
+                      Recovery Adjustment Preview
+                    </span>
+                    <span className="text-[10px] text-[#5A5A6A] ml-auto">
+                      Today only — program unchanged
+                    </span>
+                  </div>
+                  {/* User message */}
+                  <p className="text-xs text-[#9A9AAA] mb-3">
+                    {recoveryAdjustmentPreview.userMessage}
+                  </p>
+                  {/* Changes summary */}
+                  <div className="space-y-1.5 mb-3">
+                    {recoveryAdjustmentPreview.exerciseAdjustments
+                      .filter(ea => ea.changes.length > 0)
+                      .slice(0, 3)
+                      .map(ea => (
+                        <div key={ea.exerciseId} className="flex items-center gap-2 text-[11px]">
+                          <span className="text-[#7A7A8A] truncate flex-1">{ea.exerciseName}</span>
+                          <span className="text-[#5A5A6A]">→</span>
+                          <span className="text-emerald-400/70">
+                            {ea.changes.map(c => c.label).join(', ')} adjusted
+                          </span>
+                        </div>
+                      ))}
+                    {recoveryAdjustmentPreview.overallSummary.totalExercisesAffected > 3 && (
+                      <p className="text-[10px] text-[#5A5A6A]">
+                        +{recoveryAdjustmentPreview.overallSummary.totalExercisesAffected - 3} more exercises
+                      </p>
+                    )}
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={onApplyAdjustment}
+                      className="flex-1 h-8 text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                      Apply to Today Only
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onDismissAdjustment}
+                      className="flex-1 h-8 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A]"
+                    >
+                      Keep Original
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {recoveryAdjustmentPreview.status === 'applied' && (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-emerald-300/90">
+                      Recovery-adjusted session active
+                    </p>
+                    <p className="text-[10px] text-[#6A6A7A]">
+                      {recoveryAdjustmentPreview.overallSummary.totalExercisesAffected} exercises adjusted — today only
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Show CTA to preview adjustment when no preview exists yet */
+            onRequestAdjustmentPreview && (recoveryAwarenessBridge.level === 'reduce_load' || recoveryAwarenessBridge.level === 'deload_recommended') && (
+              <div className="border-t border-[#2A3040] bg-[#0D0D15]/30 p-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onRequestAdjustmentPreview}
+                  className="w-full h-8 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  Preview Recovery Adjustment for Today
+                </Button>
+              </div>
+            )
+          )}
+        </div>
+      )}
+      
       <div className="space-y-3">
-        {/* [MAIN-PAGE-AI-VISIBILITY] Section header with session count and structure hint */}
-        <div className="flex items-center justify-between">
-          <h4 className="text-base font-semibold text-[#B5B5B5]">
-            Weekly Structure
+      {/* [MAIN-PAGE-AI-VISIBILITY] Section header with session count and structure hint */}
+      <div className="flex items-center justify-between">
+      <h4 className="text-base font-semibold text-[#B5B5B5]">
+      Weekly Structure
             <span className="ml-2 text-xs font-normal text-[#6A6A6A]">
               {validSessions.length} sessions
             </span>

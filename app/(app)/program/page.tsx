@@ -99,6 +99,18 @@ import {
   buildStalenessEvaluatorProgram,
   type StalenessEvaluatorInput,
 } from '@/lib/program/program-page-contract-adapter'
+// [PHASE M1.2 + STEP 21.6] Recovery-to-Program Awareness Bridge and Session Adjustment
+import {
+  deriveRecoveryProgramAwarenessBridge,
+  deriveRecoverySessionAdjustmentPreview,
+  applyRecoveryAdjustmentToSession,
+  hasRecoveryConcern,
+  type RecoveryProgramAwarenessBridge,
+  type RecoverySessionAdjustmentPreview,
+} from '@/lib/program/recovery-program-awareness-bridge'
+import {
+  deriveDeloadRecommendation,
+} from '@/lib/program/recovery-adaptation-snapshot-contract'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -1973,6 +1985,139 @@ function ProgramDisplayWrapper({
   forceProbe?: boolean // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
 }) {
   // ==========================================================================
+  // [PHASE M1.2 + STEP 21.6] Recovery-to-Program Awareness Bridge
+  // Derives the advisory bridge from localStorage recovery check-in and
+  // provides session adjustment preview/apply state.
+  // ==========================================================================
+  const [recoveryAwarenessBridge, setRecoveryAwarenessBridge] = useState<RecoveryProgramAwarenessBridge | null>(null)
+  const [recoveryAdjustmentPreview, setRecoveryAdjustmentPreview] = useState<RecoverySessionAdjustmentPreview | null>(null)
+  
+  // Load recovery bridge from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    try {
+      // Read L2 check-in from localStorage
+      const checkInRaw = localStorage.getItem('spartanlab_l2_recovery_checkin')
+      if (!checkInRaw) {
+        setRecoveryAwarenessBridge(null)
+        return
+      }
+      
+      const checkIn = JSON.parse(checkInRaw)
+      
+      // Compute L4 deload recommendation
+      const deloadRecommendation = deriveDeloadRecommendation({
+        checkIn,
+        snapshot: null, // We don't have the full snapshot in this context
+      })
+      
+      // Derive the M1 bridge
+      const bridge = deriveRecoveryProgramAwarenessBridge({
+        snapshot: null,
+        deloadRecommendation,
+        checkIn,
+      })
+      
+      setRecoveryAwarenessBridge(bridge)
+      
+      console.log('[phase-m1.2-recovery-bridge-loaded]', {
+        available: bridge.available,
+        level: bridge.level,
+        headline: bridge.headline,
+        hasRecoveryConcern: hasRecoveryConcern(bridge),
+        advisoryOnly: bridge.advisoryOnly,
+        source: 'spartanlab_l2_recovery_checkin',
+      })
+    } catch (error) {
+      console.error('[phase-m1.2-recovery-bridge-error]', error)
+      setRecoveryAwarenessBridge(null)
+    }
+  }, [])
+  
+  // [STEP 21.6] Handler to generate adjustment preview
+  const handleRequestAdjustmentPreview = useCallback(() => {
+    if (!recoveryAwarenessBridge || !program.sessions?.length) return
+    
+    // Get today's session (first session for now - in production this would be smarter)
+    const todaySession = program.sessions[0]
+    if (!todaySession) return
+    
+    const preview = deriveRecoverySessionAdjustmentPreview({
+      bridge: recoveryAwarenessBridge,
+      session: todaySession as unknown as Parameters<typeof deriveRecoverySessionAdjustmentPreview>[0]['session'],
+    })
+    
+    if (preview) {
+      setRecoveryAdjustmentPreview(preview)
+      console.log('[step-21.6-adjustment-preview-generated]', {
+        id: preview.id,
+        status: preview.status,
+        totalExercisesAffected: preview.overallSummary.totalExercisesAffected,
+        adjustmentIntensity: preview.overallSummary.adjustmentIntensity,
+        triggerLevel: preview.triggerLevel,
+      })
+    }
+  }, [recoveryAwarenessBridge, program.sessions])
+  
+  // [STEP 21.6] Handler to apply adjustment
+  const handleApplyAdjustment = useCallback(() => {
+    if (!recoveryAdjustmentPreview) return
+    
+    // Update preview status to 'applied'
+    setRecoveryAdjustmentPreview({
+      ...recoveryAdjustmentPreview,
+      status: 'applied',
+    })
+    
+    // Stamp the adjustment in localStorage for Start Workout to consume
+    try {
+      localStorage.setItem('spartanlab_recovery_adjustment_applied', JSON.stringify({
+        previewId: recoveryAdjustmentPreview.id,
+        appliedAt: new Date().toISOString(),
+        scope: 'current-session-only',
+        totalExercisesAffected: recoveryAdjustmentPreview.overallSummary.totalExercisesAffected,
+        exerciseAdjustments: recoveryAdjustmentPreview.exerciseAdjustments,
+      }))
+      
+      console.log('[step-21.6-adjustment-applied]', {
+        previewId: recoveryAdjustmentPreview.id,
+        totalExercisesAffected: recoveryAdjustmentPreview.overallSummary.totalExercisesAffected,
+        scope: 'current-session-only',
+        savedProgramMutated: false,
+      })
+    } catch (error) {
+      console.error('[step-21.6-adjustment-apply-error]', error)
+    }
+  }, [recoveryAdjustmentPreview])
+  
+  // [STEP 21.6] Handler to dismiss adjustment (keep original)
+  const handleDismissAdjustment = useCallback(() => {
+    if (!recoveryAdjustmentPreview) return
+    
+    setRecoveryAdjustmentPreview({
+      ...recoveryAdjustmentPreview,
+      status: 'dismissed',
+    })
+    
+    // Clear any applied adjustment in localStorage
+    try {
+      localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+    } catch (error) {
+      // Silent fail
+    }
+    
+    // After a short delay, clear the preview entirely so CTA reappears
+    setTimeout(() => {
+      setRecoveryAdjustmentPreview(null)
+    }, 2000)
+    
+    console.log('[step-21.6-adjustment-dismissed]', {
+      previewId: recoveryAdjustmentPreview.id,
+      originalSessionPreserved: true,
+    })
+  }, [recoveryAdjustmentPreview])
+  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -2679,15 +2824,23 @@ function ProgramDisplayWrapper({
              day cards have one authoritative source of truth owned by the
              page-level CanonicalProgramDisplayTruth contract. */
           sessionCardSurfaces={canonicalDisplayTruth.visibleSessionCards}
-          /* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Pass the page-built
-             read-only projection. AdaptiveProgramDisplay does not re-build
-             this; it only looks up the per-session slice by dayNumber and
-             passes it to the matching AdaptiveSessionCard. The card renders
-             the per-session doctrine causal line inside its body, not in a
-             wrapper strip — answering "did doctrine change THIS session?"
-             with honest copy that never claims change without Phase 4E proof. */
-          programDisplayProjection={programDisplayProjection}
-        />
+  /* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Pass the page-built
+  read-only projection. AdaptiveProgramDisplay does not re-build
+  this; it only looks up the per-session slice by dayNumber and
+  passes it to the matching AdaptiveSessionCard. The card renders
+  the per-session doctrine causal line inside its body, not in a
+  wrapper strip — answering "did doctrine change THIS session?"
+  with honest copy that never claims change without Phase 4E proof. */
+  programDisplayProjection={programDisplayProjection}
+  /* [PHASE M1.2 + STEP 21.6] Recovery awareness bridge and adjustment props.
+  Advisory-only bridge displays recovery guidance. Step 21.6 adds
+  user-approved, preview-first, current-session-only adjustment. */
+  recoveryAwarenessBridge={recoveryAwarenessBridge}
+  recoveryAdjustmentPreview={recoveryAdjustmentPreview}
+  onRequestAdjustmentPreview={handleRequestAdjustmentPreview}
+  onApplyAdjustment={handleApplyAdjustment}
+  onDismissAdjustment={handleDismissAdjustment}
+  />
       </ErrorBoundary>
     </div>
   )

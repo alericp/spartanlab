@@ -2291,7 +2291,7 @@ function step23(): BlueprintPhase {
       'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
     status: 'PARTIAL',
     nextAction:
-      'Step 23.1 COMPLETE. Advisory foundation created in lib/program/missed-workout-recomposition-advisory.ts. Typed contracts for MissedWorkoutRecompositionInput/Advisory, normalizers, buildMissedWorkoutRecompositionAdvisory helper, and display info helper all exported. No automatic mutation — canAutoApplyNow/savedProgramMutationAllowed/liveWorkoutMutationAllowed always false. Next: Step 23.2 wire advisory display into Program Page session cards.',
+      'Step 23.1-23.2 COMPLETE. Advisory foundation created and wired into Program Page. AdaptiveProgramDisplay shows compact advisory card when hasActionableMissedWorkoutAdvisory is true. Card displays badge, title, summary, reasoning, and advisory-only proof line. No automatic mutation — canAutoApplyNow/savedProgramMutationAllowed/liveWorkoutMutationAllowed always false. Next: Step 23.3 user action corridor for "I can\'t train today" with confirmation.',
     subtasks: [
       {
         id: 'U.U1',
@@ -2361,13 +2361,18 @@ function step23(): BlueprintPhase {
       {
         id: 'U.U7',
         title: 'Program Page / session-card advisory display wired',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Import advisory helpers into Program Page or AdaptiveProgramDisplay',
-          'Show compact advisory card when missed workout context exists',
-          'Display action recommendation without automatic mutation',
+        status: 'COMPLETE',
+        evidence: [
+          'Step 23.2 imports added to app/(app)/program/page.tsx and components/programs/AdaptiveProgramDisplay.tsx',
+          'missedWorkoutAdvisory state computed in Program Page using useMemo with buildMissedWorkoutRecompositionAdvisory',
+          'Advisory passed as prop to AdaptiveProgramDisplay',
+          'Compact advisory card renders when hasActionableMissedWorkoutAdvisory is true',
+          'Card displays: badge label, title, summary, reasoning (max 2 lines), advisory-only proof line',
+          'Severity-based styling: high (amber), caution (blue), info (gray)',
+          'data-step-23-2-missed-workout-advisory="true" and data-no-program-mutation="true" markers',
+          'No automatic mutation — canAutoApplyNow, savedProgramMutationAllowed, liveWorkoutMutationAllowed all false',
         ],
+        remainingWork: [],
       },
       {
         id: 'U.U8',

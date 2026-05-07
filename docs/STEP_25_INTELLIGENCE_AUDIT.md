@@ -208,11 +208,21 @@ Answering as a real paying SpartanLab user, with code evidence:
 - [x] Show performance envelope state without technical jargon (via surface signals)
 - [x] Display fatigue/readiness signals in actionable format (via protective week context + signals)
 
-### Step 25.3 — Program Decision Explanation Upgrade [NOT_STARTED]
-- [ ] Derive why-this-program reasoning from canonical builder truth
-- [ ] Show which onboarding selections influenced which decisions
-- [ ] Explain method selection in user-friendly terms
-- [ ] No fake reasoning copy — must trace to real computation
+### Step 25.3 — Program Decision Explanation Upgrade [COMPLETE]
+- [x] Derive why-this-program reasoning from canonical builder truth
+  - **Implementation:** "Why this program" section added to AdaptiveProgramDisplay.tsx
+  - **Source:** `buildProgramDecisionsNarrative(program)` from `lib/program/program-decisions-narrative.ts`
+  - **Truth source:** Y2 `trainingDifferentiationCalibration` field on program object
+- [x] Show which onboarding selections influenced which decisions
+  - **topLevelStrategyLabel:** Derived from weeklyRoleSummary roles (e.g. "Controlled skill-strength wave", "Skill-protected wave", "Primary skill-strength with capacity support")
+  - **supportingSentence:** Derived from stress tally and role distribution, personalized with primaryGoal
+- [x] Explain method selection in user-friendly terms
+  - **perDayStressBreakdown:** Shows "2 high · 3 moderate · 1 low" stress distribution
+  - **densityVisibleLine:** Explains density block status when applicable
+  - **safetyTag:** Shows "Skill-protected week", "Acclimation week", "Tendon-protected week" when applicable
+- [x] No fake reasoning copy — must trace to real computation
+  - **Guard:** `available: false` returned when Y2 calibration is missing
+  - **All fields derive from real `trainingDifferentiationCalibration.weeklyRoleSummary` rows**
 
 ### Step 25.4 — Performance Progression Clarity [NOT_STARTED]
 - [ ] Show week-to-week progression status

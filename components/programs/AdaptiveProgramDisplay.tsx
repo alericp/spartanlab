@@ -62,6 +62,7 @@ import {
   type ProgramDisplayProjection,
 } from '@/lib/program/program-display-contract'
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
+import { buildProgramDecisionsNarrative, type ProgramDecisionsNarrative } from '@/lib/program/program-decisions-narrative'
 import { 
   advanceToNextWeek, 
   advanceToWeek,
@@ -410,6 +411,11 @@ export function AdaptiveProgramDisplay({
   
   // [SURFACE-SIGNALS] Compact surface signals for main card display
   const programSurfaceSignals = program ? getProgramSurfaceSignals(program) : null
+  
+  // [STEP 25.3] Program Decisions Narrative — why this program was built this way
+  const decisionsNarrative: ProgramDecisionsNarrative | null = program 
+    ? buildProgramDecisionsNarrative(program) 
+    : null
   
   // ==========================================================================
   // [PHASE 15A-HOTFIX] SAFE DISPLAY VIEW-MODEL - MOVED ABOVE useEffects
@@ -1289,6 +1295,49 @@ export function AdaptiveProgramDisplay({
                     {programSurfaceSignals.dosageMessage}
                   </p>
                 )}
+              </div>
+            )}
+            
+            {/* [STEP 25.3] Program Decisions Narrative — why this program was built this way */}
+            {decisionsNarrative && decisionsNarrative.available && (
+              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Target className="w-3 h-3 text-[#E63946]/50" />
+                  <span className="text-[10px] text-[#7A7A7A] font-medium">Why this program</span>
+                </div>
+                
+                {/* Top-level strategy label */}
+                {decisionsNarrative.topLevelStrategyLabel && (
+                  <p className="text-[11px] text-[#B8B8B8] font-medium mb-1">
+                    {decisionsNarrative.topLevelStrategyLabel}
+                  </p>
+                )}
+                
+                {/* Supporting sentence */}
+                {decisionsNarrative.supportingSentence && (
+                  <p className="text-[10px] text-[#8A8A8A] leading-relaxed mb-1.5">
+                    {decisionsNarrative.supportingSentence}
+                  </p>
+                )}
+                
+                {/* Key details row */}
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {decisionsNarrative.perDayStressBreakdown && (
+                    <span className="text-[9px] text-[#6A6A6A]">
+                      {decisionsNarrative.perDayStressBreakdown}
+                    </span>
+                  )}
+                  {decisionsNarrative.safetyTag && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] bg-blue-500/10 border border-blue-500/20 text-blue-400/80">
+                      {decisionsNarrative.safetyTag}
+                    </span>
+                  )}
+                  {decisionsNarrative.densityVisibleLine && (
+                    <span className="text-[9px] text-[#6A6A6A]">
+                      {decisionsNarrative.densityVisibleLine}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

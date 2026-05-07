@@ -2278,6 +2278,126 @@ function step22(): BlueprintPhase {
 }
 
 // =============================================================================
+// STEP 23: MISSED-WORKOUT RECOMPOSITION ADVISORY-FIRST LAYER
+// =============================================================================
+
+function step23(): BlueprintPhase {
+  // [STEP 23.1] Advisory-first missed-workout recomposition foundation.
+  // No mutation. No schedule rewrite. No saved-program changes.
+  return {
+    id: 'U',
+    title: 'Missed-Workout Recomposition Advisory-First Layer (Step 23)',
+    purpose:
+      'Evaluate missed/skipped workout context using session, schedule, fatigue, and pain signals. Return truthful recommendation for what should happen next: proceed normally, push workout forward, reduce intensity, protect recovery spacing, or recommend controlled regeneration. NEVER mutate saved program automatically. NEVER rewrite schedule without explicit user confirmation. Advisory-only until user action corridor is wired.',
+    status: 'PARTIAL',
+    nextAction:
+      'Step 23.1 COMPLETE. Advisory foundation created in lib/program/missed-workout-recomposition-advisory.ts. Typed contracts for MissedWorkoutRecompositionInput/Advisory, normalizers, buildMissedWorkoutRecompositionAdvisory helper, and display info helper all exported. No automatic mutation — canAutoApplyNow/savedProgramMutationAllowed/liveWorkoutMutationAllowed always false. Next: Step 23.2 wire advisory display into Program Page session cards.',
+    subtasks: [
+      {
+        id: 'U.U1',
+        title: 'Missed workout reason types defined',
+        status: 'COMPLETE',
+        evidence: [
+          'MissedWorkoutReason union: user_unavailable | fatigue | soreness | pain_or_discomfort | schedule_conflict | travel | unknown',
+          'MissedWorkoutSessionStress union: low | moderate | high | very_high | unknown',
+          'MissedWorkoutTrainingPriority union: skill | strength | hypertrophy | mobility | recovery | mixed | unknown',
+          'MissedWorkoutRecompositionAction union: continue_as_planned | push_session_forward | reduce_next_session_intensity | protect_recovery_spacing | recommend_regeneration | recommend_full_rest | insufficient_context',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U2',
+        title: 'Recomposition input contract defined',
+        status: 'COMPLETE',
+        evidence: [
+          'MissedWorkoutRecompositionInput interface with sessionId, sessionTitle, sessionIndex, scheduledDate, missedDate, reason, sessionStress, trainingPriority, hasPainSignal, hasHighFatigueSignal, upcomingSessionCount, nextSessionStress, daysUntilNextPlannedSession, isFixedSchedule, userCanTrainTomorrow, currentProgramId, source',
+          'All fields optional — handles incomplete context gracefully',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U3',
+        title: 'Recomposition advisory output contract defined',
+        status: 'COMPLETE',
+        evidence: [
+          'MissedWorkoutRecompositionAdvisory interface with action, severity, title, summary, reasoning[], userFacingRecommendation, requiresUserConfirmation, canAutoApplyNow (always false), savedProgramMutationAllowed (always false), liveWorkoutMutationAllowed (always false), shouldRegenerateProgram, nonBlocking, evidence[], blockedBecause[], nextStepLabel',
+          'Mutation flags hardcoded false for Step 23.1 advisory-only phase',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U4',
+        title: 'Normalizer functions exported',
+        status: 'COMPLETE',
+        evidence: [
+          'normalizeMissedWorkoutReason(value: unknown): MissedWorkoutReason',
+          'normalizeSessionStress(value: unknown): MissedWorkoutSessionStress',
+          'normalizeTrainingPriority(value: unknown): MissedWorkoutTrainingPriority',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U5',
+        title: 'Advisory builder implemented with decision logic',
+        status: 'COMPLETE',
+        evidence: [
+          'buildMissedWorkoutRecompositionAdvisory(input): MissedWorkoutRecompositionAdvisory',
+          'Decision cases: pain/discomfort -> recommend_full_rest, high fatigue -> protect_recovery_spacing or reduce_intensity, soreness -> reduce_intensity, schedule conflict + can train tomorrow -> push_session_forward, fixed schedule -> continue_as_planned with review, high-stress stacking -> protect_recovery_spacing, insufficient context -> insufficient_context, default -> continue_as_planned',
+          'All cases enforce requiresUserConfirmation: true, canAutoApplyNow: false, savedProgramMutationAllowed: false, liveWorkoutMutationAllowed: false',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U6',
+        title: 'Display info helper exported',
+        status: 'COMPLETE',
+        evidence: [
+          'getMissedWorkoutAdvisoryDisplayInfo(advisory): MissedWorkoutAdvisoryDisplayInfo',
+          'Returns badgeLabel, title, description, severity, primaryActionLabel, secondaryNote',
+          'hasActionableMissedWorkoutAdvisory and isUrgentMissedWorkoutAdvisory validation helpers',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'U.U7',
+        title: 'Program Page / session-card advisory display wired',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Import advisory helpers into Program Page or AdaptiveProgramDisplay',
+          'Show compact advisory card when missed workout context exists',
+          'Display action recommendation without automatic mutation',
+        ],
+      },
+      {
+        id: 'U.U8',
+        title: 'User action corridor for "I can\'t train today" implemented',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Add "I can\'t train today" or "Push workout" action button',
+          'Show confirmation modal with advisory reasoning',
+          'Implement push_session_forward with user confirmation',
+          'Persist schedule change only after confirmation',
+        ],
+      },
+      {
+        id: 'U.U9',
+        title: 'Persistence/reload proof and regression lock',
+        status: 'NOT_STARTED',
+        evidence: [],
+        remainingWork: [
+          'Verify pushed session persists across reload',
+          'Verify no stale schedule after schedule change',
+          'Verify Step 22 injury substitution unchanged',
+          'Blueprint closeout',
+        ],
+      },
+    ],
+  }
+}
+
+// =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
 
@@ -2387,6 +2507,14 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // advisory context. Generates recommendations WITHOUT mutating saved
     // program. Requires explicit user confirmation before any apply.
     step22(),
+    // [STEP 23] Missed-Workout Recomposition Advisory-First Layer
+    // Advisory-only missed-workout/skipped-session recomposition decision
+    // layer. Evaluates missed workout context using session, schedule,
+    // fatigue, and pain signals. Returns truthful recommendation for
+    // what should happen next (proceed, push forward, reduce intensity,
+    // protect spacing, regenerate). No automatic mutation. No saved-program
+    // rewrite. Requires explicit user confirmation before any schedule change.
+    step23(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

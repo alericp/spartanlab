@@ -270,8 +270,8 @@ function deriveProgressionState(
       }
     }
 
-    // Recovery bias active
-    if (recoveryBias === 'prioritize') {
+    // Recovery bias active (RecoveryBias = 'protect' | 'normal')
+    if (recoveryBias === 'protect') {
       reasons.push({
         id: 'recovery_priority',
         label: 'Recovery focus',

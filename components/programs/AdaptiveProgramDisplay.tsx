@@ -8,6 +8,7 @@ import { BuildIdentityStamp } from './BuildIdentityStamp'
 import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
+  Activity,
   AlertTriangle,
   AlertCircle,
   CheckCircle2,

@@ -2722,14 +2722,19 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W10',
         title: 'User Control Without Breaking Intelligence',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Identify safe user override points',
-          'Add gentle warnings when choices are less optimal',
-          'Preserve program logic when users make adjustments',
-          'Connect to existing override-signal-service',
+        status: 'COMPLETE',
+        evidence: [
+          '[W.W10] Created lib/program/user-control-coaching.ts helper',
+          '[W.W10] deriveUserControlCoaching() consumes existing override-signal-service truth',
+          '[W.W10] Uses analyzeSignalsForAdaptive() and getOverrideSummaryBrief() as authoritative sources',
+          '[W.W10] Visible coaching card renders in AdaptiveProgramDisplay when patterns detected',
+          '[W.W10] Shows gentle warnings for frequent skips, difficulty mismatches, equipment issues',
+          '[W.W10] Conservative language: "Pattern Detected", "Learning From Your Choices", "Consider Adjusting"',
+          '[W.W10] Patterns include exercise name and severity for actionable guidance',
+          '[W.W10] isAdvisoryOnly: true, programUnchanged: true — no mutation',
+          '[W.W10] Inactive state returns gracefully when no significant patterns exist',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W11',

@@ -7334,8 +7334,8 @@ function ExerciseRow({
     ? alignRowWithSessionEvidence(rowSurface, sessionEvidence)
     : rowSurface
 
-  // [STEP 25.6A] Derive exercise-level coaching guidance from card contract truth
-  // Uses existing prescriptionContext/intent as the source — advisory display only
+  // [STEP 25.6A/B] Derive exercise-level coaching guidance from card contract truth
+  // Step 25.6B: Now prescription-aware with sets, rest, and session context
   const coachingGuidance = !isWarmupCooldown
     ? buildCoachingGuidanceFromCardContract(
         exercise.name || '',
@@ -7346,11 +7346,23 @@ function ExerciseRow({
           intentLabel: card.intentLabel,
         },
         {
+          sets: effectiveSets,
           repsOrTime: effectiveReps,
           targetRPE: effectiveTargetRPE,
+          restSeconds: exercise.restSeconds,
           method: exercise.method,
           selectionReason: exercise.selectionReason,
-        }
+        },
+        sessionContext ? {
+          sessionFocus: sessionContext.sessionFocus,
+          isPrimarySession: sessionContext.isPrimarySession,
+          primaryGoal: sessionContext.primaryGoal,
+          compositionMetadata: sessionContext.compositionMetadata as {
+            sessionIntensity?: 'high' | 'moderate' | 'low' | 'recovery'
+            sessionRole?: string
+            volumeEmphasis?: string
+          },
+        } : undefined
       )
     : null
 

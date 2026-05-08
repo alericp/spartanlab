@@ -17,17 +17,24 @@
 //   - Honest "considered / no change" state when evidence exists but the
 //     bounded engine decided not to alter the prescription.
 //   - No raw IDs, no JSON dumps, no debug data, no marketing language.
+// [P1] Now supports defaultCollapsed prop for cleaner Program page hierarchy.
 // =============================================================================
 
+import { useState } from 'react'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Activity, Sparkles, Info } from 'lucide-react'
+import { Activity, ChevronDown, Sparkles, Info } from 'lucide-react'
 import type {
   ProgramEvidenceDomain,
   ProgramEvidenceFeedbackSummary,
@@ -73,6 +80,11 @@ interface FeedbackLoopProofCardProps {
    * When omitted or `'inactive'`, the strip is hidden silently.
    */
   generationInfluence?: EvidenceCalibrationGenerationInfluence | null
+  /**
+   * [P1] When true, the card renders collapsed by default for cleaner
+   * Program page hierarchy. User can expand to see full details.
+   */
+  defaultCollapsed?: boolean
   className?: string
 }
 
@@ -249,66 +261,120 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const summary = pickDisplaySummary(props)
   const plan = props.calibrationPlan ?? null
   const influence = props.generationInfluence ?? null
-
+  // [P1] Support collapsed by default for cleaner Program page
+  const [isExpanded, setIsExpanded] = useState<boolean>(!props.defaultCollapsed)
+  
   // No summary at all — render compact no-evidence baseline.
   if (!summary) {
     return (
-      <Card
-        className={cn('mt-4', props.className)}
-        data-ab11-5-feedback-proof="no-summary"
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles
-              className="h-4 w-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <CardTitle className="text-base font-semibold">
-              Feedback Loop Proof
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-            No benchmark or workout evidence yet — using your onboarding
-            baseline until you log tests or workouts.
-          </p>
-          {plan && <CalibrationPlanStrip plan={plan} />}
-          {influence && <GenerationInfluenceStrip influence={influence} />}
-        </CardContent>
-      </Card>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <Card
+          className={cn('mt-4', props.className)}
+          data-ab11-5-feedback-proof="no-summary"
+          data-p1-collapsed={!isExpanded}
+        >
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer pb-3 hover:bg-muted/30 transition-colors rounded-t-lg">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <CardTitle className="text-base font-semibold">
+                    Coaching Feedback Loop
+                  </CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    Baseline
+                  </Badge>
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                      isExpanded && 'rotate-180'
+                    )}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+              {!isExpanded && (
+                <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                  Using onboarding baseline until you log tests or workouts
+                </p>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+                No benchmark or workout evidence yet — using your onboarding
+                baseline until you log tests or workouts.
+              </p>
+              {plan && <CalibrationPlanStrip plan={plan} />}
+              {influence && <GenerationInfluenceStrip influence={influence} />}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     )
   }
-
+  
   const totalSignals =
     summary.benchmarkSignalsUsed + summary.workoutSignalsUsed
-
+  
   // Has summary but zero signals → honest baseline copy.
   if (totalSignals === 0) {
     return (
-      <Card
-        className={cn('mt-4', props.className)}
-        data-ab11-5-feedback-proof="no-evidence"
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles
-              className="h-4 w-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <CardTitle className="text-base font-semibold">
-              Feedback Loop Proof
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-            {summary.summaryText}
-          </p>
-          {plan && <CalibrationPlanStrip plan={plan} />}
-          {influence && <GenerationInfluenceStrip influence={influence} />}
-        </CardContent>
-      </Card>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <Card
+          className={cn('mt-4', props.className)}
+          data-ab11-5-feedback-proof="no-evidence"
+          data-p1-collapsed={!isExpanded}
+        >
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer pb-3 hover:bg-muted/30 transition-colors rounded-t-lg">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <CardTitle className="text-base font-semibold">
+                    Coaching Feedback Loop
+                  </CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    Baseline
+                  </Badge>
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                      isExpanded && 'rotate-180'
+                    )}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+              {!isExpanded && (
+                <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                  Your program adapts as you log workouts and tests
+                </p>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+                {summary.summaryText}
+              </p>
+              {plan && <CalibrationPlanStrip plan={plan} />}
+              {influence && <GenerationInfluenceStrip influence={influence} />}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     )
   }
 
@@ -316,94 +382,119 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const stateAttr: string = summary.changedProgram
     ? 'changed'
     : 'considered_no_change'
+    
+  // [P1] Build summary label for collapsed state
+  const signalLabel = summary.changedProgram
+    ? `${totalSignals} signal${totalSignals > 1 ? 's' : ''} applied`
+    : `${totalSignals} signal${totalSignals > 1 ? 's' : ''} reviewed`
 
   return (
-    <Card
-      className={cn('mt-4', props.className)}
-      data-ab11-5-feedback-proof="present"
-      data-ab11-5-state={stateAttr}
-    >
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Activity
-              className="h-4 w-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <CardTitle className="text-base font-semibold">
-              Feedback Loop Proof
-            </CardTitle>
-          </div>
-          <div className="flex flex-wrap items-center gap-1">
-            {summary.benchmarkSignalsUsed > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-medium uppercase tracking-wide"
-              >
-                {summary.benchmarkSignalsUsed} benchmark
-                {summary.benchmarkSignalsUsed === 1 ? '' : 's'}
-              </Badge>
-            )}
-            {summary.workoutSignalsUsed > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-medium uppercase tracking-wide"
-              >
-                {summary.workoutSignalsUsed} workout signal
-                {summary.workoutSignalsUsed === 1 ? '' : 's'}
-              </Badge>
-            )}
-            {!summary.changedProgram && (
-              <Badge variant="outline" className="text-[10px] font-medium">
-                Considered • no change
-              </Badge>
-            )}
-          </div>
-        </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
-          {summary.summaryText}
-        </p>
-      </CardHeader>
-
-      {summary.proofLines.length > 0 && (
-        <CardContent className="pt-0">
-          <ul className="flex flex-col gap-1.5" role="list">
-            {summary.proofLines.slice(0, 3).map((line, idx) => (
-              <li
-                key={`${idx}-${line}`}
-                className="flex items-start gap-2 text-sm leading-relaxed text-foreground/90 text-pretty"
-              >
-                <Info
-                  className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground"
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Card
+        className={cn('mt-4', props.className)}
+        data-ab11-5-feedback-proof="present"
+        data-ab11-5-state={stateAttr}
+        data-p1-collapsed={!isExpanded}
+      >
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer pb-3 hover:bg-muted/30 transition-colors rounded-t-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Activity
+                  className="h-4 w-4 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-          {summary.domainsAffected.length > 0 && (
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Areas reviewed:{' '}
-              {summary.domainsAffected
-                .map((d) => DOMAIN_LABEL[d])
-                .filter((s) => s !== 'general')
-                .join(', ') || 'general'}
+                <CardTitle className="text-base font-semibold">
+                  Coaching Feedback Loop
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant={summary.changedProgram ? 'default' : 'secondary'} 
+                  className="text-xs"
+                >
+                  {signalLabel}
+                </Badge>
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                    isExpanded && 'rotate-180'
+                  )}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            {!isExpanded && (
+              <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                {summary.changedProgram
+                  ? 'Your logged data has shaped this program'
+                  : 'Evidence reviewed, no changes needed'}
+              </p>
+            )}
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap items-center gap-1 mb-3">
+              {summary.benchmarkSignalsUsed > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] font-medium uppercase tracking-wide"
+                >
+                  {summary.benchmarkSignalsUsed} benchmark
+                  {summary.benchmarkSignalsUsed === 1 ? '' : 's'}
+                </Badge>
+              )}
+              {summary.workoutSignalsUsed > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] font-medium uppercase tracking-wide"
+                >
+                  {summary.workoutSignalsUsed} workout signal
+                  {summary.workoutSignalsUsed === 1 ? '' : 's'}
+                </Badge>
+              )}
+              {!summary.changedProgram && (
+                <Badge variant="outline" className="text-[10px] font-medium">
+                  Considered, no change needed
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground text-pretty mb-3">
+              {summary.summaryText}
             </p>
-          )}
-          {plan && <CalibrationPlanStrip plan={plan} />}
-          {influence && <GenerationInfluenceStrip influence={influence} />}
-        </CardContent>
-      )}
-      {/* When there are no proofLines we still render the plan strip
-          inside its own minimal CardContent so the AB12-1 surface is
-          visible even when AB11 only produced summary text. AB12-2
-          influence rides on the same fallback content. */}
-      {summary.proofLines.length === 0 && (plan || influence) && (
-        <CardContent className="pt-0">
-          {plan && <CalibrationPlanStrip plan={plan} />}
-          {influence && <GenerationInfluenceStrip influence={influence} />}
-        </CardContent>
-      )}
-    </Card>
+
+            {summary.proofLines.length > 0 && (
+              <ul className="flex flex-col gap-1.5" role="list">
+                {summary.proofLines.slice(0, 3).map((line, idx) => (
+                  <li
+                    key={`${idx}-${line}`}
+                    className="flex items-start gap-2 text-sm leading-relaxed text-foreground/90 text-pretty"
+                  >
+                    <Info
+                      className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {summary.domainsAffected.length > 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Areas reviewed:{' '}
+                {summary.domainsAffected
+                  .map((d) => DOMAIN_LABEL[d])
+                  .filter((s) => s !== 'general')
+                  .join(', ') || 'general'}
+              </p>
+            )}
+            {plan && <CalibrationPlanStrip plan={plan} />}
+            {influence && <GenerationInfluenceStrip influence={influence} />}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   )
 }

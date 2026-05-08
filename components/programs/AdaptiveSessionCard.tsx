@@ -2922,169 +2922,57 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 {(session as any).resolvedSessionIdentity || session.focusLabel}
               </p>
             )}
-            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] Supporting character line:
-                intensity * progression * breadth from authoritative role truth.
-                Plain text below the dominant identity — no chip-spam. Absent
-                when role truth is absent (legacy sessions unchanged). */}
-            {cardSurface?.weeklyRoleLabel && (() => {
-              const intensityLabels: Record<string, string> = {
-                high: 'High intensity',
-                moderate_high: 'Moderate-high intensity',
-                moderate: 'Moderate intensity',
-                moderate_low: 'Moderate-low intensity',
-                low: 'Low intensity',
-              }
-              const progressionLabels: Record<string, string> = {
-                direct_load: 'Direct load',
-                banded_support: 'Band-supported',
-                conservative_skill: 'Conservative skill',
-                mixed_breadth: 'Mixed breadth',
-                volume_direct: 'Volume-direct',
-                recovery_quality: 'Recovery quality',
-              }
-              const intensityLabel = cardSurface.weeklyIntensityClass
-                ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
-                : null
-              const progressionLabel = cardSurface.weeklyProgressionCharacter
-                ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
-                : null
-              const breadthLabel = cardSurface.weeklyBreadthLabel || null
-              const parts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
-              if (parts.length === 0) return null
-              return (
-                <p className="text-[11px] text-[#A8A8A8] mt-1 leading-snug">
-                  {parts.join(' \u00B7 ')}
-                </p>
-              )
-            })()}
             {/* ============================================================
-                [PHASE-K] WEEKLY STRESS DISTRIBUTION PROOF
+                [PEX-4] CLUTTER COMPRESSION — DEFAULT VISIBILITY BUDGET
                 ----------------------------------------------------------------
-                Compact coach-facing chip + one-line explanation derived from
-                the canonical weekly stress plan (computed once in the builder
-                by `buildWeeklyStressDistributionPlan` and stamped onto
-                `session.stressDistributionProof`). This is the visible proof
-                that the week was reasoned about as a whole - not just six
-                isolated session labels.
-                Render rules:
-                  - Only renders when `session.stressDistributionProof` is
-                    present (legacy programs without Phase K classification
-                    show nothing - we never invent labels).
-                  - Label is the coach chip ("High strength day", "Moderate
-                    volume day", "Tendon-protective skill day", etc.).
-                  - Explanation is the post-governor one-liner
-                    ("Hard pull stress; next day softened", etc.) - omitted
-                    when the contract had nothing notable to say.
-                  - Sized one notch above the intensity meta line so the
-                    coach chip reads as the authoritative summary while
-                    intensity/progression/breadth above remain context.
+                Per PEX-4 doctrine, the default collapsed header shows ONLY:
+                - Day label + Primary badge (above)
+                - Weekly role label as primary identity (above)
+                - Focus label as secondary context (above)
+                - Time + exercise count (below)
+                - ONE status indicator maximum if meaningful
+                
+                MOVED to "Why this workout" dropdown:
+                - Intensity/progression/breadth line
+                - Stress distribution proof chip + explanation
+                - "Why this day exists" section (role labels, RPE bands, reasons)
+                - Quality audit explanations
+                
+                Safety warnings (OVERLAP WATCH, TIME REALISM) remain visible
+                because they are real safety signals that should not be hidden.
                 ============================================================ */}
-            {session.stressDistributionProof?.label && (
-              <div className="mt-1.5 flex flex-col gap-0.5">
-                <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#161A21] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-[#E6E9EF]">
-                  {session.stressDistributionProof.label}
-                </span>
-                {session.stressDistributionProof.explanation && (
-                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
-                    {session.stressDistributionProof.explanation}
-                  </p>
-                )}
-              </div>
-            )}
-            {/* ============================================================
-                [PHASE Y3 OF 3] WHY THIS DAY EXISTS
-                ----------------------------------------------------------------
-                Reads the Y2 calibrator's per-session `weeklyDayPurpose` stamp
-                (added in `applyTrainingDifferentiationCalibration`). Renders a
-                compact role label + intended-RPE band + one-sentence reason so
-                each day card answers "why this day exists" without forcing the
-                user to open the trust accordion. Falls back to nothing on
-                legacy programs without Y2.
-                ============================================================ */}
-            {(() => {
-              const dp = (session as unknown as {
-                weeklyDayPurpose?: {
-                  roleLabel?: string
-                  intendedRPEBand?: string
-                  intendedStressLevel?: 'low' | 'moderate' | 'high'
-                  reason?: string
-                }
-              }).weeklyDayPurpose
-              if (!dp || !dp.reason) return null
-
-              // Skip if the role label perfectly duplicates the stress proof
-              // label above — avoids two near-identical chip rows.
-              const stressLabel = session.stressDistributionProof?.label || ''
-              const roleLabel = dp.roleLabel || ''
-              const duplicate =
-                stressLabel.toLowerCase().trim() === roleLabel.toLowerCase().trim()
-
-              const stressTone =
-                dp.intendedStressLevel === 'high'
-                  ? 'text-amber-300/90'
-                  : dp.intendedStressLevel === 'low'
-                    ? 'text-blue-300/90'
-                    : 'text-zinc-300/90'
-
-              return (
-                <div className="mt-1.5 flex flex-col gap-0.5" data-phase-y3-day-purpose="true">
-                  {!duplicate && (roleLabel || dp.intendedRPEBand) && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {roleLabel && (
-                        <span className={`inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${stressTone}`}>
-                          {roleLabel}
-                        </span>
-                      )}
-                      {dp.intendedRPEBand && (
-                        <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#22272F] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium tracking-wide text-zinc-400">
-                          {dp.intendedRPEBand}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
-                    {dp.reason}
-                  </p>
-                </div>
-              )
-            })()}
-            {/* ============================================================
-                [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT — chip only
-                ----------------------------------------------------------------
-                Compact amber chip stays always-visible because it is a real
-                safety / realism warning the user MUST see at a glance
-                (Phase S spec: "Do not hide important warnings completely").
-                The longer one-line explanation that USED to render right
-                under the chip has been moved to the "Why this plan?"
-                trust dropdown below to keep the always-visible header
-                surface compact (Phase S compression target). Tap "Why this
-                plan?" to see the explanation; the original
-                `data-phase-p-session-proof` attribute remains on the chip
-                so screenshot verification and dev probes still work.
-                ============================================================ */}
+            {/* [PEX-4] Single status indicator — show most important one only */}
             {(() => {
               const sqa = (session as unknown as {
                 qualityAudit?: {
-                  shortLabel?: string
-                  conciseExplanation?: string
                   corrections?: string[]
-                  sessionLengthRealism?: { verdict?: 'within_tolerance' | 'over' | 'under' }
-                  straightArmOverlap?: { pattern?: string; explanation?: string }
                 }
               }).qualityAudit
-              if (!sqa) return null
-              const corr = Array.isArray(sqa.corrections) ? sqa.corrections : []
+              const corr = Array.isArray(sqa?.corrections) ? sqa.corrections : []
               const hasOverlap = corr.includes('straight_arm_overlap_warning_attached')
               const hasTimeWarn = corr.includes('session_length_warning_attached')
-              if (!hasOverlap && !hasTimeWarn) return null
-              const label = hasOverlap ? 'OVERLAP WATCH' : 'TIME REALISM'
-              return (
-                <div className="mt-1 flex flex-col gap-0.5" data-phase-p-session-proof="true">
-                  <span className="inline-flex items-center self-start gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-amber-300">
-                    {label}
-                  </span>
-                </div>
-              )
+              // Safety warnings take priority
+              if (hasOverlap || hasTimeWarn) {
+                const label = hasOverlap ? 'OVERLAP WATCH' : 'TIME REALISM'
+                return (
+                  <div className="mt-1.5" data-phase-p-session-proof="true">
+                    <span className="inline-flex items-center self-start gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-amber-300">
+                      {label}
+                    </span>
+                  </div>
+                )
+              }
+              // Otherwise show stress label as the one indicator (no explanation)
+              if (session.stressDistributionProof?.label) {
+                return (
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#161A21] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-[#E6E9EF]">
+                      {session.stressDistributionProof.label}
+                    </span>
+                  </div>
+                )
+              }
+              return null
             })()}
             {/* ====================================================================
                 [PHASE-S] PROOF CLUTTER COMPRESSION
@@ -3116,20 +3004,19 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </div>
 
             {/* ====================================================================
-                [PHASE-S] "WHY THIS PLAN?" TRUST DROPDOWN
+                [PEX-4] "WHY THIS WORKOUT" TRUST DROPDOWN
                 ----------------------------------------------------------------
-                Default-collapsed trust details. Renders ONLY when there is
-                meaningful trust data to show — Phase Q `doctrineUtilizationTrace`,
-                Phase R `sessionLengthTruth`, Phase P `qualityAudit` extended
-                explanation, or a doctrine breakdown by category. Otherwise the
-                trigger does not render and the header stays calm.
-
+                Default-collapsed trust details. Now includes content previously
+                shown always-visible (per PEX-4 clutter compression):
+                - Intensity/progression/breadth line (moved from header)
+                - Stress distribution explanation (moved from header)
+                - Day purpose/reason (moved from header)
+                - Phase Q doctrine utilization trace
+                - Phase R session length truth
+                - Phase P quality audit explanation
+                
                 Click handlers `e.stopPropagation()` so opening the trust
-                dropdown does NOT also toggle the parent header expand/collapse
-                (the parent `<div>` at L2335 has its own `onClick` for the body
-                expansion). Local state `showWhyThisPlan` keeps the dropdown
-                open/close stable per-card and does not reset on parent
-                re-render.
+                dropdown does NOT also toggle the parent header expand/collapse.
                 ==================================================================== */}
             {(() => {
               const sessionAny = session as unknown as {
@@ -3157,10 +3044,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   corrections?: string[]
                   straightArmOverlap?: { explanation?: string }
                 }
+                weeklyDayPurpose?: {
+                  roleLabel?: string
+                  intendedRPEBand?: string
+                  intendedStressLevel?: 'low' | 'moderate' | 'high'
+                  reason?: string
+                }
               }
               const trace = sessionAny.doctrineUtilizationTrace
               const slt = sessionAny.sessionLengthTruth
               const sqa = sessionAny.qualityAudit
+              const dayPurpose = sessionAny.weeklyDayPurpose
               const hasTrace = !!(trace && trace.summary)
               const hasSlt =
                 !!slt &&
@@ -3179,14 +3073,65 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   )
                 : []
               const hasBreakdown = byCategoryEntries.length > 0
+              
+              // [PEX-4] Check for moved content that now lives in dropdown
+              const hasStressExplanation = !!(session.stressDistributionProof?.explanation)
+              const hasDayPurpose = !!(dayPurpose?.reason)
+              
+              // [PEX-4] Build intensity/progression/breadth line
+              const intensityLabels: Record<string, string> = {
+                high: 'High intensity',
+                moderate_high: 'Moderate-high intensity',
+                moderate: 'Moderate intensity',
+                moderate_low: 'Moderate-low intensity',
+                low: 'Low intensity',
+              }
+              const progressionLabels: Record<string, string> = {
+                direct_load: 'Direct load',
+                banded_support: 'Band-supported',
+                conservative_skill: 'Conservative skill',
+                mixed_breadth: 'Mixed breadth',
+                volume_direct: 'Volume-direct',
+                recovery_quality: 'Recovery quality',
+              }
+              const intensityLabel = cardSurface?.weeklyIntensityClass
+                ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
+                : null
+              const progressionLabel = cardSurface?.weeklyProgressionCharacter
+                ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
+                : null
+              const breadthLabel = cardSurface?.weeklyBreadthLabel || null
+              const characterParts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
+              const hasCharacterLine = characterParts.length > 0
+              
+              // [PEX-4] Material adaptations + spine expression (moved from header)
+              const spineLabels: Record<string, string> = {
+                direct_intensity: 'Direct intensity',
+                technical_focus: 'Technical focus',
+                strength_support: 'Strength support',
+              }
+              const spineLabel = cardSurface?.spineExpression
+                ? spineLabels[cardSurface.spineExpression] ?? null
+                : null
+              const hasSpine = !!spineLabel
+              const hasAdaptations = (cardSurface?.materialAdaptations?.length ?? 0) > 0
+              const hasMaterialAdaptations = hasSpine || hasAdaptations
+              
+              // [PEX-4] Weekly role rationale (moved from header)
+              const hasRoleRationale = !!(cardSurface?.weeklyRoleRationale)
+              
               const insightCount =
+                (hasCharacterLine ? 1 : 0) +
+                (hasStressExplanation ? 1 : 0) +
+                (hasDayPurpose ? 1 : 0) +
+                (hasMaterialAdaptations ? 1 : 0) +
+                (hasRoleRationale ? 1 : 0) +
                 (hasTrace ? 1 : 0) +
                 (hasSlt ? 1 : 0) +
-                (hasSqaExtended ? 1 : 0) +
-                (hasBreakdown ? 1 : 0)
+                (hasSqaExtended ? 1 : 0)
               if (insightCount === 0) return null
               return (
-                <div className="mt-2" data-phase-s-trust-dropdown="true">
+                <div className="mt-2" data-phase-s-trust-dropdown="true" data-pex4-why-this-workout="true">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -3202,21 +3147,90 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     ) : (
                       <ChevronDown className="w-3 h-3" />
                     )}
-                    <span className="font-medium">Why this plan?</span>
-                    <span className="text-[10px] text-[#6A6A6A]">
-                      {insightCount} insight{insightCount === 1 ? '' : 's'}
-                    </span>
+                    <span className="font-medium">Why this workout</span>
                   </button>
                   {showWhyThisPlan && (
                     <div
                       id={`why-this-plan-${session.dayNumber}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="mt-2 space-y-2 rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/60 p-3"
+                      className="mt-2 space-y-3 rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/60 p-3"
                       data-phase-s-trust-details="true"
                     >
-                      {/* [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) — moved into
-                          details. Original `data-phase-q-*` attributes
-                          preserved so screenshot verification still works. */}
+                      {/* [PEX-4] Day strategy section — moved from always-visible */}
+                      {(hasDayPurpose || hasStressExplanation || hasCharacterLine || hasRoleRationale) && (
+                        <div data-pex4-day-strategy="true">
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                            Day strategy
+                          </div>
+                          {/* Role rationale (moved from header) */}
+                          {cardSurface?.weeklyRoleRationale && (
+                            <p className="text-[11px] text-[#8A8A8A] leading-relaxed italic mb-1.5">
+                              {cardSurface.weeklyRoleRationale}
+                            </p>
+                          )}
+                          {/* Day purpose reason */}
+                          {dayPurpose?.reason && (
+                            <p className="text-[11px] text-[#9CA3AF] leading-snug mb-1.5">
+                              {dayPurpose.reason}
+                            </p>
+                          )}
+                          {/* Stress explanation */}
+                          {session.stressDistributionProof?.explanation && (
+                            <p className="text-[11px] text-[#9CA3AF] leading-snug mb-1.5">
+                              {session.stressDistributionProof.explanation}
+                            </p>
+                          )}
+                          {/* Character line (intensity/progression/breadth) */}
+                          {hasCharacterLine && (
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {characterParts.map((part, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center rounded-full border border-[#2B313A] bg-[#0F1318] px-2 py-0.5 text-[10px] text-[#A8A8A8]"
+                                >
+                                  {part}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* RPE band if available */}
+                          {dayPurpose?.intendedRPEBand && (
+                            <span className="inline-flex items-center mt-1.5 rounded-full border border-[#22272F] bg-[#0F1318] px-2 py-0.5 text-[10px] text-zinc-400">
+                              {dayPurpose.intendedRPEBand}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* [PEX-4] Material adaptations section — moved from header */}
+                      {hasMaterialAdaptations && (
+                        <div data-pex4-adaptations="true">
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                            Adaptations applied
+                          </div>
+                          <div className="flex flex-wrap gap-x-1.5 gap-y-1">
+                            {hasSpine && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#C8C8C8] font-medium">
+                                {spineLabel}
+                              </span>
+                            )}
+                            {cardSurface?.materialAdaptations?.map((adaptation) => (
+                              <span
+                                key={`adapt-${adaptation.key}`}
+                                className={
+                                  adaptation.tone === 'reduction'
+                                    ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/90 font-medium'
+                                    : 'text-[9px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#B8B8B8] font-medium'
+                                }
+                              >
+                                {adaptation.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) */}
                       {(() => {
                         if (!trace || !trace.summary) return null
                         const tone =
@@ -3278,8 +3292,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         )
                       })()}
 
-                      {/* [PHASE-R] SESSION-LENGTH TRUTH — moved into details.
-                          Original `data-phase-r-*` attributes preserved. */}
+                      {/* [PHASE-R] SESSION-LENGTH TRUTH */}
                       {hasSlt && slt && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
@@ -3300,10 +3313,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </div>
                       )}
 
-                      {/* [PHASE-P] Extended quality-audit explanation. The
-                          severity chip itself stays on the always-visible
-                          header (real warnings should never hide); only the
-                          longer explanation moves here. */}
+                      {/* [PHASE-P] Extended quality-audit explanation */}
                       {hasSqaExtended && sqa && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
@@ -3546,93 +3556,47 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             })()}
 
             {/* ====================================================================
-                [MATERIAL-COMPOSITION-TRUTH-LOCK]
-                Structural per-day programming-difference strip. Renders only
-                when authoritative composition / adaptation truth is present
-                on the surface — null/empty leaves legacy sessions visually
-                unchanged. Three components, each guarded:
-                  1. Workload split bar (primary vs support %) — varies day to
-                     day based on real composition.workloadDistribution.
-                  2. Material adaptation chips — only TRUE reductions actually
-                     applied to this day (sets/RPE/secondary/density/finisher).
-                  3. Spine expression mini-tag — direct_intensity /
-                     technical_focus / strength_support classification.
-                Together they make programming difference visibly STRUCTURAL,
-                not descriptive. No prose added.
+                [PEX-4] MATERIAL COMPOSITION — COMPRESSED
+                ----------------------------------------------------------------
+                Per PEX-4, the material adaptation chips (sets reduced, RPE
+                capped, volume reduced, intensity capped, etc.) have been
+                moved to the "Why this workout" dropdown. Only the workload
+                split bar remains visible by default as a compact structural
+                indicator.
                 ==================================================================== */}
             {cardSurface && (() => {
               const hasWorkload =
                 typeof cardSurface.workloadPrimaryPercent === 'number' &&
                 typeof cardSurface.workloadSupportPercent === 'number' &&
                 cardSurface.workloadPrimaryPercent + cardSurface.workloadSupportPercent > 0
-              const hasAdaptations = (cardSurface.materialAdaptations?.length ?? 0) > 0
-              const spineLabels: Record<string, string> = {
-                direct_intensity: 'Direct intensity',
-                technical_focus: 'Technical focus',
-                strength_support: 'Strength support',
-              }
-              const spineLabel = cardSurface.spineExpression
-                ? spineLabels[cardSurface.spineExpression] ?? null
-                : null
-              const hasSpine = !!spineLabel
-              if (!hasWorkload && !hasAdaptations && !hasSpine) return null
+              // [PEX-4] Material adaptation chips + spine expression now live in dropdown
+              if (!hasWorkload) return null
               return (
-                <div className="mt-2 space-y-1.5">
-                  {/* Workload split bar — structural, not prose */}
-                  {hasWorkload && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-[#1A1A1A] rounded-full overflow-hidden flex">
-                        <div
-                          className="h-full bg-[#E63946] transition-all"
-                          style={{ width: `${cardSurface.workloadPrimaryPercent}%` }}
-                          aria-label={`Primary work ${cardSurface.workloadPrimaryPercent}%`}
-                        />
-                        <div
-                          className="h-full bg-[#5A5A5A] transition-all"
-                          style={{ width: `${cardSurface.workloadSupportPercent}%` }}
-                          aria-label={`Support work ${cardSurface.workloadSupportPercent}%`}
-                        />
-                      </div>
-                      <span className="text-[10px] text-[#A8A8A8] tabular-nums shrink-0">
-                        {cardSurface.workloadPrimaryPercent}
-                        <span className="text-[#6A6A6A]">% primary</span>
-                      </span>
+                <div className="mt-2">
+                  {/* Workload split bar — compact structural indicator */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-[#1A1A1A] rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-[#E63946] transition-all"
+                        style={{ width: `${cardSurface.workloadPrimaryPercent}%` }}
+                        aria-label={`Primary work ${cardSurface.workloadPrimaryPercent}%`}
+                      />
+                      <div
+                        className="h-full bg-[#5A5A5A] transition-all"
+                        style={{ width: `${cardSurface.workloadSupportPercent}%` }}
+                        aria-label={`Support work ${cardSurface.workloadSupportPercent}%`}
+                      />
                     </div>
-                  )}
-                  {/* Material adaptation chips + spine expression tag */}
-                  {(hasAdaptations || hasSpine) && (
-                    <div className="flex flex-wrap gap-x-1.5 gap-y-1">
-                      {hasSpine && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#C8C8C8] font-medium">
-                          {spineLabel}
-                        </span>
-                      )}
-                      {cardSurface.materialAdaptations!.map((adaptation) => (
-                        <span
-                          key={`adapt-${adaptation.key}`}
-                          className={
-                            adaptation.tone === 'reduction'
-                              ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/90 font-medium'
-                              : 'text-[9px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#B8B8B8] font-medium'
-                          }
-                        >
-                          {adaptation.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                    <span className="text-[10px] text-[#A8A8A8] tabular-nums shrink-0">
+                      {cardSurface.workloadPrimaryPercent}
+                      <span className="text-[#6A6A6A]">% primary</span>
+                    </span>
+                  </div>
                 </div>
               )
             })()}
 
-            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] One-line per-day "why" from the
-                authoritative role rationale. Demotes generic compactCoaching
-                purpose for non-role-aware sessions to fallback only. */}
-            {cardSurface?.weeklyRoleRationale && (
-              <p className="text-[11px] text-[#8A8A8A] mt-1 leading-relaxed italic">
-                {cardSurface.weeklyRoleRationale}
-              </p>
-            )}
+            {/* [PEX-4] weeklyRoleRationale moved to "Why this workout" dropdown */}
 
             {/* =====================================================================
                 [PHASE 4S] CANONICAL METHOD/DOCTRINE DELIVERY LINE

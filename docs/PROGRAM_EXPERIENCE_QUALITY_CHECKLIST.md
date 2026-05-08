@@ -10,7 +10,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | PEX-1 | Program Experience Truth Surface Foundation | COMPLETE |
 | PEX-2 | Selected Skill Coverage + Rotation Truth | COMPLETE |
 | PEX-3 | Method Materialization Truth | COMPLETE |
-| PEX-4 | Session Card Clutter Compression | NOT_STARTED |
+| PEX-4 | Session Card Clutter Compression | COMPLETE |
 | PEX-5 | True Short-Session Runtime Options | NOT_STARTED |
 | PEX-6 | End-to-End Runtime Proof | NOT_STARTED |
 
@@ -196,14 +196,65 @@ The builder already has comprehensive method materialization infrastructure:
 
 ## PEX-4 — Session Card Clutter Compression
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Clean up always-visible chip clutter on day cards.
 
 ### Scope
 - Remove always-visible chip clutter from day cards
-- Move useful day reasoning into collapsed per-day "Why this workout" / "Day strategy"
+- Move useful day reasoning into collapsed per-day "Why this workout" dropdown
 - Keep only essential day identity and Start Workout controls visible by default
+
+### What Changed
+
+**Default Card Compression** — AdaptiveSessionCard.tsx
+
+1. **Header Clutter Removed** — The following were moved from always-visible to the "Why this workout" dropdown:
+   - Intensity/progression/breadth line
+   - Stress distribution explanation
+   - "Why this day exists" section (role labels, RPE bands, reasons)
+   - Weekly role rationale
+   - Material adaptation chips (Direct intensity, Sets reduced, RPE capped, Volume reduced, etc.)
+   - Spine expression tag
+
+2. **Default Visibility Budget** — Now shows only:
+   - Day label + Primary badge
+   - Weekly role label (e.g., "Heavier strength day")
+   - Focus label (e.g., "Planche + Pull Strength")
+   - Time + exercise count
+   - ONE status indicator maximum (safety warning OR stress label)
+   - Workload split bar (compact structural indicator)
+   - Start Workout button
+   - Session length options
+
+3. **"Why this workout" Dropdown Enhanced** — Now contains:
+   - Day strategy section (role rationale, day purpose, stress explanation)
+   - Character line (intensity/progression/breadth)
+   - RPE band
+   - Adaptations applied (spine + material adaptations)
+   - Doctrine application
+   - Session length truth
+   - Quality & safety explanations
+
+4. **Safety Warnings Preserved** — OVERLAP WATCH and TIME REALISM chips remain always-visible because they are real safety signals that should not be hidden.
+
+### Files Changed
+- `components/programs/AdaptiveSessionCard.tsx` — Compressed default card, moved clutter to dropdown
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md` — Updated status
+
+### Acceptance Criteria
+- [x] Default session cards are visibly cleaner
+- [x] Top-level chip rows reduced to strict small budget (1-2 max)
+- [x] Internal diagnostic/proof labels no longer prominent by default
+- [x] Meaningful reasoning accessible in "Why this workout" dropdown
+- [x] PEX-1 calibration truth remains intact
+- [x] PEX-2 selected-skill truth remains intact
+- [x] PEX-3 method materialization truth remains intact
+- [x] Safety warnings (OVERLAP WATCH, TIME REALISM) remain visible
+- [x] No source-of-truth deletion
+- [x] No generation logic changes
+- [x] TypeScript passes (exit code 0)
+- [x] Build compiles successfully (pre-existing Stripe issue unrelated)
 
 ---
 

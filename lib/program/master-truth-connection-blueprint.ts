@@ -2450,7 +2450,7 @@ function step24(): BlueprintPhase {
       'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
     status: 'PARTIAL',
     nextAction:
-      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (reduce-intensity mutation). V.V5 COMPLETE (protect-recovery-spacing mutation). Next: V.V6 — Multi-session push-forward mutation guardrail. Remaining: V.V6-V.V7.',
+      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (reduce-intensity mutation). V.V5 COMPLETE (protect-recovery-spacing mutation). V.V6 COMPLETE (multi-session push-forward mutation guardrail). Next: V.V7 — Persistence/reload proof and Phase V closeout. Remaining: V.V7.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2547,15 +2547,29 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V6',
         title: 'Multi-session push-forward mutation guardrail',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Audit multi-session push-forward safety bounds',
-          'Extend push helper if needed',
-          'Two-step confirmation UI',
-          'saveAdaptiveProgram persistence',
-          'Reload proof',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V6] MultiSessionPushForwardResult type added to missed-workout-recomposition-advisory.ts',
+          '[V.V6] MultiSessionPushForwardInput type added with program/advisory/targetIndices contract',
+          '[V.V6] MultiSessionPushForwardMutationPreview type added for two-step confirmation UI',
+          '[V.V6] buildMultiSessionPushForwardMutationPreview() pure helper — builds preview without mutation',
+          '[V.V6] pushForwardMultiSessionSchedule() pure helper — applies adaptationNotes markers to multiple sessions',
+          '[V.V6] Conservative approach: markers via typed adaptationNotes, no session reordering',
+          '[V.V6] Duplicate guard: checks existing V.V6 markers before applying, returns already_applied if all marked',
+          '[V.V6] Multi-session threshold: requires at least 2 target sessions (V.V6 is multi-session, not single)',
+          '[V.V6] V.V6 UI card in AdaptiveProgramDisplay.tsx with idle/confirming/applying/applied/failed/already_applied states',
+          '[V.V6] data-step-24-vv6-multi-session-push-forward="true" marker',
+          '[V.V6] data-no-live-workout-mutation="true" marker — no live workout mutation',
+          '[V.V6] data-user-confirmed-mutation="true" only on applied state',
+          '[V.V6] onConfirmMultiSessionPushForward callback prop added to AdaptiveProgramDisplay',
+          '[V.V6] handleConfirmMultiSessionPushForward in Program Page — calls pure helper, saves via saveAdaptiveProgram',
+          '[V.V6] Single canonical save path through saveAdaptiveProgram',
+          '[V.V6] Program Page state updated via onProgramUpdate after successful save',
+          '[V.V6] No generator changes, no schema changes, no package changes',
+          '[V.V6] V.V4 and V.V5 corridors preserved',
+          '[V.V6] Created docs/STEP_24_VV6_MULTI_SESSION_PUSH_FORWARD_MUTATION_GUARDRAIL.md',
         ],
+        remainingWork: [],
       },
       {
         id: 'V.V7',

@@ -349,6 +349,123 @@ function surfaceCategoryFor(
 }
 
 // =============================================================================
+// [IQ4] CALIBRATION RELATIONSHIP STRENGTH
+// =============================================================================
+// Distinguishes between tests that DIRECTLY measure a skill vs tests that
+// provide supporting data. This prevents L-Sit from being described as a
+// "primary indicator" for front lever when Tuck Front Lever Hold exists.
+
+/**
+ * Relationship strength between a test and a target skill.
+ *  - `direct`: The test IS the skill or measures it directly
+ *    (e.g. Tuck Front Lever Hold → front_lever)
+ *  - `strong_support`: The test measures a primary prerequisite
+ *    (e.g. Max Pull-Ups → front_lever)
+ *  - `general_support`: The test measures an auxiliary quality
+ *    (e.g. L-Sit Hold → front_lever for core/compression)
+ *  - `baseline`: No specific skill relationship; general fitness test
+ */
+type CalibrationRelationshipStrength =
+  | 'direct'
+  | 'strong_support'
+  | 'general_support'
+  | 'baseline'
+
+/**
+ * [IQ4] Determines how directly a benchmark test measures a specific skill.
+ * Pure/deterministic. Used to:
+ *   1. Add a score bonus for direct tests
+ *   2. Generate honest reason text
+ *   3. Generate honest program-influence notes
+ */
+function getSkillTestRelationship(
+  def: BaselineTestDefinition,
+  skill: SkillKey,
+): CalibrationRelationshipStrength {
+  // If the skill isn't even in skillsAffected, it's baseline-only
+  if (!def.skillsAffected.includes(skill)) return 'baseline'
+
+  // === DIRECT RELATIONSHIPS ===
+  // The test IS the skill or the most direct progression test for it
+
+  // Front lever: straight-arm-pull tests are direct
+  if (skill === 'front_lever') {
+    if (def.movementFamily === 'straight_arm_pull') return 'direct'
+    // Vertical pull is strong support (pull strength needed)
+    if (def.movementFamily === 'vertical_pull') return 'strong_support'
+    // Compression/core is general support (body tension)
+    if (def.movementFamily === 'compression_core') return 'general_support'
+  }
+
+  // Planche: straight-arm-push tests are direct
+  if (skill === 'planche') {
+    if (def.movementFamily === 'straight_arm_push') return 'direct'
+    // Dip/push strength is strong support
+    if (def.movementFamily === 'dip_pattern' || def.movementFamily === 'vertical_push') return 'strong_support'
+    // Compression/core is general support
+    if (def.movementFamily === 'compression_core') return 'general_support'
+  }
+
+  // L-sit: compression_core tests are direct
+  if (skill === 'l_sit') {
+    if (def.movementFamily === 'compression_core') return 'direct'
+  }
+
+  // HSPU: handstand tests are direct
+  if (skill === 'hspu') {
+    if (def.movementFamily === 'handstand') return 'direct'
+    // Dip/push is strong support
+    if (def.movementFamily === 'dip_pattern' || def.movementFamily === 'vertical_push') return 'strong_support'
+  }
+
+  // Muscle-up: explosive_pull or ring_support are direct
+  if (skill === 'muscle_up') {
+    if (def.movementFamily === 'explosive_pull' || def.movementFamily === 'ring_support') return 'direct'
+    // Vertical pull + dip are strong support
+    if (def.movementFamily === 'vertical_pull' || def.movementFamily === 'dip_pattern') return 'strong_support'
+  }
+
+  // Back lever: straight-arm-pull tests are direct
+  if (skill === 'back_lever') {
+    if (def.movementFamily === 'straight_arm_pull') return 'direct'
+    if (def.movementFamily === 'vertical_pull') return 'strong_support'
+    if (def.movementFamily === 'compression_core') return 'general_support'
+  }
+
+  // Default: if skill is in skillsAffected but no specific rule, treat as strong_support
+  return 'strong_support'
+}
+
+/**
+ * [IQ4] Finds the strongest relationship between a test and a set of skills.
+ * Used when a test affects multiple of the user's selected skills.
+ */
+function getBestRelationship(
+  def: BaselineTestDefinition,
+  skills: SkillKey[],
+): { strength: CalibrationRelationshipStrength; skill: SkillKey | null } {
+  let bestStrength: CalibrationRelationshipStrength = 'baseline'
+  let bestSkill: SkillKey | null = null
+
+  const strengthOrder: CalibrationRelationshipStrength[] = [
+    'direct',
+    'strong_support',
+    'general_support',
+    'baseline',
+  ]
+
+  for (const skill of skills) {
+    const rel = getSkillTestRelationship(def, skill)
+    if (strengthOrder.indexOf(rel) < strengthOrder.indexOf(bestStrength)) {
+      bestStrength = rel
+      bestSkill = skill
+    }
+  }
+
+  return { strength: bestStrength, skill: bestSkill }
+}
+
+// =============================================================================
 // INTERNAL: LIMITER HYPOTHESIS
 // =============================================================================
 
@@ -390,21 +507,39 @@ function humanizeSkill(skill: SkillKey): string {
   return skill.replace(/_/g, ' ')
 }
 
+/**
+ * [IQ4] Relationship-aware reason text. Direct tests get stronger language,
+ * while support tests are honest about their indirect relationship.
+ */
 function reasonTextFor(
   def: BaselineTestDefinition,
   reasonCode: CalibrationRecommendationReasonCode,
   alignedSkills: SkillKey[],
+  relationship: CalibrationRelationshipStrength,
 ): string {
   const family = humanizeFamily(def.movementFamily)
+  const skill = alignedSkills[0]
+  const skillLabel = skill ? humanizeSkill(skill) : family
+
   switch (reasonCode) {
     case 'no_baseline_yet':
       return `No ${def.displayName} baseline recorded yet — calibrates ${family} for future progression decisions.`
+
     case 'goal_alignment':
     case 'skill_alignment': {
-      const skill = alignedSkills[0]
-      const skillLabel = skill ? humanizeSkill(skill) : family
-      return `Calibrates ${family} as a primary indicator for your ${skillLabel} work.`
+      // [IQ4] Honest copy based on relationship strength
+      switch (relationship) {
+        case 'direct':
+          return `Directly calibrates ${family} strength for your ${skillLabel} progression.`
+        case 'strong_support':
+          return `Calibrates ${family} capacity that supports your ${skillLabel} progression.`
+        case 'general_support':
+          return `Provides supporting ${family} baseline for ${skillLabel} assistance work.`
+        default:
+          return `Essential baseline — ${def.displayName} anchors ${family} dosage decisions.`
+      }
     }
+
     case 'essential_baseline':
       return `Essential baseline — ${def.displayName} anchors ${family} dosage decisions.`
     case 'plateau_suspected':
@@ -416,14 +551,29 @@ function reasonTextFor(
   }
 }
 
+/**
+ * [IQ4] Relationship-aware program influence note. Honest about what
+ * direct vs support tests actually influence in programming.
+ */
 function programInfluenceNoteFor(
   def: BaselineTestDefinition,
   alignedSkills: SkillKey[],
+  relationship: CalibrationRelationshipStrength,
 ): string {
   const skillsTxt = alignedSkills.length
     ? alignedSkills.map(humanizeSkill).join(', ')
     : humanizeFamily(def.movementFamily)
-  return `Result feeds dosage and progression decisions for ${skillsTxt}.`
+
+  switch (relationship) {
+    case 'direct':
+      return `Result directly influences progression level, dosage, and readiness for ${skillsTxt}.`
+    case 'strong_support':
+      return `Result influences capacity-based dosage decisions for ${skillsTxt}.`
+    case 'general_support':
+      return `Result provides baseline for support and assistance work related to ${skillsTxt}.`
+    default:
+      return `Result feeds general dosage decisions for ${humanizeFamily(def.movementFamily)}.`
+  }
 }
 
 // =============================================================================
@@ -514,12 +664,14 @@ export function buildProgramCalibrationRecommendation(
   const equipment = input.equipmentAvailable ?? null
 
   // ----- 3. Score each catalog test ----------------------------------------
+  // [IQ4] Extended Scored type to track relationship strength for reason text
   type Scored = {
     def: BaselineTestDefinition
     score: number
     alignedSkills: SkillKey[]
     reasonCode: CalibrationRecommendationReasonCode
     alreadyTested: boolean
+    relationship: CalibrationRelationshipStrength
   }
 
   const scored: Scored[] = []
@@ -529,6 +681,9 @@ export function buildProgramCalibrationRecommendation(
     const aligned = def.skillsAffected.filter((s) => allSkills.includes(s))
     const wasTested = alreadyTested.has(def.testName)
     const isUnTested = !wasTested
+
+    // [IQ4] Compute relationship strength for this test vs user's skills
+    const { strength: relationship, skill: primaryRelSkill } = getBestRelationship(def, allSkills)
 
     let score = 0
     let reasonCode: CalibrationRecommendationReasonCode = 'essential_baseline'
@@ -543,6 +698,17 @@ export function buildProgramCalibrationRecommendation(
       score += 60
       reasonCode = 'skill_alignment'
     }
+
+    // [IQ4] DIRECT RELATIONSHIP BONUS — ensures Tuck Front Lever Hold
+    // outranks L-Sit Hold for front_lever even though both affect it.
+    // Direct tests get +30, strong_support gets +15, general_support gets 0.
+    if (relationship === 'direct') {
+      score += 30
+    } else if (relationship === 'strong_support') {
+      score += 15
+    }
+    // general_support and baseline get no bonus — they shouldn't outrank direct tests
+
     // Baseline boost
     if (def.priority === 'essential') score += 25
     if (def.priority === 'recommended') score += 10
@@ -576,6 +742,7 @@ export function buildProgramCalibrationRecommendation(
       alignedSkills: aligned,
       reasonCode,
       alreadyTested: wasTested,
+      relationship,
     })
   }
 
@@ -617,9 +784,11 @@ export function buildProgramCalibrationRecommendation(
       estimatedTimeMinutes: s.def.estimatedTimeMinutes,
       description: s.def.description,
       reasonCode: s.reasonCode,
-      reasonText: reasonTextFor(s.def, s.reasonCode, s.alignedSkills),
+      // [IQ4] Pass relationship strength for honest reason text
+      reasonText: reasonTextFor(s.def, s.reasonCode, s.alignedSkills, s.relationship),
       influencesSkills: s.alignedSkills,
-      programInfluenceNote: programInfluenceNoteFor(s.def, s.alignedSkills),
+      // [IQ4] Pass relationship strength for honest influence note
+      programInfluenceNote: programInfluenceNoteFor(s.def, s.alignedSkills, s.relationship),
       alreadyTested: s.alreadyTested,
       latestKnownResult,
     }

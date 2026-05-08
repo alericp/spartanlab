@@ -301,6 +301,22 @@ export const BASELINE_TESTS: BaselineTestDefinition[] = [
     priority: 'recommended',
     estimatedTimeMinutes: 2,
   },
+  // [IQ4] Direct planche calibration test
+  {
+    testName: 'planche_lean_hold',
+    displayName: 'Planche Lean Hold',
+    movementFamily: 'straight_arm_push',
+    testCategory: 'skill',
+    testUnit: 'seconds',
+    description: 'Maximum planche lean hold with protracted scapula',
+    instructions: 'Hold a planche lean position with straight arms, protracted scapula, locked elbows, and feet on floor. Lean forward until shoulders are ahead of wrists. Time until form breaks or discomfort appears.',
+    minimumValue: 5,
+    targetValue: 30,
+    excellentValue: 60,
+    skillsAffected: ['planche'],
+    priority: 'recommended',
+    estimatedTimeMinutes: 2,
+  },
   {
     testName: 'wall_handstand_hold',
     displayName: 'Wall Handstand Hold',

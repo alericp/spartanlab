@@ -81,7 +81,13 @@ export function deriveTodaySessionGuidance(
   const weekNumber = program.weekNumber ?? null
   const influence = program.evidenceCalibrationInfluence ?? null
   const shapingProof = program.evidenceCalibrationShapingProof ?? null
-  const sessionLengthMinutes = program.sessionLengthTruth?.selectedMinutes ?? null
+  
+  // Check if short-session options are available at the program level
+  // ProgramSessionLengthTruthStamp exposes programVerdict, not selectedMinutes
+  const sessionLengthVerdict = program.sessionLengthTruth?.programVerdict ?? null
+  const hasShortSessionContext = sessionLengthVerdict === 'STRUCTURALLY_REAL_ACROSS_PROGRAM' ||
+    sessionLengthVerdict === 'STRUCTURALLY_REAL_PARTIAL' ||
+    sessionLengthVerdict === 'SHORTS_PRESENT_BUT_LABEL_PARITY'
 
   // Collect source signals
   const sourceSummary: string[] = []
@@ -134,12 +140,13 @@ export function deriveTodaySessionGuidance(
       tone: 'protective',
     })
 
-    // Check if time is also compressed
-    if (sessionLengthMinutes && sessionLengthMinutes <= 30) {
-      sourceSummary.push(`sessionLength:${sessionLengthMinutes}min`)
+    // Check if short-session options are available
+    if (hasShortSessionContext) {
+      sourceSummary.push(`sessionLengthVerdict:${sessionLengthVerdict}`)
       reasons.push({
-        id: 'time-compressed',
-        label: 'Short session',
+        id: 'short-options-available',
+        label: 'Short options',
+        message: 'Shorter session formats available',
         tone: 'neutral',
       })
 
@@ -147,9 +154,9 @@ export function deriveTodaySessionGuidance(
         available: true,
         state: 'reduce_or_shorten',
         label: 'Focused session',
-        summary: 'Today is a shorter, focused session with reduced volume. Keep intensity moderate and prioritize the main skill work.',
+        summary: 'Volume is reduced and shorter session options are available. Use the shorter format if time is tight.',
         reasons: reasons.slice(0, 3),
-        nextAction: 'Focus on quality reps in the primary exercises. The session is already trimmed.',
+        nextAction: 'Choose your session length at launch. The main skill work is preserved in all formats.',
         sourceSummary,
       }
     }
@@ -211,12 +218,13 @@ export function deriveTodaySessionGuidance(
   // Priority 4: Normal/positive state
   // ---------------------------------------------------------------------------
   
-  // Time compressed session
-  if (sessionLengthMinutes && sessionLengthMinutes <= 30) {
-    sourceSummary.push(`sessionLength:${sessionLengthMinutes}min`)
+  // Short session options available
+  if (hasShortSessionContext) {
+    sourceSummary.push(`sessionLengthVerdict:${sessionLengthVerdict}`)
     reasons.push({
-      id: 'short-session',
-      label: 'Short format',
+      id: 'short-options',
+      label: 'Flexible timing',
+      message: 'Multiple session lengths available',
       tone: 'neutral',
     })
 
@@ -224,9 +232,9 @@ export function deriveTodaySessionGuidance(
       available: true,
       state: 'ready',
       label: 'Ready to train',
-      summary: 'Good to go for today\'s focused session. You have a shorter format selected — make the most of the time.',
+      summary: 'Good to go for today\'s session. Shorter formats are available if time is tight — main skill work is preserved.',
       reasons: reasons.slice(0, 3),
-      nextAction: 'Start the workout. Keep rest times efficient but don\'t rush technique.',
+      nextAction: 'Start the workout. Choose your session length when you launch.',
       sourceSummary,
     }
   }

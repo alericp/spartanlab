@@ -9,7 +9,6 @@
  * Sources:
  *   - program.evidenceCalibrationInfluence (AB12-2)
  *   - program.evidenceCalibrationShapingProof (AB13-4)
- *   - program.trainingDifferentiationCalibration (Y2)
  *   - program.weekNumber
  *
  * Contract guarantees:
@@ -92,7 +91,6 @@ export function deriveProgressionClarity(
   const weekNumber = program.weekNumber ?? null
   const influence = program.evidenceCalibrationInfluence ?? null
   const shapingProof = program.evidenceCalibrationShapingProof ?? null
-  const y2Calibration = (program as Record<string, unknown>).trainingDifferentiationCalibration as Record<string, unknown> | null
 
   // Determine evidence quality from influence
   const evidenceQuality = deriveEvidenceQuality(influence)
@@ -101,7 +99,6 @@ export function deriveProgressionClarity(
   const { status, headline, summary, reasons, nextFocus } = deriveProgressionState(
     influence,
     shapingProof,
-    y2Calibration,
     weekNumber,
     evidenceQuality
   )
@@ -139,7 +136,6 @@ function deriveEvidenceQuality(
 function deriveProgressionState(
   influence: EvidenceCalibrationGenerationInfluence | null,
   shapingProof: EvidenceCalibrationShapingProof | null,
-  y2Calibration: Record<string, unknown> | null,
   weekNumber: number | null,
   evidenceQuality: ProgressionClarity['evidenceQuality']
 ): {

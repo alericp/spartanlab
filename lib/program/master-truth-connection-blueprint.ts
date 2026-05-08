@@ -2552,9 +2552,9 @@ function step25(): BlueprintPhase {
     title: 'Intelligence, Coaching, Usability, and Performance Enhancement (Step 25)',
     purpose:
       'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Step 25.5 COMPLETE — Adaptive Session Readiness / Today Guidance. New deriveTodaySessionGuidance helper reads evidenceCalibrationInfluence (recoveryBias, volumeBias, progressionAggressiveness), sessionLengthTruth, and weekNumber. Five states: ready, controlled, protect_recovery, reduce_or_shorten, collecting_data. Compact card UI added with state badge, summary, reasons (max 3), and next action. Advisory-only — no program mutation. Next: Step 25.6 Exercise-Level Coaching Upgrade.',
+      'Step 25 (Phase W) COMPLETE — All 12 subtasks (W.W1-W.W12) are now COMPLETE. Intelligence/Coaching/Usability/Performance Enhancement is fully delivered. W.W1: Audit Lock. W.W2: Visibility Repair. W.W3: Decision Explanation. W.W4: Performance Progression. W.W5: Session Readiness. W.W6: Exercise Coaching. W.W7: RPE/Effort Usability. W.W8: Skill Representation. W.W9: Recovery/Injury/Substitution. W.W10: User Control. W.W11: Noise Reduction. W.W12: End-to-End Truth-to-UI Lock. No remaining work in this phase.',
     subtasks: [
       {
         id: 'W.W1',

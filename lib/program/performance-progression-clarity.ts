@@ -124,12 +124,13 @@ function deriveEvidenceQuality(
 ): ProgressionClarity['evidenceQuality'] {
   if (!influence) return 'insufficient'
   
+  // ProgramCalibrationPlanConfidence is 'low' | 'medium' | 'high' only
+  // Map source confidence to display confidence
   switch (influence.confidence) {
     case 'high': return 'strong'
     case 'medium': return 'moderate'
     case 'low': return 'limited'
-    case 'insufficient': return 'insufficient'
-    default: return 'insufficient'
+    default: return 'insufficient' // Fallback for null/undefined
   }
 }
 

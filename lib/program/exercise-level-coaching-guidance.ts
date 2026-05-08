@@ -60,6 +60,8 @@ export interface ExerciseCoachingInput {
   repsOrTime?: string
   /** Target RPE if available */
   targetRPE?: number
+  /** Rest seconds if available */
+  restSeconds?: number
   /** Selection reason if available */
   selectionReason?: string
   /** Coaching meta from builder if available */
@@ -87,6 +89,14 @@ export interface SessionContextForCoaching {
   isPrimarySession?: boolean
   /** Training style */
   trainingStyle?: string
+  /** Primary goal from program */
+  primaryGoal?: string
+  /** Composition metadata if available */
+  compositionMetadata?: {
+    sessionIntensity?: 'high' | 'moderate' | 'low' | 'recovery'
+    sessionRole?: string
+    volumeEmphasis?: string
+  }
 }
 
 export interface ProgramContextForCoaching {
@@ -193,11 +203,118 @@ function isHoldPrescription(repsOrTime?: string): boolean {
 }
 
 // =============================================================================
+// PRESCRIPTION-AWARE DETECTION — Step 25.6B
+// =============================================================================
+
+/** Parse rep count from repsOrTime string (e.g., "8-12" -> 10, "5" -> 5, "3x8" -> 8) */
+function parseRepCount(repsOrTime?: string): number | null {
+  if (!repsOrTime) return null
+  const lower = repsOrTime.toLowerCase()
+  // Skip time-based prescriptions
+  if (lower.includes('sec') || lower.includes('hold') || /\d+s$/.test(lower)) return null
+  // Handle ranges like "8-12" -> average
+  const rangeMatch = repsOrTime.match(/(\d+)\s*[-–]\s*(\d+)/)
+  if (rangeMatch) {
+    return Math.round((parseInt(rangeMatch[1], 10) + parseInt(rangeMatch[2], 10)) / 2)
+  }
+  // Handle "3x8" format
+  const setsRepsMatch = repsOrTime.match(/\d+\s*x\s*(\d+)/i)
+  if (setsRepsMatch) {
+    return parseInt(setsRepsMatch[1], 10)
+  }
+  // Handle plain number
+  const plainMatch = repsOrTime.match(/^(\d+)/)
+  if (plainMatch) {
+    return parseInt(plainMatch[1], 10)
+  }
+  return null
+}
+
+/** Detect if prescription is low-rep strength (1-5 reps) */
+function isLowRepStrength(repsOrTime?: string): boolean {
+  const reps = parseRepCount(repsOrTime)
+  return reps !== null && reps >= 1 && reps <= 5
+}
+
+/** Detect if prescription is moderate-rep strength (4-8 reps) */
+function isModerateRepStrength(repsOrTime?: string): boolean {
+  const reps = parseRepCount(repsOrTime)
+  return reps !== null && reps >= 4 && reps <= 8
+}
+
+/** Detect if prescription is higher-rep accessory/hypertrophy (8+ reps) */
+function isHigherRepAccessory(repsOrTime?: string): boolean {
+  const reps = parseRepCount(repsOrTime)
+  return reps !== null && reps >= 8
+}
+
+/** Detect if rest is short (under 60s) indicating density work */
+function isShortRest(restSeconds?: number): boolean {
+  return restSeconds !== undefined && restSeconds > 0 && restSeconds < 60
+}
+
+/** Detect if rest is moderate (60-120s) */
+function isModerateRest(restSeconds?: number): boolean {
+  return restSeconds !== undefined && restSeconds >= 60 && restSeconds <= 120
+}
+
+/** Detect if rest is long (over 120s) indicating strength focus */
+function isLongRest(restSeconds?: number): boolean {
+  return restSeconds !== undefined && restSeconds > 120
+}
+
+/** Detect if RPE indicates high effort (8+) */
+function isHighEffortRPE(targetRPE?: number): boolean {
+  return targetRPE !== undefined && targetRPE >= 8
+}
+
+/** Detect if RPE indicates moderate effort (6-7) */
+function isModerateEffortRPE(targetRPE?: number): boolean {
+  return targetRPE !== undefined && targetRPE >= 6 && targetRPE < 8
+}
+
+/** Build prescription-aware tags from real fields */
+function buildPrescriptionTags(
+  repsOrTime?: string,
+  targetRPE?: number,
+  restSeconds?: number,
+  sets?: number
+): string[] {
+  const tags: string[] = []
+  
+  // Rep-based tags
+  if (isLowRepStrength(repsOrTime)) {
+    tags.push('Low reps')
+  } else if (isHigherRepAccessory(repsOrTime) && !isModerateRepStrength(repsOrTime)) {
+    tags.push('Volume work')
+  }
+  
+  // RPE-based tags
+  if (isHighEffortRPE(targetRPE)) {
+    tags.push('Hard effort')
+  } else if (isModerateEffortRPE(targetRPE)) {
+    tags.push('Controlled effort')
+  }
+  
+  // Rest-based tags
+  if (isShortRest(restSeconds)) {
+    tags.push('Quick turnover')
+  } else if (isLongRest(restSeconds)) {
+    tags.push('Full recovery')
+  }
+  
+  // Keep tags concise
+  return tags.slice(0, 2)
+}
+
+// =============================================================================
 // MAIN GUIDANCE DERIVATION (PURE, DETERMINISTIC)
 // =============================================================================
 
 /**
  * Derive exercise-level coaching guidance from real exercise/session/program truth.
+ * 
+ * Step 25.6B: Now prescription-aware — uses sets, reps, rest, RPE to sharpen cues.
  * 
  * @param exercise - The exercise input with available fields
  * @param sessionContext - Optional session context
@@ -209,19 +326,35 @@ export function deriveExerciseLevelCoachingGuidance(
   sessionContext?: SessionContextForCoaching,
   programContext?: ProgramContextForCoaching
 ): ExerciseCoachingGuidance {
-  const { name, category, repsOrTime, targetRPE, method, selectionReason, coachingMeta } = exercise
+  const { name, category, repsOrTime, targetRPE, restSeconds, sets, method, selectionReason } = exercise
   
   // If we have prescriptionContext from the card contract, use it as the summary base
   // This is already truth-derived by buildExerciseCardContract
   const existingContext = exercise.prescriptionContext
   const existingIntent = exercise.intentLabel
   
+  // [STEP 25.6B] Build prescription-aware tags from real fields
+  const prescriptionTags = buildPrescriptionTags(repsOrTime, targetRPE, restSeconds, sets)
+  
+  // [STEP 25.6B] Derive session intensity context if available
+  const sessionIntensity = sessionContext?.compositionMetadata?.sessionIntensity
+  const isRecoverySession = sessionIntensity === 'recovery' || sessionIntensity === 'low'
+  const isHighIntensitySession = sessionIntensity === 'high'
+  
   // PRIORITY 1: Skill / isometric / hold exercise
   if (isSkillOrIsometricExercise(name) || (isHoldPrescription(repsOrTime) && category === 'skill')) {
+    // [STEP 25.6B] Prescription-aware skill cue
+    const hasMultipleSets = sets !== undefined && sets > 1
+    const summary = existingContext || (hasMultipleSets
+      ? 'Keep each hold clean and repeatable across sets. End before position quality breaks.'
+      : 'Prioritize clean positions over longer holds. Stop when shape breaks.')
+    
     return {
       label: 'Skill focus',
-      summary: existingContext || 'Prioritize clean positions over longer holds. Stop when shape breaks.',
-      focusTags: ['Shape quality', 'Controlled effort'],
+      summary,
+      focusTags: prescriptionTags.length > 0 
+        ? ['Shape quality', ...prescriptionTags].slice(0, 3)
+        : ['Shape quality', 'Controlled effort'],
       caution: targetRPE && targetRPE >= 9 ? 'High RPE — maintain form standards' : null,
       source: existingContext ? 'specific' : 'derived',
     }
@@ -240,67 +373,128 @@ export function deriveExerciseLevelCoachingGuidance(
   
   // PRIORITY 3: Core / trunk
   if (isCoreExercise(name, category)) {
+    // [STEP 25.6B] Prescription-aware core cue
+    const isHighRep = isHigherRepAccessory(repsOrTime)
+    const summary = existingContext || (isHighRep
+      ? 'Control each rep through the full range. Stop the set before compensation takes over.'
+      : 'Keep pelvis and ribs controlled. Stop before compensation takes over.')
+    
     return {
       label: 'Core stability',
-      summary: existingContext || 'Keep pelvis and ribs controlled. Stop before compensation takes over.',
-      focusTags: ['Trunk control', 'Quality reps'],
+      summary,
+      focusTags: prescriptionTags.length > 0
+        ? ['Trunk control', ...prescriptionTags].slice(0, 3)
+        : ['Trunk control', 'Quality reps'],
       caution: null,
       source: existingContext ? 'specific' : 'derived',
     }
   }
   
-  // PRIORITY 4: Conditioning / density
-  if (isConditioningExercise(name, method, selectionReason)) {
+  // PRIORITY 4: Short rest / density prescription (before strength/accessory checks)
+  if (isShortRest(restSeconds) || isConditioningExercise(name, method, selectionReason)) {
+    // [STEP 25.6B] Prescription-aware density cue
+    const summary = existingContext || 'Pace the early sets so quality survives the shorter rest window.'
+    
     return {
       label: 'Work capacity',
-      summary: existingContext || 'Keep effort sustainable. Pace early work so quality survives.',
-      focusTags: ['Pacing', 'Sustained effort'],
-      caution: null,
+      summary,
+      focusTags: ['Pacing', 'Quick turnover'],
+      caution: isHighEffortRPE(targetRPE) ? 'High effort with short rest — pace carefully' : null,
       source: existingContext ? 'specific' : 'derived',
     }
   }
   
-  // PRIORITY 5: Strength / compound
-  if (isStrengthCompoundExercise(name, category)) {
-    const isHighRPE = targetRPE && targetRPE >= 8
+  // PRIORITY 5: Low-rep strength (1-5 reps)
+  if (isLowRepStrength(repsOrTime) && isStrengthCompoundExercise(name, category)) {
+    // [STEP 25.6B] Prescription-aware low-rep strength cue
+    const hasLongRest = isLongRest(restSeconds)
+    const summary = existingContext || (hasLongRest
+      ? 'Use the rest fully so each set stays powerful and technically clean.'
+      : 'Treat these as quality strength sets. Keep reps powerful and stop before grinding.')
+    
+    return {
+      label: 'Strength work',
+      summary,
+      focusTags: prescriptionTags.length > 0
+        ? ['Max strength', ...prescriptionTags].slice(0, 3)
+        : ['Max strength', 'Full recovery'],
+      caution: isHighEffortRPE(targetRPE) ? 'Leave technique quality in reserve' : null,
+      source: existingContext ? 'specific' : 'derived',
+    }
+  }
+  
+  // PRIORITY 6: Moderate-rep strength (4-8 reps)
+  if (isModerateRepStrength(repsOrTime) && isStrengthCompoundExercise(name, category)) {
+    // [STEP 25.6B] Prescription-aware moderate-rep cue
+    const isHighRPE = isHighEffortRPE(targetRPE)
+    const summary = existingContext || (isHighRPE
+      ? 'Hard set — maintain form through demanding reps.'
+      : 'Keep every rep consistent. The goal is repeatable strength, not chasing extra sloppy reps.')
+    
     return {
       label: isHighRPE ? 'Strength work' : 'Strength building',
-      summary: existingContext || (isHighRPE 
-        ? 'Hard set — maintain form through demanding reps.'
-        : 'Keep working sets controlled and repeatable.'),
-      focusTags: isHighRPE ? ['Max effort', 'Form integrity'] : ['Controlled strength', 'Repeatable sets'],
+      summary,
+      focusTags: prescriptionTags.length > 0
+        ? ['Repeatable sets', ...prescriptionTags].slice(0, 3)
+        : ['Controlled strength', 'Repeatable sets'],
       caution: isHighRPE ? 'Leave technique quality in reserve' : null,
       source: existingContext ? 'specific' : 'derived',
     }
   }
   
-  // PRIORITY 6: Accessory / hypertrophy
-  if (isAccessoryExercise(name, category)) {
+  // PRIORITY 7: General strength / compound (fallback for strength without clear rep range)
+  if (isStrengthCompoundExercise(name, category)) {
+    const isHighRPE = isHighEffortRPE(targetRPE)
     return {
-      label: 'Support work',
-      summary: existingContext || 'Chase control and target-muscle tension, not max load.',
-      focusTags: ['Muscle tension', 'Strict form'],
-      caution: 'Do not let accessory fatigue damage main skill work',
+      label: isHighRPE ? 'Strength work' : 'Strength building',
+      summary: existingContext || (isHighRPE 
+        ? 'Hard set — maintain form through demanding reps.'
+        : 'Keep working sets controlled and repeatable.'),
+      focusTags: prescriptionTags.length > 0
+        ? [...prescriptionTags, 'Form integrity'].slice(0, 3)
+        : (isHighRPE ? ['Max effort', 'Form integrity'] : ['Controlled strength', 'Repeatable sets']),
+      caution: isHighRPE ? 'Leave technique quality in reserve' : null,
       source: existingContext ? 'specific' : 'derived',
     }
   }
   
-  // PRIORITY 7: Use existing prescriptionContext if available
+  // PRIORITY 8: Higher-rep accessory / hypertrophy (8+ reps)
+  if (isHigherRepAccessory(repsOrTime) || isAccessoryExercise(name, category)) {
+    // [STEP 25.6B] Prescription-aware accessory cue
+    const summary = existingContext || 'Use controlled tension here. Build useful volume without draining your main skill work.'
+    
+    return {
+      label: 'Support work',
+      summary,
+      focusTags: prescriptionTags.length > 0
+        ? ['Muscle tension', ...prescriptionTags].slice(0, 3)
+        : ['Muscle tension', 'Strict form'],
+      caution: isHighIntensitySession ? null : 'Do not let accessory fatigue damage main skill work',
+      source: existingContext ? 'specific' : 'derived',
+    }
+  }
+  
+  // PRIORITY 9: Use existing prescriptionContext if available
   if (existingContext) {
     return {
       label: existingIntent || 'Training focus',
       summary: existingContext,
-      focusTags: ['Form quality', 'Consistent execution'],
+      focusTags: prescriptionTags.length > 0
+        ? [...prescriptionTags, 'Form quality'].slice(0, 3)
+        : ['Form quality', 'Consistent execution'],
       caution: null,
       source: 'specific',
     }
   }
   
   // FALLBACK: Basic guidance from available data
+  // [STEP 25.6B] Even fallback uses prescription tags when available
   return {
     label: 'Technique focus',
-    summary: 'Use clean reps and follow the listed prescription.',
-    focusTags: ['Form consistency'],
+    summary: 'Follow the listed prescription and keep technique consistent across sets.',
+    focusTags: prescriptionTags.length > 0
+      ? [...prescriptionTags, 'Form consistency'].slice(0, 3)
+      : ['Form consistency'],
     caution: null,
     source: 'basic',
   }
@@ -313,6 +507,8 @@ export function deriveExerciseLevelCoachingGuidance(
 /**
  * Build coaching guidance using existing card contract fields.
  * This is the preferred entry point when the card contract is already built.
+ * 
+ * Step 25.6B: Now accepts sets, restSeconds, and sessionContext for prescription-aware cues.
  */
 export function buildCoachingGuidanceFromCardContract(
   exerciseName: string,
@@ -323,11 +519,14 @@ export function buildCoachingGuidanceFromCardContract(
     intentLabel: string
   },
   extraFields?: {
+    sets?: number
     repsOrTime?: string
     targetRPE?: number
+    restSeconds?: number
     method?: string
     selectionReason?: string
-  }
+  },
+  sessionContext?: SessionContextForCoaching
 ): ExerciseCoachingGuidance {
   return deriveExerciseLevelCoachingGuidance({
     name: exerciseName,
@@ -336,5 +535,5 @@ export function buildCoachingGuidanceFromCardContract(
     prescriptionIntent: cardContract.prescriptionIntent,
     intentLabel: cardContract.intentLabel,
     ...extraFields,
-  })
+  }, sessionContext)
 }

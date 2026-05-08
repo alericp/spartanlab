@@ -2640,7 +2640,7 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W6',
         title: 'Exercise-Level Coaching Upgrade',
-        status: 'PARTIAL',
+        status: 'COMPLETE',
         evidence: [
           '[STEP 25.6A] New helper lib/program/exercise-level-coaching-guidance.ts created',
           '[STEP 25.6A] deriveExerciseLevelCoachingGuidance() derives from card contract truth (prescriptionContext, prescriptionIntent, intentLabel)',
@@ -2651,12 +2651,16 @@ function step25(): BlueprintPhase {
           '[STEP 25.6A] Compact UI with teal label, muted summary text, small border-chip tags, optional amber caution',
           '[STEP 25.6A] Source indicator shows "doctrine" for specific, "pattern" for derived',
           '[STEP 25.6A] Advisory-only — no mutation, no storage writes, no generator changes',
+          '[STEP 25.6B] Prescription-aware cues: parseRepCount(), isLowRepStrength(), isModerateRepStrength(), isHigherRepAccessory()',
+          '[STEP 25.6B] Rest-aware cues: isShortRest(), isModerateRest(), isLongRest() for density vs strength detection',
+          '[STEP 25.6B] RPE-aware cues: isHighEffortRPE(), isModerateEffortRPE() for effort-specific guidance',
+          '[STEP 25.6B] Session context: accepts compositionMetadata with sessionIntensity for session-aware cues',
+          '[STEP 25.6B] Dynamic tags: buildPrescriptionTags() generates "Low reps", "Hard effort", "Quick turnover", "Full recovery"',
+          '[STEP 25.6B] Cues now reflect actual prescription: "Keep each hold clean and repeatable across sets" for multi-set holds',
+          '[STEP 25.6B] Cues now reflect rest periods: "Use the rest fully so each set stays powerful" for long rest',
+          '[STEP 25.6B] Cues now reflect density work: "Pace the early sets so quality survives the shorter rest window"',
         ],
-        remainingWork: [
-          'Show skill carryover attribution when qualityAudit.skillCarryover present',
-          'Show method expression context when rowMethodTruth.family is non-straight',
-          'Potentially expand pattern detection coverage',
-        ],
+        remainingWork: [],
       },
       {
         id: 'W.W7',

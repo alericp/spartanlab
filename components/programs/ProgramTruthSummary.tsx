@@ -742,7 +742,35 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
             </p>
           )}
 
-          {underexpressedSkills.length > 0 && (
+          {/* [PEX-2] Replace vague under-expression warning with informative coverage breakdown */}
+          {underexpressedSkills.length > 0 && priorityOrder.length > 0 && (
+            <div className="text-xs text-[#A4ACB8] flex items-start gap-1.5">
+              <span>
+                {(() => {
+                  // Count skills by role from priorityOrder
+                  const directCount = priorityOrder.filter(s => s.role === 'primary' || s.role === 'secondary').length
+                  const technicalCount = priorityOrder.filter(s => s.role === 'tertiary').length
+                  const supportOnlyCount = priorityOrder.filter(s => s.role === 'support').length
+                  const deferredOnlyCount = priorityOrder.filter(s => s.role === 'deferred').length
+                  
+                  // Build informative message
+                  const parts: string[] = []
+                  if (directCount > 0) parts.push(`${directCount} direct`)
+                  if (technicalCount > 0) parts.push(`${technicalCount} technical`)
+                  if (supportOnlyCount > 0) parts.push(`${supportOnlyCount} support`)
+                  if (deferredOnlyCount > 0) parts.push(`${deferredOnlyCount} rotating later`)
+                  
+                  return parts.length > 0
+                    ? `Skill coverage this cycle: ${parts.join(', ')}.`
+                    : `${underexpressedSkills.length} skills have limited direct work this cycle.`
+                })()}
+                {' '}
+                <span className="text-[#6A6A6A]">See details for per-skill breakdown.</span>
+              </span>
+            </div>
+          )}
+          {/* Fallback if no priorityOrder but underexpressedSkills exists */}
+          {underexpressedSkills.length > 0 && priorityOrder.length === 0 && (
             <div className="text-xs text-amber-400/90 flex items-start gap-1.5">
               <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
               <span>

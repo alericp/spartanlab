@@ -7,8 +7,8 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| PEX-1 | Program Experience Truth Surface Foundation | IN_PROGRESS |
-| PEX-2 | Selected Skill Coverage + Rotation Truth | NOT_STARTED |
+| PEX-1 | Program Experience Truth Surface Foundation | COMPLETE |
+| PEX-2 | Selected Skill Coverage + Rotation Truth | IN_PROGRESS |
 | PEX-3 | Method Materialization Truth | NOT_STARTED |
 | PEX-4 | Session Card Clutter Compression | NOT_STARTED |
 | PEX-5 | True Short-Session Runtime Options | NOT_STARTED |
@@ -18,7 +18,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 
 ## PEX-1 — Program Experience Truth Surface Foundation
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETE
 
 **Purpose:** Establish calibration baseline truth + data-driven influence chain + professional program explanation surfaces.
 
@@ -77,7 +77,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 
 ## PEX-2 — Selected Skill Coverage + Rotation Truth
 
-**Status:** NOT_STARTED
+**Status:** IN_PROGRESS
 
 **Purpose:** Ensure selected skills are actually represented, rotated, deferred, or support-only with truthful reasons.
 
@@ -86,6 +86,50 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 - Ensure selected skills are actually represented in executable sessions
 - Ensure weeks/cycles are not visually identical if rotation/progression is expected
 - Clear deferred/rotational skill explanations
+
+### Audit Findings
+
+The builder already has a comprehensive skill expression tracking system:
+
+1. **AuthoritativeMultiSkillIntentContract** — tracks:
+   - `selectedSkills`, `primarySkill`, `secondarySkill`, `supportSkills`, `deferredSkills`
+   - `materiallyExpressedSkills`, `reducedThisCycleSkills`
+   - `skillPriorityOrder` with role (primary/secondary/tertiary/support/deferred) and reason
+   - `coverageVerdict`: strong | adequate | weak
+
+2. **AuthoritativeVisibleWeekSkillExpressionContract** — tracks:
+   - `skillExpressionPlan` with `expressionMode` (direct_block, technical_slot, support_block, etc.)
+   - `expressionReason` for each skill
+   - Limitation flags: `isProgressionLimited`, `isRecoveryLimited`, `isScheduleLimited`, etc.
+
+3. **SkillExpressionPlan** — per-skill detailed breakdown:
+   - `targetSessions` vs `actualSessionsPlanned`
+   - `expressionMode`: direct_block | technical_slot | support_block | mixed_day_presence | carryover_only | deferred
+
+### What Changed
+
+1. **Vague Warning Replaced** — ProgramTruthSummary.tsx
+   - Before: "X skills have limited direct work this cycle." (amber warning, no breakdown)
+   - After: "Skill coverage this cycle: 2 direct, 1 technical, 2 support, 3 rotating later. See details for per-skill breakdown."
+   - Uses `skillPriorityOrder` to count skills by role (primary/secondary = direct, tertiary = technical, support, deferred)
+   - Points user to expanded "Skill Roles This Cycle" section for full details
+
+2. **Existing Expanded Section Preserved** — The "Skill Roles This Cycle" section already shows:
+   - Per-skill role badge (primary/secondary/tertiary/support/deferred)
+   - Deferred skills with reason labels
+   - Session count per skill
+
+### Files Changed
+- `components/programs/ProgramTruthSummary.tsx` — Improved under-expression warning to show role breakdown
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md` — Updated status and documentation
+
+### Acceptance Criteria
+- [x] Every selected skill appears in the authoritative contract with a status
+- [x] Contract is saved on finalProgram (already implemented)
+- [x] UI consumes the authoritative contract (skillPriorityOrder)
+- [x] Vague under-expression warning replaced with informative breakdown
+- [ ] TypeScript passes
+- [ ] Build passes
 
 ---
 

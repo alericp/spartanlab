@@ -11,7 +11,9 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | PEX-2 | Selected Skill Coverage + Rotation Truth | COMPLETE |
 | PEX-3 | Method Materialization Truth | COMPLETE |
 | PEX-4 | Session Card Clutter Compression | COMPLETE |
-| PEX-5 | True Short-Session Runtime Options | NOT_STARTED |
+| PEX-5A | Duration Source-of-Truth Expansion (20/15/10) | COMPLETE |
+| PEX-5B | Intelligent Short-Session Recomposition Quality | NOT_STARTED |
+| PEX-5C | Short-Session UX / Tradeoff Explanation Polish | NOT_STARTED |
 | PEX-6 | End-to-End Runtime Proof | NOT_STARTED |
 
 ---
@@ -258,17 +260,111 @@ The builder already has comprehensive method materialization infrastructure:
 
 ---
 
-## PEX-5 — True Short-Session Runtime Options
+## PEX-5A — Duration Source-of-Truth Expansion (20/15/10)
+
+**Status:** COMPLETE
+
+**Purpose:** Expand the authoritative duration system so 20/15/10 minute sessions are first-class, type-safe, launchable, and traceable.
+
+### Scope
+- Extend `WorkoutExecutionMode` union to include `'10_min' | '15_min' | '20_min'`
+- Add canonical `resolveExecutionModeFromMinutes()` resolver
+- Update variant generation to produce 20/15/10 variants with proper compression
+- Update session contract, fingerprint, and snapshot types
+- Update AdaptiveSessionCard to render new duration buttons
+- Update live workout route to accept new modes
+- Ensure non-launchable variants do not render buttons
+
+### What Changed
+
+1. **WorkoutExecutionMode Extended** — `lib/workout/live-workout-authority-contract.ts`
+   - Type now: `'10_min' | '15_min' | '20_min' | '30_min' | '45_min' | 'full'`
+   - Added `EXECUTION_MODE_LABELS` and `EXECUTION_MODE_TARGET_MINUTES` for all modes
+   - Added canonical `resolveExecutionModeFromMinutes()` helper
+
+2. **Compression Levels Extended** — `lib/session-compression-engine.ts`
+   - Added `'very_heavy'` (15 min) and `'extreme'` (10 min) compression levels
+   - Updated `compressMain`, `compressWarmup`, `compressCooldown` for new levels
+   - 20 min: ~40% of full, 2 sets max on spine
+   - 15 min: ~25-30% of full, 1-2 exercises, minimal warmup
+   - 10 min: ~20% of full, 1-2 exercises maximum, no cooldown
+
+3. **Variant Generation Extended** — `lib/session-compression-engine.ts`
+   - `generateSessionVariants()` now emits 20/15/10 variants when Full is long enough
+   - Each variant passes launchability and material distinctness checks
+   - Variants are ordered: Full, 45, 30, 20, 15, 10
+
+4. **Session Contracts Updated** — `lib/workout/selected-variant-session-contract.ts`
+   - `SessionFingerprint.mode` now accepts all 6 modes
+   - `SelectedBodySnapshot.executionMode` extended
+   - `BuildFingerprintInput.mode` extended
+   - `modeFromMinutes()` delegates to canonical resolver
+
+5. **Session Length Truth Updated** — `lib/program/session-length-truth-contract.ts`
+   - `SessionLengthVariantTruth.mode` now accepts all 6 modes
+   - `modeFor()` helper delegates to canonical resolver
+
+6. **AdaptiveSessionCard Updated** — `components/programs/AdaptiveSessionCard.tsx`
+   - Imports canonical mode resolver
+   - `selectedSessionContract.selectedExecutionMode` uses canonical resolver
+   - Buttons dynamically render from `session.variants` (supports 20/15/10)
+
+7. **Live Workout Route Updated** — `app/(app)/workout/session/page.tsx`
+   - Mode param accepts `'10_min' | '15_min' | '20_min' | '30_min' | '45_min' | 'full'`
+   - Duration derivation uses mode-to-minutes map for all modes
+
+### Files Changed
+- `lib/workout/live-workout-authority-contract.ts` — Extended WorkoutExecutionMode, added resolver
+- `lib/session-compression-engine.ts` — Extended CompressionLevel, updated variant generation
+- `lib/workout/selected-variant-session-contract.ts` — Updated all mode types to use canonical resolver
+- `lib/program/session-length-truth-contract.ts` — Updated mode type for session length truth
+- `lib/workout/live-workout-normalizers.ts` — Updated target minutes map for normalizers
+- `components/programs/AdaptiveSessionCard.tsx` — Imported canonical resolver
+- `components/workout/StreamlinedWorkoutSession.tsx` — Updated executionMode type references
+- `app/(app)/workout/session/page.tsx` — Updated mode param handling
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md`
+
+### Acceptance Criteria
+- [x] Duration contract supports Full / 45 / 30 / 20 / 15 / 10
+- [x] Program card can render 20 / 15 / 10 buttons when launchable variants exist
+- [x] Buttons are generated from real variants, not hardcoded fake UI
+- [x] Start Workout URL includes the correct execution mode and variant index
+- [x] Live workout route accepts 20 / 15 / 10
+- [x] Live workout does not coerce 20/15/10 into 30_min
+- [x] Selected variant fingerprint supports 20/15/10
+- [x] Non-launchable short variants do not render as fake buttons
+- [x] PEX-1 calibration untouched
+- [x] PEX-2 skill coverage untouched
+- [x] PEX-3 method truth untouched
+- [x] PEX-4 clutter compression preserved
+- [x] TypeScript passes (exit code 0)
+- [x] Build compiles successfully (pre-existing Stripe issue unrelated)
+
+---
+
+## PEX-5B — Intelligent Short-Session Recomposition Quality
 
 **Status:** NOT_STARTED
 
-**Purpose:** Add real 20/15/10 minute session options that connect to the workout runtime.
+**Purpose:** Improve the coaching intelligence of 20/15/10 minute session recomposition.
 
 ### Scope
-- Add 20 / 15 / 10 minute options
-- Not cosmetic buttons
-- Must connect to session variant truth, launch URL, workout route, exercise pruning, and live execution
-- Preserve main skill work where possible
+- What gets preserved, compressed, deferred, converted to density, or omitted
+- Priority hierarchy enforcement for very short sessions
+- Session identity preservation under extreme compression
+
+---
+
+## PEX-5C — Short-Session UX / Tradeoff Explanation Polish
+
+**Status:** NOT_STARTED
+
+**Purpose:** Surface honest tradeoff explanations for short sessions.
+
+### Scope
+- Short-session tradeoff explanation UI
+- "What was preserved / removed" surface
+- Readiness-aware recommendations
 
 ---
 

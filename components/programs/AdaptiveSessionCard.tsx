@@ -38,6 +38,12 @@ import {
   // [AB18] Session coaching handoff type for live workout parity
   type AB18SessionCoachingHandoff,
 } from '@/lib/workout/selected-variant-session-contract'
+// [PEX-5A] Canonical execution mode resolver and types
+import {
+  type WorkoutExecutionMode,
+  resolveExecutionModeFromMinutes,
+  EXECUTION_MODE_LABELS,
+} from '@/lib/workout/live-workout-authority-contract'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
@@ -746,11 +752,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     const variantLabel = variantObj?.label ?? 'Full Session'
     const estimatedMinutes =
       typeof variantObj?.duration === 'number' ? variantObj.duration : session.estimatedMinutes
-    let executionMode: '30_min' | '45_min' | 'full' = 'full'
-    if (typeof estimatedMinutes === 'number') {
-      if (estimatedMinutes <= 35) executionMode = '30_min'
-      else if (estimatedMinutes <= 50) executionMode = '45_min'
-    }
+    // [PEX-5A] Use canonical execution mode resolver for 10/15/20/30/45/full
+    const executionMode: WorkoutExecutionMode = resolveExecutionModeFromMinutes(
+      typeof estimatedMinutes === 'number' ? estimatedMinutes : null
+    )
     const weekParam =
       typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
         ? `&week=${currentWeekNumber}`

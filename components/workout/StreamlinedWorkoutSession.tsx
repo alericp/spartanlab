@@ -261,6 +261,8 @@ import {
   classifyAdaptationHorizons,
   checkRecommendationTrigger,
   type RuntimeRecommendation,
+  // [PEX-5A] Import canonical execution mode type for 10/15/20/30/45/full
+  type WorkoutExecutionMode,
 } from '@/lib/workout/live-workout-authority-contract'
   // [LIVE-WORKOUT-ACTION-PLANNER] Import coaching expression builder
   import { buildCoachingExpression } from '@/lib/workout/live-workout-action-planner'
@@ -1284,7 +1286,7 @@ export interface ResumeSessionIdentity {
   sessionId: string                         // 'session-{dayLabel}-{dayNumber}'
   dayLabel: string                          // e.g. 'Day 6'
   dayNumber: number                         // e.g. 6
-  executionMode: '30_min' | '45_min' | 'full'
+  executionMode: WorkoutExecutionMode
   variantIndex: number                      // 0 = Full Session
   weekOverride: number | null               // selected week from URL
   schemaVersion: string
@@ -1505,7 +1507,7 @@ function generateSessionStructureSignature(session: {
 interface SaveSessionIdentity {
   dayLabel: string
   dayNumber: number
-  executionMode: '30_min' | '45_min' | 'full'
+  executionMode: WorkoutExecutionMode
   variantIndex: number
   weekOverride: number | null
 }
@@ -1801,7 +1803,7 @@ export interface ResumableSessionSummary {
   sessionId: string
   dayLabel: string
   dayNumber: number
-  executionMode: '30_min' | '45_min' | 'full'
+  executionMode: WorkoutExecutionMode
   variantIndex: number
   weekOverride: number | null
   status: 'active' | 'resting' | 'completed' | string
@@ -1852,7 +1854,7 @@ export function getResumableSessionSummary(): ResumableSessionSummary | null {
     const executionMode = data.executionMode === '30_min'
       || data.executionMode === '45_min'
       || data.executionMode === 'full'
-        ? data.executionMode as '30_min' | '45_min' | 'full'
+        ? data.executionMode as WorkoutExecutionMode
         : null
     const variantIndex = typeof data.variantIndex === 'number'
       ? data.variantIndex
@@ -2051,7 +2053,7 @@ interface StreamlinedWorkoutSessionProps {
   isDemo?: boolean
   isFirstSession?: boolean
   // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at workout start
-  executionMode?: '30_min' | '45_min' | 'full'
+  executionMode?: WorkoutExecutionMode
   variantIndex?: number
   // [PHASE-J / RESUME-IDENTITY] Selected week override forwarded from the URL
   // (?week=N). Persisted alongside the live runtime snapshot so the dashboard

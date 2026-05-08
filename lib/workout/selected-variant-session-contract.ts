@@ -52,6 +52,12 @@
 
 import type { AdaptiveSession } from '@/lib/adaptive-program-builder'
 import type { SessionVariant } from '@/lib/session-compression-engine'
+import {
+  type WorkoutExecutionMode,
+  resolveExecutionModeFromMinutes,
+  EXECUTION_MODE_LABELS,
+  EXECUTION_MODE_TARGET_MINUTES,
+} from '@/lib/workout/live-workout-authority-contract'
 
 // ============================================================================
 // TYPES
@@ -62,7 +68,7 @@ export interface SelectedVariantMainResult {
   exercises: AdaptiveSession['exercises']
   /** Declared duration of the selected variant, or full session duration. */
   estimatedMinutes: number
-  /** Human label ("Full Session" / "45 Min" / "30 Min"). */
+  /** [PEX-5A] Human label - now supports 10/15/20/30/45/Full. */
   variantLabel: string
   /** Canonical 0-based variant index. */
   variantIndex: number
@@ -82,8 +88,8 @@ export interface SelectedVariantMainResult {
 }
 
 export interface SessionFingerprint {
-  /** 'full' | '45_min' | '30_min' - derived from estimatedMinutes band. */
-  mode: 'full' | '45_min' | '30_min'
+  /** [PEX-5A] Execution mode - now supports 10/15/20/30/45/full. */
+  mode: WorkoutExecutionMode
   variantIndex: number
   exerciseCount: number
   firstId: string | null
@@ -122,11 +128,12 @@ function normKey(s: string | undefined | null): string {
     .replace(/^_+|_+$/g, '')
 }
 
-function modeFromMinutes(min: number | null | undefined): 'full' | '45_min' | '30_min' {
-  if (typeof min !== 'number') return 'full'
-  if (min <= 35) return '30_min'
-  if (min <= 50) return '45_min'
-  return 'full'
+/**
+ * [PEX-5A] Delegate to the canonical resolver in live-workout-authority-contract.
+ * Supports 10/15/20/30/45/full execution modes.
+ */
+function modeFromMinutes(min: number | null | undefined): WorkoutExecutionMode {
+  return resolveExecutionModeFromMinutes(min)
 }
 
 /**
@@ -148,8 +155,8 @@ function modeFromMinutes(min: number | null | undefined): 'full' | '45_min' | '3
 export function buildSelectedVariantMain(
   session: AdaptiveSession,
   variantIndex: number,
-  /** Optional URL executionMode hint used only when no variant duration is declared. */
-  executionModeHint?: 'full' | '45_min' | '30_min' | null
+  /** [PEX-5A] Optional URL executionMode hint - now supports 10/15/20/30/45/full */
+  executionModeHint?: WorkoutExecutionMode | null
 ): SelectedVariantMainResult {
   // Full session path
   if (!variantIndex || variantIndex <= 0) {
@@ -167,29 +174,33 @@ export function buildSelectedVariantMain(
 
   // Variants array entirely unusable (missing, too short, stale program state)
   if (!variant) {
-    const modeMinutes =
-      executionModeHint === '45_min' ? 45 : executionModeHint === '30_min' ? 30 : null
+    // [PEX-5A] Derive minutes from execution mode hint using canonical target values
+    const modeMinutes = executionModeHint && executionModeHint !== 'full'
+      ? EXECUTION_MODE_TARGET_MINUTES[executionModeHint]
+      : null
+    const labelFromHint = executionModeHint ? EXECUTION_MODE_LABELS[executionModeHint] : 'Full Session'
     return {
       exercises: session.exercises ?? [],
       estimatedMinutes:
         modeMinutes ?? (typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 60),
-      variantLabel: executionModeHint === '45_min' ? '45 Min' : executionModeHint === '30_min' ? '30 Min' : 'Full Session',
+      variantLabel: labelFromHint,
       variantIndex,
       resolvedFrom: 'variant_missing',
     }
   }
 
+  // [PEX-5A] Derive variant duration from explicit value or execution mode hint
   const variantDuration =
     typeof variant.duration === 'number' && variant.duration > 0
       ? variant.duration
-      : executionModeHint === '45_min'
-        ? 45
-        : executionModeHint === '30_min'
-          ? 30
-          : typeof session.estimatedMinutes === 'number'
-            ? session.estimatedMinutes
-            : 60
-  const variantLabel = variant.label || (variantDuration <= 35 ? '30 Min' : variantDuration <= 50 ? '45 Min' : 'Full Session')
+      : executionModeHint && executionModeHint !== 'full'
+        ? (EXECUTION_MODE_TARGET_MINUTES[executionModeHint] ?? 60)
+        : typeof session.estimatedMinutes === 'number'
+          ? session.estimatedMinutes
+          : 60
+  // [PEX-5A] Use canonical label resolver instead of hardcoded 30/45/full bands
+  const derivedMode = resolveExecutionModeFromMinutes(variantDuration)
+  const variantLabel = variant.label || EXECUTION_MODE_LABELS[derivedMode]
 
   // Variant exists but selection.main is unusable (hollow)
   if (!variant.selection?.main || !Array.isArray(variant.selection.main) || variant.selection.main.length === 0) {
@@ -322,8 +333,8 @@ export function buildSelectedVariantMain(
 
 export interface BuildFingerprintInput {
   variantIndex: number
-  /** Authoritative mode; if omitted, derived from estimatedMinutes. */
-  mode?: 'full' | '45_min' | '30_min' | null
+  /** [PEX-5A] Authoritative mode; if omitted, derived from estimatedMinutes. Supports 10/15/20/30/45/full. */
+  mode?: WorkoutExecutionMode | null
   exercises: { id?: string | null; name?: string | null; sets?: number | null }[]
   estimatedMinutes?: number | null
 }
@@ -425,7 +436,8 @@ export function compareFingerprints(
  *                      already reflects the card's authoritative display.
  */
 export interface SelectedBodySnapshot {
-  executionMode: 'full' | '45_min' | '30_min'
+  /** [PEX-5A] Execution mode - now supports 10/15/20/30/45/full */
+  executionMode: WorkoutExecutionMode
   weekNumber: number | null
   variantIndex: number
   variantLabel: string
@@ -898,7 +910,8 @@ export interface AB10LaunchProof {
   version: typeof AB10_RUNTIME_PARITY_VERSION
   dayNumber: number | string
   variantIndex: number
-  executionMode: 'full' | '45_min' | '30_min'
+  /** [PEX-5A] Execution mode - now supports 10/15/20/30/45/full */
+  executionMode: WorkoutExecutionMode
   weekNumber: number | null
   selectedBodyExerciseCount: number
   selectedBodyExerciseIds: string[]

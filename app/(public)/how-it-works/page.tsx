@@ -13,6 +13,7 @@ import {
   Timer,
   ArrowRight,
   Zap,
+  MessageCircle,
 } from 'lucide-react'
 
 export const metadata: Metadata = {
@@ -98,6 +99,15 @@ const INTELLIGENT_FEATURES = [
     explanation: 'SpartanLab monitors performance trends, effort ratings, and completion patterns to detect accumulating fatigue. When the system identifies strain, it triggers adaptive volume adjustments or recovery-focused sessions before burnout occurs.',
     benefit: 'Train consistently without overreaching.',
     accent: 'bg-orange-500/10 text-orange-400',
+  },
+  {
+    id: 'data-truth',
+    icon: MessageCircle,
+    title: 'Better Inputs, Smarter Coaching',
+    hook: 'Your data is the coaching signal.',
+    explanation: 'SpartanLab is built to coach from truth, not guesswork. Like a real coach, it adjusts your training best when it knows what is actually happening: your performance, soreness, missed sessions, available equipment, pain signals, recovery, and how hard the work felt. If an athlete tells a coach "I\'m fine" while hiding pain or poor sleep, the coach has less to work with. If a patient leaves out symptoms, even a great doctor can only make a broad recommendation. Training intelligence works the same way.',
+    benefit: 'Honest signals over time unlock more precise coaching.',
+    accent: 'bg-rose-500/10 text-rose-400',
   },
 ]
 

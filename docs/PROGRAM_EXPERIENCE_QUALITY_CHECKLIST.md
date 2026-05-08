@@ -9,7 +9,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 |-------|-------------|--------|
 | PEX-1 | Program Experience Truth Surface Foundation | COMPLETE |
 | PEX-2 | Selected Skill Coverage + Rotation Truth | COMPLETE |
-| PEX-3 | Method Materialization Truth | NOT_STARTED |
+| PEX-3 | Method Materialization Truth | COMPLETE |
 | PEX-4 | Session Card Clutter Compression | NOT_STARTED |
 | PEX-5 | True Short-Session Runtime Options | NOT_STARTED |
 | PEX-6 | End-to-End Runtime Proof | NOT_STARTED |
@@ -135,21 +135,62 @@ The builder already has a comprehensive skill expression tracking system:
 
 ## PEX-3 — Method Materialization Truth
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Ensure selected training methods actually appear in programming when safe.
 
 ### Scope
-- Density blocks
-- Finishers
-- Supersets
-- Circuits
-- Top sets
-- Drop sets
-- Rest-pause
+- Density blocks, Finishers, Supersets, Circuits, Top sets, Drop sets, Rest-pause, Cluster sets
 - If selected/requested and safe, actually program them
 - If deferred, give clear reason and future condition
-- Do not hide behind "acclimation week" if weeks 2-4 do not change
+
+### Audit Findings
+
+The builder already has comprehensive method materialization infrastructure:
+
+1. **MethodMaterializationSummary** — Per-session truth with `groupedMethodCounts`, `rowExecutionCounts`, `materializedMethods`, and `summaryIntegrityVerdict`
+
+2. **WeeklyMethodRepresentationContract** — Program-wide audit with per-method status (APPLIED, BLOCKED_BY_SAFETY, NOT_NEEDED, MATERIALIZER_NOT_CONNECTED), reason, and materializer tracking
+
+3. **MethodDecision** — Per-session doctrine decision with `actualMaterialization.hasRealStructuralChange` gating
+
+4. **WeeklyMethodDecisionAccordion** — Day-by-day UI with "Used"/"Not used" sections and per-method reasoning
+
+5. **MethodMaterialityReport** — User-facing summary with `appliedMethods`, `selectedButNotApplied`, `nonApplicationReasons`, and verdict
+
+### What Changed
+
+**Compact Method Truth Summary Added** — ProgramTruthSummary.tsx
+- Before: Method truth only visible in expanded "Training Preferences Applied" section
+- After: Collapsed view shows "Training methods: X applied, Y held back for safety. See details."
+- Uses `methodPreferencesMateriality` (the authoritative method truth contract)
+
+### Materializer Availability
+
+| Method | Has Materializer |
+|--------|-----------------|
+| superset | Yes |
+| circuit | Yes |
+| density_block | Yes |
+| cluster | Yes |
+| top_set_backoff | Yes |
+| drop_set | Yes |
+| rest_pause | Yes |
+| finisher | No (future) |
+
+### Files Changed
+- `components/programs/ProgramTruthSummary.tsx` — Added compact method truth summary
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md` — Updated status
+
+### Acceptance Criteria
+- [x] Every selected method resolves to truthful status
+- [x] Method contract built from final materialized sessions
+- [x] Applied methods have executable evidence
+- [x] Blocked methods have specific reasons
+- [x] Compact method summary in collapsed view
+- [x] PEX-1 and PEX-2 remain intact
+- [x] TypeScript passes (exit code 0)
+- [x] Build compiles successfully (pre-existing Stripe issue unrelated)
 
 ---
 

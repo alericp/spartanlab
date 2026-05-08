@@ -2739,14 +2739,18 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W11',
         title: 'Coaching Noise Reduction / Premium UX Polish',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Audit coaching surfaces for duplicated/confusing content',
-          'Remove technical proof clutter from user-facing UI',
-          'Keep high-value explanations, remove low-value noise',
-          'Ensure premium feel without information overload',
+        status: 'COMPLETE',
+        evidence: [
+          '[W.W11] Removed debug data-* attributes from W.W9 Recovery Coach card (data-ww9-coaching-integration, data-coaching-status, data-coaching-risk, data-no-program-mutation)',
+          '[W.W11] Removed debug data-* attributes from W.W10 Preference Coach card (data-ww10-user-control, data-coaching-status, data-no-program-mutation)',
+          '[W.W11] Removed debug data-* attributes from Injury Advisory card (data-step-22-7-injury-advisory-preview, data-advisory-status, data-affected-exercises, data-no-program-mutation)',
+          '[W.W11] Removed debug data-* attributes from Missed Workout Advisory card (data-step-23-2/3, data-advisory-action, data-advisory-severity, data-no-program-mutation)',
+          '[W.W11] Preserved functional data-* attributes for interactive Step 23 components',
+          '[W.W11] High-value coaching headlines/summaries preserved — only technical clutter removed',
+          '[W.W11] Advisory-only markers kept in visible UI text for user trust',
+          '[W.W11] Premium feel maintained without information overload',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W12',

@@ -1910,3 +1910,354 @@ export function protectRecoverySpacing(input: ProtectRecoverySpacingInput): Prot
     affectedSessionLabels: [targetSession.dayLabel || `Day ${targetSession.dayNumber}`],
   }
 }
+
+// =============================================================================
+// STEP 24 / V.V6 — MULTI-SESSION PUSH-FORWARD MUTATION GUARDRAIL
+// =============================================================================
+
+/**
+ * Result of multi-session push-forward mutation attempt.
+ * 
+ * V.V6 extends single-session push to handle multiple consecutive missed workouts
+ * where multiple future sessions need push-forward protection markers.
+ * 
+ * @step 24.6 (V.V6)
+ */
+export interface MultiSessionPushForwardResult {
+  /** Mutation status */
+  status: 'success' | 'blocked' | 'no_change' | 'already_applied' | 'partial_already_applied'
+  /** User-visible summary of what happened */
+  visibleSummary: string
+  /** Evidence trail for debugging */
+  evidence: string[]
+  /** Machine-readable reason code */
+  reasonCode: string
+  /** Updated program if mutation succeeded */
+  updatedProgram?: import('../adaptive-program-builder').AdaptiveProgram
+  /** Count of sessions that were marked */
+  changedSessionCount: number
+  /** Session labels that were affected */
+  targetSessionLabels: string[]
+  /** Whether mutation was applied */
+  mutationApplied: boolean
+  /** Whether live workout mutation is allowed — always false */
+  liveWorkoutMutationAllowed: false
+  /** Whether saved program mutation is allowed */
+  savedProgramMutationAllowed: boolean
+}
+
+/**
+ * Input for multi-session push-forward mutation.
+ * 
+ * @step 24.6 (V.V6)
+ */
+export interface MultiSessionPushForwardInput {
+  /** Current program state */
+  program: import('../adaptive-program-builder').AdaptiveProgram
+  /** Advisory that triggered this */
+  advisory: MissedWorkoutRecompositionAdvisory
+  /** Target session indices to mark for push-forward (0-based) */
+  targetSessionIndices: number[]
+}
+
+/**
+ * Preview model for multi-session push-forward mutation.
+ * Shows what WOULD change before user confirms.
+ * 
+ * @step 24.6 (V.V6)
+ */
+export interface MultiSessionPushForwardMutationPreview {
+  /** Whether this preview can be shown */
+  canShow: boolean
+  /** Title for the preview */
+  title: string
+  /** Summary text */
+  summary: string
+  /** Why this matters */
+  whyThisMatters: string[]
+  /** Target sessions */
+  targetSessions: Array<{
+    index: number
+    label: string
+    alreadyMarked: boolean
+  }>
+  /** What will change */
+  whatWillChange: string[]
+  /** What will NOT change */
+  whatWillNotChange: string[]
+  /** Safety notes */
+  safetyNotes: string[]
+  /** Reason if cannot show */
+  unavailableReason?: string
+  /** Whether user can confirm this action */
+  canConfirm: boolean
+  /** Step marker */
+  step: '24.6'
+}
+
+/**
+ * Build a preview of what multi-session push-forward would change.
+ * Does NOT mutate anything — pure preview for confirmation UI.
+ * 
+ * Conservative approach: V.V6 adds typed adaptationNotes markers to future sessions
+ * to indicate they are affected by push-forward spacing. This preserves session
+ * identity and order while providing visible recovery spacing guidance.
+ * 
+ * @step 24.6 (V.V6)
+ */
+export function buildMultiSessionPushForwardMutationPreview(
+  program: import('../adaptive-program-builder').AdaptiveProgram | null,
+  advisory: MissedWorkoutRecompositionAdvisory | null
+): MultiSessionPushForwardMutationPreview {
+  const emptyPreview: MultiSessionPushForwardMutationPreview = {
+    canShow: false,
+    title: 'Multi-Session Push Forward',
+    summary: '',
+    whyThisMatters: [],
+    targetSessions: [],
+    whatWillChange: [],
+    whatWillNotChange: [],
+    safetyNotes: [],
+    unavailableReason: 'No program or advisory available.',
+    canConfirm: false,
+    step: '24.6',
+  }
+  
+  if (!program || !program.sessions || !advisory) {
+    return emptyPreview
+  }
+  
+  // V.V6 is for multi-session scenarios — need at least 2 future sessions
+  const futureSessionIndices: number[] = []
+  for (let i = 0; i < program.sessions.length; i++) {
+    const session = program.sessions[i]
+    // Consider a session "future" if it's incomplete (no completedAt or similar marker)
+    // For conservative safety, we target all sessions after index 0
+    if (i > 0) {
+      futureSessionIndices.push(i)
+    }
+  }
+  
+  if (futureSessionIndices.length < 2) {
+    return {
+      ...emptyPreview,
+      unavailableReason: 'Multi-session push-forward requires at least 2 future sessions. Use single-session push for fewer targets.',
+      canShow: true,
+      canConfirm: false,
+    }
+  }
+  
+  // Limit to first 3 future sessions to keep mutation bounded
+  const targetIndices = futureSessionIndices.slice(0, 3)
+  
+  // Check existing markers
+  const targetSessions = targetIndices.map(idx => {
+    const session = program.sessions[idx]
+    const alreadyMarked = (session.adaptationNotes || []).some(
+      note => note.startsWith('[V.V6:multi_session_push_forward:')
+    )
+    return {
+      index: idx,
+      label: session.dayLabel || `Day ${session.dayNumber}`,
+      alreadyMarked,
+    }
+  })
+  
+  const allMarked = targetSessions.every(t => t.alreadyMarked)
+  
+  if (allMarked) {
+    return {
+      canShow: true,
+      title: 'Multi-Session Push Forward',
+      summary: 'All target sessions already have push-forward protection.',
+      whyThisMatters: [],
+      targetSessions,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      safetyNotes: [],
+      unavailableReason: 'All target sessions are already marked.',
+      canConfirm: false,
+      step: '24.6',
+    }
+  }
+  
+  const unmarkedCount = targetSessions.filter(t => !t.alreadyMarked).length
+  
+  return {
+    canShow: true,
+    title: 'Multi-Session Push Forward',
+    summary: `Mark ${unmarkedCount} future session${unmarkedCount > 1 ? 's' : ''} for recovery spacing protection after multiple missed workouts.`,
+    whyThisMatters: [
+      'Multiple missed workouts can create accumulated recovery debt',
+      'Push-forward markers help track which sessions need spacing awareness',
+      'This allows conservative scheduling without losing your training structure',
+    ],
+    targetSessions,
+    whatWillChange: [
+      `${unmarkedCount} session${unmarkedCount > 1 ? 's' : ''} will receive a push-forward recovery marker`,
+      'Your saved program will be updated',
+      'Markers are visible in session notes for transparency',
+    ],
+    whatWillNotChange: [
+      'Exercise selection stays the same',
+      'Sets, reps, and intensity are preserved',
+      'Skill representation is preserved',
+      'Session order remains unchanged',
+      'Your live workout (if in progress) is not affected',
+      'Completed workout history is not changed',
+    ],
+    safetyNotes: [
+      'This is a conservative approach that marks sessions for awareness without reordering',
+      'You can proceed with training at your own pace using these markers as guidance',
+      'The markers help SpartanLab track recovery spacing context for future adaptations',
+    ],
+    canConfirm: true,
+    step: '24.6',
+  }
+}
+
+/**
+ * Apply multi-session push-forward markers to target sessions.
+ * 
+ * CRITICAL INVARIANTS:
+ * - Pure function — no side effects, no storage, no hooks
+ * - Does NOT persist anything — caller must save
+ * - Does NOT change exercises, sets, reps, intensity, or skill representation
+ * - Does NOT reorder sessions (conservative approach)
+ * - Only adds push-forward marker to adaptationNotes (typed field)
+ * - Returns new program object; does not mutate input
+ * - Blocks if all targets already marked (duplicate-apply guard)
+ * 
+ * @step 24.6 (V.V6)
+ */
+export function pushForwardMultiSessionSchedule(
+  input: MultiSessionPushForwardInput
+): MultiSessionPushForwardResult {
+  const { program, advisory, targetSessionIndices } = input
+  
+  // Validate program exists
+  if (!program || !program.sessions) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      reasonCode: 'no_program',
+      changedSessionCount: 0,
+      targetSessionLabels: [],
+      mutationApplied: false,
+      liveWorkoutMutationAllowed: false,
+      savedProgramMutationAllowed: false,
+    }
+  }
+  
+  // Validate we have at least 2 targets (this is multi-session, not single)
+  if (targetSessionIndices.length < 2) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Multi-session push-forward requires at least 2 target sessions.',
+      evidence: [`Only ${targetSessionIndices.length} target(s) provided`],
+      reasonCode: 'insufficient_targets',
+      changedSessionCount: 0,
+      targetSessionLabels: [],
+      mutationApplied: false,
+      liveWorkoutMutationAllowed: false,
+      savedProgramMutationAllowed: false,
+    }
+  }
+  
+  // Validate all indices are in range
+  const validIndices = targetSessionIndices.filter(
+    idx => idx >= 0 && idx < program.sessions.length
+  )
+  if (validIndices.length !== targetSessionIndices.length) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Some target session indices are invalid.',
+      evidence: [`Requested: ${targetSessionIndices.join(', ')}, Valid range: 0-${program.sessions.length - 1}`],
+      reasonCode: 'invalid_indices',
+      changedSessionCount: 0,
+      targetSessionLabels: [],
+      mutationApplied: false,
+      liveWorkoutMutationAllowed: false,
+      savedProgramMutationAllowed: false,
+    }
+  }
+  
+  // Check which sessions already have V.V6 markers
+  const markerStatus = validIndices.map(idx => {
+    const session = program.sessions[idx]
+    const hasMarker = (session.adaptationNotes || []).some(
+      note => note.startsWith('[V.V6:multi_session_push_forward:')
+    )
+    return { idx, hasMarker, label: session.dayLabel || `Day ${session.dayNumber}` }
+  })
+  
+  const alreadyMarked = markerStatus.filter(s => s.hasMarker)
+  const needsMarking = markerStatus.filter(s => !s.hasMarker)
+  
+  // All already marked — duplicate apply
+  if (needsMarking.length === 0) {
+    return {
+      status: 'already_applied',
+      visibleSummary: `All ${alreadyMarked.length} target sessions already have push-forward protection.`,
+      evidence: alreadyMarked.map(s => `Session "${s.label}" already has V.V6 marker`),
+      reasonCode: 'all_already_marked',
+      changedSessionCount: 0,
+      targetSessionLabels: alreadyMarked.map(s => s.label),
+      mutationApplied: false,
+      liveWorkoutMutationAllowed: false,
+      savedProgramMutationAllowed: true,
+    }
+  }
+  
+  // Build provenance marker
+  const timestamp = new Date().toISOString()
+  const provenanceMarker = `[V.V6:multi_session_push_forward:${timestamp}]`
+  
+  // Build updated sessions
+  const updatedSessions = program.sessions.map((session, idx) => {
+    const shouldMark = needsMarking.some(s => s.idx === idx)
+    if (!shouldMark) return session
+    
+    return {
+      ...session,
+      adaptationNotes: [
+        ...(session.adaptationNotes || []),
+        `${provenanceMarker} Push-forward recovery spacing marked — ${advisory.title || 'missed workout recovery'}. Exercise identity, skill representation, and completed history preserved.`,
+      ],
+    }
+  })
+  
+  const updatedProgram: import('../adaptive-program-builder').AdaptiveProgram = {
+    ...program,
+    sessions: updatedSessions,
+  }
+  
+  const evidence = [
+    `Marked ${needsMarking.length} session(s) for push-forward recovery`,
+    ...needsMarking.map(s => `Target session: ${s.label} (index ${s.idx})`),
+    'Provenance marker added to adaptationNotes',
+    'No exercise changes',
+    'No sets/reps/intensity changes',
+    'No skill representation changes',
+    'No session reordering (conservative approach)',
+    'No live workout mutation',
+  ]
+  
+  if (alreadyMarked.length > 0) {
+    evidence.push(`${alreadyMarked.length} session(s) were already marked and skipped`)
+  }
+  
+  return {
+    status: needsMarking.length < validIndices.length ? 'partial_already_applied' : 'success',
+    visibleSummary: `Push-forward recovery protection applied to ${needsMarking.length} session${needsMarking.length > 1 ? 's' : ''}.`,
+    evidence,
+    reasonCode: needsMarking.length < validIndices.length ? 'partial_success' : 'multi_session_push_forward_applied',
+    updatedProgram,
+    changedSessionCount: needsMarking.length,
+    targetSessionLabels: needsMarking.map(s => s.label),
+    mutationApplied: true,
+    liveWorkoutMutationAllowed: false,
+    savedProgramMutationAllowed: true,
+  }
+}

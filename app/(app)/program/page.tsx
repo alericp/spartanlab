@@ -122,6 +122,7 @@ import {
 } from '@/lib/program/injury-substitution-advisory'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory for Program Page
 // [V.V4] Reduce intensity mutation corridor
+// [V.V6] Multi-session push-forward mutation guardrail
 import {
   buildMissedWorkoutRecompositionAdvisory,
   getMissedWorkoutAdvisoryDisplayInfo,
@@ -129,11 +130,13 @@ import {
   pushMissedWorkoutSessionForward,
   reduceSessionIntensity,
   protectRecoverySpacing,
+  pushForwardMultiSessionSchedule,
   type MissedWorkoutRecompositionAdvisory,
   type MissedWorkoutRecompositionInput,
   type PushSessionForwardResult,
   type ReduceIntensityResult,
   type ProtectRecoverySpacingResult,
+  type MultiSessionPushForwardResult,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2519,8 +2522,100 @@ function ProgramDisplayWrapper({
           reasonCode: 'save_failed',
         }
       }
-    },
-    [program, onProgramUpdate]
+  },
+  [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
+  // [STEP 24.6 / V.V6] Multi-Session Push Forward Callback
+  // Program Page owns the mutation path through saveAdaptiveProgram.
+  // This callback is passed to AdaptiveProgramDisplay for multi-session push forward action.
+  // Third saved-program mutation corridor in Phase V.
+  // ==========================================================================
+  const handleConfirmMultiSessionPushForward = useCallback(
+  async (
+  advisory: MissedWorkoutRecompositionAdvisory,
+  targetSessionIndices: number[]
+  ): Promise<MultiSessionPushForwardResult> => {
+  // Guard: Must have program
+  if (!program) {
+  return {
+  status: 'blocked',
+  visibleSummary: 'No program available.',
+  evidence: ['program is null or undefined'],
+  reasonCode: 'no_program',
+  changedSessionCount: 0,
+  targetSessionLabels: [],
+  mutationApplied: false,
+  liveWorkoutMutationAllowed: false,
+  savedProgramMutationAllowed: false,
+  }
+  }
+  
+  console.log('[step-24-vv6-multi-session-push-forward] Starting multi-session push forward', {
+  targetSessionIndices,
+  advisoryAction: advisory.action,
+  programId: program.id,
+  sessionCount: program.sessions?.length,
+  })
+  
+  // Call the pure helper
+  const result = pushForwardMultiSessionSchedule({
+  program,
+  targetSessionIndices,
+  advisory,
+  })
+  
+  console.log('[step-24-vv6-multi-session-push-forward] Helper result', {
+  status: result.status,
+  visibleSummary: result.visibleSummary,
+  changedSessionCount: result.changedSessionCount,
+  evidence: result.evidence,
+  })
+  
+  // If blocked or already_applied, return early — do not save
+  if ((result.status !== 'success' && result.status !== 'partial_already_applied') || !result.updatedProgram) {
+  return result
+  }
+  
+  // Save the updated program through the authoritative save path
+  try {
+  // [V.V6B] Dynamic import to access canonical save function
+  const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+  const savedProgram = saveAdaptiveProgram(result.updatedProgram)
+  
+  // [V.V6C] Update Program Page state via parent callback
+  if (onProgramUpdate) {
+  onProgramUpdate(savedProgram)
+  }
+  
+  console.log('[step-24-vv6-multi-session-push-forward] Program saved successfully', {
+  programId: savedProgram.id,
+  sessionCount: savedProgram.sessions?.length,
+  targetSessionIndices,
+  changedSessionCount: result.changedSessionCount,
+  })
+  
+  return {
+  ...result,
+  evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+  }
+  } catch (saveError) {
+  console.error('[step-24-vv6-multi-session-push-forward] Save failed', saveError)
+  return {
+  status: 'blocked',
+  visibleSummary: 'Failed to save the updated program.',
+  evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+  reasonCode: 'save_failed',
+  changedSessionCount: 0,
+  targetSessionLabels: result.targetSessionLabels || [],
+  mutationApplied: false,
+  liveWorkoutMutationAllowed: false,
+  savedProgramMutationAllowed: false,
+  }
+  }
+  },
+  [program, onProgramUpdate]
   )
   
   // ==========================================================================
@@ -3261,6 +3356,9 @@ function ProgramDisplayWrapper({
   /* [STEP 24.5 / V.V5] Protect recovery spacing callback — user-confirmed mutation only.
   Second saved-program mutation corridor in Phase V. */
   onConfirmProtectRecoverySpacing={handleConfirmProtectRecoverySpacing}
+  /* [STEP 24.6 / V.V6] Multi-session push-forward callback — user-confirmed mutation only.
+  Third saved-program mutation corridor in Phase V. */
+  onConfirmMultiSessionPushForward={handleConfirmMultiSessionPushForward}
   />
       </ErrorBoundary>
     </div>

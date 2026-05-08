@@ -131,6 +131,7 @@ import {
 // [V.V3] Recovery spacing preview — preview-only, no mutation
 // [V.V4] Reduce intensity mutation corridor — user-confirmed saved-program mutation
 // [V.V5] Protect recovery spacing mutation corridor — user-confirmed saved-program mutation
+// [V.V6] Multi-session push-forward mutation guardrail — user-confirmed saved-program mutation
 import type { 
   MissedWorkoutRecompositionAdvisory,
   PushSessionForwardResult,
@@ -139,6 +140,8 @@ import type {
   ReduceIntensityPreview,
   ProtectRecoverySpacingResult,
   ProtectRecoverySpacingMutationPreview,
+  MultiSessionPushForwardResult,
+  MultiSessionPushForwardMutationPreview,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 import { 
   getMissedWorkoutAdvisoryDisplayInfo, 
@@ -148,6 +151,8 @@ import {
   reduceSessionIntensity,
   buildProtectRecoverySpacingMutationPreview,
   protectRecoverySpacing,
+  buildMultiSessionPushForwardMutationPreview,
+  pushForwardMultiSessionSchedule,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
@@ -271,6 +276,13 @@ interface AdaptiveProgramDisplayProps {
   advisory: MissedWorkoutRecompositionAdvisory,
   targetSessionIndex: number
   ) => Promise<ProtectRecoverySpacingResult> | ProtectRecoverySpacingResult
+  // [STEP 24.6 / V.V6] Callback for multi-session push-forward — user-confirmed mutation only.
+  // Program Page owns the save path. Display requests, Page persists.
+  // Third saved-program mutation corridor in Phase V.
+  onConfirmMultiSessionPushForward?: (
+  advisory: MissedWorkoutRecompositionAdvisory,
+  targetSessionIndices: number[]
+  ) => Promise<MultiSessionPushForwardResult> | MultiSessionPushForwardResult
   }
 
 // =============================================================================
@@ -425,6 +437,8 @@ export function AdaptiveProgramDisplay({
   onConfirmReduceIntensity,
   // [STEP 24.5 / V.V5] Protect recovery spacing callback
   onConfirmProtectRecoverySpacing,
+  // [STEP 24.6 / V.V6] Multi-session push-forward callback
+  onConfirmMultiSessionPushForward,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -461,6 +475,10 @@ export function AdaptiveProgramDisplay({
   type ProtectRecoverySpacingState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed' | 'already_protected'
   const [protectRecoverySpacingState, setProtectRecoverySpacingState] = useState<ProtectRecoverySpacingState>('idle')
   const [protectRecoverySpacingResult, setProtectRecoverySpacingResult] = useState<ProtectRecoverySpacingResult | null>(null)
+  // [STEP 24.6 / V.V6] Multi-session push-forward action state — user-confirmed mutation corridor
+  type MultiSessionPushForwardState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed' | 'already_applied'
+  const [multiSessionPushForwardState, setMultiSessionPushForwardState] = useState<MultiSessionPushForwardState>('idle')
+  const [multiSessionPushForwardResult, setMultiSessionPushForwardResult] = useState<MultiSessionPushForwardResult | null>(null)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -2247,6 +2265,315 @@ export function AdaptiveProgramDisplay({
                     <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
                       <span>Your plan has not been changed yet.</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* [V.V6] Multi-Session Push Forward Guardrail Card
+          User-confirmed mutation corridor for multi-session push-forward scenarios.
+          Third saved-program mutation corridor in Phase V.
+          @step 24.6 */}
+      {missedWorkoutAdvisory &&
+       (missedWorkoutAdvisory.action === 'push_session_forward' || 
+        missedWorkoutAdvisory.action === 'recommend_regeneration') &&
+       !missedWorkoutAdvisoryDismissed &&
+       onConfirmMultiSessionPushForward && (() => {
+        const multiPushPreview = buildMultiSessionPushForwardMutationPreview(program, missedWorkoutAdvisory)
+        
+        // Only show V.V6 card if there are multiple sessions to push
+        if (!multiPushPreview.canShow || multiPushPreview.targetSessions.length < 2) {
+          return null
+        }
+        
+        return (
+          <div
+            className="rounded-lg border bg-gradient-to-br from-[#1A1A25]/60 via-[#1A1820]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden"
+            data-step-24-vv6-multi-session-push-forward="true"
+            data-vv6-preview-ready={multiPushPreview.canConfirm ? 'true' : 'false'}
+            data-vv6-applied={multiSessionPushForwardState === 'applied' ? 'true' : 'false'}
+            data-user-confirmed-mutation={multiSessionPushForwardState === 'applied' ? 'true' : 'false'}
+            data-no-live-workout-mutation="true"
+          >
+            <div className="p-3">
+              <div className="flex items-start gap-3">
+                {/* Multi-session icon */}
+                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-purple-500/15">
+                  <Layers className="w-3.5 h-3.5 text-purple-400" />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs font-medium text-[#FAFAFA]">
+                      {multiPushPreview.title}
+                    </p>
+                    <span className="px-1.5 py-0.5 text-[9px] rounded font-medium bg-purple-500/15 text-purple-400">
+                      Multi-Session
+                    </span>
+                  </div>
+                  
+                  {/* Summary */}
+                  <p className="text-[11px] text-[#9A9AAA] mb-2 leading-relaxed">
+                    {multiPushPreview.summary}
+                  </p>
+                  
+                  {/* Applied state */}
+                  {multiSessionPushForwardState === 'applied' && multiSessionPushForwardResult?.status === 'success' && (
+                    <div 
+                      className="p-2 bg-emerald-500/10 rounded border border-emerald-500/30 mb-2"
+                      data-step-24-vv6-success="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-emerald-300">
+                            Multi-Session Push Forward Applied
+                          </p>
+                          <p className="text-[10px] text-emerald-400/80 mt-0.5">
+                            {multiSessionPushForwardResult.visibleSummary}
+                          </p>
+                          <p className="text-[9px] text-[#6A6A7A] mt-1">
+                            {multiSessionPushForwardResult.changedSessionCount} session(s) marked. No live workout mutation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Already applied state */}
+                  {(multiSessionPushForwardState === 'already_applied' || 
+                    multiPushPreview.targetSessions.every(t => t.alreadyMarked)) && (
+                    <div 
+                      className="p-2 bg-blue-500/10 rounded border border-blue-500/30 mb-2"
+                      data-step-24-vv6-already-applied="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-blue-300">
+                            Already Applied
+                          </p>
+                          <p className="text-[10px] text-blue-400/80 mt-0.5">
+                            All target sessions already have push-forward protection.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Failed state */}
+                  {multiSessionPushForwardState === 'failed' && (
+                    <div 
+                      className="p-2 bg-red-500/10 rounded border border-red-500/30 mb-2"
+                      data-step-24-vv6-failed="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-red-300">
+                            Could Not Apply Push Forward
+                          </p>
+                          <p className="text-[10px] text-red-400/80 mt-0.5">
+                            {multiSessionPushForwardResult?.visibleSummary || 'An error occurred.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Applying state */}
+                  {multiSessionPushForwardState === 'applying' && (
+                    <div 
+                      className="p-2 bg-[#2A2A35]/50 rounded border border-[#3A3A4A] mb-2"
+                      data-step-24-vv6-applying="true"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                        <p className="text-[11px] text-[#9A9AAA]">
+                          Applying multi-session push forward...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Confirmation state — show preview of what will change */}
+                  {multiSessionPushForwardState === 'confirming' && multiPushPreview.canConfirm && (
+                    <div 
+                      className="p-2 bg-purple-500/10 rounded border border-purple-500/30 mb-2"
+                      data-step-24-vv6-confirmation-preview="true"
+                    >
+                      <p className="text-[11px] font-medium text-purple-300 mb-2">
+                        Confirm Multi-Session Push Forward?
+                      </p>
+                      
+                      {/* Target sessions */}
+                      <div className="mb-2">
+                        <p className="text-[10px] font-medium text-[#9A9AAA] mb-1">Target Sessions:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {multiPushPreview.targetSessions.map((session, idx) => (
+                            <span 
+                              key={idx} 
+                              className={cn(
+                                "px-1.5 py-0.5 text-[9px] rounded",
+                                session.alreadyMarked 
+                                  ? "bg-blue-500/10 text-blue-400" 
+                                  : "bg-purple-500/10 text-purple-300"
+                              )}
+                            >
+                              {session.label} {session.alreadyMarked && '(already marked)'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* What will change */}
+                      <div className="mb-2">
+                        <p className="text-[10px] font-medium text-[#9A9AAA] mb-1">What will change:</p>
+                        <ul className="text-[10px] text-[#7A7A8A] space-y-0.5 ml-2">
+                          {multiPushPreview.whatWillChange.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-purple-400 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      {/* What will NOT change */}
+                      <div className="mb-2">
+                        <p className="text-[10px] font-medium text-[#9A9AAA] mb-1">What stays the same:</p>
+                        <ul className="text-[10px] text-[#6A6A7A] space-y-0.5 ml-2">
+                          {multiPushPreview.whatWillNotChange.slice(0, 4).map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-emerald-500 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      {/* Safety notes */}
+                      {multiPushPreview.safetyNotes.length > 0 && (
+                        <div className="mb-2 p-1.5 bg-[#1A1A20]/50 rounded border border-[#2A2A35]">
+                          <p className="text-[9px] text-[#6A6A7A] italic">
+                            {multiPushPreview.safetyNotes[0]}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Confirm/cancel buttons */}
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!onConfirmMultiSessionPushForward || !missedWorkoutAdvisory) return
+                            const targetIndices = multiPushPreview.targetSessions
+                              .filter(t => !t.alreadyMarked)
+                              .map(t => t.index)
+                            if (targetIndices.length < 2) {
+                              // Should not happen if canConfirm is true, but guard anyway
+                              setMultiSessionPushForwardState('failed')
+                              return
+                            }
+                            setMultiSessionPushForwardState('applying')
+                            try {
+                              const result = await onConfirmMultiSessionPushForward(missedWorkoutAdvisory, targetIndices)
+                              setMultiSessionPushForwardResult(result)
+                              if (result.status === 'success' || result.status === 'partial_already_applied') {
+                                setMultiSessionPushForwardState('applied')
+                              } else if (result.status === 'already_applied') {
+                                setMultiSessionPushForwardState('already_applied')
+                              } else {
+                                setMultiSessionPushForwardState('failed')
+                              }
+                            } catch (error) {
+                              setMultiSessionPushForwardResult({
+                                status: 'blocked',
+                                visibleSummary: 'An unexpected error occurred.',
+                                evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+                                reasonCode: 'unexpected_error',
+                                changedSessionCount: 0,
+                                targetSessionLabels: [],
+                                mutationApplied: false,
+                                liveWorkoutMutationAllowed: false,
+                                savedProgramMutationAllowed: false,
+                              })
+                              setMultiSessionPushForwardState('failed')
+                            }
+                          }}
+                          className="flex-1 h-7 text-xs bg-purple-600/80 hover:bg-purple-600 text-white"
+                          data-step-24-vv6-apply="true"
+                        >
+                          <Layers className="w-3 h-3 mr-1" />
+                          Confirm Push Forward
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setMultiSessionPushForwardState('idle')}
+                          className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A]"
+                          data-action="cancel-multi-session-push-forward"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Idle state — show initiate button */}
+                  {multiSessionPushForwardState === 'idle' && 
+                   multiPushPreview.canConfirm &&
+                   !multiPushPreview.targetSessions.every(t => t.alreadyMarked) && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMultiSessionPushForwardState('confirming')}
+                        className="flex-1 h-7 text-xs border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
+                        data-action="initiate-multi-session-push-forward"
+                      >
+                        <Layers className="w-3 h-3 mr-1" />
+                        Review Multi-Session Push
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                        data-action="dismiss-multi-session-push-forward"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Done state — after successful application */}
+                  {multiSessionPushForwardState === 'applied' && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="flex-1 h-7 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                        data-action="done"
+                      >
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Done
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Proof line */}
+                  {multiSessionPushForwardState !== 'applied' && 
+                   !multiPushPreview.targetSessions.every(t => t.alreadyMarked) && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                      <span>Your plan has not been changed yet. Live workout unaffected.</span>
                     </p>
                   )}
                 </div>

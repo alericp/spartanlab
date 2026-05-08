@@ -2706,14 +2706,18 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W9',
         title: 'Recovery / Injury / Substitution Coaching Integration',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Integrate injury-substitution-advisory into visible coaching',
-          'Show recovery guidance from recovery-fatigue-engine',
-          'Keep safety guidance advisory-first without bloating UI',
-          'Preserve Step 22 injury substitution behavior',
+        status: 'COMPLETE',
+        evidence: [
+          '[W.W9] Created unified coaching helper: lib/program/recovery-injury-substitution-coaching.ts',
+          '[W.W9] Helper consumes existing RecoveryProgramAwarenessBridge and InjurySubstitutionAdvisorySnapshot',
+          '[W.W9] Unified coaching card renders in AdaptiveProgramDisplay when either source has actionable items',
+          '[W.W9] Conservative, non-medical language: "reported concern", "safer option", "recovery-aware"',
+          '[W.W9] Shows substitution items with original → alternative mapping from existing truth',
+          '[W.W9] All coaching is advisory-only — savedProgramUnchanged: true, isCurrentSessionOnly: true',
+          '[W.W9] Preserves existing Step 22 injury substitution behavior — renders alongside unified card',
+          '[W.W9] No program mutation, no generator changes, no new storage writes',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W10',

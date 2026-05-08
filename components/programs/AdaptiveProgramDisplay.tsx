@@ -111,6 +111,13 @@ import {
   hasActionableInjuryAdvisory,
   getRecommendationsForSession,
 } from '@/lib/program/injury-substitution-advisory'
+// [W.W9] Unified recovery/injury/substitution coaching integration
+import {
+  deriveRecoveryInjurySubstitutionCoaching,
+  hasActiveCoaching,
+  getCoachingItemsByType,
+  type RecoveryInjurySubstitutionCoachModel,
+} from '@/lib/program/recovery-injury-substitution-coaching'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory — advisory-only, no mutation
 import type { 
   MissedWorkoutRecompositionAdvisory,
@@ -1492,6 +1499,112 @@ export function AdaptiveProgramDisplay({
           </div>
       </div>
       )}
+
+      {/* [W.W9] UNIFIED RECOVERY / INJURY / SUBSTITUTION COACHING INTEGRATION
+          Derives a single coaching model from existing recovery and injury truth sources.
+          Shows combined guidance when either source has actionable items.
+          Advisory-only — no program mutation. */}
+      {(() => {
+        const coachingModel = deriveRecoveryInjurySubstitutionCoaching({
+          recoveryBridge: recoveryAwarenessBridge,
+          injuryAdvisory: injuryAdvisory,
+        })
+        
+        if (!hasActiveCoaching(coachingModel)) return null
+        
+        const itemsByType = getCoachingItemsByType(coachingModel)
+        const hasSubstitutions = itemsByType.substitution.length > 0
+        
+        return (
+          <div 
+            className="rounded-lg border bg-gradient-to-br from-[#1A1820]/60 via-[#1A1A25]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden"
+            data-ww9-coaching-integration="true"
+            data-coaching-status={coachingModel.status}
+            data-coaching-risk={coachingModel.riskLevel}
+            data-no-program-mutation="true"
+          >
+            {/* Coaching header */}
+            <div className="px-3 py-2 border-b border-[#2A2A35]/50 bg-[#15151A]/30">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center",
+                  coachingModel.riskLevel === 'high' ? "bg-amber-500/20" :
+                  coachingModel.riskLevel === 'moderate' ? "bg-yellow-500/15" :
+                  "bg-blue-500/15"
+                )}>
+                  {coachingModel.riskLevel === 'high' ? (
+                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  ) : coachingModel.riskLevel === 'moderate' ? (
+                    <Shield className="w-3 h-3 text-yellow-400/80" />
+                  ) : (
+                    <Activity className="w-3 h-3 text-blue-400/70" />
+                  )}
+                </div>
+                <span className={cn(
+                  "text-xs font-medium",
+                  coachingModel.riskLevel === 'high' ? "text-amber-300/90" :
+                  coachingModel.riskLevel === 'moderate' ? "text-yellow-300/80" :
+                  "text-blue-300/80"
+                )}>
+                  {coachingModel.headline}
+                </span>
+                <span className="ml-auto text-[10px] text-[#5A5A6A] uppercase tracking-wide">
+                  Recovery Coach
+                </span>
+              </div>
+            </div>
+            
+            {/* Coaching content */}
+            <div className="p-3 space-y-2">
+              {/* Summary */}
+              <p className="text-xs text-[#9A9A9A] leading-relaxed">
+                {coachingModel.summary}
+              </p>
+              
+              {/* Primary cue if available */}
+              {coachingModel.primaryCue && (
+                <p className="text-[11px] text-[#7A8A7A] flex items-start gap-1.5">
+                  <ChevronRight className="w-3 h-3 text-emerald-500/60 mt-0.5 shrink-0" />
+                  <span>{coachingModel.primaryCue}</span>
+                </p>
+              )}
+              
+              {/* Show substitution items if any */}
+              {hasSubstitutions && (
+                <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                  <p className="text-[10px] text-[#6A6A7A] uppercase tracking-wide mb-1.5">
+                    Safer Options Available
+                  </p>
+                  <div className="space-y-1">
+                    {itemsByType.substitution.slice(0, 3).map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-[11px]">
+                        <span className="text-[#7A7A8A] truncate flex-1">{item.originalExercise}</span>
+                        <span className="text-[#4A4A5A]">→</span>
+                        <span className="text-emerald-400/70 truncate max-w-[120px]">
+                          {item.suggestedAlternative || 'alternative available'}
+                        </span>
+                      </div>
+                    ))}
+                    {itemsByType.substitution.length > 3 && (
+                      <p className="text-[10px] text-[#5A5A6A]">
+                        +{itemsByType.substitution.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Non-mutation proof */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                <span className="text-[10px] text-[#5A5A6A]">
+                  Advisory only — {coachingModel.savedProgramUnchanged ? 'program unchanged' : 'current session only'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* [PHASE M1.2 + STEP 21.6] Recovery-to-Program Awareness Bridge with Adjustment Preview
           Displays recovery-aware guidance and adjustment CTA when bridge indicates concern.

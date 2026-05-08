@@ -846,10 +846,40 @@ export function AdaptiveProgramDisplay({
   // Uses centralized helper for consistent display derivation and explanations.
   // Every selected skill is visible with honest representation state.
   // ==========================================================================
+  
+  // [W.W8R] Adapter: normalize weekly representation policies for the helper.
+  // The display type allows representationVerdict to be undefined, but the helper
+  // requires a definite string. This adapter provides truthful fallbacks.
+  const normalizedPoliciesForSkillRepresentation = (() => {
+    const policies = safeWeeklyRepresentation?.policies
+    if (!Array.isArray(policies) || policies.length === 0) return null
+    
+    return policies
+      .map(policy => {
+        const skill = typeof policy.skill === 'string' ? policy.skill.trim() : ''
+        if (!skill) return null
+        
+        // Derive truthful verdict: use real verdict if available, otherwise conservative fallback
+        const representationVerdict = typeof policy.representationVerdict === 'string' && policy.representationVerdict.trim()
+          ? policy.representationVerdict.trim()
+          : 'not_assessed' // Conservative fallback when verdict is missing
+        
+        return {
+          skill,
+          representationVerdict,
+          actualExposure: policy.actualExposure ? {
+            direct: typeof policy.actualExposure.direct === 'number' ? policy.actualExposure.direct : undefined,
+            total: typeof policy.actualExposure.total === 'number' ? policy.actualExposure.total : undefined,
+          } : undefined,
+        }
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+  })()
+  
   const selectedSkillRepresentations: SelectedSkillRepresentationDisplay[] = deriveAllSelectedSkillRepresentations({
     selectedSkills: safeSelectedSkills,
     headlineSkills: sharedHeadlineSkills,
-    weeklyRepresentationPolicies: safeWeeklyRepresentation?.policies,
+    weeklyRepresentationPolicies: normalizedPoliciesForSkillRepresentation,
     weekSupportSkills: sharedWeekSupportSkills,
     weekRepresentedSkills: sharedRepresentedSkills,
   })

@@ -546,7 +546,8 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
   const skillsExpressed =
     authContract?.materiallyUsedCount ??
     (broaderSkillCoverage?.representedSkills.length ?? representedSkillsInWeek.length)
-  const deferredCount = authContract?.deferredSkills?.length ?? deferredEntries.length
+  // [IQ3] Use authContract only here; deferredEntries is declared later for rendering
+  const deferredCount = authContract?.deferredSkills?.length ?? 0
   const supportCount = authContract?.skillPriorityOrder?.filter(s => s.role === 'support').length ?? 0
 
   if (skillsTotal > 0) {

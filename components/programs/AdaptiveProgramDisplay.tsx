@@ -64,6 +64,7 @@ import {
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { buildProgramDecisionsNarrative, type ProgramDecisionsNarrative } from '@/lib/program/program-decisions-narrative'
 import { deriveProgressionClarity, type ProgressionClarity } from '@/lib/program/performance-progression-clarity'
+import { deriveTodaySessionGuidance, type TodaySessionGuidance } from '@/lib/program/adaptive-session-readiness-guidance'
 import { 
   advanceToNextWeek, 
   advanceToWeek,
@@ -421,6 +422,11 @@ export function AdaptiveProgramDisplay({
   // [STEP 25.4] Performance Progression Clarity — current progression status
   const progressionClarity: ProgressionClarity | null = program
     ? deriveProgressionClarity(program)
+    : null
+  
+  // [STEP 25.5] Today Session Readiness Guidance — what should I do today?
+  const todayGuidance: TodaySessionGuidance | null = program
+    ? deriveTodaySessionGuidance(program)
     : null
   
   // ==========================================================================
@@ -1415,6 +1421,74 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
       </Card>
+
+      {/* [STEP 25.5] Today Session Readiness Guidance — what should I do today? */}
+      {todayGuidance && todayGuidance.available && (
+        <Card className="mb-4 bg-[#0F0F0F] border-[#2A2A2A] overflow-hidden">
+          <div className="px-4 py-3">
+            {/* Header with state badge */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  todayGuidance.state === 'ready' && "bg-emerald-500",
+                  todayGuidance.state === 'controlled' && "bg-blue-400",
+                  todayGuidance.state === 'protect_recovery' && "bg-purple-400",
+                  todayGuidance.state === 'reduce_or_shorten' && "bg-amber-400",
+                  todayGuidance.state === 'collecting_data' && "bg-gray-400",
+                )} />
+                <span className="text-xs font-medium text-[#E6E9EF]">
+                  Today&apos;s guidance
+                </span>
+              </div>
+              <span className={cn(
+                "px-2 py-0.5 rounded text-[10px] font-medium",
+                todayGuidance.state === 'ready' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/90",
+                todayGuidance.state === 'controlled' && "bg-blue-500/10 border border-blue-500/20 text-blue-400/90",
+                todayGuidance.state === 'protect_recovery' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/90",
+                todayGuidance.state === 'reduce_or_shorten' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/90",
+                todayGuidance.state === 'collecting_data' && "bg-gray-500/10 border border-gray-500/20 text-gray-400/90",
+              )}>
+                {todayGuidance.label}
+              </span>
+            </div>
+            
+            {/* Summary */}
+            <p className="text-[11px] text-[#9A9A9A] leading-relaxed mb-2">
+              {todayGuidance.summary}
+            </p>
+            
+            {/* Reasons */}
+            {todayGuidance.reasons.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {todayGuidance.reasons.map((reason) => (
+                  <span
+                    key={reason.id}
+                    className={cn(
+                      "inline-flex items-center px-2 py-0.5 rounded text-[9px]",
+                      reason.tone === 'positive' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/70",
+                      reason.tone === 'neutral' && "bg-[#1A1A1A]/60 border border-[#333]/40 text-[#8A8A8A]",
+                      reason.tone === 'warning' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/70",
+                      reason.tone === 'protective' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/70",
+                    )}
+                    title={reason.message}
+                  >
+                    {reason.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            {/* Next Action */}
+            <div className="flex items-start gap-1.5 pt-2 border-t border-[#2A2A2A]">
+              <ArrowRight className="w-3 h-3 text-[#6A6A6A] mt-0.5 shrink-0" />
+              <p className="text-[10px] text-[#7A7A7A]">
+                {todayGuidance.nextAction}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* [PHASE 13 TASK 6] Schedule Change Notice - only shown after real mutation */}
       {scheduleNotice && scheduleNotice.type !== 'no_change' && (

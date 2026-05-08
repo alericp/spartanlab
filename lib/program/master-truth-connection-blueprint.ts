@@ -2554,7 +2554,7 @@ function step25(): BlueprintPhase {
       'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
     status: 'PARTIAL',
     nextAction:
-      'Step 25.4 COMPLETE — Performance Progression Clarity. Progression status section added using deriveProgressionClarity that derives status (advancing/building/holding/protecting/not_enough_evidence), reasons, and next focus from evidenceCalibrationInfluence and evidenceCalibrationShapingProof. No fake claims — insufficient evidence returns honest state. Next: Step 25.5 Adaptive Session Readiness / Today Guidance Upgrade.',
+      'Step 25.5 COMPLETE — Adaptive Session Readiness / Today Guidance. New deriveTodaySessionGuidance helper reads evidenceCalibrationInfluence (recoveryBias, volumeBias, progressionAggressiveness), sessionLengthTruth, and weekNumber. Five states: ready, controlled, protect_recovery, reduce_or_shorten, collecting_data. Compact card UI added with state badge, summary, reasons (max 3), and next action. Advisory-only — no program mutation. Next: Step 25.6 Exercise-Level Coaching Upgrade.',
     subtasks: [
       {
         id: 'W.W1',
@@ -2623,14 +2623,17 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W5',
         title: 'Adaptive Session Readiness / Today Guidance Upgrade',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Improve today guidance based on readiness, soreness, time, fatigue',
-          'Connect skill-readiness-engine output to visible suggestions',
-          'Make guidance actionable without being noisy',
-          'Integrate with existing constraint/pain signals',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 25.5] New helper lib/program/adaptive-session-readiness-guidance.ts created',
+          '[STEP 25.5] deriveTodaySessionGuidance() derives from evidenceCalibrationInfluence (recoveryBias, volumeBias, progressionAggressiveness)',
+          '[STEP 25.5] Five guidance states: ready, controlled, protect_recovery, reduce_or_shorten, collecting_data',
+          '[STEP 25.5] Compact UI card added to AdaptiveProgramDisplay.tsx with state badge, summary, reasons, next action',
+          '[STEP 25.5] Color-coded badges: emerald (ready), blue (controlled), purple (protect), amber (reduce), gray (collecting)',
+          '[STEP 25.5] Advisory-only — does NOT mutate program or sessions',
+          '[STEP 25.5] Honest "Building baseline" fallback when insufficient data',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W6',

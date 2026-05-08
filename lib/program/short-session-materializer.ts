@@ -436,6 +436,124 @@ function applyRestReduction(
 }
 
 /**
+ * [PEX-5B] 20 Min strong set reduction. More aggressive than 30 Min - target 2 sets
+ * for all non-primary exercises. Reduces from N to max(2, N-2) for accessories.
+ */
+function applyStrongSetReduction(
+  rows: RowHandle[],
+  cloned: SessionVariant,
+  records: MutationRecord[]
+): number {
+  let mutatedCount = 0
+  for (const handle of rows) {
+    if (handle.isProtectedAnchor) continue
+    if (handle.isFatigueManaged) continue
+    if (handle.sets < 3) continue
+    
+    const before = handle.sets
+    // Stronger cut: reduce by 2 sets, floor at 2
+    const after = Math.max(2, before - 2)
+    if (after === before) continue
+    
+    const target = cloned.selection.main[handle.index]
+    if (!target) continue
+    target.sets = after
+    mutatedCount += 1
+    records.push({
+      type: 'set_delta',
+      exerciseNames: [handle.name],
+      before,
+      after,
+      reason: '20 Min strong compression - accessory volume reduced to preserve time for primary work',
+    })
+  }
+  return mutatedCount
+}
+
+/**
+ * [PEX-5B] 15 Min minimum effective set reduction. Reduce non-primary to 2 sets
+ * or fewer if they started with many sets.
+ */
+function applyMinimumEffectiveSetReduction(
+  rows: RowHandle[],
+  cloned: SessionVariant,
+  records: MutationRecord[]
+): number {
+  let mutatedCount = 0
+  for (const handle of rows) {
+    if (handle.isProtectedAnchor) continue
+    if (handle.isFatigueManaged) continue
+    if (handle.sets <= 2) continue
+    
+    const before = handle.sets
+    // Minimum effective: cap non-primary at 2 sets
+    const after = 2
+    if (after >= before) continue
+    
+    const target = cloned.selection.main[handle.index]
+    if (!target) continue
+    target.sets = after
+    mutatedCount += 1
+    records.push({
+      type: 'set_delta',
+      exerciseNames: [handle.name],
+      before,
+      after,
+      reason: '15 Min minimum effective session - non-primary work capped at 2 sets',
+    })
+  }
+  return mutatedCount
+}
+
+/**
+ * [PEX-5B] 10 Min emergency set reduction. Most aggressive - primary anchors
+ * also reduced to 2 sets max, non-primary to 1-2 sets.
+ */
+function applyEmergencySetReduction(
+  rows: RowHandle[],
+  cloned: SessionVariant,
+  records: MutationRecord[]
+): number {
+  let mutatedCount = 0
+  for (const handle of rows) {
+    if (handle.isFatigueManaged) continue
+    
+    const before = handle.sets
+    let after: number
+    
+    if (handle.isProtectedAnchor) {
+      // Even primary anchors get capped at 2 in emergency mode
+      if (before <= 2) continue
+      after = 2
+    } else {
+      // Non-primary: cap at 1-2 sets
+      if (before <= 1) continue
+      after = Math.max(1, before - 2)
+    }
+    
+    if (after >= before) continue
+    
+    const target = cloned.selection.main[handle.index]
+    if (!target) continue
+    target.sets = after
+    mutatedCount += 1
+    records.push({
+      type: 'set_delta',
+      exerciseNames: [handle.name],
+      before,
+      after,
+      reason: handle.isProtectedAnchor 
+        ? '10 Min emergency dose - even primary work reduced to minimum exposure'
+        : '10 Min emergency dose - accessory work minimized for time efficiency',
+      safetyReason: handle.isProtectedAnchor 
+        ? 'Primary skill quality preserved through focused attention on fewer sets'
+        : undefined,
+    })
+  }
+  return mutatedCount
+}
+
+/**
  * Method-preservation note. AB4 does not add new methods; it just records
  * that an upstream-applied method actually carried into THIS short body so
  * the analyser/UI can show it as `executable`. We emit one record per
@@ -516,8 +634,24 @@ export function materializeShortSessionVariant(
   let rpeMutated = 0
   let restMutated = 0
 
-  // 30 Min: aggressive prescription cuts. 45 Min: rest-only trim.
-  if (targetMinutes <= 30) {
+  // [PEX-5B] Extended mutation strategies for 20/15/10 minute variants
+  if (targetMinutes <= 10) {
+    // 10 Min: Emergency dose - maximize efficiency, aggressive cuts
+    setMutated = applyEmergencySetReduction(handles, cloned, records)
+    rpeMutated = apply30MinRpeReduction(handles, cloned, records)
+    restMutated = applyRestReduction(handles, 10, cloned, records)
+  } else if (targetMinutes <= 15) {
+    // 15 Min: Minimum effective - significant cuts but preserve primary quality
+    setMutated = applyMinimumEffectiveSetReduction(handles, cloned, records)
+    rpeMutated = apply30MinRpeReduction(handles, cloned, records)
+    restMutated = applyRestReduction(handles, 15, cloned, records)
+  } else if (targetMinutes <= 20) {
+    // 20 Min: Strong compression - cut sets aggressively on non-primary
+    setMutated = applyStrongSetReduction(handles, cloned, records)
+    rpeMutated = apply30MinRpeReduction(handles, cloned, records)
+    restMutated = applyRestReduction(handles, 20, cloned, records)
+  } else if (targetMinutes <= 30) {
+    // 30 Min: Moderate compression
     setMutated = apply30MinSetReduction(handles, cloned, records)
     rpeMutated = apply30MinRpeReduction(handles, cloned, records)
     restMutated = applyRestReduction(handles, targetMinutes, cloned, records)

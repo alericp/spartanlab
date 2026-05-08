@@ -1402,15 +1402,17 @@ export function reduceSessionIntensity(input: ReduceIntensityInput): ReduceInten
   
   const targetSession = program.sessions[targetSessionIndex]
   
-  // Check for duplicate-apply guard
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existingProvenance = (targetSession as any).intensityReductionProvenance as IntensityReductionProvenance | undefined
-  if (existingProvenance?.step === '24.V.V4') {
+  // Check for duplicate-apply guard using adaptationNotes marker
+  // V.V4 provenance is stored as "[V.V4:timestamp]" prefix in adaptationNotes
+  const hasV4Marker = (targetSession.adaptationNotes || []).some(
+    note => note.startsWith('[V.V4:')
+  )
+  if (hasV4Marker) {
     return {
       status: 'already_reduced',
       visibleSummary: `Intensity was already reduced on "${targetSession.dayLabel}".`,
       evidence: [
-        `Session already has V.V4 provenance from ${existingProvenance.appliedAt}`,
+        'Session already has V.V4 provenance marker in adaptationNotes',
         'Duplicate reduction blocked to prevent stacking',
       ],
       reasonCode: 'already_reduced',
@@ -1493,16 +1495,17 @@ export function reduceSessionIntensity(input: ReduceIntensityInput): ReduceInten
     modifiedFields,
   }
   
-  // Build modified session with provenance
+  // Build modified session with provenance stored in adaptationNotes
+  // Note: intensityReductionProvenance is not a typed field on AdaptiveSession,
+  // so we encode V.V4 provenance within adaptationNotes for duplicate-apply detection.
+  const provenanceMarker = `[V.V4:${provenance.appliedAt}]`
   const modifiedSession = {
     ...targetSession,
     exercises: modifiedExercises,
-    // Attach provenance marker
-    intensityReductionProvenance: provenance,
-    // Update adaptation notes
+    // Store provenance in adaptationNotes (typed field on AdaptiveSession)
     adaptationNotes: [
       ...(targetSession.adaptationNotes || []),
-      `[V.V4] Intensity reduced due to fatigue advisory (${modifiedFields.filter(f => f.field === 'sets').length} exercises had sets reduced)`,
+      `${provenanceMarker} Intensity reduced due to fatigue advisory (${modifiedFields.filter(f => f.field === 'sets').length} exercises had sets reduced)`,
     ],
   }
   
@@ -1511,11 +1514,11 @@ export function reduceSessionIntensity(input: ReduceIntensityInput): ReduceInten
     idx === targetSessionIndex ? modifiedSession : s
   )
   
+  // Note: AdaptiveProgram does not have a root-level lastModified field.
+  // Provenance timestamp is stored in the session's adaptationNotes instead.
   const updatedProgram: import('../adaptive-program-builder').AdaptiveProgram = {
     ...program,
     sessions: updatedSessions,
-    // Update program-level metadata
-    lastModified: new Date().toISOString(),
   }
   
   // Count exercises modified
@@ -1598,10 +1601,17 @@ export function buildReduceIntensityPreview(
   
   const targetSession = program.sessions[targetSessionIndex]
   
-  // Check if already reduced
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existingProvenance = (targetSession as any).intensityReductionProvenance as IntensityReductionProvenance | undefined
-  if (existingProvenance?.step === '24.V.V4') {
+  // Check if already reduced using adaptationNotes marker
+  // V.V4 provenance is stored as "[V.V4:timestamp]" prefix in adaptationNotes
+  const v4MarkerNote = (targetSession.adaptationNotes || []).find(
+    note => note.startsWith('[V.V4:')
+  )
+  if (v4MarkerNote) {
+    // Extract timestamp from marker: "[V.V4:2024-01-01T00:00:00.000Z]"
+    const timestampMatch = v4MarkerNote.match(/\[V\.V4:([^\]]+)\]/)
+    const appliedDate = timestampMatch?.[1] 
+      ? new Date(timestampMatch[1]).toLocaleDateString() 
+      : 'previously'
     return {
       canShow: true,
       targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
@@ -1609,7 +1619,7 @@ export function buildReduceIntensityPreview(
       whatWillChange: [],
       whatWillNotChange: [],
       alreadyReduced: true,
-      blockedReason: `Already reduced on ${new Date(existingProvenance.appliedAt).toLocaleDateString()}`,
+      blockedReason: `Already reduced on ${appliedDate}`,
     }
   }
   

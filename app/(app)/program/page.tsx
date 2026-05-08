@@ -121,14 +121,17 @@ import {
   type ExerciseInfo,
 } from '@/lib/program/injury-substitution-advisory'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory for Program Page
+// [V.V4] Reduce intensity mutation corridor
 import {
   buildMissedWorkoutRecompositionAdvisory,
   getMissedWorkoutAdvisoryDisplayInfo,
   hasActionableMissedWorkoutAdvisory,
   pushMissedWorkoutSessionForward,
+  reduceSessionIntensity,
   type MissedWorkoutRecompositionAdvisory,
   type MissedWorkoutRecompositionInput,
   type PushSessionForwardResult,
+  type ReduceIntensityResult,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2353,9 +2356,91 @@ function ProgramDisplayWrapper({
         }
       }
     },
-    [program, onProgramUpdate] // [STEP 23.7] Include onProgramUpdate in deps for closure correctness
+[program, onProgramUpdate] // [STEP 23.7] Include onProgramUpdate in deps for closure correctness
   )
-
+  
+  // ==========================================================================
+  // [STEP 24.4 / V.V4] Reduce Session Intensity Callback
+  // Program Page owns the mutation path through saveAdaptiveProgram.
+  // This callback is passed to AdaptiveProgramDisplay for reduce intensity action.
+  // First saved-program mutation corridor in Phase V.
+  // ==========================================================================
+  const handleConfirmReduceIntensity = useCallback(
+    async (
+      advisory: MissedWorkoutRecompositionAdvisory,
+      targetSessionIndex: number
+    ): Promise<ReduceIntensityResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          evidence: ['program is null or undefined'],
+          reasonCode: 'no_program',
+        }
+      }
+      
+      console.log('[step-24-vv4-reduce-intensity] Starting reduce intensity', {
+        targetSessionIndex,
+        advisoryAction: advisory.action,
+        programId: program.id,
+        sessionCount: program.sessions?.length,
+      })
+      
+      // Call the pure helper
+      const result = reduceSessionIntensity({
+        program,
+        targetSessionIndex,
+        advisory,
+      })
+      
+      console.log('[step-24-vv4-reduce-intensity] Helper result', {
+        status: result.status,
+        visibleSummary: result.visibleSummary,
+        evidence: result.evidence,
+      })
+      
+      // If blocked or no_change or already_reduced, return early — do not save
+      if (result.status !== 'success' || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        // [V.V4B] Dynamic import to access canonical save function
+        // This preserves Program Page's dynamic-module isolation pattern
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram)
+        
+        // [V.V4C] Update Program Page state via parent callback
+        // onProgramUpdate is passed from parent, which owns setProgram
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[step-24-vv4-reduce-intensity] Program saved successfully', {
+          programId: savedProgram.id,
+          sessionCount: savedProgram.sessions?.length,
+          targetSessionIndex,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+        }
+      } catch (saveError) {
+        console.error('[step-24-vv4-reduce-intensity] Save failed', saveError)
+        return {
+          status: 'blocked',
+          visibleSummary: 'Failed to save the updated program.',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+          reasonCode: 'save_failed',
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
@@ -3082,12 +3167,15 @@ function ProgramDisplayWrapper({
   /* [STEP 22.7 / T.T7] Injury advisory preview — read-only, no mutation.
      Shows which exercises may be affected by joint cautions. */
   injuryAdvisory={injuryAdvisory}
-  /* [STEP 23.2] Missed-workout recomposition advisory — advisory-only.
-     No schedule rewrite, no saved-program mutation, no live workout mutation. */
+/* [STEP 23.2] Missed-workout recomposition advisory — advisory-only.
+  No schedule rewrite, no saved-program mutation, no live workout mutation. */
   missedWorkoutAdvisory={missedWorkoutAdvisory}
   /* [STEP 23.6] Push session forward callback — user-confirmed mutation only.
-     Program Page owns saveAdaptiveProgram. Display requests, Page persists. */
+  Program Page owns saveAdaptiveProgram. Display requests, Page persists. */
   onConfirmMissedWorkoutPushForward={handleConfirmMissedWorkoutPushForward}
+  /* [STEP 24.4 / V.V4] Reduce intensity callback — user-confirmed mutation only.
+  First saved-program mutation corridor in Phase V. */
+  onConfirmReduceIntensity={handleConfirmReduceIntensity}
   />
       </ErrorBoundary>
     </div>

@@ -19,6 +19,7 @@ import {
   Calendar,
   Dumbbell,
   TrendingUp,
+  TrendingDown,
   Info,
   Sparkles,
   Shield,
@@ -128,15 +129,20 @@ import {
 } from '@/lib/program/user-control-coaching'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory — advisory-only, no mutation
 // [V.V3] Recovery spacing preview — preview-only, no mutation
+// [V.V4] Reduce intensity mutation corridor — user-confirmed saved-program mutation
 import type { 
   MissedWorkoutRecompositionAdvisory,
   PushSessionForwardResult,
   RecoverySpacingPreview,
+  ReduceIntensityResult,
+  ReduceIntensityPreview,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 import { 
   getMissedWorkoutAdvisoryDisplayInfo, 
   hasActionableMissedWorkoutAdvisory,
   buildRecoverySpacingPreview,
+  buildReduceIntensityPreview,
+  reduceSessionIntensity,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
@@ -237,15 +243,22 @@ interface AdaptiveProgramDisplayProps {
   // Read-only, advisory-only — no mutation. Preview shows which exercises
   // may be affected by joint cautions, without changing the program.
   injuryAdvisory?: InjurySubstitutionAdvisorySnapshot | null
-  // [STEP 23.2] Missed-workout recomposition advisory for display
+// [STEP 23.2] Missed-workout recomposition advisory for display
   // Advisory-only — no mutation, no schedule rewrite, no saved-program changes.
   missedWorkoutAdvisory?: MissedWorkoutRecompositionAdvisory | null
   // [STEP 23.6] Callback for push session forward — user-confirmed mutation only.
   // Program Page owns the save path. Display requests, Page persists.
   onConfirmMissedWorkoutPushForward?: (
-    advisory: MissedWorkoutRecompositionAdvisory,
-    missedSessionIndex: number
+  advisory: MissedWorkoutRecompositionAdvisory,
+  missedSessionIndex: number
   ) => Promise<PushSessionForwardResult> | PushSessionForwardResult
+  // [STEP 24.4 / V.V4] Callback for reduce session intensity — user-confirmed mutation only.
+  // Program Page owns the save path. Display requests, Page persists.
+  // This enables the first safe saved-program mutation for reduce_next_session_intensity.
+  onConfirmReduceIntensity?: (
+  advisory: MissedWorkoutRecompositionAdvisory,
+  targetSessionIndex: number
+  ) => Promise<ReduceIntensityResult> | ReduceIntensityResult
   }
 
 // =============================================================================
@@ -396,6 +409,8 @@ export function AdaptiveProgramDisplay({
   missedWorkoutAdvisory,
   // [STEP 23.6] Push session forward callback
   onConfirmMissedWorkoutPushForward,
+  // [STEP 24.4 / V.V4] Reduce intensity callback
+  onConfirmReduceIntensity,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -424,6 +439,10 @@ export function AdaptiveProgramDisplay({
   type PushForwardState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed'
   const [pushForwardState, setPushForwardState] = useState<PushForwardState>('idle')
   const [pushForwardResult, setPushForwardResult] = useState<PushSessionForwardResult | null>(null)
+  // [STEP 24.4 / V.V4] Reduce intensity action state — user-confirmed mutation corridor
+  type ReduceIntensityState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed' | 'already_reduced'
+  const [reduceIntensityState, setReduceIntensityState] = useState<ReduceIntensityState>('idle')
+  const [reduceIntensityResult, setReduceIntensityResult] = useState<ReduceIntensityResult | null>(null)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -2050,14 +2069,326 @@ export function AdaptiveProgramDisplay({
         )
       })()}
 
+      {/* [V.V4] Reduce Next Session Intensity Card
+          User-confirmed mutation corridor for reduce_next_session_intensity action.
+          First saved-program mutation corridor in Phase V.
+          @step 24.4 */}
+      {missedWorkoutAdvisory &&
+       missedWorkoutAdvisory.action === 'reduce_next_session_intensity' &&
+       !missedWorkoutAdvisoryDismissed && (() => {
+        // Determine target session — for now use the first incomplete session (index 0)
+        // In a real scenario, this would come from advisory context
+        const targetSessionIndex = 0
+        const intensityPreview = buildReduceIntensityPreview(program, targetSessionIndex)
+        
+        return (
+          <div
+            className="rounded-lg border bg-gradient-to-br from-[#1A1A25]/60 via-[#1A1820]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden"
+            data-step-24-vv4-reduce-intensity-confirmation="true"
+            data-advisory-action="reduce_next_session_intensity"
+            data-user-confirmed={reduceIntensityState === 'applied' ? 'true' : 'false'}
+            data-saved-program-mutation={reduceIntensityState === 'applied' ? 'true' : 'false'}
+            data-no-live-workout-mutation="true"
+          >
+            <div className="p-3">
+              <div className="flex items-start gap-3">
+                {/* Reduce intensity icon */}
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                  missedWorkoutAdvisory.severity === 'high'
+                    ? "bg-amber-500/15"
+                    : "bg-blue-500/15"
+                )}>
+                  <TrendingDown className={cn(
+                    "w-3.5 h-3.5",
+                    missedWorkoutAdvisory.severity === 'high'
+                      ? "text-amber-400"
+                      : "text-blue-400"
+                  )} />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs font-medium text-[#FAFAFA]">
+                      {missedWorkoutAdvisory.title || 'Reduce Next Session Intensity'}
+                    </p>
+                    <span className={cn(
+                      "px-1.5 py-0.5 text-[9px] rounded font-medium",
+                      missedWorkoutAdvisory.severity === 'high'
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-blue-500/15 text-blue-400"
+                    )}>
+                      Adjust
+                    </span>
+                  </div>
+                  
+                  {/* Summary */}
+                  <p className="text-[11px] text-[#9A9AAA] mb-2 leading-relaxed">
+                    {missedWorkoutAdvisory.summary}
+                  </p>
+                  
+                  {/* Applied state */}
+                  {reduceIntensityState === 'applied' && reduceIntensityResult?.status === 'success' && (
+                    <div 
+                      className="p-2 bg-emerald-500/10 rounded border border-emerald-500/30 mb-2"
+                      data-step-24-vv4-reduce-intensity-success="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-emerald-300">
+                            Intensity Reduced
+                          </p>
+                          <p className="text-[10px] text-emerald-400/80 mt-0.5">
+                            {reduceIntensityResult.visibleSummary}
+                          </p>
+                          <p className="text-[9px] text-[#6A6A7A] mt-1">
+                            Saved program updated. Live workout unchanged.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Already reduced state */}
+                  {(reduceIntensityState === 'already_reduced' || intensityPreview.alreadyReduced) && (
+                    <div 
+                      className="p-2 bg-blue-500/10 rounded border border-blue-500/30 mb-2"
+                      data-step-24-vv4-already-reduced="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-blue-300">
+                            Already Reduced
+                          </p>
+                          <p className="text-[10px] text-blue-400/80 mt-0.5">
+                            {intensityPreview.blockedReason || 'This session has already had intensity reduced.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Failed state */}
+                  {reduceIntensityState === 'failed' && (
+                    <div 
+                      className="p-2 bg-red-500/10 rounded border border-red-500/30 mb-2"
+                      data-step-24-vv4-reduce-intensity-failed="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-medium text-red-300">
+                            Could Not Reduce Intensity
+                          </p>
+                          <p className="text-[10px] text-red-400/80 mt-0.5">
+                            {reduceIntensityResult?.visibleSummary || 'An error occurred.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Applying state */}
+                  {reduceIntensityState === 'applying' && (
+                    <div 
+                      className="p-2 bg-[#2A2A35]/50 rounded border border-[#3A3A4A] mb-2"
+                      data-step-24-vv4-applying="true"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+                        <p className="text-[11px] text-[#9A9AAA]">
+                          Reducing intensity...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Confirmation state — show preview of what will change */}
+                  {reduceIntensityState === 'confirming' && intensityPreview.canShow && !intensityPreview.alreadyReduced && (
+                    <div 
+                      className="p-2 bg-amber-500/10 rounded border border-amber-500/30 mb-2"
+                      data-step-24-vv4-confirmation-preview="true"
+                    >
+                      <p className="text-[11px] font-medium text-amber-300 mb-2">
+                        Confirm Intensity Reduction?
+                      </p>
+                      <p className="text-[10px] text-[#8A8A9A] mb-2">
+                        Target: <span className="text-amber-300">{intensityPreview.targetSessionLabel}</span>
+                      </p>
+                      
+                      {/* What will change */}
+                      <div className="mb-2">
+                        <p className="text-[10px] font-medium text-[#9A9AAA] mb-1">What will change:</p>
+                        <ul className="text-[10px] text-[#7A7A8A] space-y-0.5 ml-2">
+                          {intensityPreview.whatWillChange.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-amber-400 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      {/* What will NOT change */}
+                      <div className="mb-2">
+                        <p className="text-[10px] font-medium text-[#9A9AAA] mb-1">What stays the same:</p>
+                        <ul className="text-[10px] text-[#6A6A7A] space-y-0.5 ml-2">
+                          {intensityPreview.whatWillNotChange.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-emerald-500 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      {/* Confirm/cancel buttons */}
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!onConfirmReduceIntensity || !missedWorkoutAdvisory) return
+                            setReduceIntensityState('applying')
+                            try {
+                              const result = await onConfirmReduceIntensity(missedWorkoutAdvisory, targetSessionIndex)
+                              setReduceIntensityResult(result)
+                              if (result.status === 'success') {
+                                setReduceIntensityState('applied')
+                              } else if (result.status === 'already_reduced') {
+                                setReduceIntensityState('already_reduced')
+                              } else {
+                                setReduceIntensityState('failed')
+                              }
+                            } catch (error) {
+                              setReduceIntensityResult({
+                                status: 'blocked',
+                                visibleSummary: 'An unexpected error occurred.',
+                                evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+                                reasonCode: 'unexpected_error',
+                              })
+                              setReduceIntensityState('failed')
+                            }
+                          }}
+                          className="flex-1 h-7 text-xs bg-amber-600/80 hover:bg-amber-600 text-white"
+                          data-step-24-vv4-reduce-intensity-apply="true"
+                        >
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Confirm Reduction
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setReduceIntensityState('idle')}
+                          className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A]"
+                          data-action="cancel-reduce-intensity"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Idle state — show initiate button */}
+                  {reduceIntensityState === 'idle' && 
+                   !intensityPreview.alreadyReduced && 
+                   intensityPreview.canShow &&
+                   onConfirmReduceIntensity && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setReduceIntensityState('confirming')}
+                        className="flex-1 h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                        data-action="initiate-reduce-intensity"
+                      >
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        Review & Reduce Intensity
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                        data-action="dismiss-reduce-intensity"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Idle state without callback — advisory only */}
+                  {reduceIntensityState === 'idle' && 
+                   !intensityPreview.alreadyReduced && 
+                   intensityPreview.canShow &&
+                   !onConfirmReduceIntensity && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="flex-1 h-7 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
+                        data-action="got-it"
+                        data-no-mutation="true"
+                      >
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Got It
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                        data-action="dismiss"
+                        data-no-mutation="true"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Done state — after successful application */}
+                  {reduceIntensityState === 'applied' && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                        className="flex-1 h-7 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                        data-action="done"
+                      >
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Done
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Proof line — shows plan status */}
+                  {reduceIntensityState !== 'applied' && !intensityPreview.alreadyReduced && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                      <span>Your plan has not been changed yet.</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* [STEP 23.2/23.3] Missed-Workout Recomposition Advisory Card (generic)
           Displays advisory when there's actionable guidance about schedule.
           Advisory only — no mutation. No saved-program rewrite.
           [STEP 23.3] Adds user-controlled action buttons — non-mutating.
-          Note: protect_recovery_spacing uses dedicated V.V3 preview above. */}
+          Note: protect_recovery_spacing uses dedicated V.V3 preview above.
+          Note: reduce_next_session_intensity uses dedicated V.V4 corridor above. */}
       {missedWorkoutAdvisory && 
        hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && 
        missedWorkoutAdvisory.action !== 'protect_recovery_spacing' &&
+       missedWorkoutAdvisory.action !== 'reduce_next_session_intensity' &&
        !missedWorkoutAdvisoryDismissed && (() => {
         const displayInfo = getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory)
         return (

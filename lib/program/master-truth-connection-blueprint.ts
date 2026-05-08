@@ -2450,7 +2450,7 @@ function step24(): BlueprintPhase {
       'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
     status: 'PARTIAL',
     nextAction:
-      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). Next: V.V4 — User-confirmed reduce-intensity mutation corridor. Remaining: V.V4-V.V7.',
+      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (user-confirmed reduce-intensity mutation). Next: V.V5 — User-confirmed recovery-spacing mutation corridor. Remaining: V.V5-V.V7.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2502,14 +2502,24 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V4',
         title: 'User-confirmed reduce-intensity mutation corridor',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Two-step confirmation UI',
-          'Pure helper for intensity reduction',
-          'saveAdaptiveProgram persistence',
-          'Reload proof',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V4] IntensityReductionProvenance type with source, action, step, appliedAt, targetSessionIndex, targetSessionLabel, userConfirmed, previewOnly, reason[], modifiedFields[]',
+          '[V.V4] ReduceIntensityResult type with status (success|blocked|no_change|already_reduced), visibleSummary, evidence[], reasonCode, updatedProgram?, provenance?',
+          '[V.V4] reduceSessionIntensity() pure helper — no side effects, no storage, no hooks',
+          '[V.V4] buildReduceIntensityPreview() pure helper for confirmation preview UI',
+          '[V.V4] Two-step confirmation UI in AdaptiveProgramDisplay with idle→confirming→applying→applied states',
+          '[V.V4] Duplicate-apply guard via intensityReductionProvenance marker on session',
+          '[V.V4] Safe mutation fields only: sets reduced by 1 (minimum 2), coaching note added',
+          '[V.V4] Exercise identity preserved, skill representation preserved, schedule unchanged',
+          '[V.V4] handleConfirmReduceIntensity callback in Program Page using saveAdaptiveProgram',
+          '[V.V4] Program Page state updated via onProgramUpdate after successful save',
+          '[V.V4] No live workout mutation — data-no-live-workout-mutation="true" marker',
+          '[V.V4] No generator changes, no schema changes, no package changes',
+          '[V.V4] protect_recovery_spacing remains preview-only (V.V3 preserved)',
+          '[V.V4] Created docs/STEP_24_VV4_REDUCE_INTENSITY_MUTATION_CORRIDOR.md',
         ],
+        remainingWork: [],
       },
       {
         id: 'V.V5',

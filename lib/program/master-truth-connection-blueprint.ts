@@ -2632,6 +2632,8 @@ function step25(): BlueprintPhase {
           '[STEP 25.5] Color-coded badges: emerald (ready), blue (controlled), purple (protect), amber (reduce), gray (collecting)',
           '[STEP 25.5] Advisory-only — does NOT mutate program or sessions',
           '[STEP 25.5] Honest "Building baseline" fallback when insufficient data',
+          '[STEP 25.5A] Fixed invalid sessionLengthTruth.selectedMinutes — now reads programVerdict for short-session context',
+          '[STEP 25.5B] Visible/runtime validation PASSED — helper imported, called with real program, UI renders from helper result',
         ],
         remainingWork: [],
       },

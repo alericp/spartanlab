@@ -65,6 +65,7 @@ import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contrac
 import { buildProgramDecisionsNarrative, type ProgramDecisionsNarrative } from '@/lib/program/program-decisions-narrative'
 import { deriveProgressionClarity, type ProgressionClarity } from '@/lib/program/performance-progression-clarity'
 import { deriveTodaySessionGuidance, type TodaySessionGuidance } from '@/lib/program/adaptive-session-readiness-guidance'
+import { deriveAllSelectedSkillRepresentations, getRepresentationStateStyles, type SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
 import { 
   advanceToNextWeek, 
   advanceToWeek,
@@ -841,66 +842,17 @@ export function AdaptiveProgramDisplay({
   })
   
   // ==========================================================================
-  // [SKILL-REPRESENTATION-TRUTH] PART B: Show ALL selected skills with representation labels
-  // Skills that don't meet strict threshold are still shown but labeled as indirect/support
-  // This ensures NO SKILL SILENTLY DISAPPEARS
+  // [W.W8] SELECTED SKILL REPRESENTATION TRUTH
+  // Uses centralized helper for consistent display derivation and explanations.
+  // Every selected skill is visible with honest representation state.
   // ==========================================================================
-  type SkillRepresentationType = 'primary' | 'direct' | 'support' | 'accessory'
-  
-  interface SkillWithRepresentation {
-    skill: string
-    representationType: SkillRepresentationType
-    label: string
-    isPrimary: boolean
-  }
-  
-  const allSelectedSkillsWithRepresentation: SkillWithRepresentation[] = safeSelectedSkills.map(skill => {
-    const chipState = getSharedChipState(skill)
-    // [BUILD GREEN GATE] safeWeeklyRepresentation is now typed via the local
-    // DisplayWeeklyRepresentation contract, so `.policies.find(...)` resolves
-    // without inline casts. `??` preserves valid zero exposures.
-    const policy = safeWeeklyRepresentation?.policies.find(p => p.skill === skill)
-    const directExposure = policy?.actualExposure?.direct ?? 0
-    const totalExposure = policy?.actualExposure?.total ?? 0
-    
-    const isHeadline = chipState === 'headline_priority'
-    const hasMeaningfulDirect = directExposure >= 2
-    const hasSignificantTotal = totalExposure >= 3
-    
-    // Determine representation type
-    let representationType: SkillRepresentationType
-    let label: string
-    
-    if (isHeadline) {
-      representationType = 'primary'
-      label = skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    } else if (hasMeaningfulDirect) {
-      representationType = 'direct'
-      label = skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    } else if (hasSignificantTotal || chipState === 'support_only' || sharedWeekSupportSkills.includes(skill)) {
-      representationType = 'support'
-      label = `${skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Support)`
-    } else {
-      // Still selected but only represented through accessory/carryover work
-      representationType = 'accessory'
-      label = `${skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Accessory)`
-    }
-    
-    return {
-      skill,
-      representationType,
-      label,
-      isPrimary: isHeadline,
-    }
+  const selectedSkillRepresentations: SelectedSkillRepresentationDisplay[] = deriveAllSelectedSkillRepresentations({
+    selectedSkills: safeSelectedSkills,
+    headlineSkills: sharedHeadlineSkills,
+    weeklyRepresentationPolicies: safeWeeklyRepresentation?.policies,
+    weekSupportSkills: sharedWeekSupportSkills,
+    weekRepresentedSkills: sharedRepresentedSkills,
   })
-  
-  // Separate into primary/direct skills and support/accessory skills
-  const primaryDirectSkills = allSelectedSkillsWithRepresentation.filter(
-    s => s.representationType === 'primary' || s.representationType === 'direct'
-  )
-  const supportAccessorySkills = allSelectedSkillsWithRepresentation.filter(
-    s => s.representationType === 'support' || s.representationType === 'accessory'
-  )
   
 
   
@@ -1081,42 +1033,30 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
         
-        {/* [SKILL-REPRESENTATION-TRUTH] All Skills Focus - Show ALL selected skills with representation type */}
-        {safeSelectedSkills.length > 0 && (
+        {/* [W.W8] SELECTED SKILL REPRESENTATION TRUTH — All Skills with Honest States */}
+        {selectedSkillRepresentations.length > 0 && (
           <div className="px-4 py-2.5 border-t border-[#333]/30">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
-              {/* Primary/Direct Skills - shown prominently */}
-              {primaryDirectSkills.map(({ skill, representationType, isPrimary }) => (
-                <span 
-                  key={skill}
-                  className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
-                    isPrimary 
-                      ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
-                      : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
-                  }`}
-                >
-                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </span>
-              ))}
-              {/* Support/Accessory Skills - visually distinct styling per type */}
-              {supportAccessorySkills.map(({ skill, representationType }) => (
-                <span 
-                  key={skill}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                    representationType === 'support'
-                      ? 'bg-amber-500/8 text-amber-400/80 border border-amber-500/15'
-                      : 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-[#2A2A2A]'
-                  }`}
-                  title={representationType === 'support' 
-                    ? 'Developed through support work this week' 
-                    : 'Developed through accessory/carryover work'}
-                >
-                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </span>
-              ))}
+              {selectedSkillRepresentations.map((rep) => {
+                const styles = getRepresentationStateStyles(rep.state)
+                return (
+                  <span 
+                    key={rep.skill}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${styles.chipClass}`}
+                    title={rep.explanation}
+                  >
+                    <span>{rep.label}</span>
+                    {/* Show badge for non-primary states to clarify representation */}
+                    {rep.state !== 'headline_priority' && rep.state !== 'direct' && (
+                      <span className={`text-[8px] ${styles.badgeClass}`}>
+                        ({rep.visibleBadge})
+                      </span>
+                    )}
+                  </span>
+                )
+              })}
             </div>
-
           </div>
         )}
         

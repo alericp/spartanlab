@@ -1166,3 +1166,126 @@ export function buildMultiMissedWorkoutContextAdvisory(
     step: '24.1',
   }
 }
+
+// =============================================================================
+// STEP 24 / V.V3 — PROTECT RECOVERY SPACING PREVIEW
+// =============================================================================
+
+/**
+ * Preview model for protect_recovery_spacing advisory action.
+ * Pure, read-only, no-mutation.
+ * 
+ * @step 24.3 (V.V3)
+ */
+export interface RecoverySpacingPreview {
+  /** Whether this preview should be shown */
+  shouldShow: boolean
+  /** Preview title */
+  title: string
+  /** Summary of why recovery spacing matters */
+  summary: string
+  /** Bullet points for the preview */
+  previewBullets: string[]
+  /** Why recovery spacing is important in this case */
+  whyThisMatters: string[]
+  /** What may need to change (general guidance, not exact sessions) */
+  suggestedActions: string[]
+  /** Labels of affected sessions if known; empty if exact sessions unknown */
+  affectedSessionLabels: string[]
+  /** Reason if exact session preview is unavailable */
+  unavailableReason?: string
+  /** Mutation status flags — all must be false */
+  canAutoApplyNow: false
+  savedProgramMutationAllowed: false
+  liveWorkoutMutationAllowed: false
+  /** Preview-only marker */
+  previewOnly: true
+  /** Step identifier */
+  step: '24.3'
+}
+
+/**
+ * Build a preview for protect_recovery_spacing advisory action.
+ * 
+ * CRITICAL INVARIANTS:
+ * - Pure function — no side effects, no storage, no hooks
+ * - Does NOT mutate any state
+ * - Derives all content from advisory truth
+ * - Does NOT invent session names or dates
+ * - Does NOT claim changes have been applied
+ * - All mutation flags remain false
+ * 
+ * @step 24.3 (V.V3)
+ */
+export function buildRecoverySpacingPreview(
+  advisory: MissedWorkoutRecompositionAdvisory
+): RecoverySpacingPreview {
+  // Only show for protect_recovery_spacing action
+  if (advisory.action !== 'protect_recovery_spacing') {
+    return {
+      shouldShow: false,
+      title: '',
+      summary: '',
+      previewBullets: [],
+      whyThisMatters: [],
+      suggestedActions: [],
+      affectedSessionLabels: [],
+      canAutoApplyNow: false,
+      savedProgramMutationAllowed: false,
+      liveWorkoutMutationAllowed: false,
+      previewOnly: true,
+      step: '24.3',
+    }
+  }
+
+  // Build preview from advisory truth
+  const previewBullets: string[] = []
+  const whyThisMatters: string[] = []
+  const suggestedActions: string[] = []
+
+  // Extract reasoning as "why this matters"
+  for (const reason of advisory.reasoning) {
+    whyThisMatters.push(reason)
+  }
+
+  // Extract evidence as preview bullets
+  for (const ev of advisory.evidence) {
+    previewBullets.push(ev)
+  }
+
+  // Build suggested actions based on advisory content
+  if (advisory.severity === 'high') {
+    suggestedActions.push('Add an extra rest day before your next demanding session')
+    suggestedActions.push('Avoid stacking high-stress sessions back-to-back')
+  }
+  suggestedActions.push('Review your weekly schedule for recovery windows')
+  if (advisory.userFacingRecommendation) {
+    // Extract actionable parts from recommendation
+    if (advisory.userFacingRecommendation.toLowerCase().includes('intensity')) {
+      suggestedActions.push('Consider reducing intensity if spacing cannot be protected')
+    }
+  }
+
+  // Note: We cannot identify exact affected sessions without program context
+  // V.V5 will add the saved-program mutation corridor that enables exact session identification
+  const affectedSessionLabels: string[] = []
+  const unavailableReason = 
+    'Exact session-shift preview requires the V.V5 saved-program mutation corridor. ' +
+    'This preview shows general guidance based on advisory evidence.'
+
+  return {
+    shouldShow: true,
+    title: advisory.title || 'Protect Recovery Spacing',
+    summary: advisory.summary || 'Recovery spacing protection is recommended based on current fatigue and session stress.',
+    previewBullets,
+    whyThisMatters,
+    suggestedActions,
+    affectedSessionLabels,
+    unavailableReason,
+    canAutoApplyNow: false,
+    savedProgramMutationAllowed: false,
+    liveWorkoutMutationAllowed: false,
+    previewOnly: true,
+    step: '24.3',
+  }
+}

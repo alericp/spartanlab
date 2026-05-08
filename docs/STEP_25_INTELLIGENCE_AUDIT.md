@@ -224,11 +224,23 @@ Answering as a real paying SpartanLab user, with code evidence:
   - **Guard:** `available: false` returned when Y2 calibration is missing
   - **All fields derive from real `trainingDifferentiationCalibration.weeklyRoleSummary` rows**
 
-### Step 25.4 — Performance Progression Clarity [NOT_STARTED]
-- [ ] Show week-to-week progression status
-- [ ] Display session-to-session load progression
-- [ ] Explain why progression is happening or being constrained
-- [ ] Must derive from real program/performance evidence
+### Step 25.4 — Performance Progression Clarity [COMPLETE]
+- [x] Show week-to-week progression status
+  - **Implementation:** Progression Clarity section added to AdaptiveProgramDisplay.tsx
+  - **Source:** `deriveProgressionClarity(program)` from `lib/program/performance-progression-clarity.ts`
+  - **Truth sources:** `evidenceCalibrationInfluence` (AB12-2) + `evidenceCalibrationShapingProof` (AB13-4)
+- [x] Display session-to-session load progression
+  - **Five states:** advancing, building, holding, protecting, not_enough_evidence
+  - **Color-coded badge:** emerald (advancing), blue (building), amber (holding), purple (protecting), gray (not_enough_evidence)
+- [x] Explain why progression is happening or being constrained
+  - **Reasons array:** Max 3 compact reasons with label + message
+  - **Next focus:** Actionable guidance for what to do next
+  - **Conservative mode:** Shows RPE capping proof when `shapingProof.cappedExerciseCount > 0`
+  - **Volume/recovery bias:** Surfaces volume reduction and recovery prioritization honestly
+- [x] Must derive from real program/performance evidence
+  - **Guard:** Returns "Building baseline" + "collecting data" when evidence is insufficient
+  - **Week 1-2 detection:** Early programs show appropriate baseline-building message
+  - **No fake claims:** Never invents progression targets not backed by real fields
 
 ### Step 25.5 — Adaptive Session Readiness / Today Guidance Upgrade [NOT_STARTED]
 - [ ] Improve today guidance based on readiness, soreness, time, fatigue

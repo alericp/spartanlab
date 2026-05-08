@@ -1524,13 +1524,7 @@ export function AdaptiveProgramDisplay({
         const hasSubstitutions = itemsByType.substitution.length > 0
         
         return (
-          <div 
-            className="rounded-lg border bg-gradient-to-br from-[#1A1820]/60 via-[#1A1A25]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden"
-            data-ww9-coaching-integration="true"
-            data-coaching-status={coachingModel.status}
-            data-coaching-risk={coachingModel.riskLevel}
-            data-no-program-mutation="true"
-          >
+          <div className="rounded-lg border bg-gradient-to-br from-[#1A1820]/60 via-[#1A1A25]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden">
             {/* Coaching header */}
             <div className="px-3 py-2 border-b border-[#2A2A35]/50 bg-[#15151A]/30">
               <div className="flex items-center gap-2">
@@ -1628,12 +1622,7 @@ export function AdaptiveProgramDisplay({
         const severityStyles = topPattern ? getUserControlSeverityStyles(topPattern.severity) : getUserControlSeverityStyles('low')
         
         return (
-          <div 
-            className="rounded-lg border bg-gradient-to-br from-[#181A20]/60 via-[#1A1A22]/50 to-[#1A1820]/60 border-[#2A2A30] overflow-hidden"
-            data-ww10-user-control="true"
-            data-coaching-status={userControlModel.status}
-            data-no-program-mutation="true"
-          >
+          <div className="rounded-lg border bg-gradient-to-br from-[#181A20]/60 via-[#1A1A22]/50 to-[#1A1820]/60 border-[#2A2A30] overflow-hidden">
             {/* Header */}
             <div className="px-3 py-2 border-b border-[#2A2A30]/50 bg-[#15151A]/30">
               <div className="flex items-center gap-2">
@@ -1856,13 +1845,7 @@ export function AdaptiveProgramDisplay({
           Preview only — no mutation. Shows which exercises may be affected
           by joint cautions, without changing the program. */}
       {injuryAdvisory && hasActionableInjuryAdvisory(injuryAdvisory) && (
-        <div 
-          className="rounded-lg border bg-gradient-to-r from-[#2A1A1A]/50 to-[#1A1A20]/50 border-[#3A2A2A] overflow-hidden"
-          data-step-22-7-injury-advisory-preview="true"
-          data-advisory-status={injuryAdvisory.status}
-          data-affected-exercises={injuryAdvisory.affectedExerciseCount}
-          data-no-program-mutation="true"
-        >
+        <div className="rounded-lg border bg-gradient-to-r from-[#2A1A1A]/50 to-[#1A1A20]/50 border-[#3A2A2A] overflow-hidden">
           <div className="p-3">
             <div className="flex items-start gap-3">
               {/* Icon based on status */}
@@ -1930,14 +1913,7 @@ export function AdaptiveProgramDisplay({
       {missedWorkoutAdvisory && hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && !missedWorkoutAdvisoryDismissed && (() => {
         const displayInfo = getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory)
         return (
-          <div 
-            className="rounded-lg border bg-gradient-to-r from-[#1A1A25]/50 to-[#1A1A20]/50 border-[#2A2A35] overflow-hidden"
-            data-step-23-2-missed-workout-advisory="true"
-            data-step-23-3-user-actions="true"
-            data-advisory-action={missedWorkoutAdvisory.action}
-            data-advisory-severity={missedWorkoutAdvisory.severity}
-            data-no-program-mutation="true"
-          >
+          <div className="rounded-lg border bg-gradient-to-r from-[#1A1A25]/50 to-[#1A1A20]/50 border-[#2A2A35] overflow-hidden">
             <div className="p-3">
               <div className="flex items-start gap-3">
                 {/* Icon based on severity */}

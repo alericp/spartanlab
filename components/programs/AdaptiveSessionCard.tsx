@@ -8248,6 +8248,22 @@ function ExerciseRow({
               )}
             </div>
           )}
+          {/* [WW7] RPE / Effort Guidance — shows what the target effort means */}
+          {coachingGuidance.effortGuidance && (
+            <div className="flex items-start gap-1.5 pl-[3.5rem]">
+              <span className="text-[8px] uppercase tracking-wider font-medium text-[#6A7A8A] shrink-0 pt-0.5">
+                Effort feel
+              </span>
+              <span className="text-[9px] text-[#8A8A8A]">
+                {coachingGuidance.effortGuidance.band}
+                {coachingGuidance.effortGuidance.rpe !== undefined && (
+                  <span className="text-[#5A6A7A] ml-1">(RPE {coachingGuidance.effortGuidance.rpe})</span>
+                )}
+                <span className="text-[#6A6A6A] ml-1">—</span>
+                <span className="text-[#7A7A7A] ml-1">{coachingGuidance.effortGuidance.cue}</span>
+              </span>
+            </div>
+          )}
           {/* Optional caution line when real logic supports it */}
           {coachingGuidance.caution && (
             <p className="text-[9px] text-amber-400/70 italic pl-[3.5rem]">

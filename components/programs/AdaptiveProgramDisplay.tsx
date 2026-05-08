@@ -63,6 +63,7 @@ import {
 } from '@/lib/program/program-display-contract'
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { buildProgramDecisionsNarrative, type ProgramDecisionsNarrative } from '@/lib/program/program-decisions-narrative'
+import { deriveProgressionClarity, type ProgressionClarity } from '@/lib/program/performance-progression-clarity'
 import { 
   advanceToNextWeek, 
   advanceToWeek,
@@ -415,6 +416,11 @@ export function AdaptiveProgramDisplay({
   // [STEP 25.3] Program Decisions Narrative — why this program was built this way
   const decisionsNarrative: ProgramDecisionsNarrative | null = program 
     ? buildProgramDecisionsNarrative(program) 
+    : null
+  
+  // [STEP 25.4] Performance Progression Clarity — current progression status
+  const progressionClarity: ProgressionClarity | null = program
+    ? deriveProgressionClarity(program)
     : null
   
   // ==========================================================================
@@ -1338,6 +1344,58 @@ export function AdaptiveProgramDisplay({
                     </span>
                   )}
                 </div>
+              </div>
+            )}
+            
+            {/* [STEP 25.4] Performance Progression Clarity — current progression status */}
+            {progressionClarity && progressionClarity.available && (
+              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <TrendingUp className="w-3 h-3 text-[#E63946]/50" />
+                  <span className="text-[10px] text-[#7A7A7A] font-medium">Progression status</span>
+                  {/* Status badge */}
+                  <span className={cn(
+                    "ml-auto px-1.5 py-0.5 rounded text-[8px] font-medium",
+                    progressionClarity.status === 'advancing' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/80",
+                    progressionClarity.status === 'building' && "bg-blue-500/10 border border-blue-500/20 text-blue-400/80",
+                    progressionClarity.status === 'holding' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/80",
+                    progressionClarity.status === 'protecting' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/80",
+                    progressionClarity.status === 'not_enough_evidence' && "bg-gray-500/10 border border-gray-500/20 text-gray-400/80",
+                  )}>
+                    {progressionClarity.headline}
+                  </span>
+                </div>
+                
+                {/* Summary */}
+                <p className="text-[10px] text-[#8A8A8A] leading-relaxed mb-1.5">
+                  {progressionClarity.summary}
+                </p>
+                
+                {/* Reasons */}
+                {progressionClarity.reasons.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {progressionClarity.reasons.map((reason) => (
+                      <span
+                        key={reason.id}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[9px] bg-[#1A1A1A]/60 border border-[#333]/40 text-[#9A9A9A]"
+                        title={reason.message}
+                      >
+                        {reason.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Next focus */}
+                {progressionClarity.nextFocus && (
+                  <div className="flex items-start gap-1.5 pt-1.5 border-t border-[#2A2A2A]/50">
+                    <ArrowRight className="w-3 h-3 text-[#6A6A6A] mt-0.5 shrink-0" />
+                    <p className="text-[9px] text-[#7A7A7A]">
+                      <span className="text-[#8A8A8A] font-medium">{progressionClarity.nextFocus.label}:</span>{' '}
+                      {progressionClarity.nextFocus.message}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

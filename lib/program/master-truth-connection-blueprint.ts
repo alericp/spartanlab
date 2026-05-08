@@ -2554,7 +2554,7 @@ function step25(): BlueprintPhase {
       'Audit and enhance SpartanLab intelligence delivery. Make existing computed intelligence visible and actionable. Improve program decision explanations. Clarify performance progression. Upgrade adaptive session/today guidance. Enhance exercise-level coaching. Improve rest/RPE/effort usability. Verify selected skill representation. Integrate recovery/injury/substitution coaching. Give users safe controls. Reduce coaching noise. Lock end-to-end truth-to-UI intelligence delivery.',
     status: 'PARTIAL',
     nextAction:
-      'Step 25.3 COMPLETE — Program Decision Explanation Upgrade. "Why this program" section added using buildProgramDecisionsNarrative that derives topLevelStrategyLabel, supportingSentence, perDayStressBreakdown, safetyTag, and densityVisibleLine from Y2 trainingDifferentiationCalibration. All explanations trace to real computed fields. Next: Step 25.4 Performance Progression Clarity.',
+      'Step 25.4 COMPLETE — Performance Progression Clarity. Progression status section added using deriveProgressionClarity that derives status (advancing/building/holding/protecting/not_enough_evidence), reasons, and next focus from evidenceCalibrationInfluence and evidenceCalibrationShapingProof. No fake claims — insufficient evidence returns honest state. Next: Step 25.5 Adaptive Session Readiness / Today Guidance Upgrade.',
     subtasks: [
       {
         id: 'W.W1',
@@ -2606,14 +2606,19 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W4',
         title: 'Performance Progression Clarity',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Show week-to-week progression status (advancing/holding/capped/reduced)',
-          'Display session-to-session load progression',
-          'Explain why progression is happening or being constrained',
-          'Must derive from real program/performance evidence',
+        status: 'COMPLETE',
+        evidence: [
+          '[STEP 25.4] Progression Clarity section added to AdaptiveProgramDisplay.tsx',
+          '[STEP 25.4] New helper lib/program/performance-progression-clarity.ts created',
+          '[STEP 25.4] Derives status from evidenceCalibrationInfluence (AB12-2) and evidenceCalibrationShapingProof (AB13-4)',
+          '[STEP 25.4] Five progression states: advancing, building, holding, protecting, not_enough_evidence',
+          '[STEP 25.4] Shows headline, summary, reasons (max 3), and next focus',
+          '[STEP 25.4] Conservative progression shows RPE capping proof when shapingProof.cappedExerciseCount > 0',
+          '[STEP 25.4] Volume/recovery bias influences progression status honestly',
+          '[STEP 25.4] Early weeks (1-2) show "Building baseline" with appropriate guidance',
+          '[STEP 25.4] No fake progression claims — insufficient evidence returns honest "collecting data" state',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W5',

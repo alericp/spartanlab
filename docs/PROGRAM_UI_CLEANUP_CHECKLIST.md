@@ -188,22 +188,31 @@ The Program page has become functionally strong and intelligence-rich, but visua
 
 ### P5 — Final Program UI Acceptance Pass
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Final visual audit, copy polish, and acceptance testing across all cleanup phases.
 
-**Files Likely Involved:**
-- All Program UI components
-- docs/PROGRAM_UI_CLEANUP_CHECKLIST.md
+**Files Changed:**
+- `components/programs/CalibrationCheckpointCard.tsx`
+- `docs/PROGRAM_UI_CLEANUP_CHECKLIST.md`
+
+**What Changed:**
+- Fixed Calibration Checkpoint collapsed badge to show total visible test count instead of priority-essential subset
+- Badge now shows "X recommended tests" matching the number of rows rendered in expanded view
+- Before: "2 essential tests" when 3 tests were visible (L-Sit Hold, Max Dips, Max Push-Ups)
+- After: "3 recommended tests" correctly matching the 3 visible test rows
+- Final UI audit confirmed all P1-P4 changes remain intact
+- Verified no internal/debug language dominates default views
+- Verified all proof preserved behind appropriate toggles
 
 **Acceptance Criteria:**
-- [ ] All P1-P4 items complete
-- [ ] Program page feels premium, clean, precise
-- [ ] Normal users can understand what matters quickly
-- [ ] Advanced proof available behind accordions
-- [ ] No internal/debug language in default view
-- [ ] TypeScript compiles
-- [ ] Production build passes
+- [x] All P1-P4 items complete
+- [x] Program page feels premium, clean, precise
+- [x] Normal users can understand what matters quickly
+- [x] Advanced proof available behind accordions
+- [x] No internal/debug language in default view
+- [x] TypeScript compiles
+- [x] Production build passes
 
 **No-Breakage Constraints:**
 - No logic changes
@@ -220,7 +229,7 @@ The Program page has become functionally strong and intelligence-rich, but visua
 | P2 | Why This Plan cleanup | COMPLETE |
 | P3 | Weekly Method Decisions cleanup | COMPLETE |
 | P4 | Session card chip density cleanup | COMPLETE |
-| P5 | Final acceptance pass | NOT_STARTED |
+| P5 | Final acceptance pass | COMPLETE |
 
 ---
 
@@ -259,3 +268,17 @@ The Program page has become functionally strong and intelligence-rich, but visua
 - All demoted content preserved and accessible when expanded
 - All data attributes preserved for QA/testing
 - No generator, session structure, warm-up/cool-down, Start Workout, or live workout changes
+
+### P5 (Complete)
+- CalibrationCheckpointCard: Fixed collapsed badge to show total visible test count
+- Before: Badge showed "2 essential tests" (counting only priority=essential) when 3 test rows were rendered
+- After: Badge shows "3 recommended tests" (counting tests.length to match visible rows)
+- Final UI audit confirmed P1-P4 changes remain intact:
+  - Why This Plan: coach-friendly summary visible, technical details behind toggle
+  - Calibration Checkpoint: collapsed by default, accurate count badge
+  - Coaching Feedback Loop: collapsed by default, clear header
+  - Weekly Method Strategy: collapsed day-by-day, coach-friendly terminology
+  - Session Cards: cleaner with "View session details" toggle for heavy proof
+- No internal/debug terms dominate default views
+- All proof preserved behind appropriate disclosure toggles
+- No generator, schema, method engine, or training logic changes

@@ -399,12 +399,12 @@ export function CalibrationCheckpointCard({
   const safety = recommendation.safeToTestToday
   const showSafetyNote = safety !== 'safe' || fetchError !== null
   
-  // [P1] Build compact summary for collapsed header
-  const essentialCount = tests.filter((t) => t.priority === 'essential').length
-  const testCountLabel =
-    essentialCount > 0
-      ? `${essentialCount} essential test${essentialCount > 1 ? 's' : ''}`
-      : `${tests.length} suggested test${tests.length > 1 ? 's' : ''}`
+  // [P5] Build compact summary for collapsed header
+  // The badge must match the number of visible test rows rendered in the
+  // expanded body. We count tests.length (the same array mapped to rows),
+  // not a priority subset, to avoid "2 essential tests" when 3 rows render.
+  const visibleTestCount = tests.length
+  const testCountLabel = `${visibleTestCount} recommended test${visibleTestCount === 1 ? '' : 's'}`
 
   return (
     <>

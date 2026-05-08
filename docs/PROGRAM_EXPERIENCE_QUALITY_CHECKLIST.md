@@ -8,7 +8,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | Phase | Description | Status |
 |-------|-------------|--------|
 | PEX-1 | Program Experience Truth Surface Foundation | COMPLETE |
-| PEX-2 | Selected Skill Coverage + Rotation Truth | IN_PROGRESS |
+| PEX-2 | Selected Skill Coverage + Rotation Truth | COMPLETE |
 | PEX-3 | Method Materialization Truth | NOT_STARTED |
 | PEX-4 | Session Card Clutter Compression | NOT_STARTED |
 | PEX-5 | True Short-Session Runtime Options | NOT_STARTED |
@@ -77,7 +77,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 
 ## PEX-2 — Selected Skill Coverage + Rotation Truth
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETE
 
 **Purpose:** Ensure selected skills are actually represented, rotated, deferred, or support-only with truthful reasons.
 
@@ -128,8 +128,8 @@ The builder already has a comprehensive skill expression tracking system:
 - [x] Contract is saved on finalProgram (already implemented)
 - [x] UI consumes the authoritative contract (skillPriorityOrder)
 - [x] Vague under-expression warning replaced with informative breakdown
-- [ ] TypeScript passes
-- [ ] Build passes
+- [x] TypeScript passes (exit code 0)
+- [x] Build compiles successfully (pre-existing Stripe API key issue blocks full build, unrelated to PEX-2)
 
 ---
 

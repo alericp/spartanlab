@@ -151,25 +151,38 @@ The Program page has become functionally strong and intelligence-rich, but visua
 
 ### P4 — Session Card Chip Density Cleanup
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
-**Purpose:** Reduce visual noise from session chips. Keep primary coaching chips visible, demote technical/audit chips to expanded "Why this day?" details.
+**Purpose:** Reduce visual noise from session chips. Keep primary coaching chips visible, demote technical/audit chips to expanded "View session details" area.
 
-**Files Likely Involved:**
+**Files Changed:**
 - `components/programs/AdaptiveSessionCard.tsx`
-- `lib/program/program-display-priority.ts`
+
+**What Changed:**
+- Added `showSessionDetails` state to control visibility of heavy proof sections
+- Doctrine Materialization panel now collapsed by default behind "View session details" toggle
+- Material Composition Truth Lock (adaptation chips) now collapsed by default
+- Method decisions line now collapsed by default
+- Visible method chips now collapsed by default
+- Multi-structure composition coach line now collapsed by default
+- "View session details" / "Hide session details" toggle added below meta line
+- Primary coaching signals remain visible: day label, role, intensity, stress proof, RPE band, time/exercise count
+- All demoted content preserved and accessible when expanded
+- All data attributes preserved for QA/testing
 
 **Acceptance Criteria:**
-- [ ] Primary coaching chips visible by default (e.g., Intensity level, Recovery focus)
-- [ ] Technical chips demoted (e.g., Finisher blocked, RPE capped, Secondary trimmed)
-- [ ] "Why this day?" expansion shows all chips
-- [ ] No duplicate chips
-- [ ] No data loss
+- [x] Primary coaching chips visible by default (day role, intensity, stress label)
+- [x] Technical chips demoted (Finisher blocked, RPE capped, Secondary trimmed, etc.)
+- [x] "View session details" expansion shows all chips
+- [x] No duplicate chips
+- [x] No data loss
 
 **No-Breakage Constraints:**
 - No generator changes
 - No session structure changes
 - No warm-up/cool-down changes
+- No Start Workout behavior changes
+- No live workout changes
 
 ---
 
@@ -206,7 +219,7 @@ The Program page has become functionally strong and intelligence-rich, but visua
 | P1 | Collapse proof/calibration surfaces | COMPLETE |
 | P2 | Why This Plan cleanup | COMPLETE |
 | P3 | Weekly Method Decisions cleanup | COMPLETE |
-| P4 | Session card chip density cleanup | NOT_STARTED |
+| P4 | Session card chip density cleanup | COMPLETE |
 | P5 | Final acceptance pass | NOT_STARTED |
 
 ---
@@ -237,3 +250,12 @@ The Program page has become functionally strong and intelligence-rich, but visua
 - Coaching footnote rewritten for premium coach voice
 - All data attributes and method decision truth preserved
 - No method engine, generator, schema, or training logic changes
+
+### P4 (Complete)
+- AdaptiveSessionCard: Added `showSessionDetails` state to collapse heavy proof sections by default
+- Demoted to "View session details": Doctrine Materialization panel, Material Composition Truth Lock (adaptation chips), Method decisions line, Visible method chips, Multi-structure composition line
+- Kept visible by default: Day label, role label, intensity class, stress distribution proof, RPE band, weekly day purpose, quality/safety warnings, time/exercise meta line
+- "View session details" / "Hide session details" toggle button added below meta line
+- All demoted content preserved and accessible when expanded
+- All data attributes preserved for QA/testing
+- No generator, session structure, warm-up/cool-down, Start Workout, or live workout changes

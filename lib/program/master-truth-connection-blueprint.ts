@@ -2445,12 +2445,12 @@ function step24(): BlueprintPhase {
   // Usability/Performance branch (Step 25) is stronger.
   return {
     id: 'V',
-    title: '[PARKED] Missed-Workout Recomposition Expansion (Step 24) — Return After Step 25',
+    title: 'Missed-Workout Recomposition Expansion (Step 24) — ACTIVE after Step 25',
     purpose:
-      'PARKED: Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. PARKED until Step 25 Intelligence branch is complete.',
-    status: 'DO_NOT_REDO',
+      'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
+    status: 'PARTIAL',
     nextAction:
-      'PARKED. Step 24.1 COMPLETE. Remaining V.V2-V.V7 subtasks deferred. Return to this branch after Step 25 Intelligence/Coaching/Usability/Performance Enhancement is stronger. Do not continue missed-workout multi-action expansion until core intelligence delivery is proven.',
+      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). Next: V.V3 — Protect recovery spacing preview-only action. Remaining: V.V3-V.V7.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2468,13 +2468,18 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V2',
         title: 'Additional action readiness audit for reduce_next_session_intensity',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Audit existing reduce_next_session_intensity advisory path',
-          'Identify mutation requirements if user confirms',
-          'Document safety bounds for intensity reduction',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V2] Audited reduce_next_session_intensity path in missed-workout-recomposition-advisory.ts (lines 398-418, 423-445)',
+          '[V.V2] Action triggers on high fatigue or soreness with non-high-stress next session',
+          '[V.V2] Current status: advisory-only (canAutoApplyNow=false, savedProgramMutationAllowed=false)',
+          '[V.V2] Displayed in Program Page missed workout advisory card',
+          '[V.V2] Documented 10 mutation requirements for future V.V4 implementation',
+          '[V.V2] Documented 12 absolute safety bounds for intensity reduction',
+          '[V.V2] Created docs/STEP_24_VV2_REDUCE_INTENSITY_READINESS_AUDIT.md',
+          '[V.V2] No mutation implemented — audit/documentation only',
         ],
+        remainingWork: [],
       },
       {
         id: 'V.V3',

@@ -80,9 +80,9 @@ If the target session index is out of range or the program is null:
 |-------|--------|
 | `exercise.sets` | Reduced by 1 (minimum 2) |
 | `exercise.note` | Appended `[Reduced intensity — fatigue advisory]` |
-| `session.intensityReductionProvenance` | Added provenance marker |
-| `session.adaptationNotes` | Appended V.V4 note |
-| `program.lastModified` | Updated to current timestamp |
+| `session.adaptationNotes` | Appended V.V4 provenance marker `[V.V4:timestamp]` + note |
+
+> **Note (V.V4-A fix):** `session.intensityReductionProvenance` and `program.lastModified` are NOT valid typed fields on AdaptiveSession/AdaptiveProgram. V.V4 provenance is stored in `adaptationNotes` using a `[V.V4:timestamp]` prefix marker for duplicate-apply detection.
 
 ### Fields NOT Changed
 
@@ -146,8 +146,11 @@ The saved program is passed back to the parent component which owns `setProgram`
 ### Duplicate-Apply Guard
 
 ```typescript
-const existingProvenance = (targetSession as any).intensityReductionProvenance
-if (existingProvenance?.step === '24.V.V4') {
+// V.V4 provenance stored as "[V.V4:timestamp]" prefix in adaptationNotes
+const hasV4Marker = (targetSession.adaptationNotes || []).some(
+  note => note.startsWith('[V.V4:')
+)
+if (hasV4Marker) {
   return {
     status: 'already_reduced',
     visibleSummary: `Intensity was already reduced on "${targetSession.dayLabel}".`,
@@ -156,7 +159,7 @@ if (existingProvenance?.step === '24.V.V4') {
 }
 ```
 
-If a session already has a V.V4 provenance marker, the mutation is blocked.
+If a session already has a V.V4 provenance marker in `adaptationNotes`, the mutation is blocked.
 
 ### Failure Behavior
 

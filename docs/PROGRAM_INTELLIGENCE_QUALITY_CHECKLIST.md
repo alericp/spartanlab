@@ -147,19 +147,63 @@ The intelligence is questionable or unverified in:
 
 ### IQ4 — Calibration Test Recommendation Intelligence
 
-**Status:** TODO
+**Status:** COMPLETE
 
 **Purpose:** Ensure recommended tests map to selected goals, limiters, and progression decisions.
 
-**Investigation Required:**
-- Review whether L-Sit Hold is truly the best test for front lever work
-- Consider adding tuck front lever hold, scapular pulls, or hanging tests for front lever
-- Consider adding pseudo-planche push-up or lean holds for planche
-- Ensure test relevance text is coaching-accurate, not just movement-family mapped
+**What Changed:**
 
-**Files Likely in Scope:**
-- `lib/benchmark-testing-engine.ts` (BASELINE_TESTS catalog)
-- `lib/program/program-calibration-recommendation.ts` (scoring and reason text)
+1. **Added Relationship Strength Classifier**
+   - New `CalibrationRelationshipStrength` type: `direct` | `strong_support` | `general_support` | `baseline`
+   - `getSkillTestRelationship()` function determines how directly a test measures a specific skill
+   - `getBestRelationship()` finds the strongest relationship across all user's selected skills
+
+2. **Updated Scoring Logic**
+   - Direct tests get +30 score bonus
+   - Strong support tests get +15 score bonus
+   - General support tests get no bonus
+   - This ensures Tuck Front Lever Hold outranks L-Sit Hold for front_lever primary goal
+
+3. **Relationship-Aware Reason Text**
+   - Direct: "Directly calibrates X strength for your Y progression."
+   - Strong support: "Calibrates X capacity that supports your Y progression."
+   - General support: "Provides supporting X baseline for Y assistance work."
+   - No longer claims L-Sit is a "primary indicator" for front lever
+
+4. **Relationship-Aware Program Influence Notes**
+   - Direct: "Result directly influences progression level, dosage, and readiness for X."
+   - Strong support: "Result influences capacity-based dosage decisions for X."
+   - General support: "Result provides baseline for support and assistance work related to X."
+
+5. **Added Planche Lean Hold Test**
+   - New test in `BASELINE_TESTS` catalog
+   - `movementFamily: 'straight_arm_push'` (direct for planche)
+   - `skillsAffected: ['planche']`
+   - `priority: 'recommended'`
+   - `testUnit: 'seconds'`
+
+**Relationship Rules:**
+
+| Skill | Direct | Strong Support | General Support |
+|-------|--------|----------------|-----------------|
+| front_lever | straight_arm_pull | vertical_pull | compression_core |
+| planche | straight_arm_push | dip_pattern, vertical_push | compression_core |
+| l_sit | compression_core | - | - |
+| hspu | handstand | dip_pattern, vertical_push | - |
+| muscle_up | explosive_pull, ring_support | vertical_pull, dip_pattern | - |
+| back_lever | straight_arm_pull | vertical_pull | compression_core |
+
+**Files Changed:**
+- `lib/program/program-calibration-recommendation.ts` — Added relationship classifier, updated scoring with +30/+15 bonus for direct/strong_support, updated reason text and influence note builders
+- `lib/benchmark-testing-engine.ts` — Added Planche Lean Hold test to BASELINE_TESTS catalog
+
+**Acceptance Tests:**
+- Front lever primary + pull_up_bar equipment → Tuck Front Lever Hold ranks above L-Sit Hold
+- Planche primary + floor equipment → Planche Lean Hold appears as direct test
+- L-Sit primary → L-Sit Hold remains direct, high-priority recommendation
+- Existing benchmark data compatibility preserved (testName values unchanged)
+- Log Result button payloads unchanged
+- No schema/API changes
 
 ---
 
@@ -268,7 +312,7 @@ The intelligence is questionable or unverified in:
 | IQ1 | Read-only program intelligence audit | COMPLETE |
 | IQ2 | Session role / label truth hardening | TODO |
 | IQ3 | Selected skill coverage and rotation truth | TODO |
-| IQ4 | Calibration test recommendation intelligence | TODO |
+| IQ4 | Calibration test recommendation intelligence | COMPLETE |
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
 | IQ6 | Method decision usefulness and survival | TODO |
 | IQ7 | Feedback loop closure | TODO |
@@ -426,3 +470,19 @@ The intelligence is questionable or unverified in:
 - Verified IQ5 (prescription units) and IQ10 (Start Workout parity) are strong
 - Created this checklist with TODO phases for remaining work
 - No code changes — audit only
+
+### IQ4 (Complete)
+- Added `CalibrationRelationshipStrength` type to classify direct vs support tests
+- Added `getSkillTestRelationship()` function with skill-specific rules for front_lever, planche, l_sit, hspu, muscle_up, back_lever
+- Added `getBestRelationship()` helper to find strongest relationship across user's skills
+- Updated scoring: direct tests +30, strong_support +15, general_support +0
+- Updated `reasonTextFor()` to generate relationship-aware reason text
+- Updated `programInfluenceNoteFor()` to generate relationship-aware influence notes
+- Added `planche_lean_hold` test to BASELINE_TESTS catalog with movementFamily: 'straight_arm_push'
+- Before: L-Sit Hold could rank above Tuck Front Lever Hold for front_lever due to essential priority boost
+- After: Tuck Front Lever Hold outranks L-Sit Hold for front_lever due to +30 direct relationship bonus
+- Before: Reason text said "calibrates compression core as primary indicator for front lever work"
+- After: Reason text says "Provides supporting compression core baseline for front lever assistance work"
+- All existing testName values unchanged (backward compatible)
+- Log Result buttons unchanged
+- No schema or API changes

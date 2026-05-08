@@ -444,6 +444,8 @@ function readSkillTraceSummaryRows(value: unknown): ReadonlyArray<SkillTraceSumm
 
 export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rulePopulationLedger, goalFamilyBalanceAudit, className }: ProgramTruthSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  // [P2] Advanced details toggle for rule population / technical proof
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false)
 
   if (!truthExplanation) {
     return null
@@ -897,238 +899,264 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
             )}
 
             {/* ===========================================================
-                [PHASE AB1] RULE POPULATION LEDGER — honest one-section
-                rollup of how doctrine rules actually shaped the program.
-                Reads `program.rulePopulationLedger` (stamped by AB1 in
-                the builder). Each category resolves to ONE state from
-                the eleven-state contract — `applied` only ever means
-                mutated/visible/executable. Categories that are
-                scoring-only / audit-only / blocked / no-target / not
-                relevant are surfaced separately and NEVER counted as
-                applied.
-
-                Suppressed entirely when ledger is missing (older saved
-                programs predate AB1) so we never fabricate counts.
+                [P2] HOW THIS WAS BUILT — Advanced Details Section
+                Coaching-friendly top summary, with technical rule
+                population details nested behind a secondary toggle.
                 =========================================================== */}
             {rulePopulationLedger &&
               rulePopulationLedger.verdict !== 'RULES_NOT_AVAILABLE' &&
               rulePopulationLedger.categories.length > 0 && (
-                <section
-                  className="space-y-2"
-                  // [PHASE AB9] Proof attributes. The Rule Population
-                  // section is the canonical user-facing surface for AB1
-                  // ledger truth. These attributes mirror the dominant-
-                  // state buckets in `RulePopulationLedgerTotals` so QA /
-                  // DOM-inspection / the AB9 proof scanner can verify
-                  // exact counts against the visible chips. Stamped on
-                  // the <section> root only — never on individual chips,
-                  // to keep the visible UI clean.
-                  data-ab9-rule-population="true"
-                  data-ab9-verdict={rulePopulationLedger.verdict}
-                  data-ab9-executable-count={String(
-                    rulePopulationLedger.totals.categoriesExecutable,
-                  )}
-                  data-ab9-visible-count={String(
-                    rulePopulationLedger.totals.categoriesVisible,
-                  )}
-                  data-ab9-mutated-count={String(
-                    rulePopulationLedger.totals.categoriesMutated,
-                  )}
-                  data-ab9-scoring-only-count={String(
-                    rulePopulationLedger.totals.categoriesScoringOnly,
-                  )}
-                  data-ab9-blocked-count={String(
-                    rulePopulationLedger.totals.categoriesBlocked,
-                  )}
-                  data-ab9-no-target-count={String(
-                    rulePopulationLedger.totals.categoriesNoTarget,
-                  )}
-                  data-ab9-audit-only-count={String(
-                    rulePopulationLedger.totals.categoriesAuditOnly,
-                  )}
-                  data-ab9-not-relevant-count={String(
-                    rulePopulationLedger.totals.categoriesNotRelevant,
-                  )}
-                  data-ab9-total-rules-read={String(
-                    rulePopulationLedger.totals.totalRulesRead,
-                  )}
-                  data-ab9-total-rules-materialized={String(
-                    rulePopulationLedger.totals.totalRulesMaterialized,
-                  )}
-                  data-ab9-doctrine-runtime-available={String(
-                    rulePopulationLedger.doctrineRuntimeAvailable,
-                  )}
-                >
-                  <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
-                    Rule Population
-                  </h4>
-                  <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
-                    {/* Honest verdict line + chip rollup */}
+                <section className="space-y-2">
+                  <button
+                    onClick={() => setShowAdvancedDetails(!showAdvancedDetails)}
+                    className="flex items-center justify-between w-full text-left group"
+                  >
+                    <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide group-hover:text-[#A4ACB8] transition-colors">
+                      How This Was Built
+                    </h4>
+                    <span className="flex items-center gap-1 text-[11px] text-[#6A6A6A] group-hover:text-[#8A8A8A] transition-colors">
+                      {showAdvancedDetails ? 'Hide details' : 'View details'}
+                      {showAdvancedDetails ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                    </span>
+                  </button>
+                  
+                  {/* [P2] Coaching-friendly summary — always visible */}
+                  <div className="text-xs bg-[#1E1E1E] rounded p-2.5">
                     <p className="text-[#E8E4D9] leading-relaxed">
-                      {rulePopulationLedger.headline}
+                      {(() => {
+                        const activeCount = rulePopulationLedger.totals.categoriesExecutable + 
+                          rulePopulationLedger.totals.categoriesVisible
+                        const monitoredCount = rulePopulationLedger.totals.categoriesScoringOnly + 
+                          rulePopulationLedger.totals.categoriesAuditOnly
+                        if (activeCount > 0 && monitoredCount > 0) {
+                          return `${activeCount} coaching rule${activeCount > 1 ? 's' : ''} actively shaped this program, while ${monitoredCount} more ${monitoredCount > 1 ? 'are' : 'is'} monitored for future adjustments.`
+                        }
+                        if (activeCount > 0) {
+                          return `${activeCount} coaching rule${activeCount > 1 ? 's' : ''} actively shaped this program based on your profile and training history.`
+                        }
+                        return 'Your program is built from your profile settings and training preferences.'
+                      })()}
                     </p>
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    
+                    {/* Compact active rule chips — coach-friendly labels */}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
                       {rulePopulationLedger.totals.categoriesExecutable > 0 && (
                         <span className="text-[11px] px-2 py-0.5 rounded border bg-green-500/10 text-green-400 border-green-500/20">
-                          {rulePopulationLedger.totals.categoriesExecutable} executable
+                          {rulePopulationLedger.totals.categoriesExecutable} shaping workouts
                         </span>
                       )}
                       {rulePopulationLedger.totals.categoriesVisible -
-                        rulePopulationLedger.totals.categoriesExecutable >
-                        0 && (
+                        rulePopulationLedger.totals.categoriesExecutable > 0 && (
                         <span className="text-[11px] px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
                           {rulePopulationLedger.totals.categoriesVisible -
                             rulePopulationLedger.totals.categoriesExecutable}{' '}
-                          visible only
+                          visible in plan
                         </span>
                       )}
-                      {rulePopulationLedger.totals.categoriesScoringOnly > 0 && (
-                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#A4ACB8] border-[#3A3A3A]">
-                          {rulePopulationLedger.totals.categoriesScoringOnly} influenced scoring
-                        </span>
-                      )}
-                      {rulePopulationLedger.totals.categoriesBlocked > 0 && (
-                        <span className="text-[11px] px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/30">
-                          {rulePopulationLedger.totals.categoriesBlocked} blocked
-                        </span>
-                      )}
-                      {rulePopulationLedger.totals.categoriesNoTarget > 0 && (
+                      {(rulePopulationLedger.totals.categoriesScoringOnly + 
+                        rulePopulationLedger.totals.categoriesAuditOnly) > 0 && (
                         <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
-                          {rulePopulationLedger.totals.categoriesNoTarget} no target
-                        </span>
-                      )}
-                      {rulePopulationLedger.totals.categoriesAuditOnly > 0 && (
-                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
-                          {rulePopulationLedger.totals.categoriesAuditOnly} audit only
-                        </span>
-                      )}
-                      {rulePopulationLedger.totals.categoriesNotRelevant > 0 && (
-                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#6A6A6A] border-[#3A3A3A]">
-                          {rulePopulationLedger.totals.categoriesNotRelevant} not relevant
+                          {rulePopulationLedger.totals.categoriesScoringOnly + 
+                            rulePopulationLedger.totals.categoriesAuditOnly} monitored
                         </span>
                       )}
                     </div>
-                    {/* Per-category honest list — one line each. Only
-                        surfaces categories whose state is meaningful for
-                        the user (executable / visible / blocked /
-                        no_target / scoring-only). audit_only and
-                        not-relevant rows are summarised in the chip row
-                        above to keep this list compact. */}
-                    <div className="grid grid-cols-1 gap-1 pt-1">
-                      {rulePopulationLedger.categories
-                        .filter((c) =>
-                          (
-                            [
-                              'executable',
-                              'visible',
-                              'mutated',
-                              'blocked',
-                              'no_target',
-                              'selected',
-                            ] as RulePopulationLedgerEntryState[]
-                          ).includes(c.state),
-                        )
-                        .map((c) => {
-                          const tone =
-                            c.state === 'executable'
-                              ? 'text-green-400'
-                              : c.state === 'visible' || c.state === 'mutated'
-                                ? 'text-blue-400'
-                                : c.state === 'blocked'
-                                  ? 'text-amber-400'
-                                  : c.state === 'no_target'
-                                    ? 'text-[#A4ACB8]'
-                                    : 'text-[#9A9A9A]'
-                          const stateText =
-                            c.state === 'executable'
-                              ? 'shapes live workout'
-                              : c.state === 'visible'
-                                ? 'visible in program'
-                                : c.state === 'mutated'
-                                  ? 'changed program fields'
+                  </div>
+                  
+                  {/* [P2] Technical details — hidden by default */}
+                  {showAdvancedDetails && (
+                    <div
+                      className="text-xs bg-[#1A1A1A] rounded p-2.5 space-y-2 border border-[#2A2A2A]"
+                      // [PHASE AB9] Proof attributes preserved for QA/testing
+                      data-ab9-rule-population="true"
+                      data-ab9-verdict={rulePopulationLedger.verdict}
+                      data-ab9-executable-count={String(
+                        rulePopulationLedger.totals.categoriesExecutable,
+                      )}
+                      data-ab9-visible-count={String(
+                        rulePopulationLedger.totals.categoriesVisible,
+                      )}
+                      data-ab9-mutated-count={String(
+                        rulePopulationLedger.totals.categoriesMutated,
+                      )}
+                      data-ab9-scoring-only-count={String(
+                        rulePopulationLedger.totals.categoriesScoringOnly,
+                      )}
+                      data-ab9-blocked-count={String(
+                        rulePopulationLedger.totals.categoriesBlocked,
+                      )}
+                      data-ab9-no-target-count={String(
+                        rulePopulationLedger.totals.categoriesNoTarget,
+                      )}
+                      data-ab9-audit-only-count={String(
+                        rulePopulationLedger.totals.categoriesAuditOnly,
+                      )}
+                      data-ab9-not-relevant-count={String(
+                        rulePopulationLedger.totals.categoriesNotRelevant,
+                      )}
+                      data-ab9-total-rules-read={String(
+                        rulePopulationLedger.totals.totalRulesRead,
+                      )}
+                      data-ab9-total-rules-materialized={String(
+                        rulePopulationLedger.totals.totalRulesMaterialized,
+                      )}
+                      data-ab9-doctrine-runtime-available={String(
+                        rulePopulationLedger.doctrineRuntimeAvailable,
+                      )}
+                    >
+                      <p className="text-[11px] text-[#6A6A6A] uppercase tracking-wide font-medium">
+                        Technical Rule Details
+                      </p>
+                      
+                      {/* Full technical chip breakdown */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {rulePopulationLedger.totals.categoriesExecutable > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-green-500/10 text-green-400 border-green-500/20">
+                            {rulePopulationLedger.totals.categoriesExecutable} executable
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesVisible -
+                          rulePopulationLedger.totals.categoriesExecutable > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                            {rulePopulationLedger.totals.categoriesVisible -
+                              rulePopulationLedger.totals.categoriesExecutable}{' '}
+                            visible only
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesScoringOnly > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#A4ACB8] border-[#3A3A3A]">
+                            {rulePopulationLedger.totals.categoriesScoringOnly} influenced scoring
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesBlocked > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/30">
+                            {rulePopulationLedger.totals.categoriesBlocked} blocked
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesNoTarget > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
+                            {rulePopulationLedger.totals.categoriesNoTarget} no target
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesAuditOnly > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
+                            {rulePopulationLedger.totals.categoriesAuditOnly} audit only
+                          </span>
+                        )}
+                        {rulePopulationLedger.totals.categoriesNotRelevant > 0 && (
+                          <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#6A6A6A] border-[#3A3A3A]">
+                            {rulePopulationLedger.totals.categoriesNotRelevant} not relevant
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Per-category list */}
+                      <div className="grid grid-cols-1 gap-1 pt-1">
+                        {rulePopulationLedger.categories
+                          .filter((c) =>
+                            (
+                              [
+                                'executable',
+                                'visible',
+                                'mutated',
+                                'blocked',
+                                'no_target',
+                                'selected',
+                              ] as RulePopulationLedgerEntryState[]
+                            ).includes(c.state),
+                          )
+                          .map((c) => {
+                            const tone =
+                              c.state === 'executable'
+                                ? 'text-green-400'
+                                : c.state === 'visible' || c.state === 'mutated'
+                                  ? 'text-blue-400'
                                   : c.state === 'blocked'
-                                    ? 'blocked'
+                                    ? 'text-amber-400'
                                     : c.state === 'no_target'
-                                      ? 'no target this run'
-                                      : 'influenced scoring'
-                          // [PHASE AB9] Per-category proof level + summary.
-                          // Defensive fallback for ledgers from older saved
-                          // programs that predate the proofLevel/proofSummary
-                          // contract addition: derive a sensible proofLevel
-                          // from `state` and use the existing `notes` /
-                          // `noChangeReason` as proofSummary. We intentionally
-                          // do NOT re-run the full proof derivation here —
-                          // the ProgramTruthSummary must stay a renderer,
-                          // not a shadow ledger builder.
-                          const fallbackProofLevel =
-                            c.state === 'executable'
-                              ? 'executable'
-                              : c.state === 'visible'
-                                ? 'visible'
-                                : c.state === 'mutated'
-                                  ? 'mutated'
-                                  : c.state === 'selected'
-                                    ? 'scoring_only'
+                                      ? 'text-[#A4ACB8]'
+                                      : 'text-[#9A9A9A]'
+                            const stateText =
+                              c.state === 'executable'
+                                ? 'shapes live workout'
+                                : c.state === 'visible'
+                                  ? 'visible in program'
+                                  : c.state === 'mutated'
+                                    ? 'changed program fields'
                                     : c.state === 'blocked'
                                       ? 'blocked'
                                       : c.state === 'no_target'
-                                        ? 'no_target'
-                                        : c.state === 'suppressed'
-                                          ? 'not_relevant'
-                                          : 'audit_only'
-                          const proofLevel =
-                            (c as { proofLevel?: string }).proofLevel ??
-                            fallbackProofLevel
-                          const proofSummary =
-                            (c as { proofSummary?: string }).proofSummary ??
-                            c.notes ??
-                            ''
-                          const proofFields =
-                            (c as { proofFields?: string[] }).proofFields ??
-                            c.changedProgramFields ??
-                            []
-                          const proofSurfaces =
-                            (c as { proofSurfaces?: string[] }).proofSurfaces ??
-                            c.visibleSurfaces ??
-                            []
-                          return (
-                            <div
-                              key={c.category}
-                              className="flex flex-col gap-0.5"
-                              data-ab9-category={c.category}
-                              data-ab9-category-state={c.state}
-                              data-ab9-proof-level={proofLevel}
-                              data-ab9-proof-fields={proofFields.join('|')}
-                              data-ab9-proof-surfaces={proofSurfaces.join('|')}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <span className="text-[#E8E4D9]">
-                                  {RULE_LEDGER_CATEGORY_LABELS[c.category] ?? c.category}
-                                </span>
-                                <span className={cn('text-[11px] flex-shrink-0', tone)}>
-                                  {stateText}
-                                  {c.state === 'blocked' && c.noChangeReason
-                                    ? ` — ${c.noChangeReason}`
-                                    : ''}
-                                </span>
+                                        ? 'no target this run'
+                                        : 'influenced scoring'
+                            const fallbackProofLevel =
+                              c.state === 'executable'
+                                ? 'executable'
+                                : c.state === 'visible'
+                                  ? 'visible'
+                                  : c.state === 'mutated'
+                                    ? 'mutated'
+                                    : c.state === 'selected'
+                                      ? 'scoring_only'
+                                      : c.state === 'blocked'
+                                        ? 'blocked'
+                                        : c.state === 'no_target'
+                                          ? 'no_target'
+                                          : c.state === 'suppressed'
+                                            ? 'not_relevant'
+                                            : 'audit_only'
+                            const proofLevel =
+                              (c as { proofLevel?: string }).proofLevel ??
+                              fallbackProofLevel
+                            const proofSummary =
+                              (c as { proofSummary?: string }).proofSummary ??
+                              c.notes ??
+                              ''
+                            const proofFields =
+                              (c as { proofFields?: string[] }).proofFields ??
+                              c.changedProgramFields ??
+                              []
+                            const proofSurfaces =
+                              (c as { proofSurfaces?: string[] }).proofSurfaces ??
+                              c.visibleSurfaces ??
+                              []
+                            return (
+                              <div
+                                key={c.category}
+                                className="flex flex-col gap-0.5"
+                                data-ab9-category={c.category}
+                                data-ab9-category-state={c.state}
+                                data-ab9-proof-level={proofLevel}
+                                data-ab9-proof-fields={proofFields.join('|')}
+                                data-ab9-proof-surfaces={proofSurfaces.join('|')}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <span className="text-[#E8E4D9]">
+                                    {RULE_LEDGER_CATEGORY_LABELS[c.category] ?? c.category}
+                                  </span>
+                                  <span className={cn('text-[11px] flex-shrink-0', tone)}>
+                                    {stateText}
+                                    {c.state === 'blocked' && c.noChangeReason
+                                      ? ` — ${c.noChangeReason}`
+                                      : ''}
+                                  </span>
+                                </div>
+                                {proofSummary &&
+                                  proofSummary.toLowerCase() !==
+                                    stateText.toLowerCase() && (
+                                    <p className="text-[10px] text-[#6A6A6A] leading-snug">
+                                      {proofSummary}
+                                    </p>
+                                  )}
                               </div>
-                              {/* Optional muted secondary line carrying the
-                                  derived proof summary. Only renders when
-                                  the summary adds information beyond the
-                                  state phrase (i.e. it is not the same as
-                                  the chip label and is not empty). */}
-                              {proofSummary &&
-                                proofSummary.toLowerCase() !==
-                                  stateText.toLowerCase() && (
-                                  <p className="text-[10px] text-[#6A6A6A] leading-snug">
-                                    {proofSummary}
-                                  </p>
-                                )}
-                            </div>
-                          )
-                        })}
+                            )
+                          })}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </section>
               )}
 

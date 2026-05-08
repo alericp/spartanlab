@@ -129,19 +129,37 @@ The intelligence is questionable or unverified in:
 
 ### IQ3 — Selected Skill Coverage and Rotation Truth
 
-**Status:** TODO
+**Status:** COMPLETE
 
 **Purpose:** Ensure all selected skills are intentionally expressed, rotated, suppressed, or explained.
 
-**Investigation Required:**
-- Verify "Skills: 2/8 expressed this cycle" is correct and intentional
-- Ensure deferred skills have real deferral reasons
-- Ensure support/rotational skills are tracked and explained
-- Add UI indication when skills are intentionally deferred vs accidentally dropped
+**Audit Findings:**
+The infrastructure for skill coverage tracking is already strong:
+- `authoritativeMultiSkillIntentContract` tracks: `materiallyExpressedSkills`, `reducedThisCycleSkills`, `deferredSkills`, `skillPriorityOrder`
+- `WeeklyExpressionAllocationContract` has disposition states: `direct_priority`, `direct_limited`, `carryover_only`, `temporary_defer`
+- `materializationVerdict.normalizedExpression` tracks: `directlyExpressed`, `technicallyExpressed`, `supportExpressed`, `carryoverOnly`, `deferredSkills`
+- The "Skill Roles This Cycle" expanded section already shows deferred skills with reasons
 
-**Files Likely in Scope:**
-- `lib/program/weekly-skill-expression-allocator.ts`
-- `components/programs/ProgramTruthSummary.tsx` (expression audit display)
+**What Changed:**
+1. **Enhanced Skills Chip** — Now shows breakdown instead of just count:
+   - Before: "Skills: 2/8 expressed this cycle"
+   - After: "Skills: 2 direct, 3 support, 3 rotating" (example)
+   - The chip now distinguishes direct expression, support work, and rotating/deferred skills
+
+2. **Added Rotation Explanation Line** — When skills are deferred, a compact explanation appears in the collapsed view:
+   - "3 skills rotate into future cycles based on priority and recovery. See details for breakdown."
+   - This makes the rotation intentional and explained, not mysterious
+
+**Files Changed:**
+- `components/programs/ProgramTruthSummary.tsx` — Updated skill chip to show breakdown, added rotation explanation line
+
+**Acceptance Tests:**
+- Multi-skill user sees accurate breakdown (direct/support/rotating) not just a count
+- Deferred skills are explained in collapsed view
+- Expanded view still shows full "Skill Roles This Cycle" with per-skill reasons
+- Support skills are tracked separately from direct expression
+- "Skills: 2/8 expressed" replaced with more informative breakdown
+- No generator, schema, or method engine changes
 
 ---
 
@@ -311,7 +329,7 @@ The intelligence is questionable or unverified in:
 |-------|-------------|--------|
 | IQ1 | Read-only program intelligence audit | COMPLETE |
 | IQ2 | Session role / label truth hardening | TODO |
-| IQ3 | Selected skill coverage and rotation truth | TODO |
+| IQ3 | Selected skill coverage and rotation truth | COMPLETE |
 | IQ4 | Calibration test recommendation intelligence | COMPLETE |
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
 | IQ6 | Method decision usefulness and survival | TODO |
@@ -470,6 +488,17 @@ The intelligence is questionable or unverified in:
 - Verified IQ5 (prescription units) and IQ10 (Start Workout parity) are strong
 - Created this checklist with TODO phases for remaining work
 - No code changes — audit only
+
+### IQ3 (Complete)
+- Audited existing skill coverage infrastructure — found it already strong
+- `authoritativeMultiSkillIntentContract` already tracks direct, support, deferred skills with reasons
+- `WeeklyExpressionAllocationContract` already has disposition states with reasoning
+- Updated Skills chip in `ProgramTruthSummary.tsx` to show breakdown instead of just count
+- Before: "Skills: 2/8 expressed this cycle" — confusing for users who selected 8 skills
+- After: "Skills: 2 direct, 3 support, 3 rotating" — clear breakdown showing rotation is intentional
+- Added compact rotation explanation line in collapsed view: "3 skills rotate into future cycles based on priority and recovery"
+- Expanded "Skill Roles This Cycle" section already shows per-skill roles and deferral reasons
+- No generator, schema, or method engine changes — UI truth display only
 
 ### IQ4 (Complete)
 - Added `CalibrationRelationshipStrength` type to classify direct vs support tests

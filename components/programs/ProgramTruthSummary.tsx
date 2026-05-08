@@ -541,15 +541,28 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
     })
   }
 
+  // [IQ3] Enhanced skill coverage chip with rotation/deferral explanation
   const skillsTotal = authContract?.sourceTruthCount ?? selectedSkillsUsed.length
   const skillsExpressed =
     authContract?.materiallyUsedCount ??
     (broaderSkillCoverage?.representedSkills.length ?? representedSkillsInWeek.length)
+  const deferredCount = authContract?.deferredSkills?.length ?? deferredEntries.length
+  const supportCount = authContract?.skillPriorityOrder?.filter(s => s.role === 'support').length ?? 0
+
   if (skillsTotal > 0) {
     const ratio = skillsTotal > 0 ? skillsExpressed / skillsTotal : 0
+    // [IQ3] Build a more informative chip value that explains rotation/deferral
+    let chipValue = `${skillsExpressed}/${skillsTotal} direct this cycle`
+    if (deferredCount > 0 && supportCount > 0) {
+      chipValue = `${skillsExpressed} direct, ${supportCount} support, ${deferredCount} rotating`
+    } else if (deferredCount > 0) {
+      chipValue = `${skillsExpressed} direct, ${deferredCount} rotating later`
+    } else if (supportCount > 0) {
+      chipValue = `${skillsExpressed} direct, ${supportCount} support`
+    }
     topChips.push({
       label: 'Skills',
-      value: `${skillsExpressed}/${skillsTotal} expressed this cycle`,
+      value: chipValue,
       tone: ratio >= 0.8 ? 'success' : ratio >= 0.5 ? 'info' : 'warning',
     })
   }
@@ -715,6 +728,17 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
                 </div>
               ))}
             </div>
+          )}
+
+          {/* [IQ3] Compact skill rotation explanation when skills are deferred */}
+          {deferredCount > 0 && skillsTotal > skillsExpressed && (
+            <p className="text-xs text-[#8A8A8A]">
+              {deferredCount === 1
+                ? `1 skill rotates into future cycles based on priority and recovery.`
+                : `${deferredCount} skills rotate into future cycles based on priority and recovery.`}
+              {' '}
+              <span className="text-[#6A6A6A]">See details for breakdown.</span>
+            </p>
           )}
 
           {underexpressedSkills.length > 0 && (

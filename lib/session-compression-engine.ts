@@ -9,14 +9,51 @@ import type { ExerciseSelection, SelectedExercise } from './program-exercise-sel
 // so 30/45-minute compressed sessions never display weird ranges.
 import { normalizeRepsOrTimeString } from './program/canonical-range-grammar'
 
+/**
+ * [PEX-5B] Compression levels extended to support 20/15/10 minute sessions.
+ * - none: No compression (Full session)
+ * - light: 45 min (~75%+ of full, mild compression)
+ * - moderate: 30 min (~50-75% of full)
+ * - heavy: 20 min (~35-50% of full)
+ * - very_heavy: 15 min (~25-35% of full)
+ * - extreme: 10 min (minimum effective dose, <25% of full)
+ */
+export type CompressionLevel = 'none' | 'light' | 'moderate' | 'heavy' | 'very_heavy' | 'extreme'
+
+/**
+ * [PEX-5B] Short-session recomposition metadata - explains what was preserved/omitted.
+ * Attached to each short variant so UI can explain tradeoffs honestly.
+ */
+export interface ShortSessionRecomposition {
+  mode: '45_min' | '30_min' | '20_min' | '15_min' | '10_min'
+  targetMinutes: number
+  recompositionLevel: 'mild' | 'moderate' | 'strong' | 'minimum_effective' | 'emergency'
+  /** What survived compression (e.g., "Primary planche exposure", "Core strength support") */
+  preservedPriorities: string[]
+  /** What was reduced but not removed (e.g., "Accessory sets from 3 to 2") */
+  reducedItems: string[]
+  /** What was completely removed (e.g., "Finisher circuit", "Cooldown stretches") */
+  omittedItems: string[]
+  /** What the user should do in a full session instead (e.g., "Full accessory volume", "Complete warmup") */
+  deferredItems: string[]
+  /** Safety or quality notes (e.g., "Warmup preserved for joint safety") */
+  safetyNotes: string[]
+  /** One-line coaching summary for UI (e.g., "Focused 15-min session preserving primary planche work") */
+  coachingSummary: string
+  /** One-line tradeoff explanation (e.g., "Accessories and finishers deferred to maintain skill quality") */
+  tradeoffSummary: string
+}
+
 export interface CompressionResult {
   original: ExerciseSelection
   compressed: ExerciseSelection
   compressionApplied: boolean
-  compressionLevel: 'none' | 'light' | 'moderate' | 'heavy'
+  compressionLevel: CompressionLevel
   removedExercises: string[]
   adjustedSets: string[]
   explanation: string
+  /** [PEX-5B] Structured recomposition metadata for UI consumption */
+  recomposition?: ShortSessionRecomposition
 }
 
 // =============================================================================
@@ -146,16 +183,20 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
     }
   }
   
-  // Calculate compression ratio
+  // [PEX-5B] Calculate compression ratio and determine level
   const ratio = targetMinutes / originalMinutes
   
-  let compressionLevel: 'light' | 'moderate' | 'heavy'
+  let compressionLevel: CompressionLevel
   if (ratio >= 0.75) {
-    compressionLevel = 'light'
-  } else if (ratio >= 0.5) {
-    compressionLevel = 'moderate'
+    compressionLevel = 'light'        // 45 min from ~60
+  } else if (ratio >= 0.50) {
+    compressionLevel = 'moderate'     // 30 min from ~60
+  } else if (ratio >= 0.35) {
+    compressionLevel = 'heavy'        // 20 min from ~60
+  } else if (ratio >= 0.25) {
+    compressionLevel = 'very_heavy'   // 15 min from ~60
   } else {
-    compressionLevel = 'heavy'
+    compressionLevel = 'extreme'      // 10 min from ~60
   }
   
   // Create compressed version with session identity preservation
@@ -248,6 +289,15 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
         : 'derived_with_adaptations',
   })
   
+  // [PEX-5B] Generate structured recomposition metadata for UI
+  const recomposition = generateRecompositionMetadata(
+    targetMinutes,
+    compressionLevel,
+    selection,
+    compressed,
+    sessionIdentity
+  )
+  
   return {
     original: selection,
     compressed,
@@ -256,6 +306,7 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
     removedExercises,
     adjustedSets,
     explanation,
+    recomposition,
   }
 }
 
@@ -265,7 +316,7 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
 
 function compressSelection(
   selection: ExerciseSelection,
-  level: 'light' | 'moderate' | 'heavy',
+  level: CompressionLevel,
   preserveSkillWork: boolean,
   sessionIdentity?: SessionIdentitySnapshot
 ): ExerciseSelection {
@@ -318,7 +369,7 @@ function compressSelection(
 
 function compressWarmup(
   warmup: SelectedExercise[],
-  level: 'light' | 'moderate' | 'heavy'
+  level: CompressionLevel
 ): SelectedExercise[] {
   // [PHASE 6A TASK 4-5] Preserve all metadata through compression
   if (level === 'light') {
@@ -337,17 +388,27 @@ function compressWarmup(
     }))
   }
   
-  // Heavy compression - minimal warmup but preserve metadata
-  return warmup.slice(0, 2).map(e => ({
-    ...e, // Preserve selectionReason, selectionTrace, etc.
+  if (level === 'heavy') {
+    // [PEX-5B] 20 min - minimal warmup but preserve metadata
+    return warmup.slice(0, 2).map(e => ({
+      ...e, // Preserve selectionReason, selectionTrace, etc.
+      sets: 1,
+      repsOrTime: reduceRepsOrTime(e.repsOrTime),
+    }))
+  }
+  
+  // [PEX-5B] very_heavy (15 min) or extreme (10 min) - one quick warmup movement only
+  if (warmup.length === 0) return []
+  return warmup.slice(0, 1).map(e => ({
+    ...e,
     sets: 1,
-    repsOrTime: reduceRepsOrTime(e.repsOrTime),
+    repsOrTime: reduceRepsOrTime(reduceRepsOrTime(e.repsOrTime)), // Double reduce for minimal prep
   }))
 }
 
 function compressMain(
   main: SelectedExercise[],
-  level: 'light' | 'moderate' | 'heavy',
+  level: CompressionLevel,
   preserveSkillWork: boolean,
   sessionIdentity?: SessionIdentitySnapshot
 ): SelectedExercise[] {
@@ -448,14 +509,31 @@ function compressMain(
     topTwoSetCut = 1
     setFloor = 2
     topTwoSetFloor = 2
-  } else {
-    // Heavy (20-25 min or short Full >= 60): keep ~40%, drop spine to 2
-    // sets as well, cut two sets off everything else. This path ALSO uses
-    // the grouped-atomic unit selection below (prior code bypassed it).
+  } else if (level === 'heavy') {
+    // [PEX-5B] 20-min: keep ~40%, spine at 2 sets, cut 2 sets off non-spine.
+    // This is strong compression but still preserves primary identity.
     targetCount = Math.max(3, Math.ceil(fullCount * 0.40))
     setCut = 2
     topTwoSetCut = 1
     setFloor = 2
+    topTwoSetFloor = 2
+  } else if (level === 'very_heavy') {
+    // [PEX-5B] 15-min: keep ~25-30%, only primary spine, 2 sets max.
+    // Focus on one primary skill/strength + minimal support.
+    // This is minimum effective focused session.
+    targetCount = Math.max(2, Math.ceil(fullCount * 0.30))
+    setCut = 2
+    topTwoSetCut = 1
+    setFloor = 1
+    topTwoSetFloor = 2
+  } else {
+    // [PEX-5B] extreme (10-min): minimum effective dose - keep ~20%, 2 sets max.
+    // Only highest-priority work: 1-2 exercises maximum.
+    // Emergency/consistency session, not a replacement for full training.
+    targetCount = Math.max(1, Math.min(2, Math.ceil(fullCount * 0.20)))
+    setCut = 3
+    topTwoSetCut = 1
+    setFloor = 1
     topTwoSetFloor = 2
   }
   // Safety: never inflate target above original count
@@ -611,7 +689,7 @@ function compressMain(
 
 function compressCooldown(
   cooldown: SelectedExercise[],
-  level: 'light' | 'moderate' | 'heavy'
+  level: CompressionLevel
 ): SelectedExercise[] {
   // [PHASE 6A TASK 4-5] Preserve all metadata through compression
   if (level === 'light') {
@@ -624,8 +702,14 @@ function compressCooldown(
     return cooldown.slice(0, 2).map(e => ({ ...e }))
   }
   
-  // Heavy - minimal stretch but preserve metadata
-  return cooldown.slice(0, 1).map(e => ({ ...e }))
+  if (level === 'heavy') {
+    // [PEX-5B] 20 min - minimal stretch but preserve metadata
+    return cooldown.slice(0, 1).map(e => ({ ...e }))
+  }
+  
+  // [PEX-5B] very_heavy (15 min) or extreme (10 min) - no cooldown exercises
+  // User can stretch after on their own. Time is too precious for formalized cooldown.
+  return []
 }
 
 // =============================================================================
@@ -765,25 +849,175 @@ function findAdjustedSets(
 }
 
 function generateCompressionExplanation(
-  level: 'light' | 'moderate' | 'heavy',
+  level: CompressionLevel,
   removed: string[],
   adjusted: string[]
 ): string {
   // [trust-polish] ISSUE A: Session compression mechanics are internal optimizations
   // Suppress detailed removal lists - users just need to know their session was adjusted
-  const parts: string[] = []
-  
   if (level === 'light') {
-    parts.push('Session adjusted to fit your available time.')
+    return 'Session adjusted to fit your available time.'
   } else if (level === 'moderate') {
-    parts.push('Session adjusted to focus on essential movements.')
+    return 'Session adjusted to focus on essential movements.'
+  } else if (level === 'heavy') {
+    return 'Session focused on primary training work.'
+  } else if (level === 'very_heavy') {
+    return 'Minimum effective session preserving highest-priority work.'
   } else {
-    parts.push('Session focused on core training.')
+    return 'Emergency session with only essential exposure.'
+  }
+}
+
+/**
+ * [PEX-5B] Generate structured recomposition metadata for short sessions.
+ * This explains what was preserved/omitted in a machine-readable format for UI.
+ */
+function generateRecompositionMetadata(
+  targetMinutes: number,
+  compressionLevel: CompressionLevel,
+  original: ExerciseSelection,
+  compressed: ExerciseSelection,
+  sessionIdentity?: SessionIdentitySnapshot
+): ShortSessionRecomposition | undefined {
+  // No recomposition for full sessions
+  if (compressionLevel === 'none') return undefined
+  
+  // Map compression level to mode
+  const modeMap: Record<CompressionLevel, '45_min' | '30_min' | '20_min' | '15_min' | '10_min'> = {
+    'none': '45_min', // won't be used
+    'light': '45_min',
+    'moderate': '30_min',
+    'heavy': '20_min',
+    'very_heavy': '15_min',
+    'extreme': '10_min',
+  }
+  const mode = modeMap[compressionLevel]
+  
+  // Map compression level to recomposition level
+  const recompLevelMap: Record<CompressionLevel, 'mild' | 'moderate' | 'strong' | 'minimum_effective' | 'emergency'> = {
+    'none': 'mild',
+    'light': 'mild',
+    'moderate': 'moderate',
+    'heavy': 'strong',
+    'very_heavy': 'minimum_effective',
+    'extreme': 'emergency',
+  }
+  const recompositionLevel = recompLevelMap[compressionLevel]
+  
+  // Analyze what was preserved
+  const originalMain = original.main || []
+  const compressedMain = compressed.main || []
+  const compressedIds = new Set(compressedMain.map(e => e.exercise.id))
+  const removedExercises = originalMain.filter(e => !compressedIds.has(e.exercise.id))
+  
+  // Categorize preserved exercises
+  const preserved: string[] = []
+  const reduced: string[] = []
+  const omitted: string[] = []
+  const deferred: string[] = []
+  const safety: string[] = []
+  
+  // Check what survived
+  const hasSkillWork = compressedMain.some(e => 
+    e.exercise.category === 'skill' || 
+    e.selectionReason?.toLowerCase().includes('skill')
+  )
+  const hasStrengthWork = compressedMain.some(e => 
+    e.exercise.category === 'strength' ||
+    e.selectionReason?.toLowerCase().includes('strength')
+  )
+  const hasPrimarySkill = sessionIdentity?.primarySkillExpressions.some(skill =>
+    compressedMain.some(e => e.exercise.name === skill)
+  ) ?? false
+  
+  // Build preserved list
+  if (hasPrimarySkill && sessionIdentity?.primarySkillExpressions.length) {
+    const preservedSkill = sessionIdentity.primarySkillExpressions.find(skill =>
+      compressedMain.some(e => e.exercise.name === skill)
+    )
+    if (preservedSkill) preserved.push(`Primary ${preservedSkill.split(' ')[0].toLowerCase()} exposure`)
+  } else if (hasSkillWork) {
+    preserved.push('Primary skill exposure')
+  }
+  if (hasStrengthWork) preserved.push('Strength support work')
+  
+  // Check warmup preservation
+  const originalWarmupCount = original.warmup?.length ?? 0
+  const compressedWarmupCount = compressed.warmup?.length ?? 0
+  if (compressedWarmupCount > 0) {
+    if (compressedWarmupCount < originalWarmupCount) {
+      reduced.push(`Warmup from ${originalWarmupCount} to ${compressedWarmupCount} exercises`)
+    }
+    safety.push('Essential warmup preserved for joint safety')
+  } else if (originalWarmupCount > 0) {
+    omitted.push('Formal warmup (micro-prep only)')
   }
   
-  // Don't list removed exercises - that's implementation detail
+  // Check set reductions
+  for (const comp of compressedMain) {
+    const orig = originalMain.find(o => o.exercise.id === comp.exercise.id)
+    if (orig && orig.sets > comp.sets) {
+      reduced.push(`${comp.exercise.name.split(' ')[0]} sets from ${orig.sets} to ${comp.sets}`)
+      break // Just show one example
+    }
+  }
   
-  return parts.join(' ')
+  // Categorize removed exercises
+  for (const removed of removedExercises) {
+    const reason = removed.selectionReason?.toLowerCase() || ''
+    const category = removed.exercise.category?.toLowerCase() || ''
+    
+    if (category === 'accessory' || reason.includes('accessory')) {
+      if (!omitted.includes('Accessory work')) omitted.push('Accessory work')
+    } else if (reason.includes('finisher') || reason.includes('conditioning')) {
+      if (!omitted.includes('Finisher/conditioning')) omitted.push('Finisher/conditioning')
+    } else if (category === 'flexibility' || reason.includes('mobility')) {
+      deferred.push('Full mobility work')
+    } else if (category === 'core') {
+      if (!deferred.includes('Full core work')) deferred.push('Full core work')
+    } else {
+      deferred.push(`${removed.exercise.name.split(' ').slice(0, 2).join(' ')}`)
+    }
+  }
+  
+  // Check cooldown
+  const originalCooldownCount = original.cooldown?.length ?? 0
+  const compressedCooldownCount = compressed.cooldown?.length ?? 0
+  if (compressedCooldownCount === 0 && originalCooldownCount > 0) {
+    omitted.push('Formal cooldown')
+    deferred.push('Full recovery stretches')
+  } else if (compressedCooldownCount < originalCooldownCount && originalCooldownCount > 0) {
+    reduced.push('Cooldown stretches')
+  }
+  
+  // Generate coaching summary
+  const focusWord = hasSkillWork ? 'skill' : hasStrengthWork ? 'strength' : 'training'
+  const coachingSummary = recompositionLevel === 'emergency'
+    ? `Emergency ${targetMinutes}-min session with essential ${focusWord} exposure only`
+    : recompositionLevel === 'minimum_effective'
+      ? `Focused ${targetMinutes}-min session preserving primary ${focusWord} work`
+      : `${targetMinutes}-min session focusing on essential ${focusWord} work`
+  
+  // Generate tradeoff summary
+  const tradeoffParts: string[] = []
+  if (omitted.length > 0) tradeoffParts.push(omitted.slice(0, 2).join(' and ') + ' omitted')
+  if (deferred.length > 0) tradeoffParts.push('additional work deferred to full session')
+  const tradeoffSummary = tradeoffParts.length > 0
+    ? tradeoffParts.join('; ')
+    : 'Session compressed while preserving primary training intent'
+  
+  return {
+    mode,
+    targetMinutes,
+    recompositionLevel,
+    preservedPriorities: preserved.slice(0, 3),
+    reducedItems: reduced.slice(0, 3),
+    omittedItems: omitted.slice(0, 4),
+    deferredItems: deferred.slice(0, 3),
+    safetyNotes: safety.slice(0, 2),
+    coachingSummary,
+    tradeoffSummary,
+  }
 }
 
 // =============================================================================
@@ -794,7 +1028,10 @@ export interface SessionVariant {
   duration: number
   label: string
   selection: ExerciseSelection
-  compressionLevel: 'none' | 'light' | 'moderate' | 'heavy'
+  /** [PEX-5B] Extended to support very_heavy/extreme for 15/10 min variants */
+  compressionLevel: CompressionLevel
+  /** [PEX-5B] Structured recomposition metadata explaining what was preserved/omitted */
+  recomposition?: ShortSessionRecomposition
 }
 
 // =============================================================================
@@ -1098,6 +1335,7 @@ export function generateSessionVariants(
         label: '45 Min',
         selection: compressed45.compressed,
         compressionLevel: compressed45.compressionLevel,
+        recomposition: compressed45.recomposition, // [PEX-5B]
       }
       // [VARIANT-LAUNCHABILITY-CONTRACT] Only emit 45 Min if it has a real
       // launchable body. `count45 <= fullExerciseCount` alone was true even
@@ -1166,6 +1404,7 @@ export function generateSessionVariants(
         label: '30 Min',
         selection: compressed30.compressed,
         compressionLevel: compressed30.compressionLevel,
+        recomposition: compressed30.recomposition, // [PEX-5B]
       }
       // [VARIANT-LAUNCHABILITY-CONTRACT] Same gate as 45 Min: reject hollow
       // compressions before the monotonicity guard, since a 0-count variant
@@ -1223,37 +1462,201 @@ export function generateSessionVariants(
   }
   
   // ==========================================================================
-  // [TASK 4] VARIANT MONOTONICITY AUDIT
+  // [PEX-5B] GENERATE 20/15/10 MINUTE SHORT VARIANTS
+  // These are intelligent short-session variants with training-priority recomposition.
   // ==========================================================================
+  let variant20: SessionVariant | null = null
+  let variant15: SessionVariant | null = null
+  let variant10: SessionVariant | null = null
+  
+  // Track the smallest emitted variant for monotonicity reference
+  const smallestEmittedVariant = variant30 ?? variant45 ?? fullCandidate
+  const smallestEmittedCount = smallestEmittedVariant.selection.main.length
+  
+  // [PEX-5B] 20 Min variant - strong compression preserving primary identity
+  if (safeOriginalMinutes > 20 + MEANINGFUL_DIFFERENCE_THRESHOLD) {
+    try {
+      const compressed20 = compressSession({
+        selection: safeSelection,
+        targetMinutes: 20,
+        originalMinutes: safeOriginalMinutes,
+        preserveSkillWork: true,
+      })
+      
+      const count20 = compressed20.compressed.main.length
+      const candidate20: SessionVariant = {
+        duration: 20,
+        label: '20 Min',
+        selection: compressed20.compressed,
+        compressionLevel: compressed20.compressionLevel,
+        recomposition: compressed20.recomposition,
+      }
+      
+      // Validity and monotonicity checks
+      if (!isVariantLaunchable(candidate20)) {
+        console.warn('[PEX-5B] Skipping 20min variant - no launchable body', {
+          count20,
+          reason: 'empty_or_unusable_selection_main',
+        })
+      } else if (count20 > smallestEmittedCount) {
+        console.warn('[PEX-5B] Skipping 20min variant - would be fuller than 30/45/full', {
+          count20,
+          smallestEmittedCount,
+        })
+      } else {
+        // Check distinctness from all prior variants
+        const distinctnessVs30 = variant30
+          ? areVariantsMateriallyDistinct(candidate20, variant30)
+          : { materiallyDistinct: true, matchedFields: [] as Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'> }
+        
+        if (!distinctnessVs30.materiallyDistinct) {
+          console.warn('[PEX-5B] Skipping 20min variant - not distinct from 30 Min')
+        } else {
+          variant20 = candidate20
+          variants.push(variant20)
+        }
+      }
+    } catch (err) {
+      console.warn('[PEX-5B] Failed to generate 20min variant:', err instanceof Error ? err.message : String(err))
+    }
+  }
+  
+  // Reference for 15/10 min checks
+  const referenceFor15 = variant20 ?? variant30 ?? variant45 ?? fullCandidate
+  const referenceCountFor15 = referenceFor15.selection.main.length
+  
+  // [PEX-5B] 15 Min variant - minimum effective focused session
+  if (safeOriginalMinutes > 15 + MEANINGFUL_DIFFERENCE_THRESHOLD) {
+    try {
+      const compressed15 = compressSession({
+        selection: safeSelection,
+        targetMinutes: 15,
+        originalMinutes: safeOriginalMinutes,
+        preserveSkillWork: true,
+      })
+      
+      const count15 = compressed15.compressed.main.length
+      const candidate15: SessionVariant = {
+        duration: 15,
+        label: '15 Min',
+        selection: compressed15.compressed,
+        compressionLevel: compressed15.compressionLevel,
+        recomposition: compressed15.recomposition,
+      }
+      
+      if (!isVariantLaunchable(candidate15)) {
+        console.warn('[PEX-5B] Skipping 15min variant - no launchable body', { count15 })
+      } else if (count15 > referenceCountFor15) {
+        console.warn('[PEX-5B] Skipping 15min variant - monotonicity violation')
+      } else {
+        // Check distinctness from prior variant
+        const distinctnessVs20 = variant20
+          ? areVariantsMateriallyDistinct(candidate15, variant20)
+          : { materiallyDistinct: true, matchedFields: [] as Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'> }
+        
+        if (!distinctnessVs20.materiallyDistinct) {
+          console.warn('[PEX-5B] Skipping 15min variant - not distinct from 20 Min')
+        } else {
+          variant15 = candidate15
+          variants.push(variant15)
+        }
+      }
+    } catch (err) {
+      console.warn('[PEX-5B] Failed to generate 15min variant:', err instanceof Error ? err.message : String(err))
+    }
+  }
+  
+  // Reference for 10 min checks
+  const referenceFor10 = variant15 ?? variant20 ?? variant30 ?? variant45 ?? fullCandidate
+  const referenceCountFor10 = referenceFor10.selection.main.length
+  
+  // [PEX-5B] 10 Min variant - emergency/minimum effective dose
+  // Only generate if full session is long enough and we can produce meaningful content
+  if (safeOriginalMinutes > 10 + MEANINGFUL_DIFFERENCE_THRESHOLD && fullExerciseCount >= 2) {
+    try {
+      const compressed10 = compressSession({
+        selection: safeSelection,
+        targetMinutes: 10,
+        originalMinutes: safeOriginalMinutes,
+        preserveSkillWork: true,
+      })
+      
+      const count10 = compressed10.compressed.main.length
+      const candidate10: SessionVariant = {
+        duration: 10,
+        label: '10 Min',
+        selection: compressed10.compressed,
+        compressionLevel: compressed10.compressionLevel,
+        recomposition: compressed10.recomposition,
+      }
+      
+      // 10 min is only valid if it has at least 1 meaningful exercise
+      if (!isVariantLaunchable(candidate10) || count10 < 1) {
+        console.warn('[PEX-5B] Skipping 10min variant - insufficient content for emergency dose', { count10 })
+      } else if (count10 > referenceCountFor10) {
+        console.warn('[PEX-5B] Skipping 10min variant - monotonicity violation')
+      } else {
+        // Check distinctness from 15 min
+        const distinctnessVs15 = variant15
+          ? areVariantsMateriallyDistinct(candidate10, variant15)
+          : { materiallyDistinct: true, matchedFields: [] as Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'> }
+        
+        if (!distinctnessVs15.materiallyDistinct) {
+          console.warn('[PEX-5B] Skipping 10min variant - not distinct from 15 Min')
+        } else {
+          variant10 = candidate10
+          variants.push(variant10)
+        }
+      }
+    } catch (err) {
+      console.warn('[PEX-5B] Failed to generate 10min variant:', err instanceof Error ? err.message : String(err))
+    }
+  }
+  
+  // ==========================================================================
+  // [TASK 4] VARIANT MONOTONICITY AUDIT (extended for PEX-5B)
+  // ==========================================================================
+  // [PEX-5B] Extended monotonicity audit including 20/15/10 variants
   const duration45 = variant45?.duration ?? null
   const duration30 = variant30?.duration ?? null
+  const duration20 = variant20?.duration ?? null
+  const duration15 = variant15?.duration ?? null
+  const duration10 = variant10?.duration ?? null
   const count45 = variant45?.selection.main.length ?? null
   const count30 = variant30?.selection.main.length ?? null
+  const count20 = variant20?.selection.main.length ?? null
+  const count15 = variant15?.selection.main.length ?? null
+  const count10 = variant10?.selection.main.length ?? null
   
+  // Monotonicity: Full >= 45 >= 30 >= 20 >= 15 >= 10 for both duration and count
   const monotonicityPassed = 
     (duration45 === null || safeOriginalMinutes >= duration45) &&
     (duration30 === null || (duration45 ?? safeOriginalMinutes) >= duration30) &&
+    (duration20 === null || (duration30 ?? duration45 ?? safeOriginalMinutes) >= duration20) &&
+    (duration15 === null || (duration20 ?? duration30 ?? duration45 ?? safeOriginalMinutes) >= duration15) &&
+    (duration10 === null || (duration15 ?? duration20 ?? duration30 ?? duration45 ?? safeOriginalMinutes) >= duration10) &&
     (count45 === null || fullExerciseCount >= count45) &&
-    (count30 === null || (count45 ?? fullExerciseCount) >= count30)
-  
-  let violationReason = ''
-  if (!monotonicityPassed) {
-    if (duration45 !== null && safeOriginalMinutes < duration45) violationReason = 'full_duration_less_than_45'
-    else if (duration30 !== null && (duration45 ?? safeOriginalMinutes) < duration30) violationReason = '45_duration_less_than_30'
-    else if (count45 !== null && fullExerciseCount < count45) violationReason = 'full_count_less_than_45'
-    else if (count30 !== null && (count45 ?? fullExerciseCount) < count30) violationReason = '45_count_less_than_30'
-  }
+    (count30 === null || (count45 ?? fullExerciseCount) >= count30) &&
+    (count20 === null || (count30 ?? count45 ?? fullExerciseCount) >= count20) &&
+    (count15 === null || (count20 ?? count30 ?? count45 ?? fullExerciseCount) >= count15) &&
+    (count10 === null || (count15 ?? count20 ?? count30 ?? count45 ?? fullExerciseCount) >= count10)
   
   console.log('[variant-monotonicity-audit]', {
     fullDuration: safeOriginalMinutes,
     duration45,
     duration30,
+    duration20,
+    duration15,
+    duration10,
     fullExerciseCount,
     count45,
     count30,
+    count20,
+    count15,
+    count10,
     monotonicityPassed,
-    violationReason: violationReason || null,
     variantsGenerated: variants.length,
+    variantLabels: variants.map(v => v.label),
   })
   
   return variants

@@ -90,10 +90,10 @@ export interface SessionLengthVariantTruth {
    * `'45 Min'`, `'30 Min'`). */
   label: string
   /**
-   * Mode tag derived from `variant.duration`. Matches the card's
-   * `selectedExecutionMode`: 'full' (>50m), '45_min' (35–50m), '30_min' (≤35m).
+   * [PEX-5B] Mode tag derived from `variant.duration`. Matches the card's
+   * `selectedExecutionMode` and live-workout-authority-contract WorkoutExecutionMode.
    */
-  mode: 'full' | '45_min' | '30_min'
+  mode: 'full' | '45_min' | '30_min' | '20_min' | '15_min' | '10_min'
   /** Variant.duration as authored upstream — the user-facing target. */
   targetMinutes: number
   /**
@@ -110,8 +110,8 @@ export interface SessionLengthVariantTruth {
    * pretending the target lands exactly.
    */
   labelDriftWarning: boolean
-  /** Compression level the engine reported for this variant. */
-  compressionLevel: 'none' | 'light' | 'moderate' | 'heavy'
+  /** [PEX-5B] Compression level the engine reported for this variant. */
+  compressionLevel: 'none' | 'light' | 'moderate' | 'heavy' | 'very_heavy' | 'extreme'
   /**
    * Total sets in this variant's main block. Used as the structural-distinctness
    * signal alongside main count and ordered identity.
@@ -380,8 +380,11 @@ function orderedIdentitySignature(variant: VariantLike | undefined): string {
     .join('|')
 }
 
-/** Maps `variant.duration` to a 3-bucket execution mode tag. */
-function modeFor(durationMinutes: number): 'full' | '45_min' | '30_min' {
+/** [PEX-5B] Maps `variant.duration` to execution mode tag. */
+function modeFor(durationMinutes: number): 'full' | '45_min' | '30_min' | '20_min' | '15_min' | '10_min' {
+  if (durationMinutes <= 10) return '10_min'
+  if (durationMinutes <= 15) return '15_min'
+  if (durationMinutes <= 20) return '20_min'
   if (durationMinutes <= 35) return '30_min'
   if (durationMinutes <= 50) return '45_min'
   return 'full'

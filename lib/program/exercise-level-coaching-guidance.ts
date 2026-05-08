@@ -43,6 +43,15 @@ export interface ExerciseCoachingGuidance {
   caution: string | null
   /** Source of the guidance: specific (from explicit data), derived (from patterns), or basic (fallback) */
   source: ExerciseCoachingGuidanceSource
+  /** [WW7] RPE/effort intelligence — explicit effort guidance when targetRPE exists */
+  effortGuidance?: {
+    /** Effort band label (e.g., "Controlled", "Strong", "Near-limit") */
+    band: string
+    /** User-friendly effort cue explaining what this RPE means */
+    cue: string
+    /** Numeric RPE if available (for display) */
+    rpe?: number
+  } | null
 }
 
 // =============================================================================
@@ -273,6 +282,86 @@ function isModerateEffortRPE(targetRPE?: number): boolean {
   return targetRPE !== undefined && targetRPE >= 6 && targetRPE < 8
 }
 
+// =============================================================================
+// WW7: RPE / EFFORT INTELLIGENCE USABILITY
+// =============================================================================
+
+/**
+ * Derive user-friendly effort guidance from real targetRPE.
+ * Maps numeric RPE to effort band + actionable execution cue.
+ * 
+ * Returns null if no real RPE exists — never invents a fake value.
+ */
+function deriveEffortGuidanceFromRPE(
+  targetRPE?: number,
+  exerciseCategory?: string,
+  isMobility?: boolean
+): { band: string; cue: string; rpe: number } | null {
+  // No RPE = no effort guidance (honest fallback)
+  if (targetRPE === undefined || targetRPE === null) return null
+  
+  // Mobility/prehab always gets low-strain guidance regardless of any RPE
+  if (isMobility) {
+    return {
+      band: 'Low strain',
+      cue: 'Stay smooth and pain-free. This should support the session, not exhaust you.',
+      rpe: targetRPE,
+    }
+  }
+  
+  // RPE band mapping based on real numeric value
+  if (targetRPE <= 5) {
+    return {
+      band: 'Easy',
+      cue: 'Light effort — focus on movement quality and positioning.',
+      rpe: targetRPE,
+    }
+  }
+  
+  if (targetRPE === 6) {
+    return {
+      band: 'Controlled',
+      cue: 'Finish with several clean reps in reserve. Build skill without draining recovery.',
+      rpe: targetRPE,
+    }
+  }
+  
+  if (targetRPE === 7) {
+    return {
+      band: 'Moderate',
+      cue: 'Work hard, but keep the set clean. You should still feel like you had more reps available.',
+      rpe: targetRPE,
+    }
+  }
+  
+  if (targetRPE === 8) {
+    return {
+      band: 'Strong',
+      cue: 'Push with intent while avoiding form breakdown. Stop before grinding turns the set sloppy.',
+      rpe: targetRPE,
+    }
+  }
+  
+  if (targetRPE === 9) {
+    return {
+      band: 'Near-limit',
+      cue: 'This should feel very hard but still controlled. Do not force extra reps past the prescription.',
+      rpe: targetRPE,
+    }
+  }
+  
+  // RPE 10 (max effort) — only if explicitly prescribed
+  if (targetRPE >= 10) {
+    return {
+      band: 'Max effort',
+      cue: 'All-out set. Use only when the prescription explicitly calls for failure.',
+      rpe: targetRPE,
+    }
+  }
+  
+  return null
+}
+
 /** Build prescription-aware tags from real fields */
 function buildPrescriptionTags(
   repsOrTime?: string,
@@ -341,6 +430,10 @@ export function deriveExerciseLevelCoachingGuidance(
   const isRecoverySession = sessionIntensity === 'recovery' || sessionIntensity === 'low'
   const isHighIntensitySession = sessionIntensity === 'high'
   
+  // [WW7] Derive effort guidance from real targetRPE — null if no RPE exists
+  const isMobility = isMobilityPrehabExercise(name, category)
+  const effortGuidance = deriveEffortGuidanceFromRPE(targetRPE, category, isMobility)
+  
   // PRIORITY 1: Skill / isometric / hold exercise
   if (isSkillOrIsometricExercise(name) || (isHoldPrescription(repsOrTime) && category === 'skill')) {
     // [STEP 25.6B] Prescription-aware skill cue
@@ -357,6 +450,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Shape quality', 'Controlled effort'],
       caution: targetRPE && targetRPE >= 9 ? 'High RPE — maintain form standards' : null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -368,6 +462,7 @@ export function deriveExerciseLevelCoachingGuidance(
       focusTags: ['Control', 'Range of motion'],
       caution: null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -387,6 +482,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Trunk control', 'Quality reps'],
       caution: null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -401,6 +497,7 @@ export function deriveExerciseLevelCoachingGuidance(
       focusTags: ['Pacing', 'Quick turnover'],
       caution: isHighEffortRPE(targetRPE) ? 'High effort with short rest — pace carefully' : null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -420,6 +517,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Max strength', 'Full recovery'],
       caution: isHighEffortRPE(targetRPE) ? 'Leave technique quality in reserve' : null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -439,6 +537,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Controlled strength', 'Repeatable sets'],
       caution: isHighRPE ? 'Leave technique quality in reserve' : null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -455,6 +554,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : (isHighRPE ? ['Max effort', 'Form integrity'] : ['Controlled strength', 'Repeatable sets']),
       caution: isHighRPE ? 'Leave technique quality in reserve' : null,
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -471,6 +571,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Muscle tension', 'Strict form'],
       caution: isHighIntensitySession ? null : 'Do not let accessory fatigue damage main skill work',
       source: existingContext ? 'specific' : 'derived',
+      effortGuidance,
     }
   }
   
@@ -484,6 +585,7 @@ export function deriveExerciseLevelCoachingGuidance(
         : ['Form quality', 'Consistent execution'],
       caution: null,
       source: 'specific',
+      effortGuidance,
     }
   }
   
@@ -497,6 +599,7 @@ export function deriveExerciseLevelCoachingGuidance(
       : ['Form consistency'],
     caution: null,
     source: 'basic',
+    effortGuidance,
   }
 }
 

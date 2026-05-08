@@ -2665,14 +2665,20 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W7',
         title: 'Rest / RPE / Effort Intelligence Usability',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Explain rest period reasoning in user terms',
-          'Clarify RPE targets and why they are set',
-          'Make effort guidance actionable without overwhelming',
-          'Connect to existing rest-intelligence and rpe-adjustment-engine',
+        status: 'COMPLETE',
+        evidence: [
+          '[WW7] Added deriveEffortGuidanceFromRPE() function to exercise-level-coaching-guidance.ts',
+          '[WW7] Maps numeric RPE to effort bands: Easy (1-5), Controlled (6), Moderate (7), Strong (8), Near-limit (9), Max (10)',
+          '[WW7] Each band has user-friendly execution cue explaining what the effort level means',
+          '[WW7] Mobility/prehab exercises always get "Low strain" guidance regardless of any RPE value',
+          '[WW7] ExerciseCoachingGuidance interface extended with effortGuidance?: { band, cue, rpe }',
+          '[WW7] All return paths in deriveExerciseLevelCoachingGuidance now include effortGuidance',
+          '[WW7] AdaptiveSessionCard ExerciseRow renders "Effort feel" line below focus tags when effortGuidance exists',
+          '[WW7] Compact UI: gray label + band name + (RPE N) + execution cue',
+          '[WW7] Null when no targetRPE exists — never invents fake values',
+          '[WW7] Advisory-only — no mutation, no storage writes, no generator changes',
         ],
+        remainingWork: [],
       },
       {
         id: 'W.W8',

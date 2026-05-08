@@ -97,6 +97,54 @@ export type CalibrationLimiterType =
  */
 export type CalibrationSafetyStatus = 'safe' | 'delay' | 'unknown'
 
+// =============================================================================
+// [PEX-1] BASELINE INFLUENCE CONTRACT
+// =============================================================================
+// Typed, engine-owned object that describes WHAT the test result will feed
+// downstream (starting level, dosage, assistance decisions, readiness).
+// This is NOT cosmetic copy — it is source-of-truth for the data chain.
+
+/**
+ * The baseline role a test plays in the calibration system.
+ * Distinguishes straight-arm planche work (shoulder-specific) from
+ * general bent-arm push (Max Dips), etc.
+ */
+export type CalibrationBaselineRole =
+  | 'straight_arm_push'    // Planche Lean, straight-arm shoulder work
+  | 'straight_arm_pull'    // Tuck Front Lever, straight-arm pulling position
+  | 'general_push_power'   // Max Dips, bent-arm pressing capacity
+  | 'general_pull_power'   // Max Pull-Ups, vertical pull capacity
+  | 'compression_core'     // L-Sit, compression/core baseline
+  | 'overhead_stability'   // Wall Handstand, HSPU readiness
+  | 'ring_stability'       // Ring Support, muscle-up transition
+  | 'support_capacity'     // General support work
+
+/**
+ * What the test result will primarily influence in programming.
+ */
+export type CalibrationPrimaryUse =
+  | 'starting_progression'  // Determines starting level for skill
+  | 'dosage'                // Influences volume/intensity decisions
+  | 'assistance_level'      // Determines accessory prescription
+  | 'readiness'             // Assesses readiness for harder variations
+  | 'limiter_detection'     // Identifies limiting factors
+  | 'method_selection'      // Influences training method choices
+
+/**
+ * [PEX-1] Typed baseline influence contract. This is NOT cosmetic copy;
+ * it is the source-of-truth for what the calibration result will feed.
+ */
+export interface CalibrationBaselineInfluence {
+  /** The role this test plays in the baseline system */
+  baselineRole: CalibrationBaselineRole
+  /** What the result will primarily influence */
+  primaryUse: CalibrationPrimaryUse
+  /** Which skill progressions this result directly affects */
+  affectedProgressions: SkillKey[]
+  /** Plain-English explanation of what the result will feed */
+  dataUseExplanation: string
+}
+
 /**
  * One recommended test, projected from the canonical
  * `BaselineTestDefinition` plus our reason annotation.
@@ -115,6 +163,12 @@ export interface CalibrationRecommendedTest {
   surfaceCategory: CalibrationTestSurfaceCategory
   /** Engine priority (`essential` | `recommended` | `optional`). */
   priority: BaselineTestDefinition['priority']
+  /**
+   * [PEX-1] Typed baseline influence contract. Describes what the result
+   * will feed in the data chain (starting level, dosage, assistance).
+   * Engine-owned; never invented in the UI layer.
+   */
+  baselineInfluence: CalibrationBaselineInfluence
   /**
    * [AB11-2] Canonical test category from the catalog. Required by the
    * result-entry payload for `POST /api/benchmarks` so the UI never
@@ -496,6 +550,81 @@ function limiterFromMovementFamily(
 }
 
 // =============================================================================
+// [PEX-1] BASELINE INFLUENCE BUILDER
+// =============================================================================
+// Derives the typed CalibrationBaselineInfluence from the test definition.
+// This is the source-of-truth for what the result will feed downstream.
+
+function buildBaselineInfluence(
+  def: BaselineTestDefinition,
+  alignedSkills: SkillKey[],
+): CalibrationBaselineInfluence {
+  // Map movement family to baseline role
+  const baselineRole: CalibrationBaselineRole = (() => {
+    switch (def.movementFamily) {
+      case 'straight_arm_push': return 'straight_arm_push'
+      case 'straight_arm_pull': return 'straight_arm_pull'
+      case 'vertical_pull':
+      case 'horizontal_pull':
+      case 'explosive_pull':
+        return 'general_pull_power'
+      case 'vertical_push':
+      case 'dip_pattern':
+        return 'general_push_power'
+      case 'compression_core':
+        return 'compression_core'
+      case 'handstand':
+        return 'overhead_stability'
+      case 'ring_support':
+        return 'ring_stability'
+      default:
+        return 'support_capacity'
+    }
+  })()
+
+  // Determine primary use based on test category and role
+  const primaryUse: CalibrationPrimaryUse = (() => {
+    // Direct skill tests inform starting progression
+    if (def.testCategory === 'skill') return 'starting_progression'
+    // Strength rep tests inform dosage
+    if (def.testCategory === 'strength' && def.testUnit === 'reps') return 'dosage'
+    // Weighted tests inform readiness
+    if (def.testUnit === 'kg' || def.testUnit === 'lbs') return 'readiness'
+    // Default to dosage
+    return 'dosage'
+  })()
+
+  // Build explanation based on role
+  const dataUseExplanation = (() => {
+    switch (baselineRole) {
+      case 'straight_arm_push':
+        return 'Informs planche starting level, lean dosage, and straight-arm push readiness.'
+      case 'straight_arm_pull':
+        return 'Informs front lever starting level, hold dosage, and straight-arm pull readiness.'
+      case 'general_pull_power':
+        return 'Informs pull volume, muscle-up readiness, and one-arm pull-up pathway decisions.'
+      case 'general_push_power':
+        return 'Informs push volume, muscle-up dip phase, and pressing progression decisions.'
+      case 'compression_core':
+        return 'Informs compression dosage, L-sit progression, and bodyline support decisions.'
+      case 'overhead_stability':
+        return 'Informs HSPU readiness, handstand volume, and overhead pressing decisions.'
+      case 'ring_stability':
+        return 'Informs muscle-up transition, ring support volume, and stability decisions.'
+      default:
+        return 'Informs general capacity and support work decisions.'
+    }
+  })()
+
+  return {
+    baselineRole,
+    primaryUse,
+    affectedProgressions: alignedSkills.length > 0 ? alignedSkills : def.skillsAffected,
+    dataUseExplanation,
+  }
+}
+
+// =============================================================================
 // INTERNAL: REASON-TEXT BUILDERS (derived from the test definition)
 // =============================================================================
 
@@ -748,14 +877,54 @@ export function buildProgramCalibrationRecommendation(
 
   scored.sort((a, b) => b.score - a.score)
 
-  // ----- 4. Pick top 3, dedup by movement family ---------------------------
+  // ----- 4. [PEX-1] Pick tests with dynamic target count -------------------
+  // For mixed push/pull/skill profiles, we need 5 baseline roles:
+  //   1. straight_arm_push (Planche Lean)
+  //   2. straight_arm_pull (Tuck Front Lever)
+  //   3. general_pull_power (Max Pull-Ups)
+  //   4. general_push_power (Max Dips)
+  //   5. compression_core (L-Sit)
+  //
+  // We determine target count based on the diversity of selected skills.
+  // Simple profiles (1-2 related skills) get 3 tests.
+  // Mixed profiles (3+ diverse skills) get up to 5 tests.
+
+  // Count distinct baseline roles needed from the user's selected skills
+  const neededRoles = new Set<CalibrationBaselineRole>()
+  for (const skill of allSkills) {
+    // Each skill maps to specific baseline roles needed
+    if (skill === 'planche') {
+      neededRoles.add('straight_arm_push')
+      neededRoles.add('compression_core')
+    }
+    if (skill === 'front_lever' || skill === 'back_lever') {
+      neededRoles.add('straight_arm_pull')
+      neededRoles.add('general_pull_power')
+      neededRoles.add('compression_core')
+    }
+    if (skill === 'muscle_up') {
+      neededRoles.add('general_pull_power')
+      neededRoles.add('general_push_power')
+    }
+    if (skill === 'hspu') {
+      neededRoles.add('overhead_stability')
+      neededRoles.add('general_push_power')
+    }
+    if (skill === 'l_sit') {
+      neededRoles.add('compression_core')
+    }
+  }
+
+  // Target count: 3 for simple profiles, up to 5 for complex mixed profiles
+  const targetTestCount = Math.max(3, Math.min(5, neededRoles.size))
+
   const seenFamilies = new Set<BenchmarkMovementFamily>()
   const picks: Scored[] = []
   for (const s of scored) {
     if (seenFamilies.has(s.def.movementFamily)) continue
     seenFamilies.add(s.def.movementFamily)
     picks.push(s)
-    if (picks.length >= 3) break
+    if (picks.length >= targetTestCount) break
   }
 
   // ----- 5. Project to public shape ----------------------------------------
@@ -777,6 +946,8 @@ export function buildProgramCalibrationRecommendation(
       movementFamily: s.def.movementFamily,
       surfaceCategory: surfaceCategoryFor(s.def),
       priority: s.def.priority,
+      // [PEX-1] Typed baseline influence contract — what the result will feed
+      baselineInfluence: buildBaselineInfluence(s.def, s.alignedSkills),
       // [AB11-2] Canonical category/unit projected from the catalog so
       // the UI never guesses when building the `BenchmarkInput` payload.
       testCategory: s.def.testCategory,

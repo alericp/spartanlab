@@ -20,22 +20,58 @@ import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 // =============================================================================
 
 /**
- * Workout duration mode selected before starting.
+ * [PEX-5A] Workout duration mode selected before starting.
  * Once started, this becomes the authoritative runtime mode.
+ * Extended to support 10/15/20 minute short sessions in addition to 30/45/full.
  */
-export type WorkoutExecutionMode = '30_min' | '45_min' | 'full'
+export type WorkoutExecutionMode = '10_min' | '15_min' | '20_min' | '30_min' | '45_min' | 'full'
 
 export const EXECUTION_MODE_LABELS: Record<WorkoutExecutionMode, string> = {
-  '30_min': '30 Minutes',
-  '45_min': '45 Minutes',
+  '10_min': '10 Min',
+  '15_min': '15 Min',
+  '20_min': '20 Min',
+  '30_min': '30 Min',
+  '45_min': '45 Min',
   'full': 'Full Session',
 }
 
 export const EXECUTION_MODE_TARGET_MINUTES: Record<WorkoutExecutionMode, number | null> = {
+  '10_min': 10,
+  '15_min': 15,
+  '20_min': 20,
   '30_min': 30,
   '45_min': 45,
   'full': null, // No time constraint
 }
+
+/**
+ * [PEX-5A] Canonical resolver: duration minutes → execution mode.
+ * Uses tolerance bands to map variant durations to the correct mode.
+ */
+export function resolveExecutionModeFromMinutes(
+  minutes: number | null | undefined
+): WorkoutExecutionMode {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes)) return 'full'
+  if (minutes <= 12) return '10_min'
+  if (minutes <= 17) return '15_min'
+  if (minutes <= 25) return '20_min'
+  if (minutes <= 35) return '30_min'
+  if (minutes <= 50) return '45_min'
+  return 'full'
+}
+
+/**
+ * [PEX-5A] All supported execution modes in descending duration order.
+ * Used for variant generation and UI rendering.
+ */
+export const EXECUTION_MODE_ORDER: WorkoutExecutionMode[] = [
+  'full',
+  '45_min',
+  '30_min',
+  '20_min',
+  '15_min',
+  '10_min',
+]
 
 // =============================================================================
 // EXERCISE INPUT MODE

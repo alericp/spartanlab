@@ -533,7 +533,11 @@ export function normalizeSessionExecution(
     actualExerciseCount: number
   }
 ): NormalizedSessionExecution {
+  // [PEX-5A] Extended to support 10/15/20 minute modes
   const targetMinutesMap: Record<WorkoutExecutionMode, number | null> = {
+    '10_min': 10,
+    '15_min': 15,
+    '20_min': 20,
     '30_min': 30,
     '45_min': 45,
     'full': null,

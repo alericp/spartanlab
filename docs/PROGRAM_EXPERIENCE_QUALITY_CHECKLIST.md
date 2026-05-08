@@ -314,12 +314,14 @@ The builder already has comprehensive method materialization infrastructure:
    - Duration derivation uses mode-to-minutes map for all modes
 
 ### Files Changed
-- `lib/workout/live-workout-authority-contract.ts`
-- `lib/session-compression-engine.ts`
-- `lib/workout/selected-variant-session-contract.ts`
-- `lib/program/session-length-truth-contract.ts`
-- `components/programs/AdaptiveSessionCard.tsx`
-- `app/(app)/workout/session/page.tsx`
+- `lib/workout/live-workout-authority-contract.ts` — Extended WorkoutExecutionMode, added resolver
+- `lib/session-compression-engine.ts` — Extended CompressionLevel, updated variant generation
+- `lib/workout/selected-variant-session-contract.ts` — Updated all mode types to use canonical resolver
+- `lib/program/session-length-truth-contract.ts` — Updated mode type for session length truth
+- `lib/workout/live-workout-normalizers.ts` — Updated target minutes map for normalizers
+- `components/programs/AdaptiveSessionCard.tsx` — Imported canonical resolver
+- `components/workout/StreamlinedWorkoutSession.tsx` — Updated executionMode type references
+- `app/(app)/workout/session/page.tsx` — Updated mode param handling
 - `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md`
 
 ### Acceptance Criteria
@@ -335,8 +337,8 @@ The builder already has comprehensive method materialization infrastructure:
 - [x] PEX-2 skill coverage untouched
 - [x] PEX-3 method truth untouched
 - [x] PEX-4 clutter compression preserved
-- [ ] TypeScript passes
-- [ ] Build passes
+- [x] TypeScript passes (exit code 0)
+- [x] Build compiles successfully (pre-existing Stripe issue unrelated)
 
 ---
 

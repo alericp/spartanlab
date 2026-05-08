@@ -1651,3 +1651,262 @@ export function buildReduceIntensityPreview(
     alreadyReduced: false,
   }
 }
+
+// =============================================================================
+// STEP 24 / V.V5 — PROTECT RECOVERY SPACING MUTATION CORRIDOR
+// =============================================================================
+
+/**
+ * Result of protect recovery spacing mutation attempt.
+ * 
+ * @step 24.5 (V.V5)
+ */
+export interface ProtectRecoverySpacingResult {
+  /** Mutation status */
+  status: 'success' | 'blocked' | 'no_change' | 'already_protected'
+  /** User-visible summary of what happened */
+  visibleSummary: string
+  /** Evidence trail for debugging */
+  evidence: string[]
+  /** Machine-readable reason code */
+  reasonCode: string
+  /** Updated program if mutation succeeded */
+  updatedProgram?: import('../adaptive-program-builder').AdaptiveProgram
+  /** Sessions that were affected */
+  affectedSessionIndices?: number[]
+  /** Session labels that were affected */
+  affectedSessionLabels?: string[]
+}
+
+/**
+ * Input for protect recovery spacing mutation.
+ * 
+ * @step 24.5 (V.V5)
+ */
+export interface ProtectRecoverySpacingInput {
+  /** Current program state */
+  program: import('../adaptive-program-builder').AdaptiveProgram
+  /** Advisory that triggered this */
+  advisory: MissedWorkoutRecompositionAdvisory
+  /** Target session index to protect (0-based) */
+  targetSessionIndex: number
+}
+
+/**
+ * Preview model for protect recovery spacing mutation.
+ * Shows what WOULD change before user confirms.
+ * 
+ * @step 24.5 (V.V5)
+ */
+export interface ProtectRecoverySpacingMutationPreview {
+  /** Whether this preview can be shown */
+  canShow: boolean
+  /** Target session label */
+  targetSessionLabel: string
+  /** Target session index */
+  targetSessionIndex: number
+  /** What will change */
+  whatWillChange: string[]
+  /** What will NOT change */
+  whatWillNotChange: string[]
+  /** Already protected? */
+  alreadyProtected: boolean
+  /** Reason if cannot show */
+  blockedReason?: string
+  /** Proposed action summary */
+  proposedAction: string
+}
+
+/**
+ * Build a preview of what protect-recovery-spacing would change.
+ * Does NOT mutate anything — pure preview for confirmation UI.
+ * 
+ * @step 24.5 (V.V5)
+ */
+export function buildProtectRecoverySpacingMutationPreview(
+  program: import('../adaptive-program-builder').AdaptiveProgram | null,
+  targetSessionIndex: number,
+  advisory: MissedWorkoutRecompositionAdvisory | null
+): ProtectRecoverySpacingMutationPreview {
+  if (!program || !program.sessions) {
+    return {
+      canShow: false,
+      targetSessionLabel: '',
+      targetSessionIndex: -1,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyProtected: false,
+      blockedReason: 'No program available.',
+      proposedAction: '',
+    }
+  }
+  
+  if (targetSessionIndex < 0 || targetSessionIndex >= program.sessions.length) {
+    return {
+      canShow: false,
+      targetSessionLabel: '',
+      targetSessionIndex: -1,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyProtected: false,
+      blockedReason: 'Target session not found.',
+      proposedAction: '',
+    }
+  }
+  
+  const targetSession = program.sessions[targetSessionIndex]
+  
+  // Check if already protected using adaptationNotes marker
+  // V.V5 provenance is stored as "[V.V5:protect_recovery_spacing:timestamp]" prefix
+  const v5MarkerNote = (targetSession.adaptationNotes || []).find(
+    note => note.startsWith('[V.V5:protect_recovery_spacing:')
+  )
+  if (v5MarkerNote) {
+    const timestampMatch = v5MarkerNote.match(/\[V\.V5:protect_recovery_spacing:([^\]]+)\]/)
+    const appliedDate = timestampMatch?.[1] 
+      ? new Date(timestampMatch[1]).toLocaleDateString() 
+      : 'previously'
+    return {
+      canShow: true,
+      targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
+      targetSessionIndex,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyProtected: true,
+      blockedReason: `Recovery spacing already protected on ${appliedDate}`,
+      proposedAction: '',
+    }
+  }
+  
+  // Build preview of what will change
+  const whatWillChange: string[] = [
+    'A recovery spacing note will be added to this session',
+    'This session will be marked as recovery-protected',
+    'Your saved program will be updated',
+  ]
+  
+  const whatWillNotChange: string[] = [
+    'Exercise selection stays the same',
+    'Sets, reps, and intensity are preserved',
+    'Skill representation is preserved',
+    'Your live workout (if in progress) is not affected',
+    'Session order remains unchanged',
+  ]
+  
+  const proposedAction = advisory?.userFacingRecommendation || 
+    'Mark this session for recovery spacing protection to prevent fatigue stacking.'
+  
+  return {
+    canShow: true,
+    targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
+    targetSessionIndex,
+    whatWillChange,
+    whatWillNotChange,
+    alreadyProtected: false,
+    proposedAction,
+  }
+}
+
+/**
+ * Protect recovery spacing on a target session.
+ * 
+ * CRITICAL INVARIANTS:
+ * - Pure function — no side effects, no storage, no hooks
+ * - Does NOT persist anything — caller must save
+ * - Does NOT change exercises, sets, reps, intensity, or skill representation
+ * - Only adds recovery spacing protection note/marker to adaptationNotes
+ * - Returns new program object; does not mutate input
+ * - Blocks if already protected (duplicate-apply guard)
+ * 
+ * The mutation is intentionally conservative:
+ * - We do NOT reorder sessions (that would change schedule semantics)
+ * - We DO mark the session as recovery-protected so the user knows it's flagged
+ * - Future features could use this marker for scheduling guidance
+ * 
+ * @step 24.5 (V.V5)
+ */
+export function protectRecoverySpacing(input: ProtectRecoverySpacingInput): ProtectRecoverySpacingResult {
+  const { program, targetSessionIndex, advisory } = input
+  
+  // Validate program exists
+  if (!program || !program.sessions) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      reasonCode: 'no_program',
+    }
+  }
+  
+  // Validate target session index
+  if (targetSessionIndex < 0 || targetSessionIndex >= program.sessions.length) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Target session not found.',
+      evidence: [`targetSessionIndex ${targetSessionIndex} out of range [0, ${program.sessions.length - 1}]`],
+      reasonCode: 'invalid_target_index',
+    }
+  }
+  
+  const targetSession = program.sessions[targetSessionIndex]
+  
+  // Check for duplicate-apply guard using adaptationNotes marker
+  // V.V5 provenance is stored as "[V.V5:protect_recovery_spacing:timestamp]" prefix
+  const hasV5Marker = (targetSession.adaptationNotes || []).some(
+    note => note.startsWith('[V.V5:protect_recovery_spacing:')
+  )
+  if (hasV5Marker) {
+    return {
+      status: 'already_protected',
+      visibleSummary: `Recovery spacing was already protected on "${targetSession.dayLabel}".`,
+      evidence: [
+        'Session already has V.V5 protect_recovery_spacing marker in adaptationNotes',
+        'Duplicate protection blocked to prevent stacking',
+      ],
+      reasonCode: 'already_protected',
+    }
+  }
+  
+  // Build provenance marker
+  const timestamp = new Date().toISOString()
+  const provenanceMarker = `[V.V5:protect_recovery_spacing:${timestamp}]`
+  
+  // Build modified session with recovery spacing protection
+  // Note: We do NOT change exercises, sets, reps, or intensity
+  // We only add a protection marker to adaptationNotes (typed field)
+  const modifiedSession = {
+    ...targetSession,
+    adaptationNotes: [
+      ...(targetSession.adaptationNotes || []),
+      `${provenanceMarker} Recovery spacing protected — ${advisory.title || 'fatigue advisory'}`,
+    ],
+  }
+  
+  // Build updated program with modified session
+  const updatedSessions = program.sessions.map((s, idx) =>
+    idx === targetSessionIndex ? modifiedSession : s
+  )
+  
+  const updatedProgram: import('../adaptive-program-builder').AdaptiveProgram = {
+    ...program,
+    sessions: updatedSessions,
+  }
+  
+  return {
+    status: 'success',
+    visibleSummary: `Recovery spacing protected on "${targetSession.dayLabel}".`,
+    evidence: [
+      `Target session: ${targetSession.dayLabel} (index ${targetSessionIndex})`,
+      'Provenance marker added to adaptationNotes',
+      'No exercise changes',
+      'No sets/reps/intensity changes',
+      'No skill representation changes',
+      'No session order changes',
+      'No live workout mutation',
+    ],
+    reasonCode: 'recovery_spacing_protected',
+    updatedProgram,
+    affectedSessionIndices: [targetSessionIndex],
+    affectedSessionLabels: [targetSession.dayLabel || `Day ${targetSession.dayNumber}`],
+  }
+}

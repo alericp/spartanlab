@@ -2450,7 +2450,7 @@ function step24(): BlueprintPhase {
       'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
     status: 'PARTIAL',
     nextAction:
-      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (user-confirmed reduce-intensity mutation). Next: V.V5 — User-confirmed recovery-spacing mutation corridor. Remaining: V.V5-V.V7.',
+      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (reduce-intensity mutation). V.V5 COMPLETE (protect-recovery-spacing mutation). Next: V.V6 — Multi-session push-forward mutation guardrail. Remaining: V.V6-V.V7.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2525,14 +2525,24 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V5',
         title: 'User-confirmed recovery-spacing mutation corridor',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Two-step confirmation UI',
-          'Pure helper for recovery spacing adjustment',
-          'saveAdaptiveProgram persistence',
-          'Reload proof',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V5] ProtectRecoverySpacingResult type with status (success|blocked|no_change|already_protected), visibleSummary, evidence[], affectedSessionIndices',
+          '[V.V5] ProtectRecoverySpacingInput type for mutation helper input',
+          '[V.V5] ProtectRecoverySpacingMutationPreview type for confirmation preview',
+          '[V.V5] protectRecoverySpacing() pure helper — no side effects, no storage, no hooks',
+          '[V.V5] buildProtectRecoverySpacingMutationPreview() pure helper for confirmation preview UI',
+          '[V.V5] Two-step confirmation UI in AdaptiveProgramDisplay with idle→confirming→applying→applied states',
+          '[V.V5] Duplicate-apply guard via [V.V5:protect_recovery_spacing:timestamp] marker in adaptationNotes',
+          '[V.V5] Safe mutation: only adds protection note to adaptationNotes, no exercise/set/rep/intensity changes',
+          '[V.V5] handleConfirmProtectRecoverySpacing callback in Program Page using saveAdaptiveProgram',
+          '[V.V5] Program Page state updated via onProgramUpdate after successful save',
+          '[V.V5] No live workout mutation — data-no-live-workout-mutation="true" marker',
+          '[V.V5] No generator changes, no schema changes, no package changes',
+          '[V.V5] V.V4 reduce_next_session_intensity corridor preserved',
+          '[V.V5] Created docs/STEP_24_VV5_PROTECT_RECOVERY_SPACING_MUTATION_CORRIDOR.md',
         ],
+        remainingWork: [],
       },
       {
         id: 'V.V6',

@@ -711,8 +711,8 @@ function WorkoutSessionContent() {
   const dayParam = searchParams.get('day')
   const demoMode = searchParams.get('demo') === 'true'
   const isFirstSession = searchParams.get('first') === 'true'
-  // [LIVE-WORKOUT-AUTHORITY] Read execution mode from URL - locked at workout start
-  const executionModeParam = searchParams.get('mode') as '30_min' | '45_min' | 'full' | null
+  // [PEX-5A] Read execution mode from URL - now supports 10/15/20/30/45/full
+  const executionModeParam = searchParams.get('mode') as '10_min' | '15_min' | '20_min' | '30_min' | '45_min' | 'full' | null
   const executionMode = executionModeParam || 'full'
   const variantIndexParam = searchParams.get('variant')
   const variantIndex = variantIndexParam ? parseInt(variantIndexParam, 10) : 0
@@ -1129,12 +1129,15 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
         // ("surface an explicit divergence") in the selected-session
         // corridor lock.
         // =================================================================
-        const intendedVariantDuration =
-          executionMode === '45_min'
-            ? 45
-            : executionMode === '30_min'
-              ? 30
-              : result.session.estimatedMinutes
+        // [PEX-5A] Derive intended duration from execution mode (10/15/20/30/45/full)
+        const modeToMinutes: Record<string, number | undefined> = {
+          '10_min': 10,
+          '15_min': 15,
+          '20_min': 20,
+          '30_min': 30,
+          '45_min': 45,
+        }
+        const intendedVariantDuration = modeToMinutes[executionMode] ?? result.session.estimatedMinutes
         finalSession = {
           ...result.session,
           estimatedMinutes: intendedVariantDuration,

@@ -2640,13 +2640,22 @@ function step25(): BlueprintPhase {
       {
         id: 'W.W6',
         title: 'Exercise-Level Coaching Upgrade',
-        status: 'NOT_STARTED',
-        evidence: [],
+        status: 'PARTIAL',
+        evidence: [
+          '[STEP 25.6A] New helper lib/program/exercise-level-coaching-guidance.ts created',
+          '[STEP 25.6A] deriveExerciseLevelCoachingGuidance() derives from card contract truth (prescriptionContext, prescriptionIntent, intentLabel)',
+          '[STEP 25.6A] buildCoachingGuidanceFromCardContract() convenience function for ExerciseRow consumption',
+          '[STEP 25.6A] Pattern detection: skill/isometric, strength/compound, accessory, mobility/prehab, core, conditioning',
+          '[STEP 25.6A] Returns label, summary, focusTags[], caution, source (specific/derived/basic)',
+          '[STEP 25.6A] AdaptiveSessionCard ExerciseRow now renders "Coach cue" line with summary + focus tags',
+          '[STEP 25.6A] Compact UI with teal label, muted summary text, small border-chip tags, optional amber caution',
+          '[STEP 25.6A] Source indicator shows "doctrine" for specific, "pattern" for derived',
+          '[STEP 25.6A] Advisory-only — no mutation, no storage writes, no generator changes',
+        ],
         remainingWork: [
-          'Add per-exercise "why this" context from builder truth',
-          'Show skill carryover, method expression, pain risk context',
-          'Keep explanations short and contextual',
-          'Derive from exercise-intelligence-engine and doctrine',
+          'Show skill carryover attribution when qualityAudit.skillCarryover present',
+          'Show method expression context when rowMethodTruth.family is non-straight',
+          'Potentially expand pattern detection coverage',
         ],
       },
       {

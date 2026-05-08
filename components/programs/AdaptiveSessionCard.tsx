@@ -98,6 +98,8 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // [SINGLE-TRUTH-FIX] Removed: getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
+// [STEP 25.6A] Exercise-level coaching guidance helper
+import { buildCoachingGuidanceFromCardContract } from '@/lib/program/exercise-level-coaching-guidance'
 // [DOCTRINE-METHOD-DECISION-PHASE3B-BRIDGE]
 // On-read bridge for legacy programs generated BEFORE the authoritative
 // wrapper started stamping `session.methodDecision`. The wrapper remains the
@@ -7332,6 +7334,26 @@ function ExerciseRow({
     ? alignRowWithSessionEvidence(rowSurface, sessionEvidence)
     : rowSurface
 
+  // [STEP 25.6A] Derive exercise-level coaching guidance from card contract truth
+  // Uses existing prescriptionContext/intent as the source — advisory display only
+  const coachingGuidance = !isWarmupCooldown
+    ? buildCoachingGuidanceFromCardContract(
+        exercise.name || '',
+        exercise.category || 'accessory',
+        {
+          prescriptionContext: card.prescriptionContext,
+          prescriptionIntent: card.prescriptionIntent,
+          intentLabel: card.intentLabel,
+        },
+        {
+          repsOrTime: effectiveReps,
+          targetRPE: effectiveTargetRPE,
+          method: exercise.method,
+          selectionReason: exercise.selectionReason,
+        }
+      )
+    : null
+
   // [ROW-METHOD-TRUTH] Resolve the single authoritative method truth for this
   // row ONCE per render. Both the Row 1 fallback chip and the Row 2b Method
   // Ownership Panel read from this object -- they cannot go out of sync.
@@ -8175,19 +8197,59 @@ function ExerciseRow({
         </p>
       )}
 
-      {/* ROW 3: Canonical explanation - TWO LEVELS from SAME canonical contract */}
-      {/* [SUMMARY-OWNER] whyLine = visible card summary (concise WHY) */}
-      {/* [DETAIL-OWNER] detailExplanation = InfoBubble content (richer purpose + effort) */}
-      {/* [COMPACT-CUE] prescriptionContext = fallback execution cue */}
-      {/* All from buildExerciseCardContract - same canonical source, no contradiction possible */}
-      {/* BANNED: exercise.note, alignedRowSurface, getBestRowSublabel, old coaching fallbacks */}
-      {!isWarmupCooldown && (card.whyLine || card.prescriptionContext) && (
+      {/* ROW 3: Exercise-Level Coaching Guidance — Step 25.6A */}
+      {/* [COACH-CUE-OWNER] coachingGuidance.summary = visible coaching cue */}
+      {/* [FOCUS-TAGS-OWNER] coachingGuidance.focusTags = compact focus chips */}
+      {/* Source: buildCoachingGuidanceFromCardContract using card.prescriptionContext/prescriptionIntent */}
+      {/* Falls back to whyLine when no specific coaching guidance, then to basic fallback */}
+      {!isWarmupCooldown && coachingGuidance && (
+        <div className="mt-1.5 space-y-1">
+          {/* Coach cue line: label + summary */}
+          <div className="flex items-start gap-1.5">
+            <span className="text-[9px] uppercase tracking-wider font-semibold text-[#5A8A8A] shrink-0 pt-px">
+              Coach cue
+            </span>
+            <p className="text-[10px] text-[#9A9A9A] leading-relaxed">
+              {coachingGuidance.summary}
+            </p>
+            {/* InfoBubble: richer detail from same canonical contract */}
+            {card.detailExplanation && card.detailExplanation !== card.whyLine && (
+              <InfoBubble content={card.detailExplanation} />
+            )}
+          </div>
+          {/* Focus tags: compact chips */}
+          {coachingGuidance.focusTags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap pl-[3.5rem]">
+              {coachingGuidance.focusTags.map((tag, tagIdx) => (
+                <span
+                  key={tagIdx}
+                  className="text-[8px] px-1.5 py-0.5 rounded bg-[#252525] text-[#7A7A7A] border border-[#333]"
+                >
+                  {tag}
+                </span>
+              ))}
+              {/* Source indicator for transparency */}
+              {coachingGuidance.source !== 'basic' && (
+                <span className="text-[7px] text-[#4A4A4A] ml-1">
+                  {coachingGuidance.source === 'specific' ? '· doctrine' : '· pattern'}
+                </span>
+              )}
+            </div>
+          )}
+          {/* Optional caution line when real logic supports it */}
+          {coachingGuidance.caution && (
+            <p className="text-[9px] text-amber-400/70 italic pl-[3.5rem]">
+              {coachingGuidance.caution}
+            </p>
+          )}
+        </div>
+      )}
+      {/* Fallback: show whyLine when no coaching guidance exists */}
+      {!isWarmupCooldown && !coachingGuidance && card.whyLine && (
         <div className="flex items-center gap-1 mt-1">
           <p className="text-[10px] text-[#6A6A6A] italic">
-            {/* Summary: prefer whyLine (WHY this exercise) over prescriptionContext (HOW to execute) */}
-            {card.whyLine || card.prescriptionContext}
+            {card.whyLine}
           </p>
-          {/* InfoBubble: richer detail from same canonical contract */}
           {card.detailExplanation && card.detailExplanation !== card.whyLine && (
             <InfoBubble content={card.detailExplanation} />
           )}

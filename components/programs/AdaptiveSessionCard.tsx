@@ -44,6 +44,12 @@ import {
   resolveExecutionModeFromMinutes,
   EXECUTION_MODE_LABELS,
 } from '@/lib/workout/live-workout-authority-contract'
+// [PEX-5C] Duration recommendation system for readiness-aware UX
+import {
+  buildDurationRecommendations,
+  type SessionDurationRecommendation,
+  type SessionDurationRecommendations,
+} from '@/lib/program/session-length-truth-contract'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
@@ -4233,73 +4239,101 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               that pass the canonical validity gate (`isVariantLaunchable`). A
               variant whose `selection.main` is empty, missing, or contains
               unusable rows will not render a tab here -- even if the
-              variant object itself exists and carries a duration/label. This
-              means 45 / 30 controls now match true launchability: if a 45 or
-              30 variant cannot be honestly materialized by the live-workout
-              route, it simply disappears from the toggle row instead of
-              presenting a button that would silently fall back to Full. The
-              underlying `selectedVariant` state still indexes the full
-              `session.variants` array so the launch URL's `variant=idx`
-              param lines up with what the route will read after session
-              load (the engine now never emits hollow variants, so indices
-              are dense). */}
-          {session.variants && session.variants.filter(v => isVariantLaunchable(v)).length > 1 && (
-            <div className="flex gap-2 flex-wrap">
-              <span className="text-xs text-[#6A6A6A] self-center mr-1">Session length:</span>
-              {session.variants.map((variant, idx) => {
-                // [VARIANT-LAUNCHABILITY-CONTRACT] Skip non-launchable entries
-                // without touching indices -- the idx we emit here must match
-                // the idx in `session.variants` so the launch URL and route
-                // post-load lookup agree.
-                if (!isVariantLaunchable(variant)) {
-                  // [BUILD GREEN GATE / VARIANT NEVER-NARROWING] The
-                  // failed-predicate branch narrows `variant` to `never`
-                  // when `session.variants` is `SessionVariant[]`. Inspect
-                  // the rejected value through the typed unknown-boundary
-                  // diagnostic snapshot so the warning still names the
-                  // hidden variant without breaking type-check.
-                  const diagnostic = getVariantDiagnosticSnapshot(variant)
-                  console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
-                    sessionDay: session.dayNumber,
-                    idx,
-                    variantLabel: diagnostic.label,
-                    variantDuration: diagnostic.duration,
-                    mainCount: diagnostic.mainCount,
-                  })
-                  return null
-                }
-                // [TASK 4] Determine if this variant is the active selection
-                const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
-                
-                return (
-                  <Button
-                    key={`${variant.duration}-${variant.label}`}
-                    size="sm"
-                    variant={isActive ? 'default' : 'outline'}
-                    className={
-                      isActive
-                        ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
-                        : 'border-[#3A3A3A] text-xs h-7'
-                    }
-                    onClick={() => {
-                      // [TASK 4] Explicitly handle Full Session as null for canonical reset
-                      const newVariant = idx === 0 ? null : idx
-                      console.log('[variant-selection]', {
+              variant object itself exists and carries a duration/label.
+              
+              [PEX-5C] Duration recommendations now show which option is best
+              fit for today based on session structure (and readiness if available). */}
+          {session.variants && session.variants.filter(v => isVariantLaunchable(v)).length > 1 && (() => {
+            // [PEX-5C] Build duration recommendations from session length truth
+            const sessionLengthTruth = (session as { sessionLengthTruth?: unknown }).sessionLengthTruth as Parameters<typeof buildDurationRecommendations>[0] | undefined
+            const recommendations = buildDurationRecommendations(sessionLengthTruth)
+            const recommendedMode = recommendations.recommended?.mode
+            
+            return (
+              <div className="space-y-2">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <span className="text-xs text-[#6A6A6A] mr-1">Session length:</span>
+                  {session.variants.map((variant, idx) => {
+                    // [VARIANT-LAUNCHABILITY-CONTRACT] Skip non-launchable entries
+                    if (!isVariantLaunchable(variant)) {
+                      const diagnostic = getVariantDiagnosticSnapshot(variant)
+                      console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
                         sessionDay: session.dayNumber,
-                        previousVariant: selectedVariant,
-                        newVariant,
-                        variantLabel: variant.label,
-                        variantDuration: variant.duration,
+                        idx,
+                        variantLabel: diagnostic.label,
+                        variantDuration: diagnostic.duration,
+                        mainCount: diagnostic.mainCount,
                       })
-                      setSelectedVariant(newVariant)
-                    }}
-                  >
-                    {variant.label}
-                  </Button>
-                )
-              })}
-            </div>
-          )}
+                      return null
+                    }
+                    
+                    const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
+                    
+                    // [PEX-5C] Find recommendation for this variant
+                    const variantMode = resolveExecutionModeFromMinutes(variant.duration ?? 60)
+                    const rec = recommendations.options.find(o => o.mode === variantMode)
+                    const isRecommended = rec?.verdict === 'recommended'
+                    const isEmergency = rec?.verdict === 'emergency_only'
+                    
+                    return (
+                      <div key={`${variant.duration}-${variant.label}`} className="flex flex-col items-center gap-0.5">
+                        <Button
+                          size="sm"
+                          variant={isActive ? 'default' : 'outline'}
+                          className={
+                            isActive
+                              ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
+                              : isEmergency
+                                ? 'border-[#3A3A3A] text-xs h-7 opacity-70'
+                                : 'border-[#3A3A3A] text-xs h-7'
+                          }
+                          onClick={() => {
+                            const newVariant = idx === 0 ? null : idx
+                            console.log('[variant-selection]', {
+                              sessionDay: session.dayNumber,
+                              previousVariant: selectedVariant,
+                              newVariant,
+                              variantLabel: variant.label,
+                              variantDuration: variant.duration,
+                              recommendationVerdict: rec?.verdict,
+                            })
+                            setSelectedVariant(newVariant)
+                          }}
+                        >
+                          {variant.label}
+                        </Button>
+                        {/* [PEX-5C] Recommendation chip - compact, non-intrusive */}
+                        {isRecommended && !isActive && (
+                          <span className="text-[10px] text-emerald-500 font-medium">Best fit</span>
+                        )}
+                        {isEmergency && !isActive && (
+                          <span className="text-[10px] text-amber-500/80">Emergency</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* [PEX-5C] Compact coaching summary - only when a non-full short variant is selected */}
+                {selectedVariant !== null && selectedVariant > 0 && (() => {
+                  const selectedVarData = session.variants?.[selectedVariant]
+                  if (!selectedVarData || !isVariantLaunchable(selectedVarData)) return null
+                  const selectedMode = resolveExecutionModeFromMinutes(selectedVarData.duration ?? 60)
+                  const rec = recommendations.options.find(o => o.mode === selectedMode)
+                  if (!rec || !rec.shortReason) return null
+                  
+                  return (
+                    <div className="text-xs text-[#8A8A8A] pl-0.5">
+                      <span className="font-medium text-[#A0A0A0]">{selectedVarData.label}:</span>{' '}
+                      {rec.shortReason}
+                      {rec.tradeoffSummary && (
+                        <span className="text-[#6A6A6A]"> · {rec.tradeoffSummary}</span>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+            )
+          })()}
 
           {/* [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH SURFACE
               Renders ONLY when a short variant (45 Min / 30 Min) is selected

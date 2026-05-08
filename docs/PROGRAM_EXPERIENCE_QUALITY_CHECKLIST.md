@@ -344,14 +344,37 @@ The builder already has comprehensive method materialization infrastructure:
 
 ## PEX-5B — Intelligent Short-Session Recomposition Quality
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Improve the coaching intelligence of 20/15/10 minute session recomposition.
 
-### Scope
-- What gets preserved, compressed, deferred, converted to density, or omitted
-- Priority hierarchy enforcement for very short sessions
-- Session identity preservation under extreme compression
+### Implementation Summary
+
+1. **CompressionLevel Extended** — `lib/session-compression-engine.ts`
+   - Type now: `'none' | 'light' | 'moderate' | 'heavy' | 'very_heavy' | 'extreme'`
+   - `heavy` = 20 min, `very_heavy` = 15 min, `extreme` = 10 min
+
+2. **ShortSessionRecomposition Metadata** — `lib/session-compression-engine.ts`
+   - `preservedPriorities[]`, `reducedItems[]`, `omittedItems[]`, `deferredItems[]`
+   - `coachingSummary` and `tradeoffSummary` for UI consumption
+   - `recompositionLevel`: 'mild' | 'moderate' | 'strong' | 'minimum_effective' | 'emergency'
+
+3. **20/15/10 Variant Generation** — `lib/session-compression-engine.ts`
+   - `generateSessionVariants()` emits 20/15/10 variants with distinctness checks
+   - Each variant carries full `ShortSessionRecomposition` metadata
+
+4. **Short-Session Materializer Extended** — `lib/program/short-session-materializer.ts`
+   - `applyStrongSetReduction()` for 20 min
+   - `applyMinimumEffectiveSetReduction()` for 15 min
+   - `applyEmergencySetReduction()` for 10 min
+
+### Acceptance Criteria
+- [x] 20 Min preserves primary day identity
+- [x] 15 Min is minimum effective focused session
+- [x] 10 Min is emergency dose
+- [x] Metadata explains preserved/reduced/omitted/deferred
+- [x] TypeScript passes
+- [x] Build compiles
 
 ---
 

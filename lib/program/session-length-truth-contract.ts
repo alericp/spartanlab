@@ -712,6 +712,310 @@ function buildProgramStamp(
  *
  * Safe to call multiple times — overwrites the stamp deterministically.
  */
+// =============================================================================
+// [PEX-5C] DURATION RECOMMENDATION SYSTEM
+// =============================================================================
+// Readiness-aware ranking for session duration options. Produces user-facing
+// labels that explain which duration is recommended today and why.
+// =============================================================================
+
+/**
+ * [PEX-5C] Verdict for each duration option.
+ */
+export type DurationRecommendationVerdict =
+  | 'recommended'       // Best fit for today's context
+  | 'good_option'       // Solid alternative
+  | 'acceptable'        // Works if time is tight
+  | 'emergency_only'    // Use only when consistency matters more than volume
+  | 'not_recommended'   // Available but not ideal
+  | 'not_launchable'    // Cannot be safely launched
+
+/**
+ * [PEX-5C] Per-duration recommendation for UI rendering.
+ */
+export interface SessionDurationRecommendation {
+  mode: 'full' | '45_min' | '30_min' | '20_min' | '15_min' | '10_min'
+  targetMinutes: number
+  verdict: DurationRecommendationVerdict
+  /** Short label for button/chip (e.g., "Full", "45 Min") */
+  label: string
+  /** Compact chip/badge label (e.g., "Best fit", "Time tight", "Emergency") */
+  chipLabel: string
+  /** One-line reason shown near the button (e.g., "Full training dose") */
+  shortReason: string
+  /** What this duration preserves (for detail disclosure) */
+  preservedSummary?: string
+  /** What this duration defers/omits (for detail disclosure) */
+  tradeoffSummary?: string
+  /** Safety or quality note if relevant */
+  riskNote?: string
+  /** Rank for sorting (lower = more recommended) */
+  rank: number
+  /** Whether this option is launchable */
+  launchable: boolean
+}
+
+/**
+ * [PEX-5C] Full recommendation result for a session.
+ */
+export interface SessionDurationRecommendations {
+  /** All available duration options, sorted by rank */
+  options: SessionDurationRecommendation[]
+  /** The single recommended option (first with verdict='recommended') */
+  recommended: SessionDurationRecommendation | null
+  /** One-line coaching summary for the recommendation */
+  coachingSummary: string
+  /** Whether readiness data was used */
+  readinessAware: boolean
+}
+
+/**
+ * [PEX-5C] Input context for building recommendations.
+ */
+export interface DurationRecommendationContext {
+  /** Readiness score 0-100 if available */
+  readinessScore?: number | null
+  /** Whether this is an acclimation/introductory week */
+  isAcclimationWeek?: boolean
+  /** User's stated available time in minutes */
+  availableMinutes?: number | null
+  /** Session stress level from doctrine (high/medium/low) */
+  sessionStressLevel?: 'high' | 'medium' | 'low' | null
+}
+
+/**
+ * [PEX-5C] Build duration recommendations from session length truth.
+ * Pure function - no side effects, deterministic output.
+ */
+export function buildDurationRecommendations(
+  stamp: SessionLengthTruthStamp | null | undefined,
+  context: DurationRecommendationContext = {}
+): SessionDurationRecommendations {
+  const { readinessScore, isAcclimationWeek, availableMinutes, sessionStressLevel } = context
+  const hasReadiness = typeof readinessScore === 'number' && readinessScore >= 0 && readinessScore <= 100
+  
+  // Default empty result
+  if (!stamp || !stamp.variantTruth || stamp.variantTruth.length === 0) {
+    return {
+      options: [],
+      recommended: null,
+      coachingSummary: 'No session variants available.',
+      readinessAware: false,
+    }
+  }
+  
+  const options: SessionDurationRecommendation[] = []
+  
+  for (const variant of stamp.variantTruth) {
+    const { mode, targetMinutes, label, compressionLevel, liveWorkoutLaunchable, deferredExerciseNames, priorityPreservation } = variant
+    
+    // Skip non-launchable
+    if (!liveWorkoutLaunchable) {
+      options.push({
+        mode,
+        targetMinutes,
+        verdict: 'not_launchable',
+        label,
+        chipLabel: 'Unavailable',
+        shortReason: 'Cannot be safely launched',
+        rank: 999,
+        launchable: false,
+      })
+      continue
+    }
+    
+    // Determine verdict based on mode, readiness, and context
+    let verdict: DurationRecommendationVerdict = 'acceptable'
+    let chipLabel = ''
+    let shortReason = ''
+    let preservedSummary: string | undefined
+    let tradeoffSummary: string | undefined
+    let riskNote: string | undefined
+    let rank = 50
+    
+    // Build preserved/tradeoff summaries
+    const preserved: string[] = []
+    if (priorityPreservation.primarySkillAnchorPreserved) preserved.push('primary skill')
+    if (priorityPreservation.essentialStrengthSupportPreserved) preserved.push('strength support')
+    if (priorityPreservation.secondaryOrHybridSkillPreserved) preserved.push('secondary skill')
+    preservedSummary = preserved.length > 0 ? `Keeps ${preserved.join(', ')}` : undefined
+    
+    if (deferredExerciseNames.length > 0) {
+      const deferredCount = deferredExerciseNames.length
+      tradeoffSummary = deferredCount <= 2
+        ? `Defers ${deferredExerciseNames.join(', ')}`
+        : `Defers ${deferredCount} exercises`
+    }
+    
+    // Mode-specific verdicts
+    switch (mode) {
+      case 'full':
+        if (hasReadiness && readinessScore! >= 70) {
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = 'Full training dose with high readiness'
+          rank = 1
+        } else if (hasReadiness && readinessScore! >= 40) {
+          verdict = 'good_option'
+          chipLabel = 'Good option'
+          shortReason = 'Full session when time allows'
+          rank = 2
+        } else if (hasReadiness && readinessScore! < 40) {
+          verdict = 'acceptable'
+          chipLabel = 'Full'
+          shortReason = 'Consider shorter for today'
+          rank = 4
+        } else {
+          // No readiness data
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = 'Full training dose'
+          rank = 1
+        }
+        if (availableMinutes != null && targetMinutes > availableMinutes + 5) {
+          verdict = 'not_recommended'
+          chipLabel = 'Long'
+          shortReason = 'May exceed available time'
+          rank = 6
+        }
+        break
+        
+      case '45_min':
+        if (hasReadiness && readinessScore! >= 60) {
+          verdict = 'good_option'
+          chipLabel = 'Good option'
+          shortReason = 'Keeps most of the session'
+          rank = 3
+        } else if (hasReadiness && readinessScore! >= 40) {
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = 'Good balance for moderate readiness'
+          rank = 1
+        } else {
+          verdict = 'good_option'
+          chipLabel = 'Good option'
+          shortReason = 'Solid time-saving choice'
+          rank = 3
+        }
+        break
+        
+      case '30_min':
+        if (hasReadiness && readinessScore! < 50) {
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = 'Good fit for lower readiness'
+          rank = 1
+        } else if (isAcclimationWeek) {
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = 'Right dose for acclimation'
+          rank = 1
+        } else {
+          verdict = 'acceptable'
+          chipLabel = 'Time tight'
+          shortReason = 'Main work with trimmed volume'
+          rank = 5
+        }
+        break
+        
+      case '20_min':
+        verdict = 'acceptable'
+        chipLabel = 'Short'
+        shortReason = 'Preserves primary work only'
+        rank = 7
+        if (hasReadiness && readinessScore! < 30) {
+          verdict = 'good_option'
+          chipLabel = 'Good for today'
+          shortReason = 'Light session for recovery'
+          rank = 2
+        }
+        if (sessionStressLevel === 'high') {
+          riskNote = 'Time pressure on high-skill day'
+        }
+        break
+        
+      case '15_min':
+        verdict = 'emergency_only'
+        chipLabel = 'Minimum'
+        shortReason = 'Minimum effective dose'
+        rank = 8
+        tradeoffSummary = tradeoffSummary || 'Most accessories and finishers omitted'
+        if (hasReadiness && readinessScore! < 25) {
+          verdict = 'acceptable'
+          chipLabel = 'Minimum'
+          shortReason = 'Light touchpoint for consistency'
+          rank = 5
+        }
+        break
+        
+      case '10_min':
+        verdict = 'emergency_only'
+        chipLabel = 'Emergency'
+        shortReason = 'Use for consistency only'
+        rank = 9
+        riskNote = 'Not a full training replacement'
+        tradeoffSummary = tradeoffSummary || 'Only essential exposure survives'
+        break
+    }
+    
+    // Override if time available is constraining
+    if (availableMinutes != null && availableMinutes > 0) {
+      if (targetMinutes <= availableMinutes && targetMinutes >= availableMinutes - 5) {
+        // This duration fits available time well
+        if (verdict !== 'emergency_only') {
+          verdict = 'recommended'
+          chipLabel = 'Best fit'
+          shortReason = `Fits your ${availableMinutes} min window`
+          rank = 1
+        }
+      }
+    }
+    
+    options.push({
+      mode,
+      targetMinutes,
+      verdict,
+      label,
+      chipLabel,
+      shortReason,
+      preservedSummary,
+      tradeoffSummary,
+      riskNote,
+      rank,
+      launchable: true,
+    })
+  }
+  
+  // Sort by rank
+  options.sort((a, b) => a.rank - b.rank)
+  
+  // Find recommended option
+  const recommended = options.find(o => o.verdict === 'recommended' && o.launchable) ?? null
+  
+  // Build coaching summary
+  let coachingSummary: string
+  if (recommended) {
+    if (hasReadiness) {
+      coachingSummary = `${recommended.label} is the best fit based on your readiness.`
+    } else {
+      coachingSummary = `${recommended.label} recommended. Shorter options available if time is tight.`
+    }
+  } else {
+    coachingSummary = 'Choose the duration that fits your available time.'
+  }
+  
+  return {
+    options,
+    recommended,
+    coachingSummary,
+    readinessAware: hasReadiness,
+  }
+}
+
+// =============================================================================
+// CORE — runSessionLengthTruthContract
+// =============================================================================
+
 export function runSessionLengthTruthContract(
   programInput: AdaptiveProgram,
 ): {

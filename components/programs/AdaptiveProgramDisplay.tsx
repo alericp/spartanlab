@@ -127,13 +127,16 @@ import {
   type UserControlCoachModel,
 } from '@/lib/program/user-control-coaching'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory — advisory-only, no mutation
+// [V.V3] Recovery spacing preview — preview-only, no mutation
 import type { 
   MissedWorkoutRecompositionAdvisory,
   PushSessionForwardResult,
+  RecoverySpacingPreview,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 import { 
   getMissedWorkoutAdvisoryDisplayInfo, 
-  hasActionableMissedWorkoutAdvisory 
+  hasActionableMissedWorkoutAdvisory,
+  buildRecoverySpacingPreview,
 } from '@/lib/program/missed-workout-recomposition-advisory'
 
 // [AB18-D] Local type for training style influence (mirrors WeeklyMethodDecisionAccordion)
@@ -1906,11 +1909,156 @@ export function AdaptiveProgramDisplay({
         </div>
       )}
 
-      {/* [STEP 23.2/23.3] Missed-Workout Recomposition Advisory Card
+      {/* [V.V3] Protect Recovery Spacing Preview Card
+          Dedicated preview-only UI for protect_recovery_spacing action.
+          Shows recovery spacing guidance without any mutation.
+          @step 24.3 */}
+      {missedWorkoutAdvisory && 
+       missedWorkoutAdvisory.action === 'protect_recovery_spacing' && 
+       !missedWorkoutAdvisoryDismissed && (() => {
+        const recoveryPreview = buildRecoverySpacingPreview(missedWorkoutAdvisory)
+        if (!recoveryPreview.shouldShow) return null
+        
+        return (
+          <div 
+            className="rounded-lg border bg-gradient-to-br from-[#1A1A25]/60 via-[#1A1820]/50 to-[#181A20]/60 border-[#2A2A35] overflow-hidden"
+            data-step-24-vv3-recovery-spacing-preview="true"
+            data-advisory-action="protect_recovery_spacing"
+            data-preview-only="true"
+            data-no-saved-program-mutation="true"
+            data-no-live-workout-mutation="true"
+          >
+            <div className="p-3">
+              <div className="flex items-start gap-3">
+                {/* Recovery spacing icon */}
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                  missedWorkoutAdvisory.severity === 'high' 
+                    ? "bg-amber-500/15"
+                    : "bg-blue-500/15"
+                )}>
+                  <Shield className={cn(
+                    "w-3.5 h-3.5",
+                    missedWorkoutAdvisory.severity === 'high'
+                      ? "text-amber-400/80"
+                      : "text-blue-400/80"
+                  )} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {/* Badge + Headline */}
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                      missedWorkoutAdvisory.severity === 'high'
+                        ? "bg-amber-500/20 text-amber-400"
+                        : "bg-blue-500/20 text-blue-400"
+                    )}>
+                      Recovery Preview
+                    </span>
+                    <p className="text-sm font-medium text-[#B5B5C5]">
+                      {recoveryPreview.title}
+                    </p>
+                  </div>
+                  
+                  {/* Summary */}
+                  <p className="text-xs text-[#8A8A9A] mt-1 leading-relaxed">
+                    {recoveryPreview.summary}
+                  </p>
+                  
+                  {/* Why this matters section */}
+                  {recoveryPreview.whyThisMatters.length > 0 && (
+                    <details className="mt-2 group" open>
+                      <summary className="flex items-center gap-1 cursor-pointer text-[11px] text-[#6A6A8A] hover:text-[#8A8AAA] transition-colors select-none">
+                        <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                        <span>Why recovery spacing matters</span>
+                      </summary>
+                      <div className="mt-1.5 ml-4 space-y-0.5 border-l border-[#2A2A35] pl-2">
+                        {recoveryPreview.whyThisMatters.map((reason, idx) => (
+                          <p key={idx} className="text-[11px] text-[#6A6A7A]">
+                            {reason}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                  
+                  {/* Suggested actions */}
+                  {recoveryPreview.suggestedActions.length > 0 && (
+                    <div className="mt-2 p-2 bg-[#151520]/50 rounded border border-[#2A2A30]">
+                      <p className="text-[10px] text-[#7A7A8A] uppercase tracking-wide mb-1.5 font-medium">
+                        Suggested Actions
+                      </p>
+                      <ul className="space-y-1">
+                        {recoveryPreview.suggestedActions.map((action, idx) => (
+                          <li key={idx} className="text-[11px] text-[#9A9AAA] flex items-start gap-1.5">
+                            <ArrowRight className="w-3 h-3 text-blue-400/50 shrink-0 mt-0.5" />
+                            <span>{action}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Preview limitation note */}
+                  {recoveryPreview.unavailableReason && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-2 italic">
+                      {recoveryPreview.unavailableReason}
+                    </p>
+                  )}
+                  
+                  {/* User-facing recommendation from advisory */}
+                  {missedWorkoutAdvisory.userFacingRecommendation && (
+                    <p className="text-xs text-[#9A9AAA] mt-2 italic border-t border-[#2A2A35] pt-2">
+                      {missedWorkoutAdvisory.userFacingRecommendation}
+                    </p>
+                  )}
+                  
+                  {/* Action buttons — preview-only, no mutation */}
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                      className="flex-1 h-7 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#1A1A2A] hover:text-white"
+                      data-action="got-it"
+                      data-no-mutation="true"
+                    >
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Got It
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setMissedWorkoutAdvisoryDismissed(true)}
+                      className="h-7 text-xs text-[#6A6A7A] hover:text-[#8A8A9A] hover:bg-[#1A1A2A]/50"
+                      data-action="dismiss"
+                      data-no-mutation="true"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  
+                  {/* Preview-only proof line */}
+                  <p className="text-[10px] text-[#5A5A6A] mt-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                    <span>Preview only — your plan has not been changed. Saved-program mutation requires V.V5.</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* [STEP 23.2/23.3] Missed-Workout Recomposition Advisory Card (generic)
           Displays advisory when there's actionable guidance about schedule.
           Advisory only — no mutation. No saved-program rewrite.
-          [STEP 23.3] Adds user-controlled action buttons — non-mutating. */}
-      {missedWorkoutAdvisory && hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && !missedWorkoutAdvisoryDismissed && (() => {
+          [STEP 23.3] Adds user-controlled action buttons — non-mutating.
+          Note: protect_recovery_spacing uses dedicated V.V3 preview above. */}
+      {missedWorkoutAdvisory && 
+       hasActionableMissedWorkoutAdvisory(missedWorkoutAdvisory) && 
+       missedWorkoutAdvisory.action !== 'protect_recovery_spacing' &&
+       !missedWorkoutAdvisoryDismissed && (() => {
         const displayInfo = getMissedWorkoutAdvisoryDisplayInfo(missedWorkoutAdvisory)
         return (
           <div className="rounded-lg border bg-gradient-to-r from-[#1A1A25]/50 to-[#1A1A20]/50 border-[#2A2A35] overflow-hidden">

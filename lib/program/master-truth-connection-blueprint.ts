@@ -2450,7 +2450,7 @@ function step24(): BlueprintPhase {
       'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
     status: 'PARTIAL',
     nextAction:
-      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). Next: V.V3 — Protect recovery spacing preview-only action. Remaining: V.V3-V.V7.',
+      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). Next: V.V4 — User-confirmed reduce-intensity mutation corridor. Remaining: V.V4-V.V7.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2484,13 +2484,20 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V3',
         title: 'Protect recovery spacing preview-only action',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Design preview UI for recovery spacing adjustment',
-          'Identify sessions that would shift',
-          'No mutation until V.V5',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V3] RecoverySpacingPreview interface added to missed-workout-recomposition-advisory.ts',
+          '[V.V3] buildRecoverySpacingPreview pure helper — derives preview from advisory truth, no mutation',
+          '[V.V3] Dedicated protect_recovery_spacing preview UI in AdaptiveProgramDisplay',
+          '[V.V3] Preview shows: title, summary, whyThisMatters, suggestedActions from advisory truth',
+          '[V.V3] Honest "unavailableReason" explains exact session preview requires V.V5',
+          '[V.V3] All mutation flags false: canAutoApplyNow, savedProgramMutationAllowed, liveWorkoutMutationAllowed',
+          '[V.V3] No saveAdaptiveProgram called, no onConfirmMissedWorkoutPushForward called',
+          '[V.V3] Data markers: data-step-24-vv3-recovery-spacing-preview, data-preview-only, data-no-saved-program-mutation',
+          '[V.V3] Generic missed-workout card now excludes protect_recovery_spacing (handled by V.V3 UI)',
+          '[V.V3] docs/STEP_24_VV3_PROTECT_RECOVERY_SPACING_PREVIEW.md created',
         ],
+        remainingWork: [],
       },
       {
         id: 'V.V4',

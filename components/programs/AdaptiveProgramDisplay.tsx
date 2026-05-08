@@ -119,6 +119,13 @@ import {
   getCoachingItemsByType,
   type RecoveryInjurySubstitutionCoachModel,
 } from '@/lib/program/recovery-injury-substitution-coaching'
+// [W.W10] User control coaching — gentle warnings when choices may impact progress
+import {
+  deriveUserControlCoaching,
+  hasActiveUserControlCoaching,
+  getUserControlSeverityStyles,
+  type UserControlCoachModel,
+} from '@/lib/program/user-control-coaching'
 // [STEP 23.2 / 23.6] Missed-workout recomposition advisory — advisory-only, no mutation
 import type { 
   MissedWorkoutRecompositionAdvisory,
@@ -1600,6 +1607,90 @@ export function AdaptiveProgramDisplay({
                 <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
                 <span className="text-[10px] text-[#5A5A6A]">
                   Advisory only — {coachingModel.savedProgramUnchanged ? 'program unchanged' : 'current session only'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* [W.W10] USER CONTROL WITHOUT BREAKING INTELLIGENCE
+          Shows gentle coaching when user's exercise override patterns suggest attention needed.
+          Truth source: override-signal-service (analyzeSignalsForAdaptive).
+          Advisory-only — program unchanged. */}
+      {(() => {
+        const userControlModel = deriveUserControlCoaching()
+        
+        if (!hasActiveUserControlCoaching(userControlModel)) return null
+        
+        const hasPatterns = userControlModel.patterns.length > 0
+        const topPattern = userControlModel.patterns[0]
+        const severityStyles = topPattern ? getUserControlSeverityStyles(topPattern.severity) : getUserControlSeverityStyles('low')
+        
+        return (
+          <div 
+            className="rounded-lg border bg-gradient-to-br from-[#181A20]/60 via-[#1A1A22]/50 to-[#1A1820]/60 border-[#2A2A30] overflow-hidden"
+            data-ww10-user-control="true"
+            data-coaching-status={userControlModel.status}
+            data-no-program-mutation="true"
+          >
+            {/* Header */}
+            <div className="px-3 py-2 border-b border-[#2A2A30]/50 bg-[#15151A]/30">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center",
+                  topPattern?.severity === 'high' ? "bg-amber-500/20" :
+                  topPattern?.severity === 'moderate' ? "bg-yellow-500/15" :
+                  "bg-blue-500/15"
+                )}>
+                  <TrendingUp className={cn("w-3 h-3", severityStyles.iconColor)} />
+                </div>
+                <span className={cn("text-xs font-medium", severityStyles.badgeClass.replace('/70', '/90').replace('/60', '/80').replace('/50', '/70'))}>
+                  {userControlModel.headline}
+                </span>
+                <span className="ml-auto text-[10px] text-[#5A5A6A] uppercase tracking-wide">
+                  Preference Coach
+                </span>
+              </div>
+            </div>
+            
+            {/* Content */}
+            <div className="p-3 space-y-2">
+              <p className="text-xs text-[#9A9A9A] leading-relaxed">
+                {userControlModel.summary}
+              </p>
+              
+              {/* Show top patterns */}
+              {hasPatterns && (
+                <div className="space-y-1.5">
+                  {userControlModel.patterns.slice(0, 2).map((pattern, idx) => {
+                    const patternStyles = getUserControlSeverityStyles(pattern.severity)
+                    return (
+                      <div key={idx} className="flex items-start gap-2 text-[11px]">
+                        <ChevronRight className={cn("w-3 h-3 mt-0.5 shrink-0", patternStyles.iconColor)} />
+                        <span className="text-[#8A8A8A]">
+                          {pattern.description}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              
+              {/* Recommendations if available */}
+              {userControlModel.recommendations.length > 0 && (
+                <div className="pt-1.5 border-t border-[#2A2A30]/30">
+                  <p className="text-[10px] text-emerald-400/70">
+                    {userControlModel.recommendations[0]}
+                  </p>
+                </div>
+              )}
+              
+              {/* Advisory marker */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-500/50" />
+                <span className="text-[10px] text-[#5A5A6A]">
+                  Advisory only — program unchanged
                 </span>
               </div>
             </div>

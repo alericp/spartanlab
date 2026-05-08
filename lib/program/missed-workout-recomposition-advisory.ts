@@ -1289,3 +1289,355 @@ export function buildRecoverySpacingPreview(
     step: '24.3',
   }
 }
+
+// =============================================================================
+// STEP 24 / V.V4 — REDUCE INTENSITY MUTATION CORRIDOR
+// =============================================================================
+
+/**
+ * Provenance marker for V.V4 intensity reduction.
+ * Attached to sessions that have been modified by this mutation corridor.
+ * 
+ * @step 24.4 (V.V4)
+ */
+export interface IntensityReductionProvenance {
+  /** Source of the mutation */
+  source: 'missed_workout_recomposition'
+  /** Action that triggered this mutation */
+  action: 'reduce_next_session_intensity'
+  /** Step identifier */
+  step: '24.V.V4'
+  /** ISO timestamp when reduction was applied */
+  appliedAt: string
+  /** Target session index */
+  targetSessionIndex: number
+  /** Session title/label at time of reduction */
+  targetSessionLabel: string
+  /** User confirmed this mutation */
+  userConfirmed: true
+  /** Not a preview — actual mutation */
+  previewOnly: false
+  /** Advisory reasoning that led to this */
+  reason: string[]
+  /** Fields that were modified */
+  modifiedFields: Array<{
+    exerciseIndex: number
+    exerciseName: string
+    field: 'sets' | 'repsOrTime' | 'prescribedLoad' | 'note'
+    previousValue: string | number | null
+    newValue: string | number
+  }>
+}
+
+/**
+ * Result of reduce-intensity mutation attempt.
+ * 
+ * @step 24.4 (V.V4)
+ */
+export interface ReduceIntensityResult {
+  /** Mutation status */
+  status: 'success' | 'blocked' | 'no_change' | 'already_reduced'
+  /** User-visible summary of what happened */
+  visibleSummary: string
+  /** Evidence trail for debugging */
+  evidence: string[]
+  /** Machine-readable reason code */
+  reasonCode: string
+  /** Updated program if mutation succeeded */
+  updatedProgram?: import('../adaptive-program-builder').AdaptiveProgram
+  /** Provenance marker if mutation succeeded */
+  provenance?: IntensityReductionProvenance
+}
+
+/**
+ * Input for reduce-intensity mutation.
+ * 
+ * @step 24.4 (V.V4)
+ */
+export interface ReduceIntensityInput {
+  /** Current program state */
+  program: import('../adaptive-program-builder').AdaptiveProgram
+  /** Target session index (0-based) */
+  targetSessionIndex: number
+  /** Advisory that triggered this */
+  advisory: MissedWorkoutRecompositionAdvisory
+}
+
+/**
+ * Reduce intensity on a target session.
+ * 
+ * CRITICAL INVARIANTS:
+ * - Pure function — no side effects, no storage, no hooks
+ * - Does NOT persist anything — caller must save
+ * - Only modifies intensity-safe fields (sets, repsOrTime, prescribedLoad)
+ * - Preserves exercise identity, skill representation, session structure
+ * - Returns new program object; does not mutate input
+ * - Adds provenance marker to modified session
+ * - Blocks if already reduced by V.V4 (duplicate-apply guard)
+ * 
+ * @step 24.4 (V.V4)
+ */
+export function reduceSessionIntensity(input: ReduceIntensityInput): ReduceIntensityResult {
+  const { program, targetSessionIndex, advisory } = input
+  
+  // Validate program exists
+  if (!program || !program.sessions) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      reasonCode: 'no_program',
+    }
+  }
+  
+  // Validate target session index
+  if (targetSessionIndex < 0 || targetSessionIndex >= program.sessions.length) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Target session not found.',
+      evidence: [`targetSessionIndex ${targetSessionIndex} out of range [0, ${program.sessions.length - 1}]`],
+      reasonCode: 'invalid_target_index',
+    }
+  }
+  
+  const targetSession = program.sessions[targetSessionIndex]
+  
+  // Check for duplicate-apply guard
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existingProvenance = (targetSession as any).intensityReductionProvenance as IntensityReductionProvenance | undefined
+  if (existingProvenance?.step === '24.V.V4') {
+    return {
+      status: 'already_reduced',
+      visibleSummary: `Intensity was already reduced on "${targetSession.dayLabel}".`,
+      evidence: [
+        `Session already has V.V4 provenance from ${existingProvenance.appliedAt}`,
+        'Duplicate reduction blocked to prevent stacking',
+      ],
+      reasonCode: 'already_reduced',
+    }
+  }
+  
+  // Validate session has exercises to reduce
+  if (!targetSession.exercises || targetSession.exercises.length === 0) {
+    return {
+      status: 'no_change',
+      visibleSummary: 'Session has no exercises to modify.',
+      evidence: ['targetSession.exercises is empty or undefined'],
+      reasonCode: 'no_exercises',
+    }
+  }
+  
+  // Build modified exercises with reduced intensity
+  const modifiedFields: IntensityReductionProvenance['modifiedFields'] = []
+  const modifiedExercises = targetSession.exercises.map((exercise, exIdx) => {
+    // Create a copy of the exercise
+    const modified = { ...exercise }
+    
+    // Reduction strategy:
+    // 1. Reduce sets by 1 (minimum 2)
+    // 2. Add coaching note about intensity reduction
+    
+    // Reduce sets conservatively (minimum 2)
+    if (modified.sets > 2) {
+      const previousSets = modified.sets
+      modified.sets = Math.max(2, modified.sets - 1)
+      modifiedFields.push({
+        exerciseIndex: exIdx,
+        exerciseName: exercise.name,
+        field: 'sets',
+        previousValue: previousSets,
+        newValue: modified.sets,
+      })
+    }
+    
+    // Add coaching note (append to existing or create new)
+    const reductionNote = '[Reduced intensity — fatigue advisory]'
+    if (!modified.note?.includes(reductionNote)) {
+      const previousNote = modified.note ?? null
+      modified.note = modified.note 
+        ? `${modified.note} ${reductionNote}`
+        : reductionNote
+      modifiedFields.push({
+        exerciseIndex: exIdx,
+        exerciseName: exercise.name,
+        field: 'note',
+        previousValue: previousNote,
+        newValue: modified.note,
+      })
+    }
+    
+    return modified
+  })
+  
+  // If no fields were modified, return no_change
+  if (modifiedFields.length === 0) {
+    return {
+      status: 'no_change',
+      visibleSummary: 'No exercises required intensity reduction.',
+      evidence: ['All exercises already at minimum intensity or already have reduction note'],
+      reasonCode: 'no_reduction_needed',
+    }
+  }
+  
+  // Build provenance marker
+  const provenance: IntensityReductionProvenance = {
+    source: 'missed_workout_recomposition',
+    action: 'reduce_next_session_intensity',
+    step: '24.V.V4',
+    appliedAt: new Date().toISOString(),
+    targetSessionIndex,
+    targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
+    userConfirmed: true,
+    previewOnly: false,
+    reason: advisory.reasoning,
+    modifiedFields,
+  }
+  
+  // Build modified session with provenance
+  const modifiedSession = {
+    ...targetSession,
+    exercises: modifiedExercises,
+    // Attach provenance marker
+    intensityReductionProvenance: provenance,
+    // Update adaptation notes
+    adaptationNotes: [
+      ...(targetSession.adaptationNotes || []),
+      `[V.V4] Intensity reduced due to fatigue advisory (${modifiedFields.filter(f => f.field === 'sets').length} exercises had sets reduced)`,
+    ],
+  }
+  
+  // Build updated program with modified session
+  const updatedSessions = program.sessions.map((s, idx) =>
+    idx === targetSessionIndex ? modifiedSession : s
+  )
+  
+  const updatedProgram: import('../adaptive-program-builder').AdaptiveProgram = {
+    ...program,
+    sessions: updatedSessions,
+    // Update program-level metadata
+    lastModified: new Date().toISOString(),
+  }
+  
+  // Count exercises modified
+  const setsReducedCount = modifiedFields.filter(f => f.field === 'sets').length
+  
+  return {
+    status: 'success',
+    visibleSummary: `Reduced intensity on "${targetSession.dayLabel}": ${setsReducedCount} exercise${setsReducedCount !== 1 ? 's' : ''} had sets reduced.`,
+    evidence: [
+      `Target session: ${targetSession.dayLabel} (index ${targetSessionIndex})`,
+      `Exercises modified: ${modifiedFields.length}`,
+      `Sets reduced: ${setsReducedCount}`,
+      'Provenance marker attached',
+      'No exercise identity changed',
+      'No skill representation changed',
+      'No schedule changed',
+    ],
+    reasonCode: 'intensity_reduced',
+    updatedProgram,
+    provenance,
+  }
+}
+
+/**
+ * Build preview metadata for reduce-intensity confirmation UI.
+ * Shows what WOULD change before user confirms.
+ * 
+ * @step 24.4 (V.V4)
+ */
+export interface ReduceIntensityPreview {
+  /** Whether this preview should be shown */
+  canShow: boolean
+  /** Target session label */
+  targetSessionLabel: string
+  /** Target session index */
+  targetSessionIndex: number
+  /** What will change */
+  whatWillChange: string[]
+  /** What will NOT change */
+  whatWillNotChange: string[]
+  /** Already reduced? */
+  alreadyReduced: boolean
+  /** Reason if cannot show */
+  blockedReason?: string
+}
+
+/**
+ * Build a preview of what reduce-intensity would change.
+ * Does NOT mutate anything — pure preview.
+ * 
+ * @step 24.4 (V.V4)
+ */
+export function buildReduceIntensityPreview(
+  program: import('../adaptive-program-builder').AdaptiveProgram | null,
+  targetSessionIndex: number
+): ReduceIntensityPreview {
+  if (!program || !program.sessions) {
+    return {
+      canShow: false,
+      targetSessionLabel: '',
+      targetSessionIndex: -1,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyReduced: false,
+      blockedReason: 'No program available.',
+    }
+  }
+  
+  if (targetSessionIndex < 0 || targetSessionIndex >= program.sessions.length) {
+    return {
+      canShow: false,
+      targetSessionLabel: '',
+      targetSessionIndex: -1,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyReduced: false,
+      blockedReason: 'Target session not found.',
+    }
+  }
+  
+  const targetSession = program.sessions[targetSessionIndex]
+  
+  // Check if already reduced
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existingProvenance = (targetSession as any).intensityReductionProvenance as IntensityReductionProvenance | undefined
+  if (existingProvenance?.step === '24.V.V4') {
+    return {
+      canShow: true,
+      targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
+      targetSessionIndex,
+      whatWillChange: [],
+      whatWillNotChange: [],
+      alreadyReduced: true,
+      blockedReason: `Already reduced on ${new Date(existingProvenance.appliedAt).toLocaleDateString()}`,
+    }
+  }
+  
+  // Count exercises that would have sets reduced
+  const exercisesWithReducibleSets = (targetSession.exercises || [])
+    .filter(e => e.sets > 2)
+    .length
+  
+  const whatWillChange: string[] = []
+  if (exercisesWithReducibleSets > 0) {
+    whatWillChange.push(`${exercisesWithReducibleSets} exercise${exercisesWithReducibleSets !== 1 ? 's' : ''} will have sets reduced by 1`)
+  }
+  whatWillChange.push('A coaching note will be added to each exercise')
+  whatWillChange.push('This session will be marked as intensity-reduced')
+  
+  const whatWillNotChange: string[] = [
+    'Exercise selection stays the same',
+    'Skill representation is preserved',
+    'Schedule and session order unchanged',
+    'Your live workout (if in progress) is not affected',
+  ]
+  
+  return {
+    canShow: true,
+    targetSessionLabel: targetSession.dayLabel || `Day ${targetSession.dayNumber}`,
+    targetSessionIndex,
+    whatWillChange,
+    whatWillNotChange,
+    alreadyReduced: false,
+  }
+}

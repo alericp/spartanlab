@@ -119,20 +119,28 @@ The Program page has become functionally strong and intelligence-rich, but visua
 
 ### P3 — Weekly Method Decisions Cleanup
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Keep strategy visible, collapse verbose day-by-day method reasoning. Rename internal terms for normal users.
 
-**Files Likely Involved:**
+**Files Changed:**
 - `components/programs/WeeklyMethodDecisionAccordion.tsx`
-- Related method display components
+
+**What Changed:**
+- Renamed "Weekly Method Decisions" to "Weekly Method Strategy"
+- Header chips: "active" instead of "applied", "held back" instead of "preferred not used", "tracked" instead of "runtime gap"
+- Day-by-day breakdown now collapsed by default using nested `<details>` with "view X days" / "hide details" toggle
+- DayCard influence chips: "active" instead of "applied", "held back" instead of "blocked", "tracked" instead of "runtime gap"
+- Override labels updated: "Possible with tradeoff", "Not recommended today", "Not a fit for this day", "Not yet available", "Pending review"
+- Coaching footnote rewritten to be premium and coach-focused
+- Preserved all data attributes, proof, and method decision truth
 
 **Acceptance Criteria:**
-- [ ] Strategy summary remains visible
-- [ ] Day-by-day reasoning collapsed by default
-- [ ] "Runtime gap", "blocked", "audit-only", "not eligible" terms renamed or demoted
-- [ ] Tradeoff paragraphs available on expand, not default
-- [ ] No training decision changes
+- [x] Strategy summary remains visible
+- [x] Day-by-day reasoning collapsed by default
+- [x] "Runtime gap", "blocked", "audit-only", "not eligible" terms renamed or demoted
+- [x] Tradeoff paragraphs available on expand, not default
+- [x] No training decision changes
 
 **No-Breakage Constraints:**
 - No method decision engine changes
@@ -197,7 +205,7 @@ The Program page has become functionally strong and intelligence-rich, but visua
 |-------|-------------|--------|
 | P1 | Collapse proof/calibration surfaces | COMPLETE |
 | P2 | Why This Plan cleanup | COMPLETE |
-| P3 | Weekly Method Decisions cleanup | NOT_STARTED |
+| P3 | Weekly Method Decisions cleanup | COMPLETE |
 | P4 | Session card chip density cleanup | NOT_STARTED |
 | P5 | Final acceptance pass | NOT_STARTED |
 
@@ -219,3 +227,13 @@ The Program page has become functionally strong and intelligence-rich, but visua
 - Technical details (executable/audit-only/blocked/no-target) now hidden behind "View details" button
 - Preserved all AB9 proof attributes for QA/testing in the advanced details container
 - No generator, schema, doctrine, or training logic changes
+
+### P3 (Complete)
+- WeeklyMethodDecisionAccordion: Renamed "Weekly Method Decisions" to "Weekly Method Strategy"
+- Header chips: "active" instead of "applied", "held back" instead of "preferred not used", "tracked" instead of "runtime gap"
+- Day-by-day breakdown now collapsed by default using nested `<details>` with "view X days" / "hide details" toggle
+- DayCard influence chips: "active" instead of "applied", "held back" instead of "blocked", "tracked" instead of "runtime gap"
+- Override labels: "Possible with tradeoff", "Not recommended today", "Not a fit for this day", "Not yet available", "Pending review"
+- Coaching footnote rewritten for premium coach voice
+- All data attributes and method decision truth preserved
+- No method engine, generator, schema, or training logic changes

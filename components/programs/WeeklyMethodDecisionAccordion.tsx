@@ -125,12 +125,13 @@ function formatStyleMode(mode: string): string {
 // PRESENTATION HELPERS
 // =============================================================================
 
+// [P3] Coach-friendly override labels
 const OVERRIDE_LABEL: Record<DayOverrideEligibility, string> = {
-  safe_with_tradeoff: 'Override possible (with tradeoff)',
-  unsafe_skill_protection: 'Override not recommended',
-  unsafe_role_mismatch: 'Override not recommended for this day',
-  engine_gap_no_writer: 'Override not yet supported',
-  not_yet_evaluated: 'Override not yet evaluated',
+  safe_with_tradeoff: 'Possible with tradeoff',
+  unsafe_skill_protection: 'Not recommended today',
+  unsafe_role_mismatch: 'Not a fit for this day',
+  engine_gap_no_writer: 'Not yet available',
+  not_yet_evaluated: 'Pending review',
 }
 
 function overrideChipClasses(elig: DayOverrideEligibility): string {
@@ -243,15 +244,15 @@ function DayCard({ day }: { day: PerDayMethodSummary }) {
             </span>
           )}
         </div>
+        {/* [P3] Coach-friendly influence summary */}
         <span className="shrink-0 text-[10px] text-[#6B7280]">
-          <span className="text-emerald-400">{day.influence.applied}</span> applied
+          <span className="text-emerald-400">{day.influence.applied}</span> active
           <span className="mx-1 text-[#3A3A3A]">·</span>
-          <span className="text-amber-400">{day.influence.blocked}</span> blocked
+          <span className="text-amber-400">{day.influence.blocked}</span> held back
           {day.influence.runtimeGap > 0 && (
             <>
               <span className="mx-1 text-[#3A3A3A]">·</span>
-              <span className="text-[#8A8A8A]">{day.influence.runtimeGap}</span> runtime
-              gap
+              <span className="text-[#8A8A8A]">{day.influence.runtimeGap}</span> tracked
             </>
           )}
         </span>
@@ -360,7 +361,7 @@ export function WeeklyMethodDecisionAccordion({
       <details className="group rounded-lg border border-[#2B313A] bg-[#0F1115] mb-3">
         <summary className="flex items-center justify-between gap-3 cursor-pointer select-none px-3 py-2.5 text-[12px] font-medium text-[#E6E9EF]">
           <span className="flex items-center gap-2">
-            <span>Weekly Method Decisions</span>
+            <span>Weekly Method Strategy</span>
             <span className="rounded-sm border border-[#3A3A3A] bg-[#1A1A1A] px-1.5 py-px text-[10px] font-medium text-[#8A8A8A]">
               not available
             </span>
@@ -369,8 +370,8 @@ export function WeeklyMethodDecisionAccordion({
           <span className="text-[10px] text-[#6B7280] hidden group-open:inline">collapse</span>
         </summary>
         <div className="px-3 pb-3 pt-1 text-[11px] leading-relaxed text-[#A4ACB8]">
-          Method reasoning is not available for this saved program yet.
-          Regenerate to produce a full day-by-day method explanation.
+          Method strategy details are not available for this saved program yet.
+          Regenerate to produce a full explanation.
         </div>
       </details>
     )
@@ -385,11 +386,11 @@ export function WeeklyMethodDecisionAccordion({
       <summary className="flex items-center justify-between gap-3 cursor-pointer select-none px-3 py-2.5">
         <div className="flex items-baseline gap-3 min-w-0 flex-wrap">
           <span className="text-[12px] font-medium text-[#E6E9EF]">
-            Weekly Method Decisions
+            Weekly Method Strategy
           </span>
           <span className="text-[11px] text-[#A4ACB8]">
             <span className="text-emerald-400">{usedCount}</span> method
-            {usedCount === 1 ? '' : 's'} this week
+            {usedCount === 1 ? '' : 's'} active
             <span className="mx-1.5 text-[#3A3A3A]">·</span>
             <span className="text-[#A4ACB8]">
               {daysWithMethods}/{totalDays}
@@ -398,15 +399,14 @@ export function WeeklyMethodDecisionAccordion({
             {preferredNotHonoredCount > 0 && (
               <>
                 <span className="mx-1.5 text-[#3A3A3A]">·</span>
-                <span className="text-amber-400">{preferredNotHonoredCount}</span> preferred
-                not used
+                <span className="text-amber-400">{preferredNotHonoredCount}</span> held back
               </>
             )}
             {runtimeGapCount > 0 && (
               <>
                 <span className="mx-1.5 text-[#3A3A3A]">·</span>
                 <span className="text-[#8A8A8A]">
-                  {runtimeGapCount} runtime gap{runtimeGapCount === 1 ? '' : 's'}
+                  {runtimeGapCount} tracked
                 </span>
               </>
             )}
@@ -462,17 +462,23 @@ export function WeeklyMethodDecisionAccordion({
           </section>
         )}
 
-        {/* Day-by-day breakdown */}
-        <section className="space-y-2">
-          <h4 className="text-[10px] font-medium uppercase tracking-wide text-[#6B7280]">
-            Day-by-day method reasoning
-          </h4>
-          <div className="space-y-2">
+        {/* [P3] Day-by-day breakdown — collapsed by default for cleaner hierarchy */}
+        <details className="group/days">
+          <summary className="flex items-center justify-between gap-3 cursor-pointer select-none py-1.5 text-[10px] font-medium uppercase tracking-wide text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
+            <span>Day-by-day method reasoning</span>
+            <span className="text-[10px] font-normal normal-case text-[#6B7280] group-open/days:hidden">
+              view {totalDays} day{totalDays === 1 ? '' : 's'}
+            </span>
+            <span className="text-[10px] font-normal normal-case text-[#6B7280] hidden group-open/days:inline">
+              hide details
+            </span>
+          </summary>
+          <div className="space-y-2 pt-1.5">
             {summary.days.map(day => (
               <DayCard key={day.dayNumber} day={day} />
             ))}
           </div>
-        </section>
+        </details>
 
         {/* Preferred-but-never-honored footer (week-level) */}
         {summary.totals.preferredNeverHonored.length > 0 && (
@@ -491,13 +497,11 @@ export function WeeklyMethodDecisionAccordion({
           </section>
         )}
 
-        {/* Coaching footnote — explains the doctrine WITHOUT promising an
-            override system that does not yet exist. */}
+        {/* [P3] Coach-friendly footnote */}
         <p className="text-[10px] leading-relaxed text-[#6B7280] pt-2 border-t border-[#2B313A]/40">
-          The coach recommends the most optimal plan for your current
-          profile, but you still own the program. Override-with-dosage-recompute
-          is not yet built — when it ships, the days marked &quot;Override
-          possible&quot; will offer it, with the safer days going first.
+          Methods are placed where they improve session quality without
+          compromising your primary skill work. Some methods are intentionally
+          held back to protect technique-focused days.
         </p>
       </div>
     </details>

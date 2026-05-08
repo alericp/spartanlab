@@ -2447,10 +2447,10 @@ function step24(): BlueprintPhase {
     id: 'V',
     title: 'Missed-Workout Recomposition Expansion (Step 24) — ACTIVE after Step 25',
     purpose:
-      'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is ACTIVE.',
-    status: 'PARTIAL',
-    nextAction:
-      'V.V1 COMPLETE. V.V2 COMPLETE (audit/documentation). V.V3 COMPLETE (preview-only UI). V.V4 COMPLETE (reduce-intensity mutation). V.V5 COMPLETE (protect-recovery-spacing mutation). V.V6 COMPLETE (multi-session push-forward mutation guardrail). Next: V.V7 — Persistence/reload proof and Phase V closeout. Remaining: V.V7.',
+'Expand missed-workout recomposition capabilities safely. Step 24.1 adds multi-missed-workout context advisory foundation (read-only). Future substeps will add user-confirmed mutation corridors for reduce_intensity, protect_recovery_spacing, and multi-session push-forward, each requiring explicit confirmation and persistence proof before closure. Step 25 is now COMPLETE — Phase V is now COMPLETE.',
+  status: 'COMPLETE',
+  nextAction:
+    'Phase V COMPLETE. V.V1 COMPLETE (advisory foundation). V.V2 COMPLETE (reduce-intensity audit). V.V3 COMPLETE (recovery spacing preview). V.V4 COMPLETE (reduce-intensity mutation). V.V5 COMPLETE (protect-recovery-spacing mutation). V.V6 COMPLETE (multi-session push-forward mutation). V.V7 COMPLETE (persistence/reload proof and Phase V closeout). All Phase V items verified with persistence proof through saveAdaptiveProgram → localStorage → reload. No remaining work in Phase V.',
     subtasks: [
       {
         id: 'V.V1',
@@ -2574,14 +2574,24 @@ function step24(): BlueprintPhase {
       {
         id: 'V.V7',
         title: 'Persistence/reload proof for any new mutation action',
-        status: 'NOT_STARTED',
-        evidence: [],
-        remainingWork: [
-          'Verify all new mutation actions persist correctly',
-          'Verify reload preserves applied changes',
-          'Verify Step 22/23 preserved',
-          'Blueprint closeout',
+        status: 'COMPLETE',
+        evidence: [
+          '[V.V7] Authoritative save path verified: saveAdaptiveProgram() → JSON.stringify() → localStorage.setItem("spartanlab_active_program")',
+          '[V.V7] Authoritative load path verified: localStorage.getItem() → JSON.parse() → program with all fields preserved',
+          '[V.V7] adaptationNotes: string[] is typed field on AdaptiveSession (line 1633) — survives JSON round-trip',
+          '[V.V7] V.V4 persistence proof: [V.V4:] marker in adaptationNotes survives save/load, duplicate guard checks persisted marker',
+          '[V.V7] V.V5 persistence proof: [V.V5:protect_recovery_spacing:timestamp] marker survives save/load, duplicate guard checks persisted marker',
+          '[V.V7] V.V6 persistence proof: [V.V6:multi_session_push_forward:timestamp] marker survives save/load, duplicate guard checks persisted marker',
+          '[V.V7] UI truth after reload: preview/mutation helpers derive already-applied state from persisted adaptationNotes, not transient React state',
+          '[V.V7] No hydration/stale overwrite risk: Program Page loads from canonical key, no later effect overwrites successful mutation',
+          '[V.V7] No live workout mutation: all V.V4/V.V5/V.V6 results include liveWorkoutMutationAllowed: false',
+          '[V.V7] No completed history mutation: mutation helpers do not touch completed workout history',
+          '[V.V7] No generator changes, no schema changes, no package changes',
+          '[V.V7] Step 22/23 preserved: existing push-forward and missed-workout advisory behavior unchanged',
+          '[V.V7] Created docs/STEP_24_VV7_PERSISTENCE_RELOAD_PROOF_AND_PHASE_V_CLOSEOUT.md',
+          '[V.V7] Phase V is now COMPLETE',
         ],
+        remainingWork: [],
       },
     ],
   }

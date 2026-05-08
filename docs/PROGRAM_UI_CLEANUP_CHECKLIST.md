@@ -86,22 +86,28 @@ The Program page has become functionally strong and intelligence-rich, but visua
 
 ### P2 — Why This Plan Cleanup
 
-**Status:** NOT_STARTED
+**Status:** COMPLETE
 
 **Purpose:** Keep the strong summary visible, move rule population/doctrine/audit taxonomy behind details, rewrite default copy into smarter AI-coach language.
 
-**Files Likely Involved:**
-- `components/programs/AdaptiveProgramDisplay.tsx`
-- `components/programs/ProgramTrustAccordion.tsx`
-- Related display helpers
+**Files Changed:**
+- `components/programs/ProgramTruthSummary.tsx`
+
+**What Changed:**
+- Renamed "Rule Population" section to "How This Was Built" with coach-friendly language
+- Added secondary toggle (`showAdvancedDetails`) to hide technical rule details by default
+- Top-level summary now shows: "X coaching rules actively shaped this program, while Y more are monitored for future adjustments"
+- Simplified chips: "shaping workouts", "visible in plan", "monitored" instead of "executable", "audit only", "influenced scoring"
+- Technical details (full breakdown with executable/audit-only/blocked/no-target chips) now hidden behind "View details" toggle
+- Preserved all AB9 proof attributes on the advanced details container for QA/testing
 
 **Acceptance Criteria:**
-- [ ] Why This Plan summary remains visible at top
-- [ ] Rule population/doctrine counts collapsed by default
-- [ ] "Audit-only", "executable", "influenced scoring" terms demoted to advanced details
-- [ ] Default copy reads like coaching, not diagnostic output
-- [ ] No data loss
-- [ ] No training decision changes
+- [x] Why This Plan summary remains visible at top
+- [x] Rule population/doctrine counts collapsed by default
+- [x] "Audit-only", "executable", "influenced scoring" terms demoted to advanced details
+- [x] Default copy reads like coaching, not diagnostic output
+- [x] No data loss — all technical details preserved behind toggle
+- [x] No training decision changes
 
 **No-Breakage Constraints:**
 - No generator changes
@@ -190,7 +196,7 @@ The Program page has become functionally strong and intelligence-rich, but visua
 | Phase | Description | Status |
 |-------|-------------|--------|
 | P1 | Collapse proof/calibration surfaces | COMPLETE |
-| P2 | Why This Plan cleanup | NOT_STARTED |
+| P2 | Why This Plan cleanup | COMPLETE |
 | P3 | Weekly Method Decisions cleanup | NOT_STARTED |
 | P4 | Session card chip density cleanup | NOT_STARTED |
 | P5 | Final acceptance pass | NOT_STARTED |
@@ -204,3 +210,12 @@ The Program page has become functionally strong and intelligence-rich, but visua
 - FeedbackLoopProofCard: Added Collapsible wrapper, default collapsed state (via `defaultCollapsed` prop), renamed title to "Coaching Feedback Loop", compact header with signal summary badge, coaching-friendly collapsed copy
 - Both cards preserve all existing content and actions when expanded
 - No generator, schema, or training logic changes
+
+### P2 (Complete)
+- ProgramTruthSummary: Renamed "Rule Population" to "How This Was Built" with coaching-friendly default summary
+- Added `showAdvancedDetails` toggle to hide technical rule breakdown by default
+- Top-level summary: "X coaching rules actively shaped this program, while Y more are monitored for future adjustments"
+- Simplified chips: "shaping workouts", "visible in plan", "monitored" instead of "executable", "audit only", "influenced scoring"
+- Technical details (executable/audit-only/blocked/no-target) now hidden behind "View details" button
+- Preserved all AB9 proof attributes for QA/testing in the advanced details container
+- No generator, schema, doctrine, or training logic changes

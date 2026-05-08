@@ -35,6 +35,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,6 +48,7 @@ import { cn } from '@/lib/utils'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Info,
   Loader2,
@@ -199,6 +205,8 @@ function formatLatest(t: CalibrationRecommendedTest): string | null {
 export function CalibrationCheckpointCard({
   input,
 }: CalibrationCheckpointCardProps) {
+  // [P1] Default collapsed for cleaner Program page hierarchy
+  const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const [latestMap, setLatestMap] = useState<Map<
     string,
     LatestBenchmarkSummary
@@ -313,40 +321,66 @@ export function CalibrationCheckpointCard({
   if (recommendation.recommendedTests.length === 0) {
     return (
       <>
-        <Card
-          className="mt-4"
-          data-ab11-2-calibration-checkpoint="empty"
-          data-engine-version={recommendation.engineVersion}
-        >
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Target
-                className="h-4 w-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <CardTitle className="text-base font-semibold">
-                Calibration Checkpoint
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-              {recommendation.reasonSummary}
-            </p>
-            {fetchError && (
-              <p
-                className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-                role="note"
-              >
-                <AlertTriangle
-                  className="mt-[2px] h-3 w-3 shrink-0"
-                  aria-hidden="true"
-                />
-                <span>{fetchError}</span>
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <Card
+            className="mt-4"
+            data-ab11-2-calibration-checkpoint="empty"
+            data-engine-version={recommendation.engineVersion}
+            data-p1-collapsed={!isExpanded}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer pb-3 hover:bg-muted/30 transition-colors rounded-t-lg">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Target
+                      className="h-4 w-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <CardTitle className="text-base font-semibold">
+                      Calibration Checkpoint
+                    </CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      No tests needed
+                    </Badge>
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                        isExpanded && 'rotate-180'
+                      )}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+                {!isExpanded && (
+                  <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                    Your calibration is up to date
+                  </p>
+                )}
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+                  {recommendation.reasonSummary}
+                </p>
+                {fetchError && (
+                  <p
+                    className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
+                    role="note"
+                  >
+                    <AlertTriangle
+                      className="mt-[2px] h-3 w-3 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span>{fetchError}</span>
+                  </p>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
         {/* [AB11-5] Honest benchmark-side proof even when no tests are
             recommended (e.g. user has no goals selected). Shows the
             baseline copy via summarizeNoEvidence when latestMap is empty.
@@ -355,6 +389,7 @@ export function CalibrationCheckpointCard({
         <FeedbackLoopProofCard
           benchmarkSummary={benchmarkSummary}
           calibrationPlan={calibrationPlan}
+          defaultCollapsed={true}
         />
       </>
     )
@@ -363,80 +398,111 @@ export function CalibrationCheckpointCard({
   const tests = recommendation.recommendedTests
   const safety = recommendation.safeToTestToday
   const showSafetyNote = safety !== 'safe' || fetchError !== null
+  
+  // [P1] Build compact summary for collapsed header
+  const essentialCount = tests.filter((t) => t.priority === 'essential').length
+  const testCountLabel =
+    essentialCount > 0
+      ? `${essentialCount} essential test${essentialCount > 1 ? 's' : ''}`
+      : `${tests.length} suggested test${tests.length > 1 ? 's' : ''}`
 
   return (
     <>
-    <Card
-      className="mt-4"
-      data-ab11-2-calibration-checkpoint="present"
-      data-engine-version={recommendation.engineVersion}
-    >
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Target
-              className="h-4 w-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <CardTitle className="text-base font-semibold">
-              Calibration Checkpoint
-            </CardTitle>
-          </div>
-          {recommendation.primaryLimiterHypothesis &&
-            recommendation.primaryLimiterHypothesis !== 'unknown' && (
-              <Badge variant="outline" className="text-xs font-medium">
-                Limiter hypothesis:{' '}
-                {recommendation.primaryLimiterHypothesis.replace(/_/g, ' ')}
-              </Badge>
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Card
+        className="mt-4"
+        data-ab11-2-calibration-checkpoint="present"
+        data-engine-version={recommendation.engineVersion}
+        data-p1-collapsed={!isExpanded}
+      >
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer pb-3 hover:bg-muted/30 transition-colors rounded-t-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Target
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <CardTitle className="text-base font-semibold">
+                  Calibration Checkpoint
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  {testCountLabel}
+                </Badge>
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                    isExpanded && 'rotate-180'
+                  )}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            {!isExpanded && (
+              <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                Baseline tests help personalize your progressions with real evidence
+              </p>
             )}
-        </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
-          {recommendation.reasonSummary}
-        </p>
-      </CardHeader>
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground text-pretty">
+              {recommendation.reasonSummary}
+            </p>
+            {recommendation.primaryLimiterHypothesis &&
+              recommendation.primaryLimiterHypothesis !== 'unknown' && (
+                <Badge variant="outline" className="mb-3 text-xs font-medium">
+                  Limiter hypothesis:{' '}
+                  {recommendation.primaryLimiterHypothesis.replace(/_/g, ' ')}
+                </Badge>
+              )}
+            <ul className="flex flex-col gap-3" role="list">
+              {tests.map((t) => (
+                <CalibrationTestRow
+                  key={t.testName}
+                  test={t}
+                  onSubmitted={() => setRefreshTick((n) => n + 1)}
+                />
+              ))}
+            </ul>
 
-      <CardContent className="pt-0">
-        <ul className="flex flex-col gap-3" role="list">
-          {tests.map((t) => (
-            <CalibrationTestRow
-              key={t.testName}
-              test={t}
-              onSubmitted={() => setRefreshTick((n) => n + 1)}
-            />
-          ))}
-        </ul>
-
-        {showSafetyNote && (
-          <p
-            className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
-            role="note"
-          >
-            <AlertTriangle
-              className="mt-[2px] h-3 w-3 shrink-0"
-              aria-hidden="true"
-            />
-            <span>
-              {fetchError ? (
-                <>{fetchError}</>
-              ) : (
-                <>
-                  {SAFETY_LABEL[safety]}
-                  {recommendation.blockedReasons.length > 0 && (
+            {showSafetyNote && (
+              <p
+                className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
+                role="note"
+              >
+                <AlertTriangle
+                  className="mt-[2px] h-3 w-3 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>
+                  {fetchError ? (
+                    <>{fetchError}</>
+                  ) : (
                     <>
-                      {' — '}
-                      {recommendation.blockedReasons.join('; ')}
+                      {SAFETY_LABEL[safety]}
+                      {recommendation.blockedReasons.length > 0 && (
+                        <>
+                          {' — '}
+                          {recommendation.blockedReasons.join('; ')}
+                        </>
+                      )}
+                      {safety === 'unknown' && (
+                        <> Test only when you feel fresh.</>
+                      )}
                     </>
                   )}
-                  {safety === 'unknown' && (
-                    <> Test only when you feel fresh.</>
-                  )}
-                </>
-              )}
-            </span>
-          </p>
-        )}
-      </CardContent>
-    </Card>
+                </span>
+              </p>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
     {/* [AB11-5] Benchmark-side feedback proof. Renders directly off the
         same `latestMap` the calibration engine consumed, so the proof
         cannot drift from the recommendation. The card itself handles
@@ -447,6 +513,7 @@ export function CalibrationCheckpointCard({
     <FeedbackLoopProofCard
       benchmarkSummary={benchmarkSummary}
       calibrationPlan={calibrationPlan}
+      defaultCollapsed={true}
     />
     </>
   )

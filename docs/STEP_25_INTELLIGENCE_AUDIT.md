@@ -242,10 +242,18 @@ Answering as a real paying SpartanLab user, with code evidence:
   - **Week 1-2 detection:** Early programs show appropriate baseline-building message
   - **No fake claims:** Never invents progression targets not backed by real fields
 
-### Step 25.5 — Adaptive Session Readiness / Today Guidance Upgrade [NOT_STARTED]
-- [ ] Improve today guidance based on readiness, soreness, time, fatigue
-- [ ] Connect skill-readiness-engine output to visible suggestions
-- [ ] Make guidance actionable without being noisy
+### Step 25.5 — Adaptive Session Readiness / Today Guidance Upgrade [COMPLETE]
+- [x] Improve today guidance based on readiness, soreness, time, fatigue
+  - **Implementation:** `deriveTodaySessionGuidance()` in `lib/program/adaptive-session-readiness-guidance.ts`
+  - **Sources:** `evidenceCalibrationInfluence` (recoveryBias, volumeBias, progressionAggressiveness), `evidenceCalibrationShapingProof`, `sessionLengthTruth`, `weekNumber`
+  - **Five states:** ready, controlled, protect_recovery, reduce_or_shorten, collecting_data
+- [x] Connect skill-readiness-engine output to visible suggestions
+  - **Via:** recoveryBias and volumeBias from evidence calibration influence (derived from performance/fatigue signals)
+  - **Conservative progression:** Shows "Steady progress" reason when progression is conservative
+- [x] Make guidance actionable without being noisy
+  - **UI:** Compact card with state badge, summary (1 sentence), reasons (max 3 chips), next action
+  - **Placement:** Below Weekly Intelligence Strip, above session cards
+  - **Color-coded badges:** emerald (ready), blue (controlled), purple (protect_recovery), amber (reduce_or_shorten), gray (collecting_data)
 
 ### Step 25.6 — Exercise-Level Coaching Upgrade [NOT_STARTED]
 - [ ] Add per-exercise "why this" context from builder truth

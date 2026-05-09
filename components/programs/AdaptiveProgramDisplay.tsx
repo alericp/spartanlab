@@ -446,6 +446,9 @@ export function AdaptiveProgramDisplay({
   // Why This Fits You - premium explanation sheet state
   const [showWhySheet, setShowWhySheet] = useState(false)
   
+  // [PPX-5] Skill coverage expand/collapse state (collapsed by default when >5 skills)
+  const [showSkillCoverageExpanded, setShowSkillCoverageExpanded] = useState(false)
+  
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
   
@@ -549,6 +552,12 @@ export function AdaptiveProgramDisplay({
   const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
   const rawSummaryTruth = (program as unknown as { summaryTruth?: unknown }).summaryTruth
   const rawWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: unknown }).weeklyRepresentation
+  // [PPX-5] Extract deferred skills from session architecture truth
+  const rawDeferredSkills = (program as unknown as { 
+    sessionArchitectureTruth?: { 
+      deferredSkills?: Array<{ skill: string; reason: string }> 
+    } 
+  }).sessionArchitectureTruth?.deferredSkills
   
   // Build safe locals from raw fields - NO self-references allowed
   const safeSelectedSkills = Array.isArray(rawSelectedSkills) ? rawSelectedSkills : []
@@ -955,6 +964,8 @@ export function AdaptiveProgramDisplay({
     weeklyRepresentationPolicies: normalizedPoliciesForSkillRepresentation,
     weekSupportSkills: sharedWeekSupportSkills,
     weekRepresentedSkills: sharedRepresentedSkills,
+    // [PPX-5] Pass deferred skills for explicit deferred state labeling
+    deferredSkills: rawDeferredSkills ?? null,
   })
   
 
@@ -1136,32 +1147,82 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
         
-        {/* [W.W8] SELECTED SKILL REPRESENTATION TRUTH — All Skills with Honest States */}
-        {selectedSkillRepresentations.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-[#333]/30">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
-              {selectedSkillRepresentations.map((rep) => {
-                const styles = getRepresentationStateStyles(rep.state)
-                return (
-                  <span 
-                    key={rep.skill}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${styles.chipClass}`}
-                    title={rep.explanation}
-                  >
-                    <span>{rep.label}</span>
-                    {/* Show badge for non-primary states to clarify representation */}
-                    {rep.state !== 'headline_priority' && rep.state !== 'direct' && (
-                      <span className={`text-[8px] ${styles.badgeClass}`}>
-                        ({rep.visibleBadge})
-                      </span>
-                    )}
+        {/* [W.W8 + PPX-5] SELECTED SKILL REPRESENTATION TRUTH — Compact by default, expandable for many skills */}
+        {selectedSkillRepresentations.length > 0 && (() => {
+          // [PPX-5] Compute skill coverage summary for compact display
+          const primaryCount = selectedSkillRepresentations.filter(r => r.state === 'headline_priority').length
+          const directCount = selectedSkillRepresentations.filter(r => r.state === 'direct').length
+          const supportCount = selectedSkillRepresentations.filter(r => r.state === 'support' || r.state === 'accessory_carryover').length
+          const deferredCount = selectedSkillRepresentations.filter(r => r.state === 'deferred').length
+          const underrepCount = selectedSkillRepresentations.filter(r => r.state === 'underrepresented' || r.state === 'unknown').length
+          
+          // [PPX-5] Show compact summary when more than 5 skills, with expand option
+          const showCompactMode = selectedSkillRepresentations.length > 5
+          const visibleSkills = showCompactMode && !showSkillCoverageExpanded
+            ? selectedSkillRepresentations.slice(0, 4)
+            : selectedSkillRepresentations
+          const hiddenCount = selectedSkillRepresentations.length - visibleSkills.length
+          
+          // [PPX-5] Build compact summary line
+          const summaryParts: string[] = []
+          if (primaryCount > 0) summaryParts.push(`${primaryCount} primary`)
+          if (directCount > 0) summaryParts.push(`${directCount} direct`)
+          if (supportCount > 0) summaryParts.push(`${supportCount} support`)
+          if (deferredCount > 0) summaryParts.push(`${deferredCount} deferred`)
+          if (underrepCount > 0) summaryParts.push(`${underrepCount} needs attention`)
+          
+          return (
+            <div className="px-4 py-2.5 border-t border-[#333]/30">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
+                {/* [PPX-5] Compact summary when collapsed */}
+                {showCompactMode && !showSkillCoverageExpanded && summaryParts.length > 0 && (
+                  <span className="text-[10px] text-[#6A6A6A] mr-1">
+                    ({summaryParts.join(' · ')})
                   </span>
-                )
-              })}
+                )}
+                {visibleSkills.map((rep) => {
+                  const styles = getRepresentationStateStyles(rep.state)
+                  return (
+                    <span 
+                      key={rep.skill}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${styles.chipClass}`}
+                      title={rep.explanation}
+                    >
+                      <span>{rep.label}</span>
+                      {/* Show badge for non-primary states to clarify representation */}
+                      {rep.state !== 'headline_priority' && rep.state !== 'direct' && (
+                        <span className={`text-[8px] ${styles.badgeClass}`}>
+                          ({rep.visibleBadge})
+                        </span>
+                      )}
+                    </span>
+                  )
+                })}
+                {/* [PPX-5] Show more/less toggle when many skills */}
+                {showCompactMode && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSkillCoverageExpanded(!showSkillCoverageExpanded)}
+                    className="text-[10px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-0.5"
+                  >
+                    {showSkillCoverageExpanded ? (
+                      <>
+                        <ChevronUp className="w-3 h-3" />
+                        <span>Show less</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>+{hiddenCount} more</span>
+                        <ChevronDown className="w-3 h-3" />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
         
         {/* [WEEK-ADVANCEMENT] Week Progression Control - Safe advancement without regeneration */}
         {weekProgression && (

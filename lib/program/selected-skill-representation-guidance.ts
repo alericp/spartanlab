@@ -22,6 +22,8 @@ export type SkillRepresentationState =
   | 'direct'
   | 'support'
   | 'accessory_carryover'
+  | 'deferred'          // [PPX-5] Intentionally deferred to later cycle
+  | 'compressed'        // [PPX-5] Reduced due to session length selection
   | 'underrepresented'
   | 'unknown'
 
@@ -138,6 +140,10 @@ export interface DeriveSkillRepresentationInput {
   weekSupportSkills?: string[]
   /** Summary truth represented skills if available */
   weekRepresentedSkills?: string[]
+  /** [PPX-5] Explicitly deferred skills with reasons */
+  deferredSkills?: Array<{ skill: string; reason: string }> | null
+  /** [PPX-5] Whether a compressed session variant is selected (20/15/10 min) */
+  isCompressedSession?: boolean
 }
 
 /**
@@ -153,6 +159,8 @@ export function deriveAllSelectedSkillRepresentations(
     weeklyRepresentationPolicies,
     weekSupportSkills = [],
     weekRepresentedSkills = [],
+    deferredSkills = [],
+    isCompressedSession = false,
   } = input
   
   // Guard: no selected skills = no display
@@ -161,6 +169,14 @@ export function deriveAllSelectedSkillRepresentations(
   }
   
   const hasWeeklyRepPolicies = weeklyRepresentationPolicies && weeklyRepresentationPolicies.length > 0
+  
+  // [PPX-5] Build deferred skill lookup
+  const deferredSkillMap = new Map<string, string>()
+  if (deferredSkills && deferredSkills.length > 0) {
+    for (const d of deferredSkills) {
+      deferredSkillMap.set(d.skill, d.reason)
+    }
+  }
   
   return selectedSkills.map(skill => {
     const displayLabel = formatSkillLabel(skill)
@@ -183,6 +199,22 @@ export function deriveAllSelectedSkillRepresentations(
         directExposure,
         totalExposure,
         reasonCode: 'headline_identity',
+      }
+    }
+    
+    // [PPX-5] 1.5. EXPLICITLY DEFERRED — intentionally rotated to later cycle
+    const deferralReason = deferredSkillMap.get(skill)
+    if (deferralReason) {
+      return {
+        skill,
+        label: displayLabel,
+        state: 'deferred' as const,
+        visibleBadge: 'Deferred',
+        explanation: deferralReason || 'Intentionally rotated to a later training cycle.',
+        source: 'summary_truth' as const,
+        directExposure: 0,
+        totalExposure: 0,
+        reasonCode: 'explicitly_deferred',
       }
     }
     
@@ -358,6 +390,17 @@ export function getRepresentationStateStyles(state: SkillRepresentationState): {
       return {
         chipClass: 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-[#2A2A2A]',
         badgeClass: 'text-[#5A5A5A]',
+      }
+    // [PPX-5] New states for deferred and compressed skills
+    case 'deferred':
+      return {
+        chipClass: 'bg-blue-500/8 text-blue-400/70 border border-blue-500/15',
+        badgeClass: 'text-blue-400/60',
+      }
+    case 'compressed':
+      return {
+        chipClass: 'bg-purple-500/8 text-purple-400/70 border border-purple-500/15',
+        badgeClass: 'text-purple-400/60',
       }
     case 'underrepresented':
       return {

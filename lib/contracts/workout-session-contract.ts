@@ -53,6 +53,40 @@ export interface WorkoutSessionContract {
   warmup: WorkoutExerciseContract[]
   /** Optional cooldown exercises */
   cooldown: WorkoutExerciseContract[]
+  
+  // ==========================================================================
+  // [PPX-R4A] SECTION-LEVEL ADAPTIVE METADATA
+  // ==========================================================================
+  
+  /** Warmup section adaptive metadata - explains why this warmup was chosen */
+  warmupAdaptation?: {
+    /** Focus type: pull, push, skill, etc. */
+    focus: string
+    /** Human-readable focus label (e.g., "Front Lever Preparation") */
+    focusLabel: string
+    /** Coach rationale explaining the adaptation */
+    rationale: string
+    /** Target joints/areas being prepared */
+    targetAreas?: string[]
+    /** Source signals that drove the adaptation */
+    adaptationSource?: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+  }
+  
+  /** Cooldown section adaptive metadata - explains why this cooldown was chosen */
+  cooldownAdaptation?: {
+    /** Focus type: recovery, flexibility, mobility, etc. */
+    focus: string
+    /** Human-readable focus label (e.g., "Shoulder Recovery") */
+    focusLabel: string
+    /** Coach rationale explaining the adaptation */
+    rationale: string
+    /** Target regions being addressed */
+    targetRegions?: string[]
+    /** Flexibility goals being supported */
+    flexibilityGoals?: string[]
+    /** Source signals that drove the adaptation */
+    adaptationSource?: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+  }
 }
 
 /**

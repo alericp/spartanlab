@@ -2115,26 +2115,71 @@ function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseNa
   const effectiveRec = historyRecommendation?.recommendedBand || recommendedBand
   const isHistoryBased = historyRecommendation?.isFromHistory && historyRecommendation.recommendedBand
   
+  // [PPX-R2G] Build visible recommendation/tracking display object
+  // ALWAYS show a visible status line — never render nothing
+  const bandDisplay = useMemo(() => {
+    const historyCount = historyRecommendation?.historyCount ?? 0
+    
+    if (isHistoryBased && effectiveRec) {
+      // History-based recommendation exists
+      if (historyCount >= 6) {
+        // Enough history for progression analysis
+        return {
+          status: 'recommended' as const,
+          label: `Recommended: ${BAND_SHORT_LABELS[effectiveRec]}`,
+          detail: `Based on ${historyCount} logged sets`,
+          color: 'text-emerald-400',
+          bgColor: 'bg-emerald-500/10',
+        }
+      } else {
+        // Some history, maintaining current band
+        return {
+          status: 'maintain' as const,
+          label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
+          detail: `${historyCount} sets logged — building history`,
+          color: 'text-amber-400',
+          bgColor: 'bg-amber-500/10',
+        }
+      }
+    } else if (effectiveRec) {
+      // Starting recommendation from execution truth
+      return {
+        status: 'starting' as const,
+        label: `Start with: ${BAND_SHORT_LABELS[effectiveRec]}`,
+        detail: 'Initial recommendation',
+        color: 'text-[#A4ACB8]',
+        bgColor: 'bg-[#2B313A]/50',
+      }
+    } else {
+      // No recommendation — tracking fallback
+      return {
+        status: 'tracking' as const,
+        label: 'Tracking band history',
+        detail: 'Log band-assisted sets to build recommendations',
+        color: 'text-[#6B7280]',
+        bgColor: 'bg-[#1A1D21]/50',
+      }
+    }
+  }, [effectiveRec, isHistoryBased, historyRecommendation?.historyCount])
+  
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[#A4ACB8]">Band</span>
-        {/* [PPX-R2E] Show recommendation source */}
-        {effectiveRec && (
-          <span className="text-xs text-[#6B7280]">
-            {isHistoryBased ? (
-              <span title={historyRecommendation?.reason}>
-                <span className="text-emerald-400">●</span> {BAND_SHORT_LABELS[effectiveRec]}
-                <span className="text-[10px] ml-1 text-[#5A5A5A]">
-                  ({historyRecommendation?.historyCount} logged)
-                </span>
-              </span>
-            ) : (
-              <span>Rec: {BAND_SHORT_LABELS[effectiveRec]}</span>
-            )}
-          </span>
-        )}
+        <span className="text-sm font-medium text-[#A4ACB8]">Assistance Band(s)</span>
       </div>
+      
+      {/* [PPX-R2G] ALWAYS VISIBLE recommendation/tracking status line */}
+      <div className={`px-2.5 py-1.5 rounded-md ${bandDisplay.bgColor} border border-[#2B313A]/40`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-medium ${bandDisplay.color}`}>
+            {bandDisplay.label}
+          </span>
+        </div>
+        <p className="text-[10px] text-[#6B7280] mt-0.5">
+          {bandDisplay.detail}
+        </p>
+      </div>
+      
       <div className="flex flex-wrap gap-1.5">
         {bandOptions.map((band) => {
           const isSelected = value === band

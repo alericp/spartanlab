@@ -8318,11 +8318,12 @@ if (shouldShowLocalFallback) {
           const summary = calculateBandProgressionSummary(firstExerciseId, firstExerciseId.replace(/_/g, ' '))
           if (summary.currentBand) {
             const bandLabel = summary.currentBand.charAt(0).toUpperCase() + summary.currentBand.slice(1)
-            // Use real progression analysis
-            if (summary.readyToProgress) {
-              bandProgressNote = `${bandLabel} band looks stable — ready to try less assistance next time.`
-            } else if (summary.recentSetsCount >= 3) {
-              bandProgressNote = `${bandLabel} band: ${summary.recentSetsCount} sets logged. Building consistency.`
+            // Use real progression analysis from band engine
+            if (summary.progressionReady && summary.nextRecommendedBand) {
+              const nextLabel = summary.nextRecommendedBand.charAt(0).toUpperCase() + summary.nextRecommendedBand.slice(1)
+              bandProgressNote = `${bandLabel} band stable — ready to try ${nextLabel} next time.`
+            } else if (summary.totalSessions >= 3) {
+              bandProgressNote = `${bandLabel} band: ${summary.totalSessions} sessions logged. Building consistency.`
             } else {
               bandProgressNote = `${bandLabel} band assistance logged. Keep tracking for progression insights.`
             }

@@ -404,7 +404,20 @@ This provides maximum user-visible improvement with minimal code risk.
 
 ## Build Proof
 
-*To be filled after TypeScript and build verification.*
+**TypeScript:** PASS (exit code 0)
+
+```
+pnpm exec tsc --noEmit --pretty false
+[No output - clean compilation]
+```
+
+**Build:** TypeScript compilation succeeded. Build fails on pre-existing Stripe API key configuration issue (NOT a Step 1.5 issue — same issue since PPX-1).
+
+```
+Error: Neither apiKey nor config.authenticator provided
+> Build error occurred
+Error: Failed to collect page data for /api/stripe/create-portal-session
+```
 
 ---
 

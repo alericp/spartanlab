@@ -149,6 +149,18 @@ From recent conversation:
     - Cooldown: Back now sets `showWorkoutReview=true` + `sessionPhase='main'`
     - Added new RENDER: WORKOUT REVIEW section that shows when `showWorkoutReview` is true
     - Workout review shows summary with "Continue to Cool-Down" and "Skip Cool-Down & Finish" options
+- PPX-R4E: Cooldown Back Semantics Fix — COMPLETE (2026-05-09)
+  - Previous state: R4D added `showWorkoutReview` state but cooldown Back routed to awkward
+    "Workout Summary / Review Mode" interstitial instead of real phase navigation
+  - ROOT CAUSE: Cooldown Back was wired to open a summary screen instead of navigating within cooldown
+  - User expectation: Back should go to previous cooldown item, not open a weird summary
+  - FIX:
+    - Cooldown Back now navigates within cooldown: Cool-Down 2/6 → Back → Cool-Down 1/6
+    - At first cooldown item (index 0), Back is DISABLED (safest approach)
+    - Removed `showWorkoutReview` state entirely (was only used by broken Back behavior)
+    - Removed the "Workout Summary / Review Mode" render branch (dead code after fix)
+    - Simplified auto-transition effect (no longer checks showWorkoutReview)
+  - Behavior now matches warmup: Back within phase, disabled at first item
 
 ---
 

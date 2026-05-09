@@ -1437,15 +1437,6 @@ export function ActiveWorkoutStartCorridor({
                 style={{ width: `${progressPercent}%` }} 
               />
             </div>
-            {/* [PPX-R4B] Phase navigation - subtle link to return to warmup */}
-            {onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1 && (
-              <button
-                onClick={onGoToWarmup}
-                className="mt-1.5 text-xs text-amber-400/70 hover:text-amber-400 transition-colors"
-              >
-                ← Back to Warm-Up
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -2024,15 +2015,22 @@ export function ActiveWorkoutStartCorridor({
                   slot). Keeping both rails in lockstep preserves the
                   "rest/active parity" contract called out above. */}
               <div className="grid grid-cols-4 gap-0.5 pt-2">
-                <Button
-                  variant="ghost"
-                  onClick={onGoBack}
-                  disabled={!canGoBack || !onGoBack}
-                  className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6B7280] rounded-md"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  Back
-                </Button>
+              {/* [PPX-R4C] Context-aware Back for rest screen */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (canGoBack && onGoBack) {
+                    onGoBack()
+                  } else if (onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1) {
+                    onGoToWarmup()
+                  }
+                }}
+                disabled={!canGoBack && !(onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1)}
+                className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] disabled:opacity-30"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -2845,11 +2843,22 @@ export function ActiveWorkoutStartCorridor({
                 h-8 row, in exchange for a comfortable ~80x36 tap area
                 per cell. */}
             <div className="grid grid-cols-4 gap-0.5 pt-1.5">
-              {/* Slot 1: Back (always rendered, disabled when unavailable) */}
+              {/* [PPX-R4C] Slot 1: Context-aware Back
+                  - If canGoBack: go to previous set/exercise
+                  - If at first set/exercise AND warmup available: go to warmup
+                  - Otherwise: disabled */}
               <Button
                 variant="ghost"
-                onClick={onGoBack}
-                disabled={!canGoBack || !onGoBack}
+                onClick={() => {
+                  // If canGoBack, use normal back navigation
+                  if (canGoBack && onGoBack) {
+                    onGoBack()
+                  } else if (onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1) {
+                    // At start of workout with warmup available: go to warmup
+                    onGoToWarmup()
+                  }
+                }}
+                disabled={!canGoBack && !(onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1)}
                 className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6B7280] rounded-md"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />

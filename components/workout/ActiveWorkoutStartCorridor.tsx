@@ -204,9 +204,8 @@ import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import { 
   type ResistanceBandColor,
-  // [PPX-R2J] Canonical band history functions for consistent write/read
-  getCanonicalBandHistory,
-  supportsBandAssistanceForExercise,
+  // [PPX-R3A] Intelligent band recommendation with performance analysis
+  getCanonicalBandRecommendation,
 } from '@/lib/band-progression-engine'
 // [LIVE-WORKOUT-NORMALIZERS] Import canonical coaching signal types
 import { 
@@ -804,18 +803,30 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
  * [LIVE-WORKOUT-AUTHORITY] Multi-Band Selector
  * Allows selecting multiple assistance bands simultaneously.
  * When bands are selected, removing one keeps the others.
- * [PPX-R2H] Now includes always-visible recommendation/tracking display.
+ * [PPX-R3A] Now includes intelligent recommendation with performance analysis.
  */
 interface MultiBandSelectorProps {
   selectedBands: ResistanceBandColor[]
   onChange: (bands: ResistanceBandColor[]) => void
   recommendedBand?: ResistanceBandColor
-  // [PPX-R2H] Exercise context for history-based recommendations
+  // [PPX-R3A] Exercise context + targets for intelligent recommendations
   exerciseId?: string
   exerciseName?: string
+  targetHoldSeconds?: number
+  targetReps?: number
+  targetRPE?: number
 }
 
-function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseId, exerciseName }: MultiBandSelectorProps) {
+function MultiBandSelector({ 
+  selectedBands, 
+  onChange, 
+  recommendedBand, 
+  exerciseId, 
+  exerciseName,
+  targetHoldSeconds,
+  targetReps,
+  targetRPE,
+}: MultiBandSelectorProps) {
   const hasNoBands = selectedBands.length === 0
   
   const toggleBand = (band: ResistanceBandColor) => {
@@ -837,77 +848,66 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseI
     ALL_BAND_COLORS.indexOf(a) - ALL_BAND_COLORS.indexOf(b)
   )
   
-  // [PPX-R2J] Compute band recommendation display using canonical history reader
+  // [PPX-R3A] Compute intelligent band recommendation with performance analysis
   const bandDisplay = useMemo(() => {
-    // Use canonical history reader for consistent key resolution
-    const canonicalHistory = getCanonicalBandHistory({
+    // Get intelligent recommendation with performance analysis
+    const recommendation = getCanonicalBandRecommendation({
       exerciseId,
       exerciseName,
+      targetHoldSeconds,
+      targetReps,
+      targetRpe: targetRPE,
     })
     
-    const historyCount = canonicalHistory.exactCount
-    const familyCount = canonicalHistory.familyCount
-    const totalCount = canonicalHistory.totalCount
-    const historyBand = canonicalHistory.lastBandUsed
-    const supportsBands = canonicalHistory.supportsBandAssistance
-    
-    // Determine effective recommendation: history > execution truth > none
-    const effectiveRec = historyBand || recommendedBand
-    const hasExactHistory = historyCount > 0 && historyBand
-    const hasFamilyHistory = familyCount > 0 && historyBand && !hasExactHistory
-    
-    if (hasExactHistory && effectiveRec) {
-      if (historyCount >= 6) {
-        // Strong exact history - recommend with confidence
-        return {
-          label: `Recommended: ${BAND_SHORT_LABELS[effectiveRec]}`,
-          detail: `Based on ${historyCount} logged sets`,
-          color: 'text-emerald-400',
-          bgColor: 'bg-emerald-500/10',
-        }
-      } else {
-        // Building exact history - maintain current
-        return {
-          label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
-          detail: `${historyCount} set${historyCount === 1 ? '' : 's'} logged — building history`,
-          color: 'text-amber-400',
-          bgColor: 'bg-amber-500/10',
-        }
-      }
-    } else if (hasFamilyHistory && effectiveRec) {
-      // Same-family history found (e.g., other Front Lever variant)
-      return {
-        label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
-        detail: `Based on prior ${canonicalHistory.familyKey.replace(/_/g, ' ')} band history`,
-        color: 'text-amber-400',
-        bgColor: 'bg-amber-500/10',
-      }
-    } else if (effectiveRec && supportsBands) {
-      // Starting recommendation from execution truth
-      return {
-        label: `Start with: ${BAND_SHORT_LABELS[effectiveRec]}`,
-        detail: 'Initial recommendation',
-        color: 'text-[#A4ACB8]',
-        bgColor: 'bg-[#2B313A]/50',
-      }
-    } else if (supportsBands) {
-      // Supports bands but no history yet - tracking
-      return {
-        label: 'Tracking band history',
-        detail: 'Log band-assisted sets to build recommendations',
-        color: 'text-[#6B7280]',
-        bgColor: 'bg-[#1A1D21]/50',
-      }
-    } else {
-      // No band support for this exercise
-      return {
-        label: 'Tracking band history',
-        detail: 'Log band-assisted sets to build recommendations',
-        color: 'text-[#6B7280]',
-        bgColor: 'bg-[#1A1D21]/50',
+    // Map action to color scheme
+    const getColors = (action: typeof recommendation.action, confidence: typeof recommendation.confidence) => {
+      switch (action) {
+        case 'reduce_assistance':
+          // Ready to progress - use encouraging green
+          return {
+            color: 'text-emerald-400',
+            bgColor: 'bg-emerald-500/10',
+          }
+        case 'increase_assistance':
+          // Need more support - use warm amber warning
+          return {
+            color: 'text-orange-400',
+            bgColor: 'bg-orange-500/10',
+          }
+        case 'maintain':
+          // Stable - use confident amber or green based on confidence
+          return confidence === 'high' 
+            ? { color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' }
+            : { color: 'text-amber-400', bgColor: 'bg-amber-500/10' }
+        case 'build_history':
+          // Building confidence - use amber
+          return {
+            color: 'text-amber-400',
+            bgColor: 'bg-amber-500/10',
+          }
+        case 'start':
+          // Initial - neutral
+          return {
+            color: 'text-[#A4ACB8]',
+            bgColor: 'bg-[#2B313A]/50',
+          }
+        default:
+          // No band / tracking - subdued
+          return {
+            color: 'text-[#6B7280]',
+            bgColor: 'bg-[#1A1D21]/50',
+          }
       }
     }
-  }, [exerciseId, exerciseName, recommendedBand])
+    
+    const colors = getColors(recommendation.action, recommendation.confidence)
+    
+    return {
+      label: recommendation.label,
+      detail: recommendation.detail,
+      ...colors,
+    }
+  }, [exerciseId, exerciseName, targetHoldSeconds, targetReps, targetRPE])
   
   return (
     <div className="space-y-2">
@@ -2523,13 +2523,16 @@ export function ActiveWorkoutStartCorridor({
             {bandSelectable && (
               showMultiBandSelector && onSetSelectedBands ? (
                 // True multi-band selector for band-assisted exercises
-                // [PPX-R2I] Use consistent exerciseId from snapshot for band history lookup
+                // [PPX-R3A] Pass targets for intelligent performance-based recommendations
                 <MultiBandSelector 
                   selectedBands={selectedBands} 
                   onChange={onSetSelectedBands} 
                   recommendedBand={recommendedBand}
                   exerciseId={exerciseId || exerciseName?.toLowerCase().replace(/\s+/g, '_')}
                   exerciseName={exerciseName}
+                  targetHoldSeconds={isHold ? targetValue : undefined}
+                  targetReps={!isHold ? targetValue : undefined}
+                  targetRPE={targetRPE}
                 />
               ) : (
                 // Legacy single-band selector fallback

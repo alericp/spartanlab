@@ -654,6 +654,407 @@ export function getLastBandUsed(exerciseId: string): ResistanceBandColor | null 
 }
 
 // =============================================================================
+// [PPX-R3A] INTELLIGENT BAND RECOMMENDATION WITH PERFORMANCE ANALYSIS
+// =============================================================================
+
+export type BandRecommendationAction = 
+  | 'start'              // No history, use starting band
+  | 'maintain'           // Continue with current band
+  | 'reduce_assistance'  // Ready to try less assistance
+  | 'increase_assistance'// Need more support
+  | 'build_history'      // Have some history, building confidence
+  | 'no_band'            // Exercise doesn't support bands
+
+export type EvidenceLevel = 'none' | 'thin' | 'usable' | 'strong'
+export type PerformanceTrend = 'improving' | 'stable' | 'declining' | 'unknown'
+
+export interface CanonicalBandRecommendation {
+  // Exercise identity
+  canonicalKey: string
+  familyKey: string
+  displayName: string
+  
+  // Band recommendation
+  currentBand: ResistanceBandColor | null
+  recommendedBand: ResistanceBandColor | null
+  action: BandRecommendationAction
+  
+  // Confidence metrics
+  confidence: 'low' | 'medium' | 'high'
+  evidenceLevel: EvidenceLevel
+  
+  // History counts
+  exactHistoryCount: number
+  familyHistoryCount: number
+  recentSetCount: number  // Sets in last 2 weeks
+  
+  // Performance analysis (from recent sets with same band)
+  recentAverageRpe: number | null
+  recentAverageHoldSeconds: number | null
+  recentAverageReps: number | null
+  recentCleanRatio: number | null  // Ratio of clean sets
+  targetHitRatio: number | null    // Ratio meeting target
+  performanceTrend: PerformanceTrend
+  
+  // Display text
+  label: string
+  detail: string
+  reason: string
+}
+
+/**
+ * Get next band in progression (less assistance)
+ */
+function getNextProgressionBand(currentBand: ResistanceBandColor): ResistanceBandColor | null {
+  const currentIndex = BAND_ORDER.indexOf(currentBand)
+  if (currentIndex === -1 || currentIndex >= BAND_ORDER.length - 1) {
+    return null // Already at lightest or not found
+  }
+  return BAND_ORDER[currentIndex + 1]
+}
+
+/**
+ * Get previous band in progression (more assistance)
+ */
+function getPreviousProgressionBand(currentBand: ResistanceBandColor): ResistanceBandColor | null {
+  const currentIndex = BAND_ORDER.indexOf(currentBand)
+  if (currentIndex <= 0) {
+    return null // Already at heaviest or not found
+  }
+  return BAND_ORDER[currentIndex - 1]
+}
+
+/**
+ * Analyze recent performance from band history entries
+ */
+function analyzeRecentPerformance(
+  history: BandHistoryEntry[],
+  currentBand: ResistanceBandColor,
+  targetHoldSeconds?: number | null,
+  targetReps?: number | null
+): {
+  recentSets: BandHistoryEntry[]
+  averageRpe: number | null
+  averageHoldSeconds: number | null
+  averageReps: number | null
+  cleanRatio: number | null
+  targetHitRatio: number | null
+  trend: PerformanceTrend
+} {
+  // Filter to recent sets (last 2 weeks) with the current band
+  const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
+  const recentSets = history.filter(h => 
+    h.bandColor === currentBand && 
+    new Date(h.sessionDate).getTime() > twoWeeksAgo
+  )
+  
+  if (recentSets.length === 0) {
+    return {
+      recentSets: [],
+      averageRpe: null,
+      averageHoldSeconds: null,
+      averageReps: null,
+      cleanRatio: null,
+      targetHitRatio: null,
+      trend: 'unknown',
+    }
+  }
+  
+  // Calculate averages
+  const rpeValues = recentSets.filter(s => s.rpe != null).map(s => s.rpe!)
+  const holdValues = recentSets.filter(s => s.holdSeconds != null).map(s => s.holdSeconds!)
+  const repValues = recentSets.filter(s => s.reps != null).map(s => s.reps!)
+  const qualityValues = recentSets.filter(s => s.quality != null)
+  
+  const averageRpe = rpeValues.length > 0 
+    ? Math.round(rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length * 10) / 10 
+    : null
+  const averageHoldSeconds = holdValues.length > 0 
+    ? Math.round(holdValues.reduce((a, b) => a + b, 0) / holdValues.length * 10) / 10 
+    : null
+  const averageReps = repValues.length > 0 
+    ? Math.round(repValues.reduce((a, b) => a + b, 0) / repValues.length * 10) / 10 
+    : null
+  
+  // Calculate clean ratio
+  const cleanRatio = qualityValues.length > 0
+    ? qualityValues.filter(s => s.quality === 'clean').length / qualityValues.length
+    : null
+  
+  // Calculate target hit ratio
+  let targetHitRatio: number | null = null
+  if (targetHoldSeconds && holdValues.length > 0) {
+    const hits = holdValues.filter(h => h >= targetHoldSeconds).length
+    targetHitRatio = hits / holdValues.length
+  } else if (targetReps && repValues.length > 0) {
+    const hits = repValues.filter(r => r >= targetReps).length
+    targetHitRatio = hits / repValues.length
+  }
+  
+  // Calculate trend (compare first half to second half of recent sets)
+  let trend: PerformanceTrend = 'unknown'
+  if (recentSets.length >= 4) {
+    const midpoint = Math.floor(recentSets.length / 2)
+    const olderSets = recentSets.slice(midpoint) // Older (sorted newest first)
+    const newerSets = recentSets.slice(0, midpoint) // Newer
+    
+    const olderRpe = olderSets.filter(s => s.rpe).map(s => s.rpe!)
+    const newerRpe = newerSets.filter(s => s.rpe).map(s => s.rpe!)
+    
+    if (olderRpe.length > 0 && newerRpe.length > 0) {
+      const olderAvg = olderRpe.reduce((a, b) => a + b, 0) / olderRpe.length
+      const newerAvg = newerRpe.reduce((a, b) => a + b, 0) / newerRpe.length
+      
+      if (newerAvg < olderAvg - 0.5) {
+        trend = 'improving' // RPE decreasing = getting easier
+      } else if (newerAvg > olderAvg + 0.5) {
+        trend = 'declining' // RPE increasing = getting harder
+      } else {
+        trend = 'stable'
+      }
+    }
+  }
+  
+  return {
+    recentSets,
+    averageRpe,
+    averageHoldSeconds,
+    averageReps,
+    cleanRatio,
+    targetHitRatio,
+    trend,
+  }
+}
+
+/**
+ * Get evidence level based on history count
+ */
+function getEvidenceLevel(count: number): EvidenceLevel {
+  if (count === 0) return 'none'
+  if (count <= 2) return 'thin'
+  if (count <= 5) return 'usable'
+  return 'strong'
+}
+
+/**
+ * Get intelligent band recommendation with performance analysis
+ */
+export function getCanonicalBandRecommendation(input: {
+  exerciseId?: string | null
+  exerciseName?: string | null
+  targetHoldSeconds?: number | null
+  targetReps?: number | null
+  targetRpe?: number | null
+}): CanonicalBandRecommendation {
+  const { targetHoldSeconds, targetReps } = input
+  const targetRpe = input.targetRpe ?? PROGRESSION_THRESHOLDS.maxRPEForProgression
+  
+  // Get canonical history
+  const history = getCanonicalBandHistory(input)
+  const { exactHistory, familyHistory, canonicalKey, familyKey, displayName, supportsBandAssistance } = history
+  
+  // Base result structure
+  const baseResult = {
+    canonicalKey,
+    familyKey,
+    displayName,
+    exactHistoryCount: exactHistory.length,
+    familyHistoryCount: familyHistory.length,
+  }
+  
+  // No band support
+  if (!supportsBandAssistance) {
+    return {
+      ...baseResult,
+      currentBand: null,
+      recommendedBand: null,
+      action: 'no_band',
+      confidence: 'high',
+      evidenceLevel: 'none',
+      recentSetCount: 0,
+      recentAverageRpe: null,
+      recentAverageHoldSeconds: null,
+      recentAverageReps: null,
+      recentCleanRatio: null,
+      targetHitRatio: null,
+      performanceTrend: 'unknown',
+      label: 'No band support',
+      detail: 'This exercise does not use band assistance',
+      reason: 'Exercise not in band-supported list',
+    }
+  }
+  
+  // No history - start fresh
+  if (exactHistory.length === 0 && familyHistory.length === 0) {
+    const startingBand = getRecommendedStartingBand(canonicalKey)
+    return {
+      ...baseResult,
+      currentBand: null,
+      recommendedBand: startingBand,
+      action: 'start',
+      confidence: 'low',
+      evidenceLevel: 'none',
+      recentSetCount: 0,
+      recentAverageRpe: null,
+      recentAverageHoldSeconds: null,
+      recentAverageReps: null,
+      recentCleanRatio: null,
+      targetHitRatio: null,
+      performanceTrend: 'unknown',
+      label: startingBand ? `Start with ${BAND_SHORT_LABELS[startingBand]}` : 'Tracking band history',
+      detail: startingBand ? 'Initial recommendation' : 'Log band-assisted sets to build recommendations',
+      reason: 'No prior band history',
+    }
+  }
+  
+  // Use exact history first, fallback to family history
+  const activeHistory = exactHistory.length > 0 ? exactHistory : familyHistory
+  const isUsingFamilyHistory = exactHistory.length === 0 && familyHistory.length > 0
+  const currentBand = activeHistory[0]?.bandColor || null
+  const evidenceLevel = getEvidenceLevel(activeHistory.length)
+  
+  if (!currentBand) {
+    return {
+      ...baseResult,
+      currentBand: null,
+      recommendedBand: getRecommendedStartingBand(canonicalKey),
+      action: 'start',
+      confidence: 'low',
+      evidenceLevel,
+      recentSetCount: 0,
+      recentAverageRpe: null,
+      recentAverageHoldSeconds: null,
+      recentAverageReps: null,
+      recentCleanRatio: null,
+      targetHitRatio: null,
+      performanceTrend: 'unknown',
+      label: 'Tracking band history',
+      detail: 'Log band-assisted sets to build recommendations',
+      reason: 'No valid band in history',
+    }
+  }
+  
+  // Analyze recent performance
+  const performance = analyzeRecentPerformance(
+    activeHistory, 
+    currentBand, 
+    targetHoldSeconds, 
+    targetReps
+  )
+  
+  const { 
+    recentSets, 
+    averageRpe, 
+    averageHoldSeconds, 
+    averageReps, 
+    cleanRatio, 
+    targetHitRatio, 
+    trend 
+  } = performance
+  
+  // Build the base result with performance data
+  const resultWithPerformance = {
+    ...baseResult,
+    currentBand,
+    recentSetCount: recentSets.length,
+    recentAverageRpe: averageRpe,
+    recentAverageHoldSeconds: averageHoldSeconds,
+    recentAverageReps: averageReps,
+    recentCleanRatio: cleanRatio,
+    targetHitRatio,
+    performanceTrend: trend,
+  }
+  
+  // Thin evidence - build history
+  if (evidenceLevel === 'thin') {
+    return {
+      ...resultWithPerformance,
+      recommendedBand: currentBand,
+      action: 'build_history',
+      confidence: 'low',
+      evidenceLevel,
+      label: `Maintain ${BAND_SHORT_LABELS[currentBand]}`,
+      detail: `${activeHistory.length} set${activeHistory.length === 1 ? '' : 's'} logged — building confidence`,
+      reason: 'Not enough history for progression analysis',
+    }
+  }
+  
+  // Analyze for progression/regression decisions
+  const hasRecentData = recentSets.length >= 2
+  const isCleanMostly = cleanRatio !== null && cleanRatio >= PROGRESSION_THRESHOLDS.minCleanSetsRatio
+  const isRpeControlled = averageRpe !== null && averageRpe <= targetRpe
+  const isRpeHigh = averageRpe !== null && averageRpe >= 9
+  const isMeetingTarget = targetHitRatio !== null && targetHitRatio >= 0.66
+  const isFailingTarget = targetHitRatio !== null && targetHitRatio < 0.33
+  
+  // REDUCE ASSISTANCE: Clean sets, controlled RPE, meeting targets, stable/improving trend
+  if (hasRecentData && isCleanMostly && isRpeControlled && (isMeetingTarget || trend === 'improving')) {
+    const nextBand = getNextProgressionBand(currentBand)
+    if (nextBand) {
+      const detailParts: string[] = []
+      if (averageRpe) detailParts.push(`RPE ${averageRpe}`)
+      if (cleanRatio) detailParts.push(`${Math.round(cleanRatio * 100)}% clean`)
+      if (trend === 'improving') detailParts.push('improving')
+      
+      return {
+        ...resultWithPerformance,
+        recommendedBand: nextBand,
+        action: 'reduce_assistance',
+        confidence: evidenceLevel === 'strong' ? 'high' : 'medium',
+        evidenceLevel,
+        label: `Try ${BAND_SHORT_LABELS[nextBand]} next`,
+        detail: `Recent ${BAND_SHORT_LABELS[currentBand]} sets look ready${detailParts.length ? ` — ${detailParts.join(', ')}` : ''}`,
+        reason: 'Performance metrics indicate readiness for less assistance',
+      }
+    }
+  }
+  
+  // INCREASE ASSISTANCE: High RPE, failing targets, declining trend
+  if (hasRecentData && (isRpeHigh || isFailingTarget || trend === 'declining')) {
+    const prevBand = getPreviousProgressionBand(currentBand)
+    if (prevBand) {
+      const detailParts: string[] = []
+      if (isRpeHigh && averageRpe) detailParts.push(`RPE ${averageRpe}`)
+      if (isFailingTarget) detailParts.push('missing targets')
+      if (trend === 'declining') detailParts.push('fatigue detected')
+      
+      return {
+        ...resultWithPerformance,
+        recommendedBand: prevBand,
+        action: 'increase_assistance',
+        confidence: 'medium',
+        evidenceLevel,
+        label: `Use ${BAND_SHORT_LABELS[prevBand]} today`,
+        detail: `Recent work suggests more support${detailParts.length ? ` — ${detailParts.join(', ')}` : ''}`,
+        reason: 'Performance metrics indicate need for more assistance',
+      }
+    }
+  }
+  
+  // MAINTAIN: Default when no clear progression/regression signal
+  const detailParts: string[] = []
+  if (activeHistory.length > 0) detailParts.push(`${activeHistory.length} sets logged`)
+  if (averageRpe) detailParts.push(`RPE ${averageRpe}`)
+  if (cleanRatio && cleanRatio > 0) detailParts.push(`${Math.round(cleanRatio * 100)}% clean`)
+  if (trend === 'stable') detailParts.push('stable')
+  
+  const familySuffix = isUsingFamilyHistory ? ` (from ${familyKey.replace(/_/g, ' ')} history)` : ''
+  
+  return {
+    ...resultWithPerformance,
+    recommendedBand: currentBand,
+    action: 'maintain',
+    confidence: evidenceLevel === 'strong' ? 'high' : 'medium',
+    evidenceLevel,
+    label: `Maintain ${BAND_SHORT_LABELS[currentBand]}`,
+    detail: detailParts.length > 0 
+      ? `${detailParts.join(' — ')}${familySuffix}`
+      : `Continue building history${familySuffix}`,
+    reason: 'Current band working well, no clear progression signal yet',
+  }
+}
+
+// =============================================================================
 // PROGRESSION ANALYSIS
 // =============================================================================
 

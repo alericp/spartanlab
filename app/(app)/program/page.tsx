@@ -3277,91 +3277,45 @@ function ProgramDisplayWrapper({
       })()}
 
         {/* ==========================================================================
-            [PHASE X] PROGRAM TRUST ACCORDION
+            [PPX-6] PROOF SURFACES MOVED TO "WHY THIS IS OPTIMAL" SHEET
             ----------------------------------------------------------------------
-            Replaces the four previously-stacked proof lines on the main
-            athlete-facing surface:
-              - Phase 4C MaterializationStatusLine
-              - Phase W  DoctrineCausalityLedgerLine
-              - Phase 4E DoctrineCausalLine
-              - Phase 4L WeeklyMethodChallengeLine
+            ProgramTrustAccordion, WeeklyMethodDecisionAccordion, and
+            ProgramDecisionSummary are now accessible via the "Why This Is
+            Optimal" button in AdaptiveProgramDisplay. This cleans up the
+            main scroll while preserving all proof data in one organized
+            drawer. The surfaces remain available via ?programProbe=1 for
+            QA and debugging.
 
-            The accordion renders a compact two-tier surface:
-              LEVEL 1 (always visible): premium verdict header, one-line
-                Phase W summary, chip strip with non-zero buckets only.
-              LEVEL 2 (collapsed by default, behind <details>): the four
-                original proof lines render IDENTICALLY to their previous
-                behavior — same components, same `program` prop, same data
-                paths, same fail-closed null behavior.
+            The Program Intelligence sheet in AdaptiveProgramDisplay contains:
+              - Coaching explanation (goal fit, structure, schedule)
+              - Weekly decision logic
+              - Protected constraints
+              - Tradeoff decisions
+              - Secondary skill handling
+              - Decision inputs
+              - Premium confidence indicators
 
-            Phase W causality states are PRESERVED INDIVIDUALLY:
-              materialized / applied (no change) / suppressed / blocked by
-              runtime / acknowledged / post-hoc / displayed-only /
-              unknown-unverified all remain accessible.
-
-            Cluster / circuit / density "blocked by runtime" remains
-            honestly visible inside the detail disclosure — never hidden,
-            never falsely promoted.
-
-            On legacy / inconclusive empty programs, the accordion hides
-            entirely (the Phase 4B stale notice owns that state).
+            This provides equivalent information in a cleaner information
+            architecture where Day cards appear sooner and proof is one
+            tap away rather than cluttering the main scroll.
             ========================================================================== */}
-        <ProgramTrustAccordion program={program} />
-
-        {/* ==========================================================================
-            [PHASE AB6] WEEKLY METHOD DECISIONS ACCORDION
-            ----------------------------------------------------------------------
-            Compact top-level surface that explains, in one place above the day
-            cards:
-              - which training methods (supersets, circuits, clusters,
-                rest-pause, etc.) the AI coach actually used this week,
-              - which user-preferred methods were NOT used and why
-                (skill-quality protection / strength specificity / engine
-                gap / not selected),
-              - whether a future safe override could honor the preference,
-              - which decision dimensions are not yet evaluated by the
-                current method decision layer (recovery, fatigue,
-                progression-week, joint/tendon caution, dosage recompute,
-                session-length tradeoff, exercise-compatibility recompute).
-
-            Source of truth: `program.weeklyMethodRepresentation` (Phase 4J
-            `WeeklyMethodRepresentationContract`, set by
-            `lib/server/authoritative-program-generation.ts`). Reading
-            happens inside the accordion via the pure
-            `buildWeeklyMethodDecisionSummary` derivation — no second
-            method-selection engine, no UI-side reasoning invention.
-
-            Older saved programs that lack the Phase 4J contract render an
-            honest "not available — regenerate" fallback rather than fake
-            method reasoning.
-
-            The accordion is collapsed by default; the always-visible
-            header shows used / preferred-not-used / engine-gap counts so
-            the user gets the gist without expanding.
-            ========================================================================== */}
-        <WeeklyMethodDecisionAccordion program={program} />
-
-        {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
-            DoctrineIntegrationProofBlock are diagnostic surfaces. They
-            were leaking onto the athlete-facing page and creating the
-            illusion that "Selected rules: 18 · Batches: 10/10" was a
-            program outcome. They are now gated behind the same
-            `?programProbe=1` probe gate as the runtime parity strip and
-            the grouped scanner strip — preserved for QA, hidden from
-            athletes. The honest user-facing materialization signal is
-            `<MaterializationStatusLine>` above + the Phase 4B stale
-            notice + the per-session Phase 4A panel inside session cards
-            (which only renders when `actualMaterialization.hasRealStructuralChange`
-            is true). */}
         {(showProbe || forceProbe) && (
           <>
+            {/* [PHASE X] PROGRAM TRUST ACCORDION — QA/debug only */}
+            <ProgramTrustAccordion program={program} />
+
+            {/* [PHASE AB6] WEEKLY METHOD DECISIONS ACCORDION — QA/debug only */}
+            <WeeklyMethodDecisionAccordion program={program} />
+
+            {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
+                DoctrineIntegrationProofBlock are diagnostic surfaces. */}
             <DoctrineRuntimeProof program={program} />
             <DoctrineIntegrationProofBlock program={program} />
+
+            {/* [PROGRAM-DECISION-SUMMARY] — QA/debug only */}
+            <ProgramDecisionSummary program={program} />
           </>
         )}
-
-      {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
-      <ProgramDecisionSummary program={program} />
 
       {/* [DEBUG-LEAKAGE-REMOVAL] PROGRAM_RUNTIME_PARITY parity probe + grouped
           diagnostic scanner strip are diagnostic surfaces and were leaking

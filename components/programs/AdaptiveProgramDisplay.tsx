@@ -3153,6 +3153,28 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
+        {/* [PPX-6] WHY THIS IS OPTIMAL — Prominent access point before Day cards
+            Opens the existing "Program Intelligence" sheet with all coaching proof,
+            decisions, and skill coverage. Makes it clear that deeper reasoning is
+            accessible without cluttering the main scroll. */}
+        <button
+          onClick={() => setShowWhySheet(true)}
+          className="w-full flex items-center justify-between gap-3 p-3 mb-4 rounded-lg border border-[#2B313A]/50 bg-gradient-to-r from-[#1A1F26]/60 to-[#1A1A1A]/40 hover:border-[#E63946]/30 hover:bg-[#1A1F26]/80 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#E63946]/10 flex items-center justify-center group-hover:bg-[#E63946]/15 transition-colors">
+              <Sparkles className="w-4 h-4 text-[#E63946]" />
+            </div>
+            <div className="text-left">
+              <span className="text-sm font-medium text-[#E6E9EF] block">Why This Plan Is Optimal</span>
+              <span className="text-[10px] text-[#6A6A6A]">
+                View coaching logic, skill coverage, and program decisions
+              </span>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#5A5A5A] group-hover:text-[#E63946] transition-colors" />
+        </button>
+        
         {/* [WEEK-PROGRESSION-TRUTH] Render scaled sessions with week-appropriate dosage */}
         {scaledSessions.length > 0 ? (
           scaledSessions.map((session, sessionIndex) => {

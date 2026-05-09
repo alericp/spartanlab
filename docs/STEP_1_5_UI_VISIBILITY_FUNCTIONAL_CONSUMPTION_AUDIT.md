@@ -93,6 +93,20 @@ From recent conversation:
   - Actions: maintain, reduce_assistance, increase_assistance, build_history, start, no_band
   - Labels now show coaching actions: "Maintain RED", "Try YLW next", "Use GRN today"
   - Details explain why: "RPE 7.5 — 80% clean", "Recent work suggests more support"
+- PPX-R4A: Warm-Up + Cool-Down Adaptiveness Visibility Audit — COMPLETE (2026-05-09)
+  - Previous state: Warmup/cooldown sections existed but showed generic text ("Prepare your body for the workout")
+  - ROOT CAUSE: Adaptive metadata (focusLabel, rationale, targetAreas) generated but stripped during conversion
+  - Warmup engine generates `GeneratedWarmUp` with focusLabel/rationale but only exercises were passed through
+  - Session contract had no fields for section-level warmup/cooldown adaptation metadata
+  - FIX: Added `warmupAdaptation` and `cooldownAdaptation` fields to:
+    - `WorkoutSessionContract` (lib/contracts/workout-session-contract.ts)
+    - `ExerciseSelection` (lib/program-exercise-selector.ts)
+    - `AdaptiveSession` (lib/adaptive-program-builder.ts)
+  - Updated `selectIntelligentWarmup()` and `selectIntelligentCooldown()` to return adaptation metadata
+  - Updated UI displays:
+    - Program Page: Shows "Front Lever Preparation — lats, shoulders, scapula"
+    - Live Workout: Shows adaptive focusLabel instead of generic text
+  - Adaptive signals used: skill_focus, session_exercises, flexibility_goal, session_stress
 
 ---
 

@@ -3153,10 +3153,9 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
-        {/* [PPX-6] WHY THIS IS OPTIMAL — Prominent access point before Day cards
+        {/* [PPX-6 + PPX-7] WHY THIS PLAN FITS — Prominent access point before Day cards
             Opens the existing "Program Intelligence" sheet with all coaching proof,
-            decisions, and skill coverage. Makes it clear that deeper reasoning is
-            accessible without cluttering the main scroll. */}
+            decisions, and skill coverage. Uses honest copy that adapts to confidence level. */}
         <button
           onClick={() => setShowWhySheet(true)}
           className="w-full flex items-center justify-between gap-3 p-3 mb-4 rounded-lg border border-[#2B313A]/50 bg-gradient-to-r from-[#1A1F26]/60 to-[#1A1A1A]/40 hover:border-[#E63946]/30 hover:bg-[#1A1F26]/80 transition-all group"
@@ -3166,9 +3165,14 @@ export function AdaptiveProgramDisplay({
               <Sparkles className="w-4 h-4 text-[#E63946]" />
             </div>
             <div className="text-left">
-              <span className="text-sm font-medium text-[#E6E9EF] block">Why This Plan Is Optimal</span>
+              {/* [PPX-7] Honest title based on confidence level */}
+              <span className="text-sm font-medium text-[#E6E9EF] block">
+                {intelligenceContract?.premiumConfidence?.level === 'high' 
+                  ? 'Why This Plan Is Optimal'
+                  : 'Why This Plan Fits You'}
+              </span>
               <span className="text-[10px] text-[#6A6A6A]">
-                View coaching logic, skill coverage, and program decisions
+                See your goals, schedule fit, and training decisions
               </span>
             </div>
           </div>
@@ -3468,7 +3472,7 @@ export function AdaptiveProgramDisplay({
         )}
       </div>
 
-      {/* Why This Fits You - Premium evidence-driven explanation sheet */}
+      {/* [PPX-7] Why This Plan Fits - Premium evidence-driven explanation sheet */}
       <Dialog open={showWhySheet} onOpenChange={setShowWhySheet}>
         <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -3476,10 +3480,13 @@ export function AdaptiveProgramDisplay({
               <div className="w-6 h-6 rounded bg-[#E63946]/10 flex items-center justify-center">
                 <Sparkles className="w-3.5 h-3.5 text-[#E63946]" />
               </div>
-              Program Intelligence
+              {/* [PPX-7] User-friendly title based on confidence */}
+              {intelligenceContract?.premiumConfidence?.level === 'high' 
+                ? 'Why This Plan Is Optimal'
+                : 'Why This Plan Fits You'}
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8] pt-1">
-              Decision evidence for your engineered training plan
+              How your goals, schedule, and progress shaped this plan
             </DialogDescription>
           </DialogHeader>
           
@@ -3556,12 +3563,12 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* [DECISION-EVIDENCE] Weekly Decision Logic - Why this frequency/structure */}
+            {/* [DECISION-EVIDENCE + PPX-7] Weekly Structure - Why this frequency/structure */}
             {intelligenceContract?.weeklyDecisionLogic && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Decision Logic</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Structure</h4>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs text-[#C8C8C8]">
@@ -3584,12 +3591,12 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Protected Constraints - What doctrine protects */}
+            {/* [PPX-7] What We Protect - Training principles we never compromise */}
             {intelligenceContract?.protectedConstraints && intelligenceContract.protectedConstraints.length > 0 && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Protected Constraints</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">What We Protect</h4>
                 </div>
                 <ul className="space-y-1.5">
                   {intelligenceContract.protectedConstraints.slice(0, 4).map((constraint, i) => (
@@ -3607,12 +3614,12 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Tradeoffs - What was balanced */}
+            {/* [PPX-7] What We Balanced - Tradeoffs we made for your goals */}
             {intelligenceContract?.tradeoffs && intelligenceContract.tradeoffs.length > 0 && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Scale className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Tradeoff Decisions</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">What We Balanced</h4>
                 </div>
                 <ul className="space-y-2">
                   {intelligenceContract.tradeoffs.slice(0, 3).map((tradeoff, i) => (

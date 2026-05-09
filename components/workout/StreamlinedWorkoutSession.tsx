@@ -7161,8 +7161,13 @@ if (shouldShowLocalFallback) {
   // [PPX-R1C] Post-workout substitution proposal queue useEffect moved to line ~6567
   // to comply with React's rules of hooks (before all conditional returns)
   
+  // [PPX-R2] If user is in warmup phase (after tapping Start Workout but before main workout),
+  // render warmup UI regardless of safeStatus being 'ready' (machine hasn't started yet)
+  // This takes priority over the ready shell render
+  
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
-  if (safeStatus === 'ready') {
+  // [PPX-R2] Skip ready shell if user has started warmup phase
+  if (safeStatus === 'ready' && sessionPhase !== 'warmup') {
     // [LIVE-TRUE-ISOLATION-R5] Mark that we entered the ready shell branch.
     // If the route-level boundary fires while this is the last known stage,
     // the failure happened during pre-start shell rendering, not live.
@@ -7661,30 +7666,25 @@ if (shouldShowLocalFallback) {
                   </h3>
                   
                   {/* Prescription if available */}
-                  {(currentWarmupItem.sets || currentWarmupItem.reps || currentWarmupItem.duration) && (
+                  {(currentWarmupItem.sets || currentWarmupItem.repsOrTime) && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {currentWarmupItem.sets && (
                         <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
                           {currentWarmupItem.sets} sets
                         </span>
                       )}
-                      {currentWarmupItem.reps && (
+                      {currentWarmupItem.repsOrTime && (
                         <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
-                          {currentWarmupItem.reps} reps
-                        </span>
-                      )}
-                      {currentWarmupItem.duration && (
-                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
-                          {currentWarmupItem.duration}s
+                          {currentWarmupItem.repsOrTime}
                         </span>
                       )}
                     </div>
                   )}
                   
                   {/* Purpose/notes if available */}
-                  {(currentWarmupItem.purpose || currentWarmupItem.notes) && (
+                  {currentWarmupItem.note && (
                     <p className="text-xs text-[#6B7280]">
-                      {currentWarmupItem.purpose || currentWarmupItem.notes}
+                      {currentWarmupItem.note}
                     </p>
                   )}
                 </div>
@@ -7832,30 +7832,25 @@ if (shouldShowLocalFallback) {
                   </h3>
                   
                   {/* Prescription if available */}
-                  {(currentCooldownItem.sets || currentCooldownItem.reps || currentCooldownItem.duration) && (
+                  {(currentCooldownItem.sets || currentCooldownItem.repsOrTime) && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {currentCooldownItem.sets && (
                         <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
                           {currentCooldownItem.sets} sets
                         </span>
                       )}
-                      {currentCooldownItem.reps && (
+                      {currentCooldownItem.repsOrTime && (
                         <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
-                          {currentCooldownItem.reps} reps
-                        </span>
-                      )}
-                      {currentCooldownItem.duration && (
-                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
-                          {currentCooldownItem.duration}s
+                          {currentCooldownItem.repsOrTime}
                         </span>
                       )}
                     </div>
                   )}
                   
                   {/* Purpose/notes if available */}
-                  {(currentCooldownItem.purpose || currentCooldownItem.notes) && (
+                  {currentCooldownItem.note && (
                     <p className="text-xs text-[#6B7280]">
-                      {currentCooldownItem.purpose || currentCooldownItem.notes}
+                      {currentCooldownItem.note}
                     </p>
                   )}
                 </div>
@@ -7934,23 +7929,16 @@ if (shouldShowLocalFallback) {
     if (cooldownItems.length > 0 && !cooldownSkipped) {
       // Transition to cooldown phase
       console.log('[v0] [PPX-R2] Main workout complete, transitioning to cooldown with', cooldownItems.length, 'items')
-      // Use effect to avoid setting state during render
-      // We need to use a ref or effect here, but for now we'll do a simple check
-      // This will cause a re-render that shows the cooldown
-      if (sessionPhase !== 'cooldown') {
-        // Set the phase to cooldown - this triggers a re-render
-        Promise.resolve().then(() => {
-          setSessionPhase('cooldown')
-          setCooldownIndex(0)
-        })
-      }
+      // Set the phase to cooldown - this triggers a re-render
+      Promise.resolve().then(() => {
+        setSessionPhase('cooldown')
+        setCooldownIndex(0)
+      })
     } else {
       // No cooldown items, go to done
-      if (sessionPhase !== 'done') {
-        Promise.resolve().then(() => {
-          setSessionPhase('done')
-        })
-      }
+      Promise.resolve().then(() => {
+        setSessionPhase('done')
+      })
     }
     // Show a loading state while transitioning
     return (

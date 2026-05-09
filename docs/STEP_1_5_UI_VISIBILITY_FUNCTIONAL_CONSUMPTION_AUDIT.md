@@ -120,6 +120,19 @@ From recent conversation:
     - "← Back to Workout" button in cooldown phase
     - Progress preserved (logged sets, selected bands, exercise index)
   - Added `onGoToWarmup` / `onGoToCooldown` to `LiveWorkoutHandlers` interface
+- PPX-R4C: Phase Navigation UI Placement Cleanup — COMPLETE (2026-05-09)
+  - Previous state: R4B added phase navigation but placement was visually inconsistent
+    - Top "← Back to Warm-Up" text link above exercise card (wrong location)
+    - Cooldown "← Back to Workout" was a standalone text link (wrong style)
+  - FIX: Relocated phase navigation to match existing Live Workout control styles
+  - Removed:
+    - Top "← Back to Warm-Up" text link from ActiveWorkoutStartCorridor progress bar area
+  - Updated:
+    - Cooldown: "Back" button now in action row with Skip buttons (matches button style)
+    - Main workout: Bottom "Back" button is now context-aware:
+      - If at first exercise/set AND warmup exists → goes to warmup
+      - Otherwise → normal previous set/exercise navigation
+  - No new header clutter, all navigation follows existing bottom nav style
 
 ---
 

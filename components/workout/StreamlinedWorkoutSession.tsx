@@ -140,7 +140,14 @@ import {
   ResistanceBandColor, 
   ALL_BAND_COLORS, 
   BAND_SHORT_LABELS, 
-  BAND_COLORS 
+  BAND_COLORS,
+  // [PPX-R2E] Band history commit bridge — writes completed band-assisted sets to localStorage history
+  logSetWithBand,
+  getBandRecommendation,
+  calculateBandProgressionSummary,
+  getExerciseBandHistory,
+  supportsBandAssistance,
+  type BandHistoryEntry,
 } from '@/lib/band-progression-engine'
 // [LIVE-EXECUTION-TRUTH] Adaptive performance evaluator for post-set recommendations
 import {
@@ -2077,23 +2084,62 @@ interface BandSelectorProps {
   value: ResistanceBandColor | 'none'
   onChange: (value: ResistanceBandColor | 'none') => void
   recommendedBand?: ResistanceBandColor
+  // [PPX-R2E] Exercise context for history-based recommendations
+  exerciseId?: string
+  exerciseName?: string
 }
 
-function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
+function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseName }: BandSelectorProps) {
   const bandOptions: (ResistanceBandColor | 'none')[] = ['none', ...ALL_BAND_COLORS]
+  
+  // [PPX-R2E] Get history-based band recommendation if exercise context provided
+  const historyRecommendation = useMemo(() => {
+    if (!exerciseId || !exerciseName) return null
+    if (!supportsBandAssistance(exerciseId)) return null
+    
+    try {
+      const recommendation = getBandRecommendation(exerciseId, exerciseName)
+      const history = getExerciseBandHistory(exerciseId)
+      return {
+        recommendedBand: recommendation.recommendedBand,
+        reason: recommendation.reason,
+        historyCount: history.length,
+        isFromHistory: history.length > 0,
+      }
+    } catch {
+      return null
+    }
+  }, [exerciseId, exerciseName])
+  
+  // [PPX-R2E] Determine effective recommended band (history > execution truth > none)
+  const effectiveRec = historyRecommendation?.recommendedBand || recommendedBand
+  const isHistoryBased = historyRecommendation?.isFromHistory && historyRecommendation.recommendedBand
   
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">Band</span>
-        {recommendedBand && (
-          <span className="text-xs text-[#6B7280]">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
+        {/* [PPX-R2E] Show recommendation source */}
+        {effectiveRec && (
+          <span className="text-xs text-[#6B7280]">
+            {isHistoryBased ? (
+              <span title={historyRecommendation?.reason}>
+                <span className="text-emerald-400">●</span> {BAND_SHORT_LABELS[effectiveRec]}
+                <span className="text-[10px] ml-1 text-[#5A5A5A]">
+                  ({historyRecommendation?.historyCount} logged)
+                </span>
+              </span>
+            ) : (
+              <span>Rec: {BAND_SHORT_LABELS[effectiveRec]}</span>
+            )}
+          </span>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {bandOptions.map((band) => {
           const isSelected = value === band
           const colors = band === 'none' ? null : BAND_COLORS[band]
+          const isRecommended = band !== 'none' && band === effectiveRec
           
           return (
             <button
@@ -2107,7 +2153,7 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
                   : band === 'none'
                     ? 'bg-[#0F1115] text-[#6B7280] border border-[#2B313A]'
                     : `${colors?.bg} ${colors?.text} opacity-50`
-              }`}
+              } ${isRecommended && !isSelected ? 'ring-1 ring-emerald-500/40' : ''}`}
             >
               {band === 'none' ? 'None' : BAND_SHORT_LABELS[band]}
             </button>
@@ -5287,6 +5333,118 @@ failureStage: null,
     warmupSkipped,
     cooldownSkipped,
   ])
+  
+  // [PPX-R2E] BAND HISTORY COMMIT BRIDGE
+  // Watches completedSets for new band-assisted entries and commits them
+  // to the band progression engine's localStorage history. This enables
+  // future band recommendations to learn from actual logged sets.
+  //
+  // Key design constraints:
+  // 1. Runs in effect layer, not reducer (reducer must be pure)
+  // 2. Idempotent — uses session-local ref to track committed set keys
+  // 3. Fail-open — band history write errors don't block workout flow
+  // 4. Multi-band aware — extracts effective primary band from selectedBands
+  const bandHistoryCommittedKeysRef = useRef<Set<string>>(new Set())
+  
+  useEffect(() => {
+    // Skip for demo sessions — no progression tracking
+    if (isDemoSession) return
+    // Skip if no session contract (exercises lookup would fail)
+    if (!machineSessionContract?.exercises) return
+    
+    const completedSets = normalizedCompletedSets
+    if (completedSets.length === 0) return
+    
+    // Process each completed set that hasn't been committed yet
+    for (const set of completedSets) {
+      // Build stable dedupe key: exerciseIndex + setNumber + timestamp
+      const dedupeKey = `${sessionId}-${set.exerciseIndex}-${set.setNumber}-${set.timestamp}`
+      
+      // Skip if already committed
+      if (bandHistoryCommittedKeysRef.current.has(dedupeKey)) continue
+      
+      // Extract band data — prefer selectedBands array, fall back to bandUsed
+      const selectedBands = set.selectedBands
+      const bandUsed = set.bandUsed
+      
+      // Determine effective band for history
+      // If multi-band, use the highest-assistance band as primary
+      let effectiveBand: ResistanceBandColor | null = null
+      
+      if (selectedBands && selectedBands.length > 0) {
+        // Multi-band: pick highest assistance band
+        // Band order (most to least assistance): blue > green > purple > black > red > yellow
+        const ASSISTANCE_ORDER: ResistanceBandColor[] = ['blue', 'green', 'purple', 'black', 'red', 'yellow']
+        effectiveBand = selectedBands.reduce((highest, current) => {
+          const highestIdx = ASSISTANCE_ORDER.indexOf(highest)
+          const currentIdx = ASSISTANCE_ORDER.indexOf(current)
+          return currentIdx < highestIdx ? current : highest
+        }, selectedBands[0])
+      } else if (bandUsed && bandUsed !== 'none') {
+        effectiveBand = bandUsed
+      }
+      
+      // Skip if no band was used
+      if (!effectiveBand) {
+        // Mark as processed so we don't re-check
+        bandHistoryCommittedKeysRef.current.add(dedupeKey)
+        continue
+      }
+      
+      // Resolve exercise info from session contract
+      const exercise = machineSessionContract.exercises[set.exerciseIndex]
+      if (!exercise) {
+        bandHistoryCommittedKeysRef.current.add(dedupeKey)
+        continue
+      }
+      
+      // Derive exercise ID (use id field or derive from name)
+      const exerciseId = (exercise.id || exercise.name?.toLowerCase().replace(/\s+/g, '_')) ?? 'unknown'
+      const exerciseName = exercise.name || 'Unknown Exercise'
+      
+      // Determine quality from RPE
+      const quality: 'clean' | 'shaky' | 'failed' | undefined = 
+        set.actualRPE ? (
+          set.actualRPE <= 7 ? 'clean' :
+          set.actualRPE <= 8 ? 'clean' :
+          set.actualRPE === 9 ? 'shaky' :
+          'failed'
+        ) : undefined
+      
+      // Commit to band history (fail-open)
+      try {
+        const entry = logSetWithBand(exerciseId, exerciseName, {
+          reps: set.actualReps || undefined,
+          holdSeconds: set.holdSeconds,
+          quality,
+          rpe: set.actualRPE,
+          bandColor: effectiveBand,
+          sessionId,
+          notes: selectedBands && selectedBands.length > 1 
+            ? `Multi-band: ${selectedBands.join(', ')}` 
+            : undefined,
+        })
+        
+        if (entry) {
+          console.log('[PPX-R2E] Band history committed:', {
+            exerciseName,
+            band: effectiveBand,
+            reps: set.actualReps,
+            holdSeconds: set.holdSeconds,
+            rpe: set.actualRPE,
+            quality,
+            entryId: entry.id,
+          })
+        }
+      } catch (error) {
+        // Fail-open: log but don't block workout
+        console.warn('[PPX-R2E] Band history commit failed (fail-open):', error)
+      }
+      
+      // Mark as committed regardless of success (prevents retry loops)
+      bandHistoryCommittedKeysRef.current.add(dedupeKey)
+    }
+  }, [normalizedCompletedSets, sessionId, isDemoSession, machineSessionContract?.exercises])
   
   // [UNIFIED-HANDOFF] REMOVED: Exercise-change reset effect
   // This was a secondary transition system that caused race conditions.
@@ -10053,7 +10211,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           )}
           <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={contractTargetRPE} />
           {bandSelectable && (
-            <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={contractRecommendedBand} />
+            <BandSelector 
+              value={safeBandUsed} 
+              onChange={setBandUsed} 
+              recommendedBand={contractRecommendedBand}
+              exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
+              exerciseName={safeCurrentExercise.name}
+            />
           )}
           
           {/* Per-set notes section - collapsible */}

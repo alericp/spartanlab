@@ -667,6 +667,19 @@ interface ExerciseOverrideState {
   isProgressionAdjusted: boolean
 }
 
+// [PPX-R2C] Session phase type for warmup/main/cooldown sequencing
+type SessionPhase = 'warmup' | 'main' | 'cooldown' | 'done'
+
+// [PPX-R2C] Live flow phase snapshot persisted alongside workout state
+interface LiveFlowPhase {
+  phase: SessionPhase
+  warmupIndex: number
+  cooldownIndex: number
+  warmupSkipped: boolean
+  cooldownSkipped: boolean
+  updatedAt: number
+}
+
 interface WorkoutSessionState {
   status: 'ready' | 'active' | 'resting' | 'completed'
   currentExerciseIndex: number
@@ -677,6 +690,8 @@ interface WorkoutSessionState {
   lastSetRPE: RPEValue | null
   workoutNotes: string
   exerciseOverrides: Record<number, ExerciseOverrideState>
+  // [PPX-R2C] Phase sequencing state for warmup/main/cooldown
+  liveFlowPhase?: LiveFlowPhase
 }
 
 // =============================================================================
@@ -1720,6 +1735,64 @@ function loadSessionFromStorage(
       safeExerciseOverrides = cleanedOverrides
     }
     
+    // [PPX-R2C] Validate and restore liveFlowPhase if present
+    let safeLiveFlowPhase: LiveFlowPhase | undefined = undefined
+    if (data.liveFlowPhase && typeof data.liveFlowPhase === 'object' && !Array.isArray(data.liveFlowPhase)) {
+      const lfp = data.liveFlowPhase as Record<string, unknown>
+      const validPhases: SessionPhase[] = ['warmup', 'main', 'cooldown', 'done']
+      
+      // Validate phase is a known value
+      if (typeof lfp.phase === 'string' && validPhases.includes(lfp.phase as SessionPhase)) {
+        // Validate indexes are finite non-negative
+        const warmupIdx = typeof lfp.warmupIndex === 'number' && Number.isFinite(lfp.warmupIndex) && lfp.warmupIndex >= 0
+          ? lfp.warmupIndex
+          : 0
+        const cooldownIdx = typeof lfp.cooldownIndex === 'number' && Number.isFinite(lfp.cooldownIndex) && lfp.cooldownIndex >= 0
+          ? lfp.cooldownIndex
+          : 0
+        
+        safeLiveFlowPhase = {
+          phase: lfp.phase as SessionPhase,
+          warmupIndex: warmupIdx,
+          cooldownIndex: cooldownIdx,
+          warmupSkipped: typeof lfp.warmupSkipped === 'boolean' ? lfp.warmupSkipped : false,
+          cooldownSkipped: typeof lfp.cooldownSkipped === 'boolean' ? lfp.cooldownSkipped : false,
+          updatedAt: typeof lfp.updatedAt === 'number' ? lfp.updatedAt : Date.now(),
+        }
+        
+        console.log('[workout-restore] Restored liveFlowPhase', safeLiveFlowPhase)
+      }
+    }
+    
+    // [PPX-R2C] Derive phase from status if liveFlowPhase is missing but session has progress
+    // Critical: if status is 'active' or 'resting', user was in main workout, NOT warmup
+    if (!safeLiveFlowPhase) {
+      if (status === 'active' || status === 'resting') {
+        // User was actively working out - default to main phase
+        safeLiveFlowPhase = {
+          phase: 'main',
+          warmupIndex: 0,
+          cooldownIndex: 0,
+          warmupSkipped: true, // Assume warmup was done/skipped since we're in main
+          cooldownSkipped: false,
+          updatedAt: Date.now(),
+        }
+        console.log('[workout-restore] Derived main phase from active/resting status')
+      } else if (status === 'completed') {
+        // Completed status - default to done phase
+        safeLiveFlowPhase = {
+          phase: 'done',
+          warmupIndex: 0,
+          cooldownIndex: 0,
+          warmupSkipped: true,
+          cooldownSkipped: true,
+          updatedAt: Date.now(),
+        }
+        console.log('[workout-restore] Derived done phase from completed status')
+      }
+      // If status is 'ready' and no liveFlowPhase, we leave it undefined and component defaults to 'warmup'
+    }
+    
     // [PHASE-NEXT] Build explicit validated payload - only include fields from WorkoutSessionState
     const validatedPayload: WorkoutSessionState = {
       status: status as WorkoutSessionState['status'],
@@ -1731,6 +1804,8 @@ function loadSessionFromStorage(
       lastSetRPE: typeof data.lastSetRPE === 'number' ? data.lastSetRPE as RPEValue : null,
       workoutNotes: typeof data.workoutNotes === 'string' ? data.workoutNotes : '',
       exerciseOverrides: safeExerciseOverrides,
+      // [PPX-R2C] Include restored/derived liveFlowPhase
+      liveFlowPhase: safeLiveFlowPhase,
     }
     
     console.log('[workout-restore] ACCEPTED session with strict validation', {
@@ -3564,8 +3639,8 @@ export function StreamlinedWorkoutSession({
   // 
   // This state is declared BEFORE all conditional returns per PPX-R1C rules.
   // The phase determines which UI surface is rendered.
+  // SessionPhase type is defined at module level (line ~670) for reuse.
   // ==========================================================================
-  type SessionPhase = 'warmup' | 'main' | 'cooldown' | 'done'
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('warmup')
   const [warmupIndex, setWarmupIndex] = useState(0)
   const [cooldownIndex, setCooldownIndex] = useState(0)
@@ -3799,11 +3874,43 @@ export function StreamlinedWorkoutSession({
             exerciseOverrides: {},
           }),
         })
-  markBootStage(
-    'state_initialized',
-    { currentExerciseIndex: validatedPayload.currentExerciseIndex },
-    { status: validatedPayload.status },
-  )
+        
+        // [PPX-R2C] Restore phase sequencing state from saved liveFlowPhase
+        // This MUST happen after HYDRATE_FROM_STORAGE to avoid render-time conflicts
+        if (saved.liveFlowPhase) {
+          const lfp = saved.liveFlowPhase
+          const warmupCount = safeWorkoutSessionContract.warmup?.length ?? 0
+          const cooldownCount = safeWorkoutSessionContract.cooldown?.length ?? 0
+          
+          // Clamp indexes to available item counts
+          const clampedWarmupIndex = Math.min(lfp.warmupIndex, Math.max(0, warmupCount - 1))
+          const clampedCooldownIndex = Math.min(lfp.cooldownIndex, Math.max(0, cooldownCount - 1))
+          
+          console.log('[PPX-R2C] Restoring phase state', {
+            phase: lfp.phase,
+            warmupIndex: clampedWarmupIndex,
+            cooldownIndex: clampedCooldownIndex,
+            warmupSkipped: lfp.warmupSkipped,
+            cooldownSkipped: lfp.cooldownSkipped,
+          })
+          
+          setSessionPhase(lfp.phase)
+          setWarmupIndex(clampedWarmupIndex)
+          setCooldownIndex(clampedCooldownIndex)
+          setWarmupSkipped(lfp.warmupSkipped)
+          setCooldownSkipped(lfp.cooldownSkipped)
+        } else if (validatedPayload.status === 'active' || validatedPayload.status === 'resting') {
+          // [PPX-R2C] Derive main phase if no liveFlowPhase but session was active
+          console.log('[PPX-R2C] Deriving main phase from active/resting status (no saved liveFlowPhase)')
+          setSessionPhase('main')
+          setWarmupSkipped(true)
+        }
+        
+        markBootStage(
+          'state_initialized',
+          { currentExerciseIndex: validatedPayload.currentExerciseIndex },
+          { status: validatedPayload.status },
+        )
       } else {
         // Restore rejected - validation failed
         console.warn('[workout-restore] Hydration payload validation failed, starting fresh', {
@@ -5127,7 +5234,8 @@ failureStage: null,
       return
     }
 
-    if (liveSession.status !== 'ready') {
+    // [PPX-R2C] Also persist if in warmup phase (before main workout starts)
+    if (liveSession.status !== 'ready' || sessionPhase !== 'warmup' || warmupIndex > 0) {
       // Save the core workout state from the unified liveSession
       // [PHASE-J / RESUME-IDENTITY] Persist resume identity alongside runtime
       // state so the dashboard Resume button can rebuild the EXACT launch URL
@@ -5145,6 +5253,15 @@ failureStage: null,
         lastSetRPE: liveSession.lastSetRPE,
         workoutNotes: liveSession.workoutNotes,
         exerciseOverrides: liveSession.exerciseOverrides,
+        // [PPX-R2C] Include phase sequencing state for refresh/resume
+        liveFlowPhase: {
+          phase: sessionPhase,
+          warmupIndex,
+          cooldownIndex,
+          warmupSkipped,
+          cooldownSkipped,
+          updatedAt: Date.now(),
+        },
       }, sessionId, sessionStructureSignature, {
         dayLabel: safeWorkoutSessionContract.dayLabel,
         dayNumber: safeWorkoutSessionContract.dayNumber,
@@ -5163,6 +5280,12 @@ failureStage: null,
     executionMode,
     variantIndex,
     weekOverride,
+    // [PPX-R2C] Phase state dependencies for autosave
+    sessionPhase,
+    warmupIndex,
+    cooldownIndex,
+    warmupSkipped,
+    cooldownSkipped,
   ])
   
   // [UNIFIED-HANDOFF] REMOVED: Exercise-change reset effect
@@ -6574,6 +6697,30 @@ failureStage: null,
     })
   }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, safeStatus, validatedSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
+  // ==========================================================================
+  // [PPX-R2C] PHASE TRANSITION EFFECT — MAIN TO COOLDOWN
+  // ==========================================================================
+  // This effect handles the transition from main workout to cooldown phase.
+  // Previously this was done via Promise.resolve().then() during render,
+  // which violated React's rules about not mutating state during render.
+  // Now properly handled in an effect.
+  // ==========================================================================
+  useEffect(() => {
+    if (safeStatus === 'completed' && sessionPhase === 'main') {
+      const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
+      if (cooldownItems.length > 0 && !cooldownSkipped) {
+        // Transition to cooldown phase
+        console.log('[PPX-R2C] Effect: Main workout complete, transitioning to cooldown with', cooldownItems.length, 'items')
+        setSessionPhase('cooldown')
+        setCooldownIndex(0)
+      } else {
+        // No cooldown items, go to done
+        console.log('[PPX-R2C] Effect: Main workout complete, no cooldown items, transitioning to done')
+        setSessionPhase('done')
+      }
+    }
+  }, [safeStatus, sessionPhase, cooldownSkipped, safeWorkoutSessionContract.cooldown])
+  
   // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
   // to comply with React's rules of hooks (same hook count/order on every render)
@@ -7917,39 +8064,9 @@ if (shouldShowLocalFallback) {
     )
   }
   
-  // ==========================================================================
-  // [PPX-R2] AUTO-TRANSITION TO COOLDOWN ON WORKOUT COMPLETION
-  // ==========================================================================
-  // When the main workout completes (safeStatus === 'completed'), check if we
-  // need to show cooldown first before the final summary.
-  // ==========================================================================
-  
-  if (safeStatus === 'completed' && sessionPhase === 'main') {
-    const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
-    if (cooldownItems.length > 0 && !cooldownSkipped) {
-      // Transition to cooldown phase
-      console.log('[v0] [PPX-R2] Main workout complete, transitioning to cooldown with', cooldownItems.length, 'items')
-      // Set the phase to cooldown - this triggers a re-render
-      Promise.resolve().then(() => {
-        setSessionPhase('cooldown')
-        setCooldownIndex(0)
-      })
-    } else {
-      // No cooldown items, go to done
-      Promise.resolve().then(() => {
-        setSessionPhase('done')
-      })
-    }
-    // Show a loading state while transitioning
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-[#6B7280] text-sm">Preparing next phase...</p>
-        </div>
-      </div>
-    )
-  }
+  // [PPX-R2C] Cooldown transition is now handled in an effect above (before conditional returns)
+  // to avoid render-time state mutation. The effect checks safeStatus === 'completed' &&
+  // sessionPhase === 'main' and transitions to 'cooldown' or 'done' appropriately.
   
   // ==========================================================================
   // ==========================================================================

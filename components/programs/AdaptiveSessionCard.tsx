@@ -4670,6 +4670,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </button>
             {showWarmup && (
               <div className="mt-2 space-y-2">
+                {/* [PPX-R4A] Section-level warmup adaptation proof */}
+                {session.warmupAdaptation && (
+                  <div className="flex items-start gap-2 text-xs text-emerald-400/80 bg-emerald-500/5 px-2 py-1.5 rounded border border-emerald-500/10">
+                    <span className="font-medium shrink-0">{session.warmupAdaptation.focusLabel}</span>
+                    {session.warmupAdaptation.targetAreas && session.warmupAdaptation.targetAreas.length > 0 && (
+                      <span className="text-[#6A6A6A]">
+                        — {session.warmupAdaptation.targetAreas.slice(0, 3).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* [WARM-UP-STRUCTURE-CONTRACT] Prior intended warm-up surface: the
                     structure-explanation KnowledgeBubble ("Joint protocols appear in
                     warm-up to prepare specific areas for main work.") sits ABOVE the
@@ -4677,7 +4688,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     a regression; this block restores the earlier contract exactly. */}
                 <StructureKnowledgeBubble structureType="protocol_warmup" />
                 {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
-                {session.warmup[0]?.selectionReason && (
+                {session.warmup[0]?.selectionReason && !session.warmupAdaptation && (
                   <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
                     {session.warmup[0].selectionReason}
                   </p>
@@ -5428,8 +5439,24 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </button>
             {showCooldown && (
               <div className="mt-2 space-y-2">
+                {/* [PPX-R4A] Section-level cooldown adaptation proof */}
+                {session.cooldownAdaptation && (
+                  <div className="flex items-start gap-2 text-xs text-sky-400/80 bg-sky-500/5 px-2 py-1.5 rounded border border-sky-500/10 mb-2">
+                    <span className="font-medium shrink-0">{session.cooldownAdaptation.focusLabel}</span>
+                    {session.cooldownAdaptation.flexibilityGoals && session.cooldownAdaptation.flexibilityGoals.length > 0 && (
+                      <span className="text-[#6A6A6A]">
+                        — supports {session.cooldownAdaptation.flexibilityGoals.map(g => g.replace(/_/g, ' ')).slice(0, 2).join(', ')}
+                      </span>
+                    )}
+                    {!session.cooldownAdaptation.flexibilityGoals && session.cooldownAdaptation.targetRegions && session.cooldownAdaptation.targetRegions.length > 0 && (
+                      <span className="text-[#6A6A6A]">
+                        — {session.cooldownAdaptation.targetRegions.slice(0, 3).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
-                {session.cooldown[0]?.selectionReason && (
+                {session.cooldown[0]?.selectionReason && !session.cooldownAdaptation && (
                   <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-green-500/30">
                     {session.cooldown[0].selectionReason}
                   </p>

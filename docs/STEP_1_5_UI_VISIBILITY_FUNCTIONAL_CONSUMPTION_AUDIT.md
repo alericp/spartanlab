@@ -107,6 +107,19 @@ From recent conversation:
     - Program Page: Shows "Front Lever Preparation — lats, shoulders, scapula"
     - Live Workout: Shows adaptive focusLabel instead of generic text
   - Adaptive signals used: skill_focus, session_exercises, flexibility_goal, session_stress
+- PPX-R4B: Warm-Up + Cool-Down Adaptive Proof + Phase Back-Navigation — COMPLETE (2026-05-09)
+  - Previous state: R4A added metadata fields but Live Workout still showed generic "Prepare your body" text
+  - ROOT CAUSE: `safeWorkoutSessionContract` in StreamlinedWorkoutSession did NOT include `warmupAdaptation`/`cooldownAdaptation`
+  - The fields existed on `AdaptiveSession` but were not passed through to the contract object used by UI
+  - FIX: Added `warmupAdaptation` and `cooldownAdaptation` to `safeWorkoutSessionContract` return object
+  - Enhanced warmup display: "Adapted for Front Lever Preparation — lats, shoulders, scapula"
+  - Enhanced cooldown display: "Supports pancake, pike — hamstrings, adductors" or "Recovery for [focus]"
+  - Added phase navigation:
+    - `handleGoToWarmup()` / `handleGoToCooldown()` handlers in StreamlinedWorkoutSession
+    - "← Back to Warm-Up" button in ActiveWorkoutStartCorridor (visible at first exercise)
+    - "← Back to Workout" button in cooldown phase
+    - Progress preserved (logged sets, selected bands, exercise index)
+  - Added `onGoToWarmup` / `onGoToCooldown` to `LiveWorkoutHandlers` interface
 
 ---
 

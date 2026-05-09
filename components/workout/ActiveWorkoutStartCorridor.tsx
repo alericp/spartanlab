@@ -490,6 +490,10 @@ export interface ActiveWorkoutCorridorProps {
   // Back navigation
   onGoBack?: () => void
   canGoBack?: boolean // True if user can navigate backward (not at first set of first exercise)
+  
+  // [PPX-R4B] Phase navigation - allows returning to warmup or skipping to cooldown
+  onGoToWarmup?: () => void
+  onGoToCooldown?: () => void
 
   // [STEP 22.3 / T.T11] Injury substitution state for current exercise
   // When present and applied=true, indicates this exercise is a safer
@@ -1102,6 +1106,9 @@ export function ActiveWorkoutStartCorridor({
   onRestComplete,
   onGoBack,
   canGoBack = false,
+  // [PPX-R4B] Phase navigation
+  onGoToWarmup,
+  onGoToCooldown,
   // [STEP 22.3 / T.T11] Injury substitution state
   injurySubstitution,
 }: ActiveWorkoutCorridorProps) {
@@ -1430,6 +1437,15 @@ export function ActiveWorkoutStartCorridor({
                 style={{ width: `${progressPercent}%` }} 
               />
             </div>
+            {/* [PPX-R4B] Phase navigation - subtle link to return to warmup */}
+            {onGoToWarmup && currentExerciseIndex === 0 && currentSetNumber <= 1 && (
+              <button
+                onClick={onGoToWarmup}
+                className="mt-1.5 text-xs text-amber-400/70 hover:text-amber-400 transition-colors"
+              >
+                ← Back to Warm-Up
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -2603,6 +2603,10 @@ export function StreamlinedWorkoutSession({
       warmup: Array.isArray(session.warmup) ? session.warmup : [],
       cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
       
+      // [PPX-R4B] Preserve warmup/cooldown adaptation metadata for visible proof
+      warmupAdaptation: (session as AdaptiveSession).warmupAdaptation ?? undefined,
+      cooldownAdaptation: (session as AdaptiveSession).cooldownAdaptation ?? undefined,
+      
       // [WEEK-TRUTH-CORRIDOR] Preserve session-level grouping / audit metadata.
       // Passed through as-is; downstream readers (line ~1728 styledGroups
       // derivation, ~4836 grouped render, ~5083 acclimation microcopy,
@@ -6513,6 +6517,22 @@ failureStage: null,
   // Compute whether user can go back (not at first set of first exercise)
   const canGoBack = safeExerciseIndex > 0 || validatedSetNumber > 1
   
+  // [PPX-R4B] Phase navigation handlers - allow returning to warmup or advancing to cooldown
+  // These preserve workout progress (completed sets, selected bands, etc.)
+  const handleGoToWarmup = useCallback(() => {
+    // Return to warmup phase without losing progress
+    setSessionPhase('warmup')
+  }, [])
+  
+  const handleGoToCooldown = useCallback(() => {
+    // Advance to cooldown phase (for when user wants to finish workout early)
+    if (safeWorkoutSessionContract.cooldown.length > 0) {
+      setSessionPhase('cooldown')
+    } else {
+      setSessionPhase('done')
+    }
+  }, [safeWorkoutSessionContract.cooldown.length])
+  
   // ==========================================================================
   // [LIVE-WORKOUT-CORRIDOR] PHONE / SYSTEM BACK INTEGRATION
   // ==========================================================================
@@ -8014,12 +8034,19 @@ if (shouldShowLocalFallback) {
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
                   <Flame className="w-4 h-4 text-amber-400" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
-                  {/* [PPX-R4A] Show adaptive warmup focus if available */}
-                  {(safeWorkoutSessionContract as AdaptiveSession).warmupAdaptation ? (
+                  {/* [PPX-R4B] Show adaptive warmup focus with target areas */}
+                  {safeWorkoutSessionContract.warmupAdaptation ? (
                     <p className="text-xs text-emerald-400/80">
-                      {(safeWorkoutSessionContract as AdaptiveSession).warmupAdaptation?.focusLabel}
+                      Adapted for {safeWorkoutSessionContract.warmupAdaptation.focusLabel}
+                      {safeWorkoutSessionContract.warmupAdaptation.targetAreas?.length ? (
+                        <span className="text-[#6B7280]"> — {safeWorkoutSessionContract.warmupAdaptation.targetAreas.slice(0, 3).join(', ')}</span>
+                      ) : null}
+                    </p>
+                  ) : safeWorkoutSessionContract.focus ? (
+                    <p className="text-xs text-emerald-400/80">
+                      Adapted for {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}
                     </p>
                   ) : (
                     <p className="text-xs text-[#6B7280]">Prepare your body for the workout</p>
@@ -8187,12 +8214,23 @@ if (shouldShowLocalFallback) {
               <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
                 <Wind className="w-4 h-4 text-sky-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h2 className="text-lg font-semibold text-[#E6E9EF]">Cool-Down</h2>
-                {/* [PPX-R4A] Show adaptive cooldown focus if available */}
-                {(safeWorkoutSessionContract as AdaptiveSession).cooldownAdaptation ? (
+                {/* [PPX-R4B] Show adaptive cooldown focus with flexibility goals */}
+                {safeWorkoutSessionContract.cooldownAdaptation ? (
                   <p className="text-xs text-sky-400/80">
-                    {(safeWorkoutSessionContract as AdaptiveSession).cooldownAdaptation?.focusLabel}
+                    {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals?.length ? (
+                      <>Supports {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals.map(g => g.replace(/_/g, ' ')).slice(0, 2).join(', ')}</>
+                    ) : (
+                      <>Recovery for {safeWorkoutSessionContract.cooldownAdaptation.focusLabel}</>
+                    )}
+                    {safeWorkoutSessionContract.cooldownAdaptation.targetRegions?.length ? (
+                      <span className="text-[#6B7280]"> — {safeWorkoutSessionContract.cooldownAdaptation.targetRegions.slice(0, 3).join(', ')}</span>
+                    ) : null}
+                  </p>
+                ) : safeWorkoutSessionContract.focus ? (
+                  <p className="text-xs text-sky-400/80">
+                    Recovery after {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}
                   </p>
                 ) : (
                   <p className="text-xs text-[#6B7280]">Recovery stretches and mobility</p>
@@ -8259,6 +8297,13 @@ if (shouldShowLocalFallback) {
                       Skip Cool-Down
                     </Button>
                   </div>
+                  {/* [PPX-R4B] Back to workout navigation */}
+                  <button
+                    onClick={() => setSessionPhase('main')}
+                    className="text-xs text-sky-400/70 hover:text-sky-400 transition-colors text-center"
+                  >
+                    ← Back to Workout
+                  </button>
                 </div>
               </div>
             ) : (
@@ -9777,6 +9822,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       onRestComplete: handleRestComplete,
       onGoBack: handleGoBack,
       onBlockRoundRestComplete: handleBlockRoundRestComplete,
+      // [PPX-R4B] Phase navigation handlers
+      onGoToWarmup: handleGoToWarmup,
+      onGoToCooldown: handleGoToCooldown,
     }
     
     // [PHASE 4Y / H.H5] Honest guidance-only banner.

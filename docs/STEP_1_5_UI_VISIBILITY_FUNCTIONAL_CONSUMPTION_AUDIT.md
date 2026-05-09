@@ -48,7 +48,8 @@ From `docs/STEP_25_INTELLIGENCE_AUDIT.md`:
 - Step 25.5: Adaptive Session Readiness / Today Guidance — COMPLETE
 - Step 25.6-25.7: NOT_STARTED
 - Step 25.8: Selected Skill Representation Truth — COMPLETE (2026-05-09)
-- Step 25.9-25.12: NOT_STARTED
+- Step 25.9: Weekly Variation + Method Decision Truth — COMPLETE (2026-05-09)
+- Step 25.10-25.12: NOT_STARTED
 
 ### PPX — Live Workout Phases
 From recent conversation:

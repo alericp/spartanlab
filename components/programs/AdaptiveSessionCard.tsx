@@ -646,6 +646,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [showWarmup, setShowWarmup] = useState(false)
   const [showCooldown, setShowCooldown] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null)
+  // [PPX-4] State for emergency session options (20/15/10) disclosure
+  const [showEmergencyOptions, setShowEmergencyOptions] = useState(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
   const [showReplacementModal, setShowReplacementModal] = useState(false)
   const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
@@ -4247,72 +4249,128 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             // [PEX-5C] Build duration recommendations from session length truth
             const sessionLengthTruth = (session as { sessionLengthTruth?: unknown }).sessionLengthTruth as Parameters<typeof buildDurationRecommendations>[0] | undefined
             const recommendations = buildDurationRecommendations(sessionLengthTruth)
-            const recommendedMode = recommendations.recommended?.mode
+            
+            // [PPX-4] Separate primary options (Full/45/30) from emergency options (20/15/10)
+            const launchableVariants = session.variants
+              .map((v, idx) => ({ variant: v, idx }))
+              .filter(({ variant }) => isVariantLaunchable(variant))
+            
+            const primaryVariants = launchableVariants.filter(({ variant }) => {
+              const duration = variant.duration ?? 60
+              return duration >= 30 || duration === 0 // Full session has duration 0 or undefined
+            })
+            
+            const emergencyVariants = launchableVariants.filter(({ variant }) => {
+              const duration = variant.duration ?? 60
+              return duration > 0 && duration < 30
+            })
+            
+            const hasEmergencyOptions = emergencyVariants.length > 0
+            
+            // Check if any emergency option is currently selected - auto-expand disclosure
+            const selectedIsEmergency = emergencyVariants.some(({ idx }) => selectedVariant === idx)
+            const shouldShowEmergency = showEmergencyOptions || selectedIsEmergency
+            
+            const renderVariantButton = ({ variant, idx }: { variant: typeof session.variants[number], idx: number }) => {
+              const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
+              
+              // [PEX-5C] Find recommendation for this variant
+              const variantMode = resolveExecutionModeFromMinutes(variant.duration ?? 60)
+              const rec = recommendations.options.find(o => o.mode === variantMode)
+              const isRecommended = rec?.verdict === 'recommended'
+              const isEmergency = rec?.verdict === 'emergency_only'
+              
+              // [PPX-4] Emergency variant labels with clearer descriptions
+              const getEmergencyLabel = (duration: number): string | null => {
+                if (duration === 20) return 'Minimum effective'
+                if (duration === 15) return 'Emergency dose'
+                if (duration === 10) return 'Streak saver'
+                return null
+              }
+              const emergencyLabel = getEmergencyLabel(variant.duration ?? 0)
+              
+              return (
+                <div key={`${variant.duration}-${variant.label}`} className="flex flex-col items-center gap-0.5">
+                  <Button
+                    size="sm"
+                    variant={isActive ? 'default' : 'outline'}
+                    className={
+                      isActive
+                        ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
+                        : isEmergency
+                          ? 'border-amber-500/30 text-amber-400/80 text-xs h-7'
+                          : 'border-[#3A3A3A] text-xs h-7'
+                    }
+                    onClick={() => {
+                      const newVariant = idx === 0 ? null : idx
+                      console.log('[variant-selection]', {
+                        sessionDay: session.dayNumber,
+                        previousVariant: selectedVariant,
+                        newVariant,
+                        variantLabel: variant.label,
+                        variantDuration: variant.duration,
+                        recommendationVerdict: rec?.verdict,
+                      })
+                      setSelectedVariant(newVariant)
+                    }}
+                  >
+                    {variant.label}
+                  </Button>
+                  {/* [PEX-5C] Recommendation chip - compact, non-intrusive */}
+                  {isRecommended && !isActive && (
+                    <span className="text-[10px] text-emerald-500 font-medium">Best fit</span>
+                  )}
+                  {/* [PPX-4] Emergency label with clearer description */}
+                  {isEmergency && !isActive && emergencyLabel && (
+                    <span className="text-[10px] text-amber-500/80">{emergencyLabel}</span>
+                  )}
+                </div>
+              )
+            }
             
             return (
               <div className="space-y-2">
+                {/* Primary session options (Full/45/30) */}
                 <div className="flex gap-2 flex-wrap items-center">
                   <span className="text-xs text-[#6A6A6A] mr-1">Session length:</span>
-                  {session.variants.map((variant, idx) => {
-                    // [VARIANT-LAUNCHABILITY-CONTRACT] Skip non-launchable entries
-                    if (!isVariantLaunchable(variant)) {
-                      const diagnostic = getVariantDiagnosticSnapshot(variant)
-                      console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
-                        sessionDay: session.dayNumber,
-                        idx,
-                        variantLabel: diagnostic.label,
-                        variantDuration: diagnostic.duration,
-                        mainCount: diagnostic.mainCount,
-                      })
-                      return null
-                    }
-                    
-                    const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
-                    
-                    // [PEX-5C] Find recommendation for this variant
-                    const variantMode = resolveExecutionModeFromMinutes(variant.duration ?? 60)
-                    const rec = recommendations.options.find(o => o.mode === variantMode)
-                    const isRecommended = rec?.verdict === 'recommended'
-                    const isEmergency = rec?.verdict === 'emergency_only'
-                    
-                    return (
-                      <div key={`${variant.duration}-${variant.label}`} className="flex flex-col items-center gap-0.5">
-                        <Button
-                          size="sm"
-                          variant={isActive ? 'default' : 'outline'}
-                          className={
-                            isActive
-                              ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
-                              : isEmergency
-                                ? 'border-[#3A3A3A] text-xs h-7 opacity-70'
-                                : 'border-[#3A3A3A] text-xs h-7'
-                          }
-                          onClick={() => {
-                            const newVariant = idx === 0 ? null : idx
-                            console.log('[variant-selection]', {
-                              sessionDay: session.dayNumber,
-                              previousVariant: selectedVariant,
-                              newVariant,
-                              variantLabel: variant.label,
-                              variantDuration: variant.duration,
-                              recommendationVerdict: rec?.verdict,
-                            })
-                            setSelectedVariant(newVariant)
-                          }}
-                        >
-                          {variant.label}
-                        </Button>
-                        {/* [PEX-5C] Recommendation chip - compact, non-intrusive */}
-                        {isRecommended && !isActive && (
-                          <span className="text-[10px] text-emerald-500 font-medium">Best fit</span>
-                        )}
-                        {isEmergency && !isActive && (
-                          <span className="text-[10px] text-amber-500/80">Emergency</span>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {primaryVariants.map(renderVariantButton)}
                 </div>
+                
+                {/* [PPX-4] Emergency options disclosure (20/15/10) */}
+                {hasEmergencyOptions && (
+                  <div className="pl-0.5">
+                    {!shouldShowEmergency ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowEmergencyOptions(true)}
+                        className="text-[11px] text-amber-500/70 hover:text-amber-400 transition-colors flex items-center gap-1"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                        Need a shorter emergency session?
+                      </button>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {!selectedIsEmergency && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmergencyOptions(false)}
+                            className="text-[11px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-1"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                            Emergency options
+                          </button>
+                        )}
+                        <div className="flex gap-2 flex-wrap items-center pl-1 py-1 border-l border-amber-500/20">
+                          {emergencyVariants.map(renderVariantButton)}
+                        </div>
+                        <p className="text-[10px] text-[#5A5A5A] pl-1 italic">
+                          Emergency sessions preserve only essential work for consistency
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 {/* [PEX-5C] Compact coaching summary - only when a non-full short variant is selected */}
                 {selectedVariant !== null && selectedVariant > 0 && (() => {
                   const selectedVarData = session.variants?.[selectedVariant]
@@ -4321,12 +4379,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   const rec = recommendations.options.find(o => o.mode === selectedMode)
                   if (!rec || !rec.shortReason) return null
                   
+                  // [PPX-4] Enhanced tradeoff descriptions for emergency options
+                  const getTradeoffDescription = (mode: string): string | null => {
+                    switch (mode) {
+                      case '20_min': return 'Preserves priority skill work; trims accessories and extra volume.'
+                      case '15_min': return 'Keeps the highest-value work; drops most accessories.'
+                      case '10_min': return 'Very limited session; preserves habit/recovery and only essential exposure.'
+                      default: return null
+                    }
+                  }
+                  const emergencyTradeoff = getTradeoffDescription(selectedMode)
+                  
                   return (
-                    <div className="text-xs text-[#8A8A8A] pl-0.5">
-                      <span className="font-medium text-[#A0A0A0]">{selectedVarData.label}:</span>{' '}
-                      {rec.shortReason}
-                      {rec.tradeoffSummary && (
-                        <span className="text-[#6A6A6A]"> · {rec.tradeoffSummary}</span>
+                    <div className="text-xs text-[#8A8A8A] pl-0.5 space-y-0.5">
+                      <div>
+                        <span className="font-medium text-[#A0A0A0]">{selectedVarData.label}:</span>{' '}
+                        {rec.shortReason}
+                        {rec.tradeoffSummary && (
+                          <span className="text-[#6A6A6A]"> · {rec.tradeoffSummary}</span>
+                        )}
+                      </div>
+                      {emergencyTradeoff && (
+                        <div className="text-[11px] text-amber-500/60 italic">
+                          {emergencyTradeoff}
+                        </div>
                       )}
                     </div>
                   )

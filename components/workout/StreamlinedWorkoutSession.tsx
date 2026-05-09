@@ -2131,6 +2131,91 @@ type StyledWorkoutGroup = {
   exercises: StyledWorkoutGroupExerciseRef[]
 }
 
+// =============================================================================
+// [PPX-R1C] INTER-EXERCISE REST COUNTDOWN COMPONENT — MOVED TO MODULE LEVEL
+// =============================================================================
+// This component was previously declared INSIDE StreamlinedWorkoutSession after
+// conditional returns (ready shell, completed branch), which caused React #310
+// hook-order violations. Moving it to module level ensures its hooks are isolated
+// from the parent component's hook order.
+// =============================================================================
+
+function InterExerciseRestCountdown({ 
+  initialSeconds, 
+  onComplete 
+}: { 
+  initialSeconds: number
+  onComplete: () => void 
+}) {
+  const [timeRemaining, setTimeRemaining] = useState(initialSeconds)
+  const [isComplete, setIsComplete] = useState(false)
+  
+  useEffect(() => {
+    if (timeRemaining <= 0) {
+      setIsComplete(true)
+      onComplete()
+      return
+    }
+    
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setIsComplete(true)
+          // Call onComplete on next tick to avoid state update during render
+          setTimeout(onComplete, 0)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    
+    return () => clearInterval(timer)
+  }, [initialSeconds]) // Only depend on initialSeconds, not onComplete
+  
+  const progress = ((initialSeconds - timeRemaining) / initialSeconds) * 100
+  
+  return (
+    <div className="text-center">
+      {/* Circular progress indicator */}
+      <div className="relative w-24 h-24 mx-auto mb-3">
+        <svg className="w-full h-full transform -rotate-90">
+          <circle
+            cx="48"
+            cy="48"
+            r="44"
+            fill="none"
+            stroke="#2B313A"
+            strokeWidth="6"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r="44"
+            fill="none"
+            stroke={isComplete ? '#22c55e' : '#4F6D8A'}
+            strokeWidth="6"
+            strokeDasharray={`${2 * Math.PI * 44}`}
+            strokeDashoffset={`${2 * Math.PI * 44 * (1 - progress / 100)}`}
+            className="transition-all duration-1000"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`text-2xl font-bold tabular-nums ${
+            isComplete ? 'text-green-500' : 'text-[#E6E9EF]'
+          }`}>
+            {isComplete ? '✓' : `${Math.floor(timeRemaining / 60)}:${(timeRemaining % 60).toString().padStart(2, '0')}`}
+          </span>
+        </div>
+      </div>
+      
+      {isComplete && (
+        <p className="text-sm text-green-500 font-medium">Ready!</p>
+      )}
+    </div>
+  )
+}
+
 // MERGE_LANE_REACTIVATE_V1
 export function StreamlinedWorkoutSession({
   session,
@@ -6480,6 +6565,53 @@ failureStage: null,
   }, [sessionId, machineState.phase, exercises.length, safeExerciseIndex, validatedSetNumber, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, hasValidExercises, normalizedCompletedSets.length, normalizedExerciseOverrides])
   
   // ==========================================================================
+  // [PPX-R1C FIX] POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE — HOOK CORRECTLY PLACED
+  // ==========================================================================
+  // This useEffect was incorrectly placed at line ~7086 which is AFTER several
+  // conditional returns (bootHydrationReady, componentError, sessionIsValid,
+  // shouldShowLocalFallback, hasValidExercises). Now correctly placed BEFORE
+  // ALL conditional returns to comply with React's rules of hooks.
+  // ==========================================================================
+  useEffect(() => {
+    if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
+      // Get program ID for scoping
+      const savedProgram = getLatestAdaptiveProgram()
+      const programId = savedProgram?.id
+      
+      // Build scope for this proposal queue
+      const scope: ProposalQueueScope = {
+        programId,
+        sessionId: safeSession.dayLabel,
+        dayKey: safeSession.dayLabel,
+      }
+      
+      // Collect evidence from exercises with applied substitutions
+      const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
+        sessionId: safeSession.dayLabel,
+        programId,
+        dayKey: safeSession.dayLabel,
+      })
+      
+      if (evidence.length > 0) {
+        // Build proposals from evidence
+        const baseQueue = buildSavedProgramSubstitutionProposals(evidence)
+        
+        // Create scoped queue with eligibility info
+        const scopedQueue: ScopedPostWorkoutSubstitutionProposalQueue = {
+          ...baseQueue,
+          scope,
+          safeForSavedProgramApply: !!programId,
+          applyBlockedReason: programId ? undefined : 'Missing program ID — cannot apply to saved program',
+        }
+        
+        // Persist scoped queue to sessionStorage
+        saveScopedProposalQueue(scopedQueue, scope)
+        setSubstitutionProposalQueue(scopedQueue)
+      }
+    }
+  }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
+  
+  // ==========================================================================
   // [PHASE LW3] HYDRATION GATE - Wait for hydration before showing UI
   // This prevents half-hydrated first render from racing restore logic
   // ==========================================================================
@@ -6987,55 +7119,8 @@ if (shouldShowLocalFallback) {
     })
   }
   
-  // ==========================================================================
-  // [PPX-R1 FIX] POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE — HOOK MOVED HERE
-  // ==========================================================================
-  // This useEffect was previously located AFTER the `if (safeStatus === 'ready')`
-  // conditional return, which caused React error #310 (hook-order violation).
-  // When safeStatus === 'ready', the component would return early, and this
-  // useEffect would never be called — breaking React's hook count consistency.
-  // 
-  // Now moved BEFORE all conditional returns so it is always called in the
-  // same order. The effect body guards itself with `safeStatus === 'completed'`.
-  // ==========================================================================
-  useEffect(() => {
-    if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
-      // Get program ID for scoping
-      const savedProgram = getLatestAdaptiveProgram()
-      const programId = savedProgram?.id
-      
-      // Build scope for this proposal queue
-      const scope: ProposalQueueScope = {
-        programId,
-        sessionId: safeSession.dayLabel,
-        dayKey: safeSession.dayLabel,
-      }
-      
-      // Collect evidence from exercises with applied substitutions
-      const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
-        sessionId: safeSession.dayLabel,
-        programId,
-        dayKey: safeSession.dayLabel,
-      })
-      
-      if (evidence.length > 0) {
-        // Build proposals from evidence
-        const baseQueue = buildSavedProgramSubstitutionProposals(evidence)
-        
-        // Create scoped queue with eligibility info
-        const scopedQueue: ScopedPostWorkoutSubstitutionProposalQueue = {
-          ...baseQueue,
-          scope,
-          safeForSavedProgramApply: !!programId,
-          applyBlockedReason: programId ? undefined : 'Missing program ID — cannot apply to saved program',
-        }
-        
-        // Persist scoped queue to sessionStorage
-        saveScopedProposalQueue(scopedQueue, scope)
-        setSubstitutionProposalQueue(scopedQueue)
-      }
-    }
-  }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
+  // [PPX-R1C] Post-workout substitution proposal queue useEffect moved to line ~6567
+  // to comply with React's rules of hooks (before all conditional returns)
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
@@ -7869,86 +7954,7 @@ if (shouldShowLocalFallback) {
       )
     }
 
-// =============================================================================
-// [EXECUTION-TRUTH-FIX] INTER-EXERCISE REST COUNTDOWN COMPONENT
-// =============================================================================
-
-function InterExerciseRestCountdown({ 
-  initialSeconds, 
-  onComplete 
-}: { 
-  initialSeconds: number
-  onComplete: () => void 
-}) {
-  const [timeRemaining, setTimeRemaining] = useState(initialSeconds)
-  const [isComplete, setIsComplete] = useState(false)
-  
-  useEffect(() => {
-    if (timeRemaining <= 0) {
-      setIsComplete(true)
-      onComplete()
-      return
-    }
-    
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          setIsComplete(true)
-          // Call onComplete on next tick to avoid state update during render
-          setTimeout(onComplete, 0)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    
-    return () => clearInterval(timer)
-  }, [initialSeconds]) // Only depend on initialSeconds, not onComplete
-  
-  const progress = ((initialSeconds - timeRemaining) / initialSeconds) * 100
-  
-  return (
-    <div className="text-center">
-      {/* Circular progress indicator */}
-      <div className="relative w-24 h-24 mx-auto mb-3">
-        <svg className="w-full h-full transform -rotate-90">
-          <circle
-            cx="48"
-            cy="48"
-            r="44"
-            fill="none"
-            stroke="#2B313A"
-            strokeWidth="6"
-          />
-          <circle
-            cx="48"
-            cy="48"
-            r="44"
-            fill="none"
-            stroke={isComplete ? '#22c55e' : '#4F6D8A'}
-            strokeWidth="6"
-            strokeDasharray={`${2 * Math.PI * 44}`}
-            strokeDashoffset={`${2 * Math.PI * 44 * (1 - progress / 100)}`}
-            className="transition-all duration-1000"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-2xl font-bold tabular-nums ${
-            isComplete ? 'text-green-500' : 'text-[#E6E9EF]'
-          }`}>
-            {isComplete ? '✓' : `${Math.floor(timeRemaining / 60)}:${(timeRemaining % 60).toString().padStart(2, '0')}`}
-          </span>
-        </div>
-      </div>
-      
-      {isComplete && (
-        <p className="text-sm text-green-500 font-medium">Ready!</p>
-      )}
-    </div>
-  )
-}
-
+    // [PPX-R1C] InterExerciseRestCountdown moved to module level to fix React #310
     
     // ========================================================================
     // POST-SAVE: Authoritative completion screen

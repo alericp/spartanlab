@@ -8189,34 +8189,33 @@ if (shouldShowLocalFallback) {
         </div>
       </div>
       
-      {/* [PPX-R7.2] Adaptive Details Dialog - rendered in warmup phase */}
+      {/* [PPX-R7.3] Adaptive Details Dialog - Full Warm-Up Plan Map */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md">
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Flame className="w-5 h-5 text-amber-400" />
               Why This Warm-Up?
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8]">
-              Understanding your session prep
+              Full prep map for {safeWorkoutSessionContract.focusLabel || 'this session'}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 mt-2">
-            {/* Session Focus */}
+            {/* Plan Summary */}
             <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
               <h4 className="text-sm font-medium text-amber-400 mb-2">
                 {safeWorkoutSessionContract.warmupAdaptation?.focusLabel 
-                  ? `Built for ${safeWorkoutSessionContract.warmupAdaptation.focusLabel}`
+                  ? `Session Prep for ${safeWorkoutSessionContract.warmupAdaptation.focusLabel}`
                   : safeWorkoutSessionContract.focusLabel 
                   ? `Session Prep for ${safeWorkoutSessionContract.focusLabel}`
-                  : 'General Warm-Up'}
+                  : 'General Warm-Up Sequence'}
               </h4>
-              {safeWorkoutSessionContract.warmupAdaptation?.rationale && (
-                <p className="text-xs text-[#A4ACB8] mb-2">
-                  {safeWorkoutSessionContract.warmupAdaptation.rationale}
-                </p>
-              )}
+              <p className="text-xs text-[#A4ACB8] mb-2">
+                {safeWorkoutSessionContract.warmupAdaptation?.rationale 
+                  || `This warm-up moves from general movement prep → joint mobility → muscle activation → low-fatigue pattern rehearsal before ${safeWorkoutSessionContract.focusLabel || 'main work'}.`}
+              </p>
               {safeWorkoutSessionContract.warmupAdaptation?.targetAreas?.length ? (
                 <div className="flex flex-wrap gap-1.5">
                   {safeWorkoutSessionContract.warmupAdaptation.targetAreas.map((area, i) => (
@@ -8228,25 +8227,85 @@ if (shouldShowLocalFallback) {
               ) : null}
             </div>
             
-            {/* Current Item */}
-            {currentWarmupItem && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">
-                  {currentWarmupItem.name}
-                </h4>
-                <p className="text-xs text-[#6B7280] mb-2">
-                  {currentWarmupItem.sets ? `${currentWarmupItem.sets} sets` : ''} 
-                  {currentWarmupItem.repsOrTime ? ` · ${currentWarmupItem.repsOrTime}` : ''}
-                </p>
-                <p className="text-xs text-[#A4ACB8]">
-                  {(currentWarmupItem as { selectionReason?: string }).selectionReason 
-                    || (currentWarmupItem as { reason?: string }).reason 
-                    || currentWarmupItem.note 
-                    || (currentWarmupItem as { purpose?: string }).purpose 
-                    || 'General prep selected for this session focus.'}
-                </p>
+            {/* Why This Order */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Why This Order?</h4>
+              <ul className="space-y-1.5 text-xs text-[#A4ACB8]">
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span>General movement prep raises temperature and blood flow first</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span>Joint mobility before loaded positions reduces injury risk</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span>Activation work primes muscles without creating fatigue</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span>Pattern rehearsal prepares movement skill before working sets</span>
+                </li>
+              </ul>
+            </div>
+            
+            {/* Full Warm-Up Sequence */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-3">Warm-Up Sequence ({warmupItems.length} movements)</h4>
+              <div className="space-y-3">
+                {warmupItems.map((item, idx) => {
+                  const isCurrent = idx === warmupIndex
+                  const itemName = item.name?.toLowerCase() || ''
+                  // Infer role from item name for display only
+                  const role = itemName.includes('circle') || itemName.includes('rotation') ? 'Joint Mobility'
+                    : itemName.includes('pull apart') || itemName.includes('activation') || itemName.includes('scap') ? 'Activation'
+                    : itemName.includes('band') && !itemName.includes('pull apart') ? 'Pattern Rehearsal'
+                    : itemName.includes('row') || itemName.includes('pull') ? 'Movement Prep'
+                    : idx === 0 ? 'General Prep'
+                    : idx < warmupItems.length / 2 ? 'Joint/Mobility Prep'
+                    : 'Activation/Rehearsal'
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-2 rounded border ${isCurrent ? 'border-amber-500/50 bg-amber-500/5' : 'border-[#2B313A]'}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-[#E6E9EF]">
+                          {idx + 1}. {item.name}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded">Current</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-[#6B7280]">
+                        <span>{item.sets || 1} sets · {item.repsOrTime || 'as needed'}</span>
+                        <span className="text-amber-400/70">• {role}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )}
+            </div>
+            
+            {/* Adaptive Logic */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Future Adaptation</h4>
+              <p className="text-xs text-[#A4ACB8] mb-2">
+                This warm-up can adjust based on your logged data:
+              </p>
+              <ul className="space-y-1 text-xs text-[#6B7280]">
+                <li>• More prep volume if readiness or logged fatigue is low</li>
+                <li>• Different joint prep if pain/discomfort is reported</li>
+                <li>• Extra activation if early sets underperform</li>
+                <li>• Reduced prep if session time is limited</li>
+              </ul>
+              <p className="text-[10px] text-[#6B7280] mt-2 italic">
+                {safeWorkoutSessionContract.warmupAdaptation?.rationale 
+                  ? 'Current signals: Session focus and warmup adaptation are active.'
+                  : 'Current inputs: Session focus and structure. Deeper readiness signals appear when performance data is logged.'}
+              </p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -8564,34 +8623,33 @@ if (shouldShowLocalFallback) {
         </div>
       </div>
       
-      {/* [PPX-R7.2] Adaptive Details Dialog - rendered in cooldown phase */}
+      {/* [PPX-R7.3] Adaptive Details Dialog - Full Cool-Down Plan Map */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md">
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Wind className="w-5 h-5 text-sky-400" />
               Why This Cool-Down?
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8]">
-              Understanding your recovery work
+              Full recovery map after {safeWorkoutSessionContract.focusLabel || 'your workout'}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 mt-2">
-            {/* Session Focus */}
+            {/* Plan Summary */}
             <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
               <h4 className="text-sm font-medium text-sky-400 mb-2">
                 {safeWorkoutSessionContract.cooldownAdaptation?.focusLabel 
                   ? `Recovery for ${safeWorkoutSessionContract.cooldownAdaptation.focusLabel}`
                   : safeWorkoutSessionContract.focusLabel 
                   ? `Recovery after ${safeWorkoutSessionContract.focusLabel}`
-                  : 'General Cool-Down'}
+                  : 'General Cool-Down Sequence'}
               </h4>
-              {safeWorkoutSessionContract.cooldownAdaptation?.rationale && (
-                <p className="text-xs text-[#A4ACB8] mb-2">
-                  {safeWorkoutSessionContract.cooldownAdaptation.rationale}
-                </p>
-              )}
+              <p className="text-xs text-[#A4ACB8] mb-2">
+                {safeWorkoutSessionContract.cooldownAdaptation?.rationale 
+                  || `This cooldown moves from breathing reset → target tissue recovery → mobility restoration → low-tension finish after ${safeWorkoutSessionContract.focusLabel || 'your workout'}.`}
+              </p>
               {safeWorkoutSessionContract.cooldownAdaptation?.targetRegions?.length ? (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {safeWorkoutSessionContract.cooldownAdaptation.targetRegions.map((region, i) => (
@@ -8612,25 +8670,86 @@ if (shouldShowLocalFallback) {
               ) : null}
             </div>
             
-            {/* Current Item */}
-            {currentCooldownItem && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">
-                  {currentCooldownItem.name}
-                </h4>
-                <p className="text-xs text-[#6B7280] mb-2">
-                  {currentCooldownItem.sets ? `${currentCooldownItem.sets} sets` : ''} 
-                  {currentCooldownItem.repsOrTime ? ` · ${currentCooldownItem.repsOrTime}` : ''}
-                </p>
-                <p className="text-xs text-[#A4ACB8]">
-                  {(currentCooldownItem as { selectionReason?: string }).selectionReason 
-                    || (currentCooldownItem as { reason?: string }).reason 
-                    || currentCooldownItem.note 
-                    || (currentCooldownItem as { purpose?: string }).purpose 
-                    || 'General recovery selected for this session focus.'}
-                </p>
+            {/* Why This Order */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Why This Order?</h4>
+              <ul className="space-y-1.5 text-xs text-[#A4ACB8]">
+                <li className="flex items-start gap-2">
+                  <span className="text-sky-400 mt-0.5">•</span>
+                  <span>Breathing/downshift first to lower nervous system tension</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-sky-400 mt-0.5">•</span>
+                  <span>Target muscles and joints after loaded work for recovery</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-sky-400 mt-0.5">•</span>
+                  <span>Longer holds later when tissue is warm and receptive</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-sky-400 mt-0.5">•</span>
+                  <span>Gentle finish rather than aggressive positions post-strain</span>
+                </li>
+              </ul>
+            </div>
+            
+            {/* Full Cool-Down Sequence */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-3">Cool-Down Sequence ({cooldownItems.length} movements)</h4>
+              <div className="space-y-3">
+                {cooldownItems.map((item, idx) => {
+                  const isCurrent = idx === cooldownIndex
+                  const itemName = item.name?.toLowerCase() || ''
+                  // Infer role from item name for display only
+                  const role = itemName.includes('breath') || itemName.includes('breathing') ? 'Breathing Reset'
+                    : itemName.includes('wrist') || itemName.includes('forearm') ? 'Forearm/Wrist Care'
+                    : itemName.includes('shoulder') || itemName.includes('scap') || itemName.includes('lat') ? 'Shoulder Recovery'
+                    : itemName.includes('twist') || itemName.includes('spine') || itemName.includes('thoracic') ? 'Spinal Mobility'
+                    : itemName.includes('stretch') ? 'Target Tissue Recovery'
+                    : idx === 0 ? 'Downshift'
+                    : idx < cooldownItems.length / 2 ? 'Target Recovery'
+                    : 'Mobility Restore'
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-2 rounded border ${isCurrent ? 'border-sky-500/50 bg-sky-500/5' : 'border-[#2B313A]'}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-[#E6E9EF]">
+                          {idx + 1}. {item.name}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-sky-500/20 text-sky-400 rounded">Current</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-[#6B7280]">
+                        <span>{item.sets || 1} sets · {item.repsOrTime || 'as needed'}</span>
+                        <span className="text-sky-400/70">• {role}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )}
+            </div>
+            
+            {/* Adaptive Logic */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Future Adaptation</h4>
+              <p className="text-xs text-[#A4ACB8] mb-2">
+                This cooldown can adjust based on your logged data:
+              </p>
+              <ul className="space-y-1 text-xs text-[#6B7280]">
+                <li>• Longer cooldown if session strain or logged RPE is high</li>
+                <li>• More forearm/wrist work if grip fatigue is reported</li>
+                <li>• More mobility if range restrictions appear</li>
+                <li>• Simpler cooldown if session time is limited</li>
+              </ul>
+              <p className="text-[10px] text-[#6B7280] mt-2 italic">
+                {safeWorkoutSessionContract.cooldownAdaptation?.rationale 
+                  ? 'Current signals: Session focus and cooldown adaptation are active.'
+                  : 'Current inputs: Session focus and structure. Deeper recovery signals appear when feedback is logged.'}
+              </p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -8024,6 +8024,7 @@ if (shouldShowLocalFallback) {
     }
     
     return (
+      <>
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
         <div className="max-w-md mx-auto space-y-4">
           {/* [PPX-R4D] Header - no top Back button, just progress indicator */}
@@ -8335,7 +8336,7 @@ if (shouldShowLocalFallback) {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
     )
   }
   
@@ -8383,6 +8384,7 @@ if (shouldShowLocalFallback) {
     }
     
     return (
+      <>
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
         <div className="max-w-md mx-auto space-y-4">
           {/* Header */}
@@ -8632,7 +8634,7 @@ if (shouldShowLocalFallback) {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
     )
   }
   

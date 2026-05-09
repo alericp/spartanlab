@@ -114,6 +114,7 @@ export function resolveExerciseInputMode(
       isWeighted?: boolean
       isTimedHold?: boolean
       isUnilateral?: boolean
+      recommendedBand?: string | null  // [PPX-R2] Added for band selector detection
     }
     prescribedLoad?: {
       load?: number
@@ -189,7 +190,23 @@ export function resolveExerciseInputMode(
   }
 
   // Band-assisted skill work (bodyweight only - weighted branch above wins first)
-  if (exec.bandSelectable === true) {
+  // [PPX-R2] Enhanced band detection: show band selector if:
+  // 1. bandSelectable === true (explicit template flag), OR
+  // 2. recommendedBand is set (adaptive system recommends band assistance), OR
+  // 3. Exercise name contains band-assistable progression markers
+  const hasBandRecommendation = typeof exec.recommendedBand === 'string' && exec.recommendedBand.length > 0
+  const isBandAssistableByName = 
+    name.includes('front lever') ||
+    name.includes('back lever') ||
+    name.includes('planche') ||
+    name.includes('muscle-up') ||
+    name.includes('muscle up') ||
+    name.includes('one-arm pull') ||
+    name.includes('one arm pull')
+  
+  const shouldShowBandSelector = exec.bandSelectable === true || hasBandRecommendation || isBandAssistableByName
+  
+  if (shouldShowBandSelector) {
     return {
       mode: 'band_assisted_skill',
       showBandSelector: true,

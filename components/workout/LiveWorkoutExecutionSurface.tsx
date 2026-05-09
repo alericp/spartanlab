@@ -238,6 +238,9 @@ export interface LiveWorkoutHandlers {
   onRestComplete?: () => void
   onGoBack?: () => void
   onBlockRoundRestComplete?: () => void
+  // [PPX-R4B] Phase navigation - allows returning to warmup or cooldown
+  onGoToWarmup?: () => void
+  onGoToCooldown?: () => void
 }
 
 // =============================================================================
@@ -706,6 +709,9 @@ export function LiveWorkoutExecutionSurface({
         onRestComplete={handlers.onRestComplete}
         onGoBack={handlers.onGoBack}
         canGoBack={snapshot.canGoBack}
+        // [PPX-R4B] Phase navigation handlers
+        onGoToWarmup={handlers.onGoToWarmup}
+        onGoToCooldown={handlers.onGoToCooldown}
         // [STEP 22.3 / T.T11] Injury substitution state for current exercise
         injurySubstitution={snapshot.injurySubstitution}
       />

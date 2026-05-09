@@ -75,6 +75,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'

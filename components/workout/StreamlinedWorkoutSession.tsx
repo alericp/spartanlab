@@ -9093,12 +9093,16 @@ if (shouldShowLocalFallback) {
   // reducer output with zero intermediate ownership.
   // ==========================================================================
   const livePhase = machineState.phase
+  // [PPX-R4I] Extended to include returnedFromCooldown case - when user backs out of
+  // cooldown to view workout context, we need to render the live execution surface
+  // with the "Continue to Cool-Down" banner, even though machineState.phase is 'completed'
   const isLiveExecutionPhase =
     livePhase === 'active' ||
     livePhase === 'resting' ||
     livePhase === 'between_exercise_rest' ||
     livePhase === 'block_round_rest' ||
-    livePhase === 'transitioning'
+    livePhase === 'transitioning' ||
+    (returnedFromCooldown && safeStatus === 'completed' && sessionPhase === 'main')
   
   // =========================================================================
   // [HOOK-CONTRACT-FIX] Post-commit observability (Stage F) used to live

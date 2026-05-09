@@ -165,20 +165,25 @@ From recent conversation:
   - Previous state: R4E fixed cooldown internal navigation but Cool-Down 1 Back was disabled
   - R4G added `completedMain` phase but user didn't want "Day 1 Done" interstitial
   - SUPERSEDED: R4H replaces this with direct return to live workout context
-- PPX-R4H: Cool-Down 1 Back to Last Live Workout Context — COMPLETE (2026-05-09)
-  - Previous state: R4G routed Cool-Down 1 Back to "Day 1 Done / Workout skipped" interstitial
-  - User expectation: Cool-Down 1 Back should return to the actual live workout exercise/set context
-  - ROOT CAUSE: `completedMain` was an interstitial summary, not the live workout context
+- PPX-R4H: Cool-Down 1 Back to Last Live Workout Context — SUPERSEDED BY R4I
+  - Added `returnedFromCooldown` state flag and auto-transition bypass
+  - But render still fell through to LEGACY-ACTIVE-R3 because `isLiveExecutionPhase` was false
+  - SUPERSEDED: R4I fixes the render gate to include returnedFromCooldown case
+- PPX-R4I: Fix Cool-Down 1 Back LEGACY Blank Screen — COMPLETE (2026-05-09)
+  - Previous state: R4H set `returnedFromCooldown=true` + `sessionPhase='main'` but user saw
+    LEGACY-ACTIVE-R3 blank screen instead of real workout context
+  - ROOT CAUSE: `isLiveExecutionPhase` only checked for active machine phases like 'active',
+    'resting', etc. When returning from cooldown, `machineState.phase` is 'completed', so
+    `isLiveExecutionPhase` was false and render fell through to legacy surface
   - FIX:
-    - Added `returnedFromCooldown` state flag
-    - Cool-Down 1 Back now sets `returnedFromCooldown=true` + `setSessionPhase('main')`
-    - Auto-transition effect skips when `returnedFromCooldown` is true
-    - Live workout renders with "Workout Complete / Continue to Cool-Down" banner at top
-    - User sees the actual final exercise/set context, not a summary card
-    - "Continue to Cool-Down" button clears flag and returns to cooldown
+    - Extended `isLiveExecutionPhase` condition to include:
+      `(returnedFromCooldown && safeStatus === 'completed' && sessionPhase === 'main')`
+    - Now when Cool-Down 1 Back is pressed, the render enters the LiveWorkoutExecutionSurface
+      branch which includes the "Workout Complete / Continue to Cool-Down" banner
+    - User sees the real workout context, not LEGACY-ACTIVE-R3 blank screen
   - Navigation contract now correct:
     - Cool-Down 2+ Back → previous cooldown item
-    - Cool-Down 1 Back → live workout context with continue banner
+    - Cool-Down 1 Back → real live workout context with continue banner (not legacy)
     - Continue to Cool-Down → returns to cooldown (index preserved)
   - Normal completion flow unchanged: final set → auto-transition to cooldown (no interstitial)
 - PPX-R5: Warm-Up + Cool-Down Adaptiveness Truth-to-UI Audit — NOT_STARTED

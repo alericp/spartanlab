@@ -8291,23 +8291,49 @@ if (shouldShowLocalFallback) {
       }
     }
     
-    // Generate band progression note if bands were used
-    // [LIVE-SESSION-LOCK] Safe band label generation with null guards
+    // [PPX-R2E] Generate band progression note using actual band history engine
+    // This now uses logged band history for real progression feedback
     // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
-    const bandsUsed = normalizedCompletedSets
-      .filter(s => s.bandUsed && s.bandUsed !== 'none')
-      .map(s => s.bandUsed)
+    const bandSetsLogged = normalizedCompletedSets
+      .filter(s => (s.bandUsed && s.bandUsed !== 'none') || (s.selectedBands && s.selectedBands.length > 0))
     let bandProgressNote: string | null = null
-    if (bandsUsed.length > 0) {
-      const uniqueBands = [...new Set(bandsUsed)]
-      const primaryBand = uniqueBands[0]
-      // [LIVE-SESSION-LOCK] Safe charAt with length check
-      if (primaryBand && primaryBand.length > 0) {
-        const bandLabel = primaryBand.charAt(0).toUpperCase() + primaryBand.slice(1)
-        if (performance.performanceTier === 'excellent' || performance.performanceTier === 'strong') {
-          bandProgressNote = `${bandLabel} band is stabilizing well.`
-        } else {
-          bandProgressNote = `${bandLabel} band assistance logged.`
+    
+    if (bandSetsLogged.length > 0) {
+      // Find band-assisted exercises from this session
+      const bandExerciseIds = new Set<string>()
+      for (const set of bandSetsLogged) {
+        if (set.exerciseIndex >= 0 && set.exerciseIndex < exercises.length) {
+          const ex = exercises[set.exerciseIndex]
+          if (ex?.name) {
+            const exId = ex.id || ex.name.toLowerCase().replace(/\s+/g, '_')
+            bandExerciseIds.add(exId)
+          }
+        }
+      }
+      
+      // Get band progression summary for first band-assisted exercise
+      const firstExerciseId = [...bandExerciseIds][0]
+      if (firstExerciseId) {
+        try {
+          const summary = calculateBandProgressionSummary(firstExerciseId, firstExerciseId.replace(/_/g, ' '))
+          if (summary.currentBand) {
+            const bandLabel = summary.currentBand.charAt(0).toUpperCase() + summary.currentBand.slice(1)
+            // Use real progression analysis
+            if (summary.readyToProgress) {
+              bandProgressNote = `${bandLabel} band looks stable — ready to try less assistance next time.`
+            } else if (summary.recentSetsCount >= 3) {
+              bandProgressNote = `${bandLabel} band: ${summary.recentSetsCount} sets logged. Building consistency.`
+            } else {
+              bandProgressNote = `${bandLabel} band assistance logged. Keep tracking for progression insights.`
+            }
+          }
+        } catch {
+          // Fallback to simple note
+          const primaryBand = bandSetsLogged[0]?.bandUsed || bandSetsLogged[0]?.selectedBands?.[0]
+          if (primaryBand && primaryBand !== 'none') {
+            const bandLabel = primaryBand.charAt(0).toUpperCase() + primaryBand.slice(1)
+            bandProgressNote = `${bandLabel} band assistance logged.`
+          }
         }
       }
     }

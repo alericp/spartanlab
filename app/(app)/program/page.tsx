@@ -3249,12 +3249,16 @@ function ProgramDisplayWrapper({
         return (
           <div className="flex flex-col gap-3">
             {/* [PPX-1] FeedbackLoopProofCard now defaults to collapsed for cleaner
-                Program page hierarchy. User can expand to see full evidence details. */}
+                Program page hierarchy. User can expand to see full evidence details.
+                [PPX-2] Custom title "Recent adjustments" to distinguish from
+                the benchmark-side "Calibration evidence" card nested inside
+                CalibrationCheckpointCard. */}
             <FeedbackLoopProofCard
               workoutSummary={workoutSummary}
               calibrationPlan={calibrationPlan}
               generationInfluence={generationInfluence}
               defaultCollapsed={true}
+              title="Recent adjustments"
             />
             <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
             {/* [AB13-10] Gated visual proof overlay. Renders absolutely

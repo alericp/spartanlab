@@ -301,8 +301,38 @@ From recent conversation:
     - [x] PPX-R7.2 WU/CD blank descriptions fixed with honest fallback: COMPLETE
     - [x] PPX-R7.2 render/UI proof required: COMPLETE
   - REMAINING CHAIN:
-    - PPX-R7.3: Permanent workout history/adaptive input proof/delete path
-    - PPX-R7.4: Final live WU/CD adaptive acceptance pass
+    - PPX-R7.3: Plan-map modal depth (COMPLETED BELOW)
+    - PPX-R7.4: Live set-level adaptive coaching + ramp-up logic
+    - PPX-R7.5: Permanent workout history/adaptive input proof/delete path
+    - PPX-R7.6: Final live WU/CD adaptive acceptance pass
+- PPX-R7.3: WU/CD Plan-Map Modal Depth + Card Cue Separation — COMPLETE (2026-05-09)
+  - ROOT CAUSE: WU/CD modals only showed currentWarmupItem/currentCooldownItem (single item), duplicating what's on the main card. User expected full plan explanation.
+  - FIX: Upgraded both modals to show full plan-map with all items in sequence
+  - WARMUP MODAL NOW SHOWS:
+    - Plan Summary: "This warm-up moves from general movement prep → joint mobility → muscle activation → low-fatigue pattern rehearsal"
+    - Why This Order: 4 bullets explaining sequence rationale
+    - Full Warm-Up Sequence: All items with step number, name, prescription, inferred role, current item highlighted
+    - Future Adaptation: What can change based on logged data (readiness, pain, performance)
+    - Current Signals: Honest statement about available vs missing data
+  - COOLDOWN MODAL NOW SHOWS:
+    - Plan Summary: "This cooldown moves from breathing reset → target tissue recovery → mobility restoration → low-tension finish"
+    - Why This Order: 4 bullets explaining recovery sequence rationale
+    - Full Cool-Down Sequence: All items with step number, name, prescription, inferred role, current item highlighted
+    - Future Adaptation: What can change based on logged data (strain, grip fatigue, range restrictions)
+    - Current Signals: Honest statement about available vs missing data
+  - MAIN CARD CUES: Already execution-focused from PPX-R7.2 fallback chain (selectionReason → reason → note → purpose → cue → fallback)
+  - CHECKLIST STATUS:
+    - [x] R7.3.a Warm-Up modal uses full ordered warm-up map, not current item duplicate
+    - [x] R7.3.b Warm-Up modal explains plan summary, order rationale, adaptive signals
+    - [x] R7.3.c Cool-Down modal uses full ordered cooldown map, not current item duplicate
+    - [x] R7.3.d Cool-Down modal explains plan summary, order rationale, adaptive signals
+    - [x] R7.3.e Main WU/CD cards show execution cues (unchanged from R7.2)
+    - [x] R7.3.f Render/UI proof: modal is visibly deeper than card
+    - [x] R7.3.g No fake adaptive claims; missing signals labeled honestly
+  - REMAINING CHAIN:
+    - PPX-R7.4: Live set-level adaptive coaching + future-set adaptation triggers + ramp-up sets
+    - PPX-R7.5: Permanent workout history/adaptive input proof/delete path
+    - PPX-R7.6: Final acceptance pass
 
 ---
 

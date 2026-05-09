@@ -8280,7 +8280,16 @@ if (shouldShowLocalFallback) {
                     {isLastCooldown ? 'Complete & Finish' : 'Done — Next'}
                   </Button>
                   
+                  {/* [PPX-R4C] Action row with Back to Workout + Skip buttons */}
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setSessionPhase('main')}
+                      className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Back
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={handleSkipCooldownItem}
@@ -8297,13 +8306,6 @@ if (shouldShowLocalFallback) {
                       Skip Cool-Down
                     </Button>
                   </div>
-                  {/* [PPX-R4B] Back to workout navigation */}
-                  <button
-                    onClick={() => setSessionPhase('main')}
-                    className="text-xs text-sky-400/70 hover:text-sky-400 transition-colors text-center"
-                  >
-                    ← Back to Workout
-                  </button>
                 </div>
               </div>
             ) : (

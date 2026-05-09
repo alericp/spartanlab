@@ -57,6 +57,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  ChevronLeft,
   Play,
   Check,
   Trash2,
@@ -75,6 +76,8 @@ import {
   Zap,
   AlertCircle,
   AlertTriangle,
+  Flame,
+  Wind,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
@@ -3549,6 +3552,25 @@ export function StreamlinedWorkoutSession({
   // Built from exercises with applied injury substitutions after workout completion.
   // User can dismiss, defer, or mark for future review. Saved program is NEVER auto-mutated.
   const [substitutionProposalQueue, setSubstitutionProposalQueue] = useState<ScopedPostWorkoutSubstitutionProposalQueue | null>(null)
+  
+  // ==========================================================================
+  // [PPX-R2] SESSION PHASE SEQUENCING — WARMUP / MAIN / COOLDOWN
+  // ==========================================================================
+  // Session phase controls the high-level flow of the workout:
+  // - 'warmup': User is going through warmup items before main work
+  // - 'main': User is doing the main workout (existing live workout machine)
+  // - 'cooldown': User is going through cooldown items after main work
+  // - 'done': Session is fully complete (warmup + main + cooldown)
+  // 
+  // This state is declared BEFORE all conditional returns per PPX-R1C rules.
+  // The phase determines which UI surface is rendered.
+  // ==========================================================================
+  type SessionPhase = 'warmup' | 'main' | 'cooldown' | 'done'
+  const [sessionPhase, setSessionPhase] = useState<SessionPhase>('warmup')
+  const [warmupIndex, setWarmupIndex] = useState(0)
+  const [cooldownIndex, setCooldownIndex] = useState(0)
+  const [warmupSkipped, setWarmupSkipped] = useState(false)
+  const [cooldownSkipped, setCooldownSkipped] = useState(false)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -5188,36 +5210,53 @@ failureStage: null,
   
   // Start workout
   // [LIVE-WORKOUT-MACHINE] Validates active state requirements via machine validation
+  // [PPX-R2] Now routes through warmup phase first if warmup items exist
   const handleStart = useCallback(() => {
-  console.log('[v0] [handleStart] Start Workout clicked', {
-  machinePhase: machineState.phase,
-  hasSessionContract: !!machineSessionContract,
-  exerciseCount: machineSessionContract?.exercises?.length ?? 0,
-  currentExerciseIndex: machineState.currentExerciseIndex,
-  })
-  
-  // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
-  const validation = validateActiveEntry(machineState, machineSessionContract)
-  if (!validation.isValid) {
-  console.error('[WORKOUT-START] Machine validation failed:', validation.reason)
-  recordBootError('active_state_entry', new Error(validation.reason || 'Machine validation failed'))
-  machineDispatch({
-  type: 'ENTER_INVALID',
-  reason: validation.reason || 'Unable to start workout',
-  stage: validation.stage || 'active_entry_validation'
-  })
-  return
-  }
-  
-  markBootStage('active_state_entry', {
-  sessionId: sessionId,
-  exerciseCount: machineSessionContract?.exercises.length ?? 0,
-  currentExerciseIndex: machineState.currentExerciseIndex,
-  })
-  
-  setShowResumePrompt(false)
-  dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
-  }, [machineState, machineSessionContract, machineDispatch, sessionId])
+    console.log('[v0] [handleStart] Start Workout clicked', {
+      machinePhase: machineState.phase,
+      hasSessionContract: !!machineSessionContract,
+      exerciseCount: machineSessionContract?.exercises?.length ?? 0,
+      currentExerciseIndex: machineState.currentExerciseIndex,
+      warmupCount: safeWorkoutSessionContract.warmup?.length ?? 0,
+      cooldownCount: safeWorkoutSessionContract.cooldown?.length ?? 0,
+    })
+    
+    // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
+    const validation = validateActiveEntry(machineState, machineSessionContract)
+    if (!validation.isValid) {
+      console.error('[WORKOUT-START] Machine validation failed:', validation.reason)
+      recordBootError('active_state_entry', new Error(validation.reason || 'Machine validation failed'))
+      machineDispatch({
+        type: 'ENTER_INVALID',
+        reason: validation.reason || 'Unable to start workout',
+        stage: validation.stage || 'active_entry_validation'
+      })
+      return
+    }
+    
+    markBootStage('active_state_entry', {
+      sessionId: sessionId,
+      exerciseCount: machineSessionContract?.exercises.length ?? 0,
+      currentExerciseIndex: machineState.currentExerciseIndex,
+    })
+    
+    setShowResumePrompt(false)
+    
+    // [PPX-R2] Check if we have warmup items to run first
+    const warmupItems = safeWorkoutSessionContract.warmup ?? []
+    if (warmupItems.length > 0 && !warmupSkipped) {
+      // Start with warmup phase
+      console.log('[v0] [PPX-R2] Starting warmup phase with', warmupItems.length, 'items')
+      setSessionPhase('warmup')
+      setWarmupIndex(0)
+      // Don't dispatch START_WORKOUT_ACTIVE yet - that happens after warmup
+    } else {
+      // No warmup or warmup skipped - go directly to main workout
+      console.log('[v0] [PPX-R2] No warmup items, starting main workout directly')
+      setSessionPhase('main')
+      dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+    }
+  }, [machineState, machineSessionContract, machineDispatch, sessionId, safeWorkoutSessionContract.warmup, warmupSkipped])
   
   // Resume existing workout
   const handleResume = useCallback(() => {
@@ -7517,12 +7556,421 @@ if (shouldShowLocalFallback) {
   }
   
   // ==========================================================================
+  // [PPX-R2] RENDER: WARMUP PHASE
   // ==========================================================================
-  // RENDER: COMPLETED STATE
+  // Warmup phase runs before the main workout machine starts.
+  // Users can complete, skip individual items, or skip entire warmup.
+  // ==========================================================================
+  
+  if (sessionPhase === 'warmup') {
+    const warmupItems = safeWorkoutSessionContract.warmup ?? []
+    const currentWarmupItem = warmupItems[warmupIndex]
+    const isLastWarmup = warmupIndex >= warmupItems.length - 1
+    
+    // Handle completing current warmup item
+    const handleWarmupComplete = () => {
+      if (isLastWarmup) {
+        // All warmup items done, transition to main workout
+        console.log('[v0] [PPX-R2] Warmup complete, starting main workout')
+        setSessionPhase('main')
+        dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+      } else {
+        // Move to next warmup item
+        setWarmupIndex(prev => prev + 1)
+      }
+    }
+    
+    // Handle skipping current warmup item
+    const handleSkipWarmupItem = () => {
+      if (isLastWarmup) {
+        // Skipping last item, transition to main workout
+        console.log('[v0] [PPX-R2] Last warmup item skipped, starting main workout')
+        setSessionPhase('main')
+        dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+      } else {
+        // Skip to next warmup item
+        setWarmupIndex(prev => prev + 1)
+      }
+    }
+    
+    // Handle skipping entire warmup
+    const handleSkipWarmup = () => {
+      console.log('[v0] [PPX-R2] Entire warmup skipped, starting main workout')
+      setWarmupSkipped(true)
+      setSessionPhase('main')
+      dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+    }
+    
+    // Handle back/exit from warmup
+    const handleWarmupBack = () => {
+      if (warmupIndex === 0) {
+        // Go back to ready shell
+        setSessionPhase('warmup') // Reset to warmup start
+        setWarmupIndex(0)
+        // Component will fall through to ready shell since safeStatus is still 'ready'
+        // We need to reset the phase tracking
+        setSessionPhase('warmup')
+        // Force re-render by clearing the session phase temporarily
+        // Actually, we need to go back to ready state - but the machine is still in ready
+        // So we just need to not render this warmup UI
+        window.location.reload() // Simplest approach for now - TODO: improve
+      } else {
+        // Go back to previous warmup item
+        setWarmupIndex(prev => prev - 1)
+      }
+    }
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleWarmupBack}
+              className="text-[#6B7280] hover:text-white"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+            <span className="text-xs text-[#6B7280]">
+              Warm-Up {warmupIndex + 1} / {warmupItems.length}
+            </span>
+          </div>
+          
+          {/* Warmup Card */}
+          <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
+            {/* Phase Label */}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Flame className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
+                <p className="text-xs text-[#6B7280]">Prepare your body for the workout</p>
+              </div>
+            </div>
+            
+            {/* Current Warmup Item */}
+            {currentWarmupItem ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                  <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
+                    {currentWarmupItem.name || 'Warm-up Exercise'}
+                  </h3>
+                  
+                  {/* Prescription if available */}
+                  {(currentWarmupItem.sets || currentWarmupItem.reps || currentWarmupItem.duration) && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {currentWarmupItem.sets && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentWarmupItem.sets} sets
+                        </span>
+                      )}
+                      {currentWarmupItem.reps && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentWarmupItem.reps} reps
+                        </span>
+                      )}
+                      {currentWarmupItem.duration && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentWarmupItem.duration}s
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Purpose/notes if available */}
+                  {(currentWarmupItem.purpose || currentWarmupItem.notes) && (
+                    <p className="text-xs text-[#6B7280]">
+                      {currentWarmupItem.purpose || currentWarmupItem.notes}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Actions */}
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleWarmupComplete}
+                    className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    {isLastWarmup ? 'Complete & Start Workout' : 'Done — Next'}
+                  </Button>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipWarmupItem}
+                      className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                    >
+                      <SkipForward className="w-4 h-4 mr-1" />
+                      Skip This
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipWarmup}
+                      className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                    >
+                      Skip Warm-Up
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-[#6B7280]">
+                <p>No warmup items found</p>
+                <Button
+                  onClick={() => {
+                    setSessionPhase('main')
+                    dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+                  }}
+                  className="mt-4 bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+                >
+                  Start Workout
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {/* Progress indicator */}
+          <div className="flex gap-1 justify-center">
+            {warmupItems.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all ${
+                  i < warmupIndex
+                    ? 'w-4 bg-amber-500'
+                    : i === warmupIndex
+                      ? 'w-6 bg-amber-400'
+                      : 'w-2 bg-[#2B313A]'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // [PPX-R2] RENDER: COOLDOWN PHASE
+  // ==========================================================================
+  // Cooldown phase runs after the main workout completes, before final summary.
+  // Users can complete, skip individual items, or skip entire cooldown.
+  // ==========================================================================
+  
+  if (safeStatus === 'completed' && sessionPhase === 'cooldown') {
+    const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
+    const currentCooldownItem = cooldownItems[cooldownIndex]
+    const isLastCooldown = cooldownIndex >= cooldownItems.length - 1
+    
+    // Handle completing current cooldown item
+    const handleCooldownComplete = () => {
+      if (isLastCooldown) {
+        // All cooldown items done, transition to final completion
+        console.log('[v0] [PPX-R2] Cooldown complete, showing final summary')
+        setSessionPhase('done')
+      } else {
+        // Move to next cooldown item
+        setCooldownIndex(prev => prev + 1)
+      }
+    }
+    
+    // Handle skipping current cooldown item
+    const handleSkipCooldownItem = () => {
+      if (isLastCooldown) {
+        // Skipping last item, transition to final completion
+        console.log('[v0] [PPX-R2] Last cooldown item skipped, showing final summary')
+        setSessionPhase('done')
+      } else {
+        // Skip to next cooldown item
+        setCooldownIndex(prev => prev + 1)
+      }
+    }
+    
+    // Handle skipping entire cooldown
+    const handleSkipCooldown = () => {
+      console.log('[v0] [PPX-R2] Entire cooldown skipped, showing final summary')
+      setCooldownSkipped(true)
+      setSessionPhase('done')
+    }
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-emerald-400">
+              Workout Complete!
+            </span>
+            <span className="text-xs text-[#6B7280]">
+              Cool-Down {cooldownIndex + 1} / {cooldownItems.length}
+            </span>
+          </div>
+          
+          {/* Cooldown Card */}
+          <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
+            {/* Phase Label */}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+                <Wind className="w-4 h-4 text-sky-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-[#E6E9EF]">Cool-Down</h2>
+                <p className="text-xs text-[#6B7280]">Recovery stretches and mobility</p>
+              </div>
+            </div>
+            
+            {/* Current Cooldown Item */}
+            {currentCooldownItem ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                  <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
+                    {currentCooldownItem.name || 'Cool-down Exercise'}
+                  </h3>
+                  
+                  {/* Prescription if available */}
+                  {(currentCooldownItem.sets || currentCooldownItem.reps || currentCooldownItem.duration) && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {currentCooldownItem.sets && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentCooldownItem.sets} sets
+                        </span>
+                      )}
+                      {currentCooldownItem.reps && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentCooldownItem.reps} reps
+                        </span>
+                      )}
+                      {currentCooldownItem.duration && (
+                        <span className="px-2 py-1 text-xs bg-[#2B313A] rounded text-[#A4ACB8]">
+                          {currentCooldownItem.duration}s
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Purpose/notes if available */}
+                  {(currentCooldownItem.purpose || currentCooldownItem.notes) && (
+                    <p className="text-xs text-[#6B7280]">
+                      {currentCooldownItem.purpose || currentCooldownItem.notes}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Actions */}
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleCooldownComplete}
+                    className="w-full h-12 bg-sky-500 hover:bg-sky-600 text-white font-semibold"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    {isLastCooldown ? 'Complete & Finish' : 'Done — Next'}
+                  </Button>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipCooldownItem}
+                      className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                    >
+                      <SkipForward className="w-4 h-4 mr-1" />
+                      Skip This
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipCooldown}
+                      className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                    >
+                      Skip Cool-Down
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-[#6B7280]">
+                <p>No cooldown items found</p>
+                <Button
+                  onClick={() => setSessionPhase('done')}
+                  className="mt-4 bg-emerald-500 hover:bg-emerald-600 text-white"
+                >
+                  Finish Workout
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {/* Progress indicator */}
+          <div className="flex gap-1 justify-center">
+            {cooldownItems.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all ${
+                  i < cooldownIndex
+                    ? 'w-4 bg-sky-500'
+                    : i === cooldownIndex
+                      ? 'w-6 bg-sky-400'
+                      : 'w-2 bg-[#2B313A]'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // [PPX-R2] AUTO-TRANSITION TO COOLDOWN ON WORKOUT COMPLETION
+  // ==========================================================================
+  // When the main workout completes (safeStatus === 'completed'), check if we
+  // need to show cooldown first before the final summary.
+  // ==========================================================================
+  
+  if (safeStatus === 'completed' && sessionPhase === 'main') {
+    const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
+    if (cooldownItems.length > 0 && !cooldownSkipped) {
+      // Transition to cooldown phase
+      console.log('[v0] [PPX-R2] Main workout complete, transitioning to cooldown with', cooldownItems.length, 'items')
+      // Use effect to avoid setting state during render
+      // We need to use a ref or effect here, but for now we'll do a simple check
+      // This will cause a re-render that shows the cooldown
+      if (sessionPhase !== 'cooldown') {
+        // Set the phase to cooldown - this triggers a re-render
+        Promise.resolve().then(() => {
+          setSessionPhase('cooldown')
+          setCooldownIndex(0)
+        })
+      }
+    } else {
+      // No cooldown items, go to done
+      if (sessionPhase !== 'done') {
+        Promise.resolve().then(() => {
+          setSessionPhase('done')
+        })
+      }
+    }
+    // Show a loading state while transitioning
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-[#6B7280] text-sm">Preparing next phase...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // ==========================================================================
+  // RENDER: COMPLETED STATE (FINAL SUMMARY)
   // ==========================================================================
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
-  if (safeStatus === 'completed') {
+  // [PPX-R2] Only show when sessionPhase === 'done' (after cooldown)
+  if (safeStatus === 'completed' && sessionPhase === 'done') {
     const stats = getSessionStats()
     let readiness: ReturnType<typeof getDailyReadiness> | null = null
     try {

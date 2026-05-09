@@ -161,6 +161,43 @@ From recent conversation:
     - Removed the "Workout Summary / Review Mode" render branch (dead code after fix)
     - Simplified auto-transition effect (no longer checks showWorkoutReview)
   - Behavior now matches warmup: Back within phase, disabled at first item
+- PPX-R4G: Cooldown First-Item Back to Completed WO Context — COMPLETE (2026-05-09)
+  - Previous state: R4E fixed cooldown internal navigation but Cool-Down 1 Back was disabled
+  - User expectation: Cool-Down 1 Back should return to completed workout context, not be dead
+  - FIX:
+    - Added new `SessionPhase = 'completedMain'` for completed workout context
+    - Cool-Down 1 Back now transitions to `completedMain` phase
+    - `completedMain` render shows workout summary with:
+      - "Continue to Cool-Down" button (returns to cooldown at index 0)
+      - "Skip Cool-Down & Finish" button (goes to final done)
+    - State preserved: logged sets, selected bands, cooldown progress
+    - No auto-transition from `completedMain` (only from `main`)
+  - Navigation contract now complete:
+    - Cool-Down 2+ Back → previous cooldown item
+    - Cool-Down 1 Back → completedMain (workout summary with continue option)
+    - completedMain → cooldown OR done
+- PPX-R5: Warm-Up + Cool-Down Adaptiveness Truth-to-UI Audit — NOT_STARTED
+  - PURPOSE: Prove whether WU/CD are truly adaptive or only showing adaptive labels
+  - SCOPE: Verify item selection, ordering, dosage, rationale labels, mobility/flexibility
+    inclusion, joint-prep inclusion, recovery selection are derived from real onboarding/
+    session/adaptive truth and survive the full truth-to-UI corridor
+  - INPUT TRUTH TO VERIFY:
+    - Selected skills (planche, front lever, muscle-up, HSPU)
+    - Strength emphasis (Pull Strength, Push Strength, etc.)
+    - Flexibility goals (pancake, pike, front split, side split)
+    - Joint cautions (wrist, elbow, shoulder, hip, knee, ankle)
+    - Equipment availability
+    - Session intensity and type
+    - Recovery/fatigue/RPE signals
+  - CORRIDOR TO AUDIT:
+    - Generator output → saved payload → loaded/normalized → live workout handoff
+    - StreamlinedWorkoutSession render → visible WU/CD item list → visible dosage
+    - Visible adaptive label/rationale
+  - ACCEPTANCE CRITERIA:
+    - Labels alone are NOT proof
+    - Must show at least one scenario where changing input truth changes WU/CD
+      item selection, dosage, order, or rationale
+    - Must include exact user-visible verification points
 
 ---
 
@@ -417,7 +454,7 @@ From recent conversation:
 | 25.6 Exercise-level coaching | NOT_STARTED | — | — | — | — | — | — |
 | 25.7 Rest/RPE intelligence | NOT_STARTED | — | — | — | — | — | — |
 | 25.8 Skill representation | NOT_STARTED | — | — | — | — | — | — |
-| 25.9 Recovery coaching | NOT_STARTED | — | — | — | — | — | — |
+| 25.9 Recovery coaching | NOT_STARTED | — | — | — | �� | — | — |
 | 25.10 User control | NOT_STARTED | — | — | — | — | — | — |
 | 25.11 Noise reduction | NOT_STARTED | — | — | — | — | — | — |
 | 25.12 Truth-to-UI lock | NOT_STARTED | — | — | — | — | — | — |

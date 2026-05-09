@@ -11134,9 +11134,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       <div className="flex justify-between">
                         <span className="text-[#6B7280]">Target</span>
                         <span className="text-[#E6E9EF]">
-                          {safeCurrentExercise.reps ? `${safeCurrentExercise.reps} reps` : ''}
-                          {safeCurrentExercise.holdSeconds ? `${safeCurrentExercise.holdSeconds}s hold` : ''}
-                          {!safeCurrentExercise.reps && !safeCurrentExercise.holdSeconds && safeCurrentExercise.repsOrTime ? safeCurrentExercise.repsOrTime : ''}
+                          {safeCurrentExercise.repsOrTime || 'As prescribed'}
                         </span>
                       </div>
                       {safeCurrentExercise.targetRPE && (
@@ -11145,78 +11143,16 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                           <span className="text-[#E6E9EF]">{safeCurrentExercise.targetRPE}</span>
                         </div>
                       )}
-                      {(safeCurrentExercise as AdaptiveExercise).bandRecommendation && (
+                      {(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Band Rec</span>
-                          <span className="text-[#E6E9EF] capitalize">{(safeCurrentExercise as AdaptiveExercise).bandRecommendation}</span>
+                          <span className="text-[#E6E9EF] capitalize">{(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation}</span>
                         </div>
                       )}
-                      {(safeCurrentExercise as AdaptiveExercise).selectionReason && (
+                      {safeCurrentExercise.selectionReason && (
                         <div className="mt-2 pt-2 border-t border-[#2B313A]">
                           <span className="text-[#6B7280]">Why: </span>
-                          <span className="text-[#A4ACB8]">{(safeCurrentExercise as AdaptiveExercise).selectionReason}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                <p className="text-xs text-[#6B7280] text-center">
-                  More adaptation will appear after logged performance data is available.
-                </p>
-              </div>
-            )}
-                  </p>
-                  
-                  {/* Session stress context if available */}
-                  {(safeWorkoutSessionContract.stressRole || safeWorkoutSessionContract.stressLevel) && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {safeWorkoutSessionContract.stressRole && (
-                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
-                          {safeWorkoutSessionContract.stressRole.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                      {safeWorkoutSessionContract.stressLevel && (
-                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
-                          {safeWorkoutSessionContract.stressLevel}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Current exercise info */}
-                {liveSnapshot && (
-                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">
-                      Current Exercise
-                    </h4>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-[#6B7280]">Exercise</span>
-                        <span className="text-[#E6E9EF]">{liveSnapshot.exerciseName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#6B7280]">Set</span>
-                        <span className="text-[#E6E9EF]">{liveSnapshot.setNumber} of {liveSnapshot.totalSets}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#6B7280]">Target</span>
-                        <span className="text-[#E6E9EF]">
-                          {liveSnapshot.targetReps ? `${liveSnapshot.targetReps} reps` : ''}
-                          {liveSnapshot.targetHoldSeconds ? `${liveSnapshot.targetHoldSeconds}s hold` : ''}
-                        </span>
-                      </div>
-                      {liveSnapshot.targetRPE && (
-                        <div className="flex justify-between">
-                          <span className="text-[#6B7280]">Target RPE</span>
-                          <span className="text-[#E6E9EF]">{liveSnapshot.targetRPE}</span>
-                        </div>
-                      )}
-                      {liveSnapshot.selectedBand && (
-                        <div className="flex justify-between">
-                          <span className="text-[#6B7280]">Band</span>
-                          <span className="text-[#E6E9EF] capitalize">{liveSnapshot.selectedBand}</span>
+                          <span className="text-[#A4ACB8]">{safeCurrentExercise.selectionReason}</span>
                         </div>
                       )}
                     </div>

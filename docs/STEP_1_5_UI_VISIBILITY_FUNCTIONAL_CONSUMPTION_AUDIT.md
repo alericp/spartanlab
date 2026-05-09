@@ -71,6 +71,13 @@ From recent conversation:
   - FIX: Added always-visible recommendation/tracking block to MultiBandSelector with exercise context
   - Displays: "Recommended: X", "Maintain X", "Start with: X", "Tracking band history"
   - Uses getBandRecommendation/getExerciseBandHistory for real history-based display
+- PPX-R2I: Band History Persistence + Later-Session Recommendation Consumption Fix — COMPLETE (2026-05-09)
+  - ROOT CAUSE: exerciseId mismatch between band history commit and lookup
+  - Commit used: `exercise.id || name.toLowerCase().replace()` (line 5447)
+  - Lookup used: `exerciseName?.toLowerCase().replace()` only (line 2520)
+  - FIX: Added exerciseId to LiveWorkoutSnapshot, LiveWorkoutExecutionSurface, ActiveWorkoutStartCorridor prop chain
+  - Now uses consistent exerciseId for both commit and lookup
+  - Later-session recommendations will match prior completed band history
 
 ---
 

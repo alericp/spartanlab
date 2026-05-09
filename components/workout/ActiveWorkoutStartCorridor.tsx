@@ -329,6 +329,8 @@ export interface ActiveWorkoutCorridorProps {
   sessionLabel: string
   
   // Current exercise (plain values, not computed)
+  // [PPX-R2I] exerciseId for consistent band history lookup
+  exerciseId?: string
   exerciseName: string
   exerciseCategory: string
   exerciseSets: number
@@ -993,6 +995,8 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseI
 
 export function ActiveWorkoutStartCorridor({
   sessionLabel,
+  // [PPX-R2I] exerciseId for consistent band history lookup
+  exerciseId,
   exerciseName,
   mode,
   exerciseCategory,

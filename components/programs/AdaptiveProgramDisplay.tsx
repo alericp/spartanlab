@@ -1149,79 +1149,202 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
         
-        {/* [W.W8 + PPX-5] SELECTED SKILL REPRESENTATION TRUTH — Compact by default, expandable for many skills */}
+        {/* [W.W8 + PPX-5 + STEP 25.8] SELECTED SKILL REPRESENTATION TRUTH — Compact by default, expandable for all skills */}
         {selectedSkillRepresentations.length > 0 && (() => {
           // [PPX-5] Compute skill coverage summary for compact display
           const primaryCount = selectedSkillRepresentations.filter(r => r.state === 'headline_priority').length
           const directCount = selectedSkillRepresentations.filter(r => r.state === 'direct').length
           const supportCount = selectedSkillRepresentations.filter(r => r.state === 'support' || r.state === 'accessory_carryover').length
-          const deferredCount = selectedSkillRepresentations.filter(r => r.state === 'deferred').length
+          const deferredCount = selectedSkillRepresentations.filter(r => r.state === 'deferred' || r.state === 'compressed').length
           const underrepCount = selectedSkillRepresentations.filter(r => r.state === 'underrepresented' || r.state === 'unknown').length
           
-          // [PPX-5] Show compact summary when more than 5 skills, with expand option
-          const showCompactMode = selectedSkillRepresentations.length > 5
+          // [STEP 25.8] Show compact summary when more than 4 skills, with expand option
+          const showCompactMode = selectedSkillRepresentations.length > 4
           const visibleSkills = showCompactMode && !showSkillCoverageExpanded
-            ? selectedSkillRepresentations.slice(0, 4)
+            ? selectedSkillRepresentations.slice(0, 3)
             : selectedSkillRepresentations
           const hiddenCount = selectedSkillRepresentations.length - visibleSkills.length
           
-          // [PPX-5] Build compact summary line
+          // [STEP 25.8] Group skills by representation state for expanded view
+          const primarySkills = selectedSkillRepresentations.filter(r => r.state === 'headline_priority')
+          const directSkills = selectedSkillRepresentations.filter(r => r.state === 'direct')
+          const supportSkills = selectedSkillRepresentations.filter(r => r.state === 'support' || r.state === 'accessory_carryover')
+          const deferredSkills = selectedSkillRepresentations.filter(r => r.state === 'deferred' || r.state === 'compressed')
+          const underrepSkills = selectedSkillRepresentations.filter(r => r.state === 'underrepresented' || r.state === 'unknown')
+          
+          // [STEP 25.8] Build compact summary line with counts
           const summaryParts: string[] = []
-          if (primaryCount > 0) summaryParts.push(`${primaryCount} primary`)
-          if (directCount > 0) summaryParts.push(`${directCount} direct`)
-          if (supportCount > 0) summaryParts.push(`${supportCount} support`)
+          const trainedCount = primaryCount + directCount + supportCount
+          if (trainedCount > 0) summaryParts.push(`${trainedCount} trained`)
           if (deferredCount > 0) summaryParts.push(`${deferredCount} deferred`)
-          if (underrepCount > 0) summaryParts.push(`${underrepCount} needs attention`)
+          if (underrepCount > 0) summaryParts.push(`${underrepCount} underrepresented`)
           
           return (
             <div className="px-4 py-2.5 border-t border-[#333]/30">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
-                {/* [PPX-5] Compact summary when collapsed */}
-                {showCompactMode && !showSkillCoverageExpanded && summaryParts.length > 0 && (
-                  <span className="text-[10px] text-[#6A6A6A] mr-1">
-                    ({summaryParts.join(' · ')})
-                  </span>
-                )}
-                {visibleSkills.map((rep) => {
-                  const styles = getRepresentationStateStyles(rep.state)
-                  return (
-                    <span 
-                      key={rep.skill}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${styles.chipClass}`}
-                      title={rep.explanation}
-                    >
-                      <span>{rep.label}</span>
-                      {/* Show badge for non-primary states to clarify representation */}
-                      {rep.state !== 'headline_priority' && rep.state !== 'direct' && (
-                        <span className={`text-[8px] ${styles.badgeClass}`}>
-                          ({rep.visibleBadge})
-                        </span>
-                      )}
+              {/* [STEP 25.8] Compact row view (default) */}
+              {!showSkillCoverageExpanded && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
+                  {/* Compact summary when collapsed */}
+                  {showCompactMode && summaryParts.length > 0 && (
+                    <span className="text-[10px] text-[#6A6A6A] mr-1">
+                      ({summaryParts.join(' · ')})
                     </span>
-                  )
-                })}
-                {/* [PPX-5] Show more/less toggle when many skills */}
-                {showCompactMode && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSkillCoverageExpanded(!showSkillCoverageExpanded)}
-                    className="text-[10px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-0.5"
-                  >
-                    {showSkillCoverageExpanded ? (
-                      <>
-                        <ChevronUp className="w-3 h-3" />
-                        <span>Show less</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>+{hiddenCount} more</span>
-                        <ChevronDown className="w-3 h-3" />
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
+                  )}
+                  {visibleSkills.map((rep) => {
+                    const styles = getRepresentationStateStyles(rep.state)
+                    return (
+                      <span 
+                        key={rep.skill}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${styles.chipClass}`}
+                        title={rep.explanation}
+                      >
+                        <span>{rep.label}</span>
+                        {/* Show badge for non-primary states to clarify representation */}
+                        {rep.state !== 'headline_priority' && rep.state !== 'direct' && (
+                          <span className={`text-[8px] ${styles.badgeClass}`}>
+                            ({rep.visibleBadge})
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })}
+                  {/* Show more toggle when there are hidden skills */}
+                  {showCompactMode && hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSkillCoverageExpanded(true)}
+                      className="text-[10px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-0.5"
+                    >
+                      <span>+{hiddenCount} more</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  )}
+                  {/* Expand button when all skills visible but we want detail */}
+                  {!showCompactMode && selectedSkillRepresentations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSkillCoverageExpanded(true)}
+                      className="text-[10px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-0.5 ml-auto"
+                    >
+                      <span>Details</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+              
+              {/* [STEP 25.8] Expanded detail view — shows all skills with explanations */}
+              {showSkillCoverageExpanded && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium">
+                      Your Goals — {selectedSkillRepresentations.length} selected skills
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSkillCoverageExpanded(false)}
+                      className="text-[10px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-0.5"
+                    >
+                      <span>Collapse</span>
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                  </div>
+                  
+                  {/* Primary / Headline skills */}
+                  {primarySkills.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Target className="w-3 h-3 text-[#E63946]" />
+                        <span className="text-[10px] text-[#E63946] font-medium">Primary Focus</span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {primarySkills.map((rep) => (
+                          <div key={rep.skill} className="flex items-start gap-2">
+                            <span className="text-[11px] text-[#C8C8C8] font-medium">{rep.label}</span>
+                            <span className="text-[10px] text-[#6A6A6A]">— {rep.explanation}</span>
+                            {rep.directExposure !== null && (
+                              <span className="text-[9px] text-[#5A5A5A] ml-auto">{rep.directExposure}+ sessions</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Direct training skills */}
+                  {directSkills.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="w-3 h-3 text-[#8A8A8A]" />
+                        <span className="text-[10px] text-[#8A8A8A] font-medium">Direct Training</span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {directSkills.map((rep) => (
+                          <div key={rep.skill} className="flex items-start gap-2">
+                            <span className="text-[11px] text-[#A8A8A8]">{rep.label}</span>
+                            <span className="text-[10px] text-[#6A6A6A]">— {rep.explanation}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Support / Accessory skills */}
+                  {supportSkills.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="w-3 h-3 text-amber-400/70" />
+                        <span className="text-[10px] text-amber-400/70 font-medium">Support / Carryover</span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {supportSkills.map((rep) => (
+                          <div key={rep.skill} className="flex items-start gap-2">
+                            <span className="text-[11px] text-[#9A9A9A]">{rep.label}</span>
+                            <span className="text-[10px] text-[#6A6A6A]">— {rep.explanation}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Deferred / Compressed skills */}
+                  {deferredSkills.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <RotateCcw className="w-3 h-3 text-blue-400/70" />
+                        <span className="text-[10px] text-blue-400/70 font-medium">Deferred This Week</span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {deferredSkills.map((rep) => (
+                          <div key={rep.skill} className="flex items-start gap-2">
+                            <span className="text-[11px] text-[#7A7A7A]">{rep.label}</span>
+                            <span className="text-[10px] text-[#5A5A5A]">— {rep.explanation}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Underrepresented / Unknown skills */}
+                  {underrepSkills.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-[#5A5A5A]" />
+                        <span className="text-[10px] text-[#5A5A5A] font-medium">Needs Attention</span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {underrepSkills.map((rep) => (
+                          <div key={rep.skill} className="flex items-start gap-2">
+                            <span className="text-[11px] text-[#6A6A6A]">{rep.label}</span>
+                            <span className="text-[10px] text-[#5A5A5A]">— {rep.explanation}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })()}

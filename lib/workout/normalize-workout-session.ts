@@ -199,6 +199,56 @@ function normalizeExecutionTruth(raw: unknown): WorkoutExerciseContract['executi
   }
 }
 
+/**
+ * [PPX-R5] Normalize warmup/cooldown adaptation metadata
+ * This preserves the computed adaptation proof from program generation
+ */
+function normalizeAdaptation(
+  raw: unknown,
+  type: 'warmup' | 'cooldown'
+): WorkoutSessionContract['warmupAdaptation'] | WorkoutSessionContract['cooldownAdaptation'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  
+  const adapt = raw as Record<string, unknown>
+  
+  // Base fields common to both warmup and cooldown
+  const base = {
+    focus: safeString(adapt.focus, ''),
+    focusLabel: safeString(adapt.focusLabel, ''),
+    rationale: safeString(adapt.rationale, ''),
+  }
+  
+  // Skip if no meaningful content
+  if (!base.focus && !base.focusLabel && !base.rationale) {
+    return undefined
+  }
+  
+  if (type === 'warmup') {
+    return {
+      ...base,
+      targetAreas: Array.isArray(adapt.targetAreas) 
+        ? adapt.targetAreas.filter((a): a is string => typeof a === 'string')
+        : undefined,
+      adaptationSource: typeof adapt.adaptationSource === 'string'
+        ? adapt.adaptationSource as 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+        : undefined,
+    }
+  } else {
+    return {
+      ...base,
+      targetRegions: Array.isArray(adapt.targetRegions)
+        ? adapt.targetRegions.filter((r): r is string => typeof r === 'string')
+        : undefined,
+      flexibilityGoals: Array.isArray(adapt.flexibilityGoals)
+        ? adapt.flexibilityGoals.filter((g): g is string => typeof g === 'string')
+        : undefined,
+      adaptationSource: typeof adapt.adaptationSource === 'string'
+        ? adapt.adaptationSource as 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+        : undefined,
+    }
+  }
+}
+
 // =============================================================================
 // MAIN SESSION NORMALIZER
 // =============================================================================
@@ -243,6 +293,11 @@ export function normalizeWorkoutSession(raw: unknown): WorkoutSessionContract | 
     .map((ex, idx) => normalizeExercise(ex, idx))
     .filter((ex): ex is WorkoutExerciseContract => ex !== null)
   
+  // [PPX-R5] Normalize warmup/cooldown adaptation metadata
+  // These fields are critical for proving adaptive WU/CD in the UI
+  const warmupAdaptation = normalizeAdaptation(session.warmupAdaptation, 'warmup')
+  const cooldownAdaptation = normalizeAdaptation(session.cooldownAdaptation, 'cooldown')
+  
   // Build the normalized session contract
   const normalized: WorkoutSessionContract = {
     id: safeString(session.id, `session-${Date.now()}`),
@@ -257,6 +312,9 @@ export function normalizeWorkoutSession(raw: unknown): WorkoutSessionContract | 
     exercises: normalizedExercises,
     warmup: normalizedWarmup,
     cooldown: normalizedCooldown,
+    // [PPX-R5] Preserve adaptation metadata for UI proof
+    warmupAdaptation,
+    cooldownAdaptation,
   }
   
   console.log('[workout-normalizer] Session normalization complete:', {

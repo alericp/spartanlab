@@ -266,10 +266,14 @@ export function resolveExercisePrescriptionUnitTruth(
   // 1. Identify whether this exercise is a hold.
   const isDynamicByName = name && nameMatches(name, DYNAMIC_DRILL_NAME_PATTERNS)
   const isStaticByName = name && nameMatches(name, STATIC_HOLD_NAME_PATTERNS)
-  // Name signal beats metadata. A "Pike Shoulder Taps" in a hold-tagged
-  // accessory bucket should still be reps. A "Wall Handstand Hold" with no
-  // metadata flag should still be a hold.
-  const isHold = isStaticByName ? true : isDynamicByName ? false : !!input.isIsometric
+  // [PPX-3 FIX] Dynamic pattern wins over static pattern when both match.
+  // "Planche Lean Push-Ups" matches both `/\bplanche\s+lean\b/i` (static) and
+  // `/\bpush[\s-]?ups?\b/i` (dynamic). Prior logic prioritized static, incorrectly
+  // treating the dynamic push-up as a hold. Now dynamic check comes first:
+  // dynamic-named → not a hold; static-named → hold; fallback to metadata flag.
+  // A "Pike Shoulder Taps" in a hold-tagged accessory bucket stays reps.
+  // A "Wall Handstand Hold" with no metadata flag stays a hold.
+  const isHold = isDynamicByName ? false : isStaticByName ? true : !!input.isIsometric
 
   // 2. Pass-through for non-holds. The renderer already handles rep formatting.
   if (!isHold) {

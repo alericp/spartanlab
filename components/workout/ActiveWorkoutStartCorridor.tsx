@@ -194,7 +194,7 @@ function GroupedMethodScannerStrip({
  * - Participate in stage-lock experiments
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -202,7 +202,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
 import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
-import type { ResistanceBandColor } from '@/lib/band-progression-engine'
+import { 
+  type ResistanceBandColor,
+  // [PPX-R2H] Band history functions for visible recommendation display
+  getBandRecommendation,
+  getExerciseBandHistory,
+  supportsBandAssistance,
+} from '@/lib/band-progression-engine'
 // [LIVE-WORKOUT-NORMALIZERS] Import canonical coaching signal types
 import { 
   COACHING_SIGNAL_LABELS,
@@ -797,14 +803,18 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
  * [LIVE-WORKOUT-AUTHORITY] Multi-Band Selector
  * Allows selecting multiple assistance bands simultaneously.
  * When bands are selected, removing one keeps the others.
+ * [PPX-R2H] Now includes always-visible recommendation/tracking display.
  */
 interface MultiBandSelectorProps {
   selectedBands: ResistanceBandColor[]
   onChange: (bands: ResistanceBandColor[]) => void
   recommendedBand?: ResistanceBandColor
+  // [PPX-R2H] Exercise context for history-based recommendations
+  exerciseId?: string
+  exerciseName?: string
 }
 
-function MultiBandSelector({ selectedBands, onChange, recommendedBand }: MultiBandSelectorProps) {
+function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseId, exerciseName }: MultiBandSelectorProps) {
   const hasNoBands = selectedBands.length === 0
   
   const toggleBand = (band: ResistanceBandColor) => {
@@ -826,13 +836,86 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand }: MultiBa
     ALL_BAND_COLORS.indexOf(a) - ALL_BAND_COLORS.indexOf(b)
   )
   
+  // [PPX-R2H] Compute band recommendation display - ALWAYS show something
+  const bandDisplay = useMemo(() => {
+    // Try to get history-based recommendation if exercise context provided
+    let historyCount = 0
+    let historyRecommendedBand: ResistanceBandColor | null = null
+    let historyReason = ''
+    
+    if (exerciseId && exerciseName) {
+      try {
+        if (supportsBandAssistance(exerciseId)) {
+          const history = getExerciseBandHistory(exerciseId)
+          historyCount = history.length
+          if (historyCount > 0) {
+            const recommendation = getBandRecommendation(exerciseId, exerciseName)
+            historyRecommendedBand = recommendation.recommendedBand
+            historyReason = recommendation.reason
+          }
+        }
+      } catch {
+        // Fail silently, use fallbacks
+      }
+    }
+    
+    // Determine display state based on available data
+    const effectiveRec = historyRecommendedBand || recommendedBand
+    const isHistoryBased = historyCount > 0 && historyRecommendedBand
+    
+    if (isHistoryBased && effectiveRec) {
+      if (historyCount >= 6) {
+        // Strong history - recommend with confidence
+        return {
+          label: `Recommended: ${BAND_SHORT_LABELS[effectiveRec]}`,
+          detail: `Based on ${historyCount} logged sets`,
+          color: 'text-emerald-400',
+          bgColor: 'bg-emerald-500/10',
+        }
+      } else {
+        // Building history - maintain current
+        return {
+          label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
+          detail: `${historyCount} sets logged — building history`,
+          color: 'text-amber-400',
+          bgColor: 'bg-amber-500/10',
+        }
+      }
+    } else if (effectiveRec) {
+      // Starting recommendation from execution truth
+      return {
+        label: `Start with: ${BAND_SHORT_LABELS[effectiveRec]}`,
+        detail: 'Initial recommendation',
+        color: 'text-[#A4ACB8]',
+        bgColor: 'bg-[#2B313A]/50',
+      }
+    } else {
+      // No recommendation - tracking fallback (ALWAYS visible)
+      return {
+        label: 'Tracking band history',
+        detail: 'Log band-assisted sets to build recommendations',
+        color: 'text-[#6B7280]',
+        bgColor: 'bg-[#1A1D21]/50',
+      }
+    }
+  }, [exerciseId, exerciseName, recommendedBand])
+  
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">Assistance Band(s)</span>
-        {recommendedBand && (
-          <span className="text-xs text-[#6B7280]">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
-        )}
+      </div>
+      
+      {/* [PPX-R2H] ALWAYS VISIBLE recommendation/tracking status block */}
+      <div className={`px-2.5 py-1.5 rounded-md ${bandDisplay.bgColor} border border-[#2B313A]/40`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-medium ${bandDisplay.color}`}>
+            {bandDisplay.label}
+          </span>
+        </div>
+        <p className="text-[10px] text-[#6B7280] mt-0.5">
+          {bandDisplay.detail}
+        </p>
       </div>
       
       {/* Selected bands summary */}
@@ -2429,10 +2512,13 @@ export function ActiveWorkoutStartCorridor({
             {bandSelectable && (
               showMultiBandSelector && onSetSelectedBands ? (
                 // True multi-band selector for band-assisted exercises
+                // [PPX-R2H] Pass exercise context for history-based recommendations
                 <MultiBandSelector 
                   selectedBands={selectedBands} 
                   onChange={onSetSelectedBands} 
-                  recommendedBand={recommendedBand} 
+                  recommendedBand={recommendedBand}
+                  exerciseId={exerciseName?.toLowerCase().replace(/\s+/g, '_')}
+                  exerciseName={exerciseName}
                 />
               ) : (
                 // Legacy single-band selector fallback

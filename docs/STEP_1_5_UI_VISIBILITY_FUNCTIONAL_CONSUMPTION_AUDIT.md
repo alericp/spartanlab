@@ -65,6 +65,12 @@ From recent conversation:
 - PPX-R2F: Band Recommendation Visible Proof Lock — COMPLETE (2026-05-09)
   - Recent sets display shows styled band chips with multi-band support (RED+GRN)
   - Full corridor verified: selector → state → completedSet → recent set UI → history → recommendation → active card
+- PPX-R2H: Live Active MultiBandSelector Display-Corridor Fix — COMPLETE (2026-05-09)
+  - ROOT CAUSE: Prior fix was in wrong selector path (BandSelector in StreamlinedWorkoutSession)
+  - ACTUAL PATH: ActiveWorkoutStartCorridor.tsx → MultiBandSelector is the live production render
+  - FIX: Added always-visible recommendation/tracking block to MultiBandSelector with exercise context
+  - Displays: "Recommended: X", "Maintain X", "Start with: X", "Tracking band history"
+  - Uses getBandRecommendation/getExerciseBandHistory for real history-based display
 
 ---
 

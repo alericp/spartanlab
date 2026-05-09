@@ -133,6 +133,22 @@ From recent conversation:
       - If at first exercise/set AND warmup exists → goes to warmup
       - Otherwise → normal previous set/exercise navigation
   - No new header clutter, all navigation follows existing bottom nav style
+- PPX-R4D: Warm-Up + Cooldown Phase Back Placement and Function Fix — COMPLETE (2026-05-09)
+  - Previous state:
+    - Warmup still had top/header Back button with unsafe `window.location.reload()` fallback
+    - Cooldown Back was visually correct but only called `setSessionPhase('main')` which didn't work
+      because auto-transition effect immediately pushed back to cooldown
+  - ROOT CAUSE:
+    - Warmup Back: In header, used reload when at first item (unsafe)
+    - Cooldown Back: `sessionPhase` change alone insufficient — machine status stayed `completed`,
+      triggering the useEffect that auto-transitions completed+main → cooldown
+  - FIX:
+    - Warmup: Removed header Back button, added Back to action row (left of Skip This)
+    - Warmup: Back disabled at index 0 (no reload), enabled at index > 0 (goes to previous item)
+    - Cooldown: Added `showWorkoutReview` state to bypass auto-transition effect
+    - Cooldown: Back now sets `showWorkoutReview=true` + `sessionPhase='main'`
+    - Added new RENDER: WORKOUT REVIEW section that shows when `showWorkoutReview` is true
+    - Workout review shows summary with "Continue to Cool-Down" and "Skip Cool-Down & Finish" options
 
 ---
 

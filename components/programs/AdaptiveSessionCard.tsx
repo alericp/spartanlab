@@ -646,6 +646,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [showWarmup, setShowWarmup] = useState(false)
   const [showCooldown, setShowCooldown] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null)
+  // [PPX-4] State for emergency session options (20/15/10) disclosure
+  const [showEmergencyOptions, setShowEmergencyOptions] = useState(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
   const [showReplacementModal, setShowReplacementModal] = useState(false)
   const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
@@ -4265,18 +4267,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             
             const hasEmergencyOptions = emergencyVariants.length > 0
             
-            // Check if any emergency option is currently selected
+            // Check if any emergency option is currently selected - auto-expand disclosure
             const selectedIsEmergency = emergencyVariants.some(({ idx }) => selectedVariant === idx)
-            
-            // [PPX-4] Emergency disclosure state - auto-expand if emergency option is selected
-            const [showEmergencyOptions, setShowEmergencyOptions] = React.useState(selectedIsEmergency)
-            
-            // Auto-expand when an emergency option is selected
-            React.useEffect(() => {
-              if (selectedIsEmergency && !showEmergencyOptions) {
-                setShowEmergencyOptions(true)
-              }
-            }, [selectedIsEmergency, showEmergencyOptions])
+            const shouldShowEmergency = showEmergencyOptions || selectedIsEmergency
             
             const renderVariantButton = ({ variant, idx }: { variant: typeof session.variants[number], idx: number }) => {
               const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
@@ -4346,7 +4339,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 {/* [PPX-4] Emergency options disclosure (20/15/10) */}
                 {hasEmergencyOptions && (
                   <div className="pl-0.5">
-                    {!showEmergencyOptions ? (
+                    {!shouldShowEmergency ? (
                       <button
                         type="button"
                         onClick={() => setShowEmergencyOptions(true)}
@@ -4357,14 +4350,16 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       </button>
                     ) : (
                       <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setShowEmergencyOptions(false)}
-                          className="text-[11px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-1"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                          Emergency options
-                        </button>
+                        {!selectedIsEmergency && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmergencyOptions(false)}
+                            className="text-[11px] text-[#6A6A6A] hover:text-[#8A8A8A] transition-colors flex items-center gap-1"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                            Emergency options
+                          </button>
+                        )}
                         <div className="flex gap-2 flex-wrap items-center pl-1 py-1 border-l border-amber-500/20">
                           {emergencyVariants.map(renderVariantButton)}
                         </div>

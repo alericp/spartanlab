@@ -8049,7 +8049,6 @@ if (shouldShowLocalFallback) {
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        console.log('[v0] Warmup adaptive button clicked')
                         setAdaptiveDetailsOpen('warmup')
                       }}
                       className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors cursor-pointer"
@@ -8065,7 +8064,6 @@ if (shouldShowLocalFallback) {
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        console.log('[v0] Warmup adaptive button clicked (focus)')
                         setAdaptiveDetailsOpen('warmup')
                       }}
                       className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors cursor-pointer"
@@ -8346,7 +8344,6 @@ if (shouldShowLocalFallback) {
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      console.log('[v0] Cooldown adaptive button clicked')
                       setAdaptiveDetailsOpen('cooldown')
                     }}
                     className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors cursor-pointer"
@@ -8368,7 +8365,6 @@ if (shouldShowLocalFallback) {
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      console.log('[v0] Cooldown adaptive button clicked (focus)')
                       setAdaptiveDetailsOpen('cooldown')
                     }}
                     className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors cursor-pointer"
@@ -10127,7 +10123,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              console.log('[v0] Live workout adaptive button clicked')
               setAdaptiveDetailsOpen('live')
             }}
             className="flex items-center gap-1 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors px-2 py-1 rounded hover:bg-[#1A1F26]"

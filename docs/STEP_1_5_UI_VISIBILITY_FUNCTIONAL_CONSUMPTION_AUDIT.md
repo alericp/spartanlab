@@ -244,6 +244,40 @@ From recent conversation:
     - PPX-R4I Cool-Down 1 Back behavior unchanged
     - No LEGACY-ACTIVE-R3 regression
     - Direct final-set-to-cooldown unchanged
+- PPX-R7: Live Adaptive Details + Nonblocking Cooldown Return UX — COMPLETE (2026-05-09)
+  - PHASE 1: WU/CD Adaptive Details Modal Fix
+    - Added `type="button"` to prevent form submission issues
+    - Added `e.preventDefault()` and `e.stopPropagation()` to click handlers
+    - Added `cursor-pointer` class for visual feedback
+    - Added `aria-label` for accessibility
+    - Added debug console.log to trace click events
+  - PHASE 2: Live Workout Adaptive Info Button
+    - Added compact "Why this set?" button above LiveWorkoutExecutionSurface
+    - Shows session focus label and sparkle icon
+    - Opens same adaptive details dialog with 'live' mode
+    - Dialog shows current exercise info: name, sets, target, RPE, band recommendation, selection reason
+  - PHASE 3: Cooldown Return Banner - Nonblocking
+    - Changed from in-flow banner to fixed position toast
+    - Uses `fixed top-16 left-1/2 -translate-x-1/2 z-50`
+    - Added backdrop blur and shadow for floating appearance
+    - Added animate-in fade-in slide-in-from-top-2 for smooth appearance
+    - Added dismiss X button with `cooldownReturnBannerDismissed` state
+    - No longer pushes page content down or causes awkward scroll
+  - FILES CHANGED:
+    - StreamlinedWorkoutSession.tsx:
+      - Added `cooldownReturnBannerDismissed` state
+      - Updated `adaptiveDetailsOpen` type to include 'live'
+      - Fixed warmup/cooldown buttons with proper event handling
+      - Added live workout adaptive info button
+      - Added live workout content to adaptive details dialog
+      - Changed cooldown return banner to fixed toast
+  - CHECKLIST STATUS:
+    - [x] WU adaptive info modal opens and renders real truth
+    - [x] CD adaptive info modal opens and renders real truth
+    - [x] Live workout adaptive info modal exists
+    - [x] Cooldown return reminder no longer causes layout scroll/clutter
+    - [ ] Permanent workout history audit (follow-up item)
+    - [ ] Manual history deletion from DB (follow-up item)
 
 ---
 

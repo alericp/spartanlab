@@ -10348,9 +10348,32 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   <span className="text-[#E6E9EF] font-medium">
                     {set.actualReps > 0 ? `${set.actualReps}` : set.holdSeconds ? `${set.holdSeconds}s` : '—'}
                   </span>
-                  {set.bandUsed && set.bandUsed !== 'none' && (
-                    <span className="text-[#C1121F]">{set.bandUsed}</span>
-                  )}
+                  {/* [PPX-R2F] Band chip with multi-band support */}
+                  {(() => {
+                    // Prefer selectedBands array for multi-band, fall back to bandUsed
+                    const bands = set.selectedBands && set.selectedBands.length > 0 
+                      ? set.selectedBands.filter((b: ResistanceBandColor) => b !== 'none' as unknown)
+                      : set.bandUsed && set.bandUsed !== 'none' 
+                        ? [set.bandUsed] 
+                        : []
+                    if (bands.length === 0) return null
+                    
+                    // Get color styling for primary band
+                    const primaryBand = bands[0] as ResistanceBandColor
+                    const colors = BAND_COLORS[primaryBand]
+                    const label = bands.length > 1 
+                      ? bands.map((b: ResistanceBandColor) => BAND_SHORT_LABELS[b]).join('+')
+                      : BAND_SHORT_LABELS[primaryBand]
+                    
+                    return (
+                      <span 
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${colors?.bg || 'bg-[#2B313A]'} ${colors?.text || 'text-[#A4ACB8]'}`}
+                        title={bands.length > 1 ? `Multi-band: ${bands.join(', ')}` : primaryBand}
+                      >
+                        {label}
+                      </span>
+                    )
+                  })()}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[#A4ACB8]`}>RPE {set.actualRPE}</span>

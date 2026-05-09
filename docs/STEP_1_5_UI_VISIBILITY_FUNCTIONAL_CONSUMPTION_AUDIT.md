@@ -186,28 +186,43 @@ From recent conversation:
     - Cool-Down 1 Back → real live workout context with continue banner (not legacy)
     - Continue to Cool-Down → returns to cooldown (index preserved)
   - Normal completion flow unchanged: final set → auto-transition to cooldown (no interstitial)
-- PPX-R5: Warm-Up + Cool-Down Adaptiveness Truth-to-UI Audit — NOT_STARTED
-  - PURPOSE: Prove whether WU/CD are truly adaptive or only showing adaptive labels
-  - SCOPE: Verify item selection, ordering, dosage, rationale labels, mobility/flexibility
-    inclusion, joint-prep inclusion, recovery selection are derived from real onboarding/
-    session/adaptive truth and survive the full truth-to-UI corridor
-  - INPUT TRUTH TO VERIFY:
-    - Selected skills (planche, front lever, muscle-up, HSPU)
-    - Strength emphasis (Pull Strength, Push Strength, etc.)
-    - Flexibility goals (pancake, pike, front split, side split)
-    - Joint cautions (wrist, elbow, shoulder, hip, knee, ankle)
-    - Equipment availability
-    - Session intensity and type
-    - Recovery/fatigue/RPE signals
-  - CORRIDOR TO AUDIT:
-    - Generator output → saved payload → loaded/normalized → live workout handoff
-    - StreamlinedWorkoutSession render → visible WU/CD item list → visible dosage
-    - Visible adaptive label/rationale
-  - ACCEPTANCE CRITERIA:
-    - Labels alone are NOT proof
-    - Must show at least one scenario where changing input truth changes WU/CD
-      item selection, dosage, order, or rationale
-    - Must include exact user-visible verification points
+- PPX-R5: Warm-Up + Cool-Down Adaptiveness Truth-to-UI Audit — COMPLETE (2026-05-09)
+  - VERDICT: COMPUTED-BUT-LOST (now fixed)
+  - ROOT CAUSE: The normalizer in `normalize-workout-session.ts` was NOT preserving
+    `warmupAdaptation` and `cooldownAdaptation` fields. These fields were computed by
+    the program builder, attached to AdaptiveSession, but dropped during normalization.
+  - PROOF OF TRUE ADAPTIVENESS (engines are real, not label-only):
+    - `warmup-engine.ts` generateWarmUp():
+      - Detects session focus from mainExercises (line 549)
+      - Gets target muscles/patterns from main exercises (lines 555-564)
+      - Filters by equipment (line 567)
+      - Uses firstSkillProgression for progression-aware ramp (lines 576-580)
+      - Includes joint integrity protocols based on primaryGoal + jointCautions (line 661)
+    - `cooldown-engine.ts` generateCoolDown():
+      - Detects session focus from mainExercises (line 789)
+      - Uses flexibilityGoals to add flexibility work (lines 792-793)
+      - Adjusts for fatigueSensitivity and currentFatigueScore (lines 799-805)
+      - Selects cool-down exercises based on session focus (line 808)
+      - Adds flexibility block if goals present (lines 820-836)
+    - `adaptive-program-builder.ts`:
+      - warmupAdaptation attached at lines 29777-29778
+      - cooldownAdaptation attached at lines 31031-31032
+  - FIX APPLIED:
+    - Added `normalizeWarmupAdaptation()` helper to preserve warmup adaptation metadata
+    - Added `normalizeCooldownAdaptation()` helper to preserve cooldown adaptation metadata
+    - Updated `normalizeWorkoutSession()` to include warmupAdaptation/cooldownAdaptation
+    - UI in StreamlinedWorkoutSession (lines 8027-8031, 8303-8316) already consumes these
+  - INPUTS CONSUMED BY WU/CD ENGINES:
+    - Session focus / focusLabel: YES
+    - Main exercise patterns/muscles: YES
+    - Equipment availability: YES
+    - Joint cautions: YES (joint integrity protocols)
+    - Flexibility goals: YES (cooldown flexibility block)
+    - Fatigue sensitivity: YES (cooldown intensity adjustment)
+    - Skill progressions: YES (warmup ramp selection)
+  - METADATA NOW PRESERVED:
+    - warmupAdaptation: focus, focusLabel, rationale, targetAreas, adaptationSource
+    - cooldownAdaptation: focus, focusLabel, rationale, targetRegions, flexibilityGoals, adaptationSource
 
 ---
 

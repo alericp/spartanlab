@@ -85,6 +85,14 @@ From recent conversation:
   - Updated commit bridge to use canonical key for storage
   - Updated MultiBandSelector to use `getCanonicalBandHistory()` for lookup
   - Day 1 RED set on "Tuck Front Lever Hold" now found on Day 4 via canonical key match
+- PPX-R3A: Band Recommendation Intelligence Quality + Visible Reason Semantics — COMPLETE (2026-05-09)
+  - Previous state: "Recommended: RED / Based on 13 logged sets" was populated but shallow (count-only, no performance analysis)
+  - ROOT CAUSE: Recommendation used lastBandUsed + historyCount threshold, not actual RPE/quality/target analysis
+  - FIX: Created `getCanonicalBandRecommendation()` with full performance analysis
+  - Analyzes: RPE, quality (clean/shaky/failed), target hit ratio, performance trend (improving/stable/declining)
+  - Actions: maintain, reduce_assistance, increase_assistance, build_history, start, no_band
+  - Labels now show coaching actions: "Maintain RED", "Try YLW next", "Use GRN today"
+  - Details explain why: "RPE 7.5 — 80% clean", "Recent work suggests more support"
 
 ---
 

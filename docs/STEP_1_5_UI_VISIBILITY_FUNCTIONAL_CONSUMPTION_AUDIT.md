@@ -78,6 +78,13 @@ From recent conversation:
   - FIX: Added exerciseId to LiveWorkoutSnapshot, LiveWorkoutExecutionSurface, ActiveWorkoutStartCorridor prop chain
   - Now uses consistent exerciseId for both commit and lookup
   - Later-session recommendations will match prior completed band history
+- PPX-R2J: Band History Canonical Exercise Key Lock — COMPLETE (2026-05-09)
+  - ROOT CAUSE: Key mismatch - "Tuck Front Lever Hold" produced `tuck_front_lever_hold` but support/history used `front_lever_tuck`
+  - FIX: Created `resolveBandExerciseKey()` canonical resolver with pattern matching
+  - Maps "Tuck Front Lever Hold" / "tuck_front_lever_hold" → `front_lever_tuck`
+  - Updated commit bridge to use canonical key for storage
+  - Updated MultiBandSelector to use `getCanonicalBandHistory()` for lookup
+  - Day 1 RED set on "Tuck Front Lever Hold" now found on Day 4 via canonical key match
 
 ---
 

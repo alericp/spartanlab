@@ -311,6 +311,169 @@ export function supportsBandAssistance(exerciseId: string): boolean {
   return BAND_SUPPORTED_EXERCISES.has(exerciseId)
 }
 
+// =============================================================================
+// [PPX-R2J] CANONICAL BAND EXERCISE KEY RESOLVER
+// =============================================================================
+
+/**
+ * Movement family mappings for band-assisted exercises
+ */
+const BAND_EXERCISE_FAMILIES: Record<string, { canonicalPrefix: string; displayFamily: string }> = {
+  front_lever: { canonicalPrefix: 'front_lever', displayFamily: 'Front Lever' },
+  planche: { canonicalPrefix: 'planche', displayFamily: 'Planche' },
+  muscle_up: { canonicalPrefix: 'muscle_up', displayFamily: 'Muscle-Up' },
+  pull_up: { canonicalPrefix: 'pull_up', displayFamily: 'Pull-Up' },
+  hspu: { canonicalPrefix: 'hspu', displayFamily: 'HSPU' },
+  back_lever: { canonicalPrefix: 'back_lever', displayFamily: 'Back Lever' },
+  dragon_flag: { canonicalPrefix: 'dragon_flag', displayFamily: 'Dragon Flag' },
+  human_flag: { canonicalPrefix: 'human_flag', displayFamily: 'Human Flag' },
+  iron_cross: { canonicalPrefix: 'iron_cross', displayFamily: 'Iron Cross' },
+}
+
+/**
+ * Name pattern matchers to canonical IDs
+ * Order matters: more specific patterns should come first
+ */
+const CANONICAL_NAME_PATTERNS: Array<{ pattern: RegExp; canonicalId: string; family: string }> = [
+  // Front Lever variants (most specific first)
+  { pattern: /full\s*front\s*lever|front\s*lever\s*full/i, canonicalId: 'front_lever_full', family: 'front_lever' },
+  { pattern: /half\s*lay.*front\s*lever|front\s*lever.*half\s*lay/i, canonicalId: 'front_lever_half_lay', family: 'front_lever' },
+  { pattern: /straddle.*front\s*lever|front\s*lever.*straddle/i, canonicalId: 'front_lever_straddle', family: 'front_lever' },
+  { pattern: /adv(anced)?[\s_-]*tuck.*front\s*lever|front\s*lever.*adv(anced)?[\s_-]*tuck/i, canonicalId: 'front_lever_adv_tuck', family: 'front_lever' },
+  { pattern: /tuck.*front\s*lever|front\s*lever.*tuck/i, canonicalId: 'front_lever_tuck', family: 'front_lever' },
+  { pattern: /front\s*lever\s*raise/i, canonicalId: 'front_lever_raises', family: 'front_lever' },
+  { pattern: /front\s*lever\s*pull/i, canonicalId: 'front_lever_pulls', family: 'front_lever' },
+  { pattern: /front\s*lever/i, canonicalId: 'front_lever_tuck', family: 'front_lever' }, // Default FL to tuck
+  
+  // Planche variants
+  { pattern: /full\s*planche/i, canonicalId: 'full_planche', family: 'planche' },
+  { pattern: /straddle\s*planche/i, canonicalId: 'straddle_planche', family: 'planche' },
+  { pattern: /adv(anced)?[\s_-]*tuck\s*planche/i, canonicalId: 'adv_tuck_planche', family: 'planche' },
+  { pattern: /tuck\s*planche/i, canonicalId: 'tuck_planche', family: 'planche' },
+  { pattern: /planche\s*push[\s_-]*up/i, canonicalId: 'planche_pushup', family: 'planche' },
+  
+  // Muscle-up variants
+  { pattern: /ring\s*muscle[\s_-]*up/i, canonicalId: 'ring_muscle_up', family: 'muscle_up' },
+  { pattern: /muscle[\s_-]*up\s*negative/i, canonicalId: 'muscle_up_negative', family: 'muscle_up' },
+  { pattern: /muscle[\s_-]*up\s*transition/i, canonicalId: 'muscle_up_transition', family: 'muscle_up' },
+  { pattern: /muscle[\s_-]*up/i, canonicalId: 'muscle_up', family: 'muscle_up' },
+  
+  // Pull-up variants
+  { pattern: /one[\s_-]*arm\s*pull[\s_-]*up/i, canonicalId: 'one_arm_pullup', family: 'pull_up' },
+  { pattern: /archer\s*pull[\s_-]*up/i, canonicalId: 'archer_pullup', family: 'pull_up' },
+  { pattern: /typewriter\s*pull[\s_-]*up/i, canonicalId: 'typewriter_pullup', family: 'pull_up' },
+  { pattern: /chest[\s_-]*to[\s_-]*bar/i, canonicalId: 'chest_to_bar', family: 'pull_up' },
+  { pattern: /pull[\s_-]*up/i, canonicalId: 'pull_up', family: 'pull_up' },
+  
+  // HSPU variants
+  { pattern: /wall\s*hspu|wall\s*handstand\s*push[\s_-]*up/i, canonicalId: 'wall_hspu', family: 'hspu' },
+  { pattern: /hspu\s*negative|handstand\s*push[\s_-]*up\s*negative/i, canonicalId: 'hspu_negative', family: 'hspu' },
+  { pattern: /pike\s*push[\s_-]*up/i, canonicalId: 'pike_pushup', family: 'hspu' },
+  { pattern: /hspu|handstand\s*push[\s_-]*up/i, canonicalId: 'hspu', family: 'hspu' },
+  
+  // Other movements
+  { pattern: /dragon\s*flag/i, canonicalId: 'dragon_flag', family: 'dragon_flag' },
+  { pattern: /human\s*flag/i, canonicalId: 'human_flag', family: 'human_flag' },
+  { pattern: /back\s*lever/i, canonicalId: 'back_lever', family: 'back_lever' },
+  { pattern: /iron\s*cross/i, canonicalId: 'iron_cross', family: 'iron_cross' },
+]
+
+/**
+ * Result of canonical key resolution
+ */
+export interface CanonicalBandKeyResult {
+  canonicalKey: string
+  familyKey: string
+  displayName: string
+  supportsBandAssistance: boolean
+  matchSource: 'exact_id' | 'name_pattern' | 'normalized_name' | 'fallback'
+  reason: string
+}
+
+/**
+ * Resolve canonical band exercise key from various input formats
+ * This ensures consistent keys for storage, retrieval, and support detection
+ */
+export function resolveBandExerciseKey(input: {
+  exerciseId?: string | null
+  exerciseName?: string | null
+  category?: string | null
+}): CanonicalBandKeyResult {
+  const { exerciseId, exerciseName } = input
+  
+  // 1. Try exact ID match first (fast path)
+  if (exerciseId && BAND_SUPPORTED_EXERCISES.has(exerciseId)) {
+    const family = Object.entries(BAND_EXERCISE_FAMILIES).find(([key]) => 
+      exerciseId.startsWith(key)
+    )
+    return {
+      canonicalKey: exerciseId,
+      familyKey: family?.[0] || exerciseId.split('_')[0],
+      displayName: exerciseName || exerciseId,
+      supportsBandAssistance: true,
+      matchSource: 'exact_id',
+      reason: `Exact ID match: ${exerciseId}`,
+    }
+  }
+  
+  // 2. Try name pattern matching
+  if (exerciseName) {
+    for (const { pattern, canonicalId, family } of CANONICAL_NAME_PATTERNS) {
+      if (pattern.test(exerciseName)) {
+        return {
+          canonicalKey: canonicalId,
+          familyKey: family,
+          displayName: exerciseName,
+          supportsBandAssistance: BAND_SUPPORTED_EXERCISES.has(canonicalId),
+          matchSource: 'name_pattern',
+          reason: `Name pattern matched "${exerciseName}" to ${canonicalId}`,
+        }
+      }
+    }
+  }
+  
+  // 3. Try normalized ID pattern matching (e.g., tuck_front_lever_hold -> front_lever_tuck)
+  if (exerciseId) {
+    const normalizedId = exerciseId.toLowerCase().replace(/[-\s]+/g, '_')
+    for (const { pattern, canonicalId, family } of CANONICAL_NAME_PATTERNS) {
+      // Convert pattern to work on underscored IDs
+      if (pattern.test(normalizedId.replace(/_/g, ' '))) {
+        return {
+          canonicalKey: canonicalId,
+          familyKey: family,
+          displayName: exerciseName || exerciseId,
+          supportsBandAssistance: BAND_SUPPORTED_EXERCISES.has(canonicalId),
+          matchSource: 'normalized_name',
+          reason: `Normalized ID "${normalizedId}" matched to ${canonicalId}`,
+        }
+      }
+    }
+  }
+  
+  // 4. Fallback - not a supported band exercise
+  const fallbackKey = exerciseId || exerciseName?.toLowerCase().replace(/\s+/g, '_') || 'unknown'
+  return {
+    canonicalKey: fallbackKey,
+    familyKey: fallbackKey.split('_')[0],
+    displayName: exerciseName || exerciseId || 'Unknown',
+    supportsBandAssistance: false,
+    matchSource: 'fallback',
+    reason: `No canonical match found for "${exerciseName || exerciseId}"`,
+  }
+}
+
+/**
+ * Check if exercise supports band assistance using rich context
+ * This is more flexible than supportsBandAssistance(exerciseId)
+ */
+export function supportsBandAssistanceForExercise(input: {
+  exerciseId?: string | null
+  exerciseName?: string | null
+}): boolean {
+  const resolved = resolveBandExerciseKey(input)
+  return resolved.supportsBandAssistance
+}
+
 /**
  * Get recommended starting band for an exercise based on difficulty
  */
@@ -401,6 +564,85 @@ export function getExerciseBandHistory(exerciseId: string): BandHistoryEntry[] {
   return getBandHistory()
     .filter(e => e.exerciseId === exerciseId)
     .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+}
+
+/**
+ * [PPX-R2J] Get band history using canonical key resolution
+ * This finds history even when raw IDs don't match exactly
+ */
+export interface CanonicalBandHistoryResult {
+  exactHistory: BandHistoryEntry[]
+  familyHistory: BandHistoryEntry[]
+  canonicalKey: string
+  familyKey: string
+  displayName: string
+  totalCount: number
+  exactCount: number
+  familyCount: number
+  lastBandUsed: ResistanceBandColor | null
+  supportsBandAssistance: boolean
+  matchSource: 'exact_id' | 'name_pattern' | 'normalized_name' | 'fallback'
+}
+
+export function getCanonicalBandHistory(input: {
+  exerciseId?: string | null
+  exerciseName?: string | null
+}): CanonicalBandHistoryResult {
+  const resolved = resolveBandExerciseKey(input)
+  const allHistory = getBandHistory()
+  
+  // Get exact canonical key matches
+  const exactHistory = allHistory
+    .filter(e => {
+      // Match by canonical key
+      const entryResolved = resolveBandExerciseKey({ 
+        exerciseId: e.exerciseId, 
+        exerciseName: e.exerciseName 
+      })
+      return entryResolved.canonicalKey === resolved.canonicalKey
+    })
+    .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+  
+  // Get same-family matches (excluding exact matches)
+  const familyHistory = allHistory
+    .filter(e => {
+      const entryResolved = resolveBandExerciseKey({ 
+        exerciseId: e.exerciseId, 
+        exerciseName: e.exerciseName 
+      })
+      // Same family but different canonical key
+      return entryResolved.familyKey === resolved.familyKey && 
+             entryResolved.canonicalKey !== resolved.canonicalKey
+    })
+    .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+  
+  // Dev-only diagnostic
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+    console.log('[BAND-HISTORY-CANONICAL-READ]', {
+      displayedExerciseName: input.exerciseName,
+      rawExerciseId: input.exerciseId,
+      canonicalKey: resolved.canonicalKey,
+      familyKey: resolved.familyKey,
+      exactHistoryCount: exactHistory.length,
+      familyHistoryCount: familyHistory.length,
+      supportsBandAssistance: resolved.supportsBandAssistance,
+      matchSource: resolved.matchSource,
+    })
+  }
+  
+  return {
+    exactHistory,
+    familyHistory,
+    canonicalKey: resolved.canonicalKey,
+    familyKey: resolved.familyKey,
+    displayName: resolved.displayName,
+    totalCount: exactHistory.length + familyHistory.length,
+    exactCount: exactHistory.length,
+    familyCount: familyHistory.length,
+    lastBandUsed: exactHistory[0]?.bandColor || familyHistory[0]?.bandColor || null,
+    supportsBandAssistance: resolved.supportsBandAssistance,
+    matchSource: resolved.matchSource,
+  }
 }
 
 /**

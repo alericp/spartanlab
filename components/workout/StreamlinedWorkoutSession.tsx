@@ -147,6 +147,8 @@ import {
   calculateBandProgressionSummary,
   getExerciseBandHistory,
   supportsBandAssistance,
+  // [PPX-R2J] Canonical key resolver for consistent band history write/read
+  resolveBandExerciseKey,
   type BandHistoryEntry,
 } from '@/lib/band-progression-engine'
 // [LIVE-EXECUTION-TRUTH] Adaptive performance evaluator for post-set recommendations
@@ -5443,9 +5445,16 @@ failureStage: null,
         continue
       }
       
-      // Derive exercise ID (use id field or derive from name)
-      const exerciseId = (exercise.id || exercise.name?.toLowerCase().replace(/\s+/g, '_')) ?? 'unknown'
+      // [PPX-R2J] Resolve canonical band exercise key for consistent storage
+      const rawExerciseId = (exercise.id || exercise.name?.toLowerCase().replace(/\s+/g, '_')) ?? 'unknown'
       const exerciseName = exercise.name || 'Unknown Exercise'
+      const canonicalResolution = resolveBandExerciseKey({
+        exerciseId: rawExerciseId,
+        exerciseName,
+      })
+      
+      // Use canonical key for storage (ensures Day 4 can find Day 1 history)
+      const exerciseId = canonicalResolution.canonicalKey
       
       // Determine quality from RPE
       const quality: 'clean' | 'shaky' | 'failed' | undefined = 
@@ -5471,13 +5480,17 @@ failureStage: null,
         })
         
         if (entry) {
-          console.log('[PPX-R2E] Band history committed:', {
-            exerciseName,
-            band: effectiveBand,
-            reps: set.actualReps,
-            holdSeconds: set.holdSeconds,
-            rpe: set.actualRPE,
-            quality,
+          // [PPX-R2J] Dev diagnostic for canonical write verification
+          console.log('[BAND-HISTORY-CANONICAL-WRITE]', {
+            displayedExerciseName: exerciseName,
+            rawExerciseId,
+            canonicalKey: exerciseId,
+            familyKey: canonicalResolution.familyKey,
+            selectedBands,
+            effectiveBand,
+            setNumber: set.setNumber,
+            sessionId,
+            matchSource: canonicalResolution.matchSource,
             entryId: entry.id,
           })
         }

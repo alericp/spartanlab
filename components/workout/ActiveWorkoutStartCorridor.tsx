@@ -204,10 +204,9 @@ import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import { 
   type ResistanceBandColor,
-  // [PPX-R2H] Band history functions for visible recommendation display
-  getBandRecommendation,
-  getExerciseBandHistory,
-  supportsBandAssistance,
+  // [PPX-R2J] Canonical band history functions for consistent write/read
+  getCanonicalBandHistory,
+  supportsBandAssistanceForExercise,
 } from '@/lib/band-progression-engine'
 // [LIVE-WORKOUT-NORMALIZERS] Import canonical coaching signal types
 import { 
@@ -838,36 +837,28 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseI
     ALL_BAND_COLORS.indexOf(a) - ALL_BAND_COLORS.indexOf(b)
   )
   
-  // [PPX-R2H] Compute band recommendation display - ALWAYS show something
+  // [PPX-R2J] Compute band recommendation display using canonical history reader
   const bandDisplay = useMemo(() => {
-    // Try to get history-based recommendation if exercise context provided
-    let historyCount = 0
-    let historyRecommendedBand: ResistanceBandColor | null = null
-    let historyReason = ''
+    // Use canonical history reader for consistent key resolution
+    const canonicalHistory = getCanonicalBandHistory({
+      exerciseId,
+      exerciseName,
+    })
     
-    if (exerciseId && exerciseName) {
-      try {
-        if (supportsBandAssistance(exerciseId)) {
-          const history = getExerciseBandHistory(exerciseId)
-          historyCount = history.length
-          if (historyCount > 0) {
-            const recommendation = getBandRecommendation(exerciseId, exerciseName)
-            historyRecommendedBand = recommendation.recommendedBand
-            historyReason = recommendation.reason
-          }
-        }
-      } catch {
-        // Fail silently, use fallbacks
-      }
-    }
+    const historyCount = canonicalHistory.exactCount
+    const familyCount = canonicalHistory.familyCount
+    const totalCount = canonicalHistory.totalCount
+    const historyBand = canonicalHistory.lastBandUsed
+    const supportsBands = canonicalHistory.supportsBandAssistance
     
-    // Determine display state based on available data
-    const effectiveRec = historyRecommendedBand || recommendedBand
-    const isHistoryBased = historyCount > 0 && historyRecommendedBand
+    // Determine effective recommendation: history > execution truth > none
+    const effectiveRec = historyBand || recommendedBand
+    const hasExactHistory = historyCount > 0 && historyBand
+    const hasFamilyHistory = familyCount > 0 && historyBand && !hasExactHistory
     
-    if (isHistoryBased && effectiveRec) {
+    if (hasExactHistory && effectiveRec) {
       if (historyCount >= 6) {
-        // Strong history - recommend with confidence
+        // Strong exact history - recommend with confidence
         return {
           label: `Recommended: ${BAND_SHORT_LABELS[effectiveRec]}`,
           detail: `Based on ${historyCount} logged sets`,
@@ -875,15 +866,23 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseI
           bgColor: 'bg-emerald-500/10',
         }
       } else {
-        // Building history - maintain current
+        // Building exact history - maintain current
         return {
           label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
-          detail: `${historyCount} sets logged — building history`,
+          detail: `${historyCount} set${historyCount === 1 ? '' : 's'} logged — building history`,
           color: 'text-amber-400',
           bgColor: 'bg-amber-500/10',
         }
       }
-    } else if (effectiveRec) {
+    } else if (hasFamilyHistory && effectiveRec) {
+      // Same-family history found (e.g., other Front Lever variant)
+      return {
+        label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
+        detail: `Based on prior ${canonicalHistory.familyKey.replace(/_/g, ' ')} band history`,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/10',
+      }
+    } else if (effectiveRec && supportsBands) {
       // Starting recommendation from execution truth
       return {
         label: `Start with: ${BAND_SHORT_LABELS[effectiveRec]}`,
@@ -891,8 +890,16 @@ function MultiBandSelector({ selectedBands, onChange, recommendedBand, exerciseI
         color: 'text-[#A4ACB8]',
         bgColor: 'bg-[#2B313A]/50',
       }
+    } else if (supportsBands) {
+      // Supports bands but no history yet - tracking
+      return {
+        label: 'Tracking band history',
+        detail: 'Log band-assisted sets to build recommendations',
+        color: 'text-[#6B7280]',
+        bgColor: 'bg-[#1A1D21]/50',
+      }
     } else {
-      // No recommendation - tracking fallback (ALWAYS visible)
+      // No band support for this exercise
       return {
         label: 'Tracking band history',
         detail: 'Log band-assisted sets to build recommendations',

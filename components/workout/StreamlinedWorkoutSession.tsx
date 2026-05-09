@@ -6982,6 +6982,56 @@ if (shouldShowLocalFallback) {
     })
   }
   
+  // ==========================================================================
+  // [PPX-R1 FIX] POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE — HOOK MOVED HERE
+  // ==========================================================================
+  // This useEffect was previously located AFTER the `if (safeStatus === 'ready')`
+  // conditional return, which caused React error #310 (hook-order violation).
+  // When safeStatus === 'ready', the component would return early, and this
+  // useEffect would never be called — breaking React's hook count consistency.
+  // 
+  // Now moved BEFORE all conditional returns so it is always called in the
+  // same order. The effect body guards itself with `safeStatus === 'completed'`.
+  // ==========================================================================
+  useEffect(() => {
+    if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
+      // Get program ID for scoping
+      const savedProgram = getLatestAdaptiveProgram()
+      const programId = savedProgram?.id
+      
+      // Build scope for this proposal queue
+      const scope: ProposalQueueScope = {
+        programId,
+        sessionId: safeSession.dayLabel,
+        dayKey: safeSession.dayLabel,
+      }
+      
+      // Collect evidence from exercises with applied substitutions
+      const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
+        sessionId: safeSession.dayLabel,
+        programId,
+        dayKey: safeSession.dayLabel,
+      })
+      
+      if (evidence.length > 0) {
+        // Build proposals from evidence
+        const baseQueue = buildSavedProgramSubstitutionProposals(evidence)
+        
+        // Create scoped queue with eligibility info
+        const scopedQueue: ScopedPostWorkoutSubstitutionProposalQueue = {
+          ...baseQueue,
+          scope,
+          safeForSavedProgramApply: !!programId,
+          applyBlockedReason: programId ? undefined : 'Missing program ID — cannot apply to saved program',
+        }
+        
+        // Persist scoped queue to sessionStorage
+        saveScopedProposalQueue(scopedQueue, scope)
+        setSubstitutionProposalQueue(scopedQueue)
+      }
+    }
+  }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
+  
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
     // [LIVE-TRUE-ISOLATION-R5] Mark that we entered the ready shell branch.
@@ -7377,55 +7427,6 @@ if (shouldShowLocalFallback) {
   }
   
   // ==========================================================================
-  // [STEP 22.4 / T.T12 + STEP 22.5 / T.T13] BUILD POST-WORKOUT SUBSTITUTION PROPOSAL QUEUE
-  // ==========================================================================
-  // When entering completed state, collect evidence from exercises that had
-  // injury substitutions applied and build the proposal queue. This happens
-  // once when status transitions to 'completed' and exercises are available.
-  // The queue is used in the pre-save completion UI to show proposals.
-  // [STEP 22.5] Queue is now scoped by program/session to prevent stale leaks.
-  
-  // Build proposal queue when entering completed state
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    if (safeStatus === 'completed' && exercises.length > 0 && !substitutionProposalQueue) {
-      // Get program ID for scoping
-      const savedProgram = getLatestAdaptiveProgram()
-      const programId = savedProgram?.id
-      
-      // Build scope for this proposal queue
-      const scope: ProposalQueueScope = {
-        programId,
-        sessionId: safeSession.dayLabel,
-        dayKey: safeSession.dayLabel,
-      }
-      
-      // Collect evidence from exercises with applied substitutions
-      const evidence = collectPostWorkoutSubstitutionEvidence(exercises, {
-        sessionId: safeSession.dayLabel,
-        programId,
-        dayKey: safeSession.dayLabel,
-      })
-      
-      if (evidence.length > 0) {
-        // Build proposals from evidence
-        const baseQueue = buildSavedProgramSubstitutionProposals(evidence)
-        
-        // Create scoped queue with eligibility info
-        const scopedQueue: ScopedPostWorkoutSubstitutionProposalQueue = {
-          ...baseQueue,
-          scope,
-          safeForSavedProgramApply: !!programId,
-          applyBlockedReason: programId ? undefined : 'Missing program ID — cannot apply to saved program',
-        }
-        
-        // Persist scoped queue to sessionStorage
-        saveScopedProposalQueue(scopedQueue, scope)
-        setSubstitutionProposalQueue(scopedQueue)
-      }
-    }
-  }, [safeStatus, exercises, safeSession.dayLabel, substitutionProposalQueue])
-
   // ==========================================================================
   // RENDER: COMPLETED STATE
   // ==========================================================================

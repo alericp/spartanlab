@@ -8188,6 +8188,69 @@ if (shouldShowLocalFallback) {
           </div>
         </div>
       </div>
+      
+      {/* [PPX-R7.2] Adaptive Details Dialog - rendered in warmup phase */}
+      <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Flame className="w-5 h-5 text-amber-400" />
+              Why This Warm-Up?
+            </DialogTitle>
+            <DialogDescription className="text-[#A4ACB8]">
+              Understanding your session prep
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-2">
+            {/* Session Focus */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <h4 className="text-sm font-medium text-amber-400 mb-2">
+                {safeWorkoutSessionContract.warmupAdaptation?.focusLabel 
+                  ? `Built for ${safeWorkoutSessionContract.warmupAdaptation.focusLabel}`
+                  : safeWorkoutSessionContract.focusLabel 
+                  ? `Session Prep for ${safeWorkoutSessionContract.focusLabel}`
+                  : 'General Warm-Up'}
+              </h4>
+              {safeWorkoutSessionContract.warmupAdaptation?.rationale && (
+                <p className="text-xs text-[#A4ACB8] mb-2">
+                  {safeWorkoutSessionContract.warmupAdaptation.rationale}
+                </p>
+              )}
+              {safeWorkoutSessionContract.warmupAdaptation?.targetAreas?.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {safeWorkoutSessionContract.warmupAdaptation.targetAreas.map((area, i) => (
+                    <span key={i} className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            
+            {/* Current Item */}
+            {currentWarmupItem && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">
+                  {currentWarmupItem.name}
+                </h4>
+                <p className="text-xs text-[#6B7280] mb-2">
+                  {currentWarmupItem.sets ? `${currentWarmupItem.sets} sets` : ''} 
+                  {currentWarmupItem.repsOrTime ? ` · ${currentWarmupItem.repsOrTime}` : ''}
+                </p>
+                <p className="text-xs text-[#A4ACB8]">
+                  {(currentWarmupItem as { selectionReason?: string }).selectionReason 
+                    || (currentWarmupItem as { reason?: string }).reason 
+                    || currentWarmupItem.note 
+                    || (currentWarmupItem as { purpose?: string }).purpose 
+                    || 'General prep selected for this session focus.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
     )
   }
   
@@ -8274,69 +8337,6 @@ if (shouldShowLocalFallback) {
           </div>
         </div>
       </div>
-      
-      {/* [PPX-R7.2] Adaptive Details Dialog - rendered in warmup phase */}
-      <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <Flame className="w-5 h-5 text-amber-400" />
-              Why This Warm-Up?
-            </DialogTitle>
-            <DialogDescription className="text-[#A4ACB8]">
-              Understanding your session prep
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 mt-2">
-            {/* Session Focus */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-amber-400 mb-2">
-                {safeWorkoutSessionContract.warmupAdaptation?.focusLabel 
-                  ? `Built for ${safeWorkoutSessionContract.warmupAdaptation.focusLabel}`
-                  : safeWorkoutSessionContract.focusLabel 
-                  ? `Session Prep for ${safeWorkoutSessionContract.focusLabel}`
-                  : 'General Warm-Up'}
-              </h4>
-              {safeWorkoutSessionContract.warmupAdaptation?.rationale && (
-                <p className="text-xs text-[#A4ACB8] mb-2">
-                  {safeWorkoutSessionContract.warmupAdaptation.rationale}
-                </p>
-              )}
-              {safeWorkoutSessionContract.warmupAdaptation?.targetAreas?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {safeWorkoutSessionContract.warmupAdaptation.targetAreas.map((area, i) => (
-                    <span key={i} className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">
-                      {area}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            
-            {/* Current Item */}
-            {currentWarmupItem && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">
-                  {currentWarmupItem.name}
-                </h4>
-                <p className="text-xs text-[#6B7280] mb-2">
-                  {currentWarmupItem.sets ? `${currentWarmupItem.sets} sets` : ''} 
-                  {currentWarmupItem.repsOrTime ? ` · ${currentWarmupItem.repsOrTime}` : ''}
-                </p>
-                <p className="text-xs text-[#A4ACB8]">
-                  {(currentWarmupItem as { selectionReason?: string }).selectionReason 
-                    || (currentWarmupItem as { reason?: string }).reason 
-                    || currentWarmupItem.note 
-                    || (currentWarmupItem as { purpose?: string }).purpose 
-                    || 'General prep selected for this session focus.'}
-                </p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
     )
   }
   

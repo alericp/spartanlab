@@ -278,6 +278,31 @@ From recent conversation:
     - [x] Cooldown return reminder no longer causes layout scroll/clutter
     - [ ] Permanent workout history audit (follow-up item)
     - [ ] Manual history deletion from DB (follow-up item)
+- PPX-R7.2: Adaptive Modal Event/Render Ownership Fix — COMPLETE (2026-05-09)
+  - ROOT CAUSE: Dialog was only rendered in main workout phase return. Warmup and cooldown phases had early returns BEFORE the Dialog was ever mounted. The buttons worked but the Dialog never rendered in those phases.
+  - FIX: Added Dialog to each phase-specific return (warmup and cooldown) using React Fragment wrapper
+  - WARMUP PHASE:
+    - Wrapped return in `<>...</>` fragment
+    - Added Dialog with "Why This Warm-Up?" title
+    - Shows session focus, warmup adaptation, target areas
+    - Shows current item name, prescription, and reason/fallback
+  - COOLDOWN PHASE:
+    - Dialog already existed from PPX-R7.1
+    - Shows session focus, cooldown adaptation, target regions, flexibility goals
+    - Shows current item name, prescription, and reason/fallback
+  - WU/CD ITEM DESCRIPTIONS:
+    - Fixed blank descriptions by adding fallback chain
+    - Checks: selectionReason -> reason -> note -> purpose -> description -> cue -> fallback
+    - Fallback text: "Prep for {focusLabel}." or "Recovery after {focusLabel}."
+  - CHECKLIST STATUS:
+    - [x] PPX-R7.2 WU info icon opens modal: COMPLETE
+    - [x] PPX-R7.2 CD info icon opens modal: COMPLETE
+    - [x] PPX-R7.2 Live "Why this set?" opens modal: COMPLETE (uses main workout phase dialog)
+    - [x] PPX-R7.2 WU/CD blank descriptions fixed with honest fallback: COMPLETE
+    - [x] PPX-R7.2 render/UI proof required: COMPLETE
+  - REMAINING CHAIN:
+    - PPX-R7.3: Permanent workout history/adaptive input proof/delete path
+    - PPX-R7.4: Final live WU/CD adaptive acceptance pass
 
 ---
 

@@ -56,7 +56,15 @@ From recent conversation:
 - PPX-R1C: React #310 Hook-Order Fix — COMPLETE
 - PPX-R2: Warmup/Main/Cooldown Sequencing — COMPLETE
 - PPX-R2C: Phase Persistence/Refresh Restore — COMPLETE
-- PPX-R2D: Band Assistance Data Restoration — COMPLETE
+- PPX-R2D: Band Assistance Data Visibility — COMPLETE
+- PPX-R2E: Band Assistance Progression Consumption — COMPLETE (2026-05-09)
+  - Band-assisted sets committed to localStorage history via `logSetWithBand()`
+  - `BandSelector` shows history-based recommendations with set count
+  - Post-workout summary uses real band engine analysis
+  - CLIENT-LOCAL ONLY — not DB/server-backed
+- PPX-R2F: Band Recommendation Visible Proof Lock — COMPLETE (2026-05-09)
+  - Recent sets display shows styled band chips with multi-band support (RED+GRN)
+  - Full corridor verified: selector → state → completedSet → recent set UI → history → recommendation → active card
 
 ---
 

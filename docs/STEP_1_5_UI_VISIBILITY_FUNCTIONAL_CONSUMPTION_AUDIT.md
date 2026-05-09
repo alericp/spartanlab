@@ -223,6 +223,27 @@ From recent conversation:
   - METADATA NOW PRESERVED:
     - warmupAdaptation: focus, focusLabel, rationale, targetAreas, adaptationSource
     - cooldownAdaptation: focus, focusLabel, rationale, targetRegions, flexibilityGoals, adaptationSource
+- PPX-R5B: Combined Refresh Resume + Adaptive Details Modal — COMPLETE (2026-05-09)
+  - PART 1: Refresh Resume Debugging
+    - Added console.log debugging to `loadSessionFromStorage` to trace `liveFlowPhase` restoration
+    - The existing autosave effect DOES save `liveFlowPhase` including `sessionPhase`, `warmupIndex`, `cooldownIndex`
+    - The restore logic at lines 3998-4002 DOES check for `liveFlowPhase` and restore it
+    - Debug logs will help identify if the issue is save timing, stale data, or restore validation
+  - PART 2: Adaptive Details Modal
+    - Added `Sparkles` and `Info` icons to warmup/cooldown headers
+    - Converted subtitle text to clickable buttons that open the adaptive details dialog
+    - Added full `Dialog` component with adaptive breakdown:
+      - Shows focusLabel, rationale, targetAreas/targetRegions, adaptationSource
+      - Lists exercises with their `selectionReason` or `note` fields
+      - Honest fallback text when adaptation metadata is missing
+    - UI is clean: main card stays minimal, details are behind the info button
+  - FILES CHANGED:
+    - StreamlinedWorkoutSession.tsx: Added Dialog import, adaptiveDetailsOpen state, 
+      sparkle/info buttons on warmup/cooldown headers, full adaptive details dialog
+  - NAVIGATION PRESERVED:
+    - PPX-R4I Cool-Down 1 Back behavior unchanged
+    - No LEGACY-ACTIVE-R3 regression
+    - Direct final-set-to-cooldown unchanged
 
 ---
 

@@ -3762,8 +3762,10 @@ export function StreamlinedWorkoutSession({
   // [PPX-R4H] Flag to indicate user backed out of cooldown to view last workout context
   // This prevents auto-transition back to cooldown and shows "Continue to Cool-Down" option
   const [returnedFromCooldown, setReturnedFromCooldown] = useState(false)
-  // [PPX-R5B] Adaptive details dialog state for warmup/cooldown
-  const [adaptiveDetailsOpen, setAdaptiveDetailsOpen] = useState<'warmup' | 'cooldown' | null>(null)
+  // [PPX-R5B] Adaptive details dialog state for warmup/cooldown/live
+  const [adaptiveDetailsOpen, setAdaptiveDetailsOpen] = useState<'warmup' | 'cooldown' | 'live' | null>(null)
+  // [PPX-R7] Dismiss state for cooldown return banner - non-blocking reminder
+  const [cooldownReturnBannerDismissed, setCooldownReturnBannerDismissed] = useState(false)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -8040,11 +8042,17 @@ if (shouldShowLocalFallback) {
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
-                  {/* [PPX-R5B] Show adaptive warmup focus with details button */}
+                  {/* [PPX-R7] Show adaptive warmup focus with details button */}
                   {safeWorkoutSessionContract.warmupAdaptation ? (
                     <button
-                      onClick={() => setAdaptiveDetailsOpen('warmup')}
-                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setAdaptiveDetailsOpen('warmup')
+                      }}
+                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors cursor-pointer"
+                      aria-label="View warm-up adaptation details"
                     >
                       <Sparkles className="w-3 h-3" />
                       <span>Adapted for {safeWorkoutSessionContract.warmupAdaptation.focusLabel}</span>
@@ -8052,8 +8060,14 @@ if (shouldShowLocalFallback) {
                     </button>
                   ) : safeWorkoutSessionContract.focus ? (
                     <button
-                      onClick={() => setAdaptiveDetailsOpen('warmup')}
-                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setAdaptiveDetailsOpen('warmup')
+                      }}
+                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors cursor-pointer"
+                      aria-label="View warm-up details"
                     >
                       <Sparkles className="w-3 h-3" />
                       <span>Session Prep for {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}</span>
@@ -8323,11 +8337,17 @@ if (shouldShowLocalFallback) {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-[#E6E9EF]">Cool-Down</h2>
-                {/* [PPX-R5B] Show adaptive cooldown focus with details button */}
+                {/* [PPX-R7] Show adaptive cooldown focus with details button */}
                 {safeWorkoutSessionContract.cooldownAdaptation ? (
                   <button
-                    onClick={() => setAdaptiveDetailsOpen('cooldown')}
-                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setAdaptiveDetailsOpen('cooldown')
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors cursor-pointer"
+                    aria-label="View cool-down adaptation details"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>
@@ -8341,8 +8361,14 @@ if (shouldShowLocalFallback) {
                   </button>
                 ) : safeWorkoutSessionContract.focus ? (
                   <button
-                    onClick={() => setAdaptiveDetailsOpen('cooldown')}
-                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors"
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setAdaptiveDetailsOpen('cooldown')
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors cursor-pointer"
+                    aria-label="View cool-down details"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>Recovery after {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}</span>
@@ -10050,34 +10076,62 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             </div>
           </div>
         )}
-        {/* [PPX-R4H] Continue to Cool-Down banner when user backed out of cooldown */}
-        {returnedFromCooldown && safeStatus === 'completed' && (
+        {/* [PPX-R7] Continue to Cool-Down toast - fixed position, non-blocking */}
+        {returnedFromCooldown && safeStatus === 'completed' && !cooldownReturnBannerDismissed && (
           <div
-            className="mx-3 mt-3 mb-2 rounded-xl border border-[#2B313A] bg-[#1A1F26] px-4 py-3"
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-[#2B313A] bg-[#1A1F26]/95 backdrop-blur-sm px-4 py-2.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300"
             role="status"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400" />
                 <span className="text-sm font-medium text-[#E6E9EF]">
-                  Workout Complete
+                  Done
                 </span>
               </div>
               <Button
                 onClick={() => {
                   setReturnedFromCooldown(false)
+                  setCooldownReturnBannerDismissed(false)
                   setSessionPhase('cooldown')
-                  // Cooldown index preserved from before
                 }}
                 size="sm"
-                className="bg-sky-500 hover:bg-sky-600 text-white font-medium h-8 px-3"
+                className="bg-sky-500 hover:bg-sky-600 text-white font-medium h-7 px-3 text-xs"
               >
-                <ChevronRight className="w-3.5 h-3.5 mr-1" />
-                Continue to Cool-Down
+                Cool-Down
+                <ChevronRight className="w-3 h-3 ml-1" />
               </Button>
+              <button
+                type="button"
+                onClick={() => setCooldownReturnBannerDismissed(true)}
+                className="text-[#6B7280] hover:text-[#A4ACB8] p-1"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
+        {/* [PPX-R7] Live workout adaptive info button - compact, non-blocking */}
+        <div className="mx-3 mt-2 mb-1 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-[#A4ACB8]">
+            <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{safeWorkoutSessionContract.focusLabel || 'Training'}</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setAdaptiveDetailsOpen('live')
+            }}
+            className="flex items-center gap-1 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors px-2 py-1 rounded hover:bg-[#1A1F26]"
+            aria-label="View live workout adaptation details"
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>Why this set?</span>
+          </button>
+        </div>
         <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
       </>
     )
@@ -10871,17 +10925,24 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   <Flame className="w-5 h-5 text-amber-400" />
                   Warm-Up Adaptation
                 </>
-              ) : (
+              ) : adaptiveDetailsOpen === 'cooldown' ? (
                 <>
                   <Wind className="w-5 h-5 text-sky-400" />
                   Cool-Down Adaptation
+                </>
+              ) : (
+                <>
+                  <Dumbbell className="w-5 h-5 text-emerald-400" />
+                  Live Set Guidance
                 </>
               )}
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8]">
               {adaptiveDetailsOpen === 'warmup' 
                 ? 'Why this warm-up was built for you'
-                : 'Why this cool-down was built for you'
+                : adaptiveDetailsOpen === 'cooldown'
+                ? 'Why this cool-down was built for you'
+                : 'Current set prescription and adaptation'
               }
             </DialogDescription>
           </DialogHeader>
@@ -11015,6 +11076,86 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     ? `Recovery routine after ${safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus} session.`
                     : 'General cool-down routine. Detailed adaptation data not available for this session.'
                   }
+                </p>
+              </div>
+            )}
+            
+            {/* [PPX-R7] Live workout adaptation content */}
+            {adaptiveDetailsOpen === 'live' && (
+              <div className="space-y-3">
+                <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                  <h4 className="text-sm font-medium text-emerald-400 mb-2">
+                    {safeWorkoutSessionContract.focusLabel || 'Training'} Session
+                  </h4>
+                  <p className="text-xs text-[#A4ACB8] mb-2">
+                    This set is using the saved session prescription.
+                    {safeWorkoutSessionContract.rationale && (
+                      <span className="block mt-1">{safeWorkoutSessionContract.rationale}</span>
+                    )}
+                  </p>
+                  
+                  {/* Session stress context if available */}
+                  {(safeWorkoutSessionContract.stressRole || safeWorkoutSessionContract.stressLevel) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {safeWorkoutSessionContract.stressRole && (
+                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
+                          {safeWorkoutSessionContract.stressRole.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {safeWorkoutSessionContract.stressLevel && (
+                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
+                          {safeWorkoutSessionContract.stressLevel}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Current exercise info from contract */}
+                {safeCurrentExercise && (
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">
+                      Current Exercise
+                    </h4>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-[#6B7280]">Exercise</span>
+                        <span className="text-[#E6E9EF]">{safeCurrentExercise.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#6B7280]">Sets</span>
+                        <span className="text-[#E6E9EF]">{safeCurrentExercise.sets || 3}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#6B7280]">Target</span>
+                        <span className="text-[#E6E9EF]">
+                          {safeCurrentExercise.repsOrTime || 'As prescribed'}
+                        </span>
+                      </div>
+                      {safeCurrentExercise.targetRPE && (
+                        <div className="flex justify-between">
+                          <span className="text-[#6B7280]">Target RPE</span>
+                          <span className="text-[#E6E9EF]">{safeCurrentExercise.targetRPE}</span>
+                        </div>
+                      )}
+                      {(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation && (
+                        <div className="flex justify-between">
+                          <span className="text-[#6B7280]">Band Rec</span>
+                          <span className="text-[#E6E9EF] capitalize">{(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation}</span>
+                        </div>
+                      )}
+                      {safeCurrentExercise.selectionReason && (
+                        <div className="mt-2 pt-2 border-t border-[#2B313A]">
+                          <span className="text-[#6B7280]">Why: </span>
+                          <span className="text-[#A4ACB8]">{safeCurrentExercise.selectionReason}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-[#6B7280] text-center">
+                  More adaptation will appear after logged performance data is available.
                 </p>
               </div>
             )}

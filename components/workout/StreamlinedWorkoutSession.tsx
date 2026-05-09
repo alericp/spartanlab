@@ -677,7 +677,8 @@ interface ExerciseOverrideState {
 }
 
 // [PPX-R2C] Session phase type for warmup/main/cooldown sequencing
-type SessionPhase = 'warmup' | 'main' | 'cooldown' | 'done'
+// [PPX-R4G] Added 'completedMain' for Cool-Down 1 Back to return to workout context
+type SessionPhase = 'warmup' | 'main' | 'completedMain' | 'cooldown' | 'done'
 
 // [PPX-R2C] Live flow phase snapshot persisted alongside workout state
 interface LiveFlowPhase {
@@ -1748,7 +1749,7 @@ function loadSessionFromStorage(
     let safeLiveFlowPhase: LiveFlowPhase | undefined = undefined
     if (data.liveFlowPhase && typeof data.liveFlowPhase === 'object' && !Array.isArray(data.liveFlowPhase)) {
       const lfp = data.liveFlowPhase as Record<string, unknown>
-      const validPhases: SessionPhase[] = ['warmup', 'main', 'cooldown', 'done']
+      const validPhases: SessionPhase[] = ['warmup', 'main', 'completedMain', 'cooldown', 'done']
       
       // Validate phase is a known value
       if (typeof lfp.phase === 'string' && validPhases.includes(lfp.phase as SessionPhase)) {
@@ -8144,6 +8145,92 @@ if (shouldShowLocalFallback) {
   }
   
   // ==========================================================================
+  // [PPX-R4G] RENDER: COMPLETED MAIN WORKOUT CONTEXT
+  // ==========================================================================
+  // This phase is reached when user taps Back from Cool-Down 1.
+  // Shows workout summary with clear action to continue to cooldown.
+  // ==========================================================================
+  
+  if (safeStatus === 'completed' && sessionPhase === 'completedMain') {
+    const totalSets = normalizedCompletedSets.length
+    const uniqueExercises = new Set(normalizedCompletedSets.map(s => s.exerciseIndex)).size
+    const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
+    const hasCooldown = cooldownItems.length > 0 && !cooldownSkipped
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-emerald-400">
+              Workout Complete
+            </span>
+            <span className="text-xs text-[#6B7280]">
+              {totalSets} {totalSets === 1 ? 'set' : 'sets'} logged
+            </span>
+          </div>
+          
+          {/* Summary Card */}
+          <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <Check className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-[#E6E9EF]">
+                  {safeWorkoutSessionContract.dayLabel || 'Workout'} Done
+                </h2>
+                <p className="text-sm text-[#6B7280]">
+                  {totalSets > 0 
+                    ? `${totalSets} sets across ${uniqueExercises} ${uniqueExercises === 1 ? 'exercise' : 'exercises'}`
+                    : 'Workout skipped'
+                  }
+                </p>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="space-y-2">
+              {hasCooldown ? (
+                <>
+                  <Button
+                    onClick={() => {
+                      setSessionPhase('cooldown')
+                      setCooldownIndex(0)
+                    }}
+                    className="w-full h-12 bg-sky-500 hover:bg-sky-600 text-white font-semibold"
+                  >
+                    <ChevronRight className="w-4 h-4 mr-2" />
+                    Continue to Cool-Down
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCooldownSkipped(true)
+                      setSessionPhase('done')
+                    }}
+                    className="w-full h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                  >
+                    Skip Cool-Down & Finish
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={() => setSessionPhase('done')}
+                  className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Finish Workout
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
   // [PPX-R2] RENDER: COOLDOWN PHASE
   // ==========================================================================
   // Cooldown phase runs after the main workout completes, before final summary.
@@ -8272,18 +8359,20 @@ if (shouldShowLocalFallback) {
                     {isLastCooldown ? 'Complete & Finish' : 'Done — Next'}
                   </Button>
                   
-                  {/* [PPX-R4E] Action row: Back navigates within cooldown, disabled at first item */}
+                  {/* [PPX-R4G] Action row: Back navigates within cooldown or to completed WO context */}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       onClick={() => {
-                        // [PPX-R4E] Back goes to previous cooldown item, not to review screen
+                        // [PPX-R4G] Back goes to previous cooldown item, or to completedMain at index 0
                         if (cooldownIndex > 0) {
                           setCooldownIndex(prev => prev - 1)
+                        } else {
+                          // At first cooldown item, go to completed main WO context
+                          setSessionPhase('completedMain')
                         }
                       }}
-                      disabled={cooldownIndex === 0}
-                      className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] disabled:opacity-30 px-3"
+                      className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Back

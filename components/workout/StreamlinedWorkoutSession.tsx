@@ -78,7 +78,16 @@ import {
   AlertTriangle,
   Flame,
   Wind,
+  Sparkles,
+  Info,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 import {
@@ -1746,6 +1755,12 @@ function loadSessionFromStorage(
     }
     
     // [PPX-R2C] Validate and restore liveFlowPhase if present
+    // [PPX-R5B] Debug: log what's in the saved data for liveFlowPhase
+    console.log('[PPX-R5B] loadSessionFromStorage checking liveFlowPhase:', {
+      hasLiveFlowPhase: !!data.liveFlowPhase,
+      liveFlowPhaseType: typeof data.liveFlowPhase,
+      liveFlowPhaseValue: data.liveFlowPhase,
+    })
     let safeLiveFlowPhase: LiveFlowPhase | undefined = undefined
     if (data.liveFlowPhase && typeof data.liveFlowPhase === 'object' && !Array.isArray(data.liveFlowPhase)) {
       const lfp = data.liveFlowPhase as Record<string, unknown>
@@ -3747,6 +3762,8 @@ export function StreamlinedWorkoutSession({
   // [PPX-R4H] Flag to indicate user backed out of cooldown to view last workout context
   // This prevents auto-transition back to cooldown and shows "Continue to Cool-Down" option
   const [returnedFromCooldown, setReturnedFromCooldown] = useState(false)
+  // [PPX-R5B] Adaptive details dialog state for warmup/cooldown
+  const [adaptiveDetailsOpen, setAdaptiveDetailsOpen] = useState<'warmup' | 'cooldown' | null>(null)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -8023,18 +8040,25 @@ if (shouldShowLocalFallback) {
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
-                  {/* [PPX-R4B] Show adaptive warmup focus with target areas */}
+                  {/* [PPX-R5B] Show adaptive warmup focus with details button */}
                   {safeWorkoutSessionContract.warmupAdaptation ? (
-                    <p className="text-xs text-emerald-400/80">
-                      Adapted for {safeWorkoutSessionContract.warmupAdaptation.focusLabel}
-                      {safeWorkoutSessionContract.warmupAdaptation.targetAreas?.length ? (
-                        <span className="text-[#6B7280]"> — {safeWorkoutSessionContract.warmupAdaptation.targetAreas.slice(0, 3).join(', ')}</span>
-                      ) : null}
-                    </p>
+                    <button
+                      onClick={() => setAdaptiveDetailsOpen('warmup')}
+                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Adapted for {safeWorkoutSessionContract.warmupAdaptation.focusLabel}</span>
+                      <Info className="w-3 h-3 opacity-60" />
+                    </button>
                   ) : safeWorkoutSessionContract.focus ? (
-                    <p className="text-xs text-emerald-400/80">
-                      Adapted for {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}
-                    </p>
+                    <button
+                      onClick={() => setAdaptiveDetailsOpen('warmup')}
+                      className="flex items-center gap-1.5 text-xs text-emerald-400/80 hover:text-emerald-400 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Session Prep for {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}</span>
+                      <Info className="w-3 h-3 opacity-60" />
+                    </button>
                   ) : (
                     <p className="text-xs text-[#6B7280]">Prepare your body for the workout</p>
                   )}
@@ -8299,22 +8323,31 @@ if (shouldShowLocalFallback) {
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-[#E6E9EF]">Cool-Down</h2>
-                {/* [PPX-R4B] Show adaptive cooldown focus with flexibility goals */}
+                {/* [PPX-R5B] Show adaptive cooldown focus with details button */}
                 {safeWorkoutSessionContract.cooldownAdaptation ? (
-                  <p className="text-xs text-sky-400/80">
-                    {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals?.length ? (
-                      <>Supports {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals.map(g => g.replace(/_/g, ' ')).slice(0, 2).join(', ')}</>
-                    ) : (
-                      <>Recovery for {safeWorkoutSessionContract.cooldownAdaptation.focusLabel}</>
-                    )}
-                    {safeWorkoutSessionContract.cooldownAdaptation.targetRegions?.length ? (
-                      <span className="text-[#6B7280]"> — {safeWorkoutSessionContract.cooldownAdaptation.targetRegions.slice(0, 3).join(', ')}</span>
-                    ) : null}
-                  </p>
+                  <button
+                    onClick={() => setAdaptiveDetailsOpen('cooldown')}
+                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>
+                      {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals?.length ? (
+                        <>Supports {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals.map(g => g.replace(/_/g, ' ')).slice(0, 2).join(', ')}</>
+                      ) : (
+                        <>Recovery for {safeWorkoutSessionContract.cooldownAdaptation.focusLabel}</>
+                      )}
+                    </span>
+                    <Info className="w-3 h-3 opacity-60" />
+                  </button>
                 ) : safeWorkoutSessionContract.focus ? (
-                  <p className="text-xs text-sky-400/80">
-                    Recovery after {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}
-                  </p>
+                  <button
+                    onClick={() => setAdaptiveDetailsOpen('cooldown')}
+                    className="flex items-center gap-1.5 text-xs text-sky-400/80 hover:text-sky-400 transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Recovery after {safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus}</span>
+                    <Info className="w-3 h-3 opacity-60" />
+                  </button>
                 ) : (
                   <p className="text-xs text-[#6B7280]">Recovery stretches and mobility</p>
                 )}
@@ -10827,6 +10860,167 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       
       {/* Diagnostic Panel - DEV ONLY */}
       {renderDiagnosticPanel()}
+      
+      {/* [PPX-R5B] Adaptive Details Dialog */}
+      <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              {adaptiveDetailsOpen === 'warmup' ? (
+                <>
+                  <Flame className="w-5 h-5 text-amber-400" />
+                  Warm-Up Adaptation
+                </>
+              ) : (
+                <>
+                  <Wind className="w-5 h-5 text-sky-400" />
+                  Cool-Down Adaptation
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-[#A4ACB8]">
+              {adaptiveDetailsOpen === 'warmup' 
+                ? 'Why this warm-up was built for you'
+                : 'Why this cool-down was built for you'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-2">
+            {/* Adaptation Source */}
+            {adaptiveDetailsOpen === 'warmup' && safeWorkoutSessionContract.warmupAdaptation && (
+              <>
+                <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                  <h4 className="text-sm font-medium text-amber-400 mb-2">
+                    Built for {safeWorkoutSessionContract.warmupAdaptation.focusLabel}
+                  </h4>
+                  {safeWorkoutSessionContract.warmupAdaptation.rationale && (
+                    <p className="text-xs text-[#A4ACB8] mb-2">
+                      {safeWorkoutSessionContract.warmupAdaptation.rationale}
+                    </p>
+                  )}
+                  {safeWorkoutSessionContract.warmupAdaptation.targetAreas?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {safeWorkoutSessionContract.warmupAdaptation.targetAreas.map((area, i) => (
+                        <span key={i} className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {safeWorkoutSessionContract.warmupAdaptation.adaptationSource && (
+                    <p className="text-xs text-[#6B7280] mt-2">
+                      Source: {safeWorkoutSessionContract.warmupAdaptation.adaptationSource.replace(/_/g, ' ')}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Warmup Items with reasons */}
+                <div>
+                  <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Exercises</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {safeWorkoutSessionContract.warmup?.slice(0, 8).map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className="text-amber-400 font-medium w-4">{i + 1}.</span>
+                        <div className="flex-1">
+                          <span className="text-[#E6E9EF]">{item.name}</span>
+                          {item.selectionReason && (
+                            <span className="text-[#6B7280] ml-1">— {item.selectionReason}</span>
+                          )}
+                          {item.note && !item.selectionReason && (
+                            <span className="text-[#6B7280] ml-1">— {item.note}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {adaptiveDetailsOpen === 'cooldown' && safeWorkoutSessionContract.cooldownAdaptation && (
+              <>
+                <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                  <h4 className="text-sm font-medium text-sky-400 mb-2">
+                    Recovery for {safeWorkoutSessionContract.cooldownAdaptation.focusLabel}
+                  </h4>
+                  {safeWorkoutSessionContract.cooldownAdaptation.rationale && (
+                    <p className="text-xs text-[#A4ACB8] mb-2">
+                      {safeWorkoutSessionContract.cooldownAdaptation.rationale}
+                    </p>
+                  )}
+                  {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals?.length ? (
+                    <div className="mb-2">
+                      <span className="text-xs text-[#6B7280]">Flexibility goals: </span>
+                      <span className="text-xs text-sky-400">
+                        {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals.map(g => g.replace(/_/g, ' ')).join(', ')}
+                      </span>
+                    </div>
+                  ) : null}
+                  {safeWorkoutSessionContract.cooldownAdaptation.targetRegions?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {safeWorkoutSessionContract.cooldownAdaptation.targetRegions.map((region, i) => (
+                        <span key={i} className="px-2 py-0.5 text-xs bg-sky-500/10 text-sky-400 rounded">
+                          {region}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {safeWorkoutSessionContract.cooldownAdaptation.adaptationSource && (
+                    <p className="text-xs text-[#6B7280] mt-2">
+                      Source: {safeWorkoutSessionContract.cooldownAdaptation.adaptationSource.replace(/_/g, ' ')}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Cooldown Items with reasons */}
+                <div>
+                  <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Exercises</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {safeWorkoutSessionContract.cooldown?.slice(0, 8).map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className="text-sky-400 font-medium w-4">{i + 1}.</span>
+                        <div className="flex-1">
+                          <span className="text-[#E6E9EF]">{item.name}</span>
+                          {item.selectionReason && (
+                            <span className="text-[#6B7280] ml-1">— {item.selectionReason}</span>
+                          )}
+                          {item.note && !item.selectionReason && (
+                            <span className="text-[#6B7280] ml-1">— {item.note}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {/* Fallback if no adaptation data */}
+            {adaptiveDetailsOpen === 'warmup' && !safeWorkoutSessionContract.warmupAdaptation && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <p className="text-xs text-[#A4ACB8]">
+                  {safeWorkoutSessionContract.focus 
+                    ? `General preparation for ${safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus} session.`
+                    : 'General warm-up routine. Detailed adaptation data not available for this session.'
+                  }
+                </p>
+              </div>
+            )}
+            
+            {adaptiveDetailsOpen === 'cooldown' && !safeWorkoutSessionContract.cooldownAdaptation && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <p className="text-xs text-[#A4ACB8]">
+                  {safeWorkoutSessionContract.focus 
+                    ? `Recovery routine after ${safeWorkoutSessionContract.focusLabel || safeWorkoutSessionContract.focus} session.`
+                    : 'General cool-down routine. Detailed adaptation data not available for this session.'
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
   

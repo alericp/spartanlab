@@ -85,6 +85,14 @@ interface FeedbackLoopProofCardProps {
    * Program page hierarchy. User can expand to see full details.
    */
   defaultCollapsed?: boolean
+  /**
+   * [PPX-2] Custom title for the card. Defaults to "Coaching Feedback Loop"
+   * for backward compatibility, but callers can override to avoid duplicate
+   * naming when multiple cards appear on the same page. Examples:
+   *   - "Calibration evidence" for benchmark-side card
+   *   - "Recent adjustments" for workout-side card
+   */
+  title?: string
   className?: string
 }
 
@@ -261,6 +269,8 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const summary = pickDisplaySummary(props)
   const plan = props.calibrationPlan ?? null
   const influence = props.generationInfluence ?? null
+  // [PPX-2] Custom title support - default to legacy name for backward compatibility
+  const cardTitle = props.title ?? 'Coaching Feedback Loop'
   // [P1] Support collapsed by default for cleaner Program page
   const [isExpanded, setIsExpanded] = useState<boolean>(!props.defaultCollapsed)
   
@@ -282,7 +292,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                     aria-hidden="true"
                   />
                   <CardTitle className="text-base font-semibold">
-                    Coaching Feedback Loop
+                    {cardTitle}
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
@@ -341,7 +351,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                     aria-hidden="true"
                   />
                   <CardTitle className="text-base font-semibold">
-                    Coaching Feedback Loop
+                    {cardTitle}
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
@@ -405,7 +415,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                   aria-hidden="true"
                 />
                 <CardTitle className="text-base font-semibold">
-                  Coaching Feedback Loop
+                  {cardTitle}
                 </CardTitle>
               </div>
               <div className="flex items-center gap-2">

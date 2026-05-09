@@ -385,11 +385,13 @@ export function CalibrationCheckpointCard({
             recommended (e.g. user has no goals selected). Shows the
             baseline copy via summarizeNoEvidence when latestMap is empty.
             [AB12-1] Also surfaces the evidence-aware calibration plan as
-            a compact strip below the proof body. */}
+            a compact strip below the proof body.
+            [PPX-2] Custom title to distinguish from workout-side card. */}
         <FeedbackLoopProofCard
           benchmarkSummary={benchmarkSummary}
           calibrationPlan={calibrationPlan}
           defaultCollapsed={true}
+          title="Calibration evidence"
         />
       </>
     )
@@ -509,11 +511,13 @@ export function CalibrationCheckpointCard({
         no-evidence and considered/no-change states honestly.
         [AB12-1] The same proof card now also renders the evidence-aware
         calibration plan strip, derived from the benchmark summary +
-        recommendation already in scope. */}
+        recommendation already in scope.
+        [PPX-2] Custom title to distinguish from workout-side card. */}
     <FeedbackLoopProofCard
       benchmarkSummary={benchmarkSummary}
       calibrationPlan={calibrationPlan}
       defaultCollapsed={true}
+      title="Calibration evidence"
     />
     </>
   )

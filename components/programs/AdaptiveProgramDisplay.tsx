@@ -3714,6 +3714,81 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
+            {/* [STEP 25.9] Daily Training Variation - Day-by-day method/role proof */}
+            {perDayCoachingSummary && perDayCoachingSummary.days.length > 0 && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Layers className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Daily Training Variation</h4>
+                </div>
+                
+                {/* Week strategy intro */}
+                <p className="text-xs text-[#A4ACB8] mb-3">
+                  {perDayCoachingSummary.weekStrategy}
+                </p>
+                
+                {/* Day-by-day summary */}
+                <div className="space-y-2">
+                  {perDayCoachingSummary.days.map((day) => (
+                    <div 
+                      key={day.dayNumber} 
+                      className="pl-2 border-l-2 border-[#E63946]/30"
+                    >
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[11px] font-semibold text-[#E6E9EF]">
+                          Day {day.dayNumber}
+                        </span>
+                        {day.roleLabel && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2B313A] text-[#A4ACB8]">
+                            {day.roleLabel}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-[#8A8A8A] mt-0.5">
+                        {day.strategy}
+                      </p>
+                      
+                      {/* Methods summary */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {day.methodsUsed.map((m) => (
+                          <span 
+                            key={m.methodId} 
+                            className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          >
+                            {m.label}
+                          </span>
+                        ))}
+                        {day.methodsNotUsed.filter(m => m.isUserPreference).slice(0, 2).map((m) => (
+                          <span 
+                            key={m.methodId} 
+                            className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-500/70 border border-amber-500/20"
+                            title={m.reason}
+                          >
+                            {m.label} (held)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Totals footer */}
+                <div className="mt-3 pt-2 border-t border-[#2B313A]/60 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#6B7280]">
+                  <span>
+                    <span className="text-emerald-400">{perDayCoachingSummary.totals.methodsUsedAcrossWeek.length}</span> methods active
+                  </span>
+                  <span>
+                    <span className="text-[#A4ACB8]">{perDayCoachingSummary.totals.daysWithAnyMethod}</span>/{perDayCoachingSummary.days.length} days with overlays
+                  </span>
+                  {perDayCoachingSummary.totals.preferredNeverHonored.length > 0 && (
+                    <span>
+                      <span className="text-amber-400">{perDayCoachingSummary.totals.preferredNeverHonored.length}</span> preferred held back
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            
             {/* [PPX-7] What We Protect - Training principles we never compromise */}
             {intelligenceContract?.protectedConstraints && intelligenceContract.protectedConstraints.length > 0 && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">

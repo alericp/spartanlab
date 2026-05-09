@@ -3528,8 +3528,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   data-changed-exercise-count={am.changedExerciseCount}
                 >
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* [PPX-7] User-friendly label instead of "Doctrine Materialization" */}
                     <span className="text-[10px] uppercase tracking-[0.08em] text-[#E63946]/80 font-semibold">
-                      Doctrine Materialization
+                      Training Adjustments
                     </span>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-[#E63946]/40 bg-[#E63946]/10 text-[12px] font-semibold text-[#E63946]">
                       {visibleLabel}
@@ -4518,13 +4519,14 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-2">
                     <Layers className="w-3.5 h-3.5 text-[#6A8FB0]" aria-hidden="true" />
+                    {/* [PPX-7] User-friendly labels: "built" instead of "materialized", clearer "preserved" copy */}
                     <span className={`uppercase tracking-wider text-[10px] font-semibold ${labelColor}`}>
                       {isFallback
-                        ? 'Compression-only fallback'
+                        ? 'Compression fallback'
                         : showAsMaterialized
-                          ? `${truth.targetMinutes} Min materialized`
+                          ? `${truth.targetMinutes} Min session`
                           : truth.engine === 'no_safe_mutation'
-                            ? `${truth.targetMinutes} Min preserved (no safe mutation)`
+                            ? `${truth.targetMinutes} Min (structure preserved)`
                             : `${truth.targetMinutes} Min preserved`}
                     </span>
                   </div>
@@ -7826,9 +7828,10 @@ function ExerciseRow({
           if (rpeCap.applied !== true) return null
           if (typeof rpeCap.rpeBefore !== 'number') return null
           if (typeof rpeCap.rpeAfter !== 'number') return null
+          // [PPX-7] User-friendly tooltip instead of "Evidence calibration"
           const titleText =
             rpeCap.reasonCoachLine ??
-            `Evidence calibration capped this from RPE ${rpeCap.rpeBefore} to ${rpeCap.rpeAfter}.`
+            `Adjusted based on your progress: RPE ${rpeCap.rpeBefore} → ${rpeCap.rpeAfter}`
           return (
             <span
               className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-teal-500/10 text-teal-300 border border-teal-500/30"
@@ -7850,9 +7853,10 @@ function ExerciseRow({
           if (typeof volAdj.setsBefore !== 'number') return null
           if (typeof volAdj.setsAfter !== 'number') return null
           if (volAdj.setsBefore <= volAdj.setsAfter) return null
+          // [PPX-7] User-friendly tooltip instead of "Evidence calibration"
           const titleText =
             volAdj.reasonCoachLine ??
-            `Evidence calibration reduced this from ${volAdj.setsBefore} sets to ${volAdj.setsAfter}.`
+            `Adjusted based on your progress: ${volAdj.setsBefore} → ${volAdj.setsAfter} sets`
           return (
             <span
               className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-amber-500/10 text-amber-300 border border-amber-500/30"

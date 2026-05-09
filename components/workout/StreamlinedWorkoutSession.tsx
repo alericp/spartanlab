@@ -3743,6 +3743,8 @@ export function StreamlinedWorkoutSession({
   const [cooldownIndex, setCooldownIndex] = useState(0)
   const [warmupSkipped, setWarmupSkipped] = useState(false)
   const [cooldownSkipped, setCooldownSkipped] = useState(false)
+  // [PPX-R4D] State to show workout review from cooldown (bypasses auto-transition to cooldown)
+  const [showWorkoutReview, setShowWorkoutReview] = useState(false)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -6942,7 +6944,9 @@ failureStage: null,
   // Now properly handled in an effect.
   // ==========================================================================
   useEffect(() => {
-    if (safeStatus === 'completed' && sessionPhase === 'main') {
+    // [PPX-R4D] If showWorkoutReview is true, we're viewing workout summary from cooldown Back
+    // Don't auto-transition back to cooldown
+    if (safeStatus === 'completed' && sessionPhase === 'main' && !showWorkoutReview) {
       const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
       if (cooldownItems.length > 0 && !cooldownSkipped) {
         // Transition to cooldown phase
@@ -6955,7 +6959,7 @@ failureStage: null,
         setSessionPhase('done')
       }
     }
-  }, [safeStatus, sessionPhase, cooldownSkipped, safeWorkoutSessionContract.cooldown])
+  }, [safeStatus, sessionPhase, cooldownSkipped, showWorkoutReview, safeWorkoutSessionContract.cooldown])
   
   // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
@@ -7989,39 +7993,20 @@ if (shouldShowLocalFallback) {
       dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
     }
     
-    // Handle back/exit from warmup
+    // [PPX-R4D] Handle back navigation within warmup - go to previous warmup item
+    // At first item, Back is disabled (no unsafe reload)
     const handleWarmupBack = () => {
-      if (warmupIndex === 0) {
-        // Go back to ready shell
-        setSessionPhase('warmup') // Reset to warmup start
-        setWarmupIndex(0)
-        // Component will fall through to ready shell since safeStatus is still 'ready'
-        // We need to reset the phase tracking
-        setSessionPhase('warmup')
-        // Force re-render by clearing the session phase temporarily
-        // Actually, we need to go back to ready state - but the machine is still in ready
-        // So we just need to not render this warmup UI
-        window.location.reload() // Simplest approach for now - TODO: improve
-      } else {
-        // Go back to previous warmup item
+      if (warmupIndex > 0) {
         setWarmupIndex(prev => prev - 1)
       }
+      // At index 0, Back is disabled - no action needed
     }
     
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
         <div className="max-w-md mx-auto space-y-4">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleWarmupBack}
-              className="text-[#6B7280] hover:text-white"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Back
-            </Button>
+          {/* [PPX-R4D] Header - no top Back button, just progress indicator */}
+          <div className="flex items-center justify-end">
             <span className="text-xs text-[#6B7280]">
               Warm-Up {warmupIndex + 1} / {warmupItems.length}
             </span>
@@ -8096,7 +8081,17 @@ if (shouldShowLocalFallback) {
                     {isLastWarmup ? 'Complete & Start Workout' : 'Done — Next'}
                   </Button>
                   
+                  {/* [PPX-R4D] Action row: Back | Skip This | Skip Warm-Up */}
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleWarmupBack}
+                      disabled={warmupIndex === 0}
+                      className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] disabled:opacity-30 px-3"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Back
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={handleSkipWarmupItem}
@@ -8145,6 +8140,89 @@ if (shouldShowLocalFallback) {
                 }`}
               />
             ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // [PPX-R4D] RENDER: WORKOUT REVIEW (from Cooldown Back)
+  // ==========================================================================
+  // When user presses Back in cooldown, show workout summary with option to
+  // return to cooldown. This prevents the auto-transition effect from firing.
+  // ==========================================================================
+  
+  if (safeStatus === 'completed' && sessionPhase === 'main' && showWorkoutReview) {
+    const totalSets = normalizedCompletedSets.length
+    const uniqueExercises = new Set(normalizedCompletedSets.map(s => s.exerciseId)).size
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-emerald-400">
+              Workout Summary
+            </span>
+            <span className="text-xs text-[#6B7280]">
+              Review Mode
+            </span>
+          </div>
+          
+          {/* Summary Card */}
+          <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <Check className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-[#E6E9EF]">Workout Complete</h2>
+                <p className="text-xs text-[#6B7280]">
+                  {totalSets} sets across {uniqueExercises} exercises
+                </p>
+              </div>
+            </div>
+            
+            {/* Quick stats */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-[#0F1115] rounded-lg p-3">
+                <div className="text-2xl font-bold text-[#E6E9EF]">{totalSets}</div>
+                <div className="text-xs text-[#6B7280]">Sets Logged</div>
+              </div>
+              <div className="bg-[#0F1115] rounded-lg p-3">
+                <div className="text-2xl font-bold text-[#E6E9EF]">{uniqueExercises}</div>
+                <div className="text-xs text-[#6B7280]">Exercises</div>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="space-y-2">
+              <Button
+                onClick={() => {
+                  // Return to cooldown
+                  setShowWorkoutReview(false)
+                  setSessionPhase('cooldown')
+                }}
+                className="w-full h-12 bg-sky-500 hover:bg-sky-600 text-white font-semibold"
+              >
+                <ChevronRight className="w-4 h-4 mr-2" />
+                Continue to Cool-Down
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Skip cooldown and go to final summary
+                  setShowWorkoutReview(false)
+                  setCooldownSkipped(true)
+                  setSessionPhase('done')
+                }}
+                className="w-full h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+              >
+                Skip Cool-Down & Finish
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -8280,11 +8358,15 @@ if (shouldShowLocalFallback) {
                     {isLastCooldown ? 'Complete & Finish' : 'Done — Next'}
                   </Button>
                   
-                  {/* [PPX-R4C] Action row with Back to Workout + Skip buttons */}
+                  {/* [PPX-R4D] Action row with Back to Workout + Skip buttons */}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setSessionPhase('main')}
+                      onClick={() => {
+                        // [PPX-R4D] Set review mode to prevent auto-transition back to cooldown
+                        setShowWorkoutReview(true)
+                        setSessionPhase('main')
+                      }}
                       className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />

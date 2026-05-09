@@ -2512,12 +2512,12 @@ export function ActiveWorkoutStartCorridor({
             {bandSelectable && (
               showMultiBandSelector && onSetSelectedBands ? (
                 // True multi-band selector for band-assisted exercises
-                // [PPX-R2H] Pass exercise context for history-based recommendations
+                // [PPX-R2I] Use consistent exerciseId from snapshot for band history lookup
                 <MultiBandSelector 
                   selectedBands={selectedBands} 
                   onChange={onSetSelectedBands} 
                   recommendedBand={recommendedBand}
-                  exerciseId={exerciseName?.toLowerCase().replace(/\s+/g, '_')}
+                  exerciseId={exerciseId || exerciseName?.toLowerCase().replace(/\s+/g, '_')}
                   exerciseName={exerciseName}
                 />
               ) : (

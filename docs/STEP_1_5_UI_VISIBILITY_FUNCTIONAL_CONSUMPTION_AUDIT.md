@@ -161,21 +161,26 @@ From recent conversation:
     - Removed the "Workout Summary / Review Mode" render branch (dead code after fix)
     - Simplified auto-transition effect (no longer checks showWorkoutReview)
   - Behavior now matches warmup: Back within phase, disabled at first item
-- PPX-R4G: Cooldown First-Item Back to Completed WO Context — COMPLETE (2026-05-09)
+- PPX-R4G: Cooldown First-Item Back to Completed WO Context — SUPERSEDED BY R4H
   - Previous state: R4E fixed cooldown internal navigation but Cool-Down 1 Back was disabled
-  - User expectation: Cool-Down 1 Back should return to completed workout context, not be dead
+  - R4G added `completedMain` phase but user didn't want "Day 1 Done" interstitial
+  - SUPERSEDED: R4H replaces this with direct return to live workout context
+- PPX-R4H: Cool-Down 1 Back to Last Live Workout Context — COMPLETE (2026-05-09)
+  - Previous state: R4G routed Cool-Down 1 Back to "Day 1 Done / Workout skipped" interstitial
+  - User expectation: Cool-Down 1 Back should return to the actual live workout exercise/set context
+  - ROOT CAUSE: `completedMain` was an interstitial summary, not the live workout context
   - FIX:
-    - Added new `SessionPhase = 'completedMain'` for completed workout context
-    - Cool-Down 1 Back now transitions to `completedMain` phase
-    - `completedMain` render shows workout summary with:
-      - "Continue to Cool-Down" button (returns to cooldown at index 0)
-      - "Skip Cool-Down & Finish" button (goes to final done)
-    - State preserved: logged sets, selected bands, cooldown progress
-    - No auto-transition from `completedMain` (only from `main`)
-  - Navigation contract now complete:
+    - Added `returnedFromCooldown` state flag
+    - Cool-Down 1 Back now sets `returnedFromCooldown=true` + `setSessionPhase('main')`
+    - Auto-transition effect skips when `returnedFromCooldown` is true
+    - Live workout renders with "Workout Complete / Continue to Cool-Down" banner at top
+    - User sees the actual final exercise/set context, not a summary card
+    - "Continue to Cool-Down" button clears flag and returns to cooldown
+  - Navigation contract now correct:
     - Cool-Down 2+ Back → previous cooldown item
-    - Cool-Down 1 Back → completedMain (workout summary with continue option)
-    - completedMain → cooldown OR done
+    - Cool-Down 1 Back → live workout context with continue banner
+    - Continue to Cool-Down → returns to cooldown (index preserved)
+  - Normal completion flow unchanged: final set → auto-transition to cooldown (no interstitial)
 - PPX-R5: Warm-Up + Cool-Down Adaptiveness Truth-to-UI Audit — NOT_STARTED
   - PURPOSE: Prove whether WU/CD are truly adaptive or only showing adaptive labels
   - SCOPE: Verify item selection, ordering, dosage, rationale labels, mobility/flexibility

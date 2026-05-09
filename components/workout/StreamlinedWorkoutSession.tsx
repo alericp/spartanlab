@@ -3744,6 +3744,9 @@ export function StreamlinedWorkoutSession({
   const [cooldownIndex, setCooldownIndex] = useState(0)
   const [warmupSkipped, setWarmupSkipped] = useState(false)
   const [cooldownSkipped, setCooldownSkipped] = useState(false)
+  // [PPX-R4H] Flag to indicate user backed out of cooldown to view last workout context
+  // This prevents auto-transition back to cooldown and shows "Continue to Cool-Down" option
+  const [returnedFromCooldown, setReturnedFromCooldown] = useState(false)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -6943,8 +6946,9 @@ failureStage: null,
   // Now properly handled in an effect.
   // ==========================================================================
   useEffect(() => {
-    // [PPX-R4E] Auto-transition from completed main workout to cooldown (or done if no cooldown)
-    if (safeStatus === 'completed' && sessionPhase === 'main') {
+    // [PPX-R4H] Auto-transition from completed main workout to cooldown (or done if no cooldown)
+    // Skip if returnedFromCooldown is true - user backed out to view workout context
+    if (safeStatus === 'completed' && sessionPhase === 'main' && !returnedFromCooldown) {
       const cooldownItems = safeWorkoutSessionContract.cooldown ?? []
       if (cooldownItems.length > 0 && !cooldownSkipped) {
         // Transition to cooldown phase
@@ -6957,7 +6961,7 @@ failureStage: null,
         setSessionPhase('done')
       }
     }
-  }, [safeStatus, sessionPhase, cooldownSkipped, safeWorkoutSessionContract.cooldown])
+  }, [safeStatus, sessionPhase, cooldownSkipped, returnedFromCooldown, safeWorkoutSessionContract.cooldown])
   
   // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
@@ -8359,17 +8363,19 @@ if (shouldShowLocalFallback) {
                     {isLastCooldown ? 'Complete & Finish' : 'Done — Next'}
                   </Button>
                   
-                  {/* [PPX-R4G] Action row: Back navigates within cooldown or to completed WO context */}
+                  {/* [PPX-R4H] Action row: Back navigates within cooldown or to last live workout context */}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       onClick={() => {
-                        // [PPX-R4G] Back goes to previous cooldown item, or to completedMain at index 0
+                        // [PPX-R4H] Back goes to previous cooldown item, or to live workout context at index 0
                         if (cooldownIndex > 0) {
                           setCooldownIndex(prev => prev - 1)
                         } else {
-                          // At first cooldown item, go to completed main WO context
-                          setSessionPhase('completedMain')
+                          // At first cooldown item, return to last live workout context
+                          // Set flag to prevent auto-transition back to cooldown
+                          setReturnedFromCooldown(true)
+                          setSessionPhase('main')
                         }
                       }}
                       className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"
@@ -10004,6 +10010,34 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   {liveGroupedExecutionResult.parityVerdict}
                 </p>
               )}
+            </div>
+          </div>
+        )}
+        {/* [PPX-R4H] Continue to Cool-Down banner when user backed out of cooldown */}
+        {returnedFromCooldown && safeStatus === 'completed' && (
+          <div
+            className="mx-3 mt-3 mb-2 rounded-xl border border-[#2B313A] bg-[#1A1F26] px-4 py-3"
+            role="status"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm font-medium text-[#E6E9EF]">
+                  Workout Complete
+                </span>
+              </div>
+              <Button
+                onClick={() => {
+                  setReturnedFromCooldown(false)
+                  setSessionPhase('cooldown')
+                  // Cooldown index preserved from before
+                }}
+                size="sm"
+                className="bg-sky-500 hover:bg-sky-600 text-white font-medium h-8 px-3"
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1" />
+                Continue to Cool-Down
+              </Button>
             </div>
           </div>
         )}

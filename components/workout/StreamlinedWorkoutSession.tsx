@@ -8007,18 +8007,25 @@ if (shouldShowLocalFallback) {
             </span>
           </div>
           
-          {/* Warmup Card */}
-          <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
-            {/* Phase Label */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Flame className="w-4 h-4 text-amber-400" />
+            {/* Warmup Card */}
+            <div className="bg-[#1A1F26] rounded-xl border border-[#2B313A] p-5">
+              {/* Phase Label */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <Flame className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
+                  {/* [PPX-R4A] Show adaptive warmup focus if available */}
+                  {(safeWorkoutSessionContract as AdaptiveSession).warmupAdaptation ? (
+                    <p className="text-xs text-emerald-400/80">
+                      {(safeWorkoutSessionContract as AdaptiveSession).warmupAdaptation?.focusLabel}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-[#6B7280]">Prepare your body for the workout</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-[#E6E9EF]">Warm-Up</h2>
-                <p className="text-xs text-[#6B7280]">Prepare your body for the workout</p>
-              </div>
-            </div>
             
             {/* Current Warmup Item */}
             {currentWarmupItem ? (
@@ -8182,7 +8189,14 @@ if (shouldShowLocalFallback) {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-[#E6E9EF]">Cool-Down</h2>
-                <p className="text-xs text-[#6B7280]">Recovery stretches and mobility</p>
+                {/* [PPX-R4A] Show adaptive cooldown focus if available */}
+                {(safeWorkoutSessionContract as AdaptiveSession).cooldownAdaptation ? (
+                  <p className="text-xs text-sky-400/80">
+                    {(safeWorkoutSessionContract as AdaptiveSession).cooldownAdaptation?.focusLabel}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[#6B7280]">Recovery stretches and mobility</p>
+                )}
               </div>
             </div>
             

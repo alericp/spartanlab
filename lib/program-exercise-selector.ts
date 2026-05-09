@@ -1146,6 +1146,23 @@ export interface ExerciseSelection {
   // and surfaces it here so the builder can stamp it on each session and
   // aggregate it into program.doctrineCausalChallenge.
   doctrineCausalAudit?: DoctrineScoringAudit | null
+  
+  // [PPX-R4A] Section-level adaptive metadata for warmup/cooldown
+  warmupAdaptation?: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetAreas?: string[]
+    adaptationSource?: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+  }
+  cooldownAdaptation?: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetRegions?: string[]
+    flexibilityGoals?: string[]
+    adaptationSource?: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+  }
 }
 
 interface ExerciseSelectionInputs {
@@ -1742,20 +1759,24 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   })
   
   // Generate intelligent warmup based on main exercises
-  const warmup = selectIntelligentWarmup(
+  // [PPX-R4A] Now returns exercises + adaptation metadata
+  const warmupResult = selectIntelligentWarmup(
     main,
     primaryGoal,
     sessionMinutes,
     equipment
   )
+  const warmup = warmupResult.exercises
   
   // Generate intelligent cooldown based on main exercises
-  const cooldown = selectIntelligentCooldown(
+  // [PPX-R4A] Now returns exercises + adaptation metadata
+  const cooldownResult = selectIntelligentCooldown(
     main,
     primaryGoal,
     sessionMinutes,
     equipment
   )
+  const cooldown = cooldownResult.exercises
   
   // Calculate total time
   const totalEstimatedTime = calculateTotalTime(warmup, main, cooldown)
@@ -2247,6 +2268,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     // Include doctrine relaxation info in return
     doctrineRelaxationApplied,
     doctrineRelaxationReason,
+    // [PPX-R4A] Include warmup/cooldown adaptation metadata for visible proof
+    warmupAdaptation: warmupResult.adaptation,
+    cooldownAdaptation: cooldownResult.adaptation,
     antiBloatValidation: {
       isValid: antiBloatResult.isValid,
       issues: antiBloatResult.issues,
@@ -8416,12 +8440,24 @@ export function buildFallbackSelectionForSession(
 // INTELLIGENT WARMUP SELECTION (Using Warm-Up Engine)
 // =============================================================================
 
+// [PPX-R4A] Return type for warmup selection with adaptation metadata
+interface WarmupSelectionResult {
+  exercises: SelectedExercise[]
+  adaptation: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetAreas?: string[]
+    adaptationSource: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+  }
+}
+
 function selectIntelligentWarmup(
   mainExercises: SelectedExercise[],
   primaryGoal: PrimaryGoal,
   sessionMinutes: number,
   equipment: EquipmentType[]
-): SelectedExercise[] {
+): WarmupSelectionResult {
   // Convert session minutes to SessionLength
   const sessionLength: SessionLength = 
     sessionMinutes <= 20 ? '10-20' as SessionLength :
@@ -8484,7 +8520,31 @@ function selectIntelligentWarmup(
     }
   })
 
-  return selected
+  // [PPX-R4A] Determine adaptation source based on what drove the warmup selection
+  const adaptationSource: WarmupSelectionResult['adaptation']['adaptationSource'] = 
+    firstSkillProgression?.skillType ? 'skill_focus' :
+    mainExercises.length > 0 ? 'session_exercises' : 'default'
+  
+  // [PPX-R4A] Build focus label from skill or goal
+  const focusLabel = generatedWarmup.focusLabel || (
+    firstSkillProgression?.skillType 
+      ? `${firstSkillProgression.skillType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Preparation`
+      : `${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Warm-Up`
+  )
+
+  return {
+    exercises: selected,
+    adaptation: {
+      focus: generatedWarmup.block.focus,
+      focusLabel,
+      rationale: generatedWarmup.block.rationale,
+      targetAreas: generatedWarmup.block.exercises
+        .flatMap(e => e.targetMuscles)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 5),
+      adaptationSource,
+    },
+  }
 }
 
 // =============================================================================
@@ -8644,13 +8704,26 @@ function selectWarmupLegacy(
 // INTELLIGENT COOLDOWN SELECTION (Using Cool-Down Engine)
 // =============================================================================
 
+// [PPX-R4A] Return type for cooldown selection with adaptation metadata
+interface CooldownSelectionResult {
+  exercises: SelectedExercise[]
+  adaptation: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetRegions?: string[]
+    flexibilityGoals?: string[]
+    adaptationSource: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+  }
+}
+
 function selectIntelligentCooldown(
   mainExercises: SelectedExercise[],
   primaryGoal: PrimaryGoal,
   sessionMinutes: number,
   equipment: EquipmentType[],
   flexibilityGoals?: FlexibilityPathway[]
-): SelectedExercise[] {
+): CooldownSelectionResult {
   // Convert session minutes to SessionLength
   const sessionLength: SessionLength = 
     sessionMinutes <= 20 ? '10-20' as SessionLength :
@@ -8740,7 +8813,33 @@ function selectIntelligentCooldown(
     })
   }
 
-  return selected
+  // [PPX-R4A] Determine adaptation source based on what drove the cooldown selection
+  const hasFlexibilityGoals = flexibilityGoals && flexibilityGoals.length > 0
+  const adaptationSource: CooldownSelectionResult['adaptation']['adaptationSource'] = 
+    hasFlexibilityGoals ? 'flexibility_goal' :
+    mainExercises.length > 0 ? 'session_stress' : 'default'
+  
+  // [PPX-R4A] Build focus label from flexibility goals or session focus
+  const focusLabel = generatedCooldown.focusLabel || (
+    hasFlexibilityGoals 
+      ? `${flexibilityGoals[0].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Support`
+      : `Post-${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Recovery`
+  )
+
+  return {
+    exercises: selected,
+    adaptation: {
+      focus: generatedCooldown.block.focus,
+      focusLabel,
+      rationale: generatedCooldown.block.rationale,
+      targetRegions: generatedCooldown.block.exercises
+        .flatMap(e => e.targetMuscles)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 5),
+      flexibilityGoals: hasFlexibilityGoals ? flexibilityGoals : undefined,
+      adaptationSource,
+    },
+  }
 }
 
 function selectCooldownLegacy(minutes: number): SelectedExercise[] {

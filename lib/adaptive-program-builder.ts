@@ -1892,6 +1892,26 @@ export interface AdaptiveSession {
   // See lib/program/session-length-truth-contract.ts.
   // ==========================================================================
   sessionLengthTruth?: import('./program/session-length-truth-contract').SessionLengthTruthStamp
+  
+  // ==========================================================================
+  // [PPX-R4A] SECTION-LEVEL WARMUP/COOLDOWN ADAPTIVE METADATA
+  // Explains WHY the warmup/cooldown was selected for this session.
+  // ==========================================================================
+  warmupAdaptation?: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetAreas?: string[]
+    adaptationSource?: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+  }
+  cooldownAdaptation?: {
+    focus: string
+    focusLabel: string
+    rationale: string
+    targetRegions?: string[]
+    flexibilityGoals?: string[]
+    adaptationSource?: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+  }
 }
 
 export interface AdaptiveExercise {
@@ -29753,6 +29773,9 @@ function generateAdaptiveSession(
     warmup: safeWarmup,
     cooldown: safeCooldown,
     totalEstimatedTime: (sessionWasRescued || wasRecoveredFromInvalidation) ? canonicalTotalTime : selection.totalEstimatedTime,
+    // [PPX-R4A] Preserve warmup/cooldown adaptation metadata for visible proof
+    warmupAdaptation: selection.warmupAdaptation,
+    cooldownAdaptation: selection.cooldownAdaptation,
   }
   
   middleStep = 'effective_selection_built'
@@ -31004,6 +31027,9 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       exercises: validatedSession.exercises,
       warmup: validatedSession.warmup,
       cooldown: validatedSession.cooldown,
+      // [PPX-R4A] Include warmup/cooldown adaptation metadata for visible proof
+      warmupAdaptation: effectiveSelection.warmupAdaptation,
+      cooldownAdaptation: effectiveSelection.cooldownAdaptation,
       // Use effectiveSelection.totalEstimatedTime (not stale original)
       estimatedMinutes: effectiveSelection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,

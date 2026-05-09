@@ -26,6 +26,8 @@ import {
   Scale,
   Layers,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   ArrowRight,
   Loader2,
   ChevronLeft,

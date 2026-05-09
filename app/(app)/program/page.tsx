@@ -68,8 +68,14 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info } from 'lucide-react'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
@@ -1466,6 +1472,9 @@ function formatStressPattern(pattern: string | null): string {
 // programs render exactly as they did before.
 // ==========================================================================
 function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
+  // [PPX-1] Collapsed by default for cleaner Program page hierarchy
+  const [isExpanded, setIsExpanded] = useState(false)
+  
   const summary = extractProgramDecisionSummary(program)
   // [PHASE Y3] Coach-facing narrative derived from Y2. Returns
   // `available:false` when Y2 is missing — in that case we keep the
@@ -1531,40 +1540,76 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
       })
     }
 
+    // [PPX-1] Collapsed by default - show compact header with expand toggle
     return (
-      <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
-            Program Decisions
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {chips.map((chip, idx) => (
-            <div
-              key={idx}
-              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
-            >
-              <span className="text-zinc-500">{chip.label}:</span>
-              <span className="font-medium">{chip.value}</span>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <div className="mb-4 bg-zinc-900/50 border border-zinc-800/60 rounded-lg" data-ppx1-collapsed={!isExpanded}>
+          <CollapsibleTrigger asChild>
+            <div className="p-3 cursor-pointer hover:bg-zinc-800/30 transition-colors rounded-lg">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+                    Program Decisions
+                  </span>
+                  {/* [PPX-1] Show 2 compact chips in collapsed header */}
+                  {!isExpanded && chips.length > 0 && (
+                    <div className="hidden sm:flex items-center gap-1.5 ml-2">
+                      {chips.slice(0, 2).map((chip, idx) => (
+                        <span
+                          key={idx}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border ${chip.color}`}
+                        >
+                          {chip.value}
+                        </span>
+                      ))}
+                      {chips.length > 2 && (
+                        <span className="text-[10px] text-zinc-500">+{chips.length - 2}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <ChevronDown 
+                  className={cn(
+                    "w-4 h-4 text-zinc-500 transition-transform duration-200",
+                    isExpanded && "rotate-180"
+                  )}
+                />
+              </div>
             </div>
-          ))}
+          </CollapsibleTrigger>
+          
+          <CollapsibleContent>
+            <div className="px-3 pb-3">
+              <div className="flex flex-wrap gap-2">
+                {chips.map((chip, idx) => (
+                  <div
+                    key={idx}
+                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
+                  >
+                    <span className="text-zinc-500">{chip.label}:</span>
+                    <span className="font-medium">{chip.value}</span>
+                  </div>
+                ))}
+              </div>
+              {narrative.supportingSentence && (
+                <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+                  {narrative.supportingSentence}
+                </p>
+              )}
+              {narrative.densityVisibleLine && (
+                <p className="mt-1 text-[11px] text-zinc-500 italic">
+                  {narrative.densityVisibleLine}
+                </p>
+              )}
+              {narrative.consistencyNote && (
+                <p className="mt-1 text-[11px] text-zinc-600 italic">
+                  {narrative.consistencyNote}
+                </p>
+              )}
+            </div>
+          </CollapsibleContent>
         </div>
-        {narrative.supportingSentence && (
-          <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-            {narrative.supportingSentence}
-          </p>
-        )}
-        {narrative.densityVisibleLine && (
-          <p className="mt-1 text-[11px] text-zinc-500 italic">
-            {narrative.densityVisibleLine}
-          </p>
-        )}
-        {narrative.consistencyNote && (
-          <p className="mt-1 text-[11px] text-zinc-600 italic">
-            {narrative.consistencyNote}
-          </p>
-        )}
-      </div>
+      </Collapsible>
     )
   }
 
@@ -1621,30 +1666,66 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
 
   if (chips.length === 0) return null
 
+  // [PPX-1] Collapsed by default for cleaner Program page hierarchy (legacy path)
   return (
-    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
-          Program Decisions
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {chips.map((chip, idx) => (
-          <div
-            key={idx}
-            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
-          >
-            <span className="text-zinc-500">{chip.label}:</span>
-            <span className="font-medium">{chip.value}</span>
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <div className="mb-4 bg-zinc-900/50 border border-zinc-800/60 rounded-lg" data-ppx1-collapsed={!isExpanded}>
+        <CollapsibleTrigger asChild>
+          <div className="p-3 cursor-pointer hover:bg-zinc-800/30 transition-colors rounded-lg">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+                  Program Decisions
+                </span>
+                {/* [PPX-1] Show 2 compact chips in collapsed header */}
+                {!isExpanded && chips.length > 0 && (
+                  <div className="hidden sm:flex items-center gap-1.5 ml-2">
+                    {chips.slice(0, 2).map((chip, idx) => (
+                      <span
+                        key={idx}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border ${chip.color}`}
+                      >
+                        {chip.value}
+                      </span>
+                    ))}
+                    {chips.length > 2 && (
+                      <span className="text-[10px] text-zinc-500">+{chips.length - 2}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <ChevronDown 
+                className={cn(
+                  "w-4 h-4 text-zinc-500 transition-transform duration-200",
+                  isExpanded && "rotate-180"
+                )}
+              />
+            </div>
           </div>
-        ))}
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <div className="px-3 pb-3">
+            <div className="flex flex-wrap gap-2">
+              {chips.map((chip, idx) => (
+                <div
+                  key={idx}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
+                >
+                  <span className="text-zinc-500">{chip.label}:</span>
+                  <span className="font-medium">{chip.value}</span>
+                </div>
+              ))}
+            </div>
+            {summary.sessionCharacter && (
+              <p className="mt-2 text-xs text-zinc-500 italic">
+                {summary.sessionCharacter}
+              </p>
+            )}
+          </div>
+        </CollapsibleContent>
       </div>
-      {summary.sessionCharacter && (
-        <p className="mt-2 text-xs text-zinc-500 italic">
-          {summary.sessionCharacter}
-        </p>
-      )}
-    </div>
+    </Collapsible>
   )
 }
 
@@ -3167,10 +3248,13 @@ function ProgramDisplayWrapper({
         })
         return (
           <div className="flex flex-col gap-3">
+            {/* [PPX-1] FeedbackLoopProofCard now defaults to collapsed for cleaner
+                Program page hierarchy. User can expand to see full evidence details. */}
             <FeedbackLoopProofCard
               workoutSummary={workoutSummary}
               calibrationPlan={calibrationPlan}
               generationInfluence={generationInfluence}
+              defaultCollapsed={true}
             />
             <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
             {/* [AB13-10] Gated visual proof overlay. Renders absolutely
@@ -11586,7 +11670,7 @@ export default function ProgramPage() {
 
         // [STEP-4B] Run the strongest-truth schedule pair through the
         // shared resolver so Regenerate uses identical semantics to Modify
-        // and Adjustment. Flexible → canonical numeric is null. Static →
+        // and Adjustment. Flexible → canonical numeric is null. Static ��
         // numeric value preserved. No hand-rolled ternary, no fake fallback.
         const regenerateScheduleTruth = resolveProgramPageScheduleTruth({
           scheduleMode: strongestRegenerateTruth.scheduleMode,

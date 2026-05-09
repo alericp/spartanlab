@@ -8155,7 +8155,7 @@ if (shouldShowLocalFallback) {
   
   if (safeStatus === 'completed' && sessionPhase === 'main' && showWorkoutReview) {
     const totalSets = normalizedCompletedSets.length
-    const uniqueExercises = new Set(normalizedCompletedSets.map(s => s.exerciseId)).size
+    const uniqueExercises = new Set(normalizedCompletedSets.map(s => s.exerciseIndex)).size
     
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">

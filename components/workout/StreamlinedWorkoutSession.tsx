@@ -3500,6 +3500,11 @@ export function StreamlinedWorkoutSession({
   const [l2RecoverySnapshot, setL2RecoverySnapshot] = useState<RecoveryAdaptationSnapshot | null>(null)
   const [l2CheckInDismissed, setL2CheckInDismissed] = useState(false)
   
+  // [PPX-R1B] Set notes toggle state — moved here from line ~9452 to fix React #310 hook-order violation.
+  // This hook was previously declared AFTER conditional returns (ready/completed branches),
+  // which caused inconsistent hook counts when safeStatus changed.
+  const [showSetNotes, setShowSetNotes] = useState(false)
+  
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -9449,7 +9454,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // SINGLE SOURCE OF TRUTH: All input values come from machine state (safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed)
   // Setters dispatch into machine state (setHoldValue, setRepsValue, setSelectedRPE, setBandUsed)
   // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for context values
-  const [showSetNotes, setShowSetNotes] = useState(false)
+  // [PPX-R1B] showSetNotes state moved to parent hook area (line ~3505) to fix React #310
   
   const handleToggleReasonTag = (tag: SetReasonTag) => {
     machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })

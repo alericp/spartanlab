@@ -201,7 +201,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
 import { MethodInfoBubble } from '@/components/coaching'
-import type { RPEValue } from '@/lib/rpe-adjustment-engine'
+import { formatDisplayRPE, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { 
   type ResistanceBandColor,
   // [PPX-R3A] Intelligent band recommendation with performance analysis
@@ -1547,7 +1547,7 @@ export function ActiveWorkoutStartCorridor({
                               ? 'bg-blue-500/10 text-blue-400 border-0'
                               : 'bg-green-500/10 text-green-400 border-0'
                         }`}>
-                          RPE {lastSetRPE}
+                          RPE {formatDisplayRPE(lastSetRPE)}
                         </Badge>
                       </div>
                     </div>
@@ -1773,7 +1773,7 @@ export function ActiveWorkoutStartCorridor({
                                     variant="outline"
                                     className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10 tabular-nums"
                                   >
-                                    {`RPE ${nextExerciseTargetRPE}`}
+                                    {`RPE ${formatDisplayRPE(nextExerciseTargetRPE)}`}
                                   </Badge>
                                 )}
                                 {typeof nextExerciseRestSeconds === 'number' && nextExerciseRestSeconds > 0 && (
@@ -1861,12 +1861,12 @@ export function ActiveWorkoutStartCorridor({
                       <div className="flex items-center justify-between">
                         <span className="text-[#6B7280]">RPE</span>
                         <span className="text-[#E6E9EF] font-medium tabular-nums">
-                          {typeof latestRPE === 'number' ? latestRPE : '—'}
+                          {formatDisplayRPE(latestRPE)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-[#6B7280]">Target RPE</span>
-                        <span className="text-[#A4ACB8] tabular-nums">{targetRPE}</span>
+                        <span className="text-[#A4ACB8] tabular-nums">{formatDisplayRPE(targetRPE)}</span>
                       </div>
                     </div>
                     {(latestSet.actualLoadUsed !== undefined && latestSet.actualLoadUsed > 0) ||
@@ -1938,7 +1938,7 @@ export function ActiveWorkoutStartCorridor({
                               </span>
                               {set.actualRPE && (
                                 <Badge variant="outline" className="text-[10px] border-[#2B313A] text-[#A4ACB8]">
-                                  RPE {set.actualRPE}
+                                  RPE {formatDisplayRPE(set.actualRPE)}
                                 </Badge>
                               )}
                               {hasNote && (
@@ -2281,7 +2281,7 @@ export function ActiveWorkoutStartCorridor({
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
-              <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+              <span className="text-[#A4ACB8]">RPE {formatDisplayRPE(targetRPE)}</span>
               {prescribedLoad && prescribedLoad.load > 0 && (
                 <>
                   <span className="text-[#6B7280]">·</span>
@@ -2660,7 +2660,7 @@ export function ActiveWorkoutStartCorridor({
                     </span>
                     {!showRecentSets && (
                       <span className="text-xs text-[#6B7280] truncate">
-                        Last: Set {latest.setNumber} · {latestValue} · RPE {latest.actualRPE}
+                        Last: Set {latest.setNumber} · {latestValue} · RPE {formatDisplayRPE(latest.actualRPE)}
                       </span>
                     )}
                   </div>
@@ -2717,7 +2717,7 @@ export function ActiveWorkoutStartCorridor({
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
+                          <span className="text-[#A4ACB8]">RPE {formatDisplayRPE(set.actualRPE)}</span>
                           {/* Free-text note indicator */}
                           {hasNote && (
                             <MessageSquare

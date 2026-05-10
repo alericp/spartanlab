@@ -1156,7 +1156,7 @@ function enhanceRecoveryTruthWithNeon(
     evidence.push(`[NEON] ${neonData.sessionsWithHighFatigue} high-fatigue sessions detected`)
   } else if (neonData.averageRPELast7Days && neonData.averageRPELast7Days > 8) {
     recoveryRisk = 'high'
-    evidence.push(`[NEON] Avg RPE ${neonData.averageRPELast7Days.toFixed(1)} indicates high load`)
+    evidence.push(`[NEON] Avg RPE ${Math.round(neonData.averageRPELast7Days)} indicates high load`)
   } else if (neonData.completionRateLast7Days && neonData.completionRateLast7Days < 0.5) {
     recoveryRisk = 'moderate'
     evidence.push(`[NEON] Low completion rate may indicate recovery issues`)

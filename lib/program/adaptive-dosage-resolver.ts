@@ -335,7 +335,7 @@ const HANDSTAND_BANDS: Record<'beginner' | 'intermediate' | 'advanced', Handstan
   intermediate: {
     setsMin: 3, setsRecommended: 3, setsMax: 4,
     durationMin: 20, durationMax: 35,
-    rpeNumeric: 7, rpeText: 'RPE 6.5-7.5',
+    rpeNumeric: 7, rpeText: 'RPE 7',
     restMin: 75, restMax: 120, restRecommended: 90,
   },
   advanced: {

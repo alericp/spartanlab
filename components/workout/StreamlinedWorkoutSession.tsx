@@ -11796,7 +11796,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       {lastCompletedSet && <li>• Last set RPE: {lastCompletedSet.actualRPE || 'not recorded'}</li>}
                       {recommendedBand && <li>• Recommended band: {recommendedBand}</li>}
                       {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.join(' + ')}</li>}
-                      {completedCount === 0 && <li>• No prior sets logged for this exercise yet</li>}
+                      {completedCount === 0 && <li>• No sets completed in this workout yet</li>}
                     </ul>
                   </div>
                   

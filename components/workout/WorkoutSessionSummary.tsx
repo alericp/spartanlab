@@ -175,7 +175,7 @@ export function WorkoutSessionSummary({
               <span className="text-xs text-[#6B7280] uppercase tracking-wide">Avg RPE</span>
             </div>
             <p className="text-2xl font-bold text-[#E6E9EF]">
-              {stats.averageRPE?.toFixed(1) || '-'}
+              {stats.averageRPE ? Math.round(stats.averageRPE) : '-'}
             </p>
           </div>
 
@@ -227,7 +227,7 @@ export function WorkoutSessionSummary({
                     ${ex.avgRPE > 8.5 ? 'border-red-500/30 text-red-400' : ''}
                   `}
                 >
-                  RPE {ex.avgRPE.toFixed(1)}
+                  RPE {Math.round(ex.avgRPE)}
                 </Badge>
               </div>
             ))}

@@ -280,7 +280,7 @@ function BandProgressionInsight({ analysis }: BandProgressionInsightProps) {
         )}
         {analysis.signals.recentRPE && (
           <Badge variant="outline" className="text-xs bg-[#2A2A2A]">
-            RPE: {analysis.signals.recentRPE.toFixed(1)}
+            RPE: {Math.round(analysis.signals.recentRPE)}
           </Badge>
         )}
         <Badge variant="outline" className="text-xs bg-[#2A2A2A]">

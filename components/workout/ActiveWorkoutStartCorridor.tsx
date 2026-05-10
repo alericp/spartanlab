@@ -591,7 +591,7 @@ function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps)
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
         {targetRPE && (
-          <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
+          <span className="text-xs text-[#6B7280]">Target: {Math.round(Number(targetRPE))}</span>
         )}
       </div>
       <div className="grid grid-cols-5 gap-1.5">

@@ -2039,7 +2039,7 @@ function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps)
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
         {targetRPE && (
-          <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
+          <span className="text-xs text-[#6B7280]">Target: {toDisplayRPE(targetRPE)}</span>
         )}
       </div>
       <div className="grid grid-cols-4 gap-1.5">
@@ -9278,7 +9278,7 @@ if (shouldShowLocalFallback) {
               )}
               <div>
                 <p className="text-lg font-bold text-[#E6E9EF]">
-                  {stats.averageRPE ? stats.averageRPE.toFixed(1) : '-'}
+                  {stats.averageRPE ? Math.round(stats.averageRPE) : '-'}
                 </p>
                 <p className="text-[10px] text-[#6B7280] uppercase">Avg RPE</p>
               </div>
@@ -11679,8 +11679,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               const completedCount = exerciseCompletedSets.length
               const lastCompletedSet = exerciseCompletedSets[exerciseCompletedSets.length - 1]
               const avgRPE = exerciseCompletedSets.length > 0
-                ? (exerciseCompletedSets.reduce((sum, s) => sum + (s.actualRPE || 0), 0) / exerciseCompletedSets.length).toFixed(1)
-                : null
+? Math.round(exerciseCompletedSets.reduce((sum, s) => sum + (s.actualRPE || 0), 0) / exerciseCompletedSets.length)
+                  : null
               
               // Determine coaching verdict based on available data
               const getCoachingVerdict = () => {
@@ -11691,7 +11691,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   const lastRPE = lastCompletedSet.actualRPE || 0
                   const targetRPENum = parseFloat(String(targetRPE)) || 7
                   if (lastRPE >= targetRPENum + 2) {
-                    return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${lastRPE}, which is ${(lastRPE - targetRPENum).toFixed(1)} above target. Next set may reduce intensity if this persists.` }
+                    return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${Math.round(lastRPE)}, which is above target. Next set may reduce intensity if this persists.` }
                   }
                   if (lastRPE <= targetRPENum - 2 && lastRPE > 0) {
                     return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPE}, below the ${targetRPENum} target. If consistent, progression may be recommended.` }
@@ -11731,12 +11731,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                         <span className="text-[#6B7280]">Target</span>
                         <span className="text-[#E6E9EF]">{targetRepsOrTime}</span>
                       </div>
-                      {targetRPE && (
-                        <div className="flex justify-between">
-                          <span className="text-[#6B7280]">Target RPE</span>
-                          <span className="text-[#E6E9EF]">{targetRPE}</span>
-                        </div>
-                      )}
+{targetRPE && (
+                          <div className="flex justify-between">
+                            <span className="text-[#6B7280]">Target RPE</span>
+                            <span className="text-[#E6E9EF]">{toDisplayRPE(targetRPE)}</span>
+                          </div>
+                        )}
                       {prescribedLoad != null && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Load</span>
@@ -11790,7 +11790,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Evidence Used</h4>
                     <ul className="space-y-1 text-xs text-[#6B7280]">
                       <li>• Set {currentSetNumber} of {totalSets}</li>
-                      {targetRPE && <li>• Target RPE: {targetRPE}</li>}
+                      {targetRPE && <li>• Target RPE: {toDisplayRPE(targetRPE)}</li>}
                       {completedCount > 0 && <li>• Sets completed this exercise: {completedCount}</li>}
                       {avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}
                       {lastCompletedSet && <li>• Last set RPE: {lastCompletedSet.actualRPE || 'not recorded'}</li>}

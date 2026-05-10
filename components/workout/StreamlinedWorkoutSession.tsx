@@ -10410,6 +10410,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           bandSelectable: corridorBandSelectable,
           recommendedBand: corridorBandSelectable ? corridorRecommendedBand : undefined,
           selectedBands: corridorBandSelectable ? (machineState.selectedBands || []) : [],
+          // [PPX-R7.8H] Single source of truth for band guidance - card AND modal must use this
+          sharedBandGuidance: corridorBandSelectable ? sharedBandGuidanceTruth : null,
           // Weighted inputs (machine-direct)
           actualLoadUsed: machineState.actualLoadUsed,
           actualLoadUnit: machineState.actualLoadUnit,

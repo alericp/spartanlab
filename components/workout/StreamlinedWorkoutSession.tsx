@@ -10556,13 +10556,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 const selectedBands = machineState.selectedBands || []
                 const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
                 
-                // [PPX-R7.8D] Use getCanonicalBandHistory for proper canonical key resolution
+                // [PPX-R7.8E] Use getCanonicalBandHistory for proper canonical key resolution
                 // This ensures modal gets the same history as visible BandSelector card
                 const exerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || `exercise-${safeExerciseIndex}`
                 const bandHistoryData = (() => {
                   if (!exerciseId || !exerciseName) return null
                   try {
-                    // [PPX-R7.8D] Use canonical history lookup - resolves "tuck_front_lever_hold" → "front_lever_tuck"
+                    // [PPX-R7.8E] Use canonical history lookup - resolves "tuck_front_lever_hold" → "front_lever_tuck"
                     const canonicalHistory = getCanonicalBandHistory({ exerciseId, exerciseName })
                     const rec = getBandRecommendation(exerciseId, exerciseName)
                     
@@ -10575,12 +10575,17 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     const cleanReps = allHistory.filter(h => h.quality === 'clean').length
                     const cleanPercent = allHistory.length > 0 ? Math.round((cleanReps / allHistory.length) * 100) : 0
                     
+                    // [PPX-R7.8E] ROOT FIX: Use corridorRecommendedBand as fallback for recommendedBand
+                    // getBandRecommendation returns null for non-canonical IDs like "tuck_front_lever_hold"
+                    // but BandSelector uses recommendedBand prop as fallback - modal must do the same
+                    const effectiveBand = rec.recommendedBand || corridorRecommendedBand
+                    
                     return {
-                      recommendedBand: rec.recommendedBand,
+                      recommendedBand: effectiveBand,
                       historyCount: canonicalHistory.totalCount,
                       historicalAvgRPE,
                       cleanPercent,
-                      stability: 'stability' in rec ? String(rec.stability) : 'building',
+                      stability: 'stability' in rec ? String(rec.stability) : (canonicalHistory.totalCount > 0 ? 'stable' : 'building'),
                     }
                   } catch { return null }
                 })()

@@ -602,6 +602,48 @@ From recent conversation:
   - EXACT VERIFICATION PATH:
     Live Workout -> main exercise screen. Check active exercise card, RPE input target label, Assistance Band history card. Tap "Why this set?" for modal. No user-facing RPE should show decimals. Also spot-check Program page, Today page, History/session detail.
   - REMAINING CHAIN:
+    - PPX-R7.6E (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6E: Final App-Wide User-Facing RPE Decimal Doctrine Closure — COMPLETE (2026-05-10)
+  - PPX-R7.6D fixed main visible surfaces but source still had user-facing decimal RPE in reason/explanation strings
+  - DECIMAL RPE DISPLAY PATHS REMOVED:
+    1. lib/rest-intelligence.ts: "RPE 9.5-10" → "RPE 10", "RPE 8.5" → "RPE 9"
+    2. lib/band-progression-engine.ts: avgRPE.toFixed(1) → Math.round(avgRPE) x2
+    3. lib/adaptive-progression-engine.ts: context.avgRPE.toFixed(1) → Math.round(context.avgRPE) x4
+    4. lib/adaptive-deload-recovery-engine.ts: targetRPE.toFixed(1) → Math.round(targetRPE)
+    5. lib/program/adaptive-dosage-resolver.ts: "RPE 6.5-7.5" → "RPE 7"
+    6. lib/program/training-differentiation-calibrator.ts: "RPE 6.5-7" → "RPE 7", "RPE 7.5-8.5" → "RPE 8-9"
+    7. lib/server/authoritative-generation-truth-ingestion.ts: averageRPELast7Days.toFixed(1) → Math.round()
+    8. components/workout/StreamlinedWorkoutSession.tsx: "No prior sets logged" → "No sets completed in this workout yet"
+  - REMAINING .toFixed(1) CLASSIFICATION:
+    - Comments/documentation only (not user-facing)
+    - Internal numeric thresholds (e.g. peakRPE: 8.5 in strength-intelligence-engine.ts)
+    - These are acceptable per doctrine: internal math may use decimals
+  - SHARED FORMATTER: toDisplayRPE() and formatDisplayRPE() in lib/rpe-adjustment-engine.ts
+  - RPE QUICK OPTIONS: [6, 7, 8, 9, 10] - whole integers only
+  - ACCEPTANCE MATRIX:
+    - [x] Live active card no decimal RPE
+    - [x] RPE input target no decimal RPE
+    - [x] Assistance Band history no decimal RPE
+    - [x] Live Set Guidance modal no decimal RPE
+    - [x] No stale "No prior sets logged" wording
+    - [x] Program page no decimal RPE
+    - [x] Today page no decimal RPE
+    - [x] History/session detail no decimal RPE
+    - [x] Workout summary no decimal RPE
+    - [x] Band/progression/rest reason strings no decimal RPE
+    - [x] RPE quick options whole-number only
+    - [x] No non-RPE decimal damage
+    - [x] Log Set unchanged
+    - [x] Band selector unchanged
+    - [x] Why this set modal unchanged
+    - [x] WU modal unchanged
+    - [x] CD modal unchanged
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen. Check active exercise card, RPE input target label, Assistance Band history card. Tap "Why this set?" for modal. No user-facing RPE should show decimals. Then spot-check Program page, Today page, History/session detail, and workout summary.
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

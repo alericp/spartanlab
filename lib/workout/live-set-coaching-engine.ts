@@ -48,7 +48,7 @@ export interface LiveSetCoachingInput {
   targetRPE: number | null // Integer for display
   prescribedLoad?: { load?: number; unit?: string } | string | null
   selectedBands: string[]
-  recommendedBand: string | null
+  recommendedBand: string | null | undefined
   // Current session data
   currentSessionSetsCompleted: number
   currentSessionAvgRPE: number | null // Integer for display

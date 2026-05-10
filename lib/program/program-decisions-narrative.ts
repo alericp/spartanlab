@@ -405,7 +405,8 @@ function deriveRpeWaveSummary(rows: Y2WeeklyRoleRow[]): string | null {
   }
   if (!Number.isFinite(overallMin) || !Number.isFinite(overallMax)) return null
 
-  const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, ''))
+  // PPX-R7.6G: User-facing RPE must be whole integers only
+  const fmt = (n: number) => `${Math.round(n)}`
   const overall = `RPE ${fmt(overallMin)}\u2013${fmt(overallMax)}`
 
   const hasProtected = Number.isFinite(protectedMin) && Number.isFinite(protectedMax)

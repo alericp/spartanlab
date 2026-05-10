@@ -11694,7 +11694,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${Math.round(lastRPE)}, which is above target. Next set may reduce intensity if this persists.` }
                   }
                   if (lastRPE <= targetRPENum - 2 && lastRPE > 0) {
-                    return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPE}, below the ${targetRPENum} target. If consistent, progression may be recommended.` }
+                    return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${Math.round(lastRPE)}, below the ${Math.round(targetRPENum)} target. If consistent, progression may be recommended.` }
                   }
                   return { status: 'on_track', headline: 'On track', explanation: 'Performance is tracking near target. Maintain current prescription.' }
                 }
@@ -11793,7 +11793,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       {targetRPE && <li>• Target RPE: {toDisplayRPE(targetRPE)}</li>}
                       {completedCount > 0 && <li>• Sets completed this exercise: {completedCount}</li>}
                       {avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}
-                      {lastCompletedSet && <li>• Last set RPE: {lastCompletedSet.actualRPE || 'not recorded'}</li>}
+                      {lastCompletedSet && <li>• Last set RPE: {toDisplayRPE(lastCompletedSet.actualRPE) ?? 'not recorded'}</li>}
                       {recommendedBand && <li>• Recommended band: {recommendedBand}</li>}
                       {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.join(' + ')}</li>}
                       {completedCount === 0 && <li>• No sets completed in this workout yet</li>}

@@ -5616,7 +5616,7 @@ const rangeTrainingMode = 'flexibility' as RangeTrainingMode
         addExercise(
           selectorCtx,
           matchingExercise,
-          `${primaryGoal} mobility work (RPE ${mobEx.targetRPE})`,
+          `${primaryGoal} mobility work (RPE ${Math.round(Number(mobEx.targetRPE) || 7)})`,
           mobEx.sets,
           mobEx.repsOrHold,
           mobEx.cues.join(', ')
@@ -9284,10 +9284,10 @@ export function getWeightedStrengthPrescriptionForSkill(
   logWeightedLoadEstimation(exerciseType, prescriptionMode, loadPrescription)
   
   // Build the note with load info if available
-  let note = `RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`
+  let note = `RPE ${Math.round(Number(adj.intensityTarget) || 7)}. ${carryover.carryoverRationale.split('.')[0]}.`
   if (loadPrescription.loadBasis !== 'no_data' && loadPrescription.prescribedLoad > 0) {
     const loadDisplay = formatWeightedLoadDisplay(loadPrescription)
-    note = `${loadDisplay} @ RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`
+    note = `${loadDisplay} @ RPE ${Math.round(Number(adj.intensityTarget) || 7)}. ${carryover.carryoverRationale.split('.')[0]}.`
   }
   
   return {

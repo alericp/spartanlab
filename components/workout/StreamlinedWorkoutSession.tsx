@@ -91,6 +91,8 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
+// [PPX-R7.7B] Elite warm-up/cool-down coaching derivation for existing sessions
+import { generateWarmUpCoaching, generateCoolDownCoaching } from '@/lib/warmup-cooldown-coaching-engine'
 import {
   collectPostWorkoutSubstitutionEvidence,
   buildSavedProgramSubstitutionProposals,

@@ -1017,7 +1017,45 @@ From recent conversation:
     - Does not claim pain/injury/recovery unless actual feedback exists
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.8A complete; safe to move to next checklist item
+  - MOVE-ON DECISION: PPX-R7.8A complete; moved to PPX-R7.8B
+  - REMAINING CHAIN:
+    - PPX-R7.8B (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8B: Live Set Guidance Band/Dose Truth Parity — COMPLETE (2026-05-10)
+  - ROOT CAUSE CORRECTION:
+    - Modal could say "No band or external load prescribed" even when Assistance Band(s) card showed "Maintain Red"
+    - buildLiveSetCoaching() did not receive band selector visibility or guidance label truth
+    - Modal and visible band card used different truth sources
+  - SOLUTION:
+    - Extended LiveSetCoachingInput with: hasBandSelector, bandGuidanceAction, bandGuidanceLabel
+    - Computed bandGuidanceTruth in modal using same logic as BandSelector component
+    - Rewrote band/load rationale to use 5-priority system:
+      1. Exact visible band guidance label if provided
+      2. Recommended band with history
+      3. Band selector available but no recommendation yet
+      4. Prescribed load (non-band)
+      5. Truly no band/load active
+    - Removed misleading "No band or external load prescribed" fallback
+  - FILES CHANGED:
+    - lib/workout/live-set-coaching-engine.ts — extended input type, rewrote band rationale logic
+    - components/workout/StreamlinedWorkoutSession.tsx — compute bandGuidanceTruth, pass to coaching
+  - VISIBLE VERIFICATION LOCATIONS:
+    - Live Workout → active exercise → Assistance Band(s) card shows "Maintain Red"
+    - Live Workout → Why this set? → Dose/Assistance Rationale now says "Band guidance: Maintain Red. X prior sets support..."
+    - Live Workout → log a set → reopen Why this set? → set purpose changes based on logged RPE
+    - Modal no longer contradicts visible band card
+  - EXPECTED BEFORE/AFTER:
+    - Before: Modal said "No band or external load prescribed" even with visible band recommendation
+    - After: Modal says "Band guidance: Maintain Red. 13 prior sets support keeping this assistance..."
+  - RPE REGRESSION PROOF:
+    - Scan for `RPE ${average`, `.toFixed(1)`: 0 matches in live-set-coaching-engine.ts
+    - All RPE values use integer params already
+  - BAND TRUTH PARITY PROOF:
+    - Scan for "No band or external load prescribed": 0 matches
+    - Modal now uses same bandGuidanceTruth as visible BandSelector
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.8B complete; safe to move to next checklist item
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

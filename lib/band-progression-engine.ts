@@ -992,7 +992,8 @@ export function getCanonicalBandRecommendation(input: {
     const nextBand = getNextProgressionBand(currentBand)
     if (nextBand) {
       const detailParts: string[] = []
-      if (averageRpe) detailParts.push(`RPE ${averageRpe}`)
+      // [PPX-R7.7C] Display integer-only RPE to comply with user-facing RPE doctrine
+      if (averageRpe) detailParts.push(`RPE ${Math.round(averageRpe)}`)
       if (cleanRatio) detailParts.push(`${Math.round(cleanRatio * 100)}% clean`)
       if (trend === 'improving') detailParts.push('improving')
       
@@ -1014,7 +1015,8 @@ export function getCanonicalBandRecommendation(input: {
     const prevBand = getPreviousProgressionBand(currentBand)
     if (prevBand) {
       const detailParts: string[] = []
-      if (isRpeHigh && averageRpe) detailParts.push(`RPE ${averageRpe}`)
+      // [PPX-R7.7C] Display integer-only RPE to comply with user-facing RPE doctrine
+      if (isRpeHigh && averageRpe) detailParts.push(`RPE ${Math.round(averageRpe)}`)
       if (isFailingTarget) detailParts.push('missing targets')
       if (trend === 'declining') detailParts.push('fatigue detected')
       
@@ -1034,7 +1036,8 @@ export function getCanonicalBandRecommendation(input: {
   // MAINTAIN: Default when no clear progression/regression signal
   const detailParts: string[] = []
   if (activeHistory.length > 0) detailParts.push(`${activeHistory.length} sets logged`)
-  if (averageRpe) detailParts.push(`RPE ${averageRpe}`)
+  // [PPX-R7.7C] Display integer-only RPE to comply with user-facing RPE doctrine
+  if (averageRpe) detailParts.push(`RPE ${Math.round(averageRpe)}`)
   if (cleanRatio && cleanRatio > 0) detailParts.push(`${Math.round(cleanRatio * 100)}% clean`)
   if (trend === 'stable') detailParts.push('stable')
   

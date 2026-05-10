@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ��� completed/recent set ledger/history row
+    - Live Workout ����� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -946,6 +946,34 @@ From recent conversation:
     - Does not claim planche/front lever/weighted unless detected in actual session exercises
     - source field tracks: stored_adaptation | derived_from_session | minimal_fallback
   - RPE REGRESSION PROOF: No user-facing decimal RPE introduced
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.7B needed RPE fix and cool-down modal parity — see PPX-R7.7C below
+  - REMAINING CHAIN:
+    - PPX-R7.7C (COMPLETED BELOW)
+    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+- PPX-R7.7C: RPE Regression Fix + Cool-Down Modal Parity — COMPLETE (2026-05-10)
+  - ROOT CAUSE CORRECTION:
+    - Band RPE display regression: `lib/band-progression-engine.ts` was displaying raw `averageRpe` decimals (e.g., `RPE 7.8`)
+    - Cool-down modal was still old generic: "Full recovery map after Pull Strength" / generic "Why This Order?"
+  - SOLUTION:
+    - Fixed 3 locations in band-progression-engine.ts to use `Math.round(averageRpe)` for display
+    - Upgraded cool-down modal to use `localVisibleCooldownCoach` with Coach Recovery Summary, Region Recovery bullets, If Short on Time
+    - Replaced generic "Future Adaptation" with coaching source indicator
+  - FILES CHANGED:
+    - lib/band-progression-engine.ts — 3 RPE display fixes (lines 995, 1018, 1040)
+    - components/workout/StreamlinedWorkoutSession.tsx — cool-down modal upgraded to R7.7 parity
+  - VISIBLE VERIFICATION LOCATIONS:
+    - Live Workout → active exercise → Assistance Band(s) green card: now shows `RPE 8` not `RPE 7.8`
+    - Live Workout → Warm-Up phase → Why This Warm-Up modal: preserved (AI Coach Focus, etc.)
+    - Live Workout → Cool-Down phase → Why This Cool-Down modal: now shows Coach Recovery Summary, Region Recovery, If Short on Time
+  - EXPECTED BEFORE/AFTER:
+    - Before: `13 sets logged — RPE 7.8 — 100% clean — stable`
+    - After: `13 sets logged — RPE 8 — 100% clean — stable`
+    - Before: Cool-down modal "Full recovery map after Pull Strength" / generic "Why This Order?"
+    - After: Cool-down modal Coach Recovery Summary / Region Recovery / If Short on Time
+  - RPE REGRESSION PROOF: All 3 band detail string locations now use `Math.round(averageRpe)`
+  - FALLBACK HONESTY PROOF: Cool-down coaching derives from session exercises, source field tracks derivation
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
   - MOVE-ON DECISION: PPX-R7.7 is now complete; safe to move to the next checklist item

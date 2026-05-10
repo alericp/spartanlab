@@ -304,7 +304,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
                 <div>
                   <p className="text-xs text-[#6B7280] mb-0.5">Avg RPE</p>
                   <p className="text-sm font-medium text-[#E6E9EF]">
-                    {metrics.averageRPE.toFixed(1)}
+                    {Math.round(metrics.averageRPE)}
                   </p>
                 </div>
               )}

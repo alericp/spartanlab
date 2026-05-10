@@ -67,7 +67,7 @@ export function SessionHeader({
             {stats.averageRPE !== null && (
               <div className="flex items-center gap-1 text-[#A4ACB8]">
                 <Target className="w-3.5 h-3.5" />
-                <span>RPE {stats.averageRPE.toFixed(1)}</span>
+                <span>RPE {Math.round(stats.averageRPE)}</span>
               </div>
             )}
           </div>
@@ -204,7 +204,7 @@ export function PausedOverlay({
               <p className="text-xs text-[#6B7280]">Sets Done</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-[#E6E9EF]">{stats.averageRPE?.toFixed(1) || '-'}</p>
+              <p className="text-2xl font-bold text-[#E6E9EF]">{stats.averageRPE ? Math.round(stats.averageRPE) : '-'}</p>
               <p className="text-xs text-[#6B7280]">Avg RPE</p>
             </div>
           </div>

@@ -482,7 +482,7 @@ export function PostWorkoutSummary({
               <Activity className="w-3.5 h-3.5 text-[#6B7280]" />
             </div>
             <p className="text-lg font-bold text-[#C1121F]">
-              {sessionStats.averageRPE?.toFixed(1) || '-'}
+              {sessionStats.averageRPE ? Math.round(sessionStats.averageRPE) : '-'}
             </p>
             <p className="text-[10px] text-[#6B7280] uppercase">Avg RPE</p>
           </div>

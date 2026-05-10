@@ -1072,7 +1072,7 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved, sessionContext }: Ex
           </p>
           {/* RPE target if available */}
           {exercise.targetRPE && (
-            <p className="text-[10px] text-[#6A6A6A]">RPE {exercise.targetRPE}</p>
+            <p className="text-[10px] text-[#6A6A6A]">RPE {Math.round(Number(exercise.targetRPE))}</p>
           )}
         </div>
       </div>

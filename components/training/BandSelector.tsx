@@ -298,7 +298,7 @@ export function ProgressionStatusDisplay({
           {/* Signals */}
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {analysis.signals.recentRPE !== null && (
-              <span>RPE: {analysis.signals.recentRPE.toFixed(1)}</span>
+              <span>RPE: {Math.round(analysis.signals.recentRPE)}</span>
             )}
             {analysis.signals.averageHoldTime !== null && (
               <span>Avg Hold: {Math.round(analysis.signals.averageHoldTime)}s</span>

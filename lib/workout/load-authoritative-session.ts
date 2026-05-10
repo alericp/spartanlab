@@ -249,6 +249,18 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     result.prescriptionPropagationAudit = session.prescriptionPropagationAudit as AdaptiveSession['prescriptionPropagationAudit']
   }
   
+  // [PPX-R7.7] Preserve warmupAdaptation for elite coaching depth
+  // This includes coachFocusSummary, jointPrepSummary, shortTimeGuidance, rampUpAdvisory
+  if (session.warmupAdaptation && typeof session.warmupAdaptation === 'object') {
+    result.warmupAdaptation = session.warmupAdaptation as AdaptiveSession['warmupAdaptation']
+  }
+  
+  // [PPX-R7.7] Preserve cooldownAdaptation for elite coaching depth
+  // This includes coachRecoverySummary, regionSummary, shortTimeGuidance
+  if (session.cooldownAdaptation && typeof session.cooldownAdaptation === 'object') {
+    result.cooldownAdaptation = session.cooldownAdaptation as AdaptiveSession['cooldownAdaptation']
+  }
+  
   // [EXPLAIN-OWNER-LOCK] Preserve compositionMetadata for explanation engine context
   // This includes spineSessionType, sessionIntent, and other context needed for buildExercisePurposeLine
   if (session.compositionMetadata && typeof session.compositionMetadata === 'object') {

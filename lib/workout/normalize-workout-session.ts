@@ -202,6 +202,7 @@ function normalizeExecutionTruth(raw: unknown): WorkoutExerciseContract['executi
 /**
  * [PPX-R5] Normalize warmup adaptation metadata
  * This preserves the computed adaptation proof from program generation
+ * [PPX-R7.7] Extended to preserve elite coaching depth fields
  */
 function normalizeWarmupAdaptation(
   raw: unknown
@@ -229,11 +230,25 @@ function normalizeWarmupAdaptation(
     adaptationSource: typeof adapt.adaptationSource === 'string'
       ? adapt.adaptationSource as 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
       : undefined,
+    // [PPX-R7.7] Elite coaching depth fields - preserve if valid
+    coachFocusSummary: typeof adapt.coachFocusSummary === 'string' && adapt.coachFocusSummary
+      ? adapt.coachFocusSummary
+      : undefined,
+    jointPrepSummary: Array.isArray(adapt.jointPrepSummary)
+      ? adapt.jointPrepSummary.filter((s): s is string => typeof s === 'string')
+      : undefined,
+    shortTimeGuidance: typeof adapt.shortTimeGuidance === 'string' && adapt.shortTimeGuidance
+      ? adapt.shortTimeGuidance
+      : undefined,
+    rampUpAdvisory: typeof adapt.rampUpAdvisory === 'string' && adapt.rampUpAdvisory
+      ? adapt.rampUpAdvisory
+      : undefined,
   }
 }
 
 /**
  * [PPX-R5] Normalize cooldown adaptation metadata
+ * [PPX-R7.7] Extended to preserve elite coaching depth fields
  */
 function normalizeCooldownAdaptation(
   raw: unknown
@@ -263,6 +278,16 @@ function normalizeCooldownAdaptation(
       : undefined,
     adaptationSource: typeof adapt.adaptationSource === 'string'
       ? adapt.adaptationSource as 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+      : undefined,
+    // [PPX-R7.7] Elite coaching depth fields - preserve if valid
+    coachRecoverySummary: typeof adapt.coachRecoverySummary === 'string' && adapt.coachRecoverySummary
+      ? adapt.coachRecoverySummary
+      : undefined,
+    regionSummary: Array.isArray(adapt.regionSummary)
+      ? adapt.regionSummary.filter((s): s is string => typeof s === 'string')
+      : undefined,
+    shortTimeGuidance: typeof adapt.shortTimeGuidance === 'string' && adapt.shortTimeGuidance
+      ? adapt.shortTimeGuidance
       : undefined,
   }
 }

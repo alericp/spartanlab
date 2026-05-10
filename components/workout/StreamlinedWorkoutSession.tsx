@@ -160,6 +160,7 @@ import {
   getBandRecommendation,
   calculateBandProgressionSummary,
   getExerciseBandHistory,
+  getCanonicalBandHistory,
   supportsBandAssistance,
   // [PPX-R2J] Canonical key resolver for consistent band history write/read
   resolveBandExerciseKey,
@@ -10555,24 +10556,28 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 const selectedBands = machineState.selectedBands || []
                 const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
                 
-                // [PPX-R7.8C] Use same exerciseId derivation as BandSelector for truth parity
+                // [PPX-R7.8D] Use getCanonicalBandHistory for proper canonical key resolution
+                // This ensures modal gets the same history as visible BandSelector card
                 const exerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || `exercise-${safeExerciseIndex}`
                 const bandHistoryData = (() => {
                   if (!exerciseId || !exerciseName) return null
-                  // Note: supportsBandAssistance uses canonical ID matching, so we let getBandRecommendation handle resolution
-                  // if (!supportsBandAssistance(exerciseId)) return null // Removed: let getBandRecommendation try
                   try {
+                    // [PPX-R7.8D] Use canonical history lookup - resolves "tuck_front_lever_hold" → "front_lever_tuck"
+                    const canonicalHistory = getCanonicalBandHistory({ exerciseId, exerciseName })
                     const rec = getBandRecommendation(exerciseId, exerciseName)
-                    const history = getExerciseBandHistory(exerciseId)
-                    const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
+                    
+                    // Use exact + family history for complete picture
+                    const allHistory = [...canonicalHistory.exactHistory, ...canonicalHistory.familyHistory]
+                    const historyWithRPE = allHistory.filter(h => h.rpe && h.rpe > 0)
                     const historicalAvgRPE = historyWithRPE.length > 0
                       ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
                       : null
-                    const cleanReps = history.filter(h => h.quality === 'clean').length
-                    const cleanPercent = history.length > 0 ? Math.round((cleanReps / history.length) * 100) : 0
+                    const cleanReps = allHistory.filter(h => h.quality === 'clean').length
+                    const cleanPercent = allHistory.length > 0 ? Math.round((cleanReps / allHistory.length) * 100) : 0
+                    
                     return {
                       recommendedBand: rec.recommendedBand,
-                      historyCount: history.length,
+                      historyCount: canonicalHistory.totalCount,
                       historicalAvgRPE,
                       cleanPercent,
                       stability: 'stability' in rec ? String(rec.stability) : 'building',

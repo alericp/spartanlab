@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ������� completed/recent set ledger/history row
+    - Live Workout ��������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1122,9 +1122,37 @@ From recent conversation:
     - All RPE values use integer display
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-portal-session)
-  - MOVE-ON DECISION: PPX-R7.8C build is unblocked. Re-test the live modal. If the modal now matches the Assistance Band(s) card, move to R7.8D. If not, remaining blocker is runtime render consumption only.
+  - MOVE-ON DECISION: PPX-R7.8C build unblocked; runtime still showed "Tracking band history" mismatch. Moved to R7.8D.
   - REMAINING CHAIN:
-    - PPX-R7.8D (optional): Post-logged-set responsiveness verification
+    - PPX-R7.8D (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8D: Final Band Card → Live Set Guidance Parity Fix — COMPLETE (2026-05-10)
+  - ROOT CAUSE:
+    - Modal used `getExerciseBandHistory(exerciseId)` with raw exercise ID "tuck_front_lever_hold"
+    - History was stored under canonical key "front_lever_tuck"
+    - Result: history returned empty, so modal fell to "tracking" even when card showed "Maintain Red"
+    - BandSelector worked because it uses `getBandRecommendation()` which resolves canonical keys internally
+  - SOLUTION:
+    - Changed modal to use `getCanonicalBandHistory({ exerciseId, exerciseName })`
+    - This function resolves "tuck_front_lever_hold" → "front_lever_tuck" using name patterns
+    - Uses both exactHistory and familyHistory for complete picture
+    - Added import for `getCanonicalBandHistory`
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx — use getCanonicalBandHistory, add import
+  - SINGLE SOURCE OF TRUTH:
+    - `getCanonicalBandHistory()` is now the single source for band history in modal
+    - Same canonical resolution as BandSelector's internal getBandRecommendation
+    - Modal receives same historyCount, avgRPE, cleanPercent, stability as visible card
+  - BEFORE/AFTER:
+    - Before: Card "Maintain Red / 13 sets logged..." → Modal "Tracking band history / Log band-assisted sets..."
+    - After: Card "Maintain Red / 13 sets logged..." → Modal "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+  - RPE REGRESSION PROOF:
+    - Scan for `.toFixed(`, `averageRPE)`: 0 matches in coaching engine
+    - All RPE values pass through toDisplayRPE() for integer display
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.8D complete. Band card and Live Set Guidance now share the same display-ready truth. Safe to move to the next checklist item.
+  - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 
 ---

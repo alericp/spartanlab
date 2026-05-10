@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ����� completed/recent set ledger/history row
+    - Live Workout ������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -976,9 +976,49 @@ From recent conversation:
   - FALLBACK HONESTY PROOF: Cool-down coaching derives from session exercises, source field tracks derivation
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.7 is now complete; safe to move to the next checklist item
+  - MOVE-ON DECISION: PPX-R7.7 complete; moved to PPX-R7.8A
   - REMAINING CHAIN:
-    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+    - PPX-R7.8A (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8A: Live Set AI Coaching Intelligence Upgrade — COMPLETE (2026-05-10)
+  - ROOT CAUSE CORRECTION:
+    - Live Set Guidance modal was a generic evidence/status panel, not intelligent coaching
+    - Did not explain exercise intent, set purpose, execution focus, dose rationale, or safety rules
+    - Coaching view model was assembled locally without synthesis from exercise category/method
+  - SOLUTION:
+    - Created new pure helper: `lib/workout/live-set-coaching-engine.ts`
+    - Implements `buildLiveSetCoaching()` with intelligent exercise intent detection
+    - Detects: front lever, planche, handstand, weighted, explosive, rows, core, compression, mobility
+    - Generates: exerciseIntentHeadline, exerciseIntentExplanation, setPurposeHeadline, setPurposeExplanation
+    - Generates: executionCues[], dosageRationale, bandOrLoadRationale, currentEvidenceSummary
+    - Generates: nextSetAdjustmentRules[], safetyStopRule, confidenceLabel, sourceLabel
+    - Set purpose adapts: baseline set (set 1), quality continuation, effort control based on prior RPE
+    - Updated StreamlinedWorkoutSession.tsx modal to use the coaching engine
+  - FILES CHANGED:
+    - lib/workout/live-set-coaching-engine.ts — NEW (518 lines)
+    - components/workout/StreamlinedWorkoutSession.tsx — import + modal upgrade
+  - VISIBLE VERIFICATION LOCATIONS:
+    - Live Workout → main phase → "Why this set?" → Live Set Guidance modal
+    - New sections: Coach Intent (Why This Exercise), What This Set Is Proving
+    - New sections: Execution Focus, Dose Rationale, Evidence, What Could Change
+    - New section: Safety Stop Rule (red warning box)
+    - Footer: "Coaching based on [sourceLabel]"
+  - EXPECTED BEFORE/AFTER:
+    - Before: Generic "Collecting baseline data", "Current Session Evidence" bullet list
+    - After: "Coach Intent: Front lever skill-strength exposure", "Set 1 is baseline calibration"
+    - After: Execution cues, dose rationale, safety stop rules specific to exercise category
+  - RPE REGRESSION PROOF:
+    - All RPE values in coaching engine use integer display via `targetRPE` param (already integer)
+    - No `.toFixed()` or raw decimal interpolation in user-facing strings
+    - Scan for `RPE ${average`, `RPE ${avg`, `.toFixed(1).*RPE`: 0 matches
+  - FALLBACK HONESTY PROOF:
+    - Exercise intent derived from name/category patterns, not fake claims
+    - sourceLabel tracks: "current session", "historical logs", "session prescription", "baseline fallback"
+    - Does not claim pain/injury/recovery unless actual feedback exists
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.8A complete; safe to move to next checklist item
+  - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 
 ---

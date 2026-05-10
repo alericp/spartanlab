@@ -723,6 +723,43 @@ From recent conversation:
   - EXACT VERIFICATION PATH:
     Live Workout -> main exercise screen. Check the active exercise card, RPE input target label, Assistance Band(s), and top-right "Why this set?" modal. Then also check any rest/up-next screen, completed-set row, Program page, Today page, and History/session detail. Every visible RPE should be a whole number only.
   - REMAINING CHAIN:
+    - PPX-R7.6G-FINAL (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6G-FINAL: Final App-Wide User-Facing RPE Integer Leak Closure + Route-to-Runtime Proof — COMPLETE (2026-05-10)
+  - ROOT CAUSE: RPE display formatting was added to main visible components, but secondary explanation/narrative/evidence corridors still rendered raw numeric RPE values directly
+  - FINAL LEAKS FIXED:
+    1. components/workout/StreamlinedWorkoutSession.tsx line 11697:
+       - `Last set RPE was ${lastRPE}, below the ${targetRPENum} target` → `Math.round(lastRPE)`, `Math.round(targetRPENum)`
+    2. components/workout/StreamlinedWorkoutSession.tsx line 11796:
+       - `lastCompletedSet.actualRPE || 'not recorded'` → `toDisplayRPE(lastCompletedSet.actualRPE) ?? 'not recorded'`
+    3. lib/program/program-decisions-narrative.ts line 408:
+       - `const fmt = (n: number) => n.toFixed(1)...` → `const fmt = (n: number) => Math.round(n)`
+       - deriveRpeWaveSummary() now outputs integer RPE ranges like "RPE 8-9" instead of "RPE 7.5-8.5"
+    4. lib/program-exercise-selector.ts line 5619:
+       - `RPE ${mobEx.targetRPE}` → `RPE ${Math.round(Number(mobEx.targetRPE) || 7)}`
+    5. lib/program-exercise-selector.ts lines 9287-9290:
+       - `RPE ${adj.intensityTarget}` → `RPE ${Math.round(Number(adj.intensityTarget) || 7)}`
+    6. lib/adaptive-deload-recovery-engine.ts line 790:
+       - `originalValue: RPE ${sessionPlan.targetRPE}` → `RPE ${Math.round(sessionPlan.targetRPE)}`
+  - USER-FACING DECIMAL RPE LEAKS: ZERO
+  - INTERNAL MATH DECIMALS: Allowed (preserved)
+  - COMMENT/DOC/TEST DECIMALS: Allowed (not consumed by UI)
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - VISIBLE USER VERIFICATION LOCATIONS:
+    - Live Workout → main exercise screen → active exercise card
+    - Live Workout → RPE input target label
+    - Live Workout → Assistance Band(s)
+    - Live Workout → top-right "Why this set?" → Live Set Guidance modal
+    - Live Workout → Evidence Used list (now shows integer RPE)
+    - Program page/session cards
+    - Today page
+    - History/session detail/post-workout summary
+  - REQUIRED VISUAL PROOF:
+    - User should see only: RPE 7, RPE 8, RPE 9, RPE 8-9
+    - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
+  - MOVE-ON DECISION: PPX-R7.6 is CLOSED; safe to move to PPX-R7.7
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

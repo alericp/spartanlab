@@ -10518,7 +10518,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                           )}
                         </div>
                       )}
-                      {selectedRPE !== null && selectedRPE > 0 && (
+                      {typeof selectedRPE === 'number' && selectedRPE > 0 && (
                         <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
                           <span className="text-[#6B7280]">Your RPE: </span>
                           <span className="text-emerald-400">{selectedRPE}</span>
@@ -11657,14 +11657,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                           <span className="text-[#E6E9EF]">{targetRPE}</span>
                         </div>
                       )}
-                      {prescribedLoad && (
+                      {prescribedLoad != null && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Load</span>
-                          <span className="text-[#E6E9EF]">
-                            {typeof prescribedLoad === 'object' && prescribedLoad.load 
-                              ? `${prescribedLoad.load}${prescribedLoad.unit ? ` ${prescribedLoad.unit}` : ''}` 
-                              : String(prescribedLoad)}
-                          </span>
+                          <span className="text-[#E6E9EF]">{String(prescribedLoad)}</span>
                         </div>
                       )}
                       {recommendedBand && (
@@ -11683,10 +11679,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                         )}
                       </div>
                     )}
-                    {selectedRPE !== null && selectedRPE > 0 && (
+                    {selectedRPE != null && Number(selectedRPE) > 0 && (
                       <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
                         <span className="text-[#6B7280]">Your RPE: </span>
-                        <span className="text-emerald-400">{selectedRPE}</span>
+                        <span className="text-emerald-400">{String(selectedRPE)}</span>
                       </div>
                     )}
                   </div>

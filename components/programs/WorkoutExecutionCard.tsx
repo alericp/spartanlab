@@ -455,7 +455,7 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
                   {' reps'}
                 </p>
                 <p className="text-xs text-[#6B7280]">
-                  RPE {rpeConfig?.sets[progress.currentSet]?.prescribedRPE ?? 8}
+                  RPE {Math.round(rpeConfig?.sets[progress.currentSet]?.prescribedRPE ?? 8)}
                 </p>
               </div>
             </div>

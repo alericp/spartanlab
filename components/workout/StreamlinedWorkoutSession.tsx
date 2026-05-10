@@ -10582,8 +10582,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
                 
                 // [PPX-R7.8C] Use EXACT same bandSelectable truth as visible BandSelector component
-                // Get bandSelectable from the active exercise contract - this is what controls whether BandSelector renders
-                const contractBandSelectable = activeExerciseContract?.bandSelectable ?? false
+                // Get bandSelectable from inputModeContract - this is what controls whether BandSelector renders
+                const contractBandSelectable = inputModeContract?.showBandSelector ?? false
                 // Also check if we have any band evidence/recommendation as secondary signal
                 const hasBandSelector = contractBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand
                 const bandGuidanceTruth = (() => {

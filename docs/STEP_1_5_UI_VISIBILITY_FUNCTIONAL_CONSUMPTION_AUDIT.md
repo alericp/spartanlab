@@ -786,6 +786,56 @@ From recent conversation:
   - REQUIRED VISUAL PROOF:
     - User should see only: RPE 7, RPE 8, RPE 9, RPE 8-9
     - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
+  - MOVE-ON DECISION: PPX-R7.6H was FALSE PASS — see PPX-R7.6I below
+  - REMAINING CHAIN:
+    - PPX-R7.6I (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6I: True Final App-Wide User-Facing RPE Display Ownership Closure — COMPLETE (2026-05-10)
+  - FALSE-PASS CORRECTION: PPX-R7.6H fixed two named leaks but missed additional raw user-facing RPE display paths
+  - ROOT CAUSE: Mixed RPE display ownership — some branches used formatters while sibling JSX branches still rendered raw values
+  - EXACT LEAKS FIXED:
+    1. components/workout/StreamlinedWorkoutSession.tsx line 11795:
+       - OLD: `{avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}`
+       - NEW: `{avgRPE && <li>• Average RPE this exercise: {toDisplayRPE(avgRPE) ?? '-'}</li>}`
+    2. components/programs/AB13VisualProofOverlay.tsx line 567:
+       - OLD: `RPE {stamp.rpeAfter}`
+       - NEW: `RPE {Math.round(stamp.rpeAfter)}`
+    3. components/programs/AdaptiveSessionCard.tsx line 7861:
+       - OLD: `RPE ${rpeCap.rpeBefore} → ${rpeCap.rpeAfter}`
+       - NEW: `RPE ${Math.round(rpeCap.rpeBefore)} → ${Math.round(rpeCap.rpeAfter)}`
+    4. components/programs/AdaptiveSessionCard.tsx line 8370:
+       - OLD: `(RPE {coachingGuidance.effortGuidance.rpe})`
+       - NEW: `(RPE {Math.round(coachingGuidance.effortGuidance.rpe)})`
+    5. components/programs/WorkoutExecutionCard.tsx line 458:
+       - OLD: `RPE {rpeConfig?.sets[progress.currentSet]?.prescribedRPE ?? 8}`
+       - NEW: `RPE {Math.round(rpeConfig?.sets[progress.currentSet]?.prescribedRPE ?? 8)}`
+    6. lib/adaptive-performance-evaluator.ts lines 228-229, 264, 267:
+       - OLD: `RPE ${currentSet.actualRPE}` in coaching messages
+       - NEW: `RPE ${Math.round(Number(currentSet.actualRPE) || 8)}` in coaching messages
+  - USER-FACING DECIMAL RPE LEAKS: ZERO
+  - INTERNAL DECIMAL MATH: Preserved (unchanged)
+  - APP-WIDE SCAN PROOF:
+    - Hits reviewed: 25+
+    - User-facing hits fixed: 6 distinct paths across 5 files
+    - Internal-only hits left: allowed (thresholds, comparisons, RPEValue types)
+    - Comment/doc/test hits left: allowed (not consumed by UI)
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - VISIBLE USER VERIFICATION LOCATIONS:
+    - Live Workout → Evidence Used → Average RPE this exercise
+    - Live Workout → completed/recent set ledger/history row
+    - Live Workout → top-right "Why this set?" → Current Target → Your RPE
+    - Live Workout → Evidence Used → Last set RPE
+    - Program page → session card effort guidance
+    - Program page → proof overlay if visible
+    - Workout execution card if visible
+    - Today page
+    - History/session detail
+    - Post-workout summary
+    - Adaptive coaching/substitution/band feedback messages
+  - REQUIRED VISUAL PROOF:
+    - User should see only: RPE 7, RPE 8, RPE 9, RPE 8-9
+    - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
   - MOVE-ON DECISION: PPX-R7.6 is now CLOSED; safe to move to PPX-R7.7
   - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade

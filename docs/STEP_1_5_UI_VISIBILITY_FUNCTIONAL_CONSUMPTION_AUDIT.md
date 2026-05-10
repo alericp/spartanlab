@@ -499,6 +499,57 @@ From recent conversation:
   - EXACT VERIFICATION PATH:
     Live Workout -> main exercise screen -> top-right "Why this set?" button above the active exercise card -> tap it -> Live Set Guidance modal should open
   - REMAINING CHAIN:
+    - PPX-R7.6C-COMBO (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6C-COMBO: Live Set Guidance Evidence Truth Alignment + App-Wide Integer RPE Display Doctrine Lock — COMPLETE (2026-05-09)
+  - ISSUES FIXED:
+    1. Live modal set/target mismatch (modal showed Set 1 of 2, card showed Set 1/3)
+    2. Current-session vs historical evidence confusion ("No prior sets" while band history exists)
+    3. App-wide decimal RPE display (7.3, 7.5, 8.5 visible to users)
+  - ROOT CAUSE: Modal used `safeCurrentExercise?.sets || 3` while card used `activeEffectiveContract.effectiveSets`
+  - SET COUNT PARITY: Modal now uses `activeEffectiveContract.effectiveSets` (SAME as card)
+  - TARGET PARITY: Modal now uses `activeEffectiveContract.effectiveRepsOrTime` (SAME as card)
+  - RPE DISPLAY DOCTRINE: "User-facing RPE displays as whole integers only. Internal decimal math remains internal."
+  - RPE FORMATTER: `toDisplayRPE()` and `formatDisplayRPE()` in `lib/rpe-adjustment-engine.ts`
+  - RPE INPUT: `RPE_QUICK_OPTIONS` changed from `[6,7,7.5,8,8.5,9,9.5,10]` to `[6,7,8,9,10]` (integers only)
+  - EVIDENCE MODEL:
+    - Current Session Evidence = sets completed THIS workout for this exercise
+    - Historical Band Evidence = prior workout data used for band recommendation (separate section)
+    - No longer says "No prior sets logged" when historical evidence exists
+  - OVERRIDE MODEL:
+    - Recommended band = system recommendation from historical evidence
+    - Selected band = user's current-session override
+    - Logged set = final evidence after completion
+    - Future recommendation = changes only after enough clean logged evidence
+    - Band Override Detected section shows when selected differs from recommended
+  - FILES CHANGED:
+    - lib/rpe-adjustment-engine.ts (added toDisplayRPE, formatDisplayRPE, getRPEDescription, integer-only RPE_QUICK_OPTIONS)
+    - components/workout/StreamlinedWorkoutSession.tsx (live modal uses authoritative card truth, separated evidence sections)
+  - ACCEPTANCE MATRIX:
+    - [x] Live modal opens
+    - [x] Modal mounted in active live return
+    - [x] Set count matches card (uses activeEffectiveContract.effectiveSets)
+    - [x] Target hold/reps/time matches card (uses activeEffectiveContract.effectiveRepsOrTime)
+    - [x] Target RPE matches card as whole integer (toDisplayRPE applied)
+    - [x] No visible decimal RPE in live card (toDisplayRPE applied)
+    - [x] No visible decimal RPE in Live Set Guidance modal
+    - [x] No visible decimal RPE in RPE quick selector (integers only)
+    - [x] Current-session evidence wording fixed ("No sets completed in this workout yet")
+    - [x] Historical band evidence shown when available (separate section)
+    - [x] Band recommendation shown when available
+    - [x] Override explanation shown when selected differs from recommendation
+    - [x] Log Set unchanged
+    - [x] Band selector unchanged
+    - [x] RPE selector unchanged
+    - [x] WU modal unchanged
+    - [x] CD modal unchanged
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - TSC STATUS: PASS
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen -> active exercise card and top-right "Why this set?" button -> Live Set Guidance modal.
+    Compare modal against card. Set count, target, RPE should match. Evidence separated as current-session vs historical.
+    Also check Program page, Today page, History/session detail, workout RPE selectors for no visible decimal RPE.
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

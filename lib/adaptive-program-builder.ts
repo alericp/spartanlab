@@ -1903,6 +1903,11 @@ export interface AdaptiveSession {
     rationale: string
     targetAreas?: string[]
     adaptationSource?: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+    // [PPX-R7.7] Elite coaching depth fields
+    coachFocusSummary?: string
+    jointPrepSummary?: string[]
+    shortTimeGuidance?: string
+    rampUpAdvisory?: string
   }
   cooldownAdaptation?: {
     focus: string
@@ -1911,6 +1916,10 @@ export interface AdaptiveSession {
     targetRegions?: string[]
     flexibilityGoals?: string[]
     adaptationSource?: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+    // [PPX-R7.7] Elite coaching depth fields
+    coachRecoverySummary?: string
+    regionSummary?: string[]
+    shortTimeGuidance?: string
   }
 }
 

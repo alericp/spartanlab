@@ -138,6 +138,48 @@ export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): Worko
   logs.push(newLog)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
   
+  // [PPX-R7.5] Fire non-blocking server evidence persistence for trusted workouts
+  // This ensures completed set evidence survives program restart/rebuild/regenerate
+  // and feeds future adaptation even if localStorage is cleared.
+  if (
+    newLog.trusted !== false &&
+    newLog.sourceRoute !== 'demo' &&
+    Array.isArray(newLog.completedSetEvidence) &&
+    newLog.completedSetEvidence.length > 0
+  ) {
+    try {
+      // Extract programId from generatedWorkoutId if available
+      const programId = newLog.generatedWorkoutId?.split('_session_')[0] || null
+      
+      // Fire-and-forget: don't await, don't block workout completion
+      fetch('/api/workout-log/save-evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workoutLog: newLog,
+          programId,
+        }),
+      })
+        .then(response => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PPX-R7.5] Server evidence save:', {
+              workoutId: newLog.id,
+              status: response.ok ? 'ok' : 'failed',
+              setsCount: newLog.completedSetEvidence?.length || 0,
+            })
+          }
+        })
+        .catch(err => {
+          // Non-blocking: don't crash UI if server unavailable
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PPX-R7.5] Server evidence save failed (non-blocking):', String(err))
+          }
+        })
+    } catch {
+      // Outer try-catch for environments without fetch
+    }
+  }
+  
   // Auto-save session feedback for fatigue tracking
   // Uses perceived difficulty from the workout log
   // FEEDBACK LOOP: Pass trusted flag so only real workouts affect adaptation
@@ -170,6 +212,33 @@ export function deleteWorkoutLog(id: string): boolean {
   if (filtered.length === logs.length) return false
   
   localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  
+  // [PPX-R7.5] Fire non-blocking server evidence delete
+  // This ensures deleted workout evidence doesn't feed future adaptation
+  try {
+    fetch('/api/workout-log/delete-evidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workoutLogId: id }),
+    })
+      .then(response => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PPX-R7.5] Server evidence delete:', {
+            workoutId: id,
+            status: response.ok ? 'ok' : 'failed',
+          })
+        }
+      })
+      .catch(err => {
+        // Non-blocking: local delete succeeded, server delete is best-effort
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PPX-R7.5] Server evidence delete failed (non-blocking):', String(err))
+        }
+      })
+  } catch {
+    // Outer try-catch for environments without fetch
+  }
+  
   return true
 }
 

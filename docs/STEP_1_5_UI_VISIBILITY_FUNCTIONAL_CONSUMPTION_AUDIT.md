@@ -361,7 +361,45 @@ From recent conversation:
     - [x] R7.4.i Modal has visible UI proof on active workout screen
     - [x] R7.4.j No fake adaptive claims
   - REMAINING CHAIN:
-    - PPX-R7.5: Permanent workout history/adaptive input proof/delete path
+    - PPX-R7.5: Permanent workout history (COMPLETED BELOW)
+    - PPX-R7.6: Final acceptance pass
+- PPX-R7.5: Permanent Workout History + Adaptive Input Proof + Delete Path — COMPLETE (2026-05-09)
+  - ROOT CAUSE FOUND: Server infrastructure existed but CLIENT WAS NOT CALLING IT
+    - `/api/workout-log/save-evidence` route existed with full persistence logic
+    - `lib/server/workout-set-evidence-persistence.ts` writer existed
+    - `lib/server/workout-set-evidence-reader.ts` reader existed
+    - BUT `lib/workout-log-service.ts saveWorkoutLog()` did NOT fire POST to server!
+    - This meant evidence was only in localStorage, not surviving restart/rebuild
+  - FIX IMPLEMENTED:
+    1. Added non-blocking server POST in `saveWorkoutLog()`:
+       - Fires after localStorage save succeeds
+       - Gated by: trusted !== false, sourceRoute !== 'demo', completedSetEvidence.length > 0
+       - Extracts programId from generatedWorkoutId
+       - Fire-and-forget with .then()/.catch() - never blocks workout completion
+       - Dev-only console logging for diagnostics
+    2. Created `/api/workout-log/delete-evidence/route.ts`:
+       - POST endpoint for deleting evidence by workoutLogId
+       - Auth via currentUser() - user-scoped deletion only
+       - Deletes from workout_log_set_evidence table
+       - Returns count of deleted rows
+    3. Updated `deleteWorkoutLog()` to fire server delete:
+       - Non-blocking server call after local delete
+       - Best-effort: local delete succeeds regardless of server
+  - CORRIDOR PROOF:
+    - [x] Live completion builds completedSetEvidence (line 6780 in StreamlinedWorkoutSession)
+    - [x] quickLogWorkout passes evidence into saveWorkoutLog
+    - [x] saveWorkoutLog stores locally first (immediate)
+    - [x] saveWorkoutLog fires server POST (non-blocking, gated)
+    - [x] Server route auth via currentUser() not request body
+    - [x] Server writer idempotent (ON CONFLICT DO NOTHING)
+    - [x] Server reader used by generation (getRecentWorkoutSetEvidenceForGeneration)
+    - [x] Restart/rebuild only clears active session, not workout_logs or evidence
+    - [x] Manual delete fires server delete (non-blocking)
+    - [x] Demo/untrusted workouts excluded from server sync
+  - FILES CHANGED:
+    - lib/workout-log-service.ts (added server save + delete calls)
+    - app/api/workout-log/delete-evidence/route.ts (new file)
+  - REMAINING CHAIN:
     - PPX-R7.6: Final acceptance pass
 
 ---

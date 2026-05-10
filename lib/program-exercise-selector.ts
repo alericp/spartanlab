@@ -66,6 +66,11 @@ import {
   type CoolDownGenerationContext,
   type FlexibilityPathway,
 } from './cooldown-engine'
+// [PPX-R7.7] Elite warm-up/cool-down coaching
+import {
+  generateWarmUpCoaching,
+  generateCoolDownCoaching,
+} from './warmup-cooldown-coaching-engine'
 import {
   selectBestExercise,
   selectExercisesForCategory,
@@ -8441,6 +8446,7 @@ export function buildFallbackSelectionForSession(
 // =============================================================================
 
 // [PPX-R4A] Return type for warmup selection with adaptation metadata
+// [PPX-R7.7] Extended with elite coaching depth fields
 interface WarmupSelectionResult {
   exercises: SelectedExercise[]
   adaptation: {
@@ -8449,6 +8455,11 @@ interface WarmupSelectionResult {
     rationale: string
     targetAreas?: string[]
     adaptationSource: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+    // [PPX-R7.7] Elite coaching depth
+    coachFocusSummary?: string
+    jointPrepSummary?: string[]
+    shortTimeGuidance?: string
+    rampUpAdvisory?: string
   }
 }
 
@@ -8532,6 +8543,12 @@ function selectIntelligentWarmup(
       : `${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Warm-Up`
   )
 
+  // [PPX-R7.7] Generate elite coaching depth from session demands
+  const warmupCoaching = generateWarmUpCoaching(
+    mainExercises.map(e => ({ id: e.exercise.id, name: e.exercise.name, category: e.exercise.category })),
+    selected.map(e => ({ id: e.exercise.id, name: e.exercise.name }))
+  )
+
   return {
     exercises: selected,
     adaptation: {
@@ -8543,6 +8560,11 @@ function selectIntelligentWarmup(
         .filter((v, i, a) => a.indexOf(v) === i)
         .slice(0, 5),
       adaptationSource,
+      // [PPX-R7.7] Elite coaching depth
+      coachFocusSummary: warmupCoaching.coachFocusSummary,
+      jointPrepSummary: warmupCoaching.jointPrepSummary,
+      shortTimeGuidance: warmupCoaching.shortTimeGuidance,
+      rampUpAdvisory: warmupCoaching.rampUpAdvisory,
     },
   }
 }
@@ -8705,6 +8727,7 @@ function selectWarmupLegacy(
 // =============================================================================
 
 // [PPX-R4A] Return type for cooldown selection with adaptation metadata
+// [PPX-R7.7] Extended with elite coaching depth fields
 interface CooldownSelectionResult {
   exercises: SelectedExercise[]
   adaptation: {
@@ -8714,6 +8737,10 @@ interface CooldownSelectionResult {
     targetRegions?: string[]
     flexibilityGoals?: string[]
     adaptationSource: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+    // [PPX-R7.7] Elite coaching depth
+    coachRecoverySummary?: string
+    regionSummary?: string[]
+    shortTimeGuidance?: string
   }
 }
 
@@ -8826,6 +8853,12 @@ function selectIntelligentCooldown(
       : `Post-${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Recovery`
   )
 
+  // [PPX-R7.7] Generate elite coaching depth from session demands
+  const cooldownCoaching = generateCoolDownCoaching(
+    mainExercises.map(e => ({ id: e.exercise.id, name: e.exercise.name, category: e.exercise.category })),
+    selected.map(e => ({ id: e.exercise.id, name: e.exercise.name }))
+  )
+
   return {
     exercises: selected,
     adaptation: {
@@ -8838,6 +8871,10 @@ function selectIntelligentCooldown(
         .slice(0, 5),
       flexibilityGoals: hasFlexibilityGoals ? flexibilityGoals : undefined,
       adaptationSource,
+      // [PPX-R7.7] Elite coaching depth
+      coachRecoverySummary: cooldownCoaching.coachRecoverySummary,
+      regionSummary: cooldownCoaching.regionSummary,
+      shortTimeGuidance: cooldownCoaching.shortTimeGuidance,
     },
   }
 }

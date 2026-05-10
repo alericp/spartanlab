@@ -70,6 +70,15 @@ export interface WorkoutSessionContract {
     targetAreas?: string[]
     /** Source signals that drove the adaptation */
     adaptationSource?: 'skill_focus' | 'session_exercises' | 'mobility_goal' | 'joint_caution' | 'default'
+    // [PPX-R7.7] Elite coaching depth fields
+    /** AI coach focus summary (e.g., "Focused on wrist prep and scapular control") */
+    coachFocusSummary?: string
+    /** Joint prep summary strings */
+    jointPrepSummary?: string[]
+    /** "If short on time" guidance */
+    shortTimeGuidance?: string
+    /** Ramp-up advisory for weighted/skill work */
+    rampUpAdvisory?: string
   }
   
   /** Cooldown section adaptive metadata - explains why this cooldown was chosen */
@@ -86,6 +95,13 @@ export interface WorkoutSessionContract {
     flexibilityGoals?: string[]
     /** Source signals that drove the adaptation */
     adaptationSource?: 'session_stress' | 'flexibility_goal' | 'recovery_need' | 'joint_support' | 'default'
+    // [PPX-R7.7] Elite coaching depth fields
+    /** AI coach recovery summary */
+    coachRecoverySummary?: string
+    /** Region recovery summary strings */
+    regionSummary?: string[]
+    /** "If short on time" guidance */
+    shortTimeGuidance?: string
   }
 }
 

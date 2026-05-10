@@ -11344,85 +11344,220 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </div>
             )}
             
-            {/* [PPX-R7] Live workout adaptation content */}
-            {adaptiveDetailsOpen === 'live' && (
-              <div className="space-y-3">
-                <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                  <h4 className="text-sm font-medium text-emerald-400 mb-2">
-                    {safeWorkoutSessionContract.focusLabel || 'Training'} Session
-                  </h4>
-                  <p className="text-xs text-[#A4ACB8] mb-2">
-                    This set is using the saved session prescription.
-                    {safeWorkoutSessionContract.rationale && (
-                      <span className="block mt-1">{safeWorkoutSessionContract.rationale}</span>
-                    )}
-                  </p>
-                  
-                  {/* Session stress context if available */}
-                  {(safeWorkoutSessionContract.stressRole || safeWorkoutSessionContract.stressLevel) && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {safeWorkoutSessionContract.stressRole && (
-                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
-                          {safeWorkoutSessionContract.stressRole.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                      {safeWorkoutSessionContract.stressLevel && (
-                        <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">
-                          {safeWorkoutSessionContract.stressLevel}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Current exercise info from contract */}
-                {safeCurrentExercise && (
+            {/* [PPX-R7.4] Live Set-Level Coaching Content */}
+            {adaptiveDetailsOpen === 'live' && (() => {
+              // Build set-level coaching view model from live runtime truth
+              const currentSetNumber = validatedSetNumber
+              const totalSets = safeCurrentExercise?.sets || 3
+              const targetRPE = safeCurrentExercise?.targetRPE
+              const targetRepsOrTime = safeCurrentExercise?.repsOrTime || 'As prescribed'
+              const exerciseName = safeCurrentExercise?.name || 'Exercise'
+              const exerciseCategory = safeCurrentExercise?.category || ''
+              const exerciseMethod = safeCurrentExercise?.method || ''
+              const prescribedLoad = safeCurrentExercise?.prescribedLoad
+              
+              // Get corridor data for current exercise
+              const corridorMetadata = readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth)
+              const recommendedBand = corridorMetadata.recommendedBand
+              const selectedBands = machineState.selectedBands || []
+              const actualLoad = machineState.actualLoadUsed
+              const selectedRPE = safeSelectedRPE
+              
+              // Get completed sets for this exercise
+              const exerciseCompletedSets = normalizedCompletedSets.filter(
+                s => s.exerciseIndex === safeExerciseIndex
+              )
+              const completedCount = exerciseCompletedSets.length
+              const lastCompletedSet = exerciseCompletedSets[exerciseCompletedSets.length - 1]
+              const avgRPE = exerciseCompletedSets.length > 0
+                ? (exerciseCompletedSets.reduce((sum, s) => sum + (s.actualRPE || 0), 0) / exerciseCompletedSets.length).toFixed(1)
+                : null
+              
+              // Determine coaching verdict based on available data
+              const getCoachingVerdict = () => {
+                if (completedCount === 0) {
+                  return { status: 'collecting', headline: 'Collecting baseline data', explanation: 'This is your first set of this exercise. Complete it to establish your working baseline.' }
+                }
+                if (lastCompletedSet) {
+                  const lastRPE = lastCompletedSet.actualRPE || 0
+                  const targetRPENum = parseFloat(String(targetRPE)) || 7
+                  if (lastRPE >= targetRPENum + 2) {
+                    return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${lastRPE}, which is ${(lastRPE - targetRPENum).toFixed(1)} above target. Next set may reduce intensity if this persists.` }
+                  }
+                  if (lastRPE <= targetRPENum - 2 && lastRPE > 0) {
+                    return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPE}, below the ${targetRPENum} target. If consistent, progression may be recommended.` }
+                  }
+                  return { status: 'on_track', headline: 'On track', explanation: 'Performance is tracking near target. Maintain current prescription.' }
+                }
+                return { status: 'collecting', headline: 'Gathering data', explanation: 'Continue logging sets to build your performance baseline.' }
+              }
+              
+              const verdict = getCoachingVerdict()
+              
+              // Determine if ramp-up is advisable
+              const isWeightedMovement = exerciseCategory?.includes('weighted') || 
+                exerciseMethod?.includes('weighted') ||
+                exerciseName.toLowerCase().includes('weighted') ||
+                (prescribedLoad && parseFloat(String(prescribedLoad)) > 10)
+              const isAdvancedSkill = exerciseName.toLowerCase().includes('front lever') ||
+                exerciseName.toLowerCase().includes('planche') ||
+                exerciseName.toLowerCase().includes('muscle up') ||
+                exerciseName.toLowerCase().includes('handstand') ||
+                (targetRPE && parseFloat(String(targetRPE)) >= 8)
+              const needsRampUp = isWeightedMovement || isAdvancedSkill
+              
+              return (
+                <div className="space-y-3">
+                  {/* Current Target */}
                   <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">
-                      Current Exercise
-                    </h4>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-[#6B7280]">Exercise</span>
-                        <span className="text-[#E6E9EF]">{safeCurrentExercise.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#6B7280]">Sets</span>
-                        <span className="text-[#E6E9EF]">{safeCurrentExercise.sets || 3}</span>
-                      </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-emerald-400">Current Target</h4>
+                      <span className="text-xs px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">
+                        Set {currentSetNumber} of {totalSets}
+                      </span>
+                    </div>
+                    <p className="text-base font-medium text-[#E6E9EF] mb-2">{exerciseName}</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-[#6B7280]">Target</span>
-                        <span className="text-[#E6E9EF]">
-                          {safeCurrentExercise.repsOrTime || 'As prescribed'}
-                        </span>
+                        <span className="text-[#E6E9EF]">{targetRepsOrTime}</span>
                       </div>
-                      {safeCurrentExercise.targetRPE && (
+                      {targetRPE && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Target RPE</span>
-                          <span className="text-[#E6E9EF]">{safeCurrentExercise.targetRPE}</span>
+                          <span className="text-[#E6E9EF]">{targetRPE}</span>
                         </div>
                       )}
-                      {(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation && (
+                      {prescribedLoad && (
+                        <div className="flex justify-between">
+                          <span className="text-[#6B7280]">Load</span>
+                          <span className="text-[#E6E9EF]">
+                            {typeof prescribedLoad === 'object' && prescribedLoad.load 
+                              ? `${prescribedLoad.load}${prescribedLoad.unit ? ` ${prescribedLoad.unit}` : ''}` 
+                              : String(prescribedLoad)}
+                          </span>
+                        </div>
+                      )}
+                      {recommendedBand && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Band Rec</span>
-                          <span className="text-[#E6E9EF] capitalize">{(safeCurrentExercise as unknown as { bandRecommendation?: string }).bandRecommendation}</span>
-                        </div>
-                      )}
-                      {safeCurrentExercise.selectionReason && (
-                        <div className="mt-2 pt-2 border-t border-[#2B313A]">
-                          <span className="text-[#6B7280]">Why: </span>
-                          <span className="text-[#A4ACB8]">{safeCurrentExercise.selectionReason}</span>
+                          <span className="text-[#E6E9EF] capitalize">{recommendedBand}</span>
                         </div>
                       )}
                     </div>
+                    {selectedBands.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
+                        <span className="text-[#6B7280]">Selected: </span>
+                        <span className="text-emerald-400 capitalize">{selectedBands.join(' + ')}</span>
+                        {recommendedBand && selectedBands[0] !== recommendedBand && (
+                          <span className="text-[#6B7280] ml-1">(differs from rec)</span>
+                        )}
+                      </div>
+                    )}
+                    {selectedRPE !== null && selectedRPE > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
+                        <span className="text-[#6B7280]">Your RPE: </span>
+                        <span className="text-emerald-400">{selectedRPE}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <p className="text-xs text-[#6B7280] text-center">
-                  More adaptation will appear after logged performance data is available.
-                </p>
-              </div>
-            )}
+                  
+                  {/* Coaching Verdict */}
+                  <div className={`p-3 rounded-lg border ${
+                    verdict.status === 'on_track' ? 'bg-emerald-500/5 border-emerald-500/30' :
+                    verdict.status === 'reduce' ? 'bg-amber-500/5 border-amber-500/30' :
+                    verdict.status === 'increase' ? 'bg-sky-500/5 border-sky-500/30' :
+                    'bg-[#0F1115] border-[#2B313A]'
+                  }`}>
+                    <h4 className={`text-sm font-medium mb-1 ${
+                      verdict.status === 'on_track' ? 'text-emerald-400' :
+                      verdict.status === 'reduce' ? 'text-amber-400' :
+                      verdict.status === 'increase' ? 'text-sky-400' :
+                      'text-[#A4ACB8]'
+                    }`}>
+                      {verdict.headline}
+                    </h4>
+                    <p className="text-xs text-[#A4ACB8]">{verdict.explanation}</p>
+                  </div>
+                  
+                  {/* Evidence Used */}
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Evidence Used</h4>
+                    <ul className="space-y-1 text-xs text-[#6B7280]">
+                      <li>• Set {currentSetNumber} of {totalSets}</li>
+                      {targetRPE && <li>• Target RPE: {targetRPE}</li>}
+                      {completedCount > 0 && <li>• Sets completed this exercise: {completedCount}</li>}
+                      {avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}
+                      {lastCompletedSet && <li>• Last set RPE: {lastCompletedSet.actualRPE || 'not recorded'}</li>}
+                      {recommendedBand && <li>• Recommended band: {recommendedBand}</li>}
+                      {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.join(' + ')}</li>}
+                      {completedCount === 0 && <li>• No prior sets logged for this exercise yet</li>}
+                    </ul>
+                  </div>
+                  
+                  {/* What Could Change Next Set */}
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">What Could Change</h4>
+                    <ul className="space-y-1.5 text-xs text-[#6B7280]">
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400 mt-0.5">•</span>
+                        <span>If RPE jumps 2+ above target, next set may reduce reps/hold or recommend more assistance</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-sky-400 mt-0.5">•</span>
+                        <span>If RPE stays below target consistently, the app may suggest less band support or more load</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-red-400 mt-0.5">•</span>
+                        <span>If pain/unsafe feedback is logged, movement should reduce, substitute, or stop</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-[#6B7280] mt-0.5">•</span>
+                        <span>If data is inconsistent, the app keeps the current target and gathers more proof</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  {/* Ramp-Up Advisory */}
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Ramp-Up Check</h4>
+                    {needsRampUp ? (
+                      <>
+                        <p className="text-xs text-amber-400 mb-2">
+                          {isWeightedMovement ? 'Weighted movement detected' : 'Advanced progression detected'} - ramp-up sets recommended
+                        </p>
+                        <ul className="space-y-1 text-xs text-[#6B7280]">
+                          {isWeightedMovement ? (
+                            <>
+                              <li>1. Bodyweight exposure (1-2 easy reps)</li>
+                              <li>2. ~50% load exposure (2-3 reps)</li>
+                              <li>3. First working set at target load</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>1. Easier position hold (3-5s)</li>
+                              <li>2. Low-fatigue rehearsal at target</li>
+                              <li>3. First working set</li>
+                            </>
+                          )}
+                        </ul>
+                      </>
+                    ) : (
+                      <p className="text-xs text-[#6B7280]">
+                        No extra ramp-up needed beyond your warm-up. This movement is light/moderate intensity.
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Data Honesty Note */}
+                  <p className="text-[10px] text-[#6B7280] text-center italic">
+                    {completedCount > 0 
+                      ? `Coaching based on ${completedCount} logged set${completedCount > 1 ? 's' : ''} this exercise.`
+                      : 'No sets logged yet. Complete sets to see personalized coaching.'}
+                  </p>
+                </div>
+              )
+            })()}
           </div>
         </DialogContent>
       </Dialog>

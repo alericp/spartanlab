@@ -8190,8 +8190,9 @@ if (shouldShowLocalFallback) {
       </div>
       
       {/* [PPX-R7.3] Adaptive Details Dialog - Full Warm-Up Plan Map */}
+      {/* [PPX-R7.5B] Mobile width polish: slightly narrower with better side spacing */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Flame className="w-5 h-5 text-amber-400" />
@@ -8624,8 +8625,9 @@ if (shouldShowLocalFallback) {
       </div>
       
       {/* [PPX-R7.3] Adaptive Details Dialog - Full Cool-Down Plan Map */}
+      {/* [PPX-R7.5B] Mobile width polish: slightly narrower with better side spacing */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Wind className="w-5 h-5 text-sky-400" />

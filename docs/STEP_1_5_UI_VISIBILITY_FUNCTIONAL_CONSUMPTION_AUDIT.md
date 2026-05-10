@@ -400,6 +400,43 @@ From recent conversation:
     - lib/workout-log-service.ts (added server save + delete calls)
     - app/api/workout-log/delete-evidence/route.ts (new file)
   - REMAINING CHAIN:
+    - PPX-R7.5B: User-facing proof UI (COMPLETED BELOW)
+    - PPX-R7.6: Final acceptance pass
+- PPX-R7.5B: Adaptive History Proof UI + WU/CD Modal Width Polish — COMPLETE (2026-05-09)
+  - ROOT CAUSE: PPX-R7.5 fixed backend/client corridor but only had dev console diagnostics as "proof"
+    - Users cannot see dev console - they need real UI proof that completed workouts became adaptive input
+    - WU/CD modals were functional but slightly too wide on mobile (full-width feel)
+  - FIX IMPLEMENTED:
+    1. Added `getAdaptiveProof()` helper to RecentWorkoutsList.tsx:
+       - Derives display state from workout log fields (trusted, sourceRoute, completedSetEvidence)
+       - Returns status: 'trusted_evidence' | 'local_only' | 'excluded'
+       - Generates honest labels and detail text
+    2. Added adaptive proof UI section in expanded workout row:
+       - Shows "Saved as adaptive input • X sets" for trusted workouts with evidence
+       - Shows "Excluded from adaptation" for demo/test workouts
+       - Shows "Workout saved" for workouts without set-level evidence
+       - Color-coded: emerald for trusted, amber for excluded, neutral for local-only
+    3. WU/CD modal width micro-polish:
+       - Changed from `max-w-md` (448px) to `w-[calc(100vw-32px)] max-w-[400px]`
+       - Gives 16px side margins on mobile for cleaner, more premium feel
+       - Preserved max-h-[85vh] and overflow-y-auto for scroll behavior
+  - PROOF LABELS:
+    - Trusted evidence: "Saved as adaptive input • X sets captured for future coaching"
+    - Local only: "Workout saved • No set-level adaptive evidence captured"
+    - Excluded: "Excluded from adaptation • Demo/test sessions do not affect future programming"
+  - FILES CHANGED:
+    - components/workouts/RecentWorkoutsList.tsx (added getAdaptiveProof + UI section)
+    - components/workout/StreamlinedWorkoutSession.tsx (WU/CD modal width polish)
+  - CHECKLIST:
+    - [x] completedSetEvidence preserved on save
+    - [x] Real workouts show adaptive proof in expanded row
+    - [x] Demo/untrusted workouts show excluded state
+    - [x] Delete path preserved (fires server delete)
+    - [x] Restart/rebuild preservation verified (doesn't clear logs)
+    - [x] WU modal opens with narrower width
+    - [x] CD modal opens with narrower width
+    - [x] No live "Why this set?" regression
+  - REMAINING CHAIN:
     - PPX-R7.6: Final acceptance pass
 
 ---

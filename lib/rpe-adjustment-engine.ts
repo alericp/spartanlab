@@ -411,7 +411,7 @@ export function generateExerciseRPEConfig(
 }
 
 // =============================================================================
-// RPE INPUT OPTIONS
+// RPE OPTIONS
 // =============================================================================
 
 export const RPE_OPTIONS: { value: RPEValue; label: string; description: string }[] = [
@@ -428,8 +428,56 @@ export const RPE_OPTIONS: { value: RPEValue; label: string; description: string 
   { value: 10, label: '10', description: 'Max effort' },
 ]
 
-// Quick-tap options for mobile
-export const RPE_QUICK_OPTIONS: RPEValue[] = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+// [PPX-R7.6C] Quick-tap options for mobile - WHOLE INTEGERS ONLY
+// User-facing RPE input must be integers. Internal decimal math may remain for calculations.
+export const RPE_QUICK_OPTIONS: RPEValue[] = [6, 7, 8, 9, 10]
+
+// =============================================================================
+// [PPX-R7.6C] APP-WIDE INTEGER RPE DISPLAY DOCTRINE
+// =============================================================================
+// User-facing RPE must NEVER show decimals. Internal math may use decimals.
+// This is the single authoritative formatter for all user-visible RPE display.
+
+/**
+ * Convert any RPE value to a display-safe whole integer (1-10)
+ * @param value - Raw RPE value (may be decimal, string, null, undefined)
+ * @returns Whole integer 1-10, or null if unusable
+ */
+export function toDisplayRPE(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  const num = typeof value === 'number' ? value : parseFloat(String(value))
+  if (!Number.isFinite(num)) return null
+  // Round to nearest integer, clamp to 1-10
+  const rounded = Math.round(num)
+  return Math.max(1, Math.min(10, rounded))
+}
+
+/**
+ * Format RPE for user-facing display as a string
+ * @param value - Raw RPE value
+ * @param prefix - Optional prefix like "RPE " or "Target RPE: "
+ * @returns Formatted string or empty string if unusable
+ */
+export function formatDisplayRPE(value: unknown, prefix: string = ''): string {
+  const rpe = toDisplayRPE(value)
+  if (rpe === null) return ''
+  return `${prefix}${rpe}`
+}
+
+/**
+ * Get coaching description for a whole-number RPE level
+ */
+export function getRPEDescription(rpe: number): string {
+  const level = Math.round(rpe)
+  switch (level) {
+    case 10: return 'Failure — no reps or meaningful hold time left'
+    case 9: return 'Near max — about 1 rep or 1-2 seconds in reserve'
+    case 8: return 'Hard — about 2 reps or 2-4 seconds in reserve'
+    case 7: return 'Moderate-hard — about 3 reps or 3-6 seconds in reserve'
+    case 6: return 'Controlled — several reps or seconds in reserve'
+    default: return level <= 5 ? 'Easy / warm-up effort' : 'Max effort'
+  }
+}
 
 // =============================================================================
 // REST TIME FORMATTING

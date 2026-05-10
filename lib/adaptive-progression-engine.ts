@@ -440,7 +440,7 @@ function analyzeStaticSkill(
       const nextBand = nextBandIndex >= 0 ? ALL_BAND_COLORS[nextBandIndex] : undefined
       
       decision = 'REDUCE_BAND'
-      reasoning = `Consistently hitting ${avgHold.toFixed(0)}s holds with RPE ${context?.avgRPE?.toFixed(1)}. Ready for less assistance.`
+      reasoning = `Consistently hitting ${avgHold.toFixed(0)}s holds with RPE ${context?.avgRPE ? Math.round(context.avgRPE) : '?'}. Ready for less assistance.`
       
       return createAnalysis(
         history.exerciseId, history.exerciseName, 'static_skill',
@@ -539,7 +539,7 @@ function analyzeStrengthExercise(
     if (currentWeight > 0 || history.exerciseType === 'weighted') {
       decision = 'INCREASE_WEIGHT'
       const increment = PROGRESSION_THRESHOLDS.WEIGHT_INCREMENT_UPPER
-      reasoning = `Consistently hitting ${avgReps.toFixed(0)} reps at RPE ${context?.avgRPE?.toFixed(1)}. Add ${increment} lbs.`
+      reasoning = `Consistently hitting ${avgReps.toFixed(0)} reps at RPE ${context?.avgRPE ? Math.round(context.avgRPE) : '?'}. Add ${increment} lbs.`
       
       return createAnalysis(
         history.exerciseId, history.exerciseName, history.exerciseType,
@@ -652,7 +652,7 @@ function analyzeMobility(
     return createAnalysis(
       history.exerciseId, history.exerciseName, 'mobility',
       'INCREASE_WEIGHT', 'medium',
-      `Good control with RPE ${context?.avgRPE?.toFixed(1)}. Increase load.`,
+      `Good control with RPE ${context?.avgRPE ? Math.round(context.avgRPE) : '?'}. Increase load.`,
       'Add a small amount of weight to build end-range strength.',
       { ...context!, sessionsAnalyzed: records.length },
       { nextWeight: currentWeight + increment, weightIncrement: increment }
@@ -664,7 +664,7 @@ function analyzeMobility(
     return createAnalysis(
       history.exerciseId, history.exerciseName, 'mobility',
       'MAINTAIN', 'high',
-      `High effort (RPE ${context?.avgRPE?.toFixed(1)}). Build control here.`,
+      `High effort (RPE ${context?.avgRPE ? Math.round(context.avgRPE) : '?'}). Build control here.`,
       'Focus on quality at current load.',
       { ...context!, sessionsAnalyzed: records.length }
     )

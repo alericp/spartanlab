@@ -559,9 +559,9 @@ export function applyTrainingDifferentiationCalibration(
       rv.roleId === 'recovery_supportive'
         ? 'RPE 5-6'
         : rv.roleId === 'skill_quality_emphasis' || rv.roleId === 'density_capacity'
-          ? 'RPE 6.5-7'
+          ? 'RPE 7'
           : rv.roleId === 'primary_strength_emphasis'
-            ? 'RPE 7.5-8.5 where safe'
+            ? 'RPE 8-9 where safe'
             : 'RPE 7-8'
     const methodBudget =
       rv.roleId === 'density_capacity'

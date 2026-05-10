@@ -135,7 +135,7 @@ export function getRPERestAdjustment(
   if (rpe >= 9.5) {
     return {
       delta: 60,
-      reason: 'Very high effort (RPE 9.5-10) - extra recovery recommended',
+      reason: 'Very high effort (RPE 10) - extra recovery recommended',
       type: 'increase',
     }
   }
@@ -151,7 +151,7 @@ export function getRPERestAdjustment(
   if (rpe >= 8.5) {
     return {
       delta: 30,
-      reason: 'Solid effort (RPE 8.5) - slight rest increase',
+      reason: 'Solid effort (RPE 9) - slight rest increase',
       type: 'increase',
     }
   }

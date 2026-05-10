@@ -1317,7 +1317,7 @@ function checkFatigueSignals(history: BandHistoryEntry[]): { hasFatigueWarning: 
     if (avgRPE >= 9) {
       return {
         hasFatigueWarning: true,
-        reason: `High effort level (RPE ${avgRPE.toFixed(1)}) - maintain current assistance until recovered`,
+        reason: `High effort level (RPE ${Math.round(avgRPE)}) - maintain current assistance until recovered`,
       }
     }
   }
@@ -1536,7 +1536,7 @@ function analyzeProgressionReadiness(
       return {
         progressionReady: false,
         nextBand: null,
-        reason: `Effort still high (RPE ${avgRPE.toFixed(1)}) - build more comfort before reducing assistance`,
+        reason: `Effort still high (RPE ${Math.round(avgRPE)}) - build more comfort before reducing assistance`,
       }
     }
   }

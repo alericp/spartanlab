@@ -2104,6 +2104,23 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
   )
 }
 
+// [PPX-R7.8F] Shared band guidance truth type
+type SharedBandGuidanceTruth = {
+  hasBandSelector: boolean
+  action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
+  label: string
+  evidenceSummary: string
+  detail: string
+  recommendedBand: ResistanceBandColor | null
+  historyCount: number
+  historicalAvgRPE: number | null
+  cleanPercent: number | null
+  stability: string | null
+  source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
+  color: string
+  bgColor: string
+}
+
 interface BandSelectorProps {
   value: ResistanceBandColor | 'none'
   onChange: (value: ResistanceBandColor | 'none') => void
@@ -2111,43 +2128,49 @@ interface BandSelectorProps {
   // [PPX-R2E] Exercise context for history-based recommendations
   exerciseId?: string
   exerciseName?: string
+  // [PPX-R7.8F] Shared guidance truth from corridor scope - ensures parity with modal
+  sharedGuidance?: SharedBandGuidanceTruth
 }
 
-function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseName }: BandSelectorProps) {
+// [PPX-R7.8F] BandSelector now receives shared guidance truth from corridor scope
+// This ensures card and modal display the EXACT same band guidance
+function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseName, sharedGuidance }: BandSelectorProps) {
   const bandOptions: (ResistanceBandColor | 'none')[] = ['none', ...ALL_BAND_COLORS]
   
-  // [PPX-R2E] Get history-based band recommendation if exercise context provided
-  const historyRecommendation = useMemo(() => {
-    if (!exerciseId || !exerciseName) return null
-    if (!supportsBandAssistance(exerciseId)) return null
-    
-    try {
-      const recommendation = getBandRecommendation(exerciseId, exerciseName)
-      const history = getExerciseBandHistory(exerciseId)
-      return {
-        recommendedBand: recommendation.recommendedBand,
-        reason: recommendation.reason,
-        historyCount: history.length,
-        isFromHistory: history.length > 0,
-      }
-    } catch {
-      return null
-    }
-  }, [exerciseId, exerciseName])
+  // [PPX-R7.8F] Use shared guidance if provided, otherwise fall back to internal computation
+  // The sharedGuidance prop ensures parity with Live Set Guidance modal
+  const effectiveRec = sharedGuidance?.recommendedBand || recommendedBand
   
-  // [PPX-R2E] Determine effective recommended band (history > execution truth > none)
-  const effectiveRec = historyRecommendation?.recommendedBand || recommendedBand
-  const isHistoryBased = historyRecommendation?.isFromHistory && historyRecommendation.recommendedBand
-  
-  // [PPX-R2G] Build visible recommendation/tracking display object
-  // ALWAYS show a visible status line — never render nothing
+  // [PPX-R7.8F] Use shared display if available, otherwise compute internally (backward compat)
   const bandDisplay = useMemo(() => {
-    const historyCount = historyRecommendation?.historyCount ?? 0
+    if (sharedGuidance && sharedGuidance.hasBandSelector) {
+      return {
+        status: sharedGuidance.action,
+        label: sharedGuidance.label,
+        detail: sharedGuidance.detail,
+        color: sharedGuidance.color,
+        bgColor: sharedGuidance.bgColor,
+      }
+    }
+    
+    // Fallback: internal computation for backward compatibility
+    if (!exerciseId || !exerciseName) {
+      return {
+        status: 'tracking' as const,
+        label: 'Tracking band history',
+        detail: 'Log band-assisted sets to build recommendations',
+        color: 'text-[#6B7280]',
+        bgColor: 'bg-[#1A1D21]/50',
+      }
+    }
+    
+    // Internal lookup (only used if sharedGuidance not provided)
+    const history = getExerciseBandHistory(exerciseId)
+    const historyCount = history.length
+    const isHistoryBased = historyCount > 0 && effectiveRec
     
     if (isHistoryBased && effectiveRec) {
-      // History-based recommendation exists
       if (historyCount >= 6) {
-        // Enough history for progression analysis
         return {
           status: 'recommended' as const,
           label: `Recommended: ${BAND_SHORT_LABELS[effectiveRec]}`,
@@ -2156,7 +2179,6 @@ function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseNa
           bgColor: 'bg-emerald-500/10',
         }
       } else {
-        // Some history, maintaining current band
         return {
           status: 'maintain' as const,
           label: `Maintain ${BAND_SHORT_LABELS[effectiveRec]}`,
@@ -2166,7 +2188,6 @@ function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseNa
         }
       }
     } else if (effectiveRec) {
-      // Starting recommendation from execution truth
       return {
         status: 'starting' as const,
         label: `Start with: ${BAND_SHORT_LABELS[effectiveRec]}`,
@@ -2175,7 +2196,6 @@ function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseNa
         bgColor: 'bg-[#2B313A]/50',
       }
     } else {
-      // No recommendation — tracking fallback
       return {
         status: 'tracking' as const,
         label: 'Tracking band history',
@@ -2184,7 +2204,7 @@ function BandSelector({ value, onChange, recommendedBand, exerciseId, exerciseNa
         bgColor: 'bg-[#1A1D21]/50',
       }
     }
-  }, [effectiveRec, isHistoryBased, historyRecommendation?.historyCount])
+  }, [sharedGuidance, effectiveRec, exerciseId, exerciseName])
   
   return (
     <div className="space-y-2">
@@ -9697,6 +9717,138 @@ if (shouldShowLocalFallback) {
       })
     }
     
+    // [PPX-R7.8F] SINGLE SOURCE OF TRUTH: Compute band guidance ONCE at corridor scope
+    // Both BandSelector card AND Live Set Guidance modal MUST consume this exact same object
+    // This eliminates the split truth that caused modal to show "Tracking" while card showed "Maintain Red"
+    const corridorExerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || ''
+    const corridorExerciseName = safeCurrentExercise?.name || ''
+    
+    const sharedBandGuidanceTruth = useMemo(() => {
+      if (!corridorBandSelectable || !corridorExerciseId || !corridorExerciseName) {
+        return {
+          hasBandSelector: false,
+          action: 'none' as const,
+          label: '',
+          evidenceSummary: '',
+          detail: '',
+          recommendedBand: null as ResistanceBandColor | null,
+          historyCount: 0,
+          historicalAvgRPE: null as number | null,
+          cleanPercent: null as number | null,
+          stability: null as string | null,
+          source: 'none' as const,
+          color: 'text-[#6B7280]',
+          bgColor: 'bg-[#1A1D21]/50',
+        }
+      }
+      
+      // Use EXACT same lookup as BandSelector: getExerciseBandHistory with raw ID
+      // This is what actually finds the 13 logged sets
+      const history = getExerciseBandHistory(corridorExerciseId)
+      const historyCount = history.length
+      
+      // Get recommendation - use corridorRecommendedBand as authoritative fallback
+      let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand ?? null
+      try {
+        const rec = getBandRecommendation(corridorExerciseId, corridorExerciseName)
+        if (rec.recommendedBand) recommendedBand = rec.recommendedBand
+      } catch { /* use corridor fallback */ }
+      
+      const isHistoryBased = historyCount > 0 && recommendedBand
+      
+      // Compute evidence from history
+      const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
+      const historicalAvgRPE = historyWithRPE.length > 0
+        ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
+        : null
+      const cleanReps = history.filter(h => h.quality === 'clean').length
+      const cleanPercent = historyCount > 0 ? Math.round((cleanReps / historyCount) * 100) : null
+      const stability = historyCount >= 6 ? 'stable' : (historyCount > 0 ? 'building' : null)
+      
+      // Format band label
+      const bandLabel = recommendedBand ? BAND_SHORT_LABELS[recommendedBand] : ''
+      
+      if (isHistoryBased && recommendedBand) {
+        if (historyCount >= 6) {
+          return {
+            hasBandSelector: true,
+            action: 'recommended' as const,
+            label: `Recommended: ${bandLabel}`,
+            evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'stable'}`,
+            detail: `Based on ${historyCount} logged sets`,
+            recommendedBand,
+            historyCount,
+            historicalAvgRPE,
+            cleanPercent,
+            stability,
+            source: 'history_recommendation' as const,
+            color: 'text-emerald-400',
+            bgColor: 'bg-emerald-500/10',
+          }
+        } else {
+          return {
+            hasBandSelector: true,
+            action: 'maintain' as const,
+            label: `Maintain ${bandLabel}`,
+            evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'building'}`,
+            detail: `${historyCount} sets logged — building history`,
+            recommendedBand,
+            historyCount,
+            historicalAvgRPE,
+            cleanPercent,
+            stability,
+            source: 'history_recommendation' as const,
+            color: 'text-amber-400',
+            bgColor: 'bg-amber-500/10',
+          }
+        }
+      } else if (recommendedBand) {
+        return {
+          hasBandSelector: true,
+          action: 'starting' as const,
+          label: `Start with: ${bandLabel}`,
+          evidenceSummary: 'Initial recommendation',
+          detail: 'Initial recommendation',
+          recommendedBand,
+          historyCount,
+          historicalAvgRPE,
+          cleanPercent,
+          stability,
+          source: 'corridor_recommendation' as const,
+          color: 'text-[#A4ACB8]',
+          bgColor: 'bg-[#2B313A]/50',
+        }
+      } else {
+        return {
+          hasBandSelector: true,
+          action: 'tracking' as const,
+          label: 'Tracking band history',
+          evidenceSummary: 'Log band-assisted sets to build recommendations',
+          detail: 'Log band-assisted sets to build recommendations',
+          recommendedBand: null,
+          historyCount,
+          historicalAvgRPE,
+          cleanPercent,
+          stability,
+          source: 'tracking' as const,
+          color: 'text-[#6B7280]',
+          bgColor: 'bg-[#1A1D21]/50',
+        }
+      }
+    }, [corridorBandSelectable, corridorExerciseId, corridorExerciseName, corridorRecommendedBand])
+    
+    // [PPX-R7.8F] Dev-only proof that shared object is computed
+    if (process.env.NODE_ENV === 'development' && sharedBandGuidanceTruth.hasBandSelector) {
+      console.log('[PPX-R7.8F band guidance parity]', {
+        exerciseId: corridorExerciseId,
+        exerciseName: corridorExerciseName,
+        sharedLabel: sharedBandGuidanceTruth.label,
+        sharedEvidence: sharedBandGuidanceTruth.evidenceSummary,
+        historyCount: sharedBandGuidanceTruth.historyCount,
+        source: sharedBandGuidanceTruth.source,
+      })
+    }
+    
     // Build recent sets for ledger (last 3 completed sets)
     // [RECENT-SETS-FIX] Filter recent sets by CURRENT EXERCISE only, not global last 3
     // [REFRESH-DUPLICATE-SET-FIX] LEDGER RENDER HARDENING (layer 4 of 4)
@@ -10550,89 +10702,34 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 const exerciseMethod = safeCurrentExercise?.method || ''
                 const prescribedLoad = safeCurrentExercise?.prescribedLoad
                 
-                // Band data
-                const corridorMetadata = readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth)
-                const corridorRecommendedBand = corridorMetadata.recommendedBand
+                // [PPX-R7.8F] SINGLE SOURCE OF TRUTH: Use sharedBandGuidanceTruth from corridor scope
+                // This is the EXACT same object that BandSelector uses for its display
+                // No more split truth - modal and card MUST show identical band guidance
                 const selectedBands = machineState.selectedBands || []
                 const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
+                const exerciseId = corridorExerciseId
                 
-                // [PPX-R7.8E] Use getCanonicalBandHistory for proper canonical key resolution
-                // This ensures modal gets the same history as visible BandSelector card
-                const exerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || `exercise-${safeExerciseIndex}`
-                const bandHistoryData = (() => {
-                  if (!exerciseId || !exerciseName) return null
-                  try {
-                    // [PPX-R7.8E] Use canonical history lookup - resolves "tuck_front_lever_hold" → "front_lever_tuck"
-                    const canonicalHistory = getCanonicalBandHistory({ exerciseId, exerciseName })
-                    const rec = getBandRecommendation(exerciseId, exerciseName)
-                    
-                    // Use exact + family history for complete picture
-                    const allHistory = [...canonicalHistory.exactHistory, ...canonicalHistory.familyHistory]
-                    const historyWithRPE = allHistory.filter(h => h.rpe && h.rpe > 0)
-                    const historicalAvgRPE = historyWithRPE.length > 0
-                      ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
-                      : null
-                    const cleanReps = allHistory.filter(h => h.quality === 'clean').length
-                    const cleanPercent = allHistory.length > 0 ? Math.round((cleanReps / allHistory.length) * 100) : 0
-                    
-                    // [PPX-R7.8E] ROOT FIX: Use corridorRecommendedBand as fallback for recommendedBand
-                    // getBandRecommendation returns null for non-canonical IDs like "tuck_front_lever_hold"
-                    // but BandSelector uses recommendedBand prop as fallback - modal must do the same
-                    const effectiveBand = rec.recommendedBand || corridorRecommendedBand
-                    
-                    return {
-                      recommendedBand: effectiveBand,
-                      historyCount: canonicalHistory.totalCount,
-                      historicalAvgRPE,
-                      cleanPercent,
-                      stability: 'stability' in rec ? String(rec.stability) : (canonicalHistory.totalCount > 0 ? 'stable' : 'building'),
-                    }
-                  } catch { return null }
-                })()
-                const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
+                // [PPX-R7.8F] Dev-only proof that modal receives shared truth
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[PPX-R7.8F modal band truth]', {
+                    exerciseId,
+                    exerciseName,
+                    sharedLabel: sharedBandGuidanceTruth.label,
+                    sharedEvidence: sharedBandGuidanceTruth.evidenceSummary,
+                    sharedAction: sharedBandGuidanceTruth.action,
+                    historyCount: sharedBandGuidanceTruth.historyCount,
+                    source: sharedBandGuidanceTruth.source,
+                  })
+                }
                 
-                // [PPX-R7.8C-BUILD-FIX] Use corridorBandSelectable which is the same truth as visible BandSelector
-                // corridorBandSelectable is defined at corridor scope (line ~9690) from corridorInputMode.showBandSelector
-                // Also check if we have any band evidence/recommendation as secondary signal
-                const hasBandSelector = corridorBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand
-                const bandGuidanceTruth = (() => {
-                  const historyCount = bandHistoryData?.historyCount ?? 0
-                  const isHistoryBased = historyCount > 0 && bandHistoryData?.recommendedBand
-                  
-                  // [PPX-R7.8C] Use BAND_SHORT_LABELS for proper formatting, same as BandSelector
-                  const bandLabel = effectiveRecommendedBand 
-                    ? (BAND_SHORT_LABELS[effectiveRecommendedBand as ResistanceBandColor] || effectiveRecommendedBand)
-                    : ''
-                  
-                  if (isHistoryBased && effectiveRecommendedBand) {
-                    if (historyCount >= 6) {
-                      return {
-                        action: 'recommended' as const,
-                        label: `Recommended: ${bandLabel}`,
-                        evidenceSummary: `${historyCount} sets logged — RPE ${bandHistoryData?.historicalAvgRPE ?? '?'} — ${bandHistoryData?.cleanPercent ?? 0}% clean — ${bandHistoryData?.stability || 'building'}`,
-                      }
-                    } else {
-                      return {
-                        action: 'maintain' as const,
-                        label: `Maintain ${bandLabel}`,
-                        evidenceSummary: `${historyCount} sets logged — RPE ${bandHistoryData?.historicalAvgRPE ?? '?'} — ${bandHistoryData?.cleanPercent ?? 0}% clean — ${bandHistoryData?.stability || 'building'}`,
-                      }
-                    }
-                  } else if (effectiveRecommendedBand) {
-                    return {
-                      action: 'starting' as const,
-                      label: `Start with: ${bandLabel}`,
-                      evidenceSummary: 'Initial recommendation',
-                    }
-                  } else if (hasBandSelector) {
-                    return {
-                      action: 'tracking' as const,
-                      label: 'Tracking band history',
-                      evidenceSummary: 'Log band-assisted sets to build recommendations',
-                    }
-                  }
-                  return { action: 'none' as const, label: '', evidenceSummary: '' }
-                })()
+                // Aliases for backward compatibility with buildLiveSetCoaching call
+                const hasBandSelector = sharedBandGuidanceTruth.hasBandSelector
+                const bandGuidanceTruth = {
+                  action: sharedBandGuidanceTruth.action,
+                  label: sharedBandGuidanceTruth.label,
+                  evidenceSummary: sharedBandGuidanceTruth.evidenceSummary,
+                }
+                const effectiveRecommendedBand = sharedBandGuidanceTruth.recommendedBand
                 
                 // Current session evidence
                 const currentSessionSets = normalizedCompletedSets.filter(
@@ -10666,10 +10763,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   currentSessionSetsCompleted: currentSessionCount,
                   currentSessionAvgRPE,
                   lastSetRPE: lastSessionRPEDisplay,
-                  historicalSetsCount: bandHistoryData?.historyCount || 0,
-                  historicalAvgRPE: bandHistoryData?.historicalAvgRPE || null,
-                  cleanPercent: bandHistoryData?.cleanPercent || 0,
-                  bandStability: bandHistoryData?.stability || 'building',
+                  historicalSetsCount: sharedBandGuidanceTruth.historyCount,
+                  historicalAvgRPE: sharedBandGuidanceTruth.historicalAvgRPE,
+                  cleanPercent: sharedBandGuidanceTruth.cleanPercent ?? 0,
+                  bandStability: sharedBandGuidanceTruth.stability || 'building',
                   focusLabel: safeWorkoutSessionContract.focusLabel,
                 })
                 
@@ -11219,15 +11316,15 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             <RepsHoldInput type="reps" value={safeRepsValue} onChange={setRepsValue} targetValue={contractTargetValue} />
           )}
           <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={contractTargetRPE} />
-          {bandSelectable && (
-            <BandSelector 
-              value={safeBandUsed} 
-              onChange={setBandUsed} 
-              recommendedBand={contractRecommendedBand}
-              exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
-              exerciseName={safeCurrentExercise.name}
-            />
-          )}
+{bandSelectable && (
+  <BandSelector
+    value={safeBandUsed}
+    onChange={setBandUsed}
+    recommendedBand={contractRecommendedBand}
+    exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
+    exerciseName={safeCurrentExercise.name}
+  />
+)}
           
           {/* Per-set notes section - collapsible */}
           <div className="border-t border-[#2B313A] pt-3">

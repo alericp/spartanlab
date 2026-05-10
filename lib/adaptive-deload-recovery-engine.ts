@@ -787,7 +787,7 @@ export function applyRecoveryAdjustmentsToSession(
     applied.push({
       category: 'intensity',
       description: `Target RPE reduced`,
-      originalValue: `RPE ${sessionPlan.targetRPE}`,
+      originalValue: `RPE ${Math.round(sessionPlan.targetRPE)}`,
       adjustedValue: `RPE ${Math.round(adjusted.targetRPE)}`,
     })
   }

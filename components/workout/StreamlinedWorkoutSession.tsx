@@ -2121,9 +2121,9 @@ type SharedBandGuidanceTruth = {
   bgColor: string
 }
 
-// [PPX-R7.8G] PURE HELPER FUNCTION - NO REACT HOOKS
-// This replaces the useMemo that was inside the live corridor IIFE and caused React #310
-// Pure functions can be called inside conditional branches without violating hook order
+// [PPX-R7.8I] PURE HELPER FUNCTION - NO REACT HOOKS
+// Uses CANONICAL history lookup to find family/exact matches (not just raw ID)
+// This ensures the 13 logged sets for Tuck Front Lever Hold are found via canonical key resolution
 function buildSharedBandGuidanceTruth(args: {
   corridorBandSelectable: boolean
   exerciseId: string
@@ -2151,24 +2151,64 @@ function buildSharedBandGuidanceTruth(args: {
     }
   }
   
-  // Use EXACT same lookup as BandSelector: getExerciseBandHistory with raw ID
-  // This is what actually finds the 13 logged sets
-  let history: ReturnType<typeof getExerciseBandHistory> = []
+  // [PPX-R7.8I] Use CANONICAL lookup to find exact + family history
+  // This finds the 13 sets logged under canonical key even when raw ID differs
+  let canonicalResult: ReturnType<typeof getCanonicalBandHistory> | null = null
+  let rawHistory: ReturnType<typeof getExerciseBandHistory> = []
+  
   try {
-    history = getExerciseBandHistory(exerciseId)
+    canonicalResult = getCanonicalBandHistory({ exerciseId, exerciseName })
   } catch { /* safe fallback */ }
+  
+  try {
+    rawHistory = getExerciseBandHistory(exerciseId)
+  } catch { /* safe fallback */ }
+  
+  // Priority: canonical exact > canonical family > raw history
+  // This ensures we find the user's logged sets regardless of ID format
+  let history: { bandColor: ResistanceBandColor; rpe?: number; quality?: string }[] = []
+  let historySource: 'canonical_exact' | 'canonical_family' | 'raw' | 'none' = 'none'
+  
+  if (canonicalResult && canonicalResult.exactCount > 0) {
+    history = canonicalResult.exactHistory
+    historySource = 'canonical_exact'
+  } else if (canonicalResult && canonicalResult.familyCount > 0) {
+    history = canonicalResult.familyHistory
+    historySource = 'canonical_family'
+  } else if (rawHistory.length > 0) {
+    history = rawHistory
+    historySource = 'raw'
+  }
+  
   const historyCount = history.length
   
-  // Get recommendation - use corridorRecommendedBand as authoritative fallback
-  let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand
+  // Get recommendation - try canonical-aware recommendation first, then corridorRecommendedBand
+  let recommendedBand: ResistanceBandColor | null = null
+  
+  // Priority 1: Canonical recommendation
   try {
     const rec = getBandRecommendation(exerciseId, exerciseName)
     if (rec.recommendedBand) recommendedBand = rec.recommendedBand
-  } catch { /* use corridor fallback */ }
+  } catch { /* continue to fallbacks */ }
+  
+  // Priority 2: Last band from canonical history
+  if (!recommendedBand && canonicalResult?.lastBandUsed) {
+    recommendedBand = canonicalResult.lastBandUsed
+  }
+  
+  // Priority 3: Last band from raw history
+  if (!recommendedBand && rawHistory.length > 0) {
+    recommendedBand = rawHistory[0]?.bandColor || null
+  }
+  
+  // Priority 4: Corridor fallback
+  if (!recommendedBand) {
+    recommendedBand = corridorRecommendedBand
+  }
   
   const isHistoryBased = historyCount > 0 && recommendedBand
   
-  // Compute evidence from history
+  // Compute evidence from chosen history
   const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
   const historicalAvgRPE = historyWithRPE.length > 0
     ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
@@ -2180,39 +2220,38 @@ function buildSharedBandGuidanceTruth(args: {
   // Format band label
   const bandLabel = recommendedBand ? BAND_SHORT_LABELS[recommendedBand] : ''
   
+  // Dev-only diagnostic
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PPX-R7.8I shared band truth built]', {
+      exerciseId,
+      exerciseName,
+      rawHistoryCount: rawHistory.length,
+      canonicalExactCount: canonicalResult?.exactCount ?? 0,
+      canonicalFamilyCount: canonicalResult?.familyCount ?? 0,
+      chosenHistoryCount: historyCount,
+      historySource,
+      recommendedBand,
+      label: isHistoryBased ? (historyCount >= 6 ? `Maintain ${bandLabel}` : `Maintain ${bandLabel}`) : (recommendedBand ? `Start with: ${bandLabel}` : 'Tracking band history'),
+    })
+  }
+  
   if (isHistoryBased && recommendedBand) {
-    if (historyCount >= 6) {
-      return {
-        hasBandSelector: true,
-        action: 'recommended',
-        label: `Recommended: ${bandLabel}`,
-        evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'stable'}`,
-        detail: `Based on ${historyCount} logged sets`,
-        recommendedBand,
-        historyCount,
-        historicalAvgRPE,
-        cleanPercent,
-        stability,
-        source: 'history_recommendation',
-        color: 'text-emerald-400',
-        bgColor: 'bg-emerald-500/10',
-      }
-    } else {
-      return {
-        hasBandSelector: true,
-        action: 'maintain',
-        label: `Maintain ${bandLabel}`,
-        evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'building'}`,
-        detail: `${historyCount} sets logged — building history`,
-        recommendedBand,
-        historyCount,
-        historicalAvgRPE,
-        cleanPercent,
-        stability,
-        source: 'history_recommendation',
-        color: 'text-amber-400',
-        bgColor: 'bg-amber-500/10',
-      }
+    // [PPX-R7.8I] Use "Maintain" for stable history-based recommendations
+    // This matches the previous known-good card behavior
+    return {
+      hasBandSelector: true,
+      action: 'maintain',
+      label: `Maintain ${bandLabel}`,
+      evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'stable'}`,
+      detail: `${historyCount} sets logged — ${stability || 'building history'}`,
+      recommendedBand,
+      historyCount,
+      historicalAvgRPE,
+      cleanPercent,
+      stability,
+      source: 'history_recommendation',
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
     }
   } else if (recommendedBand) {
     return {

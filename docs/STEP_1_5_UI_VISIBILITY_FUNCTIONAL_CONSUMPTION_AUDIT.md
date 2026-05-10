@@ -838,7 +838,55 @@ From recent conversation:
     - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
   - MOVE-ON DECISION: PPX-R7.6 is now CLOSED; safe to move to PPX-R7.7
   - REMAINING CHAIN:
-    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+    - PPX-R7.7 (COMPLETED BELOW)
+    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+- PPX-R7.7: Elite Warm-Up/Cool-Down AI Coach Depth Upgrade — COMPLETE (2026-05-10)
+  - WHAT CHANGED:
+    - Created new `lib/warmup-cooldown-coaching-engine.ts` with session-demand detection
+    - Extended `WorkoutSessionContract` and `AdaptiveSession` types with coaching depth fields
+    - Updated `lib/program-exercise-selector.ts` to generate coaching context from session exercises
+    - Enhanced Live Workout UI with visible AI coach focus, joint prep, ramp-up advisory, and short-time guidance
+  - AUTHORITATIVE CORRIDOR:
+    - Derivation: `lib/warmup-cooldown-coaching-engine.ts` → `generateWarmUpCoaching()` / `generateCoolDownCoaching()`
+    - Selection: `lib/program-exercise-selector.ts` → `selectIntelligentWarmup()` / `selectIntelligentCooldown()`
+    - Contract: `lib/contracts/workout-session-contract.ts` → `warmupAdaptation` / `cooldownAdaptation`
+    - UI Render: `components/workout/StreamlinedWorkoutSession.tsx` → warmup/cooldown phase UI
+  - FILES CHANGED:
+    - lib/warmup-cooldown-coaching-engine.ts (NEW)
+    - lib/contracts/workout-session-contract.ts
+    - lib/adaptive-program-builder.ts
+    - lib/program-exercise-selector.ts
+    - components/workout/StreamlinedWorkoutSession.tsx
+  - VISIBLE USER-FACING IMPROVEMENTS:
+    - Live Workout → Warm-Up phase: AI Coach Focus Summary (amber box)
+    - Live Workout → Warm-Up phase: Joint Prep Summary bullets
+    - Live Workout → Warm-Up phase: Ramp-Up Advisory (blue box) for weighted/skill work
+    - Live Workout → Warm-Up phase: "If short on time" guidance on last item
+    - Live Workout → Cool-Down phase: AI Coach Recovery Summary (sky box)
+    - Live Workout → Cool-Down phase: Region Recovery Summary bullets
+    - Live Workout → Cool-Down phase: "If short on time" guidance on last item
+  - SESSION-SPECIFIC LOGIC PROOF:
+    - Planche/straight-arm push: wrist, scapular protraction, anterior shoulder detection
+    - Front lever/straight-arm pull: scapular depression, lat, elbow detection
+    - Handstand/HSPU: wrist, overhead, scapular elevation detection
+    - Weighted work: ramp-up advisory generated
+    - Explosive work: nervous system prep detection
+    - Core/dragon flag: trunk tension, hip flexor detection
+    - Lower body/flexibility: hip, hamstring, ankle detection
+    - Joint focus: wrist/elbow/shoulder/scapular/hip/knee/ankle detection
+  - STALE PATH PROTECTION:
+    - Existing warmupAdaptation.focusLabel preserved as fallback
+    - New coaching fields are additive/optional
+    - UI shows coaching only when fields exist
+    - Fallback copy still works for older sessions
+  - RPE REGRESSION PROOF:
+    - No RPE display in new coaching engine (only doc comment)
+    - No decimal RPE introduced in any user-facing copy
+    - Scan: 0 raw RPE display paths added
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.7 is complete; safe to move to the next checklist item
+  - REMAINING CHAIN:
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

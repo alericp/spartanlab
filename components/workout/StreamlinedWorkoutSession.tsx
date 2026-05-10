@@ -8782,6 +8782,7 @@ if (shouldShowLocalFallback) {
       
       {/* [PPX-R7.3] Adaptive Details Dialog - Full Cool-Down Plan Map */}
       {/* [PPX-R7.5B] Mobile width polish: slightly narrower with better side spacing */}
+      {/* [PPX-R7.7C] Upgraded Cool-Down Modal to match Warm-Up AI-coach standard */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
         <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -8790,66 +8791,44 @@ if (shouldShowLocalFallback) {
               Why This Cool-Down?
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8]">
-              Full recovery map after {safeWorkoutSessionContract.focusLabel || 'your workout'}
+              {safeWorkoutSessionContract.cooldownAdaptation?.focusLabel 
+                || safeWorkoutSessionContract.focusLabel 
+                || 'Session'} recovery
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 mt-2">
-            {/* Plan Summary */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-sky-400 mb-2">
-                {safeWorkoutSessionContract.cooldownAdaptation?.focusLabel 
-                  ? `Recovery for ${safeWorkoutSessionContract.cooldownAdaptation.focusLabel}`
-                  : safeWorkoutSessionContract.focusLabel 
-                  ? `Recovery after ${safeWorkoutSessionContract.focusLabel}`
-                  : 'General Cool-Down Sequence'}
+            {/* [PPX-R7.7C] Coach Recovery Summary - primary coaching section */}
+            <div className="p-3 bg-sky-500/5 rounded-lg border border-sky-500/20">
+              <h4 className="text-sm font-medium text-sky-400 mb-2 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Coach Recovery Summary
               </h4>
-              <p className="text-xs text-[#A4ACB8] mb-2">
-                {safeWorkoutSessionContract.cooldownAdaptation?.rationale 
-                  || `This cooldown moves from breathing reset → target tissue recovery → mobility restoration → low-tension finish after ${safeWorkoutSessionContract.focusLabel || 'your workout'}.`}
+              <p className="text-sm text-sky-200/90 mb-2">
+                {localVisibleCooldownCoach.coachRecoverySummary}
               </p>
-              {safeWorkoutSessionContract.cooldownAdaptation?.targetRegions?.length ? (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {safeWorkoutSessionContract.cooldownAdaptation.targetRegions.map((region, i) => (
-                    <span key={i} className="px-2 py-0.5 text-xs bg-sky-500/10 text-sky-400 rounded">
+              {/* Region Recovery bullets */}
+              {localVisibleCooldownCoach.regionSummary.length > 0 && (
+                <ul className="space-y-1 mt-2">
+                  {localVisibleCooldownCoach.regionSummary.map((region: string, i: number) => (
+                    <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-sky-400/60 rounded-full flex-shrink-0" />
                       {region}
-                    </span>
+                    </li>
                   ))}
-                </div>
-              ) : null}
-              {safeWorkoutSessionContract.cooldownAdaptation?.flexibilityGoals?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {safeWorkoutSessionContract.cooldownAdaptation.flexibilityGoals.map((goal, i) => (
-                    <span key={i} className="px-2 py-0.5 text-xs bg-sky-500/10 text-sky-400 rounded">
-                      {goal.replace(/_/g, ' ')}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+                </ul>
+              )}
             </div>
             
-            {/* Why This Order */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Why This Order?</h4>
-              <ul className="space-y-1.5 text-xs text-[#A4ACB8]">
-                <li className="flex items-start gap-2">
-                  <span className="text-sky-400 mt-0.5">•</span>
-                  <span>Breathing/downshift first to lower nervous system tension</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-sky-400 mt-0.5">•</span>
-                  <span>Target muscles and joints after loaded work for recovery</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-sky-400 mt-0.5">•</span>
-                  <span>Longer holds later when tissue is warm and receptive</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-sky-400 mt-0.5">•</span>
-                  <span>Gentle finish rather than aggressive positions post-strain</span>
-                </li>
-              </ul>
-            </div>
+            {/* [PPX-R7.7C] If Short on Time guidance */}
+            {localVisibleCooldownCoach.shortTimeGuidance && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">If Short on Time</h4>
+                <p className="text-xs text-[#A4ACB8]">
+                  {localVisibleCooldownCoach.shortTimeGuidance}
+                </p>
+              </div>
+            )}
             
             {/* Full Cool-Down Sequence */}
             <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
@@ -8890,18 +8869,14 @@ if (shouldShowLocalFallback) {
               </div>
             </div>
             
-            {/* Adaptive Logic */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Future Adaptation</h4>
-              <p className="text-xs text-[#A4ACB8] mb-2">
-                This cooldown can adjust based on your logged data:
-              </p>
-              <ul className="space-y-1 text-xs text-[#6B7280]">
-                <li>• Longer cooldown if session strain or logged RPE is high</li>
-                <li>• More forearm/wrist work if grip fatigue is reported</li>
-                <li>• More mobility if range restrictions appear</li>
-                <li>• Simpler cooldown if session time is limited</li>
-              </ul>
+            {/* [PPX-R7.7C] Coaching source indicator */}
+            <p className="text-[10px] text-[#6B7280] text-center italic">
+              {localVisibleCooldownCoach.source === 'stored_adaptation' 
+                ? 'Coaching derived from session generation'
+                : localVisibleCooldownCoach.source === 'derived_from_session'
+                ? 'Coaching derived from session exercises'
+                : 'General coaching guidance'}
+            </p>
               <p className="text-[10px] text-[#6B7280] mt-2 italic">
                 {safeWorkoutSessionContract.cooldownAdaptation?.rationale 
                   ? 'Current signals: Session focus and cooldown adaptation are active.'

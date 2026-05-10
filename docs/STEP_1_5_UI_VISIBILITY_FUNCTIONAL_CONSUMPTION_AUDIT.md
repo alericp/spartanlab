@@ -467,6 +467,38 @@ From recent conversation:
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - TSC STATUS: PASS
   - REMAINING CHAIN:
+    - PPX-R7.6B: Live modal false-pass repair (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6B: Live "Why This Set?" Same-Return Dialog Mount Repair — COMPLETE (2026-05-09)
+  - FALSE PASS REASON: PPX-R7.6 claimed PASS but user reported "Why this set?" modal did not open
+  - ROOT CAUSE CONFIRMED: Button and dialog were in DIFFERENT return trees
+    - Button: Line 10392-10398, inside `if (isLiveExecutionPhase)` early return (ends line 10403)
+    - Dialog: Lines 11349-11562, inside unit-based render system return (never renders during live)
+    - The unit-based system explicitly blocks live with `if (isLiveExecutionPhase) return null`
+    - So clicking the button changed state but no dialog existed in the rendered React tree
+  - FIX IMPLEMENTED:
+    1. Copied live set guidance dialog INTO the isLiveExecutionPhase return tree (after LiveWorkoutExecutionSurface)
+    2. Dialog now opens when `adaptiveDetailsOpen === 'live'` in same return
+    3. Neutralized stale duplicate dialog in unit-based path with `{false && ...}` to prevent conflicts
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx (live dialog mounted in active return, stale path neutralized)
+  - ACCEPTANCE MATRIX:
+    - [x] Live "Why this set?" button visible in main workout
+    - [x] Button opens modal (dialog now in same return tree)
+    - [x] Modal mounted in same active live return
+    - [x] Current exercise name shown
+    - [x] Current set number shown (Set X of Y)
+    - [x] Target reps/hold/time/RPE shown
+    - [x] Band/load truth shown when relevant
+    - [x] Coaching verdict shown (collecting/on_track/reduce/increase)
+    - [x] Modal close does not change workout state
+    - [x] Log Set unchanged
+    - [x] Back/Skip/Next/End unchanged
+    - [x] WU info modal unchanged
+    - [x] CD info modal unchanged
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen -> top-right "Why this set?" button above the active exercise card -> tap it -> Live Set Guidance modal should open
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

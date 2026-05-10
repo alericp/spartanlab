@@ -10763,10 +10763,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   currentSessionSetsCompleted: currentSessionCount,
                   currentSessionAvgRPE,
                   lastSetRPE: lastSessionRPEDisplay,
-                  historicalSetsCount: bandHistoryData?.historyCount || 0,
-                  historicalAvgRPE: bandHistoryData?.historicalAvgRPE || null,
-                  cleanPercent: bandHistoryData?.cleanPercent || 0,
-                  bandStability: bandHistoryData?.stability || 'building',
+                  historicalSetsCount: sharedBandGuidanceTruth.historyCount,
+                  historicalAvgRPE: sharedBandGuidanceTruth.historicalAvgRPE,
+                  cleanPercent: sharedBandGuidanceTruth.cleanPercent ?? 0,
+                  bandStability: sharedBandGuidanceTruth.stability || 'building',
                   focusLabel: safeWorkoutSessionContract.focusLabel,
                 })
                 
@@ -11323,7 +11323,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     recommendedBand={contractRecommendedBand}
     exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
     exerciseName={safeCurrentExercise.name}
-    sharedGuidance={sharedBandGuidanceTruth}
   />
 )}
           

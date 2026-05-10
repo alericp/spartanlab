@@ -10581,11 +10581,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 })()
                 const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
                 
-                // [PPX-R7.8C] Use EXACT same bandSelectable truth as visible BandSelector component
-                // Get bandSelectable from inputModeContract - this is what controls whether BandSelector renders
-                const contractBandSelectable = inputModeContract?.showBandSelector ?? false
+                // [PPX-R7.8C-BUILD-FIX] Use corridorBandSelectable which is the same truth as visible BandSelector
+                // corridorBandSelectable is defined at corridor scope (line ~9690) from corridorInputMode.showBandSelector
                 // Also check if we have any band evidence/recommendation as secondary signal
-                const hasBandSelector = contractBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand
+                const hasBandSelector = corridorBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand
                 const bandGuidanceTruth = (() => {
                   const historyCount = bandHistoryData?.historyCount ?? 0
                   const isHistoryBased = historyCount > 0 && bandHistoryData?.recommendedBand

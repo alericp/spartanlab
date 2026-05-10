@@ -8238,8 +8238,7 @@ if (shouldShowLocalFallback) {
         </div>
       </div>
       
-      {/* [PPX-R7.3] Adaptive Details Dialog - Full Warm-Up Plan Map */}
-      {/* [PPX-R7.5B] Mobile width polish: slightly narrower with better side spacing */}
+      {/* [PPX-R7.7B] Adaptive Details Dialog - Elite Warm-Up Coach Modal */}
       <Dialog open={adaptiveDetailsOpen !== null} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
         <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -8248,57 +8247,57 @@ if (shouldShowLocalFallback) {
               Why This Warm-Up?
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8]">
-              Full prep map for {safeWorkoutSessionContract.focusLabel || 'this session'}
+              {safeWorkoutSessionContract.warmupAdaptation?.focusLabel 
+                || safeWorkoutSessionContract.focusLabel 
+                || 'Session'} preparation
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 mt-2">
-            {/* Plan Summary */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-amber-400 mb-2">
-                {safeWorkoutSessionContract.warmupAdaptation?.focusLabel 
-                  ? `Session Prep for ${safeWorkoutSessionContract.warmupAdaptation.focusLabel}`
-                  : safeWorkoutSessionContract.focusLabel 
-                  ? `Session Prep for ${safeWorkoutSessionContract.focusLabel}`
-                  : 'General Warm-Up Sequence'}
+            {/* [PPX-R7.7B] AI Coach Focus - primary coaching section */}
+            <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
+              <h4 className="text-sm font-medium text-amber-400 mb-2 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                AI Coach Focus
               </h4>
-              <p className="text-xs text-[#A4ACB8] mb-2">
-                {safeWorkoutSessionContract.warmupAdaptation?.rationale 
-                  || `This warm-up moves from general movement prep → joint mobility → muscle activation → low-fatigue pattern rehearsal before ${safeWorkoutSessionContract.focusLabel || 'main work'}.`}
+              <p className="text-sm text-amber-200/90 mb-2">
+                {visibleWarmupCoach.coachFocusSummary}
               </p>
-              {safeWorkoutSessionContract.warmupAdaptation?.targetAreas?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {safeWorkoutSessionContract.warmupAdaptation.targetAreas.map((area, i) => (
-                    <span key={i} className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">
-                      {area}
-                    </span>
+              {/* Joint/Pattern Prep bullets */}
+              {visibleWarmupCoach.jointPrepSummary.length > 0 && (
+                <ul className="space-y-1 mt-2">
+                  {visibleWarmupCoach.jointPrepSummary.map((prep, i) => (
+                    <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-amber-400/60 rounded-full flex-shrink-0" />
+                      {prep}
+                    </li>
                   ))}
-                </div>
-              ) : null}
+                </ul>
+              )}
             </div>
             
-            {/* Why This Order */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Why This Order?</h4>
-              <ul className="space-y-1.5 text-xs text-[#A4ACB8]">
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400 mt-0.5">•</span>
-                  <span>General movement prep raises temperature and blood flow first</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400 mt-0.5">•</span>
-                  <span>Joint mobility before loaded positions reduces injury risk</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400 mt-0.5">•</span>
-                  <span>Activation work primes muscles without creating fatigue</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400 mt-0.5">•</span>
-                  <span>Pattern rehearsal prepares movement skill before working sets</span>
-                </li>
-              </ul>
-            </div>
+            {/* [PPX-R7.7B] Ramp-Up Advisory if present */}
+            {visibleWarmupCoach.rampUpAdvisory && (
+              <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
+                <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Ramp-Up Advisory
+                </h4>
+                <p className="text-xs text-blue-200/80">
+                  {visibleWarmupCoach.rampUpAdvisory}
+                </p>
+              </div>
+            )}
+            
+            {/* [PPX-R7.7B] If Short on Time guidance */}
+            {visibleWarmupCoach.shortTimeGuidance && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">If Short on Time</h4>
+                <p className="text-xs text-[#A4ACB8]">
+                  {visibleWarmupCoach.shortTimeGuidance}
+                </p>
+              </div>
+            )}
             
             {/* Full Warm-Up Sequence */}
             <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
@@ -8338,24 +8337,14 @@ if (shouldShowLocalFallback) {
               </div>
             </div>
             
-            {/* Adaptive Logic */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Future Adaptation</h4>
-              <p className="text-xs text-[#A4ACB8] mb-2">
-                This warm-up can adjust based on your logged data:
-              </p>
-              <ul className="space-y-1 text-xs text-[#6B7280]">
-                <li>• More prep volume if readiness or logged fatigue is low</li>
-                <li>• Different joint prep if pain/discomfort is reported</li>
-                <li>• Extra activation if early sets underperform</li>
-                <li>• Reduced prep if session time is limited</li>
-              </ul>
-              <p className="text-[10px] text-[#6B7280] mt-2 italic">
-                {safeWorkoutSessionContract.warmupAdaptation?.rationale 
-                  ? 'Current signals: Session focus and warmup adaptation are active.'
-                  : 'Current inputs: Session focus and structure. Deeper readiness signals appear when performance data is logged.'}
-              </p>
-            </div>
+            {/* [PPX-R7.7B] Coaching source indicator */}
+            <p className="text-[10px] text-[#6B7280] text-center italic">
+              {visibleWarmupCoach.source === 'stored_adaptation' 
+                ? 'Coaching derived from session generation'
+                : visibleWarmupCoach.source === 'derived_from_session'
+                ? 'Coaching derived from session exercises'
+                : 'General coaching guidance'}
+            </p>
           </div>
         </DialogContent>
       </Dialog>
@@ -8558,20 +8547,19 @@ if (shouldShowLocalFallback) {
               </div>
             </div>
             
-            {/* [PPX-R7.7] AI Coach Recovery Summary - shows what this cooldown addresses */}
-            {safeWorkoutSessionContract.cooldownAdaptation?.coachRecoverySummary && cooldownIndex === 0 && (
+            {/* [PPX-R7.7B] AI Coach Recovery Summary - always visible using derived coach model */}
+            {visibleCooldownCoach.coachRecoverySummary && cooldownIndex === 0 && (
               <div className="mb-4 p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
                 <div className="flex items-start gap-2">
                   <Target className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-sm text-sky-200/90 font-medium">
-                      {safeWorkoutSessionContract.cooldownAdaptation.coachRecoverySummary}
+                      {visibleCooldownCoach.coachRecoverySummary}
                     </p>
-                    {/* [PPX-R7.7] Region recovery summary */}
-                    {safeWorkoutSessionContract.cooldownAdaptation.regionSummary && 
-                     safeWorkoutSessionContract.cooldownAdaptation.regionSummary.length > 0 && (
+                    {/* [PPX-R7.7B] Region recovery summary from derived model */}
+                    {visibleCooldownCoach.regionSummary.length > 0 && (
                       <ul className="mt-1.5 space-y-0.5">
-                        {safeWorkoutSessionContract.cooldownAdaptation.regionSummary.slice(0, 3).map((region, i) => (
+                        {visibleCooldownCoach.regionSummary.slice(0, 3).map((region, i) => (
                           <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-1.5">
                             <span className="w-1 h-1 bg-sky-400/60 rounded-full" />
                             {region}
@@ -8620,12 +8608,12 @@ if (shouldShowLocalFallback) {
                   </p>
                 </div>
                 
-                {/* [PPX-R7.7] "If short on time" guidance - show on last item */}
-                {isLastCooldown && safeWorkoutSessionContract.cooldownAdaptation?.shortTimeGuidance && (
+                {/* [PPX-R7.7B] "If short on time" guidance - show on last item using derived coach */}
+                {isLastCooldown && visibleCooldownCoach.shortTimeGuidance && (
                   <div className="p-2.5 bg-[#2B313A]/50 rounded-lg">
                     <p className="text-xs text-[#A4ACB8]">
                       <span className="text-sky-400 font-medium">If short on time:</span>{' '}
-                      {safeWorkoutSessionContract.cooldownAdaptation.shortTimeGuidance}
+                      {visibleCooldownCoach.shortTimeGuidance}
                     </p>
                   </div>
                 )}

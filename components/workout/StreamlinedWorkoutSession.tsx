@@ -10452,7 +10452,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       isFromHistory: history.length > 0,
                       historicalAvgRPE,
                       cleanPercent,
-                      stability: rec.stability || 'building',
+                      stability: 'stability' in rec ? String(rec.stability) : 'building',
                     }
                   } catch { return null }
                 })()
@@ -10695,9 +10695,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     
                     {/* Data Honesty Note */}
                     <p className="text-[10px] text-[#6B7280] text-center italic">
-                      {completedCount > 0 
-                        ? `Coaching based on ${completedCount} logged set${completedCount > 1 ? 's' : ''} this exercise.`
-                        : 'No sets logged yet. Complete sets to see personalized coaching.'}
+                      {currentSessionCount > 0 
+                        ? `Coaching based on ${currentSessionCount} logged set${currentSessionCount > 1 ? 's' : ''} this workout${hasHistoricalBandEvidence ? ` + ${bandHistoryData?.historyCount} historical sets` : ''}.`
+                        : hasHistoricalBandEvidence ? `Using ${bandHistoryData?.historyCount} historical sets. Log sets to add current session data.` : 'No sets logged yet. Complete sets to see personalized coaching.'}
                     </p>
                   </>
                 )

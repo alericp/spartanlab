@@ -11431,7 +11431,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       {prescribedLoad && (
                         <div className="flex justify-between">
                           <span className="text-[#6B7280]">Load</span>
-                          <span className="text-[#E6E9EF]">{prescribedLoad}</span>
+                          <span className="text-[#E6E9EF]">
+                            {typeof prescribedLoad === 'object' && prescribedLoad.load 
+                              ? `${prescribedLoad.load}${prescribedLoad.unit ? ` ${prescribedLoad.unit}` : ''}` 
+                              : String(prescribedLoad)}
+                          </span>
                         </div>
                       )}
                       {recommendedBand && (

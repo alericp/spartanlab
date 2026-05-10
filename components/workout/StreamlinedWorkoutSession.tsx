@@ -8877,12 +8877,6 @@ if (shouldShowLocalFallback) {
                 ? 'Coaching derived from session exercises'
                 : 'General coaching guidance'}
             </p>
-              <p className="text-[10px] text-[#6B7280] mt-2 italic">
-                {safeWorkoutSessionContract.cooldownAdaptation?.rationale 
-                  ? 'Current signals: Session focus and cooldown adaptation are active.'
-                  : 'Current inputs: Session focus and structure. Deeper recovery signals appear when feedback is logged.'}
-              </p>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

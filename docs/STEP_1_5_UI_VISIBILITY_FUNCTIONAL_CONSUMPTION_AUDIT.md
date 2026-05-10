@@ -1090,9 +1090,41 @@ From recent conversation:
     - All RPE values use integer display
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.8C complete. Safe to move to R7.8D for logged-set responsiveness verification if needed; otherwise safe to move to next checklist item.
+  - MOVE-ON DECISION: PPX-R7.8C attempted complete but had scope error. Moved to R7.8C-BUILD-FIX.
   - REMAINING CHAIN:
-    - PPX-R7.8D (optional): Post-logged-set responsive coaching verification
+    - PPX-R7.8C-BUILD-FIX (COMPLETED BELOW)
+    - PPX-R7.8D (optional): Post-logged-set responsiveness verification
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8C-BUILD-FIX: Fix inputModeContract Scope Error — COMPLETE (2026-05-10)
+  - BUILD BLOCKER:
+    - Error: Cannot find name 'inputModeContract' at line 10586
+    - `inputModeContract` was defined at line 4785 inside a DIFFERENT render block
+    - Modal IIFE is in "corridor" scope which has `corridorInputMode` and `corridorBandSelectable` instead
+  - ROOT CAUSE:
+    - PPX-R7.8C referenced `inputModeContract?.showBandSelector` outside its lexical scope
+    - The modal render is inside a "corridor" render area with its own input mode contract
+    - The equivalent variable in corridor scope is `corridorBandSelectable` (defined at line 9690)
+  - SOLUTION:
+    - Replaced `inputModeContract?.showBandSelector` with `corridorBandSelectable`
+    - `corridorBandSelectable` is derived from `corridorInputMode.showBandSelector` at corridor scope
+    - Same truth, correct scope
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx — use corridorBandSelectable instead of inputModeContract
+  - BAND TRUTH OWNERSHIP:
+    - `hasBandSelector` is now: `corridorBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand`
+    - Uses same truth as visible BandSelector (corridorBandSelectable controls BandSelector render)
+    - Passed to buildLiveSetCoaching via bandGuidanceTruth
+  - R7.8C VISUAL BEHAVIOR PRESERVED:
+    - Modal cannot show "No external load or band assistance active" when Assistance Band(s) shows Maintain Red
+    - Priority chain: visible guidance → recommended band → band history → load → no-band fallback
+  - RPE REGRESSION PROOF:
+    - Scan for `.toFixed(`, `averageRPE)`: 0 matches in coaching engine
+    - All RPE values use integer display
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-portal-session)
+  - MOVE-ON DECISION: PPX-R7.8C build is unblocked. Re-test the live modal. If the modal now matches the Assistance Band(s) card, move to R7.8D. If not, remaining blocker is runtime render consumption only.
+  - REMAINING CHAIN:
+    - PPX-R7.8D (optional): Post-logged-set responsiveness verification
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 
 ---

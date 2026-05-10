@@ -168,7 +168,7 @@ import {
   type AdaptiveRecommendationResult,
   type SetPerformanceData,
 } from '@/lib/adaptive-performance-evaluator'
-import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
+import { RPE_QUICK_OPTIONS, type RPEValue, toDisplayRPE } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
 // [LIVE-TRUE-ISOLATION-R5] Isolated live-execution adapter. Sole owner of
 // live-phase rendering - wraps ActiveWorkoutStartCorridor in its own error
@@ -10401,6 +10401,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
         
         {/* [PPX-R7.6B] Live Set Guidance Dialog - MUST be in same return tree as button */}
+        {/* [PPX-R7.6C] Uses same authoritative truth as active card + integer RPE display */}
         <Dialog open={adaptiveDetailsOpen === 'live'} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
           <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
@@ -10411,11 +10412,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             </DialogHeader>
             <div className="space-y-3">
               {(() => {
-                // Build set-level coaching view model from live runtime truth
+                // [PPX-R7.6C] Build view model from SAME authoritative source as visible card
+                // Card uses: activeEffectiveContract.effectiveSets, activeEffectiveContract.effectiveRepsOrTime
                 const currentSetNumber = validatedSetNumber
-                const totalSets = safeCurrentExercise?.sets || 3
-                const targetRPE = safeCurrentExercise?.targetRPE
-                const targetRepsOrTime = safeCurrentExercise?.repsOrTime || 'As prescribed'
+                const totalSets = activeEffectiveContract.effectiveSets // SAME as card
+                const targetRepsOrTime = activeEffectiveContract.effectiveRepsOrTime // SAME as card
+                const rawTargetRPE = safeCurrentExercise?.targetRPE
+                const targetRPEDisplay = toDisplayRPE(rawTargetRPE) // Integer only
                 const exerciseName = safeCurrentExercise?.name || 'Exercise'
                 const exerciseCategory = safeCurrentExercise?.category || ''
                 const exerciseMethod = safeCurrentExercise?.method || ''
@@ -10423,33 +10426,72 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 
                 // Get corridor data for current exercise
                 const corridorMetadata = readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth)
-                const recommendedBand = corridorMetadata.recommendedBand
+                const corridorRecommendedBand = corridorMetadata.recommendedBand
                 const selectedBands = machineState.selectedBands || []
-                const selectedRPE = safeSelectedRPE
+                const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
                 
-                // Get completed sets for this exercise
-                const exerciseCompletedSets = normalizedCompletedSets.filter(
+                // [PPX-R7.6C] Get band history recommendation - SAME source as BandSelector
+                const exerciseId = safeCurrentExercise?.id || `exercise-${safeExerciseIndex}`
+                const bandHistoryData = (() => {
+                  if (!exerciseId || !exerciseName) return null
+                  if (!supportsBandAssistance(exerciseId)) return null
+                  try {
+                    const rec = getBandRecommendation(exerciseId, exerciseName)
+                    const history = getExerciseBandHistory(exerciseId)
+                    // Calculate historical average RPE from band history
+                    const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
+                    const historicalAvgRPE = historyWithRPE.length > 0
+                      ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
+                      : null
+                    const cleanReps = history.filter(h => h.quality === 'clean').length
+                    const cleanPercent = history.length > 0 ? Math.round((cleanReps / history.length) * 100) : 0
+                    return {
+                      recommendedBand: rec.recommendedBand,
+                      reason: rec.reason,
+                      historyCount: history.length,
+                      isFromHistory: history.length > 0,
+                      historicalAvgRPE,
+                      cleanPercent,
+                      stability: 'stability' in rec ? String(rec.stability) : 'building',
+                    }
+                  } catch { return null }
+                })()
+                const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
+                const hasHistoricalBandEvidence = bandHistoryData?.isFromHistory && bandHistoryData.historyCount > 0
+                
+                // [PPX-R7.6C] CURRENT SESSION evidence (this workout only)
+                const currentSessionSets = normalizedCompletedSets.filter(
                   s => s.exerciseIndex === safeExerciseIndex
                 )
-                const completedCount = exerciseCompletedSets.length
-                const lastCompletedSet = exerciseCompletedSets[exerciseCompletedSets.length - 1]
-                const avgRPE = exerciseCompletedSets.length > 0
-                  ? (exerciseCompletedSets.reduce((sum, s) => sum + (s.actualRPE || 0), 0) / exerciseCompletedSets.length).toFixed(1)
+                const currentSessionCount = currentSessionSets.length
+                const lastSessionSet = currentSessionSets[currentSessionSets.length - 1]
+                const currentSessionAvgRPE = currentSessionSets.length > 0
+                  ? toDisplayRPE(currentSessionSets.reduce((sum, s) => sum + (s.actualRPE || 0), 0) / currentSessionSets.length)
                   : null
+                const lastSessionRPEDisplay = lastSessionSet ? toDisplayRPE(lastSessionSet.actualRPE) : null
                 
-                // Determine coaching verdict based on available data
+                // Determine coaching verdict based on BOTH evidence types
                 const getCoachingVerdict = () => {
-                  if (completedCount === 0) {
-                    return { status: 'collecting', headline: 'Collecting baseline data', explanation: 'This is your first set of this exercise. Complete it to establish your working baseline.' }
+                  if (currentSessionCount === 0 && hasHistoricalBandEvidence) {
+                    return { 
+                      status: 'historical', 
+                      headline: 'Using historical band evidence', 
+                      explanation: `${effectiveRecommendedBand ? `${BAND_SHORT_LABELS[effectiveRecommendedBand] || effectiveRecommendedBand} is being maintained` : 'Band'} based on ${bandHistoryData?.historyCount} prior logged sets. This workout has no completed sets yet — target will update after you log this set.`
+                    }
                   }
-                  if (lastCompletedSet) {
-                    const lastRPE = lastCompletedSet.actualRPE || 0
-                    const targetRPENum = parseFloat(String(targetRPE)) || 7
+                  if (currentSessionCount === 0) {
+                    return { status: 'collecting', headline: 'Collecting baseline data', explanation: 'Complete this set to establish your working baseline for this exercise.' }
+                  }
+                  if (lastSessionSet) {
+                    const lastRPE = lastSessionSet.actualRPE || 0
+                    const targetRPENum = parseFloat(String(rawTargetRPE)) || 7
+                    const lastRPEInt = toDisplayRPE(lastRPE) || 0
+                    const targetRPEInt = toDisplayRPE(targetRPENum) || 7
                     if (lastRPE >= targetRPENum + 2) {
-                      return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${lastRPE}, which is ${(lastRPE - targetRPENum).toFixed(1)} above target. Next set may reduce intensity if this persists.` }
+                      return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${lastRPEInt}, which is above the ${targetRPEInt} target. Next set may reduce intensity if this persists.` }
                     }
                     if (lastRPE <= targetRPENum - 2 && lastRPE > 0) {
-                      return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPE}, below the ${targetRPENum} target. If consistent, progression may be recommended.` }
+                      return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPEInt}, below the ${targetRPEInt} target. If consistent, progression may be recommended.` }
                     }
                     return { status: 'on_track', headline: 'On track', explanation: 'Performance is tracking near target. Maintain current prescription.' }
                   }
@@ -10458,16 +10500,20 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 
                 const verdict = getCoachingVerdict()
                 
+                // Check if selected band differs from recommended
+                const bandOverrideDetected = selectedBands.length > 0 && effectiveRecommendedBand && 
+                  !selectedBands.includes(effectiveRecommendedBand)
+                
                 // Determine if ramp-up is advisable
                 const isWeightedMovement = exerciseCategory?.includes('weighted') || 
                   exerciseMethod?.includes('weighted') ||
                   exerciseName.toLowerCase().includes('weighted') ||
-                  (prescribedLoad && parseFloat(String(prescribedLoad)) > 10)
+                  (prescribedLoad && typeof prescribedLoad === 'object' && 'load' in prescribedLoad && parseFloat(String(prescribedLoad.load)) > 10)
                 const isAdvancedSkill = exerciseName.toLowerCase().includes('front lever') ||
                   exerciseName.toLowerCase().includes('planche') ||
                   exerciseName.toLowerCase().includes('muscle up') ||
                   exerciseName.toLowerCase().includes('handstand') ||
-                  (targetRPE && parseFloat(String(targetRPE)) >= 8)
+                  (targetRPEDisplay && targetRPEDisplay >= 8)
                 const needsRampUp = isWeightedMovement || isAdvancedSkill
                 
                 return (
@@ -10486,10 +10532,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                           <span className="text-[#6B7280]">Target</span>
                           <span className="text-[#E6E9EF]">{targetRepsOrTime}</span>
                         </div>
-                        {targetRPE && (
+                        {targetRPEDisplay && (
                           <div className="flex justify-between">
                             <span className="text-[#6B7280]">Target RPE</span>
-                            <span className="text-[#E6E9EF]">{targetRPE}</span>
+                            <span className="text-[#E6E9EF]">{targetRPEDisplay}</span>
                           </div>
                         )}
                         {prescribedLoad && (
@@ -10510,54 +10556,88 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                         )}
                       </div>
                       {selectedBands.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
-                          <span className="text-[#6B7280]">Selected: </span>
-                          <span className="text-emerald-400 capitalize">{selectedBands.join(' + ')}</span>
-                          {recommendedBand && selectedBands[0] !== recommendedBand && (
-                            <span className="text-[#6B7280] ml-1">(differs from rec)</span>
-                          )}
-                        </div>
-                      )}
-                      {typeof selectedRPE === 'number' && selectedRPE > 0 && (
-                        <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
-                          <span className="text-[#6B7280]">Your RPE: </span>
-                          <span className="text-emerald-400">{selectedRPE}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Coaching Verdict */}
-                    <div className={`p-3 rounded-lg border ${
-                      verdict.status === 'on_track' ? 'bg-emerald-500/5 border-emerald-500/30' :
-                      verdict.status === 'reduce' ? 'bg-amber-500/5 border-amber-500/30' :
-                      verdict.status === 'increase' ? 'bg-sky-500/5 border-sky-500/30' :
-                      'bg-[#0F1115] border-[#2B313A]'
+                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
+                        <span className="text-[#6B7280]">Selected: </span>
+                        <span className="text-emerald-400 capitalize">{selectedBands.join(' + ')}</span>
+                        {effectiveRecommendedBand && !selectedBands.includes(effectiveRecommendedBand) && (
+                          <span className="text-[#6B7280] ml-1">(differs from rec)</span>
+                        )}
+                      </div>
+                    )}
+                    {selectedRPEDisplay && selectedRPEDisplay > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
+                        <span className="text-[#6B7280]">Your RPE: </span>
+                        <span className="text-emerald-400">{selectedRPEDisplay}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Coaching Verdict */}
+                  <div className={`p-3 rounded-lg border ${
+                    verdict.status === 'on_track' ? 'bg-emerald-500/5 border-emerald-500/30' :
+                    verdict.status === 'reduce' ? 'bg-amber-500/5 border-amber-500/30' :
+                    verdict.status === 'increase' ? 'bg-sky-500/5 border-sky-500/30' :
+                    verdict.status === 'historical' ? 'bg-blue-500/5 border-blue-500/30' :
+                    'bg-[#0F1115] border-[#2B313A]'
+                  }`}>
+                    <h4 className={`text-sm font-medium mb-1 ${
+                      verdict.status === 'on_track' ? 'text-emerald-400' :
+                      verdict.status === 'reduce' ? 'text-amber-400' :
+                      verdict.status === 'increase' ? 'text-sky-400' :
+                      verdict.status === 'historical' ? 'text-blue-400' :
+                      'text-[#A4ACB8]'
                     }`}>
-                      <h4 className={`text-sm font-medium mb-1 ${
-                        verdict.status === 'on_track' ? 'text-emerald-400' :
-                        verdict.status === 'reduce' ? 'text-amber-400' :
-                        verdict.status === 'increase' ? 'text-sky-400' :
-                        'text-[#A4ACB8]'
-                      }`}>
-                        {verdict.headline}
-                      </h4>
-                      <p className="text-xs text-[#A4ACB8]">{verdict.explanation}</p>
-                    </div>
-                    
-                    {/* Evidence Used */}
-                    <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                      <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Evidence Used</h4>
+                      {verdict.headline}
+                    </h4>
+                    <p className="text-xs text-[#A4ACB8]">{verdict.explanation}</p>
+                  </div>
+                  
+                  {/* [PPX-R7.6C] CURRENT SESSION Evidence - sets completed THIS workout */}
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Current Session Evidence</h4>
+                    <ul className="space-y-1 text-xs text-[#6B7280]">
+                      <li>• Set {currentSetNumber} of {totalSets}</li>
+                      {targetRPEDisplay && <li>• Target RPE: {targetRPEDisplay}</li>}
+                      {currentSessionCount > 0 ? (
+                        <>
+                          <li>• Sets completed this workout: {currentSessionCount}</li>
+                          {currentSessionAvgRPE && <li>• Average RPE this workout: {currentSessionAvgRPE}</li>}
+                          {lastSessionRPEDisplay && <li>• Last set RPE: {lastSessionRPEDisplay}</li>}
+                        </>
+                      ) : (
+                        <li>• No sets completed in this workout yet</li>
+                      )}
+                      {effectiveRecommendedBand && <li>• Recommended band: {BAND_SHORT_LABELS[effectiveRecommendedBand] || effectiveRecommendedBand}</li>}
+                      {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.map(b => BAND_SHORT_LABELS[b] || b).join(' + ')}</li>}
+                    </ul>
+                  </div>
+                  
+                  {/* [PPX-R7.6C] HISTORICAL Band/Exercise Evidence - prior workout data */}
+                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Historical Band Evidence</h4>
+                    {hasHistoricalBandEvidence && bandHistoryData ? (
                       <ul className="space-y-1 text-xs text-[#6B7280]">
-                        <li>• Set {currentSetNumber} of {totalSets}</li>
-                        {targetRPE && <li>• Target RPE: {targetRPE}</li>}
-                        {completedCount > 0 && <li>• Sets completed this exercise: {completedCount}</li>}
-                        {avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}
-                        {lastCompletedSet && <li>• Last set RPE: {lastCompletedSet.actualRPE || 'not recorded'}</li>}
-                        {recommendedBand && <li>• Recommended band: {recommendedBand}</li>}
-                        {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.join(' + ')}</li>}
-                        {completedCount === 0 && <li>• No prior sets logged for this exercise yet</li>}
+                        <li>• {bandHistoryData.historyCount} historical band-assisted sets logged</li>
+                        {bandHistoryData.historicalAvgRPE && <li>• Historical average RPE: {bandHistoryData.historicalAvgRPE}</li>}
+                        <li>• Clean reps: {bandHistoryData.cleanPercent}%</li>
+                        <li>• Trend: {bandHistoryData.stability}</li>
+                        {bandHistoryData.recommendedBand && <li>• Recommendation: {bandHistoryData.reason || `Maintain ${BAND_SHORT_LABELS[bandHistoryData.recommendedBand] || bandHistoryData.recommendedBand}`}</li>}
                       </ul>
+                    ) : (
+                      <p className="text-xs text-[#6B7280]">No historical band evidence available yet. Log band-assisted sets to build recommendations.</p>
+                    )}
+                  </div>
+                  
+                  {/* [PPX-R7.6C] Band Override Explanation */}
+                  {bandOverrideDetected && (
+                    <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/30">
+                      <h4 className="text-sm font-medium text-amber-400 mb-1">Band Override Detected</h4>
+                      <p className="text-xs text-[#A4ACB8]">
+                        You selected {selectedBands.map(b => BAND_SHORT_LABELS[b] || b).join(' + ')}, while the recommendation is {BAND_SHORT_LABELS[effectiveRecommendedBand!] || effectiveRecommendedBand}. 
+                        Selected band is logged as today&apos;s input. Recommendation only changes after enough clean performance evidence.
+                      </p>
                     </div>
+                  )}
                     
                     {/* What Could Change Next Set */}
                     <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
@@ -10615,9 +10695,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     
                     {/* Data Honesty Note */}
                     <p className="text-[10px] text-[#6B7280] text-center italic">
-                      {completedCount > 0 
-                        ? `Coaching based on ${completedCount} logged set${completedCount > 1 ? 's' : ''} this exercise.`
-                        : 'No sets logged yet. Complete sets to see personalized coaching.'}
+                      {currentSessionCount > 0 
+                        ? `Coaching based on ${currentSessionCount} logged set${currentSessionCount > 1 ? 's' : ''} this workout${hasHistoricalBandEvidence ? ` + ${bandHistoryData?.historyCount} historical sets` : ''}.`
+                        : hasHistoricalBandEvidence ? `Using ${bandHistoryData?.historyCount} historical sets. Log sets to add current session data.` : 'No sets logged yet. Complete sets to see personalized coaching.'}
                     </p>
                   </>
                 )

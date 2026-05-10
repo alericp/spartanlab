@@ -7981,6 +7981,48 @@ if (shouldShowLocalFallback) {
     const currentWarmupItem = warmupItems[warmupIndex]
     const isLastWarmup = warmupIndex >= warmupItems.length - 1
     
+    // [PPX-R7.7B] Derive visible warmup coaching inside this scope for modal access
+    const localVisibleWarmupCoach = (() => {
+      const storedAdaptation = safeWorkoutSessionContract.warmupAdaptation
+      if (
+        storedAdaptation?.coachFocusSummary ||
+        (storedAdaptation?.jointPrepSummary && storedAdaptation.jointPrepSummary.length > 0)
+      ) {
+        return {
+          coachFocusSummary: storedAdaptation.coachFocusSummary || null,
+          jointPrepSummary: storedAdaptation.jointPrepSummary || [],
+          rampUpAdvisory: storedAdaptation.rampUpAdvisory || null,
+          shortTimeGuidance: storedAdaptation.shortTimeGuidance || null,
+          source: 'stored_adaptation' as const,
+        }
+      }
+      const exercises = safeWorkoutSessionContract.exercises || []
+      if (exercises.length > 0) {
+        try {
+          const derived = generateWarmUpCoaching(
+            exercises.map(e => ({ id: e.id, name: e.name, category: e.category })),
+            warmupItems.map(w => ({ name: w.name, id: (w as { id?: string }).id }))
+          )
+          return {
+            coachFocusSummary: derived.coachFocusSummary || null,
+            jointPrepSummary: derived.jointPrepSummary || [],
+            rampUpAdvisory: derived.rampUpAdvisory || null,
+            shortTimeGuidance: derived.shortTimeGuidance || null,
+            source: 'derived_from_session' as const,
+          }
+        } catch {
+          // Fall through
+        }
+      }
+      return {
+        coachFocusSummary: `Prepares joints and movement patterns for ${safeWorkoutSessionContract.focusLabel || 'this session'}`,
+        jointPrepSummary: [] as string[],
+        rampUpAdvisory: null,
+        shortTimeGuidance: 'Keep joint mobility and activation; skip general movement prep first.',
+        source: 'minimal_fallback' as const,
+      }
+    })()
+    
     // Handle completing current warmup item
     const handleWarmupComplete = () => {
       if (isLastWarmup) {
@@ -8261,12 +8303,12 @@ if (shouldShowLocalFallback) {
                 AI Coach Focus
               </h4>
               <p className="text-sm text-amber-200/90 mb-2">
-                {visibleWarmupCoach.coachFocusSummary}
+                {localVisibleWarmupCoach.coachFocusSummary}
               </p>
               {/* Joint/Pattern Prep bullets */}
-              {visibleWarmupCoach.jointPrepSummary.length > 0 && (
+              {localVisibleWarmupCoach.jointPrepSummary.length > 0 && (
                 <ul className="space-y-1 mt-2">
-                  {visibleWarmupCoach.jointPrepSummary.map((prep, i) => (
+                  {localVisibleWarmupCoach.jointPrepSummary.map((prep: string, i: number) => (
                     <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-2">
                       <span className="w-1.5 h-1.5 bg-amber-400/60 rounded-full flex-shrink-0" />
                       {prep}
@@ -8277,24 +8319,24 @@ if (shouldShowLocalFallback) {
             </div>
             
             {/* [PPX-R7.7B] Ramp-Up Advisory if present */}
-            {visibleWarmupCoach.rampUpAdvisory && (
+            {localVisibleWarmupCoach.rampUpAdvisory && (
               <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
                 <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4" />
                   Ramp-Up Advisory
                 </h4>
                 <p className="text-xs text-blue-200/80">
-                  {visibleWarmupCoach.rampUpAdvisory}
+                  {localVisibleWarmupCoach.rampUpAdvisory}
                 </p>
               </div>
             )}
             
             {/* [PPX-R7.7B] If Short on Time guidance */}
-            {visibleWarmupCoach.shortTimeGuidance && (
+            {localVisibleWarmupCoach.shortTimeGuidance && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">If Short on Time</h4>
                 <p className="text-xs text-[#A4ACB8]">
-                  {visibleWarmupCoach.shortTimeGuidance}
+                  {localVisibleWarmupCoach.shortTimeGuidance}
                 </p>
               </div>
             )}
@@ -8339,9 +8381,9 @@ if (shouldShowLocalFallback) {
             
             {/* [PPX-R7.7B] Coaching source indicator */}
             <p className="text-[10px] text-[#6B7280] text-center italic">
-              {visibleWarmupCoach.source === 'stored_adaptation' 
+              {localVisibleWarmupCoach.source === 'stored_adaptation' 
                 ? 'Coaching derived from session generation'
-                : visibleWarmupCoach.source === 'derived_from_session'
+                : localVisibleWarmupCoach.source === 'derived_from_session'
                 ? 'Coaching derived from session exercises'
                 : 'General coaching guidance'}
             </p>
@@ -8450,6 +8492,45 @@ if (shouldShowLocalFallback) {
     const currentCooldownItem = cooldownItems[cooldownIndex]
     const isLastCooldown = cooldownIndex >= cooldownItems.length - 1
     
+    // [PPX-R7.7B] Derive visible cooldown coaching inside this scope
+    const localVisibleCooldownCoach = (() => {
+      const storedAdaptation = safeWorkoutSessionContract.cooldownAdaptation
+      if (
+        storedAdaptation?.coachRecoverySummary ||
+        (storedAdaptation?.regionSummary && storedAdaptation.regionSummary.length > 0)
+      ) {
+        return {
+          coachRecoverySummary: storedAdaptation.coachRecoverySummary || null,
+          regionSummary: storedAdaptation.regionSummary || [],
+          shortTimeGuidance: storedAdaptation.shortTimeGuidance || null,
+          source: 'stored_adaptation' as const,
+        }
+      }
+      const exercises = safeWorkoutSessionContract.exercises || []
+      if (exercises.length > 0) {
+        try {
+          const derived = generateCoolDownCoaching(
+            exercises.map(e => ({ id: e.id, name: e.name, category: e.category })),
+            cooldownItems.map(c => ({ name: c.name, id: (c as { id?: string }).id }))
+          )
+          return {
+            coachRecoverySummary: derived.coachRecoverySummary || null,
+            regionSummary: derived.regionSummary || [],
+            shortTimeGuidance: derived.shortTimeGuidance || null,
+            source: 'derived_from_session' as const,
+          }
+        } catch {
+          // Fall through
+        }
+      }
+      return {
+        coachRecoverySummary: `Recovery for ${safeWorkoutSessionContract.focusLabel || 'this workout'}`,
+        regionSummary: [] as string[],
+        shortTimeGuidance: 'Keep breathing and main muscle group stretches; skip general mobility.',
+        source: 'minimal_fallback' as const,
+      }
+    })()
+    
     // Handle completing current cooldown item
     const handleCooldownComplete = () => {
       if (isLastCooldown) {
@@ -8548,18 +8629,18 @@ if (shouldShowLocalFallback) {
             </div>
             
             {/* [PPX-R7.7B] AI Coach Recovery Summary - always visible using derived coach model */}
-            {visibleCooldownCoach.coachRecoverySummary && cooldownIndex === 0 && (
+            {localVisibleCooldownCoach.coachRecoverySummary && cooldownIndex === 0 && (
               <div className="mb-4 p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
                 <div className="flex items-start gap-2">
                   <Target className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-sm text-sky-200/90 font-medium">
-                      {visibleCooldownCoach.coachRecoverySummary}
+                      {localVisibleCooldownCoach.coachRecoverySummary}
                     </p>
                     {/* [PPX-R7.7B] Region recovery summary from derived model */}
-                    {visibleCooldownCoach.regionSummary.length > 0 && (
+                    {localVisibleCooldownCoach.regionSummary.length > 0 && (
                       <ul className="mt-1.5 space-y-0.5">
-                        {visibleCooldownCoach.regionSummary.slice(0, 3).map((region, i) => (
+                        {localVisibleCooldownCoach.regionSummary.slice(0, 3).map((region: string, i: number) => (
                           <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-1.5">
                             <span className="w-1 h-1 bg-sky-400/60 rounded-full" />
                             {region}
@@ -8609,11 +8690,11 @@ if (shouldShowLocalFallback) {
                 </div>
                 
                 {/* [PPX-R7.7B] "If short on time" guidance - show on last item using derived coach */}
-                {isLastCooldown && visibleCooldownCoach.shortTimeGuidance && (
+                {isLastCooldown && localVisibleCooldownCoach.shortTimeGuidance && (
                   <div className="p-2.5 bg-[#2B313A]/50 rounded-lg">
                     <p className="text-xs text-[#A4ACB8]">
                       <span className="text-sky-400 font-medium">If short on time:</span>{' '}
-                      {visibleCooldownCoach.shortTimeGuidance}
+                      {localVisibleCooldownCoach.shortTimeGuidance}
                     </p>
                   </div>
                 )}

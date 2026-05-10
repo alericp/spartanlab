@@ -330,7 +330,37 @@ From recent conversation:
     - [x] R7.3.f Render/UI proof: modal is visibly deeper than card
     - [x] R7.3.g No fake adaptive claims; missing signals labeled honestly
   - REMAINING CHAIN:
-    - PPX-R7.4: Live set-level adaptive coaching + future-set adaptation triggers + ramp-up sets
+    - PPX-R7.4: Live set-level adaptive coaching (COMPLETED BELOW)
+    - PPX-R7.5: Permanent workout history/adaptive input proof/delete path
+    - PPX-R7.6: Final acceptance pass
+- PPX-R7.4: Live "Why This Set?" Set-Level Adaptive Coaching — COMPLETE (2026-05-09)
+  - ROOT CAUSE: Live dialog existed but showed generic session-level content (focus label, exercise name). It did not consume set-level truth: current set number, completed sets, selected RPE, band selection, or future-set triggers.
+  - FIX: Upgraded live modal to full set-level coaching view model using actual runtime truth
+  - LIVE MODAL NOW SHOWS:
+    - Current Target: Exercise name, Set X of Y, target reps/hold, target RPE, prescribed load, band recommendation, selected bands, user's RPE
+    - Coaching Verdict: Dynamic status (collecting_data / on_track / reduce_intensity / increase_challenge) based on actual completed set data
+    - Evidence Used: Concrete bullets showing set number, target RPE, completed sets count, avg RPE, last set RPE, recommended/selected bands
+    - What Could Change: Future-set triggers (RPE jump → reduce, consistent low RPE → progression, pain → stop/modify, inconsistent → keep current)
+    - Ramp-Up Check: Advisory for weighted/advanced movements (bodyweight → 50% load → working set OR easier position → rehearsal → working set)
+    - Data Honesty Note: "No sets logged yet" or "Based on X logged sets"
+  - RUNTIME TRUTH CONSUMED:
+    - validatedSetNumber, safeCurrentExercise.sets, targetRPE, repsOrTime
+    - normalizedCompletedSets filtered by exerciseIndex
+    - machineState.selectedBands, machineState.actualLoadUsed
+    - safeSelectedRPE, corridorMetadata.recommendedBand
+    - prescribedLoad (object with load/unit)
+  - CHECKLIST STATUS:
+    - [x] R7.4.a Live "Why this set?" button opens mounted modal in active live render path
+    - [x] R7.4.b Modal consumes current exercise/current set truth, not stale generic session truth
+    - [x] R7.4.c Modal displays target reps/hold/time, target RPE, set number, total sets
+    - [x] R7.4.d Modal displays band recommendation and selected bands when relevant
+    - [x] R7.4.e Modal displays load/prescribed load when relevant
+    - [x] R7.4.f Modal displays real evidence or honest "collecting data" fallback
+    - [x] R7.4.g Modal explains future-set triggers without randomly mutating every set
+    - [x] R7.4.h Modal includes advisory ramp-up/warm-up set logic for heavy weighted/advanced progressions
+    - [x] R7.4.i Modal has visible UI proof on active workout screen
+    - [x] R7.4.j No fake adaptive claims
+  - REMAINING CHAIN:
     - PPX-R7.5: Permanent workout history/adaptive input proof/delete path
     - PPX-R7.6: Final acceptance pass
 
@@ -354,7 +384,7 @@ From recent conversation:
 |------|---------|---------|-----------|-------------|---------|------------|--------------|
 | A1 | Source batches exported | PASS | NA | NA | NA | PASS | — |
 | A2 | No unreachable batches | PASS | NA | NA | NA | PASS | — |
-| A3 | Structured purpose/category | PASS | NA | NA | NA | PASS | — |
+| A3 | Structured purpose/category | PASS | NA | NA | NA | PASS | ��� |
 | A4 | Consumable by runtime | PASS | NA | NA | NA | PASS | — |
 | A5 | Foundation complete | PASS | NA | NA | NA | PASS | — |
 

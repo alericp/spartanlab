@@ -437,7 +437,39 @@ From recent conversation:
     - [x] CD modal opens with narrower width
     - [x] No live "Why this set?" regression
   - REMAINING CHAIN:
-    - PPX-R7.6: Final acceptance pass
+    - PPX-R7.6: Final acceptance pass (COMPLETED BELOW)
+- PPX-R7.6: Final Acceptance Pass — COMPLETE (2026-05-09)
+  - PURPOSE: Verify all PPX-R7.2 through R7.5B work is mounted, connected, and visible
+  - FILES INSPECTED:
+    - components/workout/StreamlinedWorkoutSession.tsx (WU/CD/live modals)
+    - components/workouts/RecentWorkoutsList.tsx (adaptive proof UI)
+    - lib/workout-log-service.ts (save/delete evidence paths)
+    - app/api/workout-log/delete-evidence/route.ts (exists)
+    - app/api/workout-log/save-evidence/route.ts (exists)
+  - FILES CHANGED: None - acceptance audit only, no runtime changes needed
+  - ACCEPTANCE MATRIX:
+    - [x] WU info modal opens (line 8192, adaptiveDetailsOpen='warmup')
+    - [x] WU full plan map (lines 11207-11268)
+    - [x] WU main card cue text (lines 8109-8111, selectionReason fallback chain)
+    - [x] CD info modal opens (line 8627, adaptiveDetailsOpen='cooldown')
+    - [x] CD full plan map (lines 11327+)
+    - [x] CD main card cue text (lines 8538+, selectionReason fallback chain)
+    - [x] Live why-set modal opens (line 10398)
+    - [x] Live why-set consumes current set truth (lines 11349-11490, validatedSetNumber, safeCurrentExercise, normalizedCompletedSets)
+    - [x] Live logging unchanged (handleCompleteSet preserved)
+    - [x] Back/Skip/Next/End stable (phase handlers unchanged)
+    - [x] Workout save creates completedSetEvidence (line 6780)
+    - [x] Recent Workouts adaptive proof visible (lines 160-198 in RecentWorkoutsList)
+    - [x] Demo/untrusted excluded (getAdaptiveProof status='excluded')
+    - [x] Delete evidence path preserved (lines 216-241, non-blocking)
+    - [x] Restart/rebuild preserves logs (spartanlab_workout_logs only modified by save/delete, not restart)
+    - [x] No overclaiming adaptiveness (honest labels: "Saved as adaptive input", "Excluded from adaptation")
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - TSC STATUS: PASS
+  - REMAINING CHAIN:
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 
 ---
 

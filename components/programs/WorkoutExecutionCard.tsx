@@ -616,18 +616,14 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
               ))}
             </div>
 
-            {/* RPE Description */}
+            {/* RPE Description - whole integers only per PPX-R7.6F */}
             {selectedRPE && (
               <p className="text-xs text-[#6B7280] text-center">
-                {selectedRPE <= 6 && 'Easy - Could do many more reps'}
-                {selectedRPE === 6.5 && 'Moderate-easy effort'}
-                {selectedRPE === 7 && 'Moderate - 3+ reps in reserve'}
-                {selectedRPE === 7.5 && 'Moderate-hard - 2-3 reps in reserve'}
-                {selectedRPE === 8 && 'Hard - 2 reps in reserve'}
-                {selectedRPE === 8.5 && 'Very hard - 1-2 reps in reserve'}
-                {selectedRPE === 9 && 'Near max - 1 rep in reserve'}
-                {selectedRPE === 9.5 && 'Almost max - Possibly 1 more'}
-                {selectedRPE === 10 && 'Max effort - No more reps possible'}
+                {Math.round(selectedRPE) <= 6 && 'Easy - Could do many more reps'}
+                {Math.round(selectedRPE) === 7 && 'Moderate - 3+ reps in reserve'}
+                {Math.round(selectedRPE) === 8 && 'Hard - 2 reps in reserve'}
+                {Math.round(selectedRPE) === 9 && 'Near max - 1 rep in reserve'}
+                {Math.round(selectedRPE) === 10 && 'Max effort - No more reps possible'}
               </p>
             )}
 

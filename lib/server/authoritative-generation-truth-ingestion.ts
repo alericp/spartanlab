@@ -634,7 +634,7 @@ function buildRecoveryTruthBlock(
   
   if (trainingFeedback?.averageRecentRPE !== null && trainingFeedback?.averageRecentRPE !== undefined) {
     usableSignals++
-    evidence.push(`Recent RPE signal available: ${trainingFeedback.averageRecentRPE.toFixed(1)}`)
+    evidence.push(`Recent RPE signal available: ${Math.round(trainingFeedback.averageRecentRPE)}`)
   }
   if (trainingFeedback?.recentCompletionRate !== null && trainingFeedback?.recentCompletionRate !== undefined) {
     usableSignals++

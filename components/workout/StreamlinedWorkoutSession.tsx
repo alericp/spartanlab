@@ -80,6 +80,7 @@ import {
   Wind,
   Sparkles,
   Info,
+  TrendingUp,
 } from 'lucide-react'
 import {
   Dialog,
@@ -8080,6 +8081,44 @@ if (shouldShowLocalFallback) {
                 </div>
               </div>
             
+            {/* [PPX-R7.7] AI Coach Focus Summary - shows what this warmup prepares */}
+            {safeWorkoutSessionContract.warmupAdaptation?.coachFocusSummary && warmupIndex === 0 && (
+              <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Target className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-amber-200/90 font-medium">
+                      {safeWorkoutSessionContract.warmupAdaptation.coachFocusSummary}
+                    </p>
+                    {/* [PPX-R7.7] Joint prep summary */}
+                    {safeWorkoutSessionContract.warmupAdaptation.jointPrepSummary && 
+                     safeWorkoutSessionContract.warmupAdaptation.jointPrepSummary.length > 0 && (
+                      <ul className="mt-1.5 space-y-0.5">
+                        {safeWorkoutSessionContract.warmupAdaptation.jointPrepSummary.slice(0, 3).map((prep, i) => (
+                          <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-1.5">
+                            <span className="w-1 h-1 bg-amber-400/60 rounded-full" />
+                            {prep}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [PPX-R7.7] Ramp-Up Advisory for weighted/skill work */}
+            {safeWorkoutSessionContract.warmupAdaptation?.rampUpAdvisory && warmupIndex === 0 && (
+              <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-blue-200/80">
+                    {safeWorkoutSessionContract.warmupAdaptation.rampUpAdvisory}
+                  </p>
+                </div>
+              </div>
+            )}
+            
             {/* Current Warmup Item */}
             {currentWarmupItem ? (
               <div className="space-y-4">
@@ -8115,6 +8154,16 @@ if (shouldShowLocalFallback) {
                       || `Prep for ${safeWorkoutSessionContract.focusLabel || 'this session'}.`}
                   </p>
                 </div>
+                
+                {/* [PPX-R7.7] "If short on time" guidance - show on last item */}
+                {isLastWarmup && safeWorkoutSessionContract.warmupAdaptation?.shortTimeGuidance && (
+                  <div className="p-2.5 bg-[#2B313A]/50 rounded-lg">
+                    <p className="text-xs text-[#A4ACB8]">
+                      <span className="text-amber-400 font-medium">If short on time:</span>{' '}
+                      {safeWorkoutSessionContract.warmupAdaptation.shortTimeGuidance}
+                    </p>
+                  </div>
+                )}
                 
                 {/* Actions */}
                 <div className="space-y-2">
@@ -8509,6 +8558,32 @@ if (shouldShowLocalFallback) {
               </div>
             </div>
             
+            {/* [PPX-R7.7] AI Coach Recovery Summary - shows what this cooldown addresses */}
+            {safeWorkoutSessionContract.cooldownAdaptation?.coachRecoverySummary && cooldownIndex === 0 && (
+              <div className="mb-4 p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Target className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-sky-200/90 font-medium">
+                      {safeWorkoutSessionContract.cooldownAdaptation.coachRecoverySummary}
+                    </p>
+                    {/* [PPX-R7.7] Region recovery summary */}
+                    {safeWorkoutSessionContract.cooldownAdaptation.regionSummary && 
+                     safeWorkoutSessionContract.cooldownAdaptation.regionSummary.length > 0 && (
+                      <ul className="mt-1.5 space-y-0.5">
+                        {safeWorkoutSessionContract.cooldownAdaptation.regionSummary.slice(0, 3).map((region, i) => (
+                          <li key={i} className="text-xs text-[#A4ACB8] flex items-center gap-1.5">
+                            <span className="w-1 h-1 bg-sky-400/60 rounded-full" />
+                            {region}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Current Cooldown Item */}
             {currentCooldownItem ? (
               <div className="space-y-4">
@@ -8544,6 +8619,16 @@ if (shouldShowLocalFallback) {
                       || `Recovery after ${safeWorkoutSessionContract.focusLabel || 'your workout'}.`}
                   </p>
                 </div>
+                
+                {/* [PPX-R7.7] "If short on time" guidance - show on last item */}
+                {isLastCooldown && safeWorkoutSessionContract.cooldownAdaptation?.shortTimeGuidance && (
+                  <div className="p-2.5 bg-[#2B313A]/50 rounded-lg">
+                    <p className="text-xs text-[#A4ACB8]">
+                      <span className="text-sky-400 font-medium">If short on time:</span>{' '}
+                      {safeWorkoutSessionContract.cooldownAdaptation.shortTimeGuidance}
+                    </p>
+                  </div>
+                )}
                 
                 {/* Actions */}
                 <div className="space-y-2">

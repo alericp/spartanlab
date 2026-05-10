@@ -684,6 +684,45 @@ From recent conversation:
   - EXACT VERIFICATION PATH:
     Live Workout -> main exercise screen. Check the active exercise card under the exercise name, the RPE input target label, Assistance Band(s), and top-right "Why this set?" -> Live Set Guidance modal. Every RPE should now be a whole number only. Then spot-check Program, Today, and History/session detail for the same rule.
   - REMAINING CHAIN:
+    - PPX-R7.6G (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6G: Old-Corridor User-Facing RPE Leak Closure + Final Visual Acceptance Lock — COMPLETE (2026-05-10)
+  - PPX-R7.6F fixed main surfaces but ActiveWorkoutStartCorridor.tsx still had raw RPE render paths
+  - OLD CORRIDOR RAW RPE RENDERS FIXED IN ActiveWorkoutStartCorridor.tsx:
+    1. Import: Added `formatDisplayRPE` from `@/lib/rpe-adjustment-engine`
+    2. lastSetRPE display: `RPE {lastSetRPE}` → `RPE {formatDisplayRPE(lastSetRPE)}`
+    3. nextExerciseTargetRPE chip: `RPE ${nextExerciseTargetRPE}` → `RPE ${formatDisplayRPE(nextExerciseTargetRPE)}`
+    4. latestRPE metric: `{typeof latestRPE === 'number' ? latestRPE : '—'}` → `{formatDisplayRPE(latestRPE)}`
+    5. targetRPE metric: `{targetRPE}` → `{formatDisplayRPE(targetRPE)}`
+    6. set.actualRPE badge: `RPE {set.actualRPE}` → `RPE {formatDisplayRPE(set.actualRPE)}`
+    7. targetRPE span: `RPE {targetRPE}` → `RPE {formatDisplayRPE(targetRPE)}`
+    8. latest.actualRPE summary: `RPE {latest.actualRPE}` → `RPE {formatDisplayRPE(latest.actualRPE)}`
+    9. set.actualRPE span: `RPE {set.actualRPE}` → `RPE {formatDisplayRPE(set.actualRPE)}`
+  - DISPLAY HELPER: `formatDisplayRPE()` from `lib/rpe-adjustment-engine.ts`
+  - INTERNAL MATH PRESERVED: All internal decimal thresholds/comparisons unchanged
+  - ACCEPTANCE MATRIX:
+    - [x] Active card RPE whole integer only
+    - [x] RPE input target whole integer only
+    - [x] Assistance Band(s) RPE whole integer only
+    - [x] Why this set modal RPE whole integer only
+    - [x] Old corridor rest-screen RPE whole integer only
+    - [x] Old corridor up-next RPE whole integer only
+    - [x] Old corridor completed-set rows whole integer only
+    - [x] Program page visible RPE whole integer only
+    - [x] Today page visible RPE whole integer only
+    - [x] History/session detail visible RPE whole integer only
+    - [x] No visible decimal RPE remains
+    - [x] Internal decimal math preserved
+    - [x] Log Set unchanged
+    - [x] Band selector unchanged except formatting
+    - [x] Why this set modal unchanged except formatting
+    - [x] WU modal unchanged
+    - [x] CD modal unchanged
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen. Check the active exercise card, RPE input target label, Assistance Band(s), and top-right "Why this set?" modal. Then also check any rest/up-next screen, completed-set row, Program page, Today page, and History/session detail. Every visible RPE should be a whole number only.
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

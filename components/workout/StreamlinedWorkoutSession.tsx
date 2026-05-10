@@ -10579,6 +10579,38 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 })()
                 const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
                 
+                // [PPX-R7.8B] Compute band selector truth parity - same logic as BandSelector component
+                const hasBandSelector = supportsBandAssistance(exerciseId)
+                const bandGuidanceTruth = (() => {
+                  const historyCount = bandHistoryData?.historyCount ?? 0
+                  const isHistoryBased = historyCount > 0 && bandHistoryData?.recommendedBand
+                  
+                  if (isHistoryBased && effectiveRecommendedBand) {
+                    if (historyCount >= 6) {
+                      return {
+                        action: 'recommended' as const,
+                        label: `Recommended: ${effectiveRecommendedBand}`,
+                      }
+                    } else {
+                      return {
+                        action: 'maintain' as const,
+                        label: `Maintain ${effectiveRecommendedBand}`,
+                      }
+                    }
+                  } else if (effectiveRecommendedBand) {
+                    return {
+                      action: 'starting' as const,
+                      label: `Start with: ${effectiveRecommendedBand}`,
+                    }
+                  } else if (hasBandSelector) {
+                    return {
+                      action: 'tracking' as const,
+                      label: 'Tracking band history',
+                    }
+                  }
+                  return { action: 'none' as const, label: '' }
+                })()
+                
                 // Current session evidence
                 const currentSessionSets = normalizedCompletedSets.filter(
                   s => s.exerciseIndex === safeExerciseIndex
@@ -10590,7 +10622,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   : null
                 const lastSessionRPEDisplay = lastSessionSet ? toDisplayRPE(lastSessionSet.actualRPE) : null
                 
-                // [PPX-R7.8A] Build the intelligent coaching view model
+                // [PPX-R7.8A/B] Build the intelligent coaching view model with band truth parity
                 const coaching = buildLiveSetCoaching({
                   exerciseName,
                   exerciseId,
@@ -10603,6 +10635,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   prescribedLoad,
                   selectedBands,
                   recommendedBand: effectiveRecommendedBand,
+                  // [PPX-R7.8B] Band selector truth parity
+                  hasBandSelector,
+                  bandGuidanceAction: bandGuidanceTruth.action,
+                  bandGuidanceLabel: bandGuidanceTruth.label,
                   currentSessionSetsCompleted: currentSessionCount,
                   currentSessionAvgRPE,
                   lastSetRPE: lastSessionRPEDisplay,

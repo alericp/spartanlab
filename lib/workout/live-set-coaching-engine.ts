@@ -49,6 +49,10 @@ export interface LiveSetCoachingInput {
   prescribedLoad?: { load?: number; unit?: string } | string | null
   selectedBands: string[]
   recommendedBand: string | null | undefined
+  // [PPX-R7.8B] Band selector truth parity fields
+  hasBandSelector?: boolean // Whether the band UI is visible to the user
+  bandGuidanceAction?: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none' // What the visible card shows
+  bandGuidanceLabel?: string // The exact label shown on the band card (e.g. "Maintain Red")
   // Current session data
   currentSessionSetsCompleted: number
   currentSessionAvgRPE: number | null // Integer for display
@@ -441,9 +445,30 @@ export function buildLiveSetCoaching(input: LiveSetCoachingInput): LiveSetCoachi
     }
   }
   
-  // Band/load rationale
+  // [PPX-R7.8B] Band/load rationale - uses same truth as visible Assistance Band(s) card
   let bandOrLoadRationale = ''
-  if (input.recommendedBand) {
+  
+  // Priority 1: Use the exact visible band guidance if provided
+  if (input.bandGuidanceLabel && input.hasBandSelector) {
+    bandOrLoadRationale = `Band guidance: ${input.bandGuidanceLabel}.`
+    
+    if (input.bandGuidanceAction === 'maintain' && input.historicalSetsCount > 0) {
+      bandOrLoadRationale += ` ${input.historicalSetsCount} prior sets support keeping this assistance while quality and RPE stabilize.`
+    } else if (input.bandGuidanceAction === 'recommended' && input.historicalSetsCount > 0) {
+      bandOrLoadRationale += ` Based on ${input.historicalSetsCount} logged sets with ${input.cleanPercent}% clean quality.`
+    } else if (input.bandGuidanceAction === 'starting') {
+      bandOrLoadRationale += ' This is the initial recommendation. Log sets to build evidence for progression decisions.'
+    } else if (input.bandGuidanceAction === 'tracking') {
+      bandOrLoadRationale += ' Log band-assisted sets to build recommendations.'
+    }
+    
+    // Note if selected differs from recommendation
+    if (input.selectedBands.length > 0 && input.recommendedBand && !input.selectedBands.includes(input.recommendedBand)) {
+      bandOrLoadRationale += ` You selected ${input.selectedBands.join(' + ')} (differs from ${input.recommendedBand}). Your selection is logged so the app can compare actual effort.`
+    }
+  }
+  // Priority 2: Recommended band exists even without label
+  else if (input.recommendedBand) {
     if (input.historicalSetsCount > 0 && input.historicalAvgRPE !== null) {
       bandOrLoadRationale = `Maintaining ${input.recommendedBand} because ${input.historicalSetsCount} prior sets show RPE ${input.historicalAvgRPE} with ${input.cleanPercent}% clean quality.`
     } else {
@@ -452,13 +477,25 @@ export function buildLiveSetCoaching(input: LiveSetCoachingInput): LiveSetCoachi
     if (input.selectedBands.length > 0 && !input.selectedBands.includes(input.recommendedBand)) {
       bandOrLoadRationale += ` You selected ${input.selectedBands.join(' + ')} (differs from recommendation). Your selection is logged so the app can compare actual effort.`
     }
-  } else if (input.prescribedLoad) {
+  }
+  // Priority 3: Band selector is available but no recommendation yet
+  else if (input.hasBandSelector) {
+    if (input.selectedBands.length > 0) {
+      bandOrLoadRationale = `Selected: ${input.selectedBands.join(' + ')}. Log sets to build band recommendations.`
+    } else {
+      bandOrLoadRationale = 'Band assistance is available. Select a band and log sets to build recommendations.'
+    }
+  }
+  // Priority 4: Prescribed load (non-band assistance)
+  else if (input.prescribedLoad) {
     const loadStr = typeof input.prescribedLoad === 'object' && input.prescribedLoad?.load
       ? `${input.prescribedLoad.load}${input.prescribedLoad.unit ? ` ${input.prescribedLoad.unit}` : ''}`
       : String(input.prescribedLoad)
     bandOrLoadRationale = `Prescribed load: ${loadStr}. Complete reps at target effort. If load feels too heavy or light, log feedback for future calibration.`
-  } else {
-    bandOrLoadRationale = 'No band or external load prescribed. Focus on bodyweight execution quality.'
+  }
+  // Priority 5: Truly no band/load active
+  else {
+    bandOrLoadRationale = 'No external load or band assistance active. Focus on bodyweight execution quality.'
   }
   
   // Current evidence summary

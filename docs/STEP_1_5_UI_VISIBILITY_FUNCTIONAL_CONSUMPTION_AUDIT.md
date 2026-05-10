@@ -1226,7 +1226,51 @@ From recent conversation:
     - All RPE values pass through toDisplayRPE() for integer display
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-portal-session)
-  - MOVE-ON DECISION: PPX-R7.8F complete. The card and modal now consume one shared display-ready band guidance truth. Safe to move to the next checklist item.
+  - MOVE-ON DECISION: PPX-R7.8F reported PASS but live app crashed with React #310. Moved to R7.8G.
+  - REMAINING CHAIN:
+    - PPX-R7.8G (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8G: Fix Live Workout React #310 Crash — COMPLETE (2026-05-10)
+  - PREVIOUS CLAIM VERIFICATION:
+    - PPX-R7.8F claimed PASS based on TypeScript/build passing
+    - Live production app crashed at live_branch_entered with React #310
+    - "Workout Session Issue" screen appeared instead of live workout
+  - EXACT ROOT CAUSE:
+    - PPX-R7.8F added `sharedBandGuidanceTruth = useMemo(...)` at line ~9726
+    - This useMemo was INSIDE the live corridor IIFE `(() => { ... })()`
+    - React hooks cannot be called inside conditional branches/IIFEs
+    - Hook order varied between renders causing React #310 hook order violation
+    - File: components/workout/StreamlinedWorkoutSession.tsx, line ~9726 (now removed)
+  - SOLUTION:
+    - Converted `useMemo` hook to pure helper function `buildSharedBandGuidanceTruth()`
+    - Pure functions can safely be called inside conditional branches
+    - Helper defined near SharedBandGuidanceTruth type (line ~2123)
+    - Corridor now calls: `const sharedBandGuidanceTruth = buildSharedBandGuidanceTruth({...})`
+    - No React hooks inside conditional render paths
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added pure helper function `buildSharedBandGuidanceTruth()` (no hooks)
+      - Replaced useMemo call with pure function call
+      - Added try/catch safety for getExerciseBandHistory lookup
+  - HOOK SAFETY PROOF:
+    - No React hooks inside conditional live branches
+    - No useMemo/useCallback/useState/useEffect inside IIFE corridors
+    - Shared band guidance computed by pure helper function only
+    - Pure helper has no hooks and cannot violate hook order
+  - SINGLE SOURCE OF TRUTH:
+    - Helper: `buildSharedBandGuidanceTruth()`
+    - Card: BandSelector receives via `sharedGuidance` prop
+    - Modal: Uses `sharedBandGuidanceTruth` directly
+    - Both consume identical object from same pure function call
+  - BEFORE/AFTER:
+    - Before: App crashed with React #310 at live_branch_entered
+    - After: Live session loads, card/modal show same band guidance truth
+  - RPE REGRESSION PROOF:
+    - Scan for `.toFixed(`, `averageRPE)`: 0 matches in coaching engine
+    - All RPE values pass through toDisplayRPE() for integer display
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
+  - MOVE-ON DECISION: PPX-R7.8G complete. Live workout loading is restored and shared band guidance parity remains intact. Safe to re-test the modal and then move to the next checklist item only if the screenshot confirms card/modal parity.
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

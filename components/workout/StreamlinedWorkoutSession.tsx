@@ -2104,7 +2104,7 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
   )
 }
 
-// [PPX-R7.8F] Shared band guidance truth type
+// [PPX-R7.8G] Shared band guidance truth type
 type SharedBandGuidanceTruth = {
   hasBandSelector: boolean
   action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
@@ -2119,6 +2119,134 @@ type SharedBandGuidanceTruth = {
   source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
   color: string
   bgColor: string
+}
+
+// [PPX-R7.8G] PURE HELPER FUNCTION - NO REACT HOOKS
+// This replaces the useMemo that was inside the live corridor IIFE and caused React #310
+// Pure functions can be called inside conditional branches without violating hook order
+function buildSharedBandGuidanceTruth(args: {
+  corridorBandSelectable: boolean
+  exerciseId: string
+  exerciseName: string
+  corridorRecommendedBand: ResistanceBandColor | null
+}): SharedBandGuidanceTruth {
+  const { corridorBandSelectable, exerciseId, exerciseName, corridorRecommendedBand } = args
+  
+  // Return none-state for missing inputs - safe fallback that won't crash
+  if (!corridorBandSelectable || !exerciseId || !exerciseName) {
+    return {
+      hasBandSelector: false,
+      action: 'none',
+      label: '',
+      evidenceSummary: '',
+      detail: '',
+      recommendedBand: null,
+      historyCount: 0,
+      historicalAvgRPE: null,
+      cleanPercent: null,
+      stability: null,
+      source: 'none',
+      color: 'text-[#6B7280]',
+      bgColor: 'bg-[#1A1D21]/50',
+    }
+  }
+  
+  // Use EXACT same lookup as BandSelector: getExerciseBandHistory with raw ID
+  // This is what actually finds the 13 logged sets
+  let history: ReturnType<typeof getExerciseBandHistory> = []
+  try {
+    history = getExerciseBandHistory(exerciseId)
+  } catch { /* safe fallback */ }
+  const historyCount = history.length
+  
+  // Get recommendation - use corridorRecommendedBand as authoritative fallback
+  let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand
+  try {
+    const rec = getBandRecommendation(exerciseId, exerciseName)
+    if (rec.recommendedBand) recommendedBand = rec.recommendedBand
+  } catch { /* use corridor fallback */ }
+  
+  const isHistoryBased = historyCount > 0 && recommendedBand
+  
+  // Compute evidence from history
+  const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
+  const historicalAvgRPE = historyWithRPE.length > 0
+    ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
+    : null
+  const cleanReps = history.filter(h => h.quality === 'clean').length
+  const cleanPercent = historyCount > 0 ? Math.round((cleanReps / historyCount) * 100) : null
+  const stability = historyCount >= 6 ? 'stable' : (historyCount > 0 ? 'building' : null)
+  
+  // Format band label
+  const bandLabel = recommendedBand ? BAND_SHORT_LABELS[recommendedBand] : ''
+  
+  if (isHistoryBased && recommendedBand) {
+    if (historyCount >= 6) {
+      return {
+        hasBandSelector: true,
+        action: 'recommended',
+        label: `Recommended: ${bandLabel}`,
+        evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'stable'}`,
+        detail: `Based on ${historyCount} logged sets`,
+        recommendedBand,
+        historyCount,
+        historicalAvgRPE,
+        cleanPercent,
+        stability,
+        source: 'history_recommendation',
+        color: 'text-emerald-400',
+        bgColor: 'bg-emerald-500/10',
+      }
+    } else {
+      return {
+        hasBandSelector: true,
+        action: 'maintain',
+        label: `Maintain ${bandLabel}`,
+        evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'building'}`,
+        detail: `${historyCount} sets logged — building history`,
+        recommendedBand,
+        historyCount,
+        historicalAvgRPE,
+        cleanPercent,
+        stability,
+        source: 'history_recommendation',
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/10',
+      }
+    }
+  } else if (recommendedBand) {
+    return {
+      hasBandSelector: true,
+      action: 'starting',
+      label: `Start with: ${bandLabel}`,
+      evidenceSummary: 'Initial recommendation',
+      detail: 'Initial recommendation',
+      recommendedBand,
+      historyCount,
+      historicalAvgRPE,
+      cleanPercent,
+      stability,
+      source: 'corridor_recommendation',
+      color: 'text-[#A4ACB8]',
+      bgColor: 'bg-[#2B313A]/50',
+    }
+  } else {
+    return {
+      hasBandSelector: true,
+      action: 'tracking',
+      label: 'Tracking band history',
+      evidenceSummary: 'Log band-assisted sets to build recommendations',
+      detail: 'Log band-assisted sets to build recommendations',
+      recommendedBand: null,
+      historyCount,
+      historicalAvgRPE,
+      cleanPercent,
+      stability,
+      source: 'tracking',
+      color: 'text-[#6B7280]',
+      bgColor: 'bg-[#1A1D21]/50',
+    }
+  }
 }
 
 interface BandSelectorProps {
@@ -9717,125 +9845,19 @@ if (shouldShowLocalFallback) {
       })
     }
     
-    // [PPX-R7.8F] SINGLE SOURCE OF TRUTH: Compute band guidance ONCE at corridor scope
+    // [PPX-R7.8G] SINGLE SOURCE OF TRUTH: Compute band guidance using pure helper (no hooks)
+    // PPX-R7.8F used useMemo inside this IIFE which caused React #310 hook order violation
     // Both BandSelector card AND Live Set Guidance modal MUST consume this exact same object
-    // This eliminates the split truth that caused modal to show "Tracking" while card showed "Maintain Red"
     const corridorExerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || ''
     const corridorExerciseName = safeCurrentExercise?.name || ''
     
-    const sharedBandGuidanceTruth = useMemo(() => {
-      if (!corridorBandSelectable || !corridorExerciseId || !corridorExerciseName) {
-        return {
-          hasBandSelector: false,
-          action: 'none' as const,
-          label: '',
-          evidenceSummary: '',
-          detail: '',
-          recommendedBand: null as ResistanceBandColor | null,
-          historyCount: 0,
-          historicalAvgRPE: null as number | null,
-          cleanPercent: null as number | null,
-          stability: null as string | null,
-          source: 'none' as const,
-          color: 'text-[#6B7280]',
-          bgColor: 'bg-[#1A1D21]/50',
-        }
-      }
-      
-      // Use EXACT same lookup as BandSelector: getExerciseBandHistory with raw ID
-      // This is what actually finds the 13 logged sets
-      const history = getExerciseBandHistory(corridorExerciseId)
-      const historyCount = history.length
-      
-      // Get recommendation - use corridorRecommendedBand as authoritative fallback
-      let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand ?? null
-      try {
-        const rec = getBandRecommendation(corridorExerciseId, corridorExerciseName)
-        if (rec.recommendedBand) recommendedBand = rec.recommendedBand
-      } catch { /* use corridor fallback */ }
-      
-      const isHistoryBased = historyCount > 0 && recommendedBand
-      
-      // Compute evidence from history
-      const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
-      const historicalAvgRPE = historyWithRPE.length > 0
-        ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
-        : null
-      const cleanReps = history.filter(h => h.quality === 'clean').length
-      const cleanPercent = historyCount > 0 ? Math.round((cleanReps / historyCount) * 100) : null
-      const stability = historyCount >= 6 ? 'stable' : (historyCount > 0 ? 'building' : null)
-      
-      // Format band label
-      const bandLabel = recommendedBand ? BAND_SHORT_LABELS[recommendedBand] : ''
-      
-      if (isHistoryBased && recommendedBand) {
-        if (historyCount >= 6) {
-          return {
-            hasBandSelector: true,
-            action: 'recommended' as const,
-            label: `Recommended: ${bandLabel}`,
-            evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'stable'}`,
-            detail: `Based on ${historyCount} logged sets`,
-            recommendedBand,
-            historyCount,
-            historicalAvgRPE,
-            cleanPercent,
-            stability,
-            source: 'history_recommendation' as const,
-            color: 'text-emerald-400',
-            bgColor: 'bg-emerald-500/10',
-          }
-        } else {
-          return {
-            hasBandSelector: true,
-            action: 'maintain' as const,
-            label: `Maintain ${bandLabel}`,
-            evidenceSummary: `${historyCount} sets logged — RPE ${historicalAvgRPE ?? '?'} — ${cleanPercent ?? 0}% clean — ${stability || 'building'}`,
-            detail: `${historyCount} sets logged — building history`,
-            recommendedBand,
-            historyCount,
-            historicalAvgRPE,
-            cleanPercent,
-            stability,
-            source: 'history_recommendation' as const,
-            color: 'text-amber-400',
-            bgColor: 'bg-amber-500/10',
-          }
-        }
-      } else if (recommendedBand) {
-        return {
-          hasBandSelector: true,
-          action: 'starting' as const,
-          label: `Start with: ${bandLabel}`,
-          evidenceSummary: 'Initial recommendation',
-          detail: 'Initial recommendation',
-          recommendedBand,
-          historyCount,
-          historicalAvgRPE,
-          cleanPercent,
-          stability,
-          source: 'corridor_recommendation' as const,
-          color: 'text-[#A4ACB8]',
-          bgColor: 'bg-[#2B313A]/50',
-        }
-      } else {
-        return {
-          hasBandSelector: true,
-          action: 'tracking' as const,
-          label: 'Tracking band history',
-          evidenceSummary: 'Log band-assisted sets to build recommendations',
-          detail: 'Log band-assisted sets to build recommendations',
-          recommendedBand: null,
-          historyCount,
-          historicalAvgRPE,
-          cleanPercent,
-          stability,
-          source: 'tracking' as const,
-          color: 'text-[#6B7280]',
-          bgColor: 'bg-[#1A1D21]/50',
-        }
-      }
-    }, [corridorBandSelectable, corridorExerciseId, corridorExerciseName, corridorRecommendedBand])
+    // [PPX-R7.8G] Use pure helper function instead of useMemo to avoid React hook order crash
+    const sharedBandGuidanceTruth = buildSharedBandGuidanceTruth({
+      corridorBandSelectable,
+      exerciseId: corridorExerciseId,
+      exerciseName: corridorExerciseName,
+      corridorRecommendedBand: corridorRecommendedBand ?? null,
+    })
     
     // [PPX-R7.8F] Dev-only proof that shared object is computed
     if (process.env.NODE_ENV === 'development' && sharedBandGuidanceTruth.hasBandSelector) {

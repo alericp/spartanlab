@@ -49,10 +49,11 @@ export interface LiveSetCoachingInput {
   prescribedLoad?: { load?: number; unit?: string } | string | null
   selectedBands: string[]
   recommendedBand: string | null | undefined
-  // [PPX-R7.8B] Band selector truth parity fields
-  hasBandSelector?: boolean // Whether the band UI is visible to the user
+  // [PPX-R7.8C] Band selector truth parity fields - must match visible Assistance Band(s) card exactly
+  hasBandSelector?: boolean // Whether band UI is visible to the user
   bandGuidanceAction?: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none' // What the visible card shows
   bandGuidanceLabel?: string // The exact label shown on the band card (e.g. "Maintain Red")
+  bandEvidenceSummary?: string // The evidence line shown on the card (e.g. "13 sets logged — RPE 8 — 100% clean")
   // Current session data
   currentSessionSetsCompleted: number
   currentSessionAvgRPE: number | null // Integer for display
@@ -445,14 +446,17 @@ export function buildLiveSetCoaching(input: LiveSetCoachingInput): LiveSetCoachi
     }
   }
   
-  // [PPX-R7.8B] Band/load rationale - uses same truth as visible Assistance Band(s) card
+  // [PPX-R7.8C] Band/load rationale - uses EXACT same truth as visible Assistance Band(s) card
   let bandOrLoadRationale = ''
   
-  // Priority 1: Use the exact visible band guidance if provided
+  // Priority 1: Use the exact visible band guidance if provided (matches green card on workout screen)
   if (input.bandGuidanceLabel && input.hasBandSelector) {
     bandOrLoadRationale = `Band guidance: ${input.bandGuidanceLabel}.`
     
-    if (input.bandGuidanceAction === 'maintain' && input.historicalSetsCount > 0) {
+    // Add evidence summary if available (same as visible card detail line)
+    if (input.bandEvidenceSummary) {
+      bandOrLoadRationale += ` Evidence: ${input.bandEvidenceSummary}.`
+    } else if (input.bandGuidanceAction === 'maintain' && input.historicalSetsCount > 0) {
       bandOrLoadRationale += ` ${input.historicalSetsCount} prior sets support keeping this assistance while quality and RPE stabilize.`
     } else if (input.bandGuidanceAction === 'recommended' && input.historicalSetsCount > 0) {
       bandOrLoadRationale += ` Based on ${input.historicalSetsCount} logged sets with ${input.cleanPercent}% clean quality.`

@@ -758,7 +758,35 @@ From recent conversation:
   - REQUIRED VISUAL PROOF:
     - User should see only: RPE 7, RPE 8, RPE 9, RPE 8-9
     - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
-  - MOVE-ON DECISION: PPX-R7.6 is CLOSED; safe to move to PPX-R7.7
+  - MOVE-ON DECISION: PPX-R7.6G was FALSE PASS — see PPX-R7.6H below
+  - REMAINING CHAIN:
+    - PPX-R7.6H (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6H: Final User-Facing Raw RPE Display Leak Closure + False-Pass Correction — COMPLETE (2026-05-10)
+  - FALSE-PASS CORRECTION: PPX-R7.6G missed two raw RPE display paths in StreamlinedWorkoutSession.tsx
+  - EXACT RAW DISPLAY LEAKS FIXED:
+    1. Line 11285: Set ledger row
+       - OLD: `<span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>`
+       - NEW: `<span className="text-[#A4ACB8]">RPE {toDisplayRPE(set.actualRPE) ?? '-'}</span>`
+    2. Line 11765: Live Set Guidance "Your RPE" section
+       - OLD: `<span className="text-emerald-400">{String(selectedRPE)}</span>`
+       - NEW: `<span className="text-emerald-400">{toDisplayRPE(selectedRPE) ?? 'not recorded'}</span>`
+  - USER-FACING DECIMAL RPE LEAKS: ZERO
+  - INTERNAL DECIMAL MATH: Preserved (unchanged)
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - VISIBLE USER VERIFICATION LOCATIONS:
+    - Live Workout → completed/recent set ledger/history row
+    - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
+    - Live Workout → Evidence Used
+    - Program page/session cards
+    - Today page
+    - History/session detail
+    - Post-workout summary
+  - REQUIRED VISUAL PROOF:
+    - User should see only: RPE 7, RPE 8, RPE 9, RPE 8-9
+    - User should NOT see: RPE 7.3, RPE 7.5, RPE 7.8, RPE 8.5, RPE 9.5, RPE 6.5-7.5, RPE 7.5-8.5
+  - MOVE-ON DECISION: PPX-R7.6 is now CLOSED; safe to move to PPX-R7.7
   - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
@@ -1045,7 +1073,7 @@ These items were noted during PPX-R7.6F but are NOT implemented in this prompt. 
 | 25.4 Progression clarity | Week-to-week status | PASS | PASS | PASS | PASS | PASS | — |
 | 25.5 Today guidance | Readiness-aware | PASS | PASS | PASS | PASS | PASS | — |
 | 25.6 Exercise-level coaching | NOT_STARTED | — | — | — | — | — | — |
-| 25.7 Rest/RPE intelligence | NOT_STARTED | — | — | — | — | — | — |
+| 25.7 Rest/RPE intelligence | NOT_STARTED | — | — | ��� | — | — | — |
 | 25.8 Skill representation | NOT_STARTED | — | — | — | — | — | — |
 | 25.9 Recovery coaching | NOT_STARTED | — | — | — | �� | — | — |
 | 25.10 User control | NOT_STARTED | — | — | — | — | — | — |

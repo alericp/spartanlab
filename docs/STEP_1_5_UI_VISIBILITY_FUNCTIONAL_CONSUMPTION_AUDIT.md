@@ -644,9 +644,77 @@ From recent conversation:
   - EXACT VERIFICATION PATH:
     Live Workout -> main exercise screen. Check active exercise card, RPE input target label, Assistance Band history card. Tap "Why this set?" for modal. No user-facing RPE should show decimals. Then spot-check Program page, Today page, History/session detail, and workout summary.
   - REMAINING CHAIN:
+    - PPX-R7.6F (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6F: Final App-Wide User-Facing RPE Integer Doctrine Closure + Checklist Taxonomy Note — COMPLETE (2026-05-10)
+  - PPX-R7.6E improved main visible surfaces but source still had some half-step RPE description branches
+  - REMAINING DECIMAL RPE DISPLAY LEAKS FIXED:
+    1. components/programs/WorkoutExecutionCard.tsx: Half-step RPE descriptions (6.5, 7.5, 8.5, 9.5) → removed, now whole integers only
+    2. lib/server/authoritative-generation-truth-ingestion.ts: averageRecentRPE.toFixed(1) → Math.round()
+  - INTERNAL THRESHOLD CONSTANTS PRESERVED (acceptable per doctrine):
+    - WorkoutSessionSummary.tsx lines 103, 226-227: Internal threshold comparisons (not displayed)
+    - PostWorkoutSummary.tsx line 220: Internal threshold comparison (not displayed)
+    - lib/rpe-adjustment-engine.ts: Comment examples + internal config
+    - lib/strength-intelligence-engine.ts: Internal peakRPE: 8.5 constant
+    - lib/week-dosage-scaling.ts: Internal thresholds
+    - lib/session-performance.ts: Internal thresholds
+    - lib/coaching-framework-engine.ts: Internal thresholds
+    - lib/training-load-analyzer.ts: Internal thresholds
+  - DISPLAY HELPER: toDisplayRPE() and formatDisplayRPE() in lib/rpe-adjustment-engine.ts
+  - ACCEPTANCE MATRIX:
+    - [x] Active card RPE whole integer only
+    - [x] RPE input target whole integer only
+    - [x] Band history RPE whole integer only
+    - [x] Why this set target RPE whole integer only
+    - [x] Why this set evidence RPE whole integer only
+    - [x] Current set history rows whole integer only
+    - [x] Workout summary RPE whole integer only
+    - [x] History/session detail RPE whole integer only
+    - [x] Program page visible RPE whole integer only
+    - [x] Today page visible RPE whole integer only
+    - [x] No half-step RPE options reachable
+    - [x] No visible static RPE decimals remain
+    - [x] Log Set unchanged
+    - [x] Band selector unchanged except formatting
+    - [x] Why this set modal unchanged except formatting
+    - [x] WU modal unchanged
+    - [x] CD modal unchanged
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen. Check the active exercise card under the exercise name, the RPE input target label, Assistance Band(s), and top-right "Why this set?" -> Live Set Guidance modal. Every RPE should now be a whole number only. Then spot-check Program, Today, and History/session detail for the same rule.
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+
+---
+
+## Future Checklist — Exercise Taxonomy + Band Eligibility Truth
+
+These items were noted during PPX-R7.6F but are NOT implemented in this prompt. They belong to a future exercise-pool/taxonomy/prescription-unit step after RPE display cleanup.
+
+1. **Explosive Pull-Ups Band Eligibility Audit:**
+   - Explosive Pull-Ups should be audited as band-eligible when the user has bands and assistance is useful/safe for speed/height/power intent.
+   - The app should not hide band controls merely because the category is accessory if the movement is pull-up-pattern and band assistance can be valid.
+
+2. **Planche Lean Push-Ups vs Planche Lean Hold Distinction:**
+   - Planche Lean Push-Ups = dynamic reps exercise.
+   - Planche Lean Hold = isometric seconds/hold exercise.
+   - The app must not prescribe push-ups as hold seconds unless the exercise is actually a hold.
+
+3. **Planche Progression Pool Expansion:**
+   - Later audit/add feet-on-bench/horizontal-body planche support variants where appropriate:
+     - Planche hold / planche lean hold with feet elevated on bench or box
+     - Horizontal-body feet-on-bench planche pattern as reduced-load progression if doctrine supports it
+
+4. **Front Lever Progression Pool Expansion:**
+   - Later audit/add feet-on-bench support variants where appropriate:
+     - Front lever line / full front lever pattern with feet on bench/box assistance
+     - Use as reduced-load shape practice only when progression logic says it fits
+
+5. **Implementation Priority:**
+   - These belong to a later exercise-pool/taxonomy/prescription-unit step AFTER RPE display cleanup is visually verified.
 
 ---
 

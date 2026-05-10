@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout → completed/recent set ledger/history row
+    - Live Workout ��� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -885,7 +885,34 @@ From recent conversation:
     - Scan: 0 raw RPE display paths added
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.7 is complete; safe to move to the next checklist item
+  - MOVE-ON DECISION: PPX-R7.7 needed preservation fix — see PPX-R7.7A below
+  - REMAINING CHAIN:
+    - PPX-R7.7A (COMPLETED BELOW)
+    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+- PPX-R7.7A: Warm-Up/Cool-Down Coaching Preservation + Live Runtime Delivery Proof — COMPLETE (2026-05-10)
+  - ROOT CAUSE CORRECTION:
+    - PPX-R7.7 created coaching fields but they were stripped by normalizer/loader
+    - `normalizeWarmupAdaptation()` was missing PPX-R7.7 fields
+    - `normalizeCooldownAdaptation()` was missing PPX-R7.7 fields
+    - `normalizeToAdaptiveSession()` was not preserving warmupAdaptation/cooldownAdaptation at all
+  - FILES CHANGED:
+    - lib/workout/normalize-workout-session.ts — added PPX-R7.7 field preservation
+    - lib/workout/load-authoritative-session.ts — added warmupAdaptation/cooldownAdaptation preservation
+  - PRESERVATION PROOF:
+    - Warm-up fields now preserved: coachFocusSummary, jointPrepSummary, shortTimeGuidance, rampUpAdvisory
+    - Cool-down fields now preserved: coachRecoverySummary, regionSummary, shortTimeGuidance
+  - VISIBLE USER VERIFICATION LOCATIONS:
+    - Live Workout → Warm-Up phase → AI Coach Focus Summary (amber box)
+    - Live Workout → Warm-Up phase → joint prep bullets
+    - Live Workout → Warm-Up phase → blue ramp-up advisory (for weighted/skill work)
+    - Live Workout → Warm-Up phase → final item → "If short on time"
+    - Live Workout → Cool-Down phase → Coach Recovery Summary (sky box)
+    - Live Workout → Cool-Down phase → region recovery bullets
+    - Live Workout → Cool-Down phase → final item → "If short on time"
+  - RPE REGRESSION PROOF: No user-facing decimal RPE introduced
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.7 is now complete; safe to move to the next checklist item
   - REMAINING CHAIN:
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
@@ -1017,7 +1044,7 @@ These items were noted during PPX-R7.6F but are NOT implemented in this prompt. 
 
 ---
 
-### Phase G — Program Display Source Lock
+### Phase G �� Program Display Source Lock
 
 | Step | Purpose | Builder | Save/Load | UI Consumer | Visible | Functional | First Broken |
 |------|---------|---------|-----------|-------------|---------|------------|--------------|

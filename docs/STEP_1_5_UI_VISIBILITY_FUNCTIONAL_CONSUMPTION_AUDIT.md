@@ -1055,8 +1055,44 @@ From recent conversation:
     - Modal now uses same bandGuidanceTruth as visible BandSelector
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.8B complete; safe to move to next checklist item
+  - MOVE-ON DECISION: PPX-R7.8B incomplete — modal still showed "No external load" while card showed "Maintain Red". Moved to R7.8C.
   - REMAINING CHAIN:
+    - PPX-R7.8C (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8C: Live Set Guidance Final Band Truth Render Lock — COMPLETE (2026-05-10)
+  - ROOT CAUSE FOUND:
+    - Modal used `supportsBandAssistance(exerciseId)` which does EXACT ID match against BAND_SUPPORTED_EXERCISES
+    - Exercise ID was `tuck_front_lever_hold` but BAND_SUPPORTED_EXERCISES contains `front_lever_tuck`
+    - BandSelector worked because it uses `supportsBandAssistanceForExercise()` which resolves names to canonical IDs
+    - Modal got `hasBandSelector = false`, leading to Priority 5 fallback: "No external load or band assistance active"
+  - EXACT DIVERGENCE:
+    - BandSelector uses `supportsBandAssistanceForExercise({ exerciseId, exerciseName })` with name pattern matching
+    - Modal was using `supportsBandAssistance(exerciseId)` with exact ID match only
+    - Exercise "Tuck Front Lever Hold" → ID `tuck_front_lever_hold` → no match in BAND_SUPPORTED_EXERCISES
+    - Same exercise name resolved by `resolveBandExerciseKey` → canonical `front_lever_tuck` → match found
+  - SOLUTION:
+    - Changed modal to use `supportsBandAssistanceForExercise({ exerciseId, exerciseName })` for name-based matching
+    - Added import for `supportsBandAssistanceForExercise` from band-progression-engine
+    - Added `bandEvidenceSummary` field to coaching input for full evidence parity
+    - Modal now uses BAND_SHORT_LABELS for proper "Red" capitalization
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx — use supportsBandAssistanceForExercise, add bandEvidenceSummary
+    - lib/workout/live-set-coaching-engine.ts — accept/use bandEvidenceSummary
+  - VISIBLE VERIFICATION LOCATIONS:
+    - Live Workout → active exercise → Assistance Band(s) card: "Maintain Red" with evidence line
+    - Live Workout → Why this set? → Dose Rationale: "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+    - Modal no longer says "No external load or band assistance active" when band card is visible
+  - EXPECTED BEFORE/AFTER:
+    - Before: "No external load or band assistance active. Focus on bodyweight execution quality."
+    - After: "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+  - RPE REGRESSION PROOF:
+    - No `.toFixed()` or decimal RPE in user-facing strings
+    - All RPE values use integer display
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.8C complete. Safe to move to R7.8D for logged-set responsiveness verification if needed; otherwise safe to move to next checklist item.
+  - REMAINING CHAIN:
+    - PPX-R7.8D (optional): Post-logged-set responsive coaching verification
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 
 ---

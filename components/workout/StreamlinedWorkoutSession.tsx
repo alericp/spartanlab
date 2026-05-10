@@ -10555,10 +10555,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 const selectedBands = machineState.selectedBands || []
                 const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
                 
-                const exerciseId = safeCurrentExercise?.id || `exercise-${safeExerciseIndex}`
+                // [PPX-R7.8C] Use same exerciseId derivation as BandSelector for truth parity
+                const exerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || `exercise-${safeExerciseIndex}`
                 const bandHistoryData = (() => {
                   if (!exerciseId || !exerciseName) return null
-                  if (!supportsBandAssistance(exerciseId)) return null
+                  // Note: supportsBandAssistance uses canonical ID matching, so we let getBandRecommendation handle resolution
+                  // if (!supportsBandAssistance(exerciseId)) return null // Removed: let getBandRecommendation try
                   try {
                     const rec = getBandRecommendation(exerciseId, exerciseName)
                     const history = getExerciseBandHistory(exerciseId)
@@ -10579,36 +10581,48 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 })()
                 const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
                 
-                // [PPX-R7.8B] Compute band selector truth parity - same logic as BandSelector component
-                const hasBandSelector = supportsBandAssistance(exerciseId)
+                // [PPX-R7.8C] Use EXACT same bandSelectable truth as visible BandSelector component
+                // Get bandSelectable from inputModeContract - this is what controls whether BandSelector renders
+                const contractBandSelectable = inputModeContract?.showBandSelector ?? false
+                // Also check if we have any band evidence/recommendation as secondary signal
+                const hasBandSelector = contractBandSelectable || bandHistoryData !== null || !!effectiveRecommendedBand
                 const bandGuidanceTruth = (() => {
                   const historyCount = bandHistoryData?.historyCount ?? 0
                   const isHistoryBased = historyCount > 0 && bandHistoryData?.recommendedBand
+                  
+                  // [PPX-R7.8C] Use BAND_SHORT_LABELS for proper formatting, same as BandSelector
+                  const bandLabel = effectiveRecommendedBand 
+                    ? (BAND_SHORT_LABELS[effectiveRecommendedBand as ResistanceBandColor] || effectiveRecommendedBand)
+                    : ''
                   
                   if (isHistoryBased && effectiveRecommendedBand) {
                     if (historyCount >= 6) {
                       return {
                         action: 'recommended' as const,
-                        label: `Recommended: ${effectiveRecommendedBand}`,
+                        label: `Recommended: ${bandLabel}`,
+                        evidenceSummary: `${historyCount} sets logged — RPE ${bandHistoryData?.historicalAvgRPE ?? '?'} — ${bandHistoryData?.cleanPercent ?? 0}% clean — ${bandHistoryData?.stability || 'building'}`,
                       }
                     } else {
                       return {
                         action: 'maintain' as const,
-                        label: `Maintain ${effectiveRecommendedBand}`,
+                        label: `Maintain ${bandLabel}`,
+                        evidenceSummary: `${historyCount} sets logged — RPE ${bandHistoryData?.historicalAvgRPE ?? '?'} — ${bandHistoryData?.cleanPercent ?? 0}% clean — ${bandHistoryData?.stability || 'building'}`,
                       }
                     }
                   } else if (effectiveRecommendedBand) {
                     return {
                       action: 'starting' as const,
-                      label: `Start with: ${effectiveRecommendedBand}`,
+                      label: `Start with: ${bandLabel}`,
+                      evidenceSummary: 'Initial recommendation',
                     }
                   } else if (hasBandSelector) {
                     return {
                       action: 'tracking' as const,
                       label: 'Tracking band history',
+                      evidenceSummary: 'Log band-assisted sets to build recommendations',
                     }
                   }
-                  return { action: 'none' as const, label: '' }
+                  return { action: 'none' as const, label: '', evidenceSummary: '' }
                 })()
                 
                 // Current session evidence
@@ -10635,10 +10649,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   prescribedLoad,
                   selectedBands,
                   recommendedBand: effectiveRecommendedBand,
-                  // [PPX-R7.8B] Band selector truth parity
+                  // [PPX-R7.8C] Band selector truth parity - exact same as visible card
                   hasBandSelector,
                   bandGuidanceAction: bandGuidanceTruth.action,
                   bandGuidanceLabel: bandGuidanceTruth.label,
+                  bandEvidenceSummary: bandGuidanceTruth.evidenceSummary,
                   currentSessionSetsCompleted: currentSessionCount,
                   currentSessionAvgRPE,
                   lastSetRPE: lastSessionRPEDisplay,

@@ -93,6 +93,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 // [PPX-R7.7B] Elite warm-up/cool-down coaching derivation for existing sessions
 import { generateWarmUpCoaching, generateCoolDownCoaching } from '@/lib/warmup-cooldown-coaching-engine'
+// [PPX-R7.8A] Live set coaching intelligence
+import { buildLiveSetCoaching } from '@/lib/workout/live-set-coaching-engine'
 import {
   collectPostWorkoutSubstitutionEvidence,
   buildSavedProgramSubstitutionProposals,
@@ -10525,8 +10527,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         </div>
         <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
         
-        {/* [PPX-R7.6B] Live Set Guidance Dialog - MUST be in same return tree as button */}
-        {/* [PPX-R7.6C] Uses same authoritative truth as active card + integer RPE display */}
+        {/* [PPX-R7.8A] Live Set Guidance Dialog - Elite AI Coaching Modal */}
         <Dialog open={adaptiveDetailsOpen === 'live'} onOpenChange={(open) => !open && setAdaptiveDetailsOpen(null)}>
           <DialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF] w-[calc(100vw-32px)] max-w-[400px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
@@ -10537,25 +10538,23 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             </DialogHeader>
             <div className="space-y-3">
               {(() => {
-                // [PPX-R7.6C] Build view model from SAME authoritative source as visible card
-                // Card uses: activeEffectiveContract.effectiveSets, activeEffectiveContract.effectiveRepsOrTime
+                // [PPX-R7.8A] Build coaching view model from authoritative sources
                 const currentSetNumber = validatedSetNumber
-                const totalSets = activeEffectiveContract.effectiveSets // SAME as card
-                const targetRepsOrTime = activeEffectiveContract.effectiveRepsOrTime // SAME as card
+                const totalSets = activeEffectiveContract.effectiveSets
+                const targetRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
                 const rawTargetRPE = safeCurrentExercise?.targetRPE
-                const targetRPEDisplay = toDisplayRPE(rawTargetRPE) // Integer only
+                const targetRPEDisplay = toDisplayRPE(rawTargetRPE)
                 const exerciseName = safeCurrentExercise?.name || 'Exercise'
                 const exerciseCategory = safeCurrentExercise?.category || ''
                 const exerciseMethod = safeCurrentExercise?.method || ''
                 const prescribedLoad = safeCurrentExercise?.prescribedLoad
                 
-                // Get corridor data for current exercise
+                // Band data
                 const corridorMetadata = readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth)
                 const corridorRecommendedBand = corridorMetadata.recommendedBand
                 const selectedBands = machineState.selectedBands || []
                 const selectedRPEDisplay = toDisplayRPE(safeSelectedRPE)
                 
-                // [PPX-R7.6C] Get band history recommendation - SAME source as BandSelector
                 const exerciseId = safeCurrentExercise?.id || `exercise-${safeExerciseIndex}`
                 const bandHistoryData = (() => {
                   if (!exerciseId || !exerciseName) return null
@@ -10563,7 +10562,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   try {
                     const rec = getBandRecommendation(exerciseId, exerciseName)
                     const history = getExerciseBandHistory(exerciseId)
-                    // Calculate historical average RPE from band history
                     const historyWithRPE = history.filter(h => h.rpe && h.rpe > 0)
                     const historicalAvgRPE = historyWithRPE.length > 0
                       ? toDisplayRPE(historyWithRPE.reduce((sum, h) => sum + (h.rpe || 0), 0) / historyWithRPE.length)
@@ -10572,9 +10570,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     const cleanPercent = history.length > 0 ? Math.round((cleanReps / history.length) * 100) : 0
                     return {
                       recommendedBand: rec.recommendedBand,
-                      reason: rec.reason,
                       historyCount: history.length,
-                      isFromHistory: history.length > 0,
                       historicalAvgRPE,
                       cleanPercent,
                       stability: 'stability' in rec ? String(rec.stability) : 'building',
@@ -10582,9 +10578,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   } catch { return null }
                 })()
                 const effectiveRecommendedBand = bandHistoryData?.recommendedBand || corridorRecommendedBand
-                const hasHistoricalBandEvidence = bandHistoryData?.isFromHistory && bandHistoryData.historyCount > 0
                 
-                // [PPX-R7.6C] CURRENT SESSION evidence (this workout only)
+                // Current session evidence
                 const currentSessionSets = normalizedCompletedSets.filter(
                   s => s.exerciseIndex === safeExerciseIndex
                 )
@@ -10595,51 +10590,28 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   : null
                 const lastSessionRPEDisplay = lastSessionSet ? toDisplayRPE(lastSessionSet.actualRPE) : null
                 
-                // Determine coaching verdict based on BOTH evidence types
-                const getCoachingVerdict = () => {
-                  if (currentSessionCount === 0 && hasHistoricalBandEvidence) {
-                    return { 
-                      status: 'historical', 
-                      headline: 'Using historical band evidence', 
-                      explanation: `${effectiveRecommendedBand ? `${BAND_SHORT_LABELS[effectiveRecommendedBand] || effectiveRecommendedBand} is being maintained` : 'Band'} based on ${bandHistoryData?.historyCount} prior logged sets. This workout has no completed sets yet — target will update after you log this set.`
-                    }
-                  }
-                  if (currentSessionCount === 0) {
-                    return { status: 'collecting', headline: 'Collecting baseline data', explanation: 'Complete this set to establish your working baseline for this exercise.' }
-                  }
-                  if (lastSessionSet) {
-                    const lastRPE = lastSessionSet.actualRPE || 0
-                    const targetRPENum = parseFloat(String(rawTargetRPE)) || 7
-                    const lastRPEInt = toDisplayRPE(lastRPE) || 0
-                    const targetRPEInt = toDisplayRPE(targetRPENum) || 7
-                    if (lastRPE >= targetRPENum + 2) {
-                      return { status: 'reduce', headline: 'High effort detected', explanation: `Last set RPE was ${lastRPEInt}, which is above the ${targetRPEInt} target. Next set may reduce intensity if this persists.` }
-                    }
-                    if (lastRPE <= targetRPENum - 2 && lastRPE > 0) {
-                      return { status: 'increase', headline: 'Below target effort', explanation: `Last set RPE was ${lastRPEInt}, below the ${targetRPEInt} target. If consistent, progression may be recommended.` }
-                    }
-                    return { status: 'on_track', headline: 'On track', explanation: 'Performance is tracking near target. Maintain current prescription.' }
-                  }
-                  return { status: 'collecting', headline: 'Gathering data', explanation: 'Continue logging sets to build your performance baseline.' }
-                }
-                
-                const verdict = getCoachingVerdict()
-                
-                // Check if selected band differs from recommended
-                const bandOverrideDetected = selectedBands.length > 0 && effectiveRecommendedBand && 
-                  !selectedBands.includes(effectiveRecommendedBand)
-                
-                // Determine if ramp-up is advisable
-                const isWeightedMovement = exerciseCategory?.includes('weighted') || 
-                  exerciseMethod?.includes('weighted') ||
-                  exerciseName.toLowerCase().includes('weighted') ||
-                  (prescribedLoad && typeof prescribedLoad === 'object' && 'load' in prescribedLoad && parseFloat(String(prescribedLoad.load)) > 10)
-                const isAdvancedSkill = exerciseName.toLowerCase().includes('front lever') ||
-                  exerciseName.toLowerCase().includes('planche') ||
-                  exerciseName.toLowerCase().includes('muscle up') ||
-                  exerciseName.toLowerCase().includes('handstand') ||
-                  (targetRPEDisplay && targetRPEDisplay >= 8)
-                const needsRampUp = isWeightedMovement || isAdvancedSkill
+                // [PPX-R7.8A] Build the intelligent coaching view model
+                const coaching = buildLiveSetCoaching({
+                  exerciseName,
+                  exerciseId,
+                  exerciseCategory,
+                  exerciseMethod,
+                  currentSetNumber,
+                  totalSets,
+                  targetRepsOrTime,
+                  targetRPE: targetRPEDisplay,
+                  prescribedLoad,
+                  selectedBands,
+                  recommendedBand: effectiveRecommendedBand,
+                  currentSessionSetsCompleted: currentSessionCount,
+                  currentSessionAvgRPE,
+                  lastSetRPE: lastSessionRPEDisplay,
+                  historicalSetsCount: bandHistoryData?.historyCount || 0,
+                  historicalAvgRPE: bandHistoryData?.historicalAvgRPE || null,
+                  cleanPercent: bandHistoryData?.cleanPercent || 0,
+                  bandStability: bandHistoryData?.stability || 'building',
+                  focusLabel: safeWorkoutSessionContract.focusLabel,
+                })
                 
                 return (
                   <>
@@ -10663,166 +10635,85 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                             <span className="text-[#E6E9EF]">{targetRPEDisplay}</span>
                           </div>
                         )}
-                        {prescribedLoad && (
-                          <div className="flex justify-between">
-                            <span className="text-[#6B7280]">Load</span>
-                            <span className="text-[#E6E9EF]">
-                              {typeof prescribedLoad === 'object' && prescribedLoad.load 
-                                ? `${prescribedLoad.load}${prescribedLoad.unit ? ` ${prescribedLoad.unit}` : ''}` 
-                                : String(prescribedLoad)}
-                            </span>
-                          </div>
-                        )}
-                        {recommendedBand && (
-                          <div className="flex justify-between">
-                            <span className="text-[#6B7280]">Band Rec</span>
-                            <span className="text-[#E6E9EF] capitalize">{recommendedBand}</span>
-                          </div>
-                        )}
                       </div>
-                      {selectedBands.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
-                        <span className="text-[#6B7280]">Selected: </span>
-                        <span className="text-emerald-400 capitalize">{selectedBands.join(' + ')}</span>
-                        {effectiveRecommendedBand && !selectedBands.includes(effectiveRecommendedBand) && (
-                          <span className="text-[#6B7280] ml-1">(differs from rec)</span>
-                        )}
-                      </div>
-                    )}
-                    {selectedRPEDisplay && selectedRPEDisplay > 0 && (
-                      <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
-                        <span className="text-[#6B7280]">Your RPE: </span>
-                        <span className="text-emerald-400">{selectedRPEDisplay}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Coaching Verdict */}
-                  <div className={`p-3 rounded-lg border ${
-                    verdict.status === 'on_track' ? 'bg-emerald-500/5 border-emerald-500/30' :
-                    verdict.status === 'reduce' ? 'bg-amber-500/5 border-amber-500/30' :
-                    verdict.status === 'increase' ? 'bg-sky-500/5 border-sky-500/30' :
-                    verdict.status === 'historical' ? 'bg-blue-500/5 border-blue-500/30' :
-                    'bg-[#0F1115] border-[#2B313A]'
-                  }`}>
-                    <h4 className={`text-sm font-medium mb-1 ${
-                      verdict.status === 'on_track' ? 'text-emerald-400' :
-                      verdict.status === 'reduce' ? 'text-amber-400' :
-                      verdict.status === 'increase' ? 'text-sky-400' :
-                      verdict.status === 'historical' ? 'text-blue-400' :
-                      'text-[#A4ACB8]'
-                    }`}>
-                      {verdict.headline}
-                    </h4>
-                    <p className="text-xs text-[#A4ACB8]">{verdict.explanation}</p>
-                  </div>
-                  
-                  {/* [PPX-R7.6C] CURRENT SESSION Evidence - sets completed THIS workout */}
-                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Current Session Evidence</h4>
-                    <ul className="space-y-1 text-xs text-[#6B7280]">
-                      <li>• Set {currentSetNumber} of {totalSets}</li>
-                      {targetRPEDisplay && <li>• Target RPE: {targetRPEDisplay}</li>}
-                      {currentSessionCount > 0 ? (
-                        <>
-                          <li>• Sets completed this workout: {currentSessionCount}</li>
-                          {currentSessionAvgRPE && <li>• Average RPE this workout: {currentSessionAvgRPE}</li>}
-                          {lastSessionRPEDisplay && <li>• Last set RPE: {lastSessionRPEDisplay}</li>}
-                        </>
-                      ) : (
-                        <li>• No sets completed in this workout yet</li>
+                      {selectedRPEDisplay && selectedRPEDisplay > 0 && (
+                        <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
+                          <span className="text-[#6B7280]">Your RPE: </span>
+                          <span className="text-emerald-400">{selectedRPEDisplay}</span>
+                        </div>
                       )}
-                      {effectiveRecommendedBand && <li>• Recommended band: {BAND_SHORT_LABELS[effectiveRecommendedBand] || effectiveRecommendedBand}</li>}
-                      {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.map(b => BAND_SHORT_LABELS[b] || b).join(' + ')}</li>}
-                    </ul>
-                  </div>
-                  
-                  {/* [PPX-R7.6C] HISTORICAL Band/Exercise Evidence - prior workout data */}
-                  <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Historical Band Evidence</h4>
-                    {hasHistoricalBandEvidence && bandHistoryData ? (
-                      <ul className="space-y-1 text-xs text-[#6B7280]">
-                        <li>• {bandHistoryData.historyCount} historical band-assisted sets logged</li>
-                        {bandHistoryData.historicalAvgRPE && <li>• Historical average RPE: {bandHistoryData.historicalAvgRPE}</li>}
-                        <li>• Clean reps: {bandHistoryData.cleanPercent}%</li>
-                        <li>• Trend: {bandHistoryData.stability}</li>
-                        {bandHistoryData.recommendedBand && <li>• Recommendation: {bandHistoryData.reason || `Maintain ${BAND_SHORT_LABELS[bandHistoryData.recommendedBand] || bandHistoryData.recommendedBand}`}</li>}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-[#6B7280]">No historical band evidence available yet. Log band-assisted sets to build recommendations.</p>
-                    )}
-                  </div>
-                  
-                  {/* [PPX-R7.6C] Band Override Explanation */}
-                  {bandOverrideDetected && (
-                    <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/30">
-                      <h4 className="text-sm font-medium text-amber-400 mb-1">Band Override Detected</h4>
-                      <p className="text-xs text-[#A4ACB8]">
-                        You selected {selectedBands.map(b => BAND_SHORT_LABELS[b] || b).join(' + ')}, while the recommendation is {BAND_SHORT_LABELS[effectiveRecommendedBand!] || effectiveRecommendedBand}. 
-                        Selected band is logged as today&apos;s input. Recommendation only changes after enough clean performance evidence.
-                      </p>
                     </div>
-                  )}
                     
-                    {/* What Could Change Next Set */}
+                    {/* [PPX-R7.8A] Coach Intent - Why This Exercise */}
+                    <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20">
+                      <h4 className="text-sm font-medium text-emerald-400 mb-1 flex items-center gap-2">
+                        <Target className="w-3.5 h-3.5" />
+                        {coaching.exerciseIntentHeadline}
+                      </h4>
+                      <p className="text-xs text-[#A4ACB8]">{coaching.exerciseIntentExplanation}</p>
+                    </div>
+                    
+                    {/* [PPX-R7.8A] What This Set Is Proving */}
+                    <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                      <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">{coaching.setPurposeHeadline}</h4>
+                      <p className="text-xs text-[#A4ACB8]">{coaching.setPurposeExplanation}</p>
+                    </div>
+                    
+                    {/* [PPX-R7.8A] Execution Focus */}
+                    {coaching.executionCues.length > 0 && (
+                      <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                        <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Execution Focus</h4>
+                        <ul className="space-y-1">
+                          {coaching.executionCues.map((cue, i) => (
+                            <li key={i} className="text-xs text-[#A4ACB8] flex items-start gap-2">
+                              <span className="text-emerald-400 mt-0.5">•</span>
+                              <span>{cue}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* [PPX-R7.8A] Dosage + Band/Load Rationale */}
+                    <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                      <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Dose Rationale</h4>
+                      <p className="text-xs text-[#A4ACB8] mb-2">{coaching.dosageRationale}</p>
+                      {coaching.bandOrLoadRationale && (
+                        <p className="text-xs text-[#6B7280]">{coaching.bandOrLoadRationale}</p>
+                      )}
+                    </div>
+                    
+                    {/* [PPX-R7.8A] Evidence Summary */}
+                    <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                      <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">Evidence</h4>
+                      <p className="text-xs text-[#A4ACB8]">{coaching.currentEvidenceSummary}</p>
+                    </div>
+                    
+                    {/* [PPX-R7.8A] What Could Change */}
                     <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                       <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">What Could Change</h4>
-                      <ul className="space-y-1.5 text-xs text-[#6B7280]">
-                        <li className="flex items-start gap-2">
-                          <span className="text-amber-400 mt-0.5">•</span>
-                          <span>If RPE jumps 2+ above target, next set may reduce reps/hold or recommend more assistance</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="text-sky-400 mt-0.5">•</span>
-                          <span>If RPE stays below target consistently, the app may suggest less band support or more load</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="text-red-400 mt-0.5">•</span>
-                          <span>If pain/unsafe feedback is logged, movement should reduce, substitute, or stop</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="text-[#6B7280] mt-0.5">•</span>
-                          <span>If data is inconsistent, the app keeps the current target and gathers more proof</span>
-                        </li>
+                      <ul className="space-y-1.5">
+                        {coaching.nextSetAdjustmentRules.map((rule, i) => (
+                          <li key={i} className="text-xs text-[#6B7280] flex items-start gap-2">
+                            <span className={`mt-0.5 ${i === 0 ? 'text-amber-400' : i === 1 ? 'text-sky-400' : i === 2 ? 'text-red-400' : 'text-[#6B7280]'}`}>•</span>
+                            <span>{rule}</span>
+                          </li>
+                        ))}
                       </ul>
                     </div>
                     
-                    {/* Ramp-Up Advisory */}
-                    <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                      <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Ramp-Up Check</h4>
-                      {needsRampUp ? (
-                        <>
-                          <p className="text-xs text-amber-400 mb-2">
-                            {isWeightedMovement ? 'Weighted movement detected' : 'Advanced progression detected'} - ramp-up sets recommended
-                          </p>
-                          <ul className="space-y-1 text-xs text-[#6B7280]">
-                            {isWeightedMovement ? (
-                              <>
-                                <li>1. Bodyweight exposure (1-2 easy reps)</li>
-                                <li>2. ~50% load exposure (2-3 reps)</li>
-                                <li>3. First working set at target load</li>
-                              </>
-                            ) : (
-                              <>
-                                <li>1. Easier position hold (3-5s)</li>
-                                <li>2. Low-fatigue rehearsal at target</li>
-                                <li>3. First working set</li>
-                              </>
-                            )}
-                          </ul>
-                        </>
-                      ) : (
-                        <p className="text-xs text-[#6B7280]">
-                          No extra ramp-up needed beyond your warm-up. This movement is light/moderate intensity.
-                        </p>
-                      )}
+                    {/* [PPX-R7.8A] Safety Stop Rule */}
+                    <div className="p-3 bg-red-500/5 rounded-lg border border-red-500/20">
+                      <h4 className="text-sm font-medium text-red-400 mb-1 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Safety Stop Rule
+                      </h4>
+                      <p className="text-xs text-[#A4ACB8]">{coaching.safetyStopRule}</p>
                     </div>
                     
-                    {/* Data Honesty Note */}
+                    {/* [PPX-R7.8A] Confidence/Source Footer */}
                     <p className="text-[10px] text-[#6B7280] text-center italic">
-                      {currentSessionCount > 0 
-                        ? `Coaching based on ${currentSessionCount} logged set${currentSessionCount > 1 ? 's' : ''} this workout${hasHistoricalBandEvidence ? ` + ${bandHistoryData?.historyCount} historical sets` : ''}.`
-                        : hasHistoricalBandEvidence ? `Using ${bandHistoryData?.historyCount} historical sets. Log sets to add current session data.` : 'No sets logged yet. Complete sets to see personalized coaching.'}
+                      Coaching based on {coaching.sourceLabel}
                     </p>
                   </>
                 )

@@ -564,7 +564,7 @@ export function AB13VisualProofOverlay({ program }: AB13VisualProofOverlayProps)
                   </span>
                   <span className="truncate">{exercise.name}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
-                    RPE {stamp.rpeAfter}
+                    RPE {Math.round(stamp.rpeAfter)}
                   </span>
                   <span
                     className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-teal-500/10 text-teal-300 border border-teal-500/30"

@@ -225,8 +225,8 @@ export function evaluateSetPerformance(
       return {
         recommendation: 'recommend_more_assistance',
         confidence: 'moderate',
-        reason: `RPE ${currentSet.actualRPE} indicates current band assistance is insufficient`,
-        coachingMessage: `RPE was ${currentSet.actualRPE} - consider using ${heavierBand} band for better quality.`,
+        reason: `RPE ${Math.round(Number(currentSet.actualRPE) || 8)} indicates current band assistance is insufficient`,
+        coachingMessage: `RPE was ${Math.round(Number(currentSet.actualRPE) || 8)} - consider using ${heavierBand} band for better quality.`,
         suggestedAction: {
           type: 'change_band',
           targetBandColor: heavierBand,
@@ -261,10 +261,10 @@ export function evaluateSetPerformance(
         recommendation: 'recommend_easier_progression',
         confidence: 'low',
         reason: rpeTooHigh 
-          ? `RPE ${currentSet.actualRPE} suggests exercise may be too challenging`
+          ? `RPE ${Math.round(Number(currentSet.actualRPE) || 8)} suggests exercise may be too challenging`
           : 'Target significantly missed, easier progression may help',
         coachingMessage: rpeTooHigh
-          ? `That set felt hard (RPE ${currentSet.actualRPE}). Consider switching to ${executionTruth.fallbackEasierExerciseName} for better quality.`
+          ? `That set felt hard (RPE ${Math.round(Number(currentSet.actualRPE) || 8)}). Consider switching to ${executionTruth.fallbackEasierExerciseName} for better quality.`
           : `Target was missed significantly. Consider ${executionTruth.fallbackEasierExerciseName} for more achievable progression.`,
         suggestedAction: {
           type: 'switch_exercise',

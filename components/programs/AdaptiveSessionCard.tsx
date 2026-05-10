@@ -7858,7 +7858,7 @@ function ExerciseRow({
           // [PPX-7] User-friendly tooltip instead of "Evidence calibration"
           const titleText =
             rpeCap.reasonCoachLine ??
-            `Adjusted based on your progress: RPE ${rpeCap.rpeBefore} → ${rpeCap.rpeAfter}`
+            `Adjusted based on your progress: RPE ${Math.round(rpeCap.rpeBefore)} → ${Math.round(rpeCap.rpeAfter)}`
           return (
             <span
               className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-teal-500/10 text-teal-300 border border-teal-500/30"
@@ -8367,7 +8367,7 @@ function ExerciseRow({
               <span className="text-[9px] text-[#8A8A8A]">
                 {coachingGuidance.effortGuidance.band}
                 {coachingGuidance.effortGuidance.rpe !== undefined && (
-                  <span className="text-[#5A6A7A] ml-1">(RPE {coachingGuidance.effortGuidance.rpe})</span>
+                  <span className="text-[#5A6A7A] ml-1">(RPE {Math.round(coachingGuidance.effortGuidance.rpe)})</span>
                 )}
                 <span className="text-[#6A6A6A] ml-1">—</span>
                 <span className="text-[#7A7A7A] ml-1">{coachingGuidance.effortGuidance.cue}</span>

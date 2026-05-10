@@ -11792,7 +11792,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                       <li>• Set {currentSetNumber} of {totalSets}</li>
                       {targetRPE && <li>• Target RPE: {toDisplayRPE(targetRPE)}</li>}
                       {completedCount > 0 && <li>• Sets completed this exercise: {completedCount}</li>}
-                      {avgRPE && <li>• Average RPE this exercise: {avgRPE}</li>}
+                      {avgRPE && <li>• Average RPE this exercise: {toDisplayRPE(avgRPE) ?? '-'}</li>}
                       {lastCompletedSet && <li>• Last set RPE: {toDisplayRPE(lastCompletedSet.actualRPE) ?? 'not recorded'}</li>}
                       {recommendedBand && <li>• Recommended band: {recommendedBand}</li>}
                       {selectedBands.length > 0 && <li>• Selected bands: {selectedBands.join(' + ')}</li>}

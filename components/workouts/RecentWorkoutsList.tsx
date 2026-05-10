@@ -11,6 +11,45 @@ import {
   deleteWorkoutLog,
 } from '@/lib/workout-log-service'
 import { formatWorkoutDate } from '@/lib/workout-analytics'
+import { Activity } from 'lucide-react'
+
+// [PPX-R7.5B] Adaptive input proof helper - derives display state from workout log
+function getAdaptiveProof(workout: WorkoutLog): {
+  status: 'trusted_evidence' | 'local_only' | 'excluded'
+  label: string
+  detail: string
+  evidenceCount: number
+} {
+  const evidence = (workout as { completedSetEvidence?: unknown[] }).completedSetEvidence
+  const evidenceCount = Array.isArray(evidence) ? evidence.length : 0
+  const isTrusted = (workout as { trusted?: boolean }).trusted !== false
+  const isDemo = (workout as { sourceRoute?: string }).sourceRoute === 'demo'
+
+  if (!isTrusted || isDemo) {
+    return {
+      status: 'excluded',
+      label: 'Excluded from adaptation',
+      detail: 'Demo/test sessions do not affect future programming',
+      evidenceCount: 0,
+    }
+  }
+
+  if (evidenceCount > 0) {
+    return {
+      status: 'trusted_evidence',
+      label: 'Saved as adaptive input',
+      detail: `${evidenceCount} set${evidenceCount === 1 ? '' : 's'} captured for future coaching`,
+      evidenceCount,
+    }
+  }
+
+  return {
+    status: 'local_only',
+    label: 'Workout saved',
+    detail: 'No set-level adaptive evidence captured',
+    evidenceCount: 0,
+  }
+}
 
 interface RecentWorkoutsListProps {
   workouts: WorkoutLog[]
@@ -117,6 +156,45 @@ export function RecentWorkoutsList({ workouts, onDelete }: RecentWorkoutsListPro
                     <p className="text-sm">{workout.notes}</p>
                   </div>
                 )}
+
+                {/* [PPX-R7.5B] Adaptive input proof */}
+                {(() => {
+                  const proof = getAdaptiveProof(workout)
+                  return (
+                    <div className={`mb-4 p-3 rounded flex items-start gap-2 ${
+                      proof.status === 'trusted_evidence' 
+                        ? 'bg-emerald-500/10 border border-emerald-500/20' 
+                        : proof.status === 'excluded'
+                        ? 'bg-amber-500/10 border border-amber-500/20'
+                        : 'bg-[#2A2A2A]'
+                    }`}>
+                      <Activity className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                        proof.status === 'trusted_evidence' 
+                          ? 'text-emerald-400' 
+                          : proof.status === 'excluded'
+                          ? 'text-amber-400'
+                          : 'text-[#6B7280]'
+                      }`} />
+                      <div>
+                        <p className={`text-sm font-medium ${
+                          proof.status === 'trusted_evidence' 
+                            ? 'text-emerald-400' 
+                            : proof.status === 'excluded'
+                            ? 'text-amber-400'
+                            : 'text-[#A5A5A5]'
+                        }`}>
+                          {proof.label}
+                          {proof.evidenceCount > 0 && (
+                            <span className="font-normal ml-1">
+                              • {proof.evidenceCount} set{proof.evidenceCount === 1 ? '' : 's'}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-[#6B7280] mt-0.5">{proof.detail}</p>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Delete action */}
                 <div className="flex justify-end">

@@ -9748,7 +9748,7 @@ if (shouldShowLocalFallback) {
       const historyCount = history.length
       
       // Get recommendation - use corridorRecommendedBand as authoritative fallback
-      let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand
+      let recommendedBand: ResistanceBandColor | null = corridorRecommendedBand ?? null
       try {
         const rec = getBandRecommendation(corridorExerciseId, corridorExerciseName)
         if (rec.recommendedBand) recommendedBand = rec.recommendedBand

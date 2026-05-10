@@ -912,6 +912,42 @@ From recent conversation:
   - RPE REGRESSION PROOF: No user-facing decimal RPE introduced
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
+  - MOVE-ON DECISION: PPX-R7.7A was incomplete — see PPX-R7.7B below
+  - REMAINING CHAIN:
+    - PPX-R7.7B (COMPLETED BELOW)
+    - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
+- PPX-R7.7B: Visible Runtime Consumption + Existing Session Fallback Derivation — COMPLETE (2026-05-10)
+  - ROOT CAUSE CORRECTION:
+    - PPX-R7.7/7A stored and preserved fields, but existing sessions without those fields showed no coaching
+    - The modal still showed old generic "Full prep map" / "Why This Order" content
+    - Render conditions only checked stored fields, not derived coaching
+  - SOLUTION:
+    - Created `localVisibleWarmupCoach` and `localVisibleCooldownCoach` derived view models
+    - These derive coaching from stored fields first, then from session exercises via coaching engine, then minimal fallback
+    - Updated all warmup/cooldown render conditions to use derived models
+    - Replaced "Why This Warm-Up?" modal with new elite coaching sections
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx — added derived coaching models, updated all renders and modal
+  - VISIBLE VERIFICATION LOCATIONS:
+    - Live Workout → Warm-Up phase → first item → AI Coach Focus Summary (amber box)
+    - Live Workout → Warm-Up phase → joint/pattern prep bullets
+    - Live Workout → Warm-Up phase → ramp-up advisory (blue box for weighted/skill work)
+    - Live Workout → Warm-Up phase → final item → "If short on time"
+    - Live Workout → Warm-Up phase → top info button → modal shows AI Coach Focus, Joint Prep, Ramp-Up, Short Time
+    - Live Workout → Cool-Down phase → first item → Coach Recovery Summary (sky box)
+    - Live Workout → Cool-Down phase → region recovery bullets
+    - Live Workout → Cool-Down phase → final item → "If short on time"
+  - CURRENT SCREENSHOT SCENARIO PROOF:
+    - Pull Strength warm-up screen now shows session-specific coaching derived from actual exercises
+    - Modal no longer shows only "Full prep map" / "Why This Order" generics
+    - Shows AI Coach Focus + Joint Prep + If Short on Time specific to pull work
+  - FALLBACK HONESTY PROOF:
+    - Derivation only claims what is detected from session exercises (pull → shoulder/scap/elbow prep)
+    - Does not claim planche/front lever/weighted unless detected in actual session exercises
+    - source field tracks: stored_adaptation | derived_from_session | minimal_fallback
+  - RPE REGRESSION PROOF: No user-facing decimal RPE introduced
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
   - MOVE-ON DECISION: PPX-R7.7 is now complete; safe to move to the next checklist item
   - REMAINING CHAIN:
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade

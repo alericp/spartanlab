@@ -376,6 +376,22 @@ export interface ActiveWorkoutCorridorProps {
   // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
   selectedBands?: ResistanceBandColor[]
   onSetSelectedBands?: (bands: ResistanceBandColor[]) => void
+  // [PPX-R7.8H] Single source of truth for band guidance - from parent
+  sharedBandGuidance?: {
+    hasBandSelector: boolean
+    action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
+    label: string
+    evidenceSummary: string
+    detail: string
+    recommendedBand: ResistanceBandColor | null
+    historyCount: number
+    historicalAvgRPE: number | null
+    cleanPercent: number | null
+    stability: string | null
+    source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
+    color: string
+    bgColor: string
+  } | null
   
   // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
   actualLoadUsed?: number | null
@@ -809,6 +825,23 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
  * When bands are selected, removing one keeps the others.
  * [PPX-R3A] Now includes intelligent recommendation with performance analysis.
  */
+// [PPX-R7.8H] Shared band guidance type from parent
+type SharedBandGuidanceType = {
+  hasBandSelector: boolean
+  action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
+  label: string
+  evidenceSummary: string
+  detail: string
+  recommendedBand: ResistanceBandColor | null
+  historyCount: number
+  historicalAvgRPE: number | null
+  cleanPercent: number | null
+  stability: string | null
+  source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
+  color: string
+  bgColor: string
+}
+
 interface MultiBandSelectorProps {
   selectedBands: ResistanceBandColor[]
   onChange: (bands: ResistanceBandColor[]) => void
@@ -819,6 +852,8 @@ interface MultiBandSelectorProps {
   targetHoldSeconds?: number
   targetReps?: number
   targetRPE?: number
+  // [PPX-R7.8H] Single source of truth from parent - when provided, use this instead of computing
+  sharedBandGuidance?: SharedBandGuidanceType | null
 }
 
 function MultiBandSelector({ 
@@ -830,6 +865,7 @@ function MultiBandSelector({
   targetHoldSeconds,
   targetReps,
   targetRPE,
+  sharedBandGuidance,
 }: MultiBandSelectorProps) {
   const hasNoBands = selectedBands.length === 0
   
@@ -852,9 +888,31 @@ function MultiBandSelector({
     ALL_BAND_COLORS.indexOf(a) - ALL_BAND_COLORS.indexOf(b)
   )
   
-  // [PPX-R3A] Compute intelligent band recommendation with performance analysis
+  // [PPX-R7.8H] Use shared guidance from parent when available - ensures card/modal parity
+  // Falls back to local computation only if parent didn't provide shared guidance
   const bandDisplay = useMemo(() => {
-    // Get intelligent recommendation with performance analysis
+    // [PPX-R7.8H] SINGLE SOURCE OF TRUTH: Use shared guidance when provided
+    if (sharedBandGuidance && sharedBandGuidance.hasBandSelector) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[PPX-R7.8H card shared guidance consumed]', {
+          exerciseId,
+          exerciseName,
+          sharedLabel: sharedBandGuidance.label,
+          sharedEvidence: sharedBandGuidance.evidenceSummary,
+          sharedAction: sharedBandGuidance.action,
+          historyCount: sharedBandGuidance.historyCount,
+          source: sharedBandGuidance.source,
+        })
+      }
+      return {
+        label: sharedBandGuidance.label,
+        detail: sharedBandGuidance.evidenceSummary,
+        color: sharedBandGuidance.color,
+        bgColor: sharedBandGuidance.bgColor,
+      }
+    }
+    
+    // Fallback: local computation when shared guidance not available
     const recommendation = getCanonicalBandRecommendation({
       exerciseId,
       exerciseName,
@@ -867,40 +925,19 @@ function MultiBandSelector({
     const getColors = (action: typeof recommendation.action, confidence: typeof recommendation.confidence) => {
       switch (action) {
         case 'reduce_assistance':
-          // Ready to progress - use encouraging green
-          return {
-            color: 'text-emerald-400',
-            bgColor: 'bg-emerald-500/10',
-          }
+          return { color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' }
         case 'increase_assistance':
-          // Need more support - use warm amber warning
-          return {
-            color: 'text-orange-400',
-            bgColor: 'bg-orange-500/10',
-          }
+          return { color: 'text-orange-400', bgColor: 'bg-orange-500/10' }
         case 'maintain':
-          // Stable - use confident amber or green based on confidence
           return confidence === 'high' 
             ? { color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' }
             : { color: 'text-amber-400', bgColor: 'bg-amber-500/10' }
         case 'build_history':
-          // Building confidence - use amber
-          return {
-            color: 'text-amber-400',
-            bgColor: 'bg-amber-500/10',
-          }
+          return { color: 'text-amber-400', bgColor: 'bg-amber-500/10' }
         case 'start':
-          // Initial - neutral
-          return {
-            color: 'text-[#A4ACB8]',
-            bgColor: 'bg-[#2B313A]/50',
-          }
+          return { color: 'text-[#A4ACB8]', bgColor: 'bg-[#2B313A]/50' }
         default:
-          // No band / tracking - subdued
-          return {
-            color: 'text-[#6B7280]',
-            bgColor: 'bg-[#1A1D21]/50',
-          }
+          return { color: 'text-[#6B7280]', bgColor: 'bg-[#1A1D21]/50' }
       }
     }
     
@@ -911,7 +948,7 @@ function MultiBandSelector({
       detail: recommendation.detail,
       ...colors,
     }
-  }, [exerciseId, exerciseName, targetHoldSeconds, targetReps, targetRPE])
+  }, [sharedBandGuidance, exerciseId, exerciseName, targetHoldSeconds, targetReps, targetRPE])
   
   return (
     <div className="space-y-2">
@@ -1043,6 +1080,8 @@ export function ActiveWorkoutStartCorridor({
   // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
   selectedBands = [],
   onSetSelectedBands,
+  // [PPX-R7.8H] Single source of truth for band guidance
+  sharedBandGuidance,
   // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
   actualLoadUsed,
   actualLoadUnit = 'lbs',
@@ -2537,7 +2576,7 @@ export function ActiveWorkoutStartCorridor({
             {bandSelectable && (
               showMultiBandSelector && onSetSelectedBands ? (
                 // True multi-band selector for band-assisted exercises
-                // [PPX-R3A] Pass targets for intelligent performance-based recommendations
+                // [PPX-R7.8H] Pass sharedBandGuidance for single source of truth
                 <MultiBandSelector 
                   selectedBands={selectedBands} 
                   onChange={onSetSelectedBands} 
@@ -2547,6 +2586,7 @@ export function ActiveWorkoutStartCorridor({
                   targetHoldSeconds={isHold ? targetValue : undefined}
                   targetReps={!isHold ? targetValue : undefined}
                   targetRPE={targetRPE}
+                  sharedBandGuidance={sharedBandGuidance}
                 />
               ) : (
                 // Legacy single-band selector fallback

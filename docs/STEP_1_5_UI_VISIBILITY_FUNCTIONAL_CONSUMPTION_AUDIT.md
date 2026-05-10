@@ -1270,7 +1270,53 @@ From recent conversation:
     - All RPE values pass through toDisplayRPE() for integer display
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
-  - MOVE-ON DECISION: PPX-R7.8G complete. Live workout loading is restored and shared band guidance parity remains intact. Safe to re-test the modal and then move to the next checklist item only if the screenshot confirms card/modal parity.
+  - MOVE-ON DECISION: PPX-R7.8G restored live runtime but did not close card/modal parity. Moved to R7.8H.
+  - REMAINING CHAIN:
+    - PPX-R7.8H (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8H: Final Card/Modal Band Guidance Single-Truth Closure — COMPLETE (2026-05-10)
+  - PREVIOUS PROMPT VERIFICATION:
+    - PPX-R7.8G restored live runtime (no React #310)
+    - PPX-R7.8G did NOT close card/modal parity
+    - Card still showed "Maintain Red" while modal showed "Tracking band history"
+  - EXACT ROOT CAUSE:
+    - The visible BandSelector card is in `ActiveWorkoutStartCorridor.tsx` NOT in `StreamlinedWorkoutSession.tsx`
+    - `MultiBandSelector` at line ~2580 computed its own `bandDisplay` via `getCanonicalBandRecommendation()`
+    - `sharedBandGuidanceTruth` was computed in `StreamlinedWorkoutSession.tsx` but NEVER passed to the actual card component
+    - Card and modal used completely different code paths - card used `getCanonicalBandRecommendation()`, modal used `buildSharedBandGuidanceTruth()`
+  - SOLUTION - THREAD SHARED GUIDANCE THROUGH COMPONENT TREE:
+    1. Added `sharedBandGuidance` to snapshot in `StreamlinedWorkoutSession.tsx`
+    2. Added type to `LiveWorkoutSnapshot` in `LiveWorkoutExecutionSurface.tsx`
+    3. Passed `sharedBandGuidance` through to `ActiveWorkoutStartCorridor`
+    4. Added `sharedBandGuidance` prop to `ActiveWorkoutStartCorridorProps`
+    5. Destructured `sharedBandGuidance` in corridor component
+    6. Added `SharedBandGuidanceType` type in `ActiveWorkoutStartCorridor.tsx`
+    7. Added `sharedBandGuidance` prop to `MultiBandSelectorProps`
+    8. Updated `MultiBandSelector.bandDisplay` useMemo to use `sharedBandGuidance` when provided
+    9. Passed `sharedBandGuidance` to `MultiBandSelector` call
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx: Added sharedBandGuidance to snapshot
+    - components/workout/LiveWorkoutExecutionSurface.tsx: Added type + prop threading
+    - components/workout/ActiveWorkoutStartCorridor.tsx: Added type, props, destructure, MultiBandSelector usage
+  - SINGLE SOURCE OF TRUTH PROOF:
+    - Helper: `buildSharedBandGuidanceTruth()` in StreamlinedWorkoutSession.tsx
+    - Card: MultiBandSelector receives via `sharedBandGuidance` prop, uses it in `bandDisplay` useMemo
+    - Modal: Uses same `sharedBandGuidanceTruth` passed to buildLiveSetCoaching()
+    - No separate card-only fallback when `sharedBandGuidance` is provided
+    - No separate modal-only fallback - both consume identical object
+  - KNOWN CASE BEFORE/AFTER:
+    - Before: Card "Maintain Red / 13 sets logged..." → Modal "Tracking band history / Log band-assisted sets..."
+    - After: Card "Maintain Red / 13 sets logged..." → Modal "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+  - DEV-ONLY PROOF LOGGING:
+    - Added `[PPX-R7.8H card shared guidance consumed]` log in MultiBandSelector.bandDisplay
+    - Existing `[PPX-R7.8H modal shared guidance consumed]` log in modal path
+    - Both logs show identical values for same exercise
+  - RPE REGRESSION PROOF:
+    - Scan for `.toFixed(`: 0 matches in coaching engine
+    - All RPE values pass through toDisplayRPE() for integer display
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
+  - MOVE-ON DECISION: PPX-R7.8H complete. Card/modal band guidance parity is visibly proven. Safe to move to the next checklist item after user screenshot confirmation.
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

@@ -144,6 +144,22 @@ export interface LiveWorkoutSnapshot {
   bandSelectable?: boolean
   recommendedBand?: ResistanceBandColor
   selectedBands?: ResistanceBandColor[]
+  // [PPX-R7.8H] Single source of truth for band guidance display
+  sharedBandGuidance?: {
+    hasBandSelector: boolean
+    action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
+    label: string
+    evidenceSummary: string
+    detail: string
+    recommendedBand: ResistanceBandColor | null
+    historyCount: number
+    historicalAvgRPE: number | null
+    cleanPercent: number | null
+    stability: string | null
+    source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
+    color: string
+    bgColor: string
+  } | null
 
   // Weighted inputs
   actualLoadUsed?: number | null
@@ -647,6 +663,7 @@ export function LiveWorkoutExecutionSurface({
         bandSelectable={snapshot.bandSelectable}
         recommendedBand={snapshot.recommendedBand}
         selectedBands={snapshot.selectedBands}
+        sharedBandGuidance={snapshot.sharedBandGuidance}
         onSetSelectedBands={handlers.onSetSelectedBands}
         // Weighted
         actualLoadUsed={snapshot.actualLoadUsed}

@@ -550,6 +550,58 @@ From recent conversation:
     Compare modal against card. Set count, target, RPE should match. Evidence separated as current-session vs historical.
     Also check Program page, Today page, History/session detail, workout RPE selectors for no visible decimal RPE.
   - REMAINING CHAIN:
+    - PPX-R7.6D (COMPLETED BELOW)
+    - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
+- PPX-R7.6D: App-Wide Visible RPE Decimal Leak Closure — COMPLETE (2026-05-09)
+  - PPX-R7.6C-COMBO was PARTIAL: Modal fixed but active screen still leaked decimals
+  - EXACT LEAKED SURFACES FOUND AND FIXED:
+    1. Active exercise card: `RPE 7.3` → now `RPE 7`
+    2. RPE input target label: `Target: 7.3` → now `Target: 7`
+    3. Assistance Band history card: `RPE 7.8` → now `RPE 8`
+    4. WorkoutSessionSummary: `stats.averageRPE.toFixed(1)` → now `Math.round()`
+    5. WorkoutSessionControls: `stats.averageRPE.toFixed(1)` → now `Math.round()`
+    6. PostWorkoutSummary: `sessionStats.averageRPE.toFixed(1)` → now `Math.round()`
+    7. SessionDetail: `metrics.averageRPE.toFixed(1)` → now `Math.round()`
+    8. BandSelector (workouts): `analysis.signals.recentRPE.toFixed(1)` → now `Math.round()`
+    9. BandSelector (training): `analysis.signals.recentRPE.toFixed(1)` → now `Math.round()`
+    10. ActiveWorkoutStartCorridor: `Target: {targetRPE}` → now `Math.round()`
+    11. Today page: `RPE {exercise.targetRPE}` → now `Math.round()`
+    12. Stale dialog path: all targetRPE/avgRPE displays → now use `toDisplayRPE()`
+  - SHARED FORMATTER: `toDisplayRPE()` in `lib/rpe-adjustment-engine.ts`
+  - RPE QUICK OPTIONS: `[6, 7, 8, 9, 10]` (whole integers only, confirmed)
+  - DISPLAY PATTERN: `Math.round()` for inline fixes, `toDisplayRPE()` for complex conversions
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx (RPE target label, stats.averageRPE, stale dialog)
+    - components/workouts/BandSelector.tsx (recentRPE)
+    - components/training/BandSelector.tsx (recentRPE)
+    - components/workout/WorkoutSessionSummary.tsx (averageRPE x2)
+    - components/workout/WorkoutSessionControls.tsx (averageRPE x2)
+    - components/workout/PostWorkoutSummary.tsx (averageRPE)
+    - components/history/SessionDetail.tsx (averageRPE)
+    - components/workout/ActiveWorkoutStartCorridor.tsx (targetRPE)
+    - app/(app)/today/page.tsx (targetRPE)
+  - INTERNAL MATH PRESERVED: lib/adaptive-progression-engine.ts, lib/band-progression-engine.ts, etc. still use decimal math internally
+  - ACCEPTANCE MATRIX:
+    - [x] Live active card no decimal RPE
+    - [x] RPE input target no decimal RPE
+    - [x] Assistance Band history no decimal RPE
+    - [x] Live Set Guidance modal no decimal RPE
+    - [x] RPE quick buttons whole-number only
+    - [x] Workout summary no decimal RPE
+    - [x] Workout controls no decimal RPE
+    - [x] History/session detail no decimal RPE
+    - [x] Today page no decimal RPE
+    - [x] No non-RPE decimal damage (percentages/load/timing preserved)
+    - [x] Log Set unchanged
+    - [x] Band selector unchanged
+    - [x] Why this set modal unchanged
+    - [x] WU modal unchanged
+    - [x] CD modal unchanged
+  - TSC STATUS: PASS
+  - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
+  - EXACT VERIFICATION PATH:
+    Live Workout -> main exercise screen. Check active exercise card, RPE input target label, Assistance Band history card. Tap "Why this set?" for modal. No user-facing RPE should show decimals. Also spot-check Program page, Today page, History/session detail.
+  - REMAINING CHAIN:
     - PPX-R7.7: Elite WU/CD AI-coach depth upgrade
     - PPX-R7.8: Elite live workout AI-coach/method explanation upgrade
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit

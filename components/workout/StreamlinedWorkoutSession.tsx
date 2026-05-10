@@ -11282,7 +11282,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[#A4ACB8]`}>RPE {set.actualRPE}</span>
+                  <span className={`text-[#A4ACB8]`}>RPE {toDisplayRPE(set.actualRPE) ?? '-'}</span>
                   {set.reasonTags && set.reasonTags.length > 0 && (
                     <span className="text-[#C1121F] text-[10px]">+{set.reasonTags.length}</span>
                   )}
@@ -11762,7 +11762,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                     {selectedRPE != null && Number(selectedRPE) > 0 && (
                       <div className="mt-2 pt-2 border-t border-[#2B313A] text-xs">
                         <span className="text-[#6B7280]">Your RPE: </span>
-                        <span className="text-emerald-400">{String(selectedRPE)}</span>
+                        <span className="text-emerald-400">{toDisplayRPE(selectedRPE) ?? 'not recorded'}</span>
                       </div>
                     )}
                   </div>

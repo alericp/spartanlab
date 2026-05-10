@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ��������� completed/recent set ledger/history row
+    - Live Workout ����������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1185,7 +1185,48 @@ From recent conversation:
     - All RPE values pass through toDisplayRPE() for integer display
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration)
-  - MOVE-ON DECISION: PPX-R7.8E complete. Band card and Live Set Guidance now share one runtime-proven display-ready truth via corridorRecommendedBand fallback. Safe to move to the next checklist item.
+  - MOVE-ON DECISION: PPX-R7.8E claimed complete but live screenshot still showed "Tracking band history". Moved to R7.8F.
+  - REMAINING CHAIN:
+    - PPX-R7.8F (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8F: Kill Split Band Guidance Ownership — COMPLETE (2026-05-10)
+  - PREVIOUS CLAIM VERIFICATION:
+    - PPX-R7.8E claimed PASS but user screenshot still showed modal displaying "Tracking band history"
+    - The modal was STILL computing band truth separately from the visible card
+  - EXACT ROOT CAUSE:
+    - BandSelector used `getExerciseBandHistory(exerciseId)` with exact ID match - found 13 sets
+    - Modal used `getCanonicalBandHistory({ exerciseId, exerciseName })` with canonical key resolution - found 0 sets
+    - Different lookup functions = different results = split truth
+    - Modal's `isHistoryBased = historyCount > 0 && bandHistoryData?.recommendedBand` was false even with card showing Maintain Red
+  - SOLUTION - ONE OBJECT, ONE OWNER, TWO CONSUMERS:
+    - Created `sharedBandGuidanceTruth` useMemo at corridor scope (line ~9718)
+    - Uses EXACT same lookup as BandSelector: `getExerciseBandHistory(corridorExerciseId)`
+    - Added `SharedBandGuidanceTruth` type with all display fields
+    - BandSelector now receives `sharedGuidance` prop and uses it for display
+    - Modal now uses `sharedBandGuidanceTruth` directly instead of computing separately
+    - Both surfaces consume THE SAME object - no more split truth
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added SharedBandGuidanceTruth type (line ~2107)
+      - Added sharedGuidance prop to BandSelectorProps
+      - Refactored BandSelector to use sharedGuidance when provided
+      - Added sharedBandGuidanceTruth useMemo at corridor scope
+      - Replaced modal's separate bandHistoryData/bandGuidanceTruth with sharedBandGuidanceTruth
+      - Added dev-only proof logging
+  - SINGLE SOURCE OF TRUTH:
+    - Object: `sharedBandGuidanceTruth` at corridor scope
+    - Consumer 1: BandSelector via `sharedGuidance` prop
+    - Consumer 2: Live Set Guidance modal via direct reference
+    - Both use exact same label/evidenceSummary/action/historyCount
+  - BEFORE/AFTER:
+    - Before: Card "Maintain Red / 13 sets logged..." → Modal "Tracking band history / Log band-assisted sets..."
+    - After: Card "Maintain Red / 13 sets logged..." → Modal "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+  - RPE REGRESSION PROOF:
+    - Scan for `.toFixed(`, `averageRPE)`: 0 matches in coaching engine
+    - All RPE values pass through toDisplayRPE() for integer display
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-portal-session)
+  - MOVE-ON DECISION: PPX-R7.8F complete. The card and modal now consume one shared display-ready band guidance truth. Safe to move to the next checklist item.
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

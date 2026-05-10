@@ -11317,15 +11317,15 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           )}
           <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={contractTargetRPE} />
 {bandSelectable && (
-> <BandSelector
-  value={safeBandUsed}
-  onChange={setBandUsed}
-  recommendedBand={contractRecommendedBand}
-  exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
-  exerciseName={safeCurrentExercise.name}
-  sharedGuidance={sharedBandGuidanceTruth}
+  <BandSelector
+    value={safeBandUsed}
+    onChange={setBandUsed}
+    recommendedBand={contractRecommendedBand}
+    exerciseId={safeCurrentExercise.id || safeCurrentExercise.name?.toLowerCase().replace(/\s+/g, '_')}
+    exerciseName={safeCurrentExercise.name}
+    sharedGuidance={sharedBandGuidanceTruth}
   />
-  )}
+)}
           
           {/* Per-set notes section - collapsible */}
           <div className="border-t border-[#2B313A] pt-3">

@@ -3202,7 +3202,8 @@ export function ActiveWorkoutStartCorridor({
               </p>
             </div>
             
-            {/* Single clean button stack with inline explanations */}
+            {/* [AB6.1.2C] Single clean button stack - matches warm-up/cooldown pattern */}
+            {/* Continue = neutral outline, Save & Exit = positive emerald, Discard = destructive red */}
             <div className="space-y-3">
               <Button
                 variant="outline"
@@ -3212,8 +3213,9 @@ export function ActiveWorkoutStartCorridor({
                 <span className="font-medium">Continue Workout</span>
               </Button>
               
+              {/* [AB6.1.2C] Save & Exit is a POSITIVE action - use emerald styling, not red */}
               <Button
-                className="w-full h-auto py-3 bg-[#C1121F] hover:bg-[#A10F1A] text-white flex flex-col items-center"
+                className="w-full h-auto py-3 bg-emerald-600 hover:bg-emerald-700 text-white flex flex-col items-center"
                 onClick={() => {
                   setShowExitConfirm(false)
                   if (onSaveAndExit) {
@@ -3227,9 +3229,10 @@ export function ActiveWorkoutStartCorridor({
                 <span className="text-xs opacity-80 mt-0.5">Resume anytime</span>
               </Button>
               
+              {/* [AB6.1.2C] Discard is destructive - use red/ghost styling */}
               <Button
                 variant="ghost"
-                className="w-full h-auto py-3 text-[#6B7280] hover:text-red-400 hover:bg-red-500/10 flex flex-col items-center"
+                className="w-full h-auto py-3 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex flex-col items-center"
                 onClick={() => {
                   setShowExitConfirm(false)
                   if (onDiscardWorkout) {
@@ -3240,7 +3243,7 @@ export function ActiveWorkoutStartCorridor({
                 }}
               >
                 <span className="font-medium">Discard Workout</span>
-                <span className="text-xs opacity-80 mt-0.5">Progress will be lost</span>
+                <span className="text-xs opacity-60 mt-0.5">Progress will be lost</span>
               </Button>
             </div>
           </Card>

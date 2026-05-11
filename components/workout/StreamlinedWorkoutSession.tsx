@@ -90,7 +90,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+  import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 // [PPX-R7.7B] Elite warm-up/cool-down coaching derivation for existing sessions
 import { generateWarmUpCoaching, generateCoolDownCoaching } from '@/lib/warmup-cooldown-coaching-engine'
@@ -2079,6 +2089,36 @@ interface RepsHoldInputProps {
 
 function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
   const label = type === 'reps' ? 'Actual Reps' : 'Hold (sec)'
+  const [localValue, setLocalValue] = useState(value.toString())
+  const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Sync local value when external value changes
+  useEffect(() => {
+    setLocalValue(value.toString())
+  }, [value])
+  
+  // [P2F-2] Handle direct numeric input
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^0-9]/g, '')
+    setLocalValue(raw)
+  }
+  
+  const handleInputBlur = () => {
+    const parsed = parseInt(localValue, 10)
+    if (!isNaN(parsed) && parsed >= 0) {
+      const max = type === 'hold' ? 600 : 999
+      onChange(Math.min(Math.max(1, parsed), max))
+    } else {
+      setLocalValue(value.toString())
+    }
+  }
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleInputBlur()
+      inputRef.current?.blur()
+    }
+  }
   
   return (
     <div className="space-y-1.5">
@@ -2090,15 +2130,27 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
         <button
           onClick={() => onChange(Math.max(1, value - 1))}
           className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+          aria-label={`Decrease ${label}`}
         >
           -
         </button>
-        <span className="w-16 text-center text-3xl font-bold text-[#E6E9EF] tabular-nums">
-          {value}
-        </span>
+        {/* [P2F-2] Direct numeric input - tap to type instead of +/- only */}
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={localValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          onKeyDown={handleKeyDown}
+          className="w-20 h-12 text-center text-3xl font-bold text-[#E6E9EF] tabular-nums bg-transparent border-none outline-none focus:ring-2 focus:ring-[#E63946]/50 rounded-lg"
+          aria-label={`Enter ${label} value`}
+        />
         <button
           onClick={() => onChange(value + 1)}
           className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+          aria-label={`Increase ${label}`}
         >
           +
         </button>
@@ -4161,6 +4213,8 @@ export function StreamlinedWorkoutSession({
   const [adaptiveDetailsOpen, setAdaptiveDetailsOpen] = useState<'warmup' | 'cooldown' | 'live' | null>(null)
   // [PPX-R7] Dismiss state for cooldown return banner - non-blocking reminder
   const [cooldownReturnBannerDismissed, setCooldownReturnBannerDismissed] = useState(false)
+  // [P2F-2] Discard confirmation dialog state - prevents accidental data loss
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
 
   // [STEP 22.5 / T.T13] Second confirmation state for saved-program apply.
   // When user clicks "Use as planned substitute", we show a second confirmation
@@ -8670,7 +8724,7 @@ if (shouldShowLocalFallback) {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={handleDiscardAndExit}
+                      onClick={() => setShowDiscardConfirm(true)}
                       className="flex-1 h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
                     >
                       <Trash2 className="w-3.5 h-3.5 mr-1" />
@@ -8919,7 +8973,7 @@ if (shouldShowLocalFallback) {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleDiscardAndExit}
+                  onClick={() => setShowDiscardConfirm(true)}
                   className="flex-1 h-10 border-red-500/30 text-red-400 hover:bg-red-500/10"
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
@@ -9235,7 +9289,7 @@ if (shouldShowLocalFallback) {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={handleDiscardAndExit}
+                      onClick={() => setShowDiscardConfirm(true)}
                       className="flex-1 h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
                     >
                       <Trash2 className="w-3.5 h-3.5 mr-1" />
@@ -9997,7 +10051,7 @@ if (shouldShowLocalFallback) {
             {/* [PPX-R7.8K] Discard option for done surface */}
             <Button
               variant="outline"
-              onClick={handleDiscardAndExit}
+              onClick={() => setShowDiscardConfirm(true)}
               className="w-full h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" />
@@ -12416,6 +12470,29 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* [P2F-2] Discard Confirmation Dialog - prevents accidental data loss */}
+      <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+        <AlertDialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#E6E9EF]">Discard workout?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#A4ACB8]">
+              This will delete this session&apos;s logged progress. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDiscardAndExit}
+              className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+            >
+              Discard Workout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
   

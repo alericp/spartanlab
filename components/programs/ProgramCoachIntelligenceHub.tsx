@@ -567,7 +567,9 @@ function MethodDetailModalContent({
   const canCreatePreview = plan.canPreview && !isAlreadyApplied && !preview
   
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full min-h-0">
+      {/* [P2C] Scrollable content area with bottom padding for sticky footer */}
+      <div className="flex-1 overflow-y-auto pb-24 space-y-4">
       {/* Status & Safety Header */}
       <div className="flex items-start gap-3 p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
         <div className="flex-1">
@@ -596,7 +598,7 @@ function MethodDetailModalContent({
       {/* Current Reason */}
       <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
         <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
-          Current Decision Reason
+          Why Coach Held This Back
         </span>
         <p className="text-xs text-[#9A9AAA] leading-relaxed">
           {plan.reason}
@@ -607,7 +609,7 @@ function MethodDetailModalContent({
       {plan.suggestedInsertion && (
         <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
-            Suggested Placement
+            Best Safe Insertion Point
           </span>
           <div className="flex items-center gap-2 mb-2">
             <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -749,11 +751,13 @@ function MethodDetailModalContent({
           </p>
         </div>
       )}
+      </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 pt-2">
+      {/* [P2C] Sticky footer for action buttons — mobile-safe with safe-area inset */}
+      <div className="sticky bottom-0 z-10 border-t border-[#2A2A35] bg-[#0F0F12]/95 backdrop-blur-sm px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex gap-2">
         {isAlreadyApplied ? (
-          <div className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
+          <div className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
             <span className="text-xs text-emerald-400 flex items-center justify-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
               Already included — no override needed
@@ -765,7 +769,7 @@ function MethodDetailModalContent({
               variant="outline"
               size="sm"
               onClick={onClearPreview}
-              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+              className="flex-1 h-10 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
             >
               Clear Preview
             </Button>
@@ -773,7 +777,7 @@ function MethodDetailModalContent({
               variant="outline"
               size="sm"
               disabled
-              className="flex-1 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
+              className="flex-1 h-10 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
             >
               Apply (Coming Next)
             </Button>
@@ -784,14 +788,14 @@ function MethodDetailModalContent({
               variant="outline"
               size="sm"
               onClick={onDismiss}
-              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+              className="flex-1 h-10 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
             >
               Dismiss
             </Button>
             <Button
               size="sm"
               onClick={onCreatePreview}
-              className="flex-1 bg-[#E63946] hover:bg-[#E63946]/90 text-white"
+              className="flex-1 h-10 bg-[#E63946] hover:bg-[#E63946]/90 text-white"
             >
               <Eye className="w-4 h-4 mr-1" />
               Create Override Preview
@@ -803,7 +807,7 @@ function MethodDetailModalContent({
               variant="outline"
               size="sm"
               onClick={onDismiss}
-              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+              className="flex-1 h-10 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
             >
               Dismiss
             </Button>
@@ -811,12 +815,13 @@ function MethodDetailModalContent({
               variant="outline"
               size="sm"
               disabled
-              className="flex-1 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
+              className="flex-1 h-10 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
             >
               {plan.safety === 'not_enough_truth' ? 'Insufficient Data' : 'Not Available'}
             </Button>
           </>
         )}
+        </div>
       </div>
     </div>
   )
@@ -951,19 +956,23 @@ function RequestedMethodsSheetContent({
   // If an item is selected, show the detail view
   if (selectedItem && currentPlan) {
     return (
-      <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
-        {/* Back Button */}
-        <button
-          onClick={handleDismiss}
-          className="flex items-center gap-2 text-xs text-[#7A7A8A] hover:text-[#E6E9EF] transition-colors"
-        >
-          <ChevronRight className="w-3 h-3 rotate-180" />
-          Back to all methods
-        </button>
+      <div className="flex flex-col h-[calc(100dvh-120px)] min-h-0">
+        {/* [P2C] Fixed header area */}
+        <div className="shrink-0 space-y-2 pb-3 border-b border-[#2A2A35]/50 mb-3">
+          {/* Back Button */}
+          <button
+            onClick={handleDismiss}
+            className="flex items-center gap-2 text-xs text-[#7A7A8A] hover:text-[#E6E9EF] transition-colors"
+          >
+            <ChevronRight className="w-3 h-3 rotate-180" />
+            Back to all methods
+          </button>
+          
+          {/* Method Label */}
+          <h3 className="text-lg font-semibold text-[#E6E9EF]">{selectedItem.label}</h3>
+        </div>
         
-        {/* Method Label */}
-        <h3 className="text-lg font-semibold text-[#E6E9EF]">{selectedItem.label}</h3>
-        
+        {/* [P2C] Flex container for detail content with sticky footer */}
         <MethodDetailModalContent
           item={selectedItem}
           plan={currentPlan}

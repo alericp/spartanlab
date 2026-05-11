@@ -1439,202 +1439,43 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
-        {/* [MAIN-PAGE-AI-VISIBILITY] Weekly Intelligence Strip - visible without opening modal */}
+        {/* [P2C] Condensed Weekly Intelligence Strip — essential context only, details moved to hub */}
         {intelligenceContract && (
-          <div className="px-4 py-3 border-t border-[#333]/30 bg-[#1A1A1A]/30">
-            {/* [WEEK-PHASE-DOCTRINE-FIX] Protective week banner - NOW uses SELECTED week context, not static program */}
+          <div className="px-4 py-2.5 border-t border-[#333]/30 bg-[#1A1A1A]/30">
+            {/* [WEEK-PHASE-DOCTRINE-FIX] Protective week indicator - compact version */}
             {weekPhaseContext.isProtectiveWeek && (
-              <div className="mb-2.5 flex items-start gap-2 p-2 rounded-md bg-blue-500/8 border border-blue-500/20">
-                <Shield className="w-3.5 h-3.5 text-blue-400/70 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-blue-400/90 font-medium leading-snug">
-                    Week {currentWeekNumber} - {weekPhaseContext.phaseName}
-                  </p>
-                  <p className="text-[10px] text-[#8A8A8A] mt-0.5">
-                    {weekPhaseContext.volumeDescription}
-                  </p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-                    {weekPhaseContext.keyCharacteristics.slice(0, 2).map((char, i) => (
-                      <span key={i} className="text-[9px] text-[#7A7A7A]">
-                        • {char}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded-md bg-blue-500/8 border border-blue-500/20">
+                <Shield className="w-3 h-3 text-blue-400/70 shrink-0" />
+                <span className="text-[10px] text-blue-400/90 font-medium">
+                  Week {currentWeekNumber} · {weekPhaseContext.phaseName}
+                </span>
               </div>
             )}
             
-            {/* [WEEK-PHASE-DOCTRINE-FIX] Week-specific coaching headline - uses selected week context */}
-            <p className="text-[13px] text-[#C8C8C8] font-medium leading-relaxed mb-2.5">
+            {/* Coaching headline - kept concise */}
+            <p className="text-[12px] text-[#C8C8C8] font-medium leading-relaxed">
               {weekPhaseContext.coachingHeadline}
             </p>
             
-            {/* Weekly structure signals - compact row */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px]">
+            {/* Compact structure row */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[9px]">
+              {/* Week/phase for non-protective */}
+              {!weekPhaseContext.isProtectiveWeek && (
+                <span className="text-[#6A6A6A]">
+                  Week {currentWeekNumber} · {weekPhaseContext.phaseName}
+                </span>
+              )}
               {/* Structure identity */}
               {intelligenceContract.weeklyDecisionLogic?.structureIdentity && (
-                <div className="flex items-center gap-1.5">
-                  <Layers className="w-3 h-3 text-[#E63946]/60" />
-                  <span className="text-[#8A8A8A]">{intelligenceContract.weeklyDecisionLogic.structureIdentity}</span>
-                </div>
+                <span className="text-[#7A7A7A]">{intelligenceContract.weeklyDecisionLogic.structureIdentity}</span>
               )}
-              
-              {/* Primary tradeoff */}
+              {/* Primary tradeoff - super compact */}
               {intelligenceContract.tradeoffs?.[0] && (
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3 text-green-500/50" />
-                  <span className="text-[#7A7A7A]">{intelligenceContract.tradeoffs[0].prioritized}</span>
-                  <span className="text-[#4A4A4A]">/</span>
-                  <span className="text-[#5A5A5A]">{intelligenceContract.tradeoffs[0].limited}</span>
-                </div>
-              )}
-              
-              {/* Protected constraint */}
-              {intelligenceContract.protectedConstraints?.[0] && (
-                <div className="flex items-center gap-1.5">
-                  <Shield className="w-3 h-3 text-amber-500/50" />
-                  <span className="text-[#6A6A6A]">{intelligenceContract.protectedConstraints[0].label}</span>
-                </div>
+                <span className="text-[#5A5A5A]">
+                  {intelligenceContract.tradeoffs[0].prioritized} &gt; {intelligenceContract.tradeoffs[0].limited}
+                </span>
               )}
             </div>
-            
-            {/* Key architectural decision (if any) - skip if already showing in protective banner */}
-            {intelligenceContract.weeklyDecisionLogic?.architecturalDecisions?.[0] && 
-             !weekPhaseContext.isProtectiveWeek && (
-              <p className="mt-2 text-[10px] text-[#5A5A5A] leading-relaxed">
-                {intelligenceContract.weeklyDecisionLogic.architecturalDecisions[0]}
-              </p>
-            )}
-            
-            {/* [WEEK-PHASE-DOCTRINE-FIX] Subtle week phase explanation - for non-protective weeks */}
-            {!weekPhaseContext.isProtectiveWeek && (
-              <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
-                <p className="text-[10px] text-[#6A6A6A]">
-                  <span className="text-[#8A8A8A]">Week {currentWeekNumber} · {weekPhaseContext.phaseName}:</span>{' '}
-                  {weekPhaseContext.volumeDescription}
-                </p>
-              </div>
-            )}
-            
-            {/* [STEP 25.2] Coach Signals — surfaces real computed generation decisions */}
-            {programSurfaceSignals && programSurfaceSignals.signals.length > 0 && (
-              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sparkles className="w-3 h-3 text-[#E63946]/50" />
-                  <span className="text-[10px] text-[#7A7A7A] font-medium">Coach signals</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {programSurfaceSignals.signals.map((signal, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center px-2 py-0.5 rounded text-[9px] bg-[#1A1A1A]/60 border border-[#333]/40 text-[#9A9A9A]"
-                    >
-                      {signal}
-                    </span>
-                  ))}
-                </div>
-                {programSurfaceSignals.dosageMessage && (
-                  <p className="mt-1.5 text-[9px] text-[#6A6A6A] leading-relaxed">
-                    {programSurfaceSignals.dosageMessage}
-                  </p>
-                )}
-              </div>
-            )}
-            
-            {/* [STEP 25.3] Program Decisions Narrative — why this program was built this way */}
-            {decisionsNarrative && decisionsNarrative.available && (
-              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Target className="w-3 h-3 text-[#E63946]/50" />
-                  <span className="text-[10px] text-[#7A7A7A] font-medium">Why this program</span>
-                </div>
-                
-                {/* Top-level strategy label */}
-                {decisionsNarrative.topLevelStrategyLabel && (
-                  <p className="text-[11px] text-[#B8B8B8] font-medium mb-1">
-                    {decisionsNarrative.topLevelStrategyLabel}
-                  </p>
-                )}
-                
-                {/* Supporting sentence */}
-                {decisionsNarrative.supportingSentence && (
-                  <p className="text-[10px] text-[#8A8A8A] leading-relaxed mb-1.5">
-                    {decisionsNarrative.supportingSentence}
-                  </p>
-                )}
-                
-                {/* Key details row */}
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {decisionsNarrative.perDayStressBreakdown && (
-                    <span className="text-[9px] text-[#6A6A6A]">
-                      {decisionsNarrative.perDayStressBreakdown}
-                    </span>
-                  )}
-                  {decisionsNarrative.safetyTag && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] bg-blue-500/10 border border-blue-500/20 text-blue-400/80">
-                      {decisionsNarrative.safetyTag}
-                    </span>
-                  )}
-                  {decisionsNarrative.densityVisibleLine && (
-                    <span className="text-[9px] text-[#6A6A6A]">
-                      {decisionsNarrative.densityVisibleLine}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* [STEP 25.4] Performance Progression Clarity — current progression status */}
-            {progressionClarity && progressionClarity.available && (
-              <div className="mt-2.5 pt-2.5 border-t border-[#2A2A2A]">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <TrendingUp className="w-3 h-3 text-[#E63946]/50" />
-                  <span className="text-[10px] text-[#7A7A7A] font-medium">Progression status</span>
-                  {/* Status badge */}
-                  <span className={cn(
-                    "ml-auto px-1.5 py-0.5 rounded text-[8px] font-medium",
-                    progressionClarity.status === 'advancing' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/80",
-                    progressionClarity.status === 'building' && "bg-blue-500/10 border border-blue-500/20 text-blue-400/80",
-                    progressionClarity.status === 'holding' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/80",
-                    progressionClarity.status === 'protecting' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/80",
-                    progressionClarity.status === 'not_enough_evidence' && "bg-gray-500/10 border border-gray-500/20 text-gray-400/80",
-                  )}>
-                    {progressionClarity.headline}
-                  </span>
-                </div>
-                
-                {/* Summary */}
-                <p className="text-[10px] text-[#8A8A8A] leading-relaxed mb-1.5">
-                  {progressionClarity.summary}
-                </p>
-                
-                {/* Reasons */}
-                {progressionClarity.reasons.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-1.5">
-                    {progressionClarity.reasons.map((reason) => (
-                      <span
-                        key={reason.id}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[9px] bg-[#1A1A1A]/60 border border-[#333]/40 text-[#9A9A9A]"
-                        title={reason.message}
-                      >
-                        {reason.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                {/* Next focus */}
-                {progressionClarity.nextFocus && (
-                  <div className="flex items-start gap-1.5 pt-1.5 border-t border-[#2A2A2A]/50">
-                    <ArrowRight className="w-3 h-3 text-[#6A6A6A] mt-0.5 shrink-0" />
-                    <p className="text-[9px] text-[#7A7A7A]">
-                      <span className="text-[#8A8A8A] font-medium">{progressionClarity.nextFocus.label}:</span>{' '}
-                      {progressionClarity.nextFocus.message}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
         
@@ -1661,72 +1502,33 @@ export function AdaptiveProgramDisplay({
         currentWeekNumber={currentWeekNumber}
       />
 
-      {/* [STEP 25.5] Today Session Readiness Guidance — what should I do today? */}
+      {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}
       {todayGuidance && todayGuidance.available && (
-        <Card className="mb-4 bg-[#0F0F0F] border-[#2A2A2A] overflow-hidden">
-          <div className="px-4 py-3">
-            {/* Header with state badge */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  todayGuidance.state === 'ready' && "bg-emerald-500",
-                  todayGuidance.state === 'controlled' && "bg-blue-400",
-                  todayGuidance.state === 'protect_recovery' && "bg-purple-400",
-                  todayGuidance.state === 'reduce_or_shorten' && "bg-amber-400",
-                  todayGuidance.state === 'collecting_data' && "bg-gray-400",
-                )} />
-                <span className="text-xs font-medium text-[#E6E9EF]">
-                  Today&apos;s guidance
-                </span>
-              </div>
-              <span className={cn(
-                "px-2 py-0.5 rounded text-[10px] font-medium",
-                todayGuidance.state === 'ready' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/90",
-                todayGuidance.state === 'controlled' && "bg-blue-500/10 border border-blue-500/20 text-blue-400/90",
-                todayGuidance.state === 'protect_recovery' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/90",
-                todayGuidance.state === 'reduce_or_shorten' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/90",
-                todayGuidance.state === 'collecting_data' && "bg-gray-500/10 border border-gray-500/20 text-gray-400/90",
-              )}>
-                {todayGuidance.label}
-              </span>
-            </div>
-            
-            {/* Summary */}
-            <p className="text-[11px] text-[#9A9A9A] leading-relaxed mb-2">
-              {todayGuidance.summary}
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[#0F0F0F] border border-[#2A2A2A]">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-2 h-2 rounded-full shrink-0",
+              todayGuidance.state === 'ready' && "bg-emerald-500",
+              todayGuidance.state === 'controlled' && "bg-blue-400",
+              todayGuidance.state === 'protect_recovery' && "bg-purple-400",
+              todayGuidance.state === 'reduce_or_shorten' && "bg-amber-400",
+              todayGuidance.state === 'collecting_data' && "bg-gray-400",
+            )} />
+            <span className={cn(
+              "px-1.5 py-0.5 rounded text-[9px] font-medium",
+              todayGuidance.state === 'ready' && "bg-emerald-500/10 text-emerald-400/90",
+              todayGuidance.state === 'controlled' && "bg-blue-500/10 text-blue-400/90",
+              todayGuidance.state === 'protect_recovery' && "bg-purple-500/10 text-purple-400/90",
+              todayGuidance.state === 'reduce_or_shorten' && "bg-amber-500/10 text-amber-400/90",
+              todayGuidance.state === 'collecting_data' && "bg-gray-500/10 text-gray-400/90",
+            )}>
+              {todayGuidance.label}
+            </span>
+            <p className="text-[10px] text-[#9A9A9A] flex-1 line-clamp-1">
+              {todayGuidance.nextAction}
             </p>
-            
-            {/* Reasons */}
-            {todayGuidance.reasons.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {todayGuidance.reasons.map((reason) => (
-                  <span
-                    key={reason.id}
-                    className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded text-[9px]",
-                      reason.tone === 'positive' && "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/70",
-                      reason.tone === 'neutral' && "bg-[#1A1A1A]/60 border border-[#333]/40 text-[#8A8A8A]",
-                      reason.tone === 'warning' && "bg-amber-500/10 border border-amber-500/20 text-amber-400/70",
-                      reason.tone === 'protective' && "bg-purple-500/10 border border-purple-500/20 text-purple-400/70",
-                    )}
-                    title={reason.message}
-                  >
-                    {reason.label}
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            {/* Next Action */}
-            <div className="flex items-start gap-1.5 pt-2 border-t border-[#2A2A2A]">
-              <ArrowRight className="w-3 h-3 text-[#6A6A6A] mt-0.5 shrink-0" />
-              <p className="text-[10px] text-[#7A7A7A]">
-                {todayGuidance.nextAction}
-              </p>
-            </div>
           </div>
-        </Card>
+        </div>
       )}
 
       {/* [PHASE 13 TASK 6] Schedule Change Notice - only shown after real mutation */}

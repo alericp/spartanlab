@@ -1658,6 +1658,55 @@ From recent conversation:
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key)
   - NEXT STEP: Method override planning/apply corridor only after visibility surface confirmed on-screen
+- SPARTANLAB-P2: Requested Method Override Planning Corridor — COMPLETE (2026-05-11)
+  - OBJECTIVE: Allow users to inspect deferred/blocked methods and create preview override plans without mutating saved program
+  - FILES CHANGED:
+    - lib/program/requested-method-override-planner.ts (NEW): Type-safe override planning logic
+    - components/programs/ProgramCoachIntelligenceHub.tsx: Updated RequestedMethodsSheetContent with click-to-detail and preview workflow
+  - WHAT CHANGED VISIBLY:
+    - Before: Method items in Requested/Deferred Methods sheet were static list items
+    - After: Method items are clickable, opening a detail view with:
+      - Current status and safety verdict
+      - Suggested placement (day, position, structure)
+      - Placement guidelines, dosage guardrails, risk notes
+      - Coach avoids list (what NOT to do)
+      - Truth sources used / missing
+      - Create Override Preview button (when safe)
+      - Preview card showing "not applied to saved program"
+  - OVERRIDE PLANNING CONTRACT:
+    - Safety types: safe_preview, needs_caution, not_recommended, not_enough_truth, unsupported_now
+    - Placement types: same_session_late, same_session_accessory, different_day, next_week, today_preview_only, not_placeable
+    - canApplyToSavedProgramNow: always false (no mutation in this prompt)
+    - Preview stored in sessionStorage (spartanlab:requestedMethodOverridePreview)
+  - METHOD-SPECIFIC PLANNING IMPLEMENTED:
+    - top_set: Primary strength-biased, not unstable skill holds
+    - drop_set: Late accessory/hypertrophy, not primary skill
+    - finisher: Last 5-8 minutes, goal-specific
+    - circuit: Non-conflicting patterns, no same-muscle repeats
+    - superset: Antagonist/non-competing with clear reason
+    - density: Short timed blocks after primary work
+    - cluster: End-of-set completion, not default primary method
+    - unknown: Returns not_enough_truth with guarded explanation
+  - TRAINING DOCTRINE ENFORCED:
+    - Circuits do NOT blindly group adjacent exercises
+    - Supersets do NOT pair archer pull-ups + pull-ups casually
+    - Drop sets avoid primary skill holds and weighted compounds
+    - Top sets avoid unstable technical work and late session
+    - Clusters are NOT treated as default primary method
+    - Weighted pull-ups/dips do NOT default to band assistance
+  - TRUTH PRESERVATION:
+    - No fake override application
+    - No saved program mutation
+    - All data derived from existing program/session/method truth
+    - Missing truth explicitly listed in proof.missingTruth
+    - Guarded copy when reason unavailable
+  - REGRESSION PROOF:
+    - All previous gates: PASS (untouched)
+    - P1 Coach Intelligence Hub: PASS (still renders)
+    - Start Workout: PASS (untouched)
+    - Live Workout: PASS (untouched)
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - NEXT STEP: Safe apply corridor only after preview behavior is confirmed on-screen
 
 ---
 

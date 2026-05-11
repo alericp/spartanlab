@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -44,6 +44,13 @@ import {
   Sparkles,
   ListX,
   ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ArrowRight,
+  Eye,
+  Info,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -54,6 +61,15 @@ import { WeeklyMethodDecisionAccordion } from './WeeklyMethodDecisionAccordion'
 import { CalibrationCheckpointCard } from './CalibrationCheckpointCard'
 import { EvidenceCoachRecommendationCard } from './EvidenceCoachRecommendationCard'
 import { cn } from '@/lib/utils'
+// [SPARTANLAB-P2] Override planner
+import {
+  planMethodOverride,
+  saveMethodOverridePreview,
+  getMethodOverridePreviews,
+  clearMethodOverridePreview,
+  type RequestedMethodOverridePlan,
+  type MethodOverridePreview,
+} from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -488,12 +504,338 @@ function SkillPhaseSheetContent({
 // REQUESTED/DEFERRED METHODS SHEET CONTENT
 // =============================================================================
 
+// Shared state colors and labels
+const METHOD_STATE_COLORS: Record<RequestedMethodState, string> = {
+  applied: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+  materialized: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+  blocked: 'border-red-500/30 bg-red-500/10 text-red-400',
+  deferred: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
+  suppressed: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
+  not_materialized: 'border-[#3A3A4A] bg-[#2A2A35] text-[#8A8A9A]',
+  not_requested: 'border-[#3A3A4A] bg-[#2A2A35] text-[#6A6A7A]',
+  unknown: 'border-[#3A3A4A] bg-[#2A2A35] text-[#5A5A6A]',
+}
+
+const METHOD_STATE_LABELS: Record<RequestedMethodState, string> = {
+  applied: 'Applied',
+  materialized: 'Materialized',
+  blocked: 'Blocked',
+  deferred: 'Deferred',
+  suppressed: 'Suppressed',
+  not_materialized: 'Not Materialized',
+  not_requested: 'Not Requested',
+  unknown: 'Unknown',
+}
+
+// Safety verdict colors
+const SAFETY_COLORS: Record<string, { border: string; bg: string; text: string; icon: typeof CheckCircle2 }> = {
+  safe_preview: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: CheckCircle2 },
+  needs_caution: { border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-400', icon: AlertTriangle },
+  not_recommended: { border: 'border-red-500/30', bg: 'bg-red-500/10', text: 'text-red-400', icon: XCircle },
+  not_enough_truth: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#7A7A8A]', icon: HelpCircle },
+  unsupported_now: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#6A6A7A]', icon: XCircle },
+}
+
+const SAFETY_LABELS: Record<string, string> = {
+  safe_preview: 'Safe to Preview',
+  needs_caution: 'Needs Caution',
+  not_recommended: 'Not Recommended',
+  not_enough_truth: 'Insufficient Data',
+  unsupported_now: 'Not Supported',
+}
+
+// Method Detail Modal Content
+function MethodDetailModalContent({
+  item,
+  plan,
+  preview,
+  onCreatePreview,
+  onClearPreview,
+  onDismiss,
+}: {
+  item: RequestedMethodDisplayItem
+  plan: RequestedMethodOverridePlan
+  preview: MethodOverridePreview | null
+  onCreatePreview: () => void
+  onClearPreview: () => void
+  onDismiss: () => void
+}) {
+  const safetyStyle = SAFETY_COLORS[plan.safety] || SAFETY_COLORS.not_enough_truth
+  const SafetyIcon = safetyStyle.icon
+  
+  const isAlreadyApplied = item.state === 'applied' || item.state === 'materialized'
+  const canCreatePreview = plan.canPreview && !isAlreadyApplied && !preview
+  
+  return (
+    <div className="space-y-4">
+      {/* Status & Safety Header */}
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className={cn(
+              'px-2 py-0.5 text-[9px] font-medium rounded border',
+              METHOD_STATE_COLORS[item.state],
+            )}>
+              {METHOD_STATE_LABELS[item.state]}
+            </span>
+            <span className={cn(
+              'px-2 py-0.5 text-[9px] font-medium rounded border flex items-center gap-1',
+              safetyStyle.border, safetyStyle.bg, safetyStyle.text,
+            )}>
+              <SafetyIcon className="w-3 h-3" />
+              {SAFETY_LABELS[plan.safety]}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-[#E6E9EF]">{plan.headline}</p>
+          <p className="text-[10px] text-[#7A7A8A] mt-1">
+            Source: {plan.source}
+          </p>
+        </div>
+      </div>
+
+      {/* Current Reason */}
+      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+          Current Decision Reason
+        </span>
+        <p className="text-xs text-[#9A9AAA] leading-relaxed">
+          {plan.reason}
+        </p>
+      </div>
+
+      {/* Suggested Insertion (if available) */}
+      {plan.suggestedInsertion && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+            Suggested Placement
+          </span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              {plan.suggestedInsertion.sessionTitle}
+            </span>
+            <ArrowRight className="w-3 h-3 text-[#5A5A6A]" />
+            <span className="text-[10px] text-[#8A8A9A]">
+              {plan.suggestedInsertion.position.replace(/_/g, ' ')}
+            </span>
+          </div>
+          <p className="text-xs text-[#9A9AAA] leading-relaxed">
+            {plan.suggestedInsertion.summary}
+          </p>
+        </div>
+      )}
+
+      {/* Placement Notes */}
+      {plan.placementNotes.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+            Placement Guidelines
+          </span>
+          <ul className="space-y-1">
+            {plan.placementNotes.map((note, i) => (
+              <li key={i} className="text-[10px] text-[#8A8A9A] flex items-start gap-2">
+                <span className="text-emerald-400 mt-0.5">•</span>
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Dosage Guardrails */}
+      {plan.dosageGuardrails.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+            Dosage Guardrails
+          </span>
+          <ul className="space-y-1">
+            {plan.dosageGuardrails.map((guard, i) => (
+              <li key={i} className="text-[10px] text-[#8A8A9A] flex items-start gap-2">
+                <span className="text-blue-400 mt-0.5">•</span>
+                <span>{guard}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Risk Notes */}
+      {plan.riskNotes.length > 0 && (
+        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-amber-400 block mb-2 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            Risk Notes
+          </span>
+          <ul className="space-y-1">
+            {plan.riskNotes.map((risk, i) => (
+              <li key={i} className="text-[10px] text-amber-300/80 flex items-start gap-2">
+                <span className="mt-0.5">•</span>
+                <span>{risk}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Avoids */}
+      {plan.avoids.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+            Coach Avoids
+          </span>
+          <ul className="space-y-1">
+            {plan.avoids.map((avoid, i) => (
+              <li key={i} className="text-[10px] text-[#7A7A8A] flex items-start gap-2">
+                <XCircle className="w-3 h-3 text-red-400/60 mt-0.5 shrink-0" />
+                <span>{avoid}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Proof / Missing Truth */}
+      <div className="p-3 rounded-lg bg-[#1A1A22]/50 border border-[#2A2A35]/50">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-[#5A5A6A] block mb-2">
+          Truth Sources Used
+        </span>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {plan.proof.usedProgramTruth && (
+            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Program
+            </span>
+          )}
+          {plan.proof.usedSessionTruth && (
+            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Sessions
+            </span>
+          )}
+          {plan.proof.usedMethodTruth && (
+            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Method Decision
+            </span>
+          )}
+          {plan.proof.usedExercisePatternTruth && (
+            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Exercise Patterns
+            </span>
+          )}
+        </div>
+        {plan.proof.missingTruth.length > 0 && (
+          <div className="mt-2">
+            <span className="text-[9px] text-[#5A5A6A]">Missing: </span>
+            <span className="text-[9px] text-amber-400/70">
+              {plan.proof.missingTruth.join(', ')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Preview Card (if exists) */}
+      {preview && (
+        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Eye className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
+          </div>
+          <p className="text-[10px] text-[#9A9AAA] mb-2">{preview.planSummary}</p>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Preview only — not applied to saved program
+            </span>
+          </div>
+          <p className="text-[9px] text-[#5A5A6A] mt-2">
+            Created: {new Date(preview.generatedAt).toLocaleString()}
+          </p>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex gap-2 pt-2">
+        {isAlreadyApplied ? (
+          <div className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
+            <span className="text-xs text-emerald-400 flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              Already included — no override needed
+            </span>
+          </div>
+        ) : preview ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClearPreview}
+              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+            >
+              Clear Preview
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="flex-1 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
+            >
+              Apply (Coming Next)
+            </Button>
+          </>
+        ) : canCreatePreview ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDismiss}
+              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+            >
+              Dismiss
+            </Button>
+            <Button
+              size="sm"
+              onClick={onCreatePreview}
+              className="flex-1 bg-[#E63946] hover:bg-[#E63946]/90 text-white"
+            >
+              <Eye className="w-4 h-4 mr-1" />
+              Create Override Preview
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDismiss}
+              className="flex-1 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35]"
+            >
+              Dismiss
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="flex-1 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
+            >
+              {plan.safety === 'not_enough_truth' ? 'Insufficient Data' : 'Not Available'}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function RequestedMethodsSheetContent({
   program,
 }: {
   program: AdaptiveProgram
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
+  const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<RequestedMethodOverridePlan | null>(null)
+  const [previews, setPreviews] = useState<MethodOverridePreview[]>([])
+  
+  // Load previews from storage on mount
+  useEffect(() => {
+    setPreviews(getMethodOverridePreviews())
+  }, [])
 
   // Group by state
   const applied = methodItems.filter(m => m.state === 'applied' || m.state === 'materialized')
@@ -504,26 +846,32 @@ function RequestedMethodsSheetContent({
   const notRequested = methodItems.filter(m => m.state === 'not_requested')
   const unknown = methodItems.filter(m => m.state === 'unknown')
 
-  const stateColors: Record<RequestedMethodState, string> = {
-    applied: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-    materialized: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-    blocked: 'border-red-500/30 bg-red-500/10 text-red-400',
-    deferred: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-    suppressed: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
-    not_materialized: 'border-[#3A3A4A] bg-[#2A2A35] text-[#8A8A9A]',
-    not_requested: 'border-[#3A3A4A] bg-[#2A2A35] text-[#6A6A7A]',
-    unknown: 'border-[#3A3A4A] bg-[#2A2A35] text-[#5A5A6A]',
+  const handleItemClick = (item: RequestedMethodDisplayItem) => {
+    setSelectedItem(item)
+    const plan = planMethodOverride({ methodItem: item, program })
+    setCurrentPlan(plan)
   }
-
-  const stateLabels: Record<RequestedMethodState, string> = {
-    applied: 'Applied',
-    materialized: 'Materialized',
-    blocked: 'Blocked',
-    deferred: 'Deferred',
-    suppressed: 'Suppressed',
-    not_materialized: 'Not Materialized',
-    not_requested: 'Not Requested',
-    unknown: 'Unknown',
+  
+  const handleCreatePreview = () => {
+    if (!currentPlan) return
+    const preview = saveMethodOverridePreview(currentPlan)
+    setPreviews(getMethodOverridePreviews())
+    // Stay on the detail view to show the preview
+  }
+  
+  const handleClearPreview = () => {
+    if (!selectedItem) return
+    clearMethodOverridePreview(selectedItem.methodKey)
+    setPreviews(getMethodOverridePreviews())
+  }
+  
+  const handleDismiss = () => {
+    setSelectedItem(null)
+    setCurrentPlan(null)
+  }
+  
+  const getCurrentPreview = (methodKey: string) => {
+    return previews.find(p => p.methodKey === methodKey) || null
   }
 
   const renderGroup = (items: RequestedMethodDisplayItem[], title: string) => {
@@ -534,27 +882,46 @@ function RequestedMethodsSheetContent({
           {title} ({items.length})
         </span>
         <ul className="space-y-2">
-          {items.map((item) => (
-            <li key={item.methodKey} className="flex items-start gap-3">
-              <span className={cn(
-                'px-2 py-0.5 text-[9px] font-medium rounded border shrink-0 mt-0.5',
-                stateColors[item.state],
-              )}>
-                {stateLabels[item.state]}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[#E6E9EF]">{item.label}</p>
-                <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5">
-                  {item.reason}
-                </p>
-                {item.confidence === 'low' && (
-                  <p className="text-[9px] text-[#5A5A6A] mt-1 italic">
-                    Reason detail confidence: low
-                  </p>
+          {items.map((item) => {
+            const hasPreview = !!getCurrentPreview(item.methodKey)
+            return (
+              <li 
+                key={item.methodKey} 
+                className={cn(
+                  'flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-all',
+                  'hover:bg-[#2A2A35]/50 border border-transparent',
+                  hasPreview && 'border-emerald-500/20 bg-emerald-500/5',
                 )}
-              </div>
-            </li>
-          ))}
+                onClick={() => handleItemClick(item)}
+              >
+                <span className={cn(
+                  'px-2 py-0.5 text-[9px] font-medium rounded border shrink-0 mt-0.5',
+                  METHOD_STATE_COLORS[item.state],
+                )}>
+                  {METHOD_STATE_LABELS[item.state]}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-medium text-[#E6E9EF]">{item.label}</p>
+                    {hasPreview && (
+                      <span className="px-1.5 py-0.5 text-[8px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Preview
+                      </span>
+                    )}
+                    <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto shrink-0" />
+                  </div>
+                  <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5 line-clamp-2">
+                    {item.reason}
+                  </p>
+                  {item.confidence === 'low' && (
+                    <p className="text-[9px] text-[#5A5A6A] mt-1 italic">
+                      Reason detail confidence: low
+                    </p>
+                  )}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       </div>
     )
@@ -562,8 +929,52 @@ function RequestedMethodsSheetContent({
 
   const hasAnyData = methodItems.length > 0
 
+  // If an item is selected, show the detail view
+  if (selectedItem && currentPlan) {
+    return (
+      <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+        {/* Back Button */}
+        <button
+          onClick={handleDismiss}
+          className="flex items-center gap-2 text-xs text-[#7A7A8A] hover:text-[#E6E9EF] transition-colors"
+        >
+          <ChevronRight className="w-3 h-3 rotate-180" />
+          Back to all methods
+        </button>
+        
+        {/* Method Label */}
+        <h3 className="text-lg font-semibold text-[#E6E9EF]">{selectedItem.label}</h3>
+        
+        <MethodDetailModalContent
+          item={selectedItem}
+          plan={currentPlan}
+          preview={getCurrentPreview(selectedItem.methodKey)}
+          onCreatePreview={handleCreatePreview}
+          onClearPreview={handleClearPreview}
+          onDismiss={handleDismiss}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+      {/* Active Previews Banner */}
+      {previews.length > 0 && (
+        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Eye className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-medium text-emerald-400">
+              {previews.length} Override Preview{previews.length > 1 ? 's' : ''} Active
+            </span>
+          </div>
+          <p className="text-[10px] text-[#8A8A9A]">
+            Preview{previews.length > 1 ? 's are' : ' is'} not applied to your saved program. 
+            Tap a method to view or clear the preview.
+          </p>
+        </div>
+      )}
+
       {!hasAnyData && (
         <div className="p-4 rounded-lg bg-[#1A1A22] border border-[#2A2A35] text-center">
           <ListX className="w-8 h-8 text-[#5A5A6A] mx-auto mb-2" />
@@ -576,6 +987,14 @@ function RequestedMethodsSheetContent({
         </div>
       )}
 
+      {/* Tap hint */}
+      {hasAnyData && (
+        <p className="text-[10px] text-[#6A6A7A] flex items-center gap-1">
+          <Info className="w-3 h-3" />
+          Tap a method to view override planning details
+        </p>
+      )}
+
       {renderGroup(applied, 'Applied / Materialized')}
       {renderGroup(blocked, 'Blocked')}
       {renderGroup(deferred, 'Deferred')}
@@ -583,14 +1002,6 @@ function RequestedMethodsSheetContent({
       {renderGroup(notMaterialized, 'Not Materialized')}
       {renderGroup(notRequested, 'Not Requested (Profile)')}
       {renderGroup(unknown, 'Unknown Status')}
-
-      {/* Override notice */}
-      <div className="p-3 rounded-lg bg-[#1A1A22]/50 border border-[#2A2A35]/50">
-        <p className="text-[10px] text-[#6A6A7A] leading-relaxed">
-          Method override functionality is planned for a future update. 
-          The decisions shown here reflect the current final program truth.
-        </p>
-      </div>
     </div>
   )
 }

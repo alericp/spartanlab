@@ -632,6 +632,13 @@ interface RepsHoldInputProps {
 function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
   const label = type === 'reps' ? 'Actual Reps' : 'Actual Hold (sec)'
   
+  // [AB6.2] Max value limit to prevent unreasonable entries
+  const maxValue = 999
+  
+  // [AB6.2] Clamp helper - ensures values stay within 1-maxValue range
+  const clampInputValue = (next: number): number =>
+    Math.min(maxValue, Math.max(1, next))
+  
   // [P2F-3] Local draft state for direct keyboard input
   const [draftValue, setDraftValue] = useState(String(value || targetValue || 1))
   const [isFocused, setIsFocused] = useState(false)
@@ -649,9 +656,9 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
     const digits = raw.replace(/\D/g, '')
     setDraftValue(digits)
     
-    // Commit valid positive integers immediately
+    // Commit valid positive integers immediately with clamping
     if (digits.length > 0) {
-      const parsed = Math.max(1, Number.parseInt(digits, 10))
+      const parsed = clampInputValue(Number.parseInt(digits, 10))
       if (Number.isFinite(parsed)) {
         onChange(parsed)
       }
@@ -667,16 +674,10 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
       setDraftValue(String(fallback))
       onChange(fallback)
     } else {
-      const parsed = Math.max(1, Number.parseInt(digits, 10))
+      const parsed = clampInputValue(Number.parseInt(digits, 10))
       setDraftValue(String(parsed))
       onChange(parsed)
     }
-  }
-  
-  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    setIsFocused(true)
-    // Select all on focus for easy replacement
-    e.target.select()
   }
   
   // [LIVE-WORKOUT-CORRIDOR] Press-and-hold auto-repeat.
@@ -716,10 +717,21 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
     }
   }, [])
   
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true)
+    // Select all on focus for easy replacement
+    e.target.select()
+    // [AB6.2] Stop any ongoing press-hold repeat when user starts typing
+    stopRepeat()
+  }
+  
   const stepValue = useCallback((direction: 1 | -1) => {
     const current = valueRef.current
-    const next = direction === 1 ? current + 1 : Math.max(1, current - 1)
+    // [AB6.2] Use clamping helper for consistent bounds
+    const next = clampInputValue(direction === 1 ? current + 1 : current - 1)
     if (next !== current) {
+      // [AB6.2] Update local draft immediately for visual sync
+      setDraftValue(String(next))
       onChangeRef.current(next)
     }
   }, [])
@@ -791,6 +803,7 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
         >
           -
         </button>
+        {/* [AB6.2] Styled as visible input box - rounded border, focus ring */}
         <input
           type="text"
           inputMode="numeric"
@@ -800,7 +813,7 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
           onChange={handleInputChange}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
-          className="w-16 text-center text-2xl font-bold text-[#E6E9EF] tabular-nums bg-transparent border-none outline-none focus:ring-2 focus:ring-[#C1121F]/50 rounded"
+          className="w-20 h-12 rounded-xl bg-[#0F1115] border border-[#3A424D] text-center text-2xl font-bold text-[#E6E9EF] tabular-nums outline-none focus:border-[#C1121F] focus:ring-2 focus:ring-[#C1121F]/35 active:border-[#A4ACB8] transition-colors"
         />
         <button
           type="button"

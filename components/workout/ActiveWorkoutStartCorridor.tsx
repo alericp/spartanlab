@@ -630,7 +630,54 @@ interface RepsHoldInputProps {
 }
 
 function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
-  const label = type === 'reps' ? 'Actual Reps' : 'Hold (sec)'
+  const label = type === 'reps' ? 'Actual Reps' : 'Actual Hold (sec)'
+  
+  // [P2F-3] Local draft state for direct keyboard input
+  const [draftValue, setDraftValue] = useState(String(value || targetValue || 1))
+  const [isFocused, setIsFocused] = useState(false)
+  
+  // Sync draft when external value changes (but not while user is typing)
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(String(value || targetValue || 1))
+    }
+  }, [value, targetValue, isFocused])
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value
+    // Allow only digits
+    const digits = raw.replace(/\D/g, '')
+    setDraftValue(digits)
+    
+    // Commit valid positive integers immediately
+    if (digits.length > 0) {
+      const parsed = Math.max(1, Number.parseInt(digits, 10))
+      if (Number.isFinite(parsed)) {
+        onChange(parsed)
+      }
+    }
+  }
+  
+  const handleInputBlur = () => {
+    setIsFocused(false)
+    // On blur, restore to valid value if empty/invalid
+    const digits = draftValue.replace(/\D/g, '')
+    if (digits.length === 0) {
+      const fallback = value || targetValue || 1
+      setDraftValue(String(fallback))
+      onChange(fallback)
+    } else {
+      const parsed = Math.max(1, Number.parseInt(digits, 10))
+      setDraftValue(String(parsed))
+      onChange(parsed)
+    }
+  }
+  
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true)
+    // Select all on focus for easy replacement
+    e.target.select()
+  }
   
   // [LIVE-WORKOUT-CORRIDOR] Press-and-hold auto-repeat.
   //
@@ -744,9 +791,17 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
         >
           -
         </button>
-        <span className="w-16 text-center text-2xl font-bold text-[#E6E9EF] tabular-nums">
-          {value}
-        </span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          aria-label={type === 'reps' ? 'Actual reps' : 'Hold seconds'}
+          value={draftValue}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+          onBlur={handleInputBlur}
+          className="w-16 text-center text-2xl font-bold text-[#E6E9EF] tabular-nums bg-transparent border-none outline-none focus:ring-2 focus:ring-[#C1121F]/50 rounded"
+        />
         <button
           type="button"
           aria-label={`Increase ${label}`}
@@ -1423,8 +1478,69 @@ export function ActiveWorkoutStartCorridor({
     }
   }
   
-  // Indicator color based on mode
-  const indicatorColor = mode === 'block_round_rest' ? 'bg-amber-500' : mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
+  // [P2F-3] Method-specific color tones for grouped execution surfaces
+  const getGroupedMethodTone = (groupType: typeof blockGroupType) => {
+    switch (groupType) {
+      case 'superset':
+        return {
+          badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+          text: 'text-blue-300/85',
+          card: 'bg-blue-500/10 border-blue-500/30',
+          cardDone: 'bg-blue-500/15 border-blue-500/40',
+          icon: 'text-blue-400',
+          button: 'bg-blue-600 hover:bg-blue-700 text-white',
+          indicator: 'bg-blue-500',
+        }
+      case 'circuit':
+        return {
+          badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+          text: 'text-emerald-300/85',
+          card: 'bg-emerald-500/10 border-emerald-500/30',
+          cardDone: 'bg-emerald-500/15 border-emerald-500/40',
+          icon: 'text-emerald-400',
+          button: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+          indicator: 'bg-emerald-500',
+        }
+      case 'cluster':
+        return {
+          badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+          text: 'text-purple-300/85',
+          card: 'bg-purple-500/10 border-purple-500/30',
+          cardDone: 'bg-purple-500/15 border-purple-500/40',
+          icon: 'text-purple-400',
+          button: 'bg-purple-600 hover:bg-purple-700 text-white',
+          indicator: 'bg-purple-500',
+        }
+      case 'emom':
+        return {
+          badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+          text: 'text-cyan-300/85',
+          card: 'bg-cyan-500/10 border-cyan-500/30',
+          cardDone: 'bg-cyan-500/15 border-cyan-500/40',
+          icon: 'text-cyan-400',
+          button: 'bg-cyan-600 hover:bg-cyan-700 text-white',
+          indicator: 'bg-cyan-500',
+        }
+      default:
+        // Fallback to amber for unknown group types
+        return {
+          badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+          text: 'text-amber-300/85',
+          card: 'bg-amber-500/10 border-amber-500/30',
+          cardDone: 'bg-amber-500/15 border-amber-500/40',
+          icon: 'text-amber-400',
+          button: 'bg-amber-600 hover:bg-amber-700 text-white',
+          indicator: 'bg-amber-500',
+        }
+    }
+  }
+  
+  const methodTone = getGroupedMethodTone(blockGroupType)
+  
+  // Indicator color based on mode (now uses method tone for block_round_rest)
+  const indicatorColor = mode === 'block_round_rest' 
+    ? methodTone.indicator 
+    : mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
   
   return (
     /* [UI-DENSITY-R3] Switch min-h-screen -> min-h-[100dvh] so the live
@@ -2130,10 +2246,10 @@ export function ActiveWorkoutStartCorridor({
                 restType={restType}
               />
 
-              {/* Round Completed Message */}
-              <Card className={`p-4 ${restTimeRemaining === 0 ? 'bg-amber-500/15 border-amber-500/40' : 'bg-amber-500/10 border-amber-500/30'}`}>
+              {/* Round Completed Message - uses method-specific colors */}
+              <Card className={`p-4 ${restTimeRemaining === 0 ? methodTone.cardDone : methodTone.card}`}>
                 <div className="flex items-center gap-3">
-                  <Check className="w-8 h-8 text-amber-500" />
+                  <Check className={`w-8 h-8 ${methodTone.icon}`} />
                   <div>
                     <p className="text-lg font-bold text-[#E6E9EF]">
                       {restTimeRemaining === 0 ? 'Ready for Next Round' : 'Round Complete!'}
@@ -2148,7 +2264,7 @@ export function ActiveWorkoutStartCorridor({
               {/* Grouped Block Info */}
               <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
                 <div className="flex items-center gap-2 mb-3">
-<Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs uppercase px-2 py-0.5">
+<Badge variant="outline" className={`${methodTone.badge} text-xs uppercase px-2 py-0.5`}>
                   {blockGroupType === 'superset' ? 'Superset' :
                    blockGroupType === 'circuit' ? 'Circuit' :
                    blockGroupType === 'cluster' ? 'Cluster' :
@@ -2180,7 +2296,7 @@ export function ActiveWorkoutStartCorridor({
                 <p className="text-sm text-[#6B7280] mb-2">
                   {restTimeRemaining === 0 ? 'Rest Complete' : 'Round Rest'}
                 </p>
-                <p className={`text-4xl font-mono font-bold tabular-nums ${restTimeRemaining === 0 ? 'text-amber-400' : 'text-[#E6E9EF]'}`}>
+                <p className={`text-4xl font-mono font-bold tabular-nums ${restTimeRemaining === 0 ? methodTone.icon : 'text-[#E6E9EF]'}`}>
                   {Math.floor(restTimeRemaining / 60)}:{(restTimeRemaining % 60).toString().padStart(2, '0')}
                 </p>
               </div>
@@ -2190,7 +2306,7 @@ export function ActiveWorkoutStartCorridor({
                 onClick={handleRestSkip}
                 className={`w-full h-16 text-lg font-bold ${
                   restTimeRemaining === 0 
-                    ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                    ? methodTone.button 
                     : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
                 }`}
               >
@@ -2251,7 +2367,7 @@ export function ActiveWorkoutStartCorridor({
                       })
                       if (!badgeText) return null
                       return (
-                        <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] uppercase px-1.5 py-0">
+                        <Badge className={`${methodTone.badge} text-[10px] uppercase px-1.5 py-0`}>
                           {badgeText}
                         </Badge>
                       )

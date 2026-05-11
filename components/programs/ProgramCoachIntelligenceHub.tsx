@@ -60,6 +60,7 @@ import type { EvidenceCoachRecommendationBundle } from '@/lib/program/evidence-d
 import { WeeklyMethodDecisionAccordion } from './WeeklyMethodDecisionAccordion'
 import { CalibrationCheckpointCard } from './CalibrationCheckpointCard'
 import { EvidenceCoachRecommendationCard } from './EvidenceCoachRecommendationCard'
+import { ProgramTruthSummary } from './ProgramTruthSummary'
 import { cn } from '@/lib/utils'
 // [SPARTANLAB-P2] Override planner
 import {
@@ -297,7 +298,13 @@ interface ProgramCoachIntelligenceHubProps {
   coachRecommendationBundle?: EvidenceCoachRecommendationBundle | null
   /** Current week number */
   currentWeekNumber: number
-  }
+  /** [P2F-3] Truth explanation for Plan Logic sheet (from resolvedTruthExplanation) */
+  truthExplanation?: Parameters<typeof ProgramTruthSummary>[0]['truthExplanation'] | null
+  /** [P2F-3] Rule population ledger for Plan Logic sheet */
+  rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] | null
+  /** [P2F-3] Goal family balance audit for Plan Logic sheet */
+  goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] | null
+}
 
 // =============================================================================
 // HUB BUTTON COMPONENT
@@ -1222,6 +1229,9 @@ export function ProgramCoachIntelligenceHub({
   calibrationInput,
   coachRecommendationBundle,
   currentWeekNumber,
+  truthExplanation,
+  rulePopulationLedger,
+  goalFamilyBalanceAudit,
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -1229,6 +1239,7 @@ export function ProgramCoachIntelligenceHub({
   const [calibrationOpen, setCalibrationOpen] = useState(false)
   const [coachRecsOpen, setCoachRecsOpen] = useState(false)
   const [requestedMethodsOpen, setRequestedMethodsOpen] = useState(false)
+  const [planLogicOpen, setPlanLogicOpen] = useState(false)
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(
@@ -1272,7 +1283,8 @@ export function ProgramCoachIntelligenceHub({
     methodPlannerSummary = 'Included'
   }
 
-  const hasCoachRecs = coachRecommendationBundle?.primary !== null
+  // [P2F-3] Fixed: check that bundle exists AND primary is not null/undefined
+  const hasCoachRecs = Boolean(coachRecommendationBundle?.primary)
 
   return (
     <>
@@ -1330,10 +1342,19 @@ export function ProgramCoachIntelligenceHub({
             badgeVariant={methodPlannerBadgeVariant}
             onClick={() => setRequestedMethodsOpen(true)}
           />
+
+          {/* [P2F-3] Plan Logic — surfaces ProgramTruthSummary content */}
+          <HubButton
+            icon={<Info className="w-3.5 h-3.5 text-cyan-400" />}
+            label="Plan Logic"
+            summary="View"
+            onClick={() => setPlanLogicOpen(true)}
+            disabled={!truthExplanation}
+          />
         </div>
         {/* [P2B] Compact helper line */}
         <p className="text-[9px] text-[#5A5A6A] mt-2 px-1">
-          Review requested, deferred, or preview-only method overrides.
+          Review method decisions, plan logic, and coach recommendations.
         </p>
       </div>
 
@@ -1450,7 +1471,22 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
-            <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle ?? null} />
+            {coachRecommendationBundle?.primary ? (
+              <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
+            ) : (
+              /* [P2F-3] Clean empty state when no coach recommendations exist */
+              <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] p-6 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#2A2A35]">
+                  <Sparkles className="h-6 w-6 text-[#7A7A8A]" />
+                </div>
+                <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
+                  No coach recommendations yet
+                </h3>
+                <p className="text-sm text-[#7A7A8A] leading-relaxed">
+                  Coach recommendations appear after logged workouts, calibration results, or enough performance evidence.
+                </p>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
@@ -1469,6 +1505,44 @@ export function ProgramCoachIntelligenceHub({
           </SheetHeader>
           <div className="mt-4">
             <RequestedMethodsSheetContent program={program} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* [P2F-3] Plan Logic Sheet — surfaces ProgramTruthSummary content */}
+      <Sheet open={planLogicOpen} onOpenChange={setPlanLogicOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
+          <SheetHeader>
+            <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <Info className="w-4 h-4 text-cyan-400" />
+              Plan Logic
+            </SheetTitle>
+            <SheetDescription className="text-[#7A7A8A]">
+              How your program was constructed and why
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+            {truthExplanation ? (
+              <ProgramTruthSummary
+                truthExplanation={truthExplanation}
+                rulePopulationLedger={rulePopulationLedger ?? null}
+                goalFamilyBalanceAudit={goalFamilyBalanceAudit ?? null}
+              />
+            ) : (
+              /* Empty state when no truth explanation exists */
+              <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] p-6 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#2A2A35]">
+                  <Info className="h-6 w-6 text-[#7A7A8A]" />
+                </div>
+                <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
+                  Plan logic unavailable
+                </h3>
+                <p className="text-sm text-[#7A7A8A] leading-relaxed">
+                  This program was generated before plan logic tracking was added.
+                  Regenerate your program to see detailed construction logic.
+                </p>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>

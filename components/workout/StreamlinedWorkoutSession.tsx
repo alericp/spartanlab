@@ -7267,19 +7267,13 @@ failureStage: null,
   }, [safeStatus, sessionPhase, cooldownSkipped, returnedFromCooldown, safeWorkoutSessionContract.cooldown])
   
   // ==========================================================================
-  // [PPX-R7.8K] PHASE MISMATCH SAFETY — MAIN + COMPLETED + RETURNED FROM COOLDOWN
+  // [PPX-R7.8K-FINAL] COOLDOWN BACK DIRECT RETURN
   // ==========================================================================
-  // If user backed from cooldown and we're in main phase but status is completed,
-  // AND returnedFromCooldown is true, redirect to completedMain to avoid dead controls.
-  // This is a safety net - the cooldown Back handler now sets completedMain directly,
-  // but this catches any edge cases where we end up in main+completed+returnedFromCooldown.
+  // When user backs from cooldown, they go directly to live workout context.
+  // The combination (main + completed + returnedFromCooldown) is now INTENTIONAL
+  // and handled by isLiveExecutionPhase (line 9920) which renders the live surface
+  // with a "Continue to Cool-Down" banner. No redirect to completedMain needed.
   // ==========================================================================
-  useEffect(() => {
-    if (safeStatus === 'completed' && sessionPhase === 'main' && returnedFromCooldown) {
-      console.log('[PPX-R7.8K phase mismatch] main phase with completed status + returnedFromCooldown; redirecting to completedMain')
-      setSessionPhase('completedMain')
-    }
-  }, [safeStatus, sessionPhase, returnedFromCooldown])
   
   // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
@@ -9052,14 +9046,16 @@ if (shouldShowLocalFallback) {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        // [PPX-R7.8K] Back goes to previous cooldown item, or to completedMain review surface
+                        // [PPX-R7.8K-FINAL] Back goes to previous cooldown item, or directly to live workout context
                         if (cooldownIndex > 0) {
                           setCooldownIndex(prev => prev - 1)
                         } else {
-                          // At first cooldown item, return to completedMain review surface
-                          // This avoids deadlock where main phase renders dead controls on completed status
+                          // At first cooldown item, return directly to live workout exercise context
+                          // Set returnedFromCooldown=true so isLiveExecutionPhase includes this case (line 9920)
+                          // Set sessionPhase='main' to bypass the completedMain interstitial
+                          // The "Continue to Cool-Down" banner will appear at top for intentional cooldown re-entry
                           setReturnedFromCooldown(true)
-                          setSessionPhase('completedMain')
+                          setSessionPhase('main')
                         }
                       }}
                       className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"

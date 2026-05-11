@@ -10420,8 +10420,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   const groupedMemberIndex = liveExecutionContract?.groupedContext?.memberIndex ?? null
     
     // Handler for block round rest completion
+    // [P2F-3] Pass firstMemberExerciseIndex to fix superset round reset bug
     const handleBlockRoundRestComplete = () => {
-      machineDispatch({ type: 'COMPLETE_BLOCK_ROUND_REST' })
+      // Get the first member's exercise index from the current block
+      const firstMemberIdx = currentBlock?.block.memberExerciseIndexes?.[0] ?? safeExerciseIndex
+      machineDispatch({ type: 'COMPLETE_BLOCK_ROUND_REST', firstMemberExerciseIndex: firstMemberIdx })
     }
     
     // Derive next exercise for between-exercise transitions

@@ -845,8 +845,6 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 // ProgramDisplayWrapper, which is the single canonical render point for every
 // visible program surface, so a static import cannot widen the render graph.
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
-// [P2F-3] Coach Intelligence Hub for consolidated program intelligence surfaces
-import { ProgramCoachIntelligenceHub } from '@/components/programs/ProgramCoachIntelligenceHub'
 // [AB11-1] Calibration Checkpoint surface — additive, source-truth-only,
 // derives from the typed recommendation engine (no parallel cosmetic copy).
 // [AB11-2] The pure recommendation engine is now consumed INSIDE the card,
@@ -3111,39 +3109,7 @@ function ProgramDisplayWrapper({
         onRegenerate={onRegenerate}
       />
 
-      {/* [P2F-3] Coach Intelligence Hub — consolidated program intelligence surfaces */}
-      <ProgramCoachIntelligenceHub
-        program={program}
-        selectedSkillRepresentations={selectedSkillRepresentations}
-        intelligenceContract={intelligenceContract}
-        calibrationInput={{
-          primaryGoal: program.primaryGoal ?? null,
-          secondaryGoal: (program as unknown as { secondaryGoal?: string | null })?.secondaryGoal ?? null,
-          selectedSkills: program.selectedSkills ?? [],
-          equipmentAvailable: program.equipmentAvailable ?? [],
-        }}
-        coachRecommendationBundle={(() => {
-          // [P2F-3] Derive coach recommendations inline - same logic as the proof card section
-          const performanceAdaptation = program.performanceAdaptation
-          if (!performanceAdaptation?.programLevelSignals) return null
-          const workoutSummary = summarizeWorkoutEvidence(performanceAdaptation.programLevelSignals)
-          const calibrationPlan = buildEvidenceAwareCalibrationPlan({
-            workoutSummary,
-            inputAvailability: { workout: 'ok', benchmark: 'absent' },
-          })
-          const generationInfluence = program.evidenceCalibrationInfluence ?? null
-          const generationShapingProof = program.evidenceCalibrationShapingProof ?? null
-          return deriveEvidenceCoachRecommendations({
-            plan: calibrationPlan,
-            influence: generationInfluence,
-            shapingProof: generationShapingProof,
-          })
-        })()}
-        currentWeekNumber={program.currentWeekNumber ?? 1}
-        truthExplanation={resolvedTruthExplanation as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation'] | null}
-        rulePopulationLedger={(program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null}
-        goalFamilyBalanceAudit={(program as unknown as { goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] })?.goalFamilyBalanceAudit ?? null}
-      />
+
 
         {/* ==========================================================================
             [AB11-2] CALIBRATION CHECKPOINT (RESULT-ENTRY ENABLED)

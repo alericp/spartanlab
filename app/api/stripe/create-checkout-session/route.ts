@@ -1,4 +1,4 @@
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { PRICING } from "@/lib/billing/pricing";
@@ -21,6 +21,9 @@ import { PRICING } from "@/lib/billing/pricing";
  */
 export async function POST() {
   try {
+    // Get Stripe client (request-time safe)
+    const stripe = getStripe();
+    
     // Check if user is authenticated
     const { userId } = await auth();
     

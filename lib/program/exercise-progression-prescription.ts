@@ -156,13 +156,30 @@ const SKILL_FAMILY_PATTERNS = [
   /\bstraddle\b/i,
 ]
 
+// ----------------------------------------------------------------------------
+// [AB7.1] Dynamic rep movement guard — MUST be checked BEFORE hold patterns.
+// Mirrors AB5.1 guard in lib/workout/execution-unit-contract.ts.
+// If an exercise name contains obvious dynamic rep movement terms, it is NOT
+// a hold exercise even if it also contains skill terms like "planche" or "lean".
+// Example: "Planche Lean Push-Ups" → reps, not hold.
+// ----------------------------------------------------------------------------
+const DYNAMIC_REP_PATTERN = /(push[- ]?up|pull[- ]?up|chin[- ]?up|dip|row|press|raise|squat|curl|extension|lunge|step[- ]?up)/i
+
+function isDynamicRepMovement(name: string): boolean {
+  return DYNAMIC_REP_PATTERN.test(name)
+}
+
 function isHoldRow(name: string, reps?: string | number | null): boolean {
+  // [AB7.1] Check dynamic rep guard FIRST — these are never holds
+  if (isDynamicRepMovement(name)) return false
   if (typeof reps === 'string' && /\d\s*s\b|sec|second|hold/i.test(reps)) return true
   return HOLD_TIME_PATTERNS.some((re) => re.test(name)) ||
     SKILL_HOLD_PATTERNS.some((re) => re.test(name))
 }
 
 function isSkillHoldRow(name: string): boolean {
+  // [AB7.1] Check dynamic rep guard FIRST — these are never skill holds
+  if (isDynamicRepMovement(name)) return false
   return SKILL_HOLD_PATTERNS.some((re) => re.test(name))
 }
 

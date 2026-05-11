@@ -1342,6 +1342,8 @@ export function ActiveWorkoutStartCorridor({
   
   // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  // [AB6.1.2.2A] Local discard confirmation state - keeps modal open during confirm flow
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
   // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
   // moment so the Log Set CTA and secondary rail remain in the first
@@ -2444,20 +2446,21 @@ export function ActiveWorkoutStartCorridor({
                   </div>
                 )}
 
-                {/* [AB6.1.2.1C] Ramp-up advisory for first loaded exercise.
-                    Only shows on set 1 of exercise index 0 when advisory exists.
-                    This guidance was moved from the warm-up phase card where it
-                    was confusingly presented as general warm-up content. */}
-                {rampUpAdvisory && currentExerciseIndex === 0 && currentSetNumber === 1 && (
-                  <div className="mt-1.5 px-2 py-1.5 bg-blue-500/5 border border-blue-500/20 rounded text-xs">
-                    <div className="flex items-start gap-2">
-                      <span className="text-blue-400 text-[10px] font-medium uppercase shrink-0">Warm-Up Sets</span>
-                    </div>
-                    <p className="mt-0.5 text-blue-200/80 leading-tight">
-                      {rampUpAdvisory}
-                    </p>
-                  </div>
-                )}
+                {/* [AB6.1.2.2F] Generic ramp-up advisory banner REMOVED.
+                    The previous implementation showed a generic "Do 1-2 lighter warm-up sets"
+                    card which was misleading because:
+                    - It did not account for exercise type (skill vs weighted)
+                    - It did not calculate actual ramp-up set percentages
+                    - It appeared as fake prescription without real warm-up set logic
+                    
+                    FUTURE: Proper ramp-up set materialization should:
+                    - Calculate warm-up/ramp-up sets per exercise based on order, load, skill vs weighted
+                    - Use 25%/50% loading for heavy weighted work (Ian Barseagle inspired)
+                    - Use lower progressions for skills
+                    - Insert distinct warm-up sets with separate progress-bar styling
+                    - Allow actual performance logging for warm-up sets
+                    
+                    This is tracked as a future checklist item, not implemented here. */}
 
             {/* Target prescription */}
             {/* [BAND-TRUTH-R6] When the authoritative contract marks this
@@ -3164,7 +3167,9 @@ export function ActiveWorkoutStartCorridor({
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <Card className="bg-[#1A1F26] border-[#2B313A] max-w-sm w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-[#E6E9EF]">Exit Workout?</h3>
+              <h3 className="text-lg font-semibold text-[#E6E9EF]">
+                  {showDiscardConfirm ? 'Discard Workout?' : 'Exit Workout?'}
+                </h3>
               <button 
                 onClick={() => setShowExitConfirm(false)}
                 className="text-[#6B7280] hover:text-[#E6E9EF] transition-colors"
@@ -3212,62 +3217,104 @@ export function ActiveWorkoutStartCorridor({
               </div>
             </div>
             
-            {/* Outcome clarity rows - subtle, not a long explanation block */}
-            <div className="mb-4 space-y-1.5 text-xs text-[#6B7280]">
-              <p>
-                <span className="text-[#E6E9EF] font-medium">Save &amp; Exit</span>
-                {' · Keeps this workout resumable from your current progress'}
-              </p>
-              <p>
-                <span className="text-[#E6E9EF] font-medium">Discard Workout</span>
-                {' · Clears this workout session and removes resumable progress'}
-              </p>
-            </div>
-            
-            {/* [AB6.1.2C] Single clean button stack - matches warm-up/cooldown pattern */}
-            {/* Continue = neutral outline, Save & Exit = positive emerald, Discard = destructive red */}
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full h-auto py-3 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A] flex flex-col items-center"
-                onClick={() => setShowExitConfirm(false)}
-              >
-                <span className="font-medium">Continue Workout</span>
-              </Button>
-              
-              {/* [AB6.1.2C] Save & Exit is a POSITIVE action - use emerald styling, not red */}
-              <Button
-                className="w-full h-auto py-3 bg-emerald-600 hover:bg-emerald-700 text-white flex flex-col items-center"
-                onClick={() => {
-                  setShowExitConfirm(false)
-                  if (onSaveAndExit) {
-                    onSaveAndExit()
-                  } else {
-                    onExit()
-                  }
-                }}
-              >
-                <span className="font-medium">Save & Exit</span>
-                <span className="text-xs opacity-80 mt-0.5">Resume anytime</span>
-              </Button>
-              
-              {/* [AB6.1.2C] Discard is destructive - use red/ghost styling */}
-              <Button
-                variant="ghost"
-                className="w-full h-auto py-3 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex flex-col items-center"
-                onClick={() => {
-                  setShowExitConfirm(false)
-                  if (onDiscardWorkout) {
-                    onDiscardWorkout()
-                  } else {
-                    onExit()
-                  }
-                }}
-              >
-                <span className="font-medium">Discard Workout</span>
-                <span className="text-xs opacity-60 mt-0.5">Progress will be lost</span>
-              </Button>
-            </div>
+            {/* [AB6.1.2.2A] Conditional content: normal chooser vs discard confirmation */}
+            {!showDiscardConfirm ? (
+              <>
+                {/* Outcome clarity rows - subtle, not a long explanation block */}
+                <div className="mb-4 space-y-1.5 text-xs text-[#6B7280]">
+                  <p>
+                    <span className="text-[#E6E9EF] font-medium">Save &amp; Exit</span>
+                    {' · Keeps this workout resumable from your current progress'}
+                  </p>
+                  <p>
+                    <span className="text-[#E6E9EF] font-medium">Discard Workout</span>
+                    {' · Clears this workout session and removes resumable progress'}
+                  </p>
+                </div>
+                
+                {/* [AB6.1.2C] Single clean button stack - matches warm-up/cooldown pattern */}
+                {/* Continue = neutral outline, Save & Exit = positive emerald, Discard = destructive red */}
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full h-auto py-3 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A] flex flex-col items-center"
+                    onClick={() => {
+                      setShowExitConfirm(false)
+                      setShowDiscardConfirm(false)
+                    }}
+                  >
+                    <span className="font-medium">Continue Workout</span>
+                  </Button>
+                  
+                  {/* [AB6.1.2C] Save & Exit is a POSITIVE action - use emerald styling, not red */}
+                  <Button
+                    className="w-full h-auto py-3 bg-emerald-600 hover:bg-emerald-700 text-white flex flex-col items-center"
+                    onClick={() => {
+                      setShowExitConfirm(false)
+                      setShowDiscardConfirm(false)
+                      if (onSaveAndExit) {
+                        onSaveAndExit()
+                      } else {
+                        onExit()
+                      }
+                    }}
+                  >
+                    <span className="font-medium">Save & Exit</span>
+                    <span className="text-xs opacity-80 mt-0.5">Resume anytime</span>
+                  </Button>
+                  
+                  {/* [AB6.1.2.2A] Discard now switches to confirmation mode instead of closing modal */}
+                  <Button
+                    variant="ghost"
+                    className="w-full h-auto py-3 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex flex-col items-center"
+                    onClick={() => setShowDiscardConfirm(true)}
+                  >
+                    <span className="font-medium">Discard Workout</span>
+                    <span className="text-xs opacity-60 mt-0.5">Progress will be lost</span>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* [AB6.1.2.2A] Discard confirmation view - modal stays open */}
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-sm text-red-200">
+                    This will permanently clear this workout session. Your logged sets will be lost and you won&apos;t be able to resume.
+                  </p>
+                  <p className="mt-2 text-xs text-red-300/70">
+                    Your saved program will not be affected.
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full h-auto py-3 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A] flex flex-col items-center"
+                    onClick={() => setShowDiscardConfirm(false)}
+                  >
+                    <span className="font-medium">Keep Workout</span>
+                    <span className="text-xs opacity-60 mt-0.5">Go back to options</span>
+                  </Button>
+                  
+                  {/* [AB6.1.2.2A] Final destructive confirm - calls parent handler */}
+                  <Button
+                    className="w-full h-auto py-3 bg-red-600 hover:bg-red-700 text-white flex flex-col items-center"
+                    onClick={() => {
+                      setShowExitConfirm(false)
+                      setShowDiscardConfirm(false)
+                      if (onDiscardWorkout) {
+                        onDiscardWorkout()
+                      } else {
+                        onExit()
+                      }
+                    }}
+                  >
+                    <span className="font-medium">Confirm Discard</span>
+                    <span className="text-xs opacity-80 mt-0.5">Cannot be undone</span>
+                  </Button>
+                </div>
+              </>
+            )}
           </Card>
         </div>
       )}

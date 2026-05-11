@@ -7721,8 +7721,10 @@ if (shouldShowLocalFallback) {
                     <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
-                          {/* [AB6] Use canonical AB6 helper for member labels */}
-                          {exInfo.prefix || buildGroupedMemberLabel({ groupType: group.groupType, memberIndex: memberIdx })}
+                          {/* [AB6] Use canonical AB6 helper for member labels with type guard */}
+                          {exInfo.prefix || (group.groupType && ['superset', 'circuit', 'cluster', 'emom', 'density_block'].includes(group.groupType) 
+                            ? buildGroupedMemberLabel({ groupType: group.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block', memberIndex: memberIdx }) 
+                            : String.fromCharCode(65 + memberIdx))}
                         </span>
                         <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
                       </div>

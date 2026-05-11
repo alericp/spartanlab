@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ������������� completed/recent set ledger/history row
+    - Live Workout ��������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1531,7 +1531,48 @@ From recent conversation:
     - No `as any`, no suppressions: PASS
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-checkout-session)
-  - MOVE-ON DECISION: PPX-R7.8K-FINAL + AB5.1 complete. Cooldown Back returns directly to live workout context. Planche Lean Push-Ups now renders as reps. AB5 grouped execution parity verified. Safe to move to next checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: PPX-R7.8K-FINAL + AB5.1 complete. Moved to AB6 for live grouped runtime parity lock.
+- AB6: Live Grouped Execution Runtime Parity Lock — COMPLETE (2026-05-10)
+  - OBJECTIVE: Make live workout runtime faithfully reflect same grouped execution truth as Program/Today cards
+  - ROOT CAUSE FOUND:
+    - ActiveWorkoutStartCorridor.tsx lines 117, 135, 2177 used `String.fromCharCode(65 + idx)` for ALL grouped member labels
+    - This caused circuits to show "Circuit A, B, C" instead of "Circuit 1, 2, 3"
+    - The AB6 helper `buildGroupedMemberLabel` was imported but not used in all locations
+    - StreamlinedWorkoutSession.tsx preview shell also used stale A/B/C for all types
+  - FILES CHANGED:
+    - components/workout/ActiveWorkoutStartCorridor.tsx:
+      - Added `buildGroupedMemberLabel` to import
+      - Fixed `step` variable to use AB6 helper instead of inline ternary
+      - Fixed `next` variable to use AB6 helper
+      - Fixed rest card member list to use AB6 helper
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added `buildGroupedMemberLabel` import
+      - Fixed preview shell member labels at lines 7725 and 7805 to use AB6 helper with type guard
+  - AB6 TRUTH CHAIN PROOF:
+    - Program/Today grouped truth source: components/programs/lib/grouped-execution-prescription.ts
+    - Live execution contract: lib/workout/live-execution-contract.ts (blockGroupType field)
+    - StreamlinedWorkoutSession snapshot: Forwards blockGroupType, groupedMemberIndex, currentRound, targetRounds, blockMemberExercises, blockRoundRestSeconds, blockIntraRestSeconds
+    - LiveWorkoutExecutionSurface handoff: Passes all grouped fields to ActiveWorkoutStartCorridor
+    - ActiveWorkoutStartCorridor final render: Now uses AB6 helper for consistent labels
+  - USER-VISIBLE BEFORE/AFTER:
+    - Before: Circuit members labeled "A, B, C" in live runtime
+    - After: Circuit members labeled "1, 2, 3", Superset members labeled "A, B", Cluster labeled "1, 2, 3"
+  - LABEL RULES NOW ENFORCED:
+    - Superset: A, B, C (letters)
+    - Circuit: 1, 2, 3 (numbers)
+    - Cluster: 1, 2, 3 (numbers)
+    - EMOM: 1, 2, 3 (numbers)
+    - Density block: 1, 2, 3 (numbers)
+  - REGRESSION PROOF:
+    - PPX-R7.8K cooldown Back direct return: PASS (untouched)
+    - AB5.1 unit/taxonomy guard: PASS (untouched)
+    - Band/RPE/live workout gates: PASS (untouched)
+    - React #310 hook order: PASS (no hook changes)
+    - Save & Exit / Discard: PASS (untouched)
+    - Refresh/resume exact: PASS (untouched)
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
+  - MOVE-ON DECISION: AB6 complete. Live workout runtime now uses canonical AB6 helper for all grouped member labels. Circuits show 1/2/3, supersets show A/B/C. Safe to move to next checklist item after user screenshot confirmation.
 
 ---
 

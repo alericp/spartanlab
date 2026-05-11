@@ -108,20 +108,15 @@ function GroupedMethodScannerStrip({
       ? `${groupedMemberIndex + 1}/${memberTotal}`
       : '-'
 
-  // STEP - current member short token. For supersets we prefer the A/B
-  // letter already used by the corridor's grouped-identity badge; for
-  // circuit/cluster/emom the 1-based index is the canonical display.
+  // STEP - current member short token using AB6 canonical helper.
+  // Supersets use A/B/C, circuits/clusters/density use 1/2/3.
   const step =
-    groupedMemberIndex !== null && groupedMemberIndex >= 0
-      ? blockGroupType === 'superset'
-        ? String.fromCharCode(65 + groupedMemberIndex)
-        : String(groupedMemberIndex + 1)
+    groupedMemberIndex !== null && groupedMemberIndex >= 0 && blockGroupType
+      ? buildGroupedMemberLabel({ groupType: blockGroupType, memberIndex: groupedMemberIndex })
       : '-'
 
-  // NEXT - next grouped member's short label (A/B or 1/2). If the current
-  // member is the last one in the block, next wraps to the first member
-  // for grouped types that cycle (superset/circuit), matching the round-
-  // based iteration the session engine uses. For non-grouped, "-".
+  // NEXT - next grouped member's short label using AB6 canonical helper.
+  // Wraps to first member for grouped types that cycle.
   let next = '-'
   if (
     groupedMemberIndex !== null &&
@@ -130,10 +125,7 @@ function GroupedMethodScannerStrip({
     blockGroupType
   ) {
     const nextIdx = (groupedMemberIndex + 1) % memberTotal
-    next =
-      blockGroupType === 'superset'
-        ? String.fromCharCode(65 + nextIdx)
-        : String(nextIdx + 1)
+    next = buildGroupedMemberLabel({ groupType: blockGroupType, memberIndex: nextIdx })
   }
 
   // PHASE - derived from the corridor's own branch selector plus restType.
@@ -228,6 +220,7 @@ import {
 // member label so circuit/cluster/density don't render with superset's
 // A/B/C idiom on the active screen.
 import {
+  buildGroupedMemberLabel,
   buildGroupedMemberBadgeText,
   buildGroupedRoundBadgeText,
   buildGroupedFlowHintText,
@@ -2173,8 +2166,8 @@ export function ActiveWorkoutStartCorridor({
                   {blockMemberExercises.map((ex, idx) => (
                     <div key={ex.id} className="flex items-center gap-3 py-1">
                       <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#A4ACB8] text-xs flex items-center justify-center font-medium">
-                        {/* [GROUPED-IDENTITY-FIX] Use A, B, C for superset members to match session card display */}
-                        {blockGroupType === 'superset' ? String.fromCharCode(65 + idx) : idx + 1}
+                        {/* [AB6] Use canonical AB6 helper for member labels */}
+                        {buildGroupedMemberLabel({ groupType: blockGroupType, memberIndex: idx })}
                       </span>
                       <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                     </div>

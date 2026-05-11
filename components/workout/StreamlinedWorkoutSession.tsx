@@ -96,6 +96,8 @@ import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/p
 import { generateWarmUpCoaching, generateCoolDownCoaching } from '@/lib/warmup-cooldown-coaching-engine'
 // [PPX-R7.8A] Live set coaching intelligence
 import { buildLiveSetCoaching } from '@/lib/workout/live-set-coaching-engine'
+// [AB6] Live grouped runtime hints for consistent member labels
+import { buildGroupedMemberLabel } from '@/lib/workout/live-grouped-runtime-hints'
 import {
   collectPostWorkoutSubstitutionEvidence,
   buildSavedProgramSubstitutionProposals,
@@ -7719,7 +7721,10 @@ if (shouldShowLocalFallback) {
                     <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
-                          {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
+                          {/* [AB6] Use canonical AB6 helper for member labels with type guard */}
+                          {exInfo.prefix || (group.groupType && ['superset', 'circuit', 'cluster', 'emom', 'density_block'].includes(group.groupType) 
+                            ? buildGroupedMemberLabel({ groupType: group.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block', memberIndex: memberIdx }) 
+                            : String.fromCharCode(65 + memberIdx))}
                         </span>
                         <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
                       </div>
@@ -7797,7 +7802,8 @@ if (shouldShowLocalFallback) {
                   <div key={ex.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
-                        {String.fromCharCode(65 + memberIdx)}
+                        {/* [AB6] Use canonical AB6 helper for member labels */}
+                        {block.groupType ? buildGroupedMemberLabel({ groupType: block.groupType, memberIndex: memberIdx }) : String(memberIdx + 1)}
                       </span>
                       <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                     </div>

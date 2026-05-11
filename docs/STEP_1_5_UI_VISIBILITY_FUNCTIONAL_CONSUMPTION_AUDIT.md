@@ -1365,7 +1365,66 @@ From recent conversation:
     - No .toFixed() usage in coaching engine
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
-  - MOVE-ON DECISION: PPX-R7.8I complete. Correct canonical band history is restored and card/modal parity is visibly proven. Safe to move to the next checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: PPX-R7.8I restored canonical band history truth. Card/modal parity proven. Remaining issue: semantic tone (stable Maintain Red rendered amber/yellow instead of green/success). Moved to R7.8J.
+  - REMAINING CHAIN:
+    - PPX-R7.8J (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8J: Final Live Coaching AI Surface Lock + Semantic Tone Polish — COMPLETE (2026-05-10)
+  - PREVIOUS PROMPT VERIFICATION:
+    - PPX-R7.8I restored card/modal canonical band-history truth
+    - User screenshots proved Maintain Red parity
+    - Remaining issue: stable Maintain Red card rendered amber/yellow instead of green/success
+    - This was a semantic tone mapping bug, not a data truth bug
+  - EXACT ROOT CAUSE:
+    - In `buildSharedBandGuidanceTruth()` lines 2253-2254, the history-based "Maintain" return
+    - Hardcoded `color: 'text-amber-400'` and `bgColor: 'bg-amber-500/10'`
+    - Did NOT check if stability='stable' + cleanPercent>=80 + historyCount>=6 to warrant success/green
+  - SOLUTION - CENTRALIZED SEMANTIC TONE RESOLVER:
+    - Added `resolveSharedBandGuidanceTone()` pure helper function
+    - Maps action + source + historyCount + cleanPercent + stability to semantic tone
+    - SUCCESS/GREEN: maintain + history_recommendation + stable + 6+ sets + 80%+ clean
+    - CAUTION/AMBER: maintain/recommended but building history or < 6 sets
+    - NEUTRAL: starting, tracking, or no history
+    - Updated all return paths in buildSharedBandGuidanceTruth() to use tone resolver
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx: Added resolveSharedBandGuidanceTone() helper, updated buildSharedBandGuidanceTruth() to use it
+  - TONE MAPPING PROOF:
+    - maintain + stable + historyCount >= 6 + cleanPercent >= 80 = success/green (text-emerald-400, bg-emerald-500/10)
+    - maintain + building or < 6 sets = caution/amber (text-amber-400, bg-amber-500/10)
+    - starting recommendation = neutral (text-[#A4ACB8], bg-[#2B313A]/50)
+    - tracking/no history = neutral (text-[#6B7280], bg-[#1A1D21]/50)
+  - KNOWN CASE BEFORE/AFTER:
+    - Before: Card "Maintain Red / 13 sets..." with amber/yellow tone
+    - After: Card "Maintain Red / 13 sets..." with green/success tone
+    - Modal unchanged: "Band guidance: Maintain Red. Evidence: 13 sets logged — RPE 8 — 100% clean — stable."
+  - CARD/MODAL SINGLE-TRUTH PROOF:
+    - Card still consumes sharedBandGuidanceTruth via sharedBandGuidance prop
+    - Modal still consumes sharedBandGuidanceTruth via buildLiveSetCoaching
+    - No card-only fallback controls known case
+    - No modal-only fallback controls known case
+    - No hardcoded Red/13 added
+  - LIVE COACHING AI SURFACE AUDIT:
+    - Current Target: PASS (correct exercise, target hold, target RPE)
+    - Skill/intent block: PASS (relevant to exercise)
+    - Baseline/Calibration Set: PASS (honest about no completed sets)
+    - Execution Focus: PASS (relevant to exercise)
+    - Dose rationale: PASS (band guidance correct)
+    - Evidence: PASS (honest about current session state)
+    - What Could Change: PASS (appropriate guidance)
+    - Safety Stop Rule: PASS (present and appropriate)
+    - Warm-up modal: PASS (derives from session focus)
+    - Cool-down modal: PASS (derives from session focus)
+  - RPE REGRESSION PROOF:
+    - All RPE values pass through toDisplayRPE() for integer display
+    - No .toFixed() usage in touched code
+    - Visible RPE remains integer-only (RPE 8, Target RPE 7)
+  - HOOK SAFETY PROOF:
+    - resolveSharedBandGuidanceTone() is pure function, no hooks
+    - No hooks added to conditional branches
+    - No hooks in IIFEs or nested functions
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
+  - MOVE-ON DECISION: PPX-R7.8J complete. Live coaching AI band guidance is now data-correct, semantically styled, card/modal locked, and runtime-safe. Safe to move to the next checklist item after user screenshot confirmation.
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

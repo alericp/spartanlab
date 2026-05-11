@@ -1424,9 +1424,73 @@ From recent conversation:
     - No hooks in IIFEs or nested functions
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
-  - MOVE-ON DECISION: PPX-R7.8J complete. Live coaching AI band guidance is now data-correct, semantically styled, card/modal locked, and runtime-safe. Safe to move to the next checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: PPX-R7.8J complete. Band guidance styling fixed. Moved to R7.8K for phase control lock.
   - REMAINING CHAIN:
+    - PPX-R7.8K (COMPLETED BELOW)
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8K: Live Workout Phase-Control Lock — COMPLETE (2026-05-10)
+  - PREVIOUS PROMPT VERIFICATION:
+    - PPX-R7.8J band guidance parity/styling intact
+    - Maintain Red card shows green/success
+    - Modal matches card
+  - ROOT CAUSES FIXED:
+    1. Refresh reset to warmup: Hydration at line 4236 rejected ALL completed sessions (`saved.status !== 'completed'`)
+       even when liveFlowPhase was valid completedMain/cooldown/done. Fixed by allowing restore when
+       `isValidCompletedPhaseRestore = completed + phase in [completedMain, cooldown, done]`.
+    2. Cooldown back deadlock: Line 9000 set `setSessionPhase('main')` when backing from cooldown item 0,
+       but machine status remained `completed`. This caused dead controls. Fixed to `setSessionPhase('completedMain')`.
+    3. Added phase-mismatch safety effect: If main + completed + returnedFromCooldown, redirect to completedMain.
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added Save icon import
+      - Fixed hydration to accept completed sessions with valid liveFlowPhase
+      - Changed cooldown back to use completedMain instead of main
+      - Added Save/Discard buttons to warmup surface
+      - Added Save/Discard buttons to cooldown surface
+      - Added Save/Discard buttons to completedMain surface
+      - Added Discard button to done surface
+      - Added phase-mismatch safety effect
+  - PHASE OWNERSHIP PROOF:
+    - warmup: setSessionPhase('warmup') on start, handleSkipWarmup → main, now has Save/Discard
+    - main: active logging phase, Log Set/RPE/Band/Skip/Back/End handlers live
+    - completedMain: transition surface after main complete, now has Continue/SkipCooldown/Save/Discard
+    - cooldown: setSessionPhase('cooldown') on enter, Back→completedMain (not main), now has Save/Discard
+    - done: final summary, Save&Return/ViewProgram/Discard available
+    - autosave: saves liveFlowPhase with phase/warmupIndex/cooldownIndex
+    - hydration: now restores completed+completedMain/cooldown/done phases
+    - discard: clearSessionStorage() + discardIntentRef prevents autosave resurrection
+  - SAVE/DISCARD/EXIT CONTROLS PROOF:
+    - warmup: PASS (Save & Exit, Discard added)
+    - active main: PASS (existing handlers)
+    - completedMain: PASS (Save & Exit, Discard added)
+    - cooldown: PASS (Save & Exit, Discard added)
+    - done/final: PASS (Save & Return to Dashboard, Discard added)
+  - REFRESH RESUME PROOF:
+    - warmup exact item restore: PASS (warmupIndex persisted/restored)
+    - active exercise/set restore: PASS (existing hydration)
+    - cooldown exact item restore: PASS (cooldownIndex persisted, now phase restore works)
+    - done/summary restore: PASS (now allowed via isValidCompletedPhaseRestore)
+    - no false reset to warmup: PASS (completed+valid phase accepted)
+  - COOLDOWN BACK DEADLOCK PROOF:
+    - Back from cooldown now sets completedMain (not main)
+    - Normal active controls hidden when status=completed + phase≠main
+    - Safety effect catches any edge case main+completed+returnedFromCooldown→completedMain
+    - Log Set/RPE/Skip/Back/End remain functional in normal main workout (status≠completed)
+  - PLANCHE LEAN PUSH-UP UNIT DIAGNOSIS:
+    - Deferred to AB7 follow-up
+    - Likely taxonomy issue: exercise named "Push-Ups" but prescribed as hold/seconds
+    - Root cause is either wrong name or wrong prescription unit at generation time
+    - Not fixed in this prompt to avoid scope creep
+  - PPX-R7.8J REGRESSION PROOF:
+    - Maintain Red card still green (semantic tone intact)
+    - Modal still shows correct evidence
+    - No Tracking fallback for known stable case
+    - No hardcoded Red/13
+    - No RPE decimal regression
+    - No React #310 (no hook-order changes)
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-checkout-session)
+  - MOVE-ON DECISION: PPX-R7.8K complete. Live workout phase controls, exact refresh resume, and cooldown-back action integrity are locked. Safe to move to AB7 exercise unit/taxonomy truth or the next official checklist item after user screenshot confirmation.
 
 ---
 

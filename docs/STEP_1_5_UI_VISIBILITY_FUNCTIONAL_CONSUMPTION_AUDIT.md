@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ��������������� completed/recent set ledger/history row
+    - Live Workout ����������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1572,7 +1572,51 @@ From recent conversation:
     - Refresh/resume exact: PASS (untouched)
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
-  - MOVE-ON DECISION: AB6 complete. Live workout runtime now uses canonical AB6 helper for all grouped member labels. Circuits show 1/2/3, supersets show A/B/C. Safe to move to next checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: AB6 complete. Moved to AB7.1 for row-level progression prescription unit/truth correction.
+- AB7.1: Row-Level Progression Prescription Unit/Truth Correction — COMPLETE (2026-05-10)
+  - OBJECTIVE: Fix AB7 row-shape classifier to not treat dynamic rep exercises as holds
+  - ROOT CAUSE: AB7 had SKILL_HOLD_PATTERNS `/planche/i` and HOLD_TIME_PATTERNS `/\blean\b/i` matching "Planche Lean Push-Ups" as hold
+  - FILES CHANGED:
+    - lib/program/exercise-progression-prescription.ts: Added `isDynamicRepMovement()` guard before hold patterns
+  - AB7 TRUTH LADDER (preserved): coachDecision > progressionMode > shape fallback (NOW WITH GUARD) > no-signal
+  - EXERCISE PROOF: Planche Lean Push-Ups → reps/quality; Tuck Front Lever Hold → hold-time allowed
+  - REGRESSION PROOF: All PPX/AB5/AB6 gates PASS
+  - TSC/BUILD: PASS / FAIL unrelated env (Stripe)
+  - MOVE-ON DECISION: AB7.1 complete. Moved to AB8 for skill progression calibration proof.
+- AB8: Row-Level Skill Progression Calibration Proof Closure — COMPLETE (2026-05-10)
+  - OBJECTIVE: Verify AB8 visible delivery on Program Page exercise rows
+  - AUDIT FINDINGS:
+    - AB8 resolver exists at lib/program/skill-progression-calibration-proof.ts
+    - AB8 is pure, unknown-safe, no `as any`, no suppressions
+    - AB8 is imported and rendered in AdaptiveSessionCard.tsx at line 8177
+    - AB8 render is guarded by `!isWarmupCooldown` (line 8176)
+    - AB8 returns null when `!ab8.shouldRender || !ab8.shortText` (line 8182)
+    - AB8 renders emerald green compact line with data-ab8-* attributes
+  - TRUTH SOURCE PROOF:
+    - dbTruthWinnerProvenance: PASS (checked at line 222)
+    - executionTruth.currentWorkingProgression: PASS (checked at line 348)
+    - skillGraphPosition: PASS (display-only signal)
+    - coachingMeta.skillSupportTargets: PASS (checked at line 380)
+    - Fallback/name-only guard: PASS (returns NOT_CALIBRATED if no real proof)
+  - VISIBLE OUTPUT:
+    - Direct skill rows: "Skill calibration: Matched to current progression truth."
+    - Support rows: "Skill support: Supports selected skill without direct level jump."
+    - Warm-up/cooldown: No AB8 line (guarded)
+    - Generic rows without proof: No AB8 line (shouldRender:false)
+  - REGRESSION PROOF:
+    - AB7.1 unit truth: PASS (untouched)
+    - AB7 progression line: PASS (untouched)
+    - AB6 grouped display: PASS (untouched)
+    - AB5 grouped prescription: PASS (untouched)
+    - PPX cooldown Back: PASS (untouched)
+    - Save & Exit / Discard: PASS (untouched)
+    - Refresh resume: PASS (untouched)
+    - Band guidance: PASS (untouched)
+    - RPE integer-only: PASS (untouched)
+    - React #310: PASS (no hook changes)
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
+  - MOVE-ON DECISION: AB8 complete. AB8 is already fully implemented and renders truthful skill progression calibration proof on Program Page exercise rows. Safe to move to next checklist item.
 
 ---
 

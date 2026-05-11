@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ������������������� completed/recent set ledger/history row
+    - Live Workout ��������������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1794,6 +1794,33 @@ From recent conversation:
     - Explanation now visible in Skill Map sheet when skills are deferred/underrepresented
   - TSC STATUS: PASS (exit code 0, no errors)
   - NEXT STEP: Safe apply corridor for override previews OR method/exercise taxonomy phase
+- SPARTANLAB-P2E: Force Program Page Top Surface Consolidation — COMPLETE (2026-05-11)
+  - OBJECTIVE: Remove duplicate inline surfaces that survived P2D, force Day 1 to appear sooner
+  - ROOT CAUSE: P2D improved hub but left inline "Weekly Structure" header, "Design Tradeoffs" panel, and large "Why This Plan Fits You" button still rendering before Day cards. These duplicate hub content.
+  - FILES CHANGED:
+    - components/programs/AdaptiveProgramDisplay.tsx: Removed ~86 lines of duplicate content
+  - EXACT INLINE SURFACES REMOVED:
+    - "Weekly Structure" header block (15 lines) → kept only essential session cards wrapper
+    - "What these terms mean" disclosure (26 lines) → removed, available in hub sheets
+    - "Design Tradeoffs" panel (19 lines) → removed, available in hub Plan Logic / Skill Map
+    - "Why This Plan Fits You" button (25 lines) → removed, users access via header card "View decisions" link or hub sheets
+  - WHERE CONTENT NOW LIVES:
+    - Skill representation → Hub Skill Map sheet
+    - Method decisions → Hub Method Decisions sheet
+    - Plan logic/tradeoffs → Hub via Method Decisions + Skill Map content
+    - Calibration → Hub Calibration sheet
+    - Coach recommendations → Hub Coach Recs sheet
+    - Method overrides → Hub Method Planner sheet
+    - "Why This Plan" detail view → still accessible via small "?" and "View decisions" buttons in header card (lines 1093 + 1146)
+  - WHAT CHANGED VISIBLY:
+    - Day 1 now appears immediately after Coach Intelligence Hub
+    - No "Weekly Structure" header block before Day 1
+    - No "Design Tradeoffs" panel before Day 1
+    - No large "Why This Plan Fits You" button before Day 1
+    - Program Page top is significantly shorter
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - GUARDRAILS: No schema/package/generator/live-workout/saved-program changes
+  - NEXT STEP: If visually verified as PASS, proceed to safe apply corridor or method/exercise taxonomy phase
 
 ---
 

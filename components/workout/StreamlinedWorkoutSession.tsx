@@ -10435,12 +10435,18 @@ if (shouldShowLocalFallback) {
     const restType = isBlockRoundRest ? 'block_round' as const :
                      isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
     
-    // Block round rest props (for grouped methods)
-    const currentBlock = getBlockForExercise(machineSessionContract?.executionPlan, machineState.currentExerciseIndex)
-    const blockLabel = currentBlock?.block.blockLabel || 'Block'
-    const blockGroupType = currentBlock?.block.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | undefined
-    const currentRound = machineState.currentRound || 1
-    const targetRounds = currentBlock?.block.targetRounds || 3
+  // Block round rest props (for grouped methods)
+  const currentBlock = getBlockForExercise(machineSessionContract?.executionPlan, machineState.currentExerciseIndex)
+  const blockLabel = currentBlock?.block.blockLabel || 'Block'
+  // [AB7] Type now includes density_block
+  const blockGroupType = currentBlock?.block.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block' | undefined
+  const currentRound = machineState.currentRound || 1
+  const targetRounds = currentBlock?.block.targetRounds || 3
+  // [AB7] Density block timer - derive time cap from execution block
+  const densityTimeCapSeconds = currentBlock?.block.timeCapSeconds
+  // [AB7] Density block start time - use workout start time as proxy for now
+  // A more sophisticated implementation would track when user first entered the density block
+  const densityBlockStartedAt = blockGroupType === 'density_block' ? machineState.startTime : null
     // [GROUPED-IDENTITY-FIX] Derive member exercises from authoritative ExecutionBlock data
     // Machine's ExecutionBlock stores full memberExercises array with MachineExercise objects
 const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
@@ -10903,6 +10909,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // render an honest grouped flow hint matching the program card.
           blockIntraRestSeconds,
           groupedMemberIndex,
+          // [AB7] Density block timer props
+          densityTimeCapSeconds,
+          densityBlockStartedAt,
           // Coaching
           coachingExpression: buildCoachingExpression(machineState.currentActionPlan),
           // Build chips (unchanged contract)
@@ -11020,10 +11029,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       liveGroupedExecutionResult.parityVerdict === 'LIVE_GUIDANCE_PRESERVED_ONLY' ||
       liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_BLOCKED' ||
       liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
+    // [AB7] Updated reason codes - DENSITY_RUNTIME_NOT_SUPPORTED_YET replaced
+    // by DENSITY_TIME_CAP_MISSING which only appears when density truly can't run
     const guidanceBannerReason =
       liveGroupedExecutionResult.reasons.find(
         (r) =>
           r === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET' ||
+          r === 'DENSITY_TIME_CAP_MISSING' || // [AB7] New reason for density without time cap
           r === 'GROUP_MEMBER_REF_NOT_FOUND' ||
           r === 'UNSUPPORTED_METHOD_TYPE' ||
           r === 'STYLED_GROUP_FLATTENED_SEQUENCE_MISMATCH' ||

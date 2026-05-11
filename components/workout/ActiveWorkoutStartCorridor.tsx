@@ -50,12 +50,14 @@ const SHOW_GROUP_SCANNER = false // [P2F-2] Disabled for production - set to tru
 
 // Pure read-only diagnostic strip. No state, no effects, no handlers.
 type GroupScannerOwner = 'ACTIVE_SURFACE' | 'REST_SURFACE' | 'GROUP_TRANSITION'
+// [AB7] Grouped method type union now includes density_block
+type GroupedMethodType = 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block'
 interface GroupScannerProps {
   owner: GroupScannerOwner
   // All fields below are pass-through of already-resolved corridor props.
   exerciseName: string
   blockLabel?: string
-  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom'
+  blockGroupType?: GroupedMethodType
   groupedMemberIndex: number | null
   blockMemberExercises: Array<{ id: string; name: string }>
   currentRound: number
@@ -422,9 +424,9 @@ export interface ActiveWorkoutCorridorProps {
   nextExerciseCategoryLabel?: string | null
   nextExerciseSetupCue?: string | null
   
-  // Block round rest props (for grouped methods - superset/circuit)
+  // Block round rest props (for grouped methods - superset/circuit/density)
   blockLabel?: string
-  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom'
+  blockGroupType?: GroupedMethodType
   currentRound?: number
   targetRounds?: number
   blockMemberExercises?: Array<{ id: string; name: string }>
@@ -437,6 +439,10 @@ export interface ActiveWorkoutCorridorProps {
   // absent or zero.
   blockIntraRestSeconds?: number
   onBlockRoundRestComplete?: () => void
+  
+  // [AB7] Density block timer props
+  densityTimeCapSeconds?: number
+  densityBlockStartedAt?: number | null
   // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
   groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
   
@@ -1178,6 +1184,9 @@ export function ActiveWorkoutStartCorridor({
   blockIntraRestSeconds = 0,
   onBlockRoundRestComplete,
   groupedMemberIndex = null,
+  // [AB7] Density block timer props
+  densityTimeCapSeconds,
+  densityBlockStartedAt,
   // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression
   coachingExpression,
   // [ACTIVE-SET-SAVE-PARITY] Authoritative primary-input kind from parent
@@ -2500,6 +2509,47 @@ export function ActiveWorkoutStartCorridor({
                 >
                   {hint}
                 </p>
+              )
+            })()}
+
+            {/* [AB7] Density Block Timer */}
+            {blockGroupType === 'density_block' && densityTimeCapSeconds && densityTimeCapSeconds > 0 && (() => {
+              const now = Date.now()
+              const startedAt = densityBlockStartedAt || now
+              const elapsedSeconds = Math.floor((now - startedAt) / 1000)
+              const remainingSeconds = Math.max(0, densityTimeCapSeconds - elapsedSeconds)
+              const isExpired = remainingSeconds === 0
+              const formatTime = (secs: number) => {
+                const mins = Math.floor(secs / 60)
+                const s = secs % 60
+                return `${mins}:${s.toString().padStart(2, '0')}`
+              }
+              return (
+                <div className={`mt-2 px-3 py-2 rounded-lg border ${
+                  isExpired 
+                    ? 'bg-amber-900/20 border-amber-500/30' 
+                    : 'bg-[#1A1F26] border-[#2B313A]'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${isExpired ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                      <span className={`text-xs font-medium ${isExpired ? 'text-amber-300' : 'text-[#A4ACB8]'}`}>
+                        Density Block
+                      </span>
+                    </div>
+                    <span className={`text-sm font-mono font-semibold tabular-nums ${
+                      isExpired ? 'text-amber-300' : remainingSeconds < 60 ? 'text-amber-400' : 'text-emerald-400'
+                    }`}>
+                      {isExpired ? 'Cap reached' : `${formatTime(remainingSeconds)} left`}
+                    </span>
+                  </div>
+                  <p className={`mt-1 text-[10px] ${isExpired ? 'text-amber-300/80' : 'text-[#6B7280]'}`}>
+                    {isExpired 
+                      ? 'Finish safely, then move on or stop the block.'
+                      : `${formatTime(densityTimeCapSeconds)} cap · Rotate quality reps until time ends`
+                    }
+                  </p>
+                </div>
               )
             })()}
 

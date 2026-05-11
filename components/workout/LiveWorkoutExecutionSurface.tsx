@@ -193,7 +193,8 @@ export interface LiveWorkoutSnapshot {
 
   // Block round rest
   blockLabel?: string
-  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom'
+  // [AB7] Updated type to include density_block
+  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block'
   currentRound?: number
   targetRounds?: number
   blockMemberExercises?: Array<{ id: string; name: string }>
@@ -204,6 +205,9 @@ export interface LiveWorkoutSnapshot {
   // back to "minimal rest" copy when absent.
   blockIntraRestSeconds?: number
   groupedMemberIndex?: number | null
+  // [AB7] Density block timer props
+  densityTimeCapSeconds?: number
+  densityBlockStartedAt?: number | null
 
   // Coaching
   coachingExpression?: CoachingExpression | null
@@ -707,6 +711,9 @@ export function LiveWorkoutExecutionSurface({
         blockIntraRestSeconds={snapshot.blockIntraRestSeconds}
         onBlockRoundRestComplete={handlers.onBlockRoundRestComplete}
         groupedMemberIndex={snapshot.groupedMemberIndex}
+        // [AB7] Density block timer props
+        densityTimeCapSeconds={snapshot.densityTimeCapSeconds}
+        densityBlockStartedAt={snapshot.densityBlockStartedAt}
         // Coaching
         coachingExpression={snapshot.coachingExpression}
         // Handlers

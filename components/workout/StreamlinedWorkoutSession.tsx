@@ -2107,6 +2107,121 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
   )
 }
 
+// [P2F] CooldownTimer - play/pause/resume timer for timed cooldown holds
+function CooldownTimer({ durationSeconds }: { durationSeconds: number }) {
+  const [remaining, setRemaining] = useState(durationSeconds)
+  const [isRunning, setIsRunning] = useState(false)
+  const [isComplete, setIsComplete] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
+  // Reset timer when duration changes (new cooldown item)
+  useEffect(() => {
+    setRemaining(durationSeconds)
+    setIsRunning(false)
+    setIsComplete(false)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [durationSeconds])
+  
+  // Timer tick effect
+  useEffect(() => {
+    if (isRunning && remaining > 0) {
+      intervalRef.current = setInterval(() => {
+        setRemaining(prev => {
+          if (prev <= 1) {
+            setIsRunning(false)
+            setIsComplete(true)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [isRunning, remaining])
+  
+  const handlePlayPause = () => {
+    if (isComplete) {
+      // Reset and start again
+      setRemaining(durationSeconds)
+      setIsComplete(false)
+      setIsRunning(true)
+    } else {
+      setIsRunning(!isRunning)
+    }
+  }
+  
+  const handleReset = () => {
+    setRemaining(durationSeconds)
+    setIsRunning(false)
+    setIsComplete(false)
+  }
+  
+  // Format time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+  
+  return (
+    <div className="mt-3 p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-sky-400">Hold Timer</span>
+        {isComplete && (
+          <span className="text-xs font-medium text-emerald-400">Complete!</span>
+        )}
+      </div>
+      <div className="flex items-center justify-center gap-4">
+        <button
+          onClick={handleReset}
+          className="w-10 h-10 rounded-full bg-[#2B313A] text-[#A4ACB8] hover:bg-[#3B414A] flex items-center justify-center transition-colors"
+          aria-label="Reset timer"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+        <div className="text-center">
+          <span className={`text-4xl font-bold tabular-nums ${isComplete ? 'text-emerald-400' : 'text-[#E6E9EF]'}`}>
+            {formatTime(remaining)}
+          </span>
+          <p className="text-[10px] text-[#6B7280] mt-0.5">
+            {isComplete ? 'Done' : isRunning ? 'Running' : 'Paused'}
+          </p>
+        </div>
+        <button
+          onClick={handlePlayPause}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+            isComplete 
+              ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+              : isRunning 
+                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                : 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
+          }`}
+          aria-label={isComplete ? 'Restart timer' : isRunning ? 'Pause timer' : 'Start timer'}
+        >
+          {isComplete ? (
+            <RotateCcw className="w-5 h-5" />
+          ) : isRunning ? (
+            <div className="flex gap-1">
+              <div className="w-1 h-4 bg-current rounded" />
+              <div className="w-1 h-4 bg-current rounded" />
+            </div>
+          ) : (
+            <Play className="w-5 h-5 ml-0.5" />
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // [PPX-R7.8G] Shared band guidance truth type
 type SharedBandGuidanceTruth = {
   hasBandSelector: boolean
@@ -9025,6 +9140,28 @@ if (shouldShowLocalFallback) {
                       || (currentCooldownItem as { cue?: string }).cue
                       || `Recovery after ${safeWorkoutSessionContract.focusLabel || 'your workout'}.`}
                   </p>
+                  
+                  {/* [P2F] Cooldown Timer for timed holds - user-controlled play/pause/resume */}
+                  {(() => {
+                    // Parse duration from repsOrTime (e.g. "60s", "30 sec", "2 min", "60 seconds")
+                    const repsOrTime = currentCooldownItem.repsOrTime?.toString() || ''
+                    const secondsMatch = repsOrTime.match(/(\d+)\s*s(ec(onds?)?)?/i)
+                    const minutesMatch = repsOrTime.match(/(\d+)\s*min(utes?)?/i)
+                    const timedDuration = secondsMatch 
+                      ? parseInt(secondsMatch[1], 10) 
+                      : minutesMatch 
+                        ? parseInt(minutesMatch[1], 10) * 60 
+                        : null
+                    
+                    if (!timedDuration || timedDuration <= 0) return null
+                    
+                    return (
+                      <CooldownTimer 
+                        key={`cooldown-timer-${cooldownIndex}`}
+                        durationSeconds={timedDuration}
+                      />
+                    )
+                  })()}
                 </div>
                 
                 {/* [PPX-R7.7B] "If short on time" guidance - show on last item using derived coach */}

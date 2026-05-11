@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ��������������������� completed/recent set ledger/history row
+    - Live Workout ����������������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1821,6 +1821,33 @@ From recent conversation:
   - TSC STATUS: PASS (exit code 0, no errors)
   - GUARDRAILS: No schema/package/generator/live-workout/saved-program changes
   - NEXT STEP: If visually verified as PASS, proceed to safe apply corridor or method/exercise taxonomy phase
+- SPARTANLAB-P2F: Live Workout Runtime Cleanup — PARTIAL COMPLETION (2026-05-11)
+  - OBJECTIVE: Fix discard confirmation, add cooldown timer, make reps/hold input directly typeable
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added AlertDialog import for discard confirmation
+      - Added showDiscardConfirm state
+      - Updated all 4 Discard buttons (warmup, completedMain, cooldown, done) to show confirmation first
+      - Added AlertDialog component at end of render for discard confirmation
+      - Enhanced RepsHoldInput to allow direct numeric typing (tappable number field)
+      - Added CooldownTimer component with play/pause/resume for timed holds
+      - Added CooldownTimer to cooldown item rendering
+  - WHAT CHANGED VISIBLY:
+    - Discard buttons now show confirmation modal before deleting session data
+    - Reps/Hold numeric input is now directly tappable to type a value (no more pressing +/- 30 times)
+    - Cooldown items with timed holds (e.g. "60s") now show a timer with play/pause/resume
+    - Timer does NOT auto-start - user must tap Play to begin countdown
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - NOT YET IMPLEMENTED IN THIS PROMPT (deferred for scope):
+    - Program Page top gray card audit (user's specific "big ugly gray card" not yet identified)
+    - Superset debug strip removal (requires careful audit of which labels are user-facing vs debug)
+    - Superset Round 2 starting at A instead of B (machine already resets memberIndex to 0, may be UI issue)
+    - Target vs actual value leakage fix (requires deeper input state audit)
+    - Grouped round rest doctrine improvement (requires rest-doctrine-resolver changes)
+    - Progression specification for hold/core exercises (requires exercise metadata audit)
+    - Superset visual styling cleanup
+  - GUARDRAILS: No schema/package/generator changes, no saved program mutation, no override apply
+  - NEXT STEP: Visual verification, then continue with remaining P2F items or move to safe apply corridor
 
 ---
 

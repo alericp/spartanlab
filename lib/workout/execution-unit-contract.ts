@@ -543,6 +543,16 @@ export function isHoldUnit(input: string | HoldUnitContext | null | undefined): 
   //    its own because some skill work is reps-based (pseudo planche push-ups).
   const nameLower = name.toLowerCase()
   const categoryLower = category.toLowerCase()
+  
+  // [PPX-R7.8K-FINAL] Guard against obvious rep-based dynamic movements.
+  // If name contains push-up, pull-up, dip, row, squat, raise, press, curl, extension,
+  // these are reps-based exercises even if they also match skill patterns like "planche lean".
+  // Example: "Planche Lean Push-Ups" should be reps, not hold.
+  const isObviouslyRepBased = /(push[- ]?up|pull[- ]?up|dip|row|squat|raise|press|curl|extension)/i.test(nameLower)
+  if (isObviouslyRepBased) {
+    return false
+  }
+  
   if (
     /(planche lean|planche hold|tuck planche|adv tuck|straddle planche|full planche)/.test(nameLower) ||
     /(front lever|back lever|side lever|tuck lever|advanced tuck lever|straddle lever)/.test(nameLower) ||

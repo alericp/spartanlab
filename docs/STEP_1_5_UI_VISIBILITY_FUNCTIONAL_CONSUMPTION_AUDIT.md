@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ����������� completed/recent set ledger/history row
+    - Live Workout ������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1490,7 +1490,48 @@ From recent conversation:
     - No React #310 (no hook-order changes)
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-checkout-session)
-  - MOVE-ON DECISION: PPX-R7.8K complete. Live workout phase controls, exact refresh resume, and cooldown-back action integrity are locked. Safe to move to AB7 exercise unit/taxonomy truth or the next official checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: PPX-R7.8K complete. Moved to R7.8K-FINAL for direct cooldown Back fix.
+- PPX-R7.8K-FINAL + AB5.1: Cooldown Back Direct Return + Unit/Taxonomy Guard + AB5 Verification — COMPLETE (2026-05-10)
+  - PPX-R7.8K RESIDUAL FIX:
+    - Previous cooldown Back set `sessionPhase('completedMain')` which showed unwanted "Day 1 Done" interstitial
+    - Fixed: cooldown Back at index 0 now sets `sessionPhase('main')` + `returnedFromCooldown(true)`
+    - Removed safety effect that redirected `main + completed + returnedFromCooldown` to `completedMain`
+    - The combination `main + completed + returnedFromCooldown` is now intentionally handled by `isLiveExecutionPhase` (line 9920)
+    - Live controls work after cooldown Back because live surface renders, not completedMain interstitial
+    - "Continue to Cool-Down" banner appears for intentional cooldown re-entry
+  - EXACT ROOT CAUSE:
+    - Line 9062: `setSessionPhase('completedMain')` in cooldown Back handler → unwanted interstitial
+    - Line 7278-7280: Safety effect `main + completed + returnedFromCooldown → completedMain` blocked direct return
+  - UNIT/TAXONOMY GUARD:
+    - Found in lib/workout/execution-unit-contract.ts, `isHoldUnit()` function
+    - Issue: Line 547 `/(planche lean|...)/.test(nameLower)` matched "Planche Lean Push-Ups" as hold
+    - Fixed: Added rep-based exercise guard BEFORE skill pattern matching
+    - Guard: `/(push[- ]?up|pull[- ]?up|dip|row|squat|raise|press|curl|extension)/i.test(nameLower)` returns false immediately
+    - Now: "Planche Lean Push-Ups" → reps, "Planche Lean" → hold, "Tuck Front Lever Hold" → hold
+  - AB5 VERIFICATION:
+    - Grouped execution prescription resolver exists at components/programs/lib/grouped-execution-prescription.ts
+    - AdaptiveSessionCard.tsx uses it at lines 150, 153, 161, 1941, etc.
+    - Today page uses it at lines 39, 44, 51, 54, 750, etc.
+    - Program card AB5 parity: PASS
+    - Today AB5 parity: PASS
+    - Orphan-row guard: PASS (documented at lines 204, 221 in session-group-display.ts)
+    - Guidance-only honesty: PASS (documented at line 262 in grouped-execution-prescription.ts)
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx: Fixed cooldown Back to set 'main' not 'completedMain', removed safety redirect effect
+    - lib/workout/execution-unit-contract.ts: Added rep-based exercise guard to isHoldUnit()
+  - REGRESSION GATES:
+    - React #310 hook order safe: PASS (no hook changes)
+    - Band guidance parity still works: PASS (untouched)
+    - RPE integer-only still works: PASS (untouched)
+    - Warm-up controls preserved: PASS (untouched)
+    - Cooldown controls preserved: PASS (untouched)
+    - Final summary controls preserved: PASS (untouched)
+    - Refresh/resume still exact: PASS (hydration logic untouched)
+    - No auth/billing/schema/package/config changes: PASS
+    - No `as any`, no suppressions: PASS
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-checkout-session)
+  - MOVE-ON DECISION: PPX-R7.8K-FINAL + AB5.1 complete. Cooldown Back returns directly to live workout context. Planche Lean Push-Ups now renders as reps. AB5 grouped execution parity verified. Safe to move to next checklist item after user screenshot confirmation.
 
 ---
 

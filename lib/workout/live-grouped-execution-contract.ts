@@ -85,6 +85,8 @@ export type LiveGroupedRuntimeReason =
   | 'UNSUPPORTED_METHOD_TYPE'
   | 'MISSING_ROUND_OR_SET_CONTRACT'
   | 'DENSITY_RUNTIME_NOT_SUPPORTED_YET'
+  | 'DENSITY_TIME_CAP_MISSING' // [AB7] Density block exists but has no timeCapMinutes
+  | 'DENSITY_EXECUTABLE_WITH_TIME_CAP' // [AB7] Density block is safe to execute
   | 'SAFE_GROUPED_RUNTIME_READY'
   | 'GUIDANCE_ONLY_PRESERVED'
   | 'FLAT_FALLBACK_REQUIRED'
@@ -162,13 +164,13 @@ const EXECUTABLE_GROUPED_FAMILIES: ReadonlySet<CanonicalMethodFamily> = new Set<
   'superset',
   'circuit',
   'cluster',
-  // density_block is intentionally classed as guidance until a safe
-  // density timer runtime exists; see DENSITY_RUNTIME_NOT_SUPPORTED_YET.
+  // [AB7] density_block is now executable when timeCapMinutes is present
+  'density_block',
 ])
 
 /** Grouped families that exist on the program side but are not yet runtime-safe. */
 const GUIDANCE_ONLY_GROUPED_FAMILIES: ReadonlySet<CanonicalMethodFamily> = new Set<CanonicalMethodFamily>([
-  'density_block',
+  // [AB7] density_block moved to executable - empty set for now
 ])
 
 function safeIsArray<T = unknown>(value: unknown): value is T[] {
@@ -282,6 +284,25 @@ export function evaluateLiveGroupedExecution(
       continue
     }
 
+    // [AB7] Density blocks require timeCapMinutes to be executable
+    if (family === 'density_block') {
+      const hasTimeCap = typeof ms.timeCapMinutes === 'number' && ms.timeCapMinutes > 0
+      if (!hasTimeCap) {
+        reasons.add('DENSITY_TIME_CAP_MISSING')
+        reasons.add('GUIDANCE_ONLY_PRESERVED')
+        groupSafety.push({
+          groupId: ms.id,
+          methodFamily: family,
+          safetyStatus: 'guidanceOnly',
+          blockedReason: 'DENSITY_TIME_CAP_MISSING',
+          boundMemberIds: ms.exerciseIds ?? [],
+          unboundMemberIds: [],
+        })
+        continue
+      }
+      // Density with valid time cap continues to binding check below
+    }
+    
     if (GUIDANCE_ONLY_GROUPED_FAMILIES.has(family)) {
       reasons.add('DENSITY_RUNTIME_NOT_SUPPORTED_YET')
       reasons.add('GUIDANCE_ONLY_PRESERVED')
@@ -313,7 +334,7 @@ export function evaluateLiveGroupedExecution(
       }
     }
 
-    // Method-minimum: superset/circuit need >= 2; cluster ok with >= 1.
+    // Method-minimum: superset/circuit need >= 2; cluster/density ok with >= 1.
     const minMembers = family === 'superset' || family === 'circuit' ? 2 : 1
     if (boundMemberIds.length < minMembers) {
       reasons.add('GROUP_MEMBER_REF_NOT_FOUND')
@@ -370,19 +391,31 @@ export function evaluateLiveGroupedExecution(
         continue
       }
 
+      // [AB7] Density blocks from styledGroups - check if corresponding
+      // methodStructure has timeCapMinutes, or mark as guidance-only
       if (groupType === 'density_block') {
-        reasons.add('DENSITY_RUNTIME_NOT_SUPPORTED_YET')
-        reasons.add('GUIDANCE_ONLY_PRESERVED')
-        groupSafety.push({
-          groupId,
-          methodFamily: groupType,
-          safetyStatus: 'guidanceOnly',
-          blockedReason: 'DENSITY_RUNTIME_NOT_SUPPORTED_YET',
-          boundMemberIds: [],
-          unboundMemberIds: [],
-        })
-        styledGroupSafetyAdded++
-        continue
+        // Look for matching methodStructure with time cap
+        const matchingMs = methodStructures.find(
+          (ms) => ms.family === 'density_block' && 
+          typeof ms.timeCapMinutes === 'number' && 
+          ms.timeCapMinutes > 0
+        )
+        if (!matchingMs) {
+          reasons.add('DENSITY_TIME_CAP_MISSING')
+          reasons.add('GUIDANCE_ONLY_PRESERVED')
+          groupSafety.push({
+            groupId,
+            methodFamily: groupType,
+            safetyStatus: 'guidanceOnly',
+            blockedReason: 'DENSITY_TIME_CAP_MISSING',
+            boundMemberIds: [],
+            unboundMemberIds: [],
+          })
+          styledGroupSafetyAdded++
+          continue
+        }
+        // Has time cap - allow it to proceed to executable status
+        reasons.add('DENSITY_EXECUTABLE_WITH_TIME_CAP')
       }
 
       // Skip if methodStructures already covered this exact group. We avoid
@@ -526,6 +559,7 @@ export function buildExecutionBlocksFromMethodStructures(
     superset: 0,
     circuit: 0,
     cluster: 0,
+    density_block: 0, // [AB7] Added density block counter
   }
 
   const exerciseIndexById = new Map<string, number>()
@@ -541,6 +575,15 @@ export function buildExecutionBlocksFromMethodStructures(
     if (ms.status !== 'applied' && ms.status !== 'already_applied') {
       reasons.add('METHOD_STRUCTURE_STATUS_NOT_APPLIED')
       continue
+    }
+    
+    // [AB7] Density blocks require timeCapMinutes to be built as executable blocks
+    if (ms.family === 'density_block') {
+      const hasTimeCap = typeof ms.timeCapMinutes === 'number' && ms.timeCapMinutes > 0
+      if (!hasTimeCap) {
+        reasons.add('DENSITY_TIME_CAP_MISSING')
+        continue
+      }
     }
 
     const ids = safeIsArray<string>(ms.exerciseIds) ? ms.exerciseIds : []
@@ -605,12 +648,19 @@ export function buildExecutionBlocksFromMethodStructures(
           ? 'Circuit'
           : family === 'cluster'
             ? 'Cluster Set'
-            : memberExercises[0]?.name || 'Exercise'
+            : family === 'density_block'
+              ? 'Density Block'
+              : memberExercises[0]?.name || 'Exercise'
     const counterIndex = familyCounters[family] ?? 0
     const blockLetter = String.fromCharCode(65 + counterIndex)
     familyCounters[family] = counterIndex + 1
     const blockLabel = `${baseLabel} ${blockLetter}`
 
+    // [AB7] Include timeCapSeconds for density blocks
+    const timeCapSeconds = family === 'density_block' && typeof ms.timeCapMinutes === 'number'
+      ? Math.round(ms.timeCapMinutes * 60)
+      : undefined
+    
     blocks.push({
       blockId: ms.id,
       groupType: family as ExecutionBlock['groupType'],
@@ -621,6 +671,7 @@ export function buildExecutionBlocksFromMethodStructures(
       intraBlockRestSeconds,
       postRoundRestSeconds,
       postBlockRestSeconds: 120,
+      timeCapSeconds,
     })
 
     for (const idx of memberExerciseIndexes) consumedExerciseIndexes.add(idx)

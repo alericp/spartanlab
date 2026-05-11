@@ -237,6 +237,8 @@ export interface ExecutionBlock {
   intraBlockRestSeconds: number
   postRoundRestSeconds: number
   postBlockRestSeconds: number
+  /** [AB7] Time cap in seconds for density blocks */
+  timeCapSeconds?: number
 }
 
 /** Execution plan derived from exercises */

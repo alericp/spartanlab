@@ -2478,9 +2478,11 @@ export function ActiveWorkoutStartCorridor({
                 nextMemberName,
               })
               if (!hint) return null
+              // [AB6.1.1D] Use method-specific text color instead of hardcoded amber.
+              // methodTone.text maps: superset -> blue, circuit -> emerald, etc.
               return (
                 <p
-                  className="mt-1 text-[11px] text-amber-400/80 leading-snug"
+                  className={`mt-1 text-[11px] ${methodTone.text} leading-snug`}
                   aria-label="Grouped block flow"
                 >
                   {hint}

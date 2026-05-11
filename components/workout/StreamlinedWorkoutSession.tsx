@@ -6951,6 +6951,7 @@ failureStage: null,
     // Clear only transient state (rest timers), keep workout session for resume
     clearRestTimerState()
     setShowExitConfirm(false)
+    setShowDiscardConfirm(false) // [AB6.1.1A] Defensive cleanup
     // Session storage is intentionally NOT cleared - workout can be resumed
     console.log('[exit-intent] Save & Exit: Preserving session for resume', {
       completedSets: normalizedCompletedSets.length,
@@ -6979,13 +6980,42 @@ failureStage: null,
     clearSessionStorage()
     clearRestTimerState()
     clearSessionOverrides()
-    // Step 3 - close the confirm dialog. This causes one more render cycle
+    // Step 3 - close both confirm dialogs. This causes one more render cycle
     // that re-fires the autosave useEffect. The ref check now wins.
+    setShowDiscardConfirm(false) // [AB6.1.1A] Close discard confirmation
     setShowExitConfirm(false)
     console.log('[exit-intent] Discard Workout: Cleared all session state (ref locked)')
     // Step 4 - navigate away.
     onCancel()
   }, [onCancel])
+  
+  // [AB6.1.1A] Render helper for discard confirmation dialog.
+  // Placed after handlers and before any early returns so it can be used
+  // in warmup, completedMain, cooldown, and active workout surfaces.
+  // This is a render function, not a hook, so it's safe to call conditionally.
+  const renderDiscardConfirmationDialog = () => (
+    <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+      <AlertDialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-[#E6E9EF]">Discard workout?</AlertDialogTitle>
+          <AlertDialogDescription className="text-[#A4ACB8]">
+            This will delete this session&apos;s logged progress and remove resumable workout state. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF]">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDiscardAndExit}
+            className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+          >
+            Discard Workout
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
   
   // [BACK-NAVIGATION] Navigate backward through workout sets/exercises
   const handleGoBack = useCallback(() => {
@@ -8877,6 +8907,9 @@ if (shouldShowLocalFallback) {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* [AB6.1.1B] Discard confirmation dialog for warmup surface */}
+      {renderDiscardConfirmationDialog()}
     </>
     )
   }
@@ -8895,6 +8928,7 @@ if (shouldShowLocalFallback) {
     const hasCooldown = cooldownItems.length > 0 && !cooldownSkipped
     
     return (
+    <>
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
         <div className="max-w-md mx-auto space-y-4">
           {/* Header */}
@@ -8984,6 +9018,10 @@ if (shouldShowLocalFallback) {
           </div>
         </div>
       </div>
+      
+      {/* [AB6.1.1B] Discard confirmation dialog for completedMain surface */}
+      {renderDiscardConfirmationDialog()}
+    </>
     )
   }
   
@@ -9429,6 +9467,9 @@ if (shouldShowLocalFallback) {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* [AB6.1.1B] Discard confirmation dialog for cooldown surface */}
+      {renderDiscardConfirmationDialog()}
     </>
     )
   }
@@ -10953,7 +10994,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       onSetIsPerSide: (isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide }),
       onExit: () => setShowExitConfirm(true),
       onSaveAndExit: handleSaveAndExit,
-      onDiscardWorkout: handleDiscardAndExit,
+      // [AB6.1.1C] Open confirmation dialog instead of directly discarding
+      onDiscardWorkout: () => setShowDiscardConfirm(true),
       onSkipSet: handleSkipSet,
       onEndExercise: handleEndExercise,
       onSkip: handleSkipExercise,
@@ -12474,28 +12516,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         </DialogContent>
       </Dialog>
       
-      {/* [P2F-2] Discard Confirmation Dialog - prevents accidental data loss */}
-      <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-        <AlertDialogContent className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#E6E9EF]">Discard workout?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#A4ACB8]">
-              This will delete this session&apos;s logged progress. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF]">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDiscardAndExit}
-              className="bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
-            >
-              Discard Workout
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* [AB6.1.1B] Discard confirmation dialog for active/main workout surface */}
+      {renderDiscardConfirmationDialog()}
     </div>
   )
   

@@ -8646,17 +8646,9 @@ if (shouldShowLocalFallback) {
               </div>
             )}
             
-            {/* [PPX-R7.7] Ramp-Up Advisory for weighted/skill work */}
-            {safeWorkoutSessionContract.warmupAdaptation?.rampUpAdvisory && warmupIndex === 0 && (
-              <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-blue-200/80">
-                    {safeWorkoutSessionContract.warmupAdaptation.rampUpAdvisory}
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* [AB6.1.2.1C] Ramp-Up Advisory REMOVED from warm-up phase.
+                Ramp-up guidance now appears on the first loaded exercise card instead,
+                as it is exercise-specific advice, not general warm-up advice. */}
             
             {/* Current Warmup Item */}
             {currentWarmupItem ? (
@@ -10912,6 +10904,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // [AB7] Density block timer props
           densityTimeCapSeconds,
           densityBlockStartedAt,
+          // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
+          // Only provided when warmupAdaptation has rampUpAdvisory and we're on exercise 0
+          rampUpAdvisory: safeExerciseIndex === 0 
+            ? (safeWorkoutSessionContract.warmupAdaptation?.rampUpAdvisory || null)
+            : null,
           // Coaching
           coachingExpression: buildCoachingExpression(machineState.currentActionPlan),
           // Build chips (unchanged contract)

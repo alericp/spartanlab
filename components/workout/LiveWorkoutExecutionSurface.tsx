@@ -209,6 +209,10 @@ export interface LiveWorkoutSnapshot {
   densityTimeCapSeconds?: number
   densityBlockStartedAt?: number | null
 
+  // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
+  // Shows on first exercise when weighted/advanced skill work detected
+  rampUpAdvisory?: string | null
+
   // Coaching
   coachingExpression?: CoachingExpression | null
 
@@ -714,6 +718,8 @@ export function LiveWorkoutExecutionSurface({
         // [AB7] Density block timer props
         densityTimeCapSeconds={snapshot.densityTimeCapSeconds}
         densityBlockStartedAt={snapshot.densityBlockStartedAt}
+        // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
+        rampUpAdvisory={snapshot.rampUpAdvisory}
         // Coaching
         coachingExpression={snapshot.coachingExpression}
         // Handlers

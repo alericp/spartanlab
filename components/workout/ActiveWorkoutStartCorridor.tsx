@@ -443,6 +443,11 @@ export interface ActiveWorkoutCorridorProps {
   // [AB7] Density block timer props
   densityTimeCapSeconds?: number
   densityBlockStartedAt?: number | null
+  
+  // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
+  // Shows on first exercise when weighted/advanced skill work detected
+  rampUpAdvisory?: string | null
+  
   // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
   groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
   
@@ -1187,6 +1192,8 @@ export function ActiveWorkoutStartCorridor({
   // [AB7] Density block timer props
   densityTimeCapSeconds,
   densityBlockStartedAt,
+  // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
+  rampUpAdvisory,
   // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression
   coachingExpression,
   // [ACTIVE-SET-SAVE-PARITY] Authoritative primary-input kind from parent
@@ -2434,6 +2441,21 @@ export function ActiveWorkoutStartCorridor({
                     <div className="mt-0.5 text-[10px] text-[#6B7280]">
                       Current workout only · Saved program unchanged
                     </div>
+                  </div>
+                )}
+
+                {/* [AB6.1.2.1C] Ramp-up advisory for first loaded exercise.
+                    Only shows on set 1 of exercise index 0 when advisory exists.
+                    This guidance was moved from the warm-up phase card where it
+                    was confusingly presented as general warm-up content. */}
+                {rampUpAdvisory && currentExerciseIndex === 0 && currentSetNumber === 1 && (
+                  <div className="mt-1.5 px-2 py-1.5 bg-blue-500/5 border border-blue-500/20 rounded text-xs">
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-400 text-[10px] font-medium uppercase shrink-0">Warm-Up Sets</span>
+                    </div>
+                    <p className="mt-0.5 text-blue-200/80 leading-tight">
+                      {rampUpAdvisory}
+                    </p>
                   </div>
                 )}
 

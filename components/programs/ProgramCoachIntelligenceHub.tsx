@@ -391,6 +391,11 @@ function SkillPhaseSheetContent({
   const supportCount = selectedSkillRepresentations.filter(r => r.state === 'support' || r.state === 'accessory_carryover').length
   const deferredCount = selectedSkillRepresentations.filter(r => r.state === 'deferred' || r.state === 'compressed').length
   const underrepCount = selectedSkillRepresentations.filter(r => r.state === 'underrepresented' || r.state === 'unknown').length
+  
+  // [P2D] Detect week phase for explanation
+  const isAcclimationWeek = currentWeekNumber === 1
+  const totalSkills = selectedSkillRepresentations.length
+  const trainedThisWeek = primaryCount + directCount + supportCount
 
   return (
     <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
@@ -403,6 +408,11 @@ function SkillPhaseSheetContent({
           {intelligenceContract?.weeklyDecisionLogic?.structureIdentity && (
             <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20">
               {intelligenceContract.weeklyDecisionLogic.structureIdentity}
+            </span>
+          )}
+          {isAcclimationWeek && (
+            <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              Acclimation
             </span>
           )}
         </div>
@@ -422,18 +432,43 @@ function SkillPhaseSheetContent({
       <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-medium text-[#E6E9EF]">
-            Your Selected Skills ({selectedSkillRepresentations.length})
+            Your Selected Skills ({totalSkills})
           </span>
           <div className="flex gap-2 text-[10px]">
-            {(primaryCount + directCount) > 0 && (
-              <span className="text-emerald-400">{primaryCount + directCount} trained</span>
+            {trainedThisWeek > 0 && (
+              <span className="text-emerald-400">{trainedThisWeek} active</span>
             )}
             {deferredCount > 0 && (
               <span className="text-amber-400">{deferredCount} deferred</span>
             )}
             {underrepCount > 0 && (
-              <span className="text-[#7A7A8A]">{underrepCount} underrep</span>
+              <span className="text-[#7A7A8A]">{underrepCount} pending</span>
             )}
+          </div>
+        </div>
+
+        {/* [P2D] Skill Representation Legend */}
+        <div className="mb-3 p-2 rounded bg-[#0F0F12] border border-[#2A2A35]">
+          <span className="text-[9px] font-medium uppercase tracking-wide text-[#5A5A6A] block mb-1.5">
+            How Skills Are Categorized
+          </span>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500/50" />
+              <span className="text-[#8A8A9A]">Primary/Direct = main focus</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-500/50" />
+              <span className="text-[#8A8A9A]">Support = pattern carryover</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500/50" />
+              <span className="text-[#8A8A9A]">Deferred = rotates later</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#5A5A6A]" />
+              <span className="text-[#8A8A9A]">Pending = needs rotation</span>
+            </div>
           </div>
         </div>
 
@@ -478,6 +513,38 @@ function SkillPhaseSheetContent({
           )}
         </div>
       </div>
+
+      {/* [P2D] Underrepresentation Explanation - only when relevant */}
+      {(deferredCount > 0 || underrepCount > 0) && (
+        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="w-4 h-4 text-amber-400/70" />
+            <span className="text-xs font-medium text-amber-400/90">
+              Why Some Skills Are Deferred or Pending
+            </span>
+          </div>
+          <div className="space-y-2 text-[11px] text-[#9A9A9A] leading-relaxed">
+            {isAcclimationWeek && (
+              <p>
+                <span className="text-amber-400/80">Week 1 (Acclimation)</span> intentionally limits volume to protect connective tissue adaptation. Some skills rotate in during later weeks when your body is ready for more stress.
+              </p>
+            )}
+            {!isAcclimationWeek && totalSkills > 5 && (
+              <p>
+                With {totalSkills} selected skills, the coach rotates focus to prevent overload. Not all skills can receive direct work every week while maintaining quality recovery.
+              </p>
+            )}
+            {!isAcclimationWeek && totalSkills <= 5 && (deferredCount > 0 || underrepCount > 0) && (
+              <p>
+                Some skills share movement patterns (e.g., planche/front lever both stress shoulders). The coach staggers direct work to protect joint health and maximize adaptation.
+              </p>
+            )}
+            <p className="text-[10px] text-[#6A6A7A]">
+              Week {currentWeekNumber + 1}+ may rotate these skills into primary focus based on recovery and priority hierarchy.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Architectural Decisions */}
       {intelligenceContract?.weeklyDecisionLogic?.architecturalDecisions &&
@@ -1320,12 +1387,51 @@ export function ProgramCoachIntelligenceHub({
               Calibration & Evidence
             </SheetTitle>
             <SheetDescription className="text-[#7A7A8A]">
-              Baseline tests and calibration recommendations
+              Baseline tests and performance calibration
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
-            {calibrationInput && (
+          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)] space-y-4">
+            {/* [P2D] Calibration Lifecycle Explanation */}
+            <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-blue-400/70" />
+                <span className="text-xs font-medium text-blue-400/90">
+                  How Calibration Works
+                </span>
+              </div>
+              <div className="space-y-2 text-[10px] text-[#9A9A9A] leading-relaxed">
+                <p>
+                  <span className="text-blue-400/80">Baseline tests</span> establish initial anchors for your strength and skill levels. These help the coach set appropriate starting intensities.
+                </p>
+                <p>
+                  <span className="text-emerald-400/80">As you log workouts</span>, your actual performance becomes the primary calibration source. Logged sets are more authoritative than baseline tests over time.
+                </p>
+                <p>
+                  <span className="text-amber-400/80">After breaks</span>, current ability may differ from historical peaks. The coach uses recent data when available, or recommends recalibration if evidence is stale.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                <span className="px-2 py-0.5 text-[9px] rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A4A]">
+                  Baseline tests: initial anchors
+                </span>
+                <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20">
+                  Logged workouts: primary truth
+                </span>
+              </div>
+            </div>
+            
+            {calibrationInput ? (
               <CalibrationCheckpointCard input={calibrationInput} />
+            ) : (
+              <div className="p-4 rounded-lg bg-[#1A1A22] border border-[#2A2A35] text-center">
+                <HelpCircle className="w-8 h-8 text-[#5A5A6A] mx-auto mb-2" />
+                <p className="text-xs text-[#8A8A9A]">
+                  Calibration data not available for this program.
+                </p>
+                <p className="text-[10px] text-[#6A6A7A] mt-1">
+                  This may happen if the program was created before calibration was enabled.
+                </p>
+              </div>
             )}
           </div>
         </SheetContent>

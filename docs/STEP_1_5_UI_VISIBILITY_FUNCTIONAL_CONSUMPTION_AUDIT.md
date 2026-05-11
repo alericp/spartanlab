@@ -1769,6 +1769,31 @@ From recent conversation:
     - No generator/schema/package changes
   - TSC STATUS: PASS (exit code 0, no errors)
   - NEXT STEP: Safe apply corridor for override previews OR method/exercise taxonomy phase
+- SPARTANLAB-P2D: Final Program Top Deduplication + Calibration Lifecycle + Skill Representation Clarity — COMPLETE (2026-05-11)
+  - OBJECTIVE: Remove remaining bulky inline surfaces, add calibration lifecycle explanation, clarify skill underrepresentation
+  - ROOT CAUSE: Old inline skill representation block (~200 lines) survived after hub migration. Calibration sheet lacked lifecycle context. Skill underrepresentation had no explanation.
+  - FILES CHANGED:
+    - components/programs/AdaptiveProgramDisplay.tsx: Replaced 200-line skill block with 15-line compact one-liner
+    - components/programs/ProgramCoachIntelligenceHub.tsx: Enhanced SkillPhaseSheetContent with legend + underrep explanation, enhanced Calibration sheet with lifecycle context
+  - WHAT CHANGED VISIBLY:
+    - Skill representation: Reduced from ~200 lines to compact "8 skills · 3 active this week · 5 deferred/pending · See Skill Map in hub"
+    - Skill Map sheet: Added legend (Primary/Direct/Support/Pending), added explanation panel for why skills are deferred
+    - Calibration sheet: Added lifecycle explanation (baseline anchors → logged workouts → stale recalibration)
+    - Day 1 appears significantly sooner
+  - CALIBRATION LIFECYCLE ANSWER:
+    - Baseline tests establish initial anchors
+    - Logged workouts become the primary calibration source over time
+    - After breaks, coach uses recent data when available or recommends recalibration
+    - The card already fetches benchmark history and re-calculates with new evidence after each submission
+    - Staleness detection exists in the evidence-aware-program-calibration-governor (stale_benchmark_warning)
+  - SKILL REPRESENTATION ANSWER:
+    - Week 1 (Acclimation) intentionally limits volume to protect connective tissue
+    - Many selected skills cause rotation to prevent overload
+    - Skills sharing movement patterns are staggered for joint health
+    - Week 2+ may rotate deferred skills into primary focus
+    - Explanation now visible in Skill Map sheet when skills are deferred/underrepresented
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - NEXT STEP: Safe apply corridor for override previews OR method/exercise taxonomy phase
 
 ---
 

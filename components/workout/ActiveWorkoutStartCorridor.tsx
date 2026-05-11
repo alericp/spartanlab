@@ -2381,6 +2381,26 @@ export function ActiveWorkoutStartCorridor({
                     {exerciseName}
                   </h2>
                   <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                    {/* [AB8.1E] Method truth label - shows execution method at a glance.
+                        When in a grouped block: shows method type (Superset/Circuit/Cluster/Density).
+                        When NOT in a grouped block: shows "Straight Sets" honestly.
+                        This matches Program Page method truth surfacing. */}
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[10px] uppercase px-1.5 py-0 ${
+                        blockGroupType === 'superset' ? 'text-blue-400 border-blue-400/30' :
+                        blockGroupType === 'circuit' ? 'text-emerald-400 border-emerald-400/30' :
+                        blockGroupType === 'cluster' ? 'text-purple-400 border-purple-400/30' :
+                        blockGroupType === 'density_block' ? 'text-amber-400 border-amber-400/30' :
+                        'text-zinc-400 border-zinc-500/30'
+                      }`}
+                    >
+                      {blockGroupType === 'superset' ? 'Superset' :
+                       blockGroupType === 'circuit' ? 'Circuit' :
+                       blockGroupType === 'cluster' ? 'Cluster' :
+                       blockGroupType === 'density_block' ? 'Density' :
+                       'Straight Sets'}
+                    </Badge>
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
                     </Badge>

@@ -46,7 +46,7 @@ const SHOW_DIAGNOSTIC_HEADER = false
 //
 // Flip to true to debug grouped-method truth flow; flip to false to ship.
 // =============================================================================
-const SHOW_GROUP_SCANNER = true // temporary grouped-corridor debug
+const SHOW_GROUP_SCANNER = false // [P2F-2] Disabled for production - set to true only for grouped-method debugging
 
 // Pure read-only diagnostic strip. No state, no effects, no handlers.
 type GroupScannerOwner = 'ACTIVE_SURFACE' | 'REST_SURFACE' | 'GROUP_TRANSITION'

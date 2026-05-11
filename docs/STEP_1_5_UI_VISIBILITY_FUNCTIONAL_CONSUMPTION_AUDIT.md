@@ -1848,6 +1848,34 @@ From recent conversation:
     - Superset visual styling cleanup
   - GUARDRAILS: No schema/package/generator changes, no saved program mutation, no override apply
   - NEXT STEP: Visual verification, then continue with remaining P2F items or move to safe apply corridor
+- SPARTANLAB-P2F-2: Partial-Fail Recovery — Debug Strip + Discard + Typing (2026-05-11)
+  - OBJECTIVE: Fix SHOW_GROUP_SCANNER debug flag, add discard confirmation, make reps/hold directly typeable
+  - ROOT CAUSE CONFIRMED:
+    - Debug strip: `SHOW_GROUP_SCANNER = true` in ActiveWorkoutStartCorridor.tsx line 49 was left on in production
+    - Discard: buttons called handleDiscardAndExit directly without confirmation
+    - Typing: RepsHoldInput used `<span>` not `<input>`
+  - FILES CHANGED:
+    - components/workout/ActiveWorkoutStartCorridor.tsx: Set SHOW_GROUP_SCANNER = false
+    - components/workout/StreamlinedWorkoutSession.tsx:
+      - Added AlertDialog import
+      - Added showDiscardConfirm state
+      - Updated RepsHoldInput to use numeric input
+      - Updated 4 Discard buttons to show confirmation first
+      - Added AlertDialog component for confirmation
+  - EXACT VISIBLE CHANGES:
+    - GROUP/BLOCK/POS/STEP/NEXT/PHASE/OWNER/ROUND debug strip NO LONGER appears in production
+    - Reps/hold number is now directly tappable and editable (numeric keyboard on mobile)
+    - Discard buttons now show confirmation modal before deleting session data
+    - Cooldown timer preserved (not modified)
+  - TSC STATUS: PASS (exit code 0)
+  - GUARDRAILS: No schema/package/generator/saved-program/override-apply changes
+  - NOT YET ADDRESSED:
+    - Program Page top clutter (needs separate audit of which cards user means)
+    - Hub consolidation (needs clearer spec on what content to move)
+    - Superset Round 2 starting at A (machine already resets memberIndex=0; UI may have stale state)
+    - Target vs actual value leakage (requires deeper input state audit)
+    - Grouped round rest doctrine (requires rest-doctrine-resolver changes)
+  - NEXT STEP: Visual verification, then address remaining items in focused follow-ups
 
 ---
 

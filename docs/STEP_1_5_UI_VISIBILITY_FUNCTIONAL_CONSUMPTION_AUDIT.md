@@ -1616,7 +1616,48 @@ From recent conversation:
     - React #310: PASS (no hook changes)
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key at /api/stripe/create-portal-session)
-  - MOVE-ON DECISION: AB8 complete. AB8 is already fully implemented and renders truthful skill progression calibration proof on Program Page exercise rows. Safe to move to next checklist item.
+  - MOVE-ON DECISION: AB8 complete. Moved to SPARTANLAB-P1 for Program Page top cleanup.
+- SPARTANLAB-P1: Program Page Top Cleanup + Requested/Deferred Method Visibility Surface — COMPLETE (2026-05-11)
+  - OBJECTIVE: Reduce Program Page top clutter, add Coach Intelligence Hub, surface requested/deferred methods
+  - FILES CHANGED:
+    - components/programs/ProgramCoachIntelligenceHub.tsx (NEW): Compact hub with 5 action buttons opening sheets
+    - components/programs/AdaptiveProgramDisplay.tsx: Added Hub import, props, and render placement
+  - WHAT CHANGED VISIBLY:
+    - Before: Bulky proof/status stack before Day 1
+    - After: Compact "Coach Intelligence" hub with obvious buttons, Day 1 appears sooner
+  - HUB BUTTONS IMPLEMENTED:
+    1. Weekly Phase / Skill Map: Shows selected skills, phase, progression context
+    2. AI Method Decisions: Shows method decision truth from weeklyMethodRepresentation
+    3. Calibration / Evidence: Shows calibration input (when provided)
+    4. Coach Recommendations: Shows coach recommendation bundle (when provided)
+    5. Requested / Deferred Methods: Shows methods that were blocked/deferred/suppressed/not materialized
+  - REQUESTED METHOD DISPLAY CONTRACT:
+    - State types: 'applied' | 'materialized' | 'deferred' | 'blocked' | 'suppressed' | 'not_materialized' | 'not_requested' | 'unknown'
+    - Source fields inspected: program.weeklyMethodRepresentation.byMethod
+    - Each entry has: methodId, status, materializedCount, reason, hasMaterializer
+    - Guarded copy when reason missing: "Detailed decision reason not yet available from final method truth."
+    - canOverrideNow: false (override not implemented in this prompt)
+  - TRUTH PRESERVATION:
+    - No fake method requests created
+    - No reasons invented
+    - All data derived from existing program truth
+    - No generator/schema changes
+    - No live workout runtime changes
+  - REGRESSION PROOF:
+    - AB8 skill calibration: PASS (untouched)
+    - AB7 progression prescription: PASS (untouched)
+    - AB6 grouped display: PASS (untouched)
+    - AB5 grouped prescription: PASS (untouched)
+    - PPX cooldown Back: PASS (untouched)
+    - Save & Exit / Discard: PASS (untouched)
+    - Refresh resume: PASS (untouched)
+    - Band guidance: PASS (untouched)
+    - RPE integer-only: PASS (untouched)
+    - React #310: PASS (no hook changes)
+    - Start Workout: PASS (untouched)
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key)
+  - NEXT STEP: Method override planning/apply corridor only after visibility surface confirmed on-screen
 
 ---
 
@@ -1688,7 +1729,7 @@ These items were noted during PPX-R7.6F but are NOT implemented in this prompt. 
 
 ---
 
-### Phase C — Training Truth Bundle Lock
+### Phase C ��� Training Truth Bundle Lock
 
 | Step | Purpose | Builder | Save/Load | UI Consumer | Visible | Functional | First Broken |
 |------|---------|---------|-----------|-------------|---------|------------|--------------|

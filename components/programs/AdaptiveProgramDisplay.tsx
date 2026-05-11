@@ -6,6 +6,8 @@ import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { AdaptiveSessionCard } from './AdaptiveSessionCard'
 import { BuildIdentityStamp } from './BuildIdentityStamp'
 import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
+// [SPARTANLAB-P2B] Coach Intelligence Hub — method planner corridor
+import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -1650,6 +1652,14 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
       </Card>
+
+      {/* [SPARTANLAB-P2B] Coach Intelligence Hub — Method Override Planner corridor */}
+      <ProgramCoachIntelligenceHub
+        program={program}
+        selectedSkillRepresentations={selectedSkillRepresentations}
+        intelligenceContract={intelligenceContract}
+        currentWeekNumber={currentWeekNumber}
+      />
 
       {/* [STEP 25.5] Today Session Readiness Guidance — what should I do today? */}
       {todayGuidance && todayGuidance.available && (

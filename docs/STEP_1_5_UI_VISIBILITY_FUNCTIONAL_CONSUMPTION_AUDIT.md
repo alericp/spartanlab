@@ -1707,6 +1707,42 @@ From recent conversation:
     - Live Workout: PASS (untouched)
   - TSC STATUS: PASS (exit code 0, no errors)
   - NEXT STEP: Safe apply corridor only after preview behavior is confirmed on-screen
+- SPARTANLAB-P2B: Method Override Planner Display-Corridor Acceptance Fix — COMPLETE (2026-05-11)
+  - OBJECTIVE: Make P2 override planner visibly verifiable on Program Page
+  - ROOT CAUSE: ProgramCoachIntelligenceHub was NEVER imported or rendered in AdaptiveProgramDisplay.tsx. The component existed but was not wired into the render tree.
+  - FILES CHANGED:
+    - components/programs/AdaptiveProgramDisplay.tsx: Added Hub import and render (was missing!)
+    - components/programs/ProgramCoachIntelligenceHub.tsx: Updated button label, badge logic, sheet header, intro panel, empty state
+  - WHAT CHANGED VISIBLY:
+    - Hub is NOW rendered on Program Page (was completely missing before)
+    - Button label changed from "Deferred Methods" to "Method Planner" with purple Eye icon
+    - Button summary shows: "Preview Active" / "Review" / "Included" / "Preview" based on state
+    - Helper line added: "Review requested, deferred, or preview-only method overrides."
+    - Sheet header now says "Method Override Planner"
+    - Sheet description now says "Preview-only. Create safe override previews..."
+    - Intro panel always visible with:
+      - "Method Override Planner" heading
+      - "Preview-only..." explanation
+      - Status chips: Program truth / Method decisions / Override preview only / Saved program unchanged
+      - Smoke-test marker: "Planner display corridor: active"
+    - Improved empty state with:
+      - Diagnostic explanation
+      - Sources checked list (weeklyMethodRepresentation, etc.)
+      - Status indicators
+      - Diagnostic example row (clearly labeled as example only)
+    - Method rows now show action hints: "Tap for override plan" / "Already included" / "View preview" / "Needs more truth"
+  - VERIFICATION PATH:
+    1. Go to Program Page
+    2. Look for "Coach Intelligence" section with purple "Method Planner" button
+    3. Tap "Method Planner"
+    4. Confirm sheet title says "Method Override Planner"
+    5. Confirm "Preview-only / saved program unchanged" appears
+    6. Confirm either real method rows or diagnostic empty state appears
+    7. If rows exist, tap one and create preview
+    8. Confirm preview card appears
+    9. Start Workout still works
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - NEXT STEP: If visible acceptance passes, proceed to P3 safe apply corridor
 
 ---
 

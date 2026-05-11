@@ -291,13 +291,13 @@ interface ProgramCoachIntelligenceHubProps {
   selectedSkillRepresentations: SelectedSkillRepresentationDisplay[]
   /** Intelligence contract for summary data */
   intelligenceContract: ProgramIntelligenceContract | null
-  /** Calibration input for CalibrationCheckpointCard */
-  calibrationInput: ProgramCalibrationInput | null
-  /** Evidence coach recommendation bundle */
-  coachRecommendationBundle: EvidenceCoachRecommendationBundle | null
+  /** Calibration input for CalibrationCheckpointCard (optional) */
+  calibrationInput?: ProgramCalibrationInput | null
+  /** Evidence coach recommendation bundle (optional) */
+  coachRecommendationBundle?: EvidenceCoachRecommendationBundle | null
   /** Current week number */
   currentWeekNumber: number
-}
+  }
 
 // =============================================================================
 // HUB BUTTON COMPONENT
@@ -884,6 +884,18 @@ function RequestedMethodsSheetContent({
         <ul className="space-y-2">
           {items.map((item) => {
             const hasPreview = !!getCurrentPreview(item.methodKey)
+            const isApplied = item.state === 'applied' || item.state === 'materialized'
+            
+            // [P2B] Compute action hint based on state
+            let actionHint = 'Tap for override plan'
+            if (isApplied) {
+              actionHint = 'Already included'
+            } else if (hasPreview) {
+              actionHint = 'View preview'
+            } else if (item.confidence === 'low') {
+              actionHint = 'Needs more truth'
+            }
+            
             return (
               <li 
                 key={item.methodKey} 
@@ -913,11 +925,18 @@ function RequestedMethodsSheetContent({
                   <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5 line-clamp-2">
                     {item.reason}
                   </p>
-                  {item.confidence === 'low' && (
-                    <p className="text-[9px] text-[#5A5A6A] mt-1 italic">
-                      Reason detail confidence: low
-                    </p>
-                  )}
+                  {/* [P2B] Action hint — makes rows obviously actionable */}
+                  <p className={cn(
+                    'text-[9px] mt-1 flex items-center gap-1',
+                    isApplied ? 'text-emerald-400/70' : hasPreview ? 'text-emerald-400/70' : 'text-purple-400/70'
+                  )}>
+                    {isApplied ? (
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                    ) : (
+                      <ArrowRight className="w-2.5 h-2.5" />
+                    )}
+                    {actionHint}
+                  </p>
                 </div>
               </li>
             )
@@ -957,8 +976,53 @@ function RequestedMethodsSheetContent({
     )
   }
 
+  // [P2B] Detect truth sources
+  const hasProgramTruth = !!program
+  const hasMethodRepTruth = !!(program?.weeklyMethodRepresentation?.byMethod?.length)
+  const hasMethodDecisionTruth = !!(program?.weeklyMethodRepresentation)
+
   return (
     <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+      {/* [P2B] Intro Panel — always visible, proves planner is deployed */}
+      <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+        <div className="flex items-center gap-2 mb-2">
+          <Eye className="w-4 h-4 text-purple-400" />
+          <span className="text-xs font-medium text-purple-300">Method Override Planner</span>
+        </div>
+        <p className="text-[10px] text-[#9A9AAA] mb-3">
+          Preview-only. This explains requested or deferred methods and can create a safe override preview without changing your saved program.
+        </p>
+        {/* Status chips */}
+        <div className="flex flex-wrap gap-1.5">
+          <span className={cn(
+            'px-2 py-0.5 text-[9px] rounded border',
+            hasProgramTruth 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+              : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
+          )}>
+            {hasProgramTruth ? 'Program truth detected' : 'No program truth'}
+          </span>
+          <span className={cn(
+            'px-2 py-0.5 text-[9px] rounded border',
+            hasMethodDecisionTruth 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+              : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
+          )}>
+            {hasMethodDecisionTruth ? 'Method decisions detected' : 'No method decisions'}
+          </span>
+          <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            Override preview only
+          </span>
+          <span className="px-2 py-0.5 text-[9px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            Saved program unchanged
+          </span>
+        </div>
+        {/* [P2B] Smoke-test marker */}
+        <p className="text-[8px] text-[#4A4A5A] mt-2">
+          Planner display corridor: active
+        </p>
+      </div>
+
       {/* Active Previews Banner */}
       {previews.length > 0 && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
@@ -975,21 +1039,86 @@ function RequestedMethodsSheetContent({
         </div>
       )}
 
+      {/* [P2B] Improved empty state with diagnostic */}
       {!hasAnyData && (
-        <div className="p-4 rounded-lg bg-[#1A1A22] border border-[#2A2A35] text-center">
-          <ListX className="w-8 h-8 text-[#5A5A6A] mx-auto mb-2" />
-          <p className="text-xs text-[#8A8A9A]">
-            No blocked or deferred method requests found in the current final program truth.
-          </p>
-          <p className="text-[10px] text-[#6A6A7A] mt-1">
-            This is normal for newly generated programs or programs without method preference conflicts.
-          </p>
+        <div className="p-4 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <div className="text-center mb-4">
+            <HelpCircle className="w-8 h-8 text-[#5A5A6A] mx-auto mb-2" />
+            <p className="text-xs font-medium text-[#9A9AAA]">
+              No requested/deferred methods found in current final truth
+            </p>
+            <p className="text-[10px] text-[#6A6A7A] mt-1">
+              The override planner is wired, but this program did not expose blocked, deferred, suppressed, or not-materialized method requests to plan from.
+            </p>
+          </div>
+          
+          {/* Truth source diagnostics */}
+          <div className="p-2 rounded bg-[#0F0F12] border border-[#2A2A35] mb-3">
+            <span className="text-[9px] font-medium uppercase tracking-wide text-[#5A5A6A] block mb-2">
+              Sources Checked
+            </span>
+            <ul className="space-y-1 text-[9px] text-[#6A6A7A]">
+              <li className="flex items-center gap-2">
+                {hasMethodRepTruth ? (
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <XCircle className="w-3 h-3 text-[#5A5A6A]" />
+                )}
+                weeklyMethodRepresentation
+              </li>
+              <li className="flex items-center gap-2">
+                <XCircle className="w-3 h-3 text-[#5A5A6A]" />
+                weeklyMethodDecisionSummary (not exposed)
+              </li>
+              <li className="flex items-center gap-2">
+                <XCircle className="w-3 h-3 text-[#5A5A6A]" />
+                weeklyMethodMaterializationPlan (not exposed)
+              </li>
+            </ul>
+          </div>
+          
+          {/* Status indicators */}
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A4A]">
+              Saved program mutation: disabled
+            </span>
+            <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              Preview planner: available once truth exists
+            </span>
+          </div>
+          
+          {/* [P2B] Diagnostic example row — clearly labeled as example only */}
+          <div className="p-2 rounded bg-[#0F0F12]/50 border border-dashed border-[#3A3A4A]">
+            <div className="flex items-center gap-2 mb-1">
+              <Info className="w-3 h-3 text-[#5A5A6A]" />
+              <span className="text-[9px] text-[#5A5A6A] font-medium">
+                Example only — not from your program
+              </span>
+            </div>
+            <div className="flex items-start gap-3 p-2 rounded-lg bg-[#1A1A22]/50 border border-[#2A2A35] opacity-60">
+              <span className="px-2 py-0.5 text-[9px] font-medium rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 shrink-0 mt-0.5">
+                Deferred
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-medium text-[#8A8A9A]">Circuits</p>
+                  <span className="px-1.5 py-0.5 text-[8px] rounded bg-[#2A2A35] text-[#5A5A6A] border border-[#3A3A4A]">
+                    Diagnostic
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-[#4A4A5A] ml-auto shrink-0" />
+                </div>
+                <p className="text-[10px] text-[#5A5A6A] leading-relaxed mt-0.5">
+                  This shows what the UI will look like when real method truth exists.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Tap hint */}
       {hasAnyData && (
-        <p className="text-[10px] text-[#6A6A7A] flex items-center gap-1">
+        <p className="text-[10px] text-[#7A7A8A] flex items-center gap-1">
           <Info className="w-3 h-3" />
           Tap a method to view override planning details
         </p>
@@ -1034,9 +1163,38 @@ export function ProgramCoachIntelligenceHub({
     : `${selectedSkillRepresentations.length} selected`
 
   const methodItems = extractRequestedMethodDecisions(program)
-  const blockedOrDeferredCount = methodItems.filter(
-    m => m.state === 'blocked' || m.state === 'deferred' || m.state === 'suppressed'
+  // [P2B] Broaden badge count to include useful planner rows
+  const attentionMethodCount = methodItems.filter(
+    m => ['blocked', 'deferred', 'suppressed', 'not_materialized', 'unknown'].includes(m.state)
   ).length
+  const appliedMethodCount = methodItems.filter(
+    m => ['applied', 'materialized'].includes(m.state)
+  ).length
+  const reviewableMethodCount = methodItems.filter(m => m.state !== 'not_requested').length
+  
+  // [P2B] Check for active previews
+  const [activePreviews, setActivePreviews] = useState<MethodOverridePreview[]>([])
+  useEffect(() => {
+    setActivePreviews(getMethodOverridePreviews())
+  }, [requestedMethodsOpen])
+  const hasActivePreviews = activePreviews.length > 0
+  
+  // Compute button summary for Method Planner
+  let methodPlannerSummary = 'Preview'
+  let methodPlannerBadge: string | undefined
+  let methodPlannerBadgeVariant: 'warning' | 'success' | 'secondary' = 'secondary'
+  
+  if (hasActivePreviews) {
+    methodPlannerSummary = 'Preview Active'
+    methodPlannerBadge = `${activePreviews.length}`
+    methodPlannerBadgeVariant = 'success'
+  } else if (attentionMethodCount > 0) {
+    methodPlannerSummary = 'Review'
+    methodPlannerBadge = `${attentionMethodCount}`
+    methodPlannerBadgeVariant = 'warning'
+  } else if (appliedMethodCount > 0) {
+    methodPlannerSummary = 'Included'
+  }
 
   const hasCoachRecs = coachRecommendationBundle?.primary !== null
 
@@ -1087,14 +1245,20 @@ export function ProgramCoachIntelligenceHub({
             disabled={!hasCoachRecs}
           />
 
+          {/* [P2B] Method Planner — clearer entry point, always visible */}
           <HubButton
-            icon={<ListX className="w-3.5 h-3.5 text-[#9A9AAA]" />}
-            label="Deferred Methods"
-            badge={blockedOrDeferredCount > 0 ? `${blockedOrDeferredCount}` : undefined}
-            badgeVariant={blockedOrDeferredCount > 0 ? 'warning' : 'secondary'}
+            icon={<Eye className="w-3.5 h-3.5 text-purple-400" />}
+            label="Method Planner"
+            summary={methodPlannerSummary}
+            badge={methodPlannerBadge}
+            badgeVariant={methodPlannerBadgeVariant}
             onClick={() => setRequestedMethodsOpen(true)}
           />
         </div>
+        {/* [P2B] Compact helper line */}
+        <p className="text-[9px] text-[#5A5A6A] mt-2 px-1">
+          Review requested, deferred, or preview-only method overrides.
+        </p>
       </div>
 
       {/* Skill Phase Sheet */}
@@ -1171,21 +1335,21 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
-            <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
+            <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle ?? null} />
           </div>
         </SheetContent>
       </Sheet>
 
-      {/* Requested/Deferred Methods Sheet */}
+      {/* [P2B] Method Override Planner Sheet — clearly labeled entry point */}
       <Sheet open={requestedMethodsOpen} onOpenChange={setRequestedMethodsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
           <SheetHeader>
             <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
-              <ListX className="w-4 h-4 text-[#9A9AAA]" />
-              Requested & Deferred Methods
+              <Eye className="w-4 h-4 text-purple-400" />
+              Method Override Planner
             </SheetTitle>
             <SheetDescription className="text-[#7A7A8A]">
-              Methods requested, blocked, deferred, or not materialized
+              Preview-only. Create safe override previews without changing your saved program.
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">

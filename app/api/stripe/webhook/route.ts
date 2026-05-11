@@ -1,6 +1,6 @@
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import {
   syncStripeSubscriptionToUser,
   downgradeUserSubscription,
@@ -66,7 +66,7 @@ interface StripeEvent {
  * Handle checkout.session.completed event
  * Called when user completes payment - this is the trustworthy moment to send upgrade email
  */
-async function handleCheckoutSessionCompleted(event: StripeEvent): Promise<void> {
+async function handleCheckoutSessionCompleted(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
   const session = event.data.object
   const customerId = session.customer as string
   const email = session.customer_email as string || session.email as string
@@ -132,7 +132,7 @@ async function handleCheckoutSessionCompleted(event: StripeEvent): Promise<void>
  * Handle customer.subscription.updated event
  * Called when subscription status changes (trial -> active, payment issues, etc.)
  */
-async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
+async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
   const subscription = event.data.object
   const customerId = subscription.customer as string
   const subscriptionId = subscription.id as string
@@ -170,7 +170,7 @@ async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
  * Handle customer.subscription.deleted event
  * Called when subscription is canceled - send cancellation email
  */
-async function handleSubscriptionDeleted(event: StripeEvent): Promise<void> {
+async function handleSubscriptionDeleted(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
   const subscription = event.data.object
   const customerId = subscription.customer as string
   const subscriptionId = subscription.id as string
@@ -219,7 +219,7 @@ async function handleSubscriptionDeleted(event: StripeEvent): Promise<void> {
  * Handle invoice.payment_succeeded event
  * Called when invoice payment succeeds
  */
-async function handleInvoicePaymentSucceeded(event: StripeEvent): Promise<void> {
+async function handleInvoicePaymentSucceeded(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
   const invoice = event.data.object
   const customerId = invoice.customer as string
   const subscriptionId = invoice.subscription as string
@@ -241,7 +241,7 @@ async function handleInvoicePaymentSucceeded(event: StripeEvent): Promise<void> 
  * Handle invoice.payment_failed event
  * Called when invoice payment fails - send payment failed email
  */
-async function handleInvoicePaymentFailed(event: StripeEvent): Promise<void> {
+async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
   const invoice = event.data.object
   const customerId = invoice.customer as string
   const invoiceId = invoice.id as string
@@ -293,6 +293,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Get Stripe client (request-time safe)
+    const stripe = getStripe()
+    
     // Get raw body for signature verification
     const body = await request.text()
     const headerPayload = await headers()
@@ -323,23 +326,23 @@ export async function POST(request: Request) {
     // Handle specific events
     switch (event.type) {
       case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event)
+        await handleCheckoutSessionCompleted(event, stripe)
         break
 
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event)
+        await handleSubscriptionUpdated(event, stripe)
         break
 
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event)
+        await handleSubscriptionDeleted(event, stripe)
         break
 
       case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event)
+        await handleInvoicePaymentSucceeded(event, stripe)
         break
 
       case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event)
+        await handleInvoicePaymentFailed(event, stripe)
         break
 
       default:

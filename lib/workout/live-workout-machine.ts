@@ -294,7 +294,7 @@ export type WorkoutMachineAction =
       interExerciseRestSeconds?: number
     }
   | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
-  | { type: 'COMPLETE_BLOCK_ROUND_REST' } // Block round rest -> next round
+  | { type: 'COMPLETE_BLOCK_ROUND_REST'; firstMemberExerciseIndex: number } // Block round rest -> next round
   | { type: 'START_BETWEEN_EXERCISE_REST'; seconds: number }
   | { type: 'SKIP_BETWEEN_EXERCISE_REST' }
   | { type: 'ADVANCE_TO_NEXT_EXERCISE'; nextIndex: number; targetValue: number }
@@ -1268,32 +1268,18 @@ export function workoutMachineReducer(
       // [P2F-3] FIX: Reset currentExerciseIndex to first member of block, not just memberIndex
       // Previous bug: memberIndex reset to 0 but exerciseIndex stayed on last member (B),
       // causing Round 2 to start at B instead of A.
-      let firstMemberExerciseIndex = state.currentExerciseIndex
+      // The firstMemberExerciseIndex is now passed in the action payload from the UI layer
+      // which has access to the execution plan.
+      const firstMemberExerciseIndex = action.firstMemberExerciseIndex
       
-      // Find the current block and get its first member's exercise index
-      if (state.executionPlan?.blocks) {
-        // Find block containing current exercise
-        for (const block of state.executionPlan.blocks) {
-          if (block.memberExerciseIndexes?.includes(state.currentExerciseIndex)) {
-            // Found the block - get first member's index
-            if (block.memberExerciseIndexes.length > 0) {
-              firstMemberExerciseIndex = block.memberExerciseIndexes[0]
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[machine] BLOCK_ROUND_REST_COMPLETE_RESET_TO_FIRST_MEMBER', {
-                  previousExerciseIndex: state.currentExerciseIndex,
-                  nextExerciseIndex: firstMemberExerciseIndex,
-                  previousMemberIndex: state.currentMemberIndex,
-                  nextMemberIndex: 0,
-                  currentRound: state.currentRound,
-                  blockId: block.blockId,
-                  blockLabel: block.blockLabel,
-                  memberCount: block.memberExerciseIndexes.length,
-                })
-              }
-            }
-            break
-          }
-        }
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[machine] BLOCK_ROUND_REST_COMPLETE_RESET_TO_FIRST_MEMBER', {
+          previousExerciseIndex: state.currentExerciseIndex,
+          nextExerciseIndex: firstMemberExerciseIndex,
+          previousMemberIndex: state.currentMemberIndex,
+          nextMemberIndex: 0,
+          currentRound: state.currentRound,
+        })
       }
       
       return {

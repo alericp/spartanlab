@@ -776,7 +776,7 @@ From recent conversation:
   - TSC STATUS: PASS
   - BUILD STATUS: FAIL unrelated env (Stripe API key/env configuration)
   - VISIBLE USER VERIFICATION LOCATIONS:
-    - Live Workout ����������������� completed/recent set ledger/history row
+    - Live Workout ������������������� completed/recent set ledger/history row
     - Live Workout → top-right "Why this set?" → Live Set Guidance modal → Current Target → "Your RPE"
     - Live Workout → Evidence Used
     - Program page/session cards
@@ -1743,6 +1743,32 @@ From recent conversation:
     9. Start Workout still works
   - TSC STATUS: PASS (exit code 0, no errors)
   - NEXT STEP: If visible acceptance passes, proceed to P3 safe apply corridor
+- SPARTANLAB-P2C: Program Top Cleanup + Method Planner Mobile-Safe Sheet Polish — COMPLETE (2026-05-11)
+  - OBJECTIVE: Make Program Page top shorter/cleaner, fix Method Planner detail footer on mobile
+  - ROOT CAUSE: Bulky pre-hub inline surfaces (Weekly Intelligence Strip, Coach Signals, Why This Program, Progression Clarity) created tall scroll before Day 1. Method detail action buttons were not sticky and got clipped on mobile.
+  - FILES CHANGED:
+    - components/programs/AdaptiveProgramDisplay.tsx: Condensed Weekly Intelligence Strip from ~160 lines to ~30 lines, condensed Today Guidance from ~60 lines to ~25 lines
+    - components/programs/ProgramCoachIntelligenceHub.tsx: Fixed MethodDetailModalContent with flex layout + sticky footer for mobile-safe action buttons, improved section labels
+  - WHAT CHANGED VISIBLY:
+    - Weekly Intelligence Strip: Now shows only coaching headline + compact week/phase/structure row (removed Coach Signals, Why This Program, Progression Clarity inline - available in hub)
+    - Today Guidance: Condensed to single-line compact format (status dot + badge + next action)
+    - Method Planner detail: Action buttons now in sticky footer with safe-area-inset padding
+    - "Create Override Preview" button fully visible and tappable on mobile
+    - Day 1 appears sooner (removed ~200 lines of bulky content)
+  - SECTION LABEL IMPROVEMENTS:
+    - "Current Decision Reason" → "Why Coach Held This Back"
+    - "Suggested Placement" → "Best Safe Insertion Point"
+  - MOBILE FOOTER FIX:
+    - MethodDetailModalContent: `flex flex-col h-full min-h-0`
+    - Scroll body: `flex-1 overflow-y-auto pb-24`
+    - Sticky footer: `sticky bottom-0 z-10 border-t bg-[#0F0F12]/95 backdrop-blur-sm pb-[max(0.75rem,env(safe-area-inset-bottom))]`
+    - Buttons: `h-10` for better tap targets
+  - TRUTH PRESERVATION:
+    - All removed inline content still accessible via Hub sheets
+    - No data deleted, only moved behind buttons
+    - No generator/schema/package changes
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - NEXT STEP: Safe apply corridor for override previews OR method/exercise taxonomy phase
 
 ---
 

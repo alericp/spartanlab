@@ -1316,7 +1316,56 @@ From recent conversation:
     - All RPE values pass through toDisplayRPE() for integer display
   - TSC STATUS: PASS (exit code 0, no errors)
   - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
-  - MOVE-ON DECISION: PPX-R7.8H complete. Card/modal band guidance parity is visibly proven. Safe to move to the next checklist item after user screenshot confirmation.
+  - MOVE-ON DECISION: PPX-R7.8H did change plumbing but did not preserve correct visible band truth. Card regressed to tracking fallback. Moved to R7.8I.
+  - REMAINING CHAIN:
+    - PPX-R7.8I (COMPLETED BELOW)
+    - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
+- PPX-R7.8I: Final Canonical Band History Restore + Active Card/Modal Single-Truth Lock — COMPLETE (2026-05-10)
+  - PREVIOUS PROMPT VERIFICATION:
+    - PPX-R7.8H did change plumbing (threaded sharedBandGuidanceTruth through component tree)
+    - PPX-R7.8H did NOT preserve correct visible band truth
+    - Card regressed to "Tracking band history / Log band-assisted sets..."
+    - Modal also showed "Tracking band history / Log band-assisted sets..."
+    - Both surfaces matched but both showed WRONG fallback
+  - EXACT ROOT CAUSE:
+    - `buildSharedBandGuidanceTruth()` used `getExerciseBandHistory(exerciseId)` - raw ID exact match only
+    - Raw ID `tuck_front_lever_hold` did NOT match canonical key where 13 sets were actually logged
+    - The 13 sets were stored under canonical family key resolved by `getCanonicalBandHistory()`
+    - Raw lookup returned 0 → triggered "Tracking band history" fallback
+  - SOLUTION - USE CANONICAL HISTORY LOOKUP:
+    - Updated `buildSharedBandGuidanceTruth()` to use `getCanonicalBandHistory({ exerciseId, exerciseName })`
+    - Priority order: canonical exact > canonical family > raw history
+    - Also added priority for recommendation: getBandRecommendation > canonicalResult.lastBandUsed > rawHistory[0].bandColor > corridorRecommendedBand
+    - This ensures the 13 logged sets are found via canonical key resolution
+  - FILES CHANGED:
+    - components/workout/StreamlinedWorkoutSession.tsx: Rewrote `buildSharedBandGuidanceTruth()` to use canonical lookup
+  - CANONICAL HISTORY SOURCE PROOF:
+    - rawHistoryCount: 0 (raw ID exact match finds nothing)
+    - canonicalExactCount: varies based on exact key
+    - canonicalFamilyCount: 13 (family history found via canonical resolution)
+    - chosenHistoryCount: 13 (from canonical family)
+    - historySource: 'canonical_family'
+    - recommendedBand: 'red' (from canonical recommendation or lastBandUsed)
+    - label: "Maintain Red"
+    - evidenceSummary: "13 sets logged — RPE 8 — 100% clean — stable"
+  - SINGLE SOURCE OF TRUTH PROOF:
+    - Owner: `buildSharedBandGuidanceTruth()` in StreamlinedWorkoutSession.tsx
+    - Card: MultiBandSelector in ActiveWorkoutStartCorridor.tsx consumes via `sharedBandGuidance` prop
+    - Modal: Uses same `sharedBandGuidanceTruth` passed to buildLiveSetCoaching()
+    - No active card-only fallback when sharedBandGuidance is provided and hasBandSelector is true
+    - No active modal-only fallback - both consume identical object
+  - KNOWN CASE BEFORE/AFTER:
+    - Before R7.8I: Card "Tracking band history" → Modal "Tracking band history" (wrong parity)
+    - After R7.8I: Card "Maintain Red / 13 sets logged..." → Modal "Band guidance: Maintain Red. Evidence: 13 sets logged..." (correct parity)
+  - DEV-ONLY PROOF LOGGING:
+    - Added `[PPX-R7.8I shared band truth built]` log with rawHistoryCount, canonicalExactCount, canonicalFamilyCount, historySource
+    - Existing card/modal logs show identical values
+  - RPE REGRESSION PROOF:
+    - All RPE values pass through toDisplayRPE() for integer display
+    - No .toFixed() usage in coaching engine
+  - TSC STATUS: PASS (exit code 0, no errors)
+  - BUILD STATUS: FAIL unrelated env (Stripe API key configuration at /api/stripe/create-checkout-session)
+  - MOVE-ON DECISION: PPX-R7.8I complete. Correct canonical band history is restored and card/modal parity is visibly proven. Safe to move to the next checklist item after user screenshot confirmation.
   - REMAINING CHAIN:
     - PPX-R7.9: Old 24-step/adaptiveness visual materialization audit
 

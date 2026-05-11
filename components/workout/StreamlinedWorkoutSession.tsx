@@ -81,6 +81,7 @@ import {
   Sparkles,
   Info,
   TrendingUp,
+  Save,
 } from 'lucide-react'
 import {
   Dialog,
@@ -4233,7 +4234,13 @@ export function StreamlinedWorkoutSession({
     const exerciseCount = safeWorkoutSessionContract.exercises?.length ?? 0
     const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
     
-    if (saved && saved.status !== 'completed') {
+    // [PPX-R7.8K] Accept completed sessions if they have valid liveFlowPhase (completedMain/cooldown/done)
+    // This allows exact refresh/resume from any workout phase, not just active/resting
+    const isValidCompletedPhaseRestore = saved?.status === 'completed' && 
+      saved?.liveFlowPhase?.phase && 
+      ['completedMain', 'cooldown', 'done'].includes(saved.liveFlowPhase.phase)
+    
+    if (saved && (saved.status !== 'completed' || isValidCompletedPhaseRestore)) {
       // [LIVE-WORKOUT-MACHINE] Validate hydration payload before accepting
       const validatedPayload = validateHydrationPayload(saved, exerciseCount)
       
@@ -7259,6 +7266,21 @@ failureStage: null,
     }
   }, [safeStatus, sessionPhase, cooldownSkipped, returnedFromCooldown, safeWorkoutSessionContract.cooldown])
   
+  // ==========================================================================
+  // [PPX-R7.8K] PHASE MISMATCH SAFETY — MAIN + COMPLETED + RETURNED FROM COOLDOWN
+  // ==========================================================================
+  // If user backed from cooldown and we're in main phase but status is completed,
+  // AND returnedFromCooldown is true, redirect to completedMain to avoid dead controls.
+  // This is a safety net - the cooldown Back handler now sets completedMain directly,
+  // but this catches any edge cases where we end up in main+completed+returnedFromCooldown.
+  // ==========================================================================
+  useEffect(() => {
+    if (safeStatus === 'completed' && sessionPhase === 'main' && returnedFromCooldown) {
+      console.log('[PPX-R7.8K phase mismatch] main phase with completed status + returnedFromCooldown; redirecting to completedMain')
+      setSessionPhase('completedMain')
+    }
+  }, [safeStatus, sessionPhase, returnedFromCooldown])
+  
   // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
   // to comply with React's rules of hooks (same hook count/order on every render)
@@ -8520,6 +8542,26 @@ if (shouldShowLocalFallback) {
                       Skip Warm-Up
                     </Button>
                   </div>
+                  
+                  {/* [PPX-R7.8K] Save/Discard/Exit controls for warmup */}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-[#2B313A]">
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveAndExit}
+                      className="flex-1 h-9 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] text-sm"
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1" />
+                      Save & Exit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleDiscardAndExit}
+                      className="flex-1 h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      Discard
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -8749,6 +8791,26 @@ if (shouldShowLocalFallback) {
                   Finish Workout
                 </Button>
               )}
+              
+              {/* [PPX-R7.8K] Save/Discard/Exit controls for completedMain */}
+              <div className="flex gap-2 mt-3 pt-3 border-t border-[#2B313A]">
+                <Button
+                  variant="outline"
+                  onClick={handleSaveAndExit}
+                  className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
+                >
+                  <Save className="w-4 h-4 mr-1" />
+                  Save & Exit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDiscardAndExit}
+                  className="flex-1 h-10 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Discard
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -8990,14 +9052,14 @@ if (shouldShowLocalFallback) {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        // [PPX-R4H] Back goes to previous cooldown item, or to live workout context at index 0
+                        // [PPX-R7.8K] Back goes to previous cooldown item, or to completedMain review surface
                         if (cooldownIndex > 0) {
                           setCooldownIndex(prev => prev - 1)
                         } else {
-                          // At first cooldown item, return to last live workout context
-                          // Set flag to prevent auto-transition back to cooldown
+                          // At first cooldown item, return to completedMain review surface
+                          // This avoids deadlock where main phase renders dead controls on completed status
                           setReturnedFromCooldown(true)
-                          setSessionPhase('main')
+                          setSessionPhase('completedMain')
                         }
                       }}
                       className="h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] px-3"
@@ -9019,6 +9081,26 @@ if (shouldShowLocalFallback) {
                       className="flex-1 h-10 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]"
                     >
                       Skip Cool-Down
+                    </Button>
+                  </div>
+                  
+                  {/* [PPX-R7.8K] Save/Discard/Exit controls for cooldown */}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-[#2B313A]">
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveAndExit}
+                      className="flex-1 h-9 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] text-sm"
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1" />
+                      Save & Exit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleDiscardAndExit}
+                      className="flex-1 h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      Discard
                     </Button>
                   </div>
                 </div>
@@ -9762,7 +9844,7 @@ if (shouldShowLocalFallback) {
               className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-semibold"
             >
               <LayoutDashboard className="w-4 h-4 mr-2" />
-              Return to Dashboard
+              Save & Return to Dashboard
             </Button>
             <Link href="/program" className="block">
               <Button
@@ -9773,6 +9855,15 @@ if (shouldShowLocalFallback) {
                 View Program
               </Button>
             </Link>
+            {/* [PPX-R7.8K] Discard option for done surface */}
+            <Button
+              variant="outline"
+              onClick={handleDiscardAndExit}
+              className="w-full h-9 border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              Discard Workout
+            </Button>
           </div>
           
           {/* ================================================================

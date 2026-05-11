@@ -11000,8 +11000,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       onSetIsPerSide: (isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide }),
       onExit: () => setShowExitConfirm(true),
       onSaveAndExit: handleSaveAndExit,
-      // [AB6.1.1C] Open confirmation dialog instead of directly discarding
-      onDiscardWorkout: () => setShowDiscardConfirm(true),
+      // [AB6.1.2.3B] Active workout child modal now owns its own confirmation view.
+      // When child calls onDiscardWorkout(), it means user already confirmed in child modal.
+      // Execute the real destructive cleanup directly instead of opening parent dialog again.
+      onDiscardWorkout: handleDiscardAndExit,
       onSkipSet: handleSkipSet,
       onEndExercise: handleEndExercise,
       onSkip: handleSkipExercise,

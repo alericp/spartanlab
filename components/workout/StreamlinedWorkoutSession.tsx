@@ -2121,6 +2121,65 @@ type SharedBandGuidanceTruth = {
   bgColor: string
 }
 
+// [PPX-R7.8J] PURE SEMANTIC TONE RESOLVER - NO REACT HOOKS
+// Maps band guidance facts to visual tone classes
+// Green = stable success, Amber = building/caution, Neutral = tracking/starting, Red = danger
+function resolveSharedBandGuidanceTone(facts: {
+  action: 'maintain' | 'recommended' | 'starting' | 'tracking' | 'none'
+  source: 'history_recommendation' | 'corridor_recommendation' | 'selected_band' | 'tracking' | 'none'
+  historyCount: number
+  cleanPercent: number | null
+  stability: string | null
+}): { tone: 'success' | 'caution' | 'neutral' | 'danger'; color: string; bgColor: string } {
+  const { action, source, historyCount, cleanPercent, stability } = facts
+  
+  // SUCCESS / GREEN: Stable history-based recommendation with good evidence
+  // maintain + history_recommendation + stable + historyCount >= 6 + cleanPercent >= 80
+  if (
+    action === 'maintain' &&
+    source === 'history_recommendation' &&
+    stability === 'stable' &&
+    historyCount >= 6 &&
+    (cleanPercent === null || cleanPercent >= 80)
+  ) {
+    return {
+      tone: 'success',
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/10',
+    }
+  }
+  
+  // CAUTION / AMBER: Building history, some evidence but not stable yet
+  // maintain/recommended with history but stability is 'building' or historyCount < 6
+  if (
+    (action === 'maintain' || action === 'recommended') &&
+    historyCount > 0 &&
+    (stability === 'building' || historyCount < 6)
+  ) {
+    return {
+      tone: 'caution',
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
+    }
+  }
+  
+  // NEUTRAL: Starting recommendation or tracking with no history
+  if (action === 'starting' || action === 'tracking' || action === 'none') {
+    return {
+      tone: 'neutral',
+      color: 'text-[#A4ACB8]',
+      bgColor: 'bg-[#2B313A]/50',
+    }
+  }
+  
+  // Default neutral fallback
+  return {
+    tone: 'neutral',
+    color: 'text-[#6B7280]',
+    bgColor: 'bg-[#1A1D21]/50',
+  }
+}
+
 // [PPX-R7.8I] PURE HELPER FUNCTION - NO REACT HOOKS
 // Uses CANONICAL history lookup to find family/exact matches (not just raw ID)
 // This ensures the 13 logged sets for Tuck Front Lever Hold are found via canonical key resolution
@@ -2236,8 +2295,17 @@ function buildSharedBandGuidanceTruth(args: {
   }
   
   if (isHistoryBased && recommendedBand) {
-    // [PPX-R7.8I] Use "Maintain" for stable history-based recommendations
-    // This matches the previous known-good card behavior
+    // [PPX-R7.8J] Use semantic tone resolver for correct visual feedback
+    // Stable + high cleanPercent + 6+ sets = success/green
+    // Building history = caution/amber
+    const tone = resolveSharedBandGuidanceTone({
+      action: 'maintain',
+      source: 'history_recommendation',
+      historyCount,
+      cleanPercent,
+      stability,
+    })
+    
     return {
       hasBandSelector: true,
       action: 'maintain',
@@ -2250,10 +2318,18 @@ function buildSharedBandGuidanceTruth(args: {
       cleanPercent,
       stability,
       source: 'history_recommendation',
-      color: 'text-amber-400',
-      bgColor: 'bg-amber-500/10',
+      color: tone.color,
+      bgColor: tone.bgColor,
     }
   } else if (recommendedBand) {
+    const tone = resolveSharedBandGuidanceTone({
+      action: 'starting',
+      source: 'corridor_recommendation',
+      historyCount,
+      cleanPercent,
+      stability,
+    })
+    
     return {
       hasBandSelector: true,
       action: 'starting',
@@ -2266,10 +2342,18 @@ function buildSharedBandGuidanceTruth(args: {
       cleanPercent,
       stability,
       source: 'corridor_recommendation',
-      color: 'text-[#A4ACB8]',
-      bgColor: 'bg-[#2B313A]/50',
+      color: tone.color,
+      bgColor: tone.bgColor,
     }
   } else {
+    const tone = resolveSharedBandGuidanceTone({
+      action: 'tracking',
+      source: 'tracking',
+      historyCount,
+      cleanPercent,
+      stability,
+    })
+    
     return {
       hasBandSelector: true,
       action: 'tracking',
@@ -2282,8 +2366,8 @@ function buildSharedBandGuidanceTruth(args: {
       cleanPercent,
       stability,
       source: 'tracking',
-      color: 'text-[#6B7280]',
-      bgColor: 'bg-[#1A1D21]/50',
+      color: tone.color,
+      bgColor: tone.bgColor,
     }
   }
 }

@@ -1264,11 +1264,54 @@ export function workoutMachineReducer(
         console.warn('[machine] COMPLETE_BLOCK_ROUND_REST called but phase is not block_round_rest:', state.phase)
         return state
       }
+      
+      // [P2F-3] FIX: Reset currentExerciseIndex to first member of block, not just memberIndex
+      // Previous bug: memberIndex reset to 0 but exerciseIndex stayed on last member (B),
+      // causing Round 2 to start at B instead of A.
+      let firstMemberExerciseIndex = state.currentExerciseIndex
+      
+      // Find the current block and get its first member's exercise index
+      if (state.executionPlan?.blocks) {
+        // Find block containing current exercise
+        for (const block of state.executionPlan.blocks) {
+          if (block.memberExerciseIndexes?.includes(state.currentExerciseIndex)) {
+            // Found the block - get first member's index
+            if (block.memberExerciseIndexes.length > 0) {
+              firstMemberExerciseIndex = block.memberExerciseIndexes[0]
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[machine] BLOCK_ROUND_REST_COMPLETE_RESET_TO_FIRST_MEMBER', {
+                  previousExerciseIndex: state.currentExerciseIndex,
+                  nextExerciseIndex: firstMemberExerciseIndex,
+                  previousMemberIndex: state.currentMemberIndex,
+                  nextMemberIndex: 0,
+                  currentRound: state.currentRound,
+                  blockId: block.blockId,
+                  blockLabel: block.blockLabel,
+                  memberCount: block.memberExerciseIndexes.length,
+                })
+              }
+            }
+            break
+          }
+        }
+      }
+      
       return {
         ...state,
         phase: 'active',
         currentMemberIndex: 0,
+        currentExerciseIndex: firstMemberExerciseIndex,
         blockRoundRestSeconds: 0,
+        // Reset set-level state for clean new member
+        selectedRPE: null,
+        currentSetNote: '',
+        currentSetReasonTags: [],
+        bandUsed: 'none',
+        selectedBands: [],
+        interExerciseRestSeconds: 0,
+        // Seed values reset to 0 so corridor re-seeds from prescription
+        repsValue: 0,
+        holdValue: 0,
       }
     }
     

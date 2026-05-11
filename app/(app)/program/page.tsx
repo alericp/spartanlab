@@ -845,6 +845,8 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 // ProgramDisplayWrapper, which is the single canonical render point for every
 // visible program surface, so a static import cannot widen the render graph.
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
+// [P2F-3] Coach Intelligence Hub for consolidated program intelligence surfaces
+import { ProgramCoachIntelligenceHub } from '@/components/programs/ProgramCoachIntelligenceHub'
 // [AB11-1] Calibration Checkpoint surface — additive, source-truth-only,
 // derives from the typed recommendation engine (no parallel cosmetic copy).
 // [AB11-2] The pure recommendation engine is now consumed INSIDE the card,
@@ -3109,38 +3111,38 @@ function ProgramDisplayWrapper({
         onRegenerate={onRegenerate}
       />
 
-      {/* ==========================================================================
-          [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth.
-          Consumes the single canonical `resolvedTruthExplanation` computed
-          above — either the build-time stamp preserved on the saved program
-          OR the same-extractor fallback for legacy programs. The component
-          internally null-renders when truth is absent, so no extra guard
-          is needed here and no fake content can be invented. This is the
-          primary user-facing proof surface for everything the truth
-          pipeline (identity, skill coverage, schedule adaptation, method
-          materiality, working-state / DB-truth winner rollup, authoritative
-          multi-skill intent contract) has been computing. Placed above
-          ProgramDecisionSummary deliberately: decisions read BELOW, the
-          full truthful explanation reads ABOVE.
-          ========================================================================== */}
-      <ProgramTruthSummary
-        truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
-        // [PHASE AB1] Forward the Rule Population Ledger stamped by the
-        // builder so the user-facing summary can render the honest
-        // executable / visible / scoring-only / blocked / no-target /
-        // audit-only rollup. Defensive cast: the ledger is optional and
-        // missing on programs generated before AB1.
-        rulePopulationLedger={
-          (program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null
-        }
-        // [GOAL-FAMILY-BALANCE-GUARD] Forward the post-Phase-P tissue-load
-        // saturation audit stamped on the program. The summary component
-        // renders exactly one compact line ONLY when `visibleSummary` is a
-        // non-empty string. Defensive cast: the audit is optional and
-        // missing on programs generated before this phase.
-        goalFamilyBalanceAudit={
-          (program as unknown as { goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] })?.goalFamilyBalanceAudit ?? null
-        }
+      {/* [P2F-3] Coach Intelligence Hub — consolidated program intelligence surfaces */}
+      <ProgramCoachIntelligenceHub
+        program={program}
+        selectedSkillRepresentations={selectedSkillRepresentations}
+        intelligenceContract={intelligenceContract}
+        calibrationInput={{
+          primaryGoal: program.primaryGoal ?? null,
+          secondaryGoal: (program as unknown as { secondaryGoal?: string | null })?.secondaryGoal ?? null,
+          selectedSkills: program.selectedSkills ?? [],
+          equipmentAvailable: program.equipmentAvailable ?? [],
+        }}
+        coachRecommendationBundle={(() => {
+          // [P2F-3] Derive coach recommendations inline - same logic as the proof card section
+          const performanceAdaptation = program.performanceAdaptation
+          if (!performanceAdaptation?.programLevelSignals) return null
+          const workoutSummary = summarizeWorkoutEvidence(performanceAdaptation.programLevelSignals)
+          const calibrationPlan = buildEvidenceAwareCalibrationPlan({
+            workoutSummary,
+            inputAvailability: { workout: 'ok', benchmark: 'absent' },
+          })
+          const generationInfluence = program.evidenceCalibrationInfluence ?? null
+          const generationShapingProof = program.evidenceCalibrationShapingProof ?? null
+          return deriveEvidenceCoachRecommendations({
+            plan: calibrationPlan,
+            influence: generationInfluence,
+            shapingProof: generationShapingProof,
+          })
+        })()}
+        currentWeekNumber={program.currentWeekNumber ?? 1}
+        truthExplanation={resolvedTruthExplanation as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation'] | null}
+        rulePopulationLedger={(program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null}
+        goalFamilyBalanceAudit={(program as unknown as { goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] })?.goalFamilyBalanceAudit ?? null}
       />
 
         {/* ==========================================================================
@@ -17686,252 +17688,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           )}
         </div>
         
-        {/* ==========================================================================
-            SCHEDULE STATUS - THE ONLY ALWAYS-VISIBLE PRODUCTION SCHEDULE TRUTH SURFACE
-            
-            This panel is the single authoritative schedule display for users.
-            - Shows Type (Flexible/Static), Complexity, Current sessions, Recommended sessions
-            - Shows alignment status badge (Aligned / Update Available / Slightly Under)
-            - Shows regeneration CTA when current < recommended by meaningful gap
-            
-            Legacy competing panels (e.g. "SCHEDULE TRUTH NOW") have been retired.
-            The post-regen diagnostic box only shows when there's an actual mismatch.
-            ========================================================================== */}
-        {program && !shouldRenderModifyBuilder && (
-          <div className="mt-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-zinc-300 font-medium">Schedule Status</span>
-              <span className={(() => {
-                const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-                const actual = program?.sessions?.length ?? 0
-                if (actual === recommended) return 'text-green-400 text-xs px-2 py-0.5 bg-green-400/10 rounded-full'
-                if (actual < recommended && (recommended - actual) >= 2) return 'text-amber-400 text-xs px-2 py-0.5 bg-amber-400/10 rounded-full'
-                if (actual < recommended) return 'text-yellow-400 text-xs px-2 py-0.5 bg-yellow-400/10 rounded-full'
-                return 'text-zinc-400 text-xs px-2 py-0.5 bg-zinc-400/10 rounded-full'
-              })()}>
-                {(() => {
-                  const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-                  const actual = program?.sessions?.length ?? 0
-                  if (actual === recommended) return 'Aligned'
-                  if (actual < recommended && (recommended - actual) >= 2) return 'Update Available'
-                  if (actual < recommended) return 'Slightly Under'
-                  return 'Over Baseline'
-                })()}
-              </span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-zinc-400">
-              {/* Schedule Type */}
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Type</span>
-                <span className={scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'text-cyan-400' : 'text-purple-400'}>
-                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'Flexible' : 'Static'}
-                </span>
-              </div>
-              
-              {/* Complexity */}
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Complexity</span>
-                <span className={
-                  (scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'text-orange-400' :
-                  (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'text-yellow-400' :
-                  'text-zinc-300'
-                }>
-                  {(scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'High' :
-                   (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'Medium' : 'Low'}
-                </span>
-              </div>
-              
-              {/* Current Sessions */}
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Current</span>
-                <span className="text-zinc-300">{program?.sessions?.length ?? 0} sessions</span>
-              </div>
-              
-              {/* Baseline Sessions - clarified terminology for flexible users */}
-              <div className="flex justify-between">
-                <span className="text-zinc-500">
-                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'Baseline' : 'Recommended'}
-                </span>
-                <span className={
-                  (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 6 ? 'text-green-400' :
-                  (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 5 ? 'text-cyan-400' :
-                  'text-zinc-300'
-                }>
-                  {scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4} sessions
-                </span>
-              </div>
-            </div>
-            
-            {/* Clarification note for flexible users when current differs from baseline */}
-            {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' && 
-             (program?.sessions?.length ?? 0) > 0 &&
-             (program?.sessions?.length ?? 0) < (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) && (
-              <div className="mt-2 pt-2 border-t border-zinc-800/50">
-                <p className="text-zinc-600 text-[10px]">
-                  Flexible schedules adapt based on recovery, recent workload, and joint health. 
-                  Your current week may differ from the complexity baseline.
-                </p>
-              </div>
-            )}
-            
-            {/* ==========================================================================
-                [SPLIT-SOURCE DIAGNOSTIC] Production-safe verdict panel
-                Only shows when there's a real mismatch between display sources
-                ========================================================================== */}
-            {(() => {
-              // All sources that drive the Program page display
-              const scheduleStatusCurrentSource = program?.sessions?.length ?? 0
-              const scheduleStatusBaselineSource = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-              const programCardSource = program?.sessions?.length ?? 0
-              const authoritativeSource = authoritativeActiveProgram?.sessions?.length ?? 0
-              
-              // Check for actual split (different sources showing different things)
-              const currentMatchesCard = scheduleStatusCurrentSource === programCardSource
-              const currentMatchesAuthoritative = scheduleStatusCurrentSource === authoritativeSource
-              const allSourcesAligned = currentMatchesCard && currentMatchesAuthoritative
-              
-              // Log the proof
-              console.log('[split-source-truth-proof]', {
-                scheduleStatusCurrentSessionCount: scheduleStatusCurrentSource,
-                scheduleStatusBaselineSessionCount: scheduleStatusBaselineSource,
-                programCardSessionCount: programCardSource,
-                authoritativeProgramSessionCount: authoritativeSource,
-                programStateId: program?.id ?? null,
-                authoritativeProgramId: authoritativeActiveProgram?.id ?? null,
-                sameId: program?.id === authoritativeActiveProgram?.id,
-                allSourcesAligned,
-                baselineDiffersFromCurrent: scheduleStatusBaselineSource !== scheduleStatusCurrentSource,
-                verdict: allSourcesAligned 
-                  ? 'PROGRAM_PAGE_SINGLE_TRUTH_ENFORCED' 
-                  : 'SPLIT_TRUTH_DETECTED',
-                explanation: allSourcesAligned
-                  ? 'All display sources use the same program object'
-                  : 'Display sources are reading from different objects',
-              })
-              
-              // Only show diagnostic if there's a REAL source split (not baseline vs current)
-              if (!allSourcesAligned) {
-                return (
-                  <div className="mt-2 pt-2 border-t border-red-800/50 bg-red-900/20 p-2 rounded">
-                    <p className="text-red-400 text-[10px] font-medium">Split Source Detected</p>
-                    <p className="text-red-400/70 text-[10px]">
-                      Status: {scheduleStatusCurrentSource} | Card: {programCardSource} | Auth: {authoritativeSource}
-                    </p>
-                  </div>
-                )
-              }
-              
-              return null
-            })()}
-            
-            {/* Regeneration CTA when significantly under baseline */}
-            {(() => {
-              const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-              const actual = program?.sessions?.length ?? 0
-              const diff = recommended - actual
-              const isFlexible = scheduleTruthAudit?.canonicalScheduleMode === 'flexible'
-              
-              if (actual > 0 && diff >= 2) {
-                return (
-                  <div className="mt-4 pt-3 border-t border-zinc-800">
-                    <p className="text-zinc-500 text-xs mb-3">
-                      Your training complexity supports a {recommended}-session {isFlexible ? 'flexible' : 'static'} baseline. 
-                      Regenerate to unlock your full potential.
-                    </p>
-                    <button
-                      onClick={() => {
-                        // ==========================================================================
-                        // [REGEN-TRUTH step-1-click-source] Capture comprehensive pre-click truth
-                        // ==========================================================================
-                        const attemptId = `regen-${Date.now()}`
-                        const clickSourceAudit: RegenTruthAudit = {
-                          // Step 1: Click source
-                          attemptId,
-                          startedAt: new Date().toISOString(),
-                          existingVisibleProgramId: program?.id ?? null,
-                          existingVisibleProgramSessionCount: actual,
-                          scheduleStatusRecommendedCount: recommended,
-                          requestedTargetSessions: recommended,
-                          canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
-                          canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
-                          canonicalSelectedSkillsCount: null, // Will be filled by builder
-                          canonicalExperienceLevel: null,
-                          // Step 2: Generation input (filled later)
-                          builderInputScheduleMode: null,
-                          builderInputTrainingDaysPerWeek: null,
-                          builderInputSelectedSkillsCount: null,
-                          builderInputExperienceLevel: null,
-                          builderInputPrimaryGoal: null,
-                          // Step 3: Resolution (filled later)
-                          complexityScore: scheduleTruthAudit?.complexityScore ?? null,
-                          complexityElevationApplied: null,
-                          targetSessionCountFromResolution: null,
-                          builderResolvedSessions: null,
-                          // Step 4: Structure (filled later)
-                          builtStructureSessions: null,
-                          // Step 5: Save (filled later)
-                          savedProgramId: null,
-                          savedProgramSessions: null,
-                          localStorageSessionCountAfterSave: null,
-                          // Step 6: setProgram (filled later)
-                          setProgramTargetId: null,
-                          setProgramTargetSessions: null,
-                          // Step 7: Display (filled later)
-                          displayedProgramId: null,
-                          displayedProgramSessions: null,
-                          // Step 8: Rehydration (filled later)
-                          rehydratedProgramId: null,
-                          rehydratedProgramSessions: null,
-                          overwriteDetected: false,
-                          overwriteSource: null,
-                          // Final
-                          finalVerdict: 'REQUEST_CAPTURED',
-                          failedStage: null,
-                          errorMessage: null,
-                        }
-                        
-                        console.log('[REGEN-TRUTH step-1-click-source]', {
-                          attemptId,
-                          existingVisibleProgramId: program?.id,
-                          existingVisibleProgramSessionCount: actual,
-                          scheduleStatusRecommendedCount: recommended,
-                          requestedTargetSessions: recommended,
-                          canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode,
-                          canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek,
-                          complexityScoreFromUI: scheduleTruthAudit?.complexityScore,
-                          verdict: 'REQUEST_CAPTURED',
-                        })
-                        
-                        setRegenTruthAudit(clickSourceAudit)
-                        
-                        // Store in sessionStorage for builder to read
-                        if (typeof window !== 'undefined') {
-                          sessionStorage.setItem('regenTruthAudit', JSON.stringify(clickSourceAudit))
-                        }
-                        
-                        handleNewProgram()
-                      }}
-                      className="w-full text-sm py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg border border-cyan-600/30 transition-colors font-medium"
-                    >
-                      Regenerate Program ({recommended} sessions)
-                    </button>
-                  </div>
-                )
-              }
-              if (actual > 0 && diff === 1) {
-                return (
-                  <div className="mt-3 pt-2 border-t border-zinc-800/50">
-                    <p className="text-zinc-600 text-xs">
-                      Optional: You could add 1 more session to match your recommended baseline.
-                    </p>
-                  </div>
-                )
-              }
-              return null
-            })()}
-          </div>
-        )}
+        {/* [P2F-3] Schedule Status card removed from inline display - now in Coach Intelligence Hub */}
         
         {/* ==========================================================================
            [REGEN-TRUTH TRACE BOX] Temporary diagnostic panel for tracing 6->4 collapse

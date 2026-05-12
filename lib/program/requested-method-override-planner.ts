@@ -720,6 +720,233 @@ export interface MethodOverridePreview {
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
 
+// =============================================================================
+// [AB17.2.1] CIRCUIT PREVIEW DOCTRINE
+// =============================================================================
+
+/** Minimum exercises required for a valid circuit (2 = superset, not circuit) */
+const CIRCUIT_MINIMUM_EXERCISES = 3
+/** Preferred circuit size range */
+const CIRCUIT_PREFERRED_MIN = 3
+const CIRCUIT_PREFERRED_MAX = 5
+
+/**
+ * [AB17.2.1] Movement pattern classification for circuit compatibility scoring.
+ */
+type MovementPattern = 'push' | 'pull' | 'core' | 'mobility' | 'skill' | 'legs' | 'unknown'
+
+/**
+ * [AB17.2.1] Classifies an exercise name into a movement pattern.
+ */
+function classifyMovementPattern(exerciseName: string): MovementPattern {
+  const lower = exerciseName.toLowerCase()
+  
+  // Skill/isometric holds
+  if (lower.includes('hold') || lower.includes('lean') || lower.includes('lever') || 
+      lower.includes('planche') || lower.includes('l-sit') || lower.includes('handstand')) {
+    return 'skill'
+  }
+  
+  // Push movements
+  if (lower.includes('push') || lower.includes('dip') || lower.includes('press') ||
+      lower.includes('tricep')) {
+    return 'push'
+  }
+  
+  // Pull movements
+  if (lower.includes('pull') || lower.includes('row') || lower.includes('chin') ||
+      lower.includes('curl') || lower.includes('bicep')) {
+    return 'pull'
+  }
+  
+  // Core movements
+  if (lower.includes('core') || lower.includes('hollow') || lower.includes('plank') ||
+      lower.includes('ab') || lower.includes('compression') || lower.includes('dragon')) {
+    return 'core'
+  }
+  
+  // Mobility movements
+  if (lower.includes('stretch') || lower.includes('mobility') || lower.includes('flexibility') ||
+      lower.includes('warm')) {
+    return 'mobility'
+  }
+  
+  // Legs
+  if (lower.includes('squat') || lower.includes('lunge') || lower.includes('leg') ||
+      lower.includes('pistol') || lower.includes('calf')) {
+    return 'legs'
+  }
+  
+  return 'unknown'
+}
+
+/**
+ * [AB17.2.1] Circuit candidate result for a specific day.
+ */
+export interface CircuitPreviewCandidate {
+  dayIndex: number
+  dayLabel: string
+  sessionTitle: string
+  selectedExercises: string[]
+  skippedExercises: string[]
+  candidateReason: string
+  riskNotes: string[]
+  circuitSize: number
+  confidence: 'high' | 'medium' | 'low' | 'none'
+  isSafeCircuitCandidate: boolean
+  patternDistribution: Record<MovementPattern, number>
+}
+
+/**
+ * [AB17.2.1] Finds circuit-compatible exercises from a list.
+ * Avoids same-pattern overload and high-fatigue skill work.
+ */
+function findCircuitCompatibleExercises(exercises: string[]): {
+  selected: string[]
+  skipped: string[]
+  patterns: Record<MovementPattern, number>
+  reason: string
+} {
+  const patterns: Record<MovementPattern, number> = {
+    push: 0, pull: 0, core: 0, mobility: 0, skill: 0, legs: 0, unknown: 0
+  }
+  
+  const selected: string[] = []
+  const skipped: string[] = []
+  
+  for (const exercise of exercises) {
+    const pattern = classifyMovementPattern(exercise)
+    
+    // [AB17.2.1] Skip high-skill isometric holds — they don't belong in circuits
+    if (pattern === 'skill') {
+      skipped.push(exercise)
+      continue
+    }
+    
+    // [AB17.2.1] Avoid same-pattern overload (max 1 per pattern in a circuit)
+    if (patterns[pattern] >= 1 && pattern !== 'unknown') {
+      skipped.push(exercise)
+      continue
+    }
+    
+    patterns[pattern]++
+    selected.push(exercise)
+  }
+  
+  // Determine reason based on what we found
+  const uniquePatterns = Object.entries(patterns).filter(([_, count]) => count > 0).length
+  let reason = ''
+  if (selected.length >= CIRCUIT_MINIMUM_EXERCISES) {
+    reason = `${selected.length} compatible exercises with ${uniquePatterns} distinct patterns`
+  } else if (selected.length === 2) {
+    reason = '2 exercises = superset, not a circuit'
+  } else if (selected.length === 1) {
+    reason = 'Only 1 compatible exercise found'
+  } else {
+    reason = 'No compatible circuit exercises found'
+  }
+  
+  return { selected, skipped, patterns, reason }
+}
+
+/**
+ * [AB17.2.1] Scores a session for circuit suitability.
+ * Higher score = better circuit candidate.
+ */
+function scoreSessionForCircuit(
+  exercises: string[],
+  sessionTitle: string
+): { score: number; notes: string[] } {
+  let score = 0
+  const notes: string[] = []
+  
+  const { selected, patterns } = findCircuitCompatibleExercises(exercises)
+  
+  // Base score for having enough exercises
+  if (selected.length >= CIRCUIT_MINIMUM_EXERCISES) {
+    score += 50
+  } else if (selected.length === 2) {
+    score -= 100 // Strongly penalize — would be superset
+    notes.push('Only 2 exercises: would be superset, not circuit')
+  } else {
+    score -= 200 // Very bad
+    notes.push('Insufficient exercises for circuit')
+  }
+  
+  // Bonus for pattern diversity
+  const uniquePatterns = Object.entries(patterns).filter(([_, count]) => count > 0).length
+  score += uniquePatterns * 10
+  
+  // Bonus for preferred patterns in circuit
+  if (patterns.push > 0 && patterns.core > 0) score += 15 // push + core is good
+  if (patterns.pull > 0 && patterns.core > 0) score += 15 // pull + core is good
+  if (patterns.mobility > 0) score += 10 // mobility in circuit is good
+  
+  // Penalty for high-skill session
+  const lower = sessionTitle.toLowerCase()
+  if (lower.includes('skill') || lower.includes('heavy') || lower.includes('heavier')) {
+    score -= 20
+    notes.push('High-skill/strength session — circuit may degrade technique')
+  }
+  
+  // Bonus for accessory-focused session
+  if (lower.includes('accessory') || lower.includes('lighter')) {
+    score += 20
+  }
+  
+  return { score, notes }
+}
+
+/**
+ * [AB17.2.1] Finds the best circuit preview candidate across all program sessions.
+ * Returns null if no safe circuit candidate exists.
+ */
+export function findBestCircuitPreviewCandidate(
+  sessions: Array<{ exercises: Array<{ name?: string }>; focus?: string; focusLabel?: string }>,
+): CircuitPreviewCandidate | null {
+  if (!sessions || sessions.length === 0) return null
+  
+  let bestCandidate: CircuitPreviewCandidate | null = null
+  let bestScore = -Infinity
+  
+  for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
+    const session = sessions[dayIndex]
+    const exercises = (session.exercises || []).map(e => e.name || 'Unknown')
+    const sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
+    
+    const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
+    const { score, notes } = scoreSessionForCircuit(exercises, sessionTitle)
+    
+    const dayLabel = formatDayLabel(dayIndex, sessionTitle)
+    
+    const confidence: CircuitPreviewCandidate['confidence'] = 
+      selected.length >= 4 && score > 60 ? 'high' :
+      selected.length >= 3 && score > 30 ? 'medium' :
+      selected.length >= 3 ? 'low' : 'none'
+    
+    const candidate: CircuitPreviewCandidate = {
+      dayIndex,
+      dayLabel,
+      sessionTitle,
+      selectedExercises: selected,
+      skippedExercises: skipped,
+      candidateReason: reason,
+      riskNotes: notes,
+      circuitSize: selected.length,
+      confidence,
+      isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
+      patternDistribution: patterns,
+    }
+    
+    if (score > bestScore) {
+      bestScore = score
+      bestCandidate = candidate
+    }
+  }
+  
+  return bestCandidate
+}
+
 /**
  * [AB17.2] Converts a session title to a user-friendly day label.
  */
@@ -840,11 +1067,29 @@ export function buildMethodOverrideWorkoutPreview(
   // Determine candidate exercises for the method based on method type
   const methodKey = plan.methodKey
   if (methodKey === 'circuits' || methodKey === 'density_blocks') {
-    // Circuits/density typically use mixed patterns
-    methodBlock.exercises = [
-      'push + core + mobility candidates',
-      '(specific grouping determined at apply time)'
-    ]
+    // [AB17.2.1] Circuit doctrine: must use real exercises, minimum 3
+    const { selected, skipped, reason } = findCircuitCompatibleExercises(exercises)
+    
+    if (selected.length >= CIRCUIT_MINIMUM_EXERCISES) {
+      // Show real circuit candidate exercises
+      methodBlock.exercises = selected.slice(0, CIRCUIT_PREFERRED_MAX)
+      methodBlock.role = `${selected.length}-exercise circuit`
+    } else if (selected.length === 2) {
+      // [AB17.2.1] 2 exercises = superset, not circuit
+      methodBlock.exercises = [
+        `${selected.join(' + ')}`,
+        '(2 exercises = superset, not circuit)'
+      ]
+      methodBlock.changeType = 'warning'
+      methodBlock.label = 'Superset (not circuit)'
+    } else {
+      // Not enough exercises for circuit
+      methodBlock.exercises = [
+        'No safe circuit candidate',
+        reason
+      ]
+      methodBlock.changeType = 'warning'
+    }
   } else if (methodKey === 'drop_sets') {
     // Drop sets work on single exercises
     methodBlock.exercises = ['Target exercise with descending intensity']
@@ -879,14 +1124,28 @@ export function buildMethodOverrideWorkoutPreview(
     }
   }
   
-  // [AB17.2] Build caution and limitations
-  const coachCaution = plan.currentState === 'blocked'
-    ? `Original coach decision blocked this: ${plan.reason.slice(0, 100)}`
-    : plan.safety === 'not_recommended'
-      ? `High risk: ${plan.riskNotes[0] || 'conflicts with current training goals'}`
-      : plan.safety === 'needs_caution'
-        ? `Moderate risk: ${plan.riskNotes[0] || 'may increase fatigue load'}`
-        : 'Preview only — actual exercise grouping determined at apply time'
+  // [AB17.2.1] Build caution and limitations with circuit-specific handling
+  let coachCaution: string
+  if (methodKey === 'circuits' || methodKey === 'density_blocks') {
+    const { selected } = findCircuitCompatibleExercises(exercises)
+    if (selected.length < CIRCUIT_MINIMUM_EXERCISES) {
+      coachCaution = selected.length === 2
+        ? '2 exercises would create a superset, not a circuit. Circuits require 3+ exercises.'
+        : 'No safe circuit candidate — need at least 3 compatible exercises with different patterns.'
+    } else {
+      coachCaution = plan.currentState === 'blocked'
+        ? `Original coach decision blocked this: ${plan.reason.slice(0, 80)}`
+        : `${selected.length}-exercise circuit with mixed patterns`
+    }
+  } else {
+    coachCaution = plan.currentState === 'blocked'
+      ? `Original coach decision blocked this: ${plan.reason.slice(0, 100)}`
+      : plan.safety === 'not_recommended'
+        ? `High risk: ${plan.riskNotes[0] || 'conflicts with current training goals'}`
+        : plan.safety === 'needs_caution'
+          ? `Moderate risk: ${plan.riskNotes[0] || 'may increase fatigue load'}`
+          : 'Preview only — actual exercise grouping determined at apply time'
+  }
   
   const previewLimitations: string[] = [
     'Exact exercise pairing not yet finalized',
@@ -895,6 +1154,13 @@ export function buildMethodOverrideWorkoutPreview(
   ]
   if (!sessionExercises || sessionExercises.length === 0) {
     previewLimitations.unshift('Session exercises not available — showing generic structure')
+  }
+  // [AB17.2.1] Add circuit-specific limitations
+  if ((methodKey === 'circuits' || methodKey === 'density_blocks') && exercises.length > 0) {
+    const { selected } = findCircuitCompatibleExercises(exercises)
+    if (selected.length < CIRCUIT_MINIMUM_EXERCISES) {
+      previewLimitations.unshift('Circuit not possible with current exercises')
+    }
   }
   
   return {

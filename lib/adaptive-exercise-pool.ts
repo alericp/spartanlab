@@ -697,11 +697,13 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     notes: 'Keep lean angle throughout',
   },
   {
-    // [AB12.1] Renamed from 'planche_lean_pushup' / 'Planche Lean Push-Ups' to remove ambiguity
-    // This is the advanced progression of PPPU with maximum forward lean (feet elevated or extreme lean)
-    // The old name confused static "planche lean" with dynamic "push-ups"
+    // [AB12.1] Originally 'planche_lean_pushup' / 'Planche Lean Push-Ups'
+    // [AB17.2.1] DEPRECATED: This exercise is no longer selected or displayed.
+    // ID kept for backward compatibility with saved programs.
+    // Display resolvers normalize to "Pseudo Planche Push-Ups" at runtime.
+    // Do NOT use this ID for new program generation.
     id: 'elevated_pppu',
-    name: 'Elevated Pseudo Planche Push-Ups',
+    name: 'Pseudo Planche Push-Ups', // [AB17.2.1] Changed from 'Elevated Pseudo Planche Push-Ups'
     category: 'strength',
     movementPattern: 'horizontal_push',
     primaryMuscles: ['anterior_deltoid', 'chest', 'triceps'],
@@ -715,7 +717,9 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     movementCategory: 'push',
     supportsRPE: true,
     progressionDown: 'pppu',
-    notes: 'Feet elevated for maximum forward lean; hands lower toward hips; maintain protraction throughout press',
+    notes: 'Standard PPPU with strong forward lean; maintain protraction throughout press',
+    // [AB17.2.1] This entry is deprecated — generation prefers 'pppu' instead
+    // Kept for backward compatibility with saved programs only
   },
   {
     id: 'support_hold_dip_negative',

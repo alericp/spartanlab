@@ -890,14 +890,21 @@ function MethodDetailModalContent({
                     <div 
                       key={idx} 
                       className={`flex items-start gap-2 text-[10px] ${
-                        block.changeType === 'inserted' ? 'text-emerald-400' : ''
+                        block.changeType === 'inserted' ? 'text-emerald-400' : 
+                        block.changeType === 'warning' ? 'text-amber-400' : ''
                       }`}
                     >
-                      <span className={`min-w-[60px] ${block.changeType === 'inserted' ? 'text-emerald-500' : 'text-[#6A6A7A]'}`}>
-                        {block.changeType === 'inserted' ? '+ ' : ''}{block.label}:
+                      <span className={`min-w-[60px] ${
+                        block.changeType === 'inserted' ? 'text-emerald-500' : 
+                        block.changeType === 'warning' ? 'text-amber-500' : 'text-[#6A6A7A]'
+                      }`}>
+                        {block.changeType === 'inserted' ? '+ ' : block.changeType === 'warning' ? '! ' : ''}{block.label}:
                       </span>
-                      <span className={block.changeType === 'inserted' ? 'text-emerald-300/80' : 'text-[#9A9AAA]'}>
-                        {block.exercises.slice(0, 2).join(', ')}{block.exercises.length > 2 ? '...' : ''}
+                      <span className={
+                        block.changeType === 'inserted' ? 'text-emerald-300/80' : 
+                        block.changeType === 'warning' ? 'text-amber-300/80' : 'text-[#9A9AAA]'
+                      }>
+                        {block.exercises.slice(0, 3).join(', ')}{block.exercises.length > 3 ? '...' : ''}
                       </span>
                     </div>
                   ))}

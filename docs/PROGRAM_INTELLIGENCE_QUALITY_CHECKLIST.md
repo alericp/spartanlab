@@ -374,6 +374,36 @@ Added concrete day-specific workout preview for method override visualization:
 - `lib/program/requested-method-override-planner.ts` — Added WorkoutPreviewBlock and MethodOverrideWorkoutPreview types, buildMethodOverrideWorkoutPreview() function
 - `components/programs/ProgramCoachIntelligenceHub.tsx` — Updated handleCreatePreview and preview card UI
 
+**IQ6.4.1 Implementation Summary (AB17.2.1):**
+
+1. **HARD BAN: Feet-Elevated PPPU** — Exercise is now NEVER generated or displayed:
+   - Removed `elevated_pppu` from `FAMILY_PREFERRED_CANDIDATE_IDS` entirely
+   - Updated `resolveCanonicalExerciseName()` to ALWAYS return "Pseudo Planche Push-Ups" for any elevated PPPU ID/name
+   - Updated exercise pool entry name to "Pseudo Planche Push-Ups" and marked as deprecated
+   - Valid alternatives: "Pseudo Planche Push-Ups", "Planche Lean", "Feet-Elevated Planche Lean Hold"
+
+2. **Circuit Preview Doctrine** — Circuits now require 3+ exercises:
+   - Added `CIRCUIT_MINIMUM_EXERCISES = 3` constant
+   - Added `classifyMovementPattern()` to categorize exercises
+   - Added `findCircuitCompatibleExercises()` to select non-conflicting patterns
+   - Added `scoreSessionForCircuit()` to evaluate session suitability
+   - Added `findBestCircuitPreviewCandidate()` to find best day across program
+   - 2 exercises = superset (shown with warning), not circuit
+   - No safe circuit shown when fewer than 3 compatible exercises exist
+
+3. **Real Exercise Display in Circuit Preview**:
+   - Circuit preview now shows actual selected exercises from the session
+   - Skips high-skill isometric holds (not suitable for circuits)
+   - Avoids same-pattern overload (max 1 push, 1 pull, etc. per circuit)
+   - Shows warning styling when circuit isn't viable
+
+**Files Changed (IQ6.4.1):**
+- `lib/workout/execution-unit-contract.ts` — Hard-banned all elevated PPPU display, always returns "Pseudo Planche Push-Ups"
+- `lib/adaptive-exercise-pool.ts` — Changed elevated_pppu entry name to "Pseudo Planche Push-Ups", deprecated
+- `lib/program/goal-family-balance-guard.ts` — Removed elevated_pppu from FAMILY_PREFERRED_CANDIDATE_IDS entirely
+- `lib/program/requested-method-override-planner.ts` — Added circuit doctrine constants, pattern classification, circuit-compatible exercise finder, session scoring, best-day circuit finder
+- `components/programs/ProgramCoachIntelligenceHub.tsx` — Added warning styling for circuit preview blocks
+
 ---
 
 ### IQ7 — Feedback Loop Closure

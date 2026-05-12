@@ -618,39 +618,36 @@ export const LEGACY_EXERCISE_ID_MAP: Record<string, string> = {
  * [AB12.1.2] Evidence-aware canonical exercise display name resolver.
  * Uses both name AND ID to determine the correct display name.
  * 
- * [AB17.2] Updated rules - more conservative with "Elevated" naming:
- * - Standard pppu ID → "Pseudo Planche Push-Ups" (safe default)
- * - Ambiguous "Planche Lean Push-Ups" → "Pseudo Planche Push-Ups" (safe default)
- * - elevated_pppu ID without explicit advanced evidence → "Pseudo Planche Push-Ups" (conservative)
- * - Only show "Elevated" when both ID and name explicitly confirm it
+ * [AB17.2.1] HARD BAN: "Feet-Elevated Pseudo Planche Push-Ups" and "Elevated Pseudo Planche Push-Ups"
+ * are NEVER valid generated/displayed exercises per user doctrine.
+ * 
+ * Valid replacements:
+ * - Dynamic pressing/reps → "Pseudo Planche Push-Ups"
+ * - Static lean exposure → "Planche Lean"
+ * - Elevated static hold → "Feet-Elevated Planche Lean Hold"
  * 
  * @param exerciseName - The raw exercise name from saved data or generation
  * @param exerciseId - Optional exercise ID for evidence-based resolution
- * @param hasAdvancedPrerequisite - Optional flag indicating user has proven 10+ floor PPPU prerequisite
+ * @param hasAdvancedPrerequisite - IGNORED per AB17.2.1 — elevated PPPU always normalizes to standard PPPU
  * @returns The canonical display name
  */
 export function resolveCanonicalExerciseName(
   exerciseName: string,
   exerciseId?: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   hasAdvancedPrerequisite?: boolean
 ): string {
   const lowerName = exerciseName.toLowerCase()
   const normalizedId = exerciseId?.toLowerCase() || ''
   
-  // [AB17.2] Conservative approach: only show "Elevated" if BOTH:
-  // 1. ID explicitly says elevated
-  // 2. User has proven advanced prerequisite OR name already explicitly says "Elevated"
+  // [AB17.2.1] HARD BAN: elevated_pppu IDs ALWAYS normalize to standard PPPU
+  // User doctrine: "Feet-Elevated Pseudo Planche Push-Ups" is not a valid generated exercise
   if (exerciseId && ELEVATED_PPPU_IDS.has(exerciseId)) {
-    // Only preserve "Elevated" if there's explicit advanced evidence
-    if (hasAdvancedPrerequisite === true || lowerName.includes('elevated pseudo planche')) {
-      return 'Feet-Elevated Pseudo Planche Push-Ups'
-    }
-    // [AB17.2] Default to safe standard PPPU - don't show "Elevated" without proof
     return 'Pseudo Planche Push-Ups'
   }
   
-  // If name already includes "Elevated Pseudo", but no ID proof, normalize to standard
-  if (lowerName.includes('elevated pseudo planche') && !hasAdvancedPrerequisite) {
+  // [AB17.2.1] HARD BAN: Any name containing "elevated pseudo planche" normalizes to standard PPPU
+  if (lowerName.includes('elevated pseudo planche') || lowerName.includes('feet-elevated pseudo planche')) {
     return 'Pseudo Planche Push-Ups'
   }
   

@@ -290,6 +290,188 @@ export const PRIMARY_SIGNAL_TAGS: CoachingSignalTag[] = [
   'load_mismatch',
 ]
 
+// =============================================================================
+// [AB8.2] ACTIVE METHOD DISPLAY RESOLVER
+// Pure helper that resolves the method label and styling for the active card.
+// Uses blockGroupType for executable grouped methods, falls back to exerciseMethod
+// for row-level method cues, and only shows "Straight Sets" when truly straight.
+// =============================================================================
+type MethodDisplayTone = 'superset' | 'circuit' | 'cluster' | 'density' | 'rest_pause' | 'drop_set' | 'top_set' | 'straight' | 'guidance'
+
+interface ActiveMethodDisplay {
+  label: string
+  tone: MethodDisplayTone
+  isExecutableGrouped: boolean
+  isGuidanceOnly: boolean
+  shortInstruction: string | null
+  colorClass: string
+}
+
+function resolveActiveMethodDisplay(params: {
+  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block'
+  exerciseMethod?: string
+  densityTimeCapSeconds?: number
+}): ActiveMethodDisplay {
+  const { blockGroupType, exerciseMethod, densityTimeCapSeconds } = params
+  const methodLower = (exerciseMethod || '').toLowerCase()
+  
+  // 1. Grouped block methods have priority when executable
+  if (blockGroupType === 'superset') {
+    return {
+      label: 'Superset',
+      tone: 'superset',
+      isExecutableGrouped: true,
+      isGuidanceOnly: false,
+      shortInstruction: 'Move to the next paired exercise, then rest after the round.',
+      colorClass: 'text-blue-400 border-blue-400/30',
+    }
+  }
+  if (blockGroupType === 'circuit') {
+    return {
+      label: 'Circuit',
+      tone: 'circuit',
+      isExecutableGrouped: true,
+      isGuidanceOnly: false,
+      shortInstruction: 'Cycle through each station, then rest after the round.',
+      colorClass: 'text-emerald-400 border-emerald-400/30',
+    }
+  }
+  if (blockGroupType === 'cluster') {
+    return {
+      label: 'Cluster',
+      tone: 'cluster',
+      isExecutableGrouped: true,
+      isGuidanceOnly: false,
+      shortInstruction: 'Use mini-rests to keep reps crisp; log each working effort honestly.',
+      colorClass: 'text-purple-400 border-purple-400/30',
+    }
+  }
+  if (blockGroupType === 'density_block') {
+    // Density is only executable with a time cap
+    if (densityTimeCapSeconds && densityTimeCapSeconds > 0) {
+      return {
+        label: 'Density',
+        tone: 'density',
+        isExecutableGrouped: true,
+        isGuidanceOnly: false,
+        shortInstruction: 'Work inside the time cap; quality reps beat rushing.',
+        colorClass: 'text-amber-400 border-amber-400/30',
+      }
+    }
+    // Density without time cap is guidance only
+    return {
+      label: 'Density',
+      tone: 'guidance',
+      isExecutableGrouped: false,
+      isGuidanceOnly: true,
+      shortInstruction: 'Density cue without time cap; log sets at your pace.',
+      colorClass: 'text-amber-400/70 border-amber-400/20',
+    }
+  }
+  if (blockGroupType === 'emom') {
+    return {
+      label: 'EMOM',
+      tone: 'density',
+      isExecutableGrouped: true,
+      isGuidanceOnly: false,
+      shortInstruction: 'Start each set at the top of the minute.',
+      colorClass: 'text-amber-400 border-amber-400/30',
+    }
+  }
+  
+  // 2. Row-level method truth when not in a grouped block
+  if (methodLower.includes('rest-pause') || methodLower.includes('rest_pause') || methodLower.includes('restpause')) {
+    return {
+      label: 'Rest-Pause',
+      tone: 'rest_pause',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'Reach the target, take short rest, then finish the mini-effort.',
+      colorClass: 'text-rose-400 border-rose-400/30',
+    }
+  }
+  if (methodLower.includes('drop-set') || methodLower.includes('drop_set') || methodLower.includes('dropset')) {
+    return {
+      label: 'Drop Set',
+      tone: 'drop_set',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'After the main effort, reduce load/assistance and continue.',
+      colorClass: 'text-orange-400 border-orange-400/30',
+    }
+  }
+  if (methodLower.includes('top-set') || methodLower.includes('top_set') || methodLower.includes('topset')) {
+    return {
+      label: 'Top Set',
+      tone: 'top_set',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'Main strength set first; back-off work follows if prescribed.',
+      colorClass: 'text-sky-400 border-sky-400/30',
+    }
+  }
+  if (methodLower.includes('cluster') && !blockGroupType) {
+    return {
+      label: 'Cluster Set',
+      tone: 'cluster',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'Use mini-rests to keep reps crisp; log each working effort honestly.',
+      colorClass: 'text-purple-400 border-purple-400/30',
+    }
+  }
+  if (methodLower.includes('density') && !blockGroupType) {
+    return {
+      label: 'Density',
+      tone: 'guidance',
+      isExecutableGrouped: false,
+      isGuidanceOnly: true,
+      shortInstruction: 'Work for quality reps at your pace.',
+      colorClass: 'text-amber-400/70 border-amber-400/20',
+    }
+  }
+  if (methodLower.includes('myo-rep') || methodLower.includes('myo_rep') || methodLower.includes('myorep')) {
+    return {
+      label: 'Myo-Reps',
+      tone: 'rest_pause',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'Activation set first, then short-rest mini-sets to failure.',
+      colorClass: 'text-rose-400 border-rose-400/30',
+    }
+  }
+  if (methodLower.includes('emom') && !blockGroupType) {
+    return {
+      label: 'EMOM',
+      tone: 'density',
+      isExecutableGrouped: false,
+      isGuidanceOnly: true,
+      shortInstruction: 'Start each set at the top of the minute.',
+      colorClass: 'text-amber-400/70 border-amber-400/20',
+    }
+  }
+  if (methodLower.includes('amrap')) {
+    return {
+      label: 'AMRAP',
+      tone: 'density',
+      isExecutableGrouped: false,
+      isGuidanceOnly: false,
+      shortInstruction: 'As many reps as possible with good form.',
+      colorClass: 'text-amber-400 border-amber-400/30',
+    }
+  }
+  
+  // 3. True straight sets - no grouped block and no row-level method
+  return {
+    label: 'Straight Sets',
+    tone: 'straight',
+    isExecutableGrouped: false,
+    isGuidanceOnly: false,
+    shortInstruction: null,
+    colorClass: 'text-zinc-400 border-zinc-500/30',
+  }
+}
+
 export interface CompletedSetInfo {
   setNumber: number
   actualReps: number
@@ -326,6 +508,9 @@ export interface ActiveWorkoutCorridorProps {
   exerciseId?: string
   exerciseName: string
   exerciseCategory: string
+  // [AB8.2] Row-level method truth from exercise prescription.
+  // Used to show honest method labels even when not in a grouped block.
+  exerciseMethod?: string
   exerciseSets: number
   exerciseRepsOrTime: string
   targetRPE?: number
@@ -1120,6 +1305,8 @@ export function ActiveWorkoutStartCorridor({
   exerciseName,
   mode,
   exerciseCategory,
+  // [AB8.2] Row-level method truth
+  exerciseMethod,
   exerciseSets,
   exerciseRepsOrTime,
   targetRPE = 8,
@@ -2381,26 +2568,25 @@ export function ActiveWorkoutStartCorridor({
                     {exerciseName}
                   </h2>
                   <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
-                    {/* [AB8.1E] Method truth label - shows execution method at a glance.
-                        When in a grouped block: shows method type (Superset/Circuit/Cluster/Density).
-                        When NOT in a grouped block: shows "Straight Sets" honestly.
-                        This matches Program Page method truth surfacing. */}
-                    <Badge 
-                      variant="outline" 
-                      className={`text-[10px] uppercase px-1.5 py-0 ${
-                        blockGroupType === 'superset' ? 'text-blue-400 border-blue-400/30' :
-                        blockGroupType === 'circuit' ? 'text-emerald-400 border-emerald-400/30' :
-                        blockGroupType === 'cluster' ? 'text-purple-400 border-purple-400/30' :
-                        blockGroupType === 'density_block' ? 'text-amber-400 border-amber-400/30' :
-                        'text-zinc-400 border-zinc-500/30'
-                      }`}
-                    >
-                      {blockGroupType === 'superset' ? 'Superset' :
-                       blockGroupType === 'circuit' ? 'Circuit' :
-                       blockGroupType === 'cluster' ? 'Cluster' :
-                       blockGroupType === 'density_block' ? 'Density' :
-                       'Straight Sets'}
-                    </Badge>
+                    {/* [AB8.2] Method truth label - uses resolver for honest method display.
+                        Considers blockGroupType for grouped methods, exerciseMethod for
+                        row-level methods (rest-pause, drop-set, etc.), and only shows
+                        "Straight Sets" when truly no method exists. */}
+                    {(() => {
+                      const methodDisplay = resolveActiveMethodDisplay({
+                        blockGroupType,
+                        exerciseMethod,
+                        densityTimeCapSeconds,
+                      })
+                      return (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[10px] uppercase px-1.5 py-0 ${methodDisplay.colorClass}`}
+                        >
+                          {methodDisplay.label}
+                        </Badge>
+                      )
+                    })()}
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
                     </Badge>
@@ -2466,21 +2652,32 @@ export function ActiveWorkoutStartCorridor({
                   </div>
                 )}
 
-                {/* [AB6.1.2.2F] Generic ramp-up advisory banner REMOVED.
-                    The previous implementation showed a generic "Do 1-2 lighter warm-up sets"
-                    card which was misleading because:
-                    - It did not account for exercise type (skill vs weighted)
-                    - It did not calculate actual ramp-up set percentages
-                    - It appeared as fake prescription without real warm-up set logic
-                    
-                    FUTURE: Proper ramp-up set materialization should:
-                    - Calculate warm-up/ramp-up sets per exercise based on order, load, skill vs weighted
-                    - Use 25%/50% loading for heavy weighted work (Ian Barseagle inspired)
-                    - Use lower progressions for skills
-                    - Insert distinct warm-up sets with separate progress-bar styling
-                    - Allow actual performance logging for warm-up sets
-                    
-                    This is tracked as a future checklist item, not implemented here. */}
+                {/* [AB8.2] Compact method instruction line - shows helpful one-liner
+                    when the exercise has a non-straight-set method. Only renders when
+                    the resolver provides a shortInstruction. Does not clutter normal
+                    straight-set exercises. */}
+                {(() => {
+                  const methodDisplay = resolveActiveMethodDisplay({
+                    blockGroupType,
+                    exerciseMethod,
+                    densityTimeCapSeconds,
+                  })
+                  if (!methodDisplay.shortInstruction || methodDisplay.tone === 'straight') {
+                    return null
+                  }
+                  return (
+                    <div className="mt-1 px-2 py-1 bg-zinc-800/50 border border-zinc-700/30 rounded text-xs">
+                      <p className={`leading-tight ${
+                        methodDisplay.isGuidanceOnly ? 'text-zinc-400' : 'text-zinc-300'
+                      }`}>
+                        {methodDisplay.shortInstruction}
+                        {methodDisplay.isGuidanceOnly && (
+                          <span className="ml-1 text-zinc-500">(guidance)</span>
+                        )}
+                      </p>
+                    </div>
+                  )
+                })()}
 
             {/* Target prescription */}
             {/* [BAND-TRUTH-R6] When the authoritative contract marks this

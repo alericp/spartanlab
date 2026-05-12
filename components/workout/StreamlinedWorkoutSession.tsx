@@ -10807,6 +10807,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // Exercise identity
           exerciseName: safeCurrentExercise?.name || 'Exercise',
           exerciseCategory: safeCurrentExercise?.category || 'general',
+          // [AB8.2] Row-level method truth for honest method labels
+          exerciseMethod: safeCurrentExercise?.method || undefined,
           // Week-scaled prescription (effective contract)
           exerciseSets: activeEffectiveContract.effectiveSets,
           exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,

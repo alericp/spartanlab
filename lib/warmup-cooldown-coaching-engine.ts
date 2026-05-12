@@ -406,15 +406,25 @@ function generateItemWarmUpCoaching(
 ): WarmUpItemCoaching {
   const nameLower = itemName.toLowerCase()
   
+  // [AB15.6] Arm swings / circles / crosses - specific shoulder temperature reason
+  if (nameLower.includes('arm') && (nameLower.includes('swing') || nameLower.includes('circle') || nameLower.includes('cross'))) {
+    return {
+      sessionReason: 'Raises shoulder temperature and opens range before loaded upper-body work.',
+      prepares: 'shoulders and upper-back rhythm',
+      coachingCue: 'Controlled circles, gradually increase range.',
+      priority: 2,
+    }
+  }
+  
   // Wrist work
   if (nameLower.includes('wrist')) {
     const prepares = demands.primaryDemands.includes('straight_arm_push')
-      ? 'Wrists for planche/straight-arm loading'
+      ? 'wrists for planche/straight-arm loading'
       : demands.primaryDemands.includes('handstand')
-        ? 'Wrists for handstand positions'
-        : 'Wrist extension and flexion'
+        ? 'wrists for handstand positions'
+        : 'wrist extension and flexion'
     return {
-      sessionReason: 'Essential prep for loaded hand positions in today\'s session.',
+      sessionReason: 'Essential prep for loaded hand positions.',
       prepares,
       coachingCue: 'Slow, controlled movements. Feel the wrists warm before loading.',
       priority: demands.jointFocusAreas.includes('wrists') ? 1 : 2,
@@ -424,21 +434,24 @@ function generateItemWarmUpCoaching(
   // Shoulder/dislocates
   if (nameLower.includes('shoulder') || nameLower.includes('dislocate')) {
     return {
-      sessionReason: 'Prepares shoulder mobility and rotator cuff for today\'s demands.',
-      prepares: 'Shoulder joint and rotator cuff',
+      sessionReason: 'Shoulder mobility and rotator cuff prep.',
+      prepares: 'shoulder joint and rotator cuff',
       coachingCue: 'Wide grip, controlled tempo. Feel the stretch, no forcing.',
       priority: demands.jointFocusAreas.includes('shoulders') ? 1 : 2,
     }
   }
   
-  // Scapular work
+  // [AB15.6] Scapular work - improved reasons
   if (nameLower.includes('scap')) {
     const isPull = demands.primaryDemands.some(d => d.includes('pull') || d.includes('lever'))
+    const isPush = demands.primaryDemands.some(d => d.includes('push') || d.includes('planche'))
     return {
       sessionReason: isPull
-        ? 'Activates scapular depressors for pulling/lever work.'
-        : 'Activates scapular control for pressing and stability.',
-      prepares: isPull ? 'Scapula for depression and retraction' : 'Scapula for protraction and stability',
+        ? 'Scapular control for pulling and straight-arm work.'
+        : isPush
+          ? 'Primes scapular protraction for planche and push-up mechanics.'
+          : 'Builds scapular control before upper-body loading.',
+      prepares: isPull ? 'scapula for depression and retraction' : 'serratus and scapular protraction',
       coachingCue: 'Full range. Feel the shoulder blades move.',
       priority: demands.jointFocusAreas.includes('scapula') ? 1 : 2,
     }
@@ -448,17 +461,25 @@ function generateItemWarmUpCoaching(
   if (nameLower.includes('hollow') || nameLower.includes('arch')) {
     return {
       sessionReason: 'Core activation for skill work and body tension.',
-      prepares: 'Core engagement pattern for levers and holds',
+      prepares: 'core engagement pattern for levers and holds',
       coachingCue: 'Posterior pelvic tilt, ribs down, squeeze everything.',
       priority: demands.hasSkillWork ? 1 : 2,
     }
   }
   
-  // Band work
+  // [AB15.6] Band work - specific to pull aparts vs general band
   if (nameLower.includes('band')) {
+    if (nameLower.includes('pull') || nameLower.includes('apart')) {
+      return {
+        sessionReason: 'Activates upper back and lightly warms elbows before pull strength.',
+        prepares: 'rear delts, scapular retraction, elbow tendons',
+        coachingCue: 'Light resistance, squeeze at end range.',
+        priority: demands.hasTendonStress ? 1 : 2,
+      }
+    }
     return {
       sessionReason: 'Light tendon prep and muscle activation.',
-      prepares: 'Tendons and small stabilizers',
+      prepares: 'tendons and small stabilizers',
       coachingCue: 'Light resistance, high reps. Feel the blood flow.',
       priority: demands.hasTendonStress ? 2 : 3,
     }
@@ -468,7 +489,7 @@ function generateItemWarmUpCoaching(
   if (nameLower.includes('hip') || nameLower.includes('lunge')) {
     return {
       sessionReason: 'Opens hip flexors for compression and lever work.',
-      prepares: 'Hip flexors and hip mobility',
+      prepares: 'hip flexors and hip mobility',
       coachingCue: 'Squeeze the back glute, sink gently.',
       priority: demands.jointFocusAreas.includes('hip_flexors') ? 1 : 3,
     }
@@ -478,16 +499,36 @@ function generateItemWarmUpCoaching(
   if (nameLower.includes('cat') || nameLower.includes('cow') || nameLower.includes('thoracic')) {
     return {
       sessionReason: 'Spine mobility for better positions.',
-      prepares: 'Thoracic spine and spinal mobility',
+      prepares: 'thoracic spine and spinal mobility',
       coachingCue: 'Slow, feel each segment of the spine move.',
       priority: 3,
     }
   }
   
-  // Default
+  // [AB15.6] Tuck FL raises / light lever activation
+  if (nameLower.includes('tuck') && (nameLower.includes('lever') || nameLower.includes('raise') || nameLower.includes('fl'))) {
+    return {
+      sessionReason: 'Lat and scapular depression activation for lever work.',
+      prepares: 'lats and scap depression for front lever shapes',
+      coachingCue: 'Drive shoulders down, squeeze lats.',
+      priority: 1,
+    }
+  }
+  
+  // [AB15.6] Explosive pull primer
+  if (nameLower.includes('explosive') && nameLower.includes('pull')) {
+    return {
+      sessionReason: 'Power output primer without accumulating fatigue.',
+      prepares: 'nervous system for explosive pulling',
+      coachingCue: 'Crisp, powerful reps only. Stop before any grind.',
+      priority: 2,
+    }
+  }
+  
+  // Default - short and honest
   return {
     sessionReason: `Preparation for today's ${demands.demandSummaryLabel || 'training'}.`,
-    prepares: 'General mobility and activation',
+    prepares: 'general mobility and activation',
     priority: 3,
   }
 }

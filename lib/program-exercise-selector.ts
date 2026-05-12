@@ -8500,7 +8500,26 @@ function selectIntelligentWarmup(
   // Generate intelligent warm-up
   const generatedWarmup = generateWarmUp(warmupContext)
 
+  // [PPX-R4A] Determine adaptation source based on what drove the warmup selection
+  const adaptationSource: WarmupSelectionResult['adaptation']['adaptationSource'] = 
+    firstSkillProgression?.skillType ? 'skill_focus' :
+    mainExercises.length > 0 ? 'session_exercises' : 'default'
+  
+  // [PPX-R4A] Build focus label from skill or goal
+  const focusLabel = generatedWarmup.focusLabel || (
+    firstSkillProgression?.skillType 
+      ? `${firstSkillProgression.skillType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Preparation`
+      : `${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Warm-Up`
+  )
+
+  // [AB15.6] Generate elite coaching BEFORE building selected items so we can use itemCoaching
+  const warmupCoaching = generateWarmUpCoaching(
+    mainExercises.map(e => ({ id: e.exercise.id, name: e.exercise.name, category: e.exercise.category })),
+    generatedWarmup.block.exercises.map(e => ({ id: e.id, name: e.name }))
+  )
+
   // Convert to SelectedExercise format
+  // [AB15.6] Each item now gets its specific per-item reason from warmupCoaching.itemCoaching
   const selected: SelectedExercise[] = generatedWarmup.block.exercises.map(ex => {
     // Find matching exercise in pool or create a minimal exercise object
     const poolExercise = WARMUP_EXERCISES.find(e => e.id === ex.id)
@@ -8521,33 +8540,20 @@ function selectIntelligentWarmup(
       defaultRepsOrTime: String(ex.reps ?? ''),
     }
 
+    // [AB15.6] Get per-item coaching for specific, non-repeated selectionReason
+    const itemCoaching = warmupCoaching.itemCoaching.get(ex.name)
+    const itemReason = itemCoaching?.sessionReason 
+      || buildFallbackWarmupItemReason(ex.name, generatedWarmup.block.focus)
+
     return {
       exercise,
       sets: 1,
       repsOrTime: String(ex.reps ?? ''),
-      note: ex.notes,
+      note: itemCoaching?.coachingCue || ex.notes,
       isOverrideable: true,
-      selectionReason: generatedWarmup.block.rationale,
+      selectionReason: itemReason,
     }
   })
-
-  // [PPX-R4A] Determine adaptation source based on what drove the warmup selection
-  const adaptationSource: WarmupSelectionResult['adaptation']['adaptationSource'] = 
-    firstSkillProgression?.skillType ? 'skill_focus' :
-    mainExercises.length > 0 ? 'session_exercises' : 'default'
-  
-  // [PPX-R4A] Build focus label from skill or goal
-  const focusLabel = generatedWarmup.focusLabel || (
-    firstSkillProgression?.skillType 
-      ? `${firstSkillProgression.skillType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Preparation`
-      : `${primaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Warm-Up`
-  )
-
-  // [PPX-R7.7] Generate elite coaching depth from session demands
-  const warmupCoaching = generateWarmUpCoaching(
-    mainExercises.map(e => ({ id: e.exercise.id, name: e.exercise.name, category: e.exercise.category })),
-    selected.map(e => ({ id: e.exercise.id, name: e.exercise.name }))
-  )
 
   return {
     exercises: selected,
@@ -8572,6 +8578,63 @@ function selectIntelligentWarmup(
 // =============================================================================
 // TASK 4: PROGRESSION-AWARE WARM-UP HELPERS
 // =============================================================================
+
+/**
+ * [AB15.6] Build a safe fallback reason for a warm-up item when itemCoaching is unavailable.
+ * Returns a short, specific reason based on the exercise name and warm-up focus.
+ */
+function buildFallbackWarmupItemReason(exerciseName: string, warmupFocus: string): string {
+  const name = exerciseName.toLowerCase()
+  
+  // Arm circles / swings
+  if (name.includes('arm') && (name.includes('swing') || name.includes('circle') || name.includes('cross'))) {
+    return 'Raises shoulder temperature and opens range for upper-body work.'
+  }
+  
+  // Band work
+  if (name.includes('band')) {
+    if (name.includes('pull') || name.includes('apart')) {
+      return 'Activates upper back and lightly warms elbows before pulling work.'
+    }
+    return 'Light resistance work for tendon prep and muscle activation.'
+  }
+  
+  // Scap work
+  if (name.includes('scap')) {
+    if (warmupFocus.includes('pull') || warmupFocus.includes('lever')) {
+      return 'Scapular control for pulling and straight-arm work.'
+    }
+    return 'Scapular activation for pressing and stability.'
+  }
+  
+  // Wrist work
+  if (name.includes('wrist')) {
+    return 'Wrist prep for loaded hand positions.'
+  }
+  
+  // Hollow / arch
+  if (name.includes('hollow') || name.includes('arch')) {
+    return 'Body-line tension for lever and skill positions.'
+  }
+  
+  // Hip / lunge
+  if (name.includes('hip') || name.includes('lunge')) {
+    return 'Hip mobility for compression and lower-body loading.'
+  }
+  
+  // Cat cow / thoracic
+  if (name.includes('cat') || name.includes('cow') || name.includes('thoracic')) {
+    return 'Spine mobility for better positions.'
+  }
+  
+  // Shoulder / dislocate
+  if (name.includes('shoulder') || name.includes('dislocate')) {
+    return 'Shoulder mobility and rotator cuff prep.'
+  }
+  
+  // Generic fallback - short and honest
+  return 'Prepares the body for today\'s training.'
+}
 
 /**
  * Detect first skill progression from main exercises for warm-up ramping

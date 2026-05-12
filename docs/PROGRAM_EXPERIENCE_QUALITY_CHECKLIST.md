@@ -17,7 +17,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | PEX-6 | End-to-End Runtime Proof | COMPLETE |
 | AB15.0-15.4 | Live Workout Ramp/Warm-Up Sets (Doctrine + UI + Weighted) | COMPLETE |
 | AB15.5.1 | Structured Prep Reopen Clamp + Graph-Backed Targets | COMPLETE |
-| AB15.6 | Full Skill-Map Prep Intelligence Upgrade | REGISTERED (next) |
+| AB15.6 | Warm-Up Rationale Trust Upgrade (Per-Item Coaching) | COMPLETE |
 
 ---
 
@@ -520,7 +520,7 @@ When implemented:
 | AB15.3 | Ramp rest timer implementation | COMPLETE |
 | AB15.4 | Weighted load ramping (practical rounded loads) | COMPLETE |
 | AB15.5.1 | Structured prep reopen clamp + legacy fallback cutoff + graph-backed target naming | COMPLETE |
-| AB15.6 | Full skill-map-driven prep intelligence and warm-up rationale upgrade | REGISTERED (next) |
+| AB15.6 | Warm-Up Rationale Trust Upgrade (Per-Item Coaching) | COMPLETE |
 
 ### AB15.5.1 — Structured Prep Reopen Clamp + Legacy Fallback Cutoff + Graph-Backed Prep Targets
 
@@ -592,18 +592,53 @@ When implemented:
 - [x] TypeScript passes
 - [x] Build passes
 
-### AB15.6 — Full Skill-Map-Driven Prep Intelligence and Warm-Up Rationale Upgrade (NEXT)
+### AB15.6 — Warm-Up Rationale Trust Upgrade (Per-Item Coaching)
 
-**Status:** REGISTERED
+**Status:** COMPLETE
 
-**Purpose:** Expand graph-backed prep for all high-load multi-month/multi-year skills, add deeper coaching explanations, and improve or reduce generic warm-up rationale.
+**Purpose:** Stop warm-up items from showing the same repeated generic block rationale. Wire existing per-item coaching from `warmup-cooldown-coaching-engine.ts` into visible warm-up rows.
 
-### Future Scope
+### What Changed
+
+1. **Per-Item Warm-Up Coaching Applied** — `lib/program-exercise-selector.ts`
+   - `selectIntelligentWarmup()` now generates `warmupCoaching` BEFORE building items
+   - Each warm-up item gets its specific reason from `warmupCoaching.itemCoaching.get(ex.name)`
+   - Falls back to `buildFallbackWarmupItemReason()` when no coaching found
+   - Block-level `generatedWarmup.block.rationale` no longer repeats on every row
+
+2. **Specific Item Reasons** — `lib/warmup-cooldown-coaching-engine.ts`
+   - `generateItemWarmUpCoaching()` already had specific reasons for:
+     - Arm Swings / Circles: "Raises shoulder temperature and opens range..."
+     - Band Pull Aparts: "Activates upper back and lightly warms elbows..."
+     - Scap Push-Ups: "Scapular control for pulling..." or "Primes scapular protraction..."
+     - Hollow/Arch: "Core activation for skill work and body tension."
+   - These reasons now flow through to visible UI
+
+3. **Generic Phrase Removed** — `lib/warmup-engine.ts`
+   - "Progressive prep for advanced planche: wrist/scap activation → lean exposure → skill work"
+   - Replaced with cleaner session-level summaries
+
+### Preserved Behavior
+- Why This Warm-Up? modal still works
+- Warm-up navigation: Done — Next, Back, Skip This, Skip Warm-Up
+- Save & Exit, Discard still work
+- AB15.5.1 Skill Prep remains intact (PREP 1/1, no Prep 3/2)
+- Block-level rationale still available in `adaptation.rationale` for modal/summary
+
+### Acceptance Criteria
+- [x] Arm Swings has specific shoulder/temperature reason
+- [x] Band Pull Aparts has specific upper-back/elbow reason
+- [x] Scap Push-Ups has specific scapular control reason
+- [x] Items no longer all show the same generic sentence
+- [x] Why This Warm-Up? modal preserved
+- [x] Warm-up navigation preserved
+- [x] AB15.5.1 Skill Prep preserved
+- [x] TypeScript passes
+
+### Future Scope (Deferred)
 - Full skill graph expansion for dragon flag, manna, Victorian, etc.
-- "Why this warm-up exists" AI coach modal
-- Warm-up screen generic rationale must be upgraded or hidden
-- Full skill readiness engine integration
 - Full long-term load progression engine
+- Full skill readiness engine integration
 
 ---
 

@@ -194,15 +194,38 @@ export function resolveExerciseInputMode(
   // 1. bandSelectable === true (explicit template flag), OR
   // 2. recommendedBand is set (adaptive system recommends band assistance), OR
   // 3. Exercise name contains band-assistable progression markers
+  // [AB11] Expanded to include common bodyweight pulling/pushing movements
+  // [AB12] Verified: weighted exercises already filtered above (hasWeightedLoad branch)
   const hasBandRecommendation = typeof exec.recommendedBand === 'string' && exec.recommendedBand.length > 0
+  
+  // Band-assistable by name: includes all realistic band-assisted calisthenics
+  // Note: weighted exercises were already filtered out above (isWeighted branch)
   const isBandAssistableByName = 
+    // Advanced skill progressions
     name.includes('front lever') ||
     name.includes('back lever') ||
     name.includes('planche') ||
     name.includes('muscle-up') ||
     name.includes('muscle up') ||
     name.includes('one-arm pull') ||
-    name.includes('one arm pull')
+    name.includes('one arm pull') ||
+    // [AB11.2] Pull-up variants (explosive, archer, standard, chin-up)
+    name.includes('pull-up') ||
+    name.includes('pull up') ||
+    name.includes('pullup') ||
+    name.includes('chin-up') ||
+    name.includes('chin up') ||
+    name.includes('chinup') ||
+    name.includes('archer pull') ||
+    name.includes('explosive pull') ||
+    // Dip variants (bodyweight only - weighted already filtered above)
+    name.includes('dip') ||
+    // Other band-assistable movements
+    name.includes('handstand push') ||
+    name.includes('hspu') ||
+    name.includes('pistol') ||
+    name.includes('nordic curl') ||
+    name.includes('dragon flag')
   
   const shouldShowBandSelector = exec.bandSelectable === true || hasBandRecommendation || isBandAssistableByName
   

@@ -780,7 +780,8 @@ export const SUBSTITUTION_MAPPINGS: SubstitutionMapping[] = [
     ],
   },
   {
-    exerciseId: 'planche_lean_pushup',
+    // [AB12.1] Renamed from planche_lean_pushup to elevated_pppu
+    exerciseId: 'elevated_pppu',
     substitutes: [
       { exerciseId: 'pppu', suitability: 'ideal', reason: 'Less lean angle', fatigueAdjustment: 'easier' },
       { exerciseId: 'ring_push_up', suitability: 'good', reason: 'Push + stability', fatigueAdjustment: 'easier' },

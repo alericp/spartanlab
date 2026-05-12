@@ -707,14 +707,15 @@ function selectedSkillToRequiredFamily(
  */
 const FAMILY_PREFERRED_CANDIDATE_IDS: Partial<Record<GoalFamily, string[]>> = {
   // straight-arm push / planche dynamic progression
+  // [AB12.1] Renamed planche_lean_pushup to elevated_pppu
   straight_arm_push: [
-    'planche_lean_pushup', // dynamic planche-lean push-up (preferred — direct progression)
-    'pppu',                // pseudo planche push-up (preferred — broad eligibility)
+    'elevated_pppu', // elevated pseudo planche push-up (preferred — maximum forward lean)
+    'pppu',          // pseudo planche push-up (preferred — broad eligibility)
   ],
   // horizontal push when planche is selected but no dynamic push exists
   push_horizontal: [
     'pppu',
-    'planche_lean_pushup',
+    'elevated_pppu',
   ],
   // vertical push / HSPU progression
   push_vertical: [

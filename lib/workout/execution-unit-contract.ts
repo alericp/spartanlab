@@ -573,52 +573,88 @@ export function isHoldUnit(input: string | HoldUnitContext | null | undefined): 
 }
 
 // =============================================================================
-// [AB12.1] CANONICAL EXERCISE DISPLAY NAME RESOLVER
+// [AB12.1.2] CANONICAL EXERCISE DISPLAY NAME RESOLVER (Evidence-Aware)
 // =============================================================================
 // Resolves ambiguous or legacy exercise names to their canonical display names.
 // This ensures backward compatibility for saved programs while preventing
 // ambiguous names from appearing in the UI.
+//
+// [AB12.1.2] IMPORTANT: Use evidence-aware resolution. Ambiguous legacy names
+// like "Planche Lean Push-Ups" should map to "Pseudo Planche Push-Ups" by default.
+// Only display "Elevated Pseudo Planche Push-Ups" when explicit elevation evidence exists.
 
 /**
- * Legacy name → canonical display name mapping.
- * Used for backward compatibility with saved programs that contain old names.
+ * Legacy ambiguous names that need evidence-aware resolution.
+ * These map to standard PPPU by default unless elevation evidence exists.
  */
-const LEGACY_EXERCISE_NAME_MAP: Record<string, string> = {
-  // [AB12.1] "Planche Lean Push-Ups" was ambiguous - it's actually a dynamic push-up, not a lean hold
-  'Planche Lean Push-Ups': 'Elevated Pseudo Planche Push-Ups',
-  'planche lean push-ups': 'Elevated Pseudo Planche Push-Ups',
-  'Planche Lean Pushups': 'Elevated Pseudo Planche Push-Ups',
-  'planche lean pushups': 'Elevated Pseudo Planche Push-Ups',
-}
+const AMBIGUOUS_LEGACY_NAMES = new Set([
+  'Planche Lean Push-Ups',
+  'planche lean push-ups',
+  'Planche Lean Pushups',
+  'planche lean pushups',
+])
+
+/**
+ * IDs that explicitly indicate elevated PPPU.
+ */
+const ELEVATED_PPPU_IDS = new Set([
+  'elevated_pppu',
+  'elevated_pseudo_planche_push_ups',
+  'feet_elevated_pppu',
+  'bench_elevated_pppu',
+])
 
 /**
  * Legacy exercise ID → canonical ID mapping.
  * Used when resolving exercise IDs from saved programs.
+ * [AB12.1.2] planche_lean_pushup maps to pppu (not elevated) for internal compatibility
  */
 export const LEGACY_EXERCISE_ID_MAP: Record<string, string> = {
-  'planche_lean_pushup': 'elevated_pppu',
-  'planche_lean_push_up': 'elevated_pppu',
+  'planche_lean_pushup': 'pppu',
+  'planche_lean_push_up': 'pppu',
 }
 
 /**
- * Resolves an exercise name to its canonical display name.
- * Handles backward compatibility for legacy/ambiguous names.
+ * [AB12.1.2] Evidence-aware canonical exercise display name resolver.
+ * Uses both name AND ID to determine the correct display name.
+ * 
+ * Rules:
+ * - Ambiguous "Planche Lean Push-Ups" → "Pseudo Planche Push-Ups" (safe default)
+ * - Explicit elevated_pppu ID → "Elevated Pseudo Planche Push-Ups"
+ * - Name already contains "Elevated Pseudo" → preserve as-is
+ * - Standard pppu ID → "Pseudo Planche Push-Ups"
  * 
  * @param exerciseName - The raw exercise name from saved data or generation
+ * @param exerciseId - Optional exercise ID for evidence-based resolution
  * @returns The canonical display name
  */
-export function resolveCanonicalExerciseName(exerciseName: string): string {
-  // Check legacy map first (case-insensitive lookup)
-  const legacyResolved = LEGACY_EXERCISE_NAME_MAP[exerciseName]
-  if (legacyResolved) {
-    return legacyResolved
+export function resolveCanonicalExerciseName(
+  exerciseName: string,
+  exerciseId?: string | null
+): string {
+  const lowerName = exerciseName.toLowerCase()
+  const normalizedId = exerciseId?.toLowerCase() || ''
+  
+  // [AB12.1.2] Check for explicit elevation evidence FIRST
+  // If ID explicitly says elevated, use elevated name
+  if (exerciseId && ELEVATED_PPPU_IDS.has(exerciseId)) {
+    return 'Elevated Pseudo Planche Push-Ups'
   }
   
-  // Also check lowercase version
-  const lowerName = exerciseName.toLowerCase()
-  const lowerResolved = LEGACY_EXERCISE_NAME_MAP[lowerName]
-  if (lowerResolved) {
-    return lowerResolved
+  // If name already includes "Elevated Pseudo", preserve it
+  if (lowerName.includes('elevated pseudo planche')) {
+    return exerciseName // Keep original casing
+  }
+  
+  // [AB12.1.2] Check for ambiguous legacy names
+  // These map to standard PPPU by default (not elevated)
+  if (AMBIGUOUS_LEGACY_NAMES.has(exerciseName) || AMBIGUOUS_LEGACY_NAMES.has(lowerName)) {
+    return 'Pseudo Planche Push-Ups'
+  }
+  
+  // Check if ID is legacy planche_lean_pushup (map to standard PPPU)
+  if (normalizedId === 'planche_lean_pushup' || normalizedId === 'planche_lean_push_up') {
+    return 'Pseudo Planche Push-Ups'
   }
   
   // No mapping needed - return as-is

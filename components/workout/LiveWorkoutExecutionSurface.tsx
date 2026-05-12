@@ -99,9 +99,11 @@ export interface LiveWorkoutSnapshot {
   // Exercise identity
   exerciseName: string
   exerciseCategory: string
-  // [AB8.2] Row-level method truth from exercise prescription.
-  // Used to show honest method labels even when not in a grouped block.
-  // Examples: 'rest-pause', 'drop-set', 'top-set', 'cluster', 'density', etc.
+  // [AB8.3] Row-level method truth from exercise prescription.
+  // setExecutionMethod is authoritative for row-level methods (top_set, drop_set, etc.)
+  // exerciseMethod is fallback/legacy/secondary.
+  // Priority: grouped block (blockGroupType) > setExecutionMethod > exerciseMethod > none
+  setExecutionMethod?: string
   exerciseMethod?: string
 
   // Week-scaled effective prescription (already validated in parent)
@@ -641,7 +643,9 @@ export function LiveWorkoutExecutionSurface({
         sessionLabel={safeSessionLabel}
         exerciseName={safeExerciseName}
         exerciseCategory={safeExerciseCategory}
-        // [AB8.2] Row-level method truth for honest method labels
+        // [AB8.3] Row-level method truth for honest method labels
+        // setExecutionMethod is authoritative; exerciseMethod is fallback
+        setExecutionMethod={snapshot.setExecutionMethod}
         exerciseMethod={snapshot.exerciseMethod}
         exerciseSets={safeExerciseSets}
         exerciseRepsOrTime={safeExerciseRepsOrTime}

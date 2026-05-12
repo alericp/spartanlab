@@ -15,8 +15,9 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | PEX-5B | Intelligent Short-Session Recomposition Quality | COMPLETE |
 | PEX-5C | Short-Session UX / Tradeoff Explanation Polish | COMPLETE |
 | PEX-6 | End-to-End Runtime Proof | COMPLETE |
-| AB15.0 | Live Workout Ramp/Warm-Up Set Doctrine | REGISTERED |
-| AB15.1 | Live Ramp Set UI Implementation | NOT STARTED |
+| AB15.0-15.4 | Live Workout Ramp/Warm-Up Sets (Doctrine + UI + Weighted) | COMPLETE |
+| AB15.5.1 | Structured Prep Reopen Clamp + Graph-Backed Targets | COMPLETE |
+| AB15.6 | Full Skill-Map Prep Intelligence Upgrade | REGISTERED (next) |
 
 ---
 
@@ -513,11 +514,96 @@ When implemented:
 
 | Subtask | Description | Status |
 |---------|-------------|--------|
-| AB15.0 | Doctrine registration and spec | REGISTERED |
-| AB15.1 | Live ramp/warm-up set UI implementation | NOT STARTED |
-| AB15.2 | Ramp-set adaptive progression-tree resolver | NOT STARTED |
-| AB15.3 | Ramp rest timer implementation | NOT STARTED |
-| AB15.4 | Weighted load ramping implementation | NOT STARTED |
+| AB15.0 | Doctrine registration and spec | COMPLETE |
+| AB15.1 | Live ramp/warm-up set UI implementation | COMPLETE |
+| AB15.2 | Ramp-set adaptive progression-tree resolver | COMPLETE |
+| AB15.3 | Ramp rest timer implementation | COMPLETE |
+| AB15.4 | Weighted load ramping (practical rounded loads) | COMPLETE |
+| AB15.5.1 | Structured prep reopen clamp + legacy fallback cutoff + graph-backed target naming | COMPLETE |
+| AB15.6 | Full skill-map-driven prep intelligence and warm-up rationale upgrade | REGISTERED (next) |
+
+### AB15.5.1 — Structured Prep Reopen Clamp + Legacy Fallback Cutoff + Graph-Backed Prep Targets
+
+**Status:** COMPLETE
+
+**Purpose:** Fix structured prep reopen bug where completed prep shows "Prep 3/2", prevent structured prep from falling back to legacy text steps, and use existing skill graph for exact prep targets.
+
+### What Changed
+
+1. **Prep Progress Clamping** — `components/workout/ActiveWorkoutStartCorridor.tsx`
+   - Added `rawPrepSetProgress`, `safePrepSetProgress`, `activePrepSetIndex` clamping
+   - Progress is clamped between 0 and `prepSetsTotal`
+   - Array access index is clamped between 0 and `prepSetsTotal - 1`
+   - Header, button, summary, and bars all use clamped values
+   - No more "Prep 3/2" display
+
+2. **Reopen Resets Progress** — `components/workout/ActiveWorkoutStartCorridor.tsx`
+   - `handleReopenPrepare()` now resets structured prep progress to 0
+   - Reopening after completion shows "Prep 1/1" or "Prep 1/2", not stale state
+
+3. **Legacy Fallback Cutoff** — `components/workout/ActiveWorkoutStartCorridor.tsx`
+   - Render uses `hasStructuredPrepSets` to gate branches
+   - If `hasStructuredPrepSets` is true, legacy `exercisePrepPlan.steps` never renders
+   - Legacy fallback only renders when `prepSetsTotal === 0`
+
+4. **Skill Graph Integration** — `lib/workout/exercise-specific-ramp-up-plan.ts`
+   - Added `inferSkillGraphId()` to map exercise names to graph families
+   - Added `findCurrentNodeInGraph()` to find target node in skill graph
+   - Added `buildSkillGraphPrepSets()` to generate prep sets from graph data
+   - Uses existing `getOrderedNodes()` from `lib/skill-progression-graph-engine.ts`
+   - Prep targets now name exact movements (e.g. "Tuck Front Lever — 5-6 sec")
+
+5. **Improved Generic Fallback Copy**
+   - Replaced vague "5-8 sec easier progression" with "Short technical hold — 5-6 sec"
+   - Replaced vague "closer progression" with specific fallback copy
+   - Pseudo planche push-up now says "Reduced-lean pseudo planche push-up — 2-3 reps"
+
+### Skill Graph Families Supported
+- front_lever
+- back_lever
+- planche
+- planche_pushup
+- pseudo_planche_pushup
+- hspu
+- handstand
+- muscle_up
+- ring_muscle_up
+- one_arm_pull_up
+- l_sit
+- v_sit
+- iron_cross
+
+### Files Changed
+- `components/workout/ActiveWorkoutStartCorridor.tsx` — Prep state clamping, reopen reset, fallback cutoff
+- `lib/workout/exercise-specific-ramp-up-plan.ts` — Skill graph helpers, improved copy
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md` — Updated status
+
+### Acceptance Criteria
+- [x] No "Prep 3/2" display on reopen
+- [x] Reopen shows "Prep 1/1" or "Prep 1/2"
+- [x] Legacy fallback never shows when structured prep exists
+- [x] Tuck Front Lever shows exact target like "Tuck front lever setup — 5-6 sec"
+- [x] Pseudo Planche Push-Up shows "Reduced-lean pseudo planche push-up"
+- [x] Skill graph used for exact prep targets where available
+- [x] Bounded fallback used where graph matching fails
+- [x] Weighted ramp load display preserved (50%/70% practical loads)
+- [x] Working set count unchanged during prep
+- [x] Workout progress unchanged during prep
+- [x] TypeScript passes
+- [x] Build passes
+
+### AB15.6 — Full Skill-Map-Driven Prep Intelligence and Warm-Up Rationale Upgrade (NEXT)
+
+**Status:** REGISTERED
+
+**Purpose:** Expand graph-backed prep for all high-load multi-month/multi-year skills, add deeper coaching explanations, and improve or reduce generic warm-up rationale.
+
+### Future Scope
+- Full skill graph expansion for dragon flag, manna, Victorian, etc.
+- "Why this warm-up exists" AI coach modal
+- Warm-up screen generic rationale must be upgraded or hidden
+- Full skill readiness engine integration
+- Full long-term load progression engine
 
 ---
 

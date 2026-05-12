@@ -5195,6 +5195,8 @@ failureStage: null,
       targetRounds: 1,
       memberLabel: '1',
       blockInfo: null as { block: ExecutionBlock; memberIndex: number } | null,
+      // [IQ6.3] Method survival proof
+      methodActiveLabel: null as string | null,
       // UI flags
       bandSelectable: false,
       hasLoad: false,
@@ -5311,6 +5313,15 @@ failureStage: null,
       const currentSetNote = machineState.currentSetNote || ''
       const currentSetReasonTags = machineState.currentSetReasonTags || []
       
+      // [IQ6.3 / AB16.2] Derive method active label from groupType for live method survival proof
+      const methodActiveLabel = groupType
+        ? groupType === 'superset' ? 'Superset'
+          : groupType === 'circuit' ? 'Circuit'
+          : groupType === 'cluster' ? 'Cluster'
+          : groupType === 'density_block' ? 'Density Block'
+          : 'Grouped'
+        : null
+      
       console.log('[v0] [active_contract_build_success]')
       
       return {
@@ -5339,6 +5350,8 @@ failureStage: null,
         targetRounds,
         memberLabel,
         blockInfo,
+        // [IQ6.3] Method survival proof
+        methodActiveLabel,
         // UI flags
         bandSelectable,
         hasLoad,
@@ -11593,6 +11606,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         targetRounds,
         memberLabel,
         blockInfo,
+        methodActiveLabel,
       } = activeEntryContract
       
       return (
@@ -11653,6 +11667,16 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 </Badge>
                 {isGrouped && (
                   <span className="text-xs font-medium text-amber-400">{memberLabel}</span>
+                )}
+                {/* [IQ6.3 / AB16.2] Method active label - live method survival proof */}
+                {methodActiveLabel && (
+                  <span 
+                    className="text-[9px] font-medium text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                    data-iq6-3-method-survival="true"
+                    data-method-label={methodActiveLabel}
+                  >
+                    Method: {methodActiveLabel}
+                  </span>
                 )}
               </div>
             </div>

@@ -654,6 +654,10 @@ export function planMethodOverride(
 // PREVIEW STATE MANAGEMENT
 // =============================================================================
 
+/**
+ * [AB16.2 / IQ6.2] Method Override Preview with structured diff fields.
+ * Provides visible Current vs Proposed structure proof.
+ */
 export interface MethodOverridePreview {
   methodKey: string
   label: string
@@ -663,11 +667,69 @@ export interface MethodOverridePreview {
   safety: RequestedMethodOverrideSafety
   suggestedDayIndex?: number
   canApplyToSavedProgramNow: false
+  
+  // [AB16.2] Structured preview diff fields
+  /** Current structure summary (what the program has now) */
+  currentStructure: string
+  /** Proposed structure summary (what the preview would add) */
+  proposedStructure: string
+  /** Impact summary for user understanding */
+  impactSummary: string
+  /** Risk/safety summary */
+  riskSummary: string
+  /** Visible proof lines for display */
+  visibleProofLines: string[]
+  /** Explicit saved-program-unchanged flag */
+  savedProgramUnchanged: true
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
 
 export function saveMethodOverridePreview(plan: RequestedMethodOverridePlan): MethodOverridePreview {
+  // [AB16.2] Derive current structure based on method state
+  const currentStructure = plan.currentState === 'applied' || plan.currentState === 'materialized'
+    ? `${plan.label} is already included in your program`
+    : plan.currentState === 'blocked'
+      ? `Currently blocked: ${plan.reason.slice(0, 80)}${plan.reason.length > 80 ? '...' : ''}`
+      : plan.currentState === 'deferred'
+        ? `Deferred for future consideration`
+        : `Straight sets / standard structure`
+  
+  // [AB16.2] Derive proposed structure from plan
+  const proposedStructure = plan.suggestedInsertion
+    ? `Add ${plan.label} ${plan.suggestedInsertion.position.replace(/_/g, ' ')} on ${plan.suggestedInsertion.sessionTitle}`
+    : plan.canPreview
+      ? `Preview ${plan.label} integration (no safe insertion point identified)`
+      : `Cannot preview: ${plan.headline}`
+  
+  // [AB16.2] Build impact summary
+  const impactSummary = plan.suggestedInsertion?.summary 
+    || (plan.canPreview 
+        ? `Would add ${plan.label} to training structure`
+        : `No structural change available`)
+  
+  // [AB16.2] Build risk summary from safety and risk notes
+  const riskSummary = plan.riskNotes.length > 0
+    ? plan.riskNotes[0]
+    : plan.safety === 'safe_preview'
+      ? 'Low risk - fits your current training profile'
+      : plan.safety === 'needs_caution'
+        ? 'Moderate risk - may increase fatigue'
+        : plan.safety === 'not_recommended'
+          ? 'High risk - conflicts with current goals'
+          : 'Insufficient data to assess risk'
+  
+  // [AB16.2] Build visible proof lines
+  const visibleProofLines: string[] = [
+    `Method: ${plan.label}`,
+    `Current: ${currentStructure}`,
+    `Proposed: ${proposedStructure}`,
+    `Safety: ${plan.safety.replace(/_/g, ' ')}`,
+  ]
+  if (plan.placementNotes.length > 0) {
+    visibleProofLines.push(`Placement: ${plan.placementNotes[0]}`)
+  }
+  
   const preview: MethodOverridePreview = {
     methodKey: plan.methodKey,
     label: plan.label,
@@ -677,6 +739,13 @@ export function saveMethodOverridePreview(plan: RequestedMethodOverridePlan): Me
     safety: plan.safety,
     suggestedDayIndex: plan.suggestedInsertion?.dayIndex,
     canApplyToSavedProgramNow: false,
+    // [AB16.2] Structured diff fields
+    currentStructure,
+    proposedStructure,
+    impactSummary,
+    riskSummary,
+    visibleProofLines,
+    savedProgramUnchanged: true,
   }
   
   try {

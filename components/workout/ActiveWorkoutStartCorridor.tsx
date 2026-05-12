@@ -291,6 +291,22 @@ export const PRIMARY_SIGNAL_TAGS: CoachingSignalTag[] = [
 ]
 
 // =============================================================================
+// [AB8.5] GROUPED METHOD DISPLAY LABEL HELPER
+// Single source of truth for grouped method display labels in round-rest UI.
+// Ensures density_block shows as "Density Block", not generic "Block".
+// =============================================================================
+function getGroupedMethodDisplayLabel(groupType?: GroupedMethodType | null): string {
+  switch (groupType) {
+    case 'superset': return 'Superset'
+    case 'circuit': return 'Circuit'
+    case 'cluster': return 'Cluster'
+    case 'emom': return 'EMOM'
+    case 'density_block': return 'Density Block'
+    default: return 'Block'
+  }
+}
+
+// =============================================================================
 // [AB8.2] ACTIVE METHOD DISPLAY RESOLVER
 // Pure helper that resolves the method label and styling for the active card.
 // Uses blockGroupType for executable grouped methods, falls back to exerciseMethod
@@ -2489,15 +2505,13 @@ export function ActiveWorkoutStartCorridor({
               <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
                 <div className="flex items-center gap-2 mb-3">
 <Badge variant="outline" className={`${methodTone.badge} text-xs uppercase px-2 py-0.5`}>
-                  {blockGroupType === 'superset' ? 'Superset' :
-                   blockGroupType === 'circuit' ? 'Circuit' :
-                   blockGroupType === 'cluster' ? 'Cluster' :
-                   blockGroupType === 'emom' ? 'EMOM' : 'Block'}
+                  {/* [AB8.5] Use centralized helper for grouped method labels */}
+                  {getGroupedMethodDisplayLabel(blockGroupType)}
                 </Badge>
-                {/* [EDUCATIONAL] Method info bubble - explains what this training method is */}
+                {/* [AB8.5] Method info bubble - now correctly typed to include density_block */}
                 {blockGroupType && (
                   <MethodInfoBubble 
-                    methodType={blockGroupType as 'superset' | 'circuit' | 'cluster' | 'emom'}
+                    methodType={blockGroupType as 'superset' | 'circuit' | 'cluster' | 'density_block' | 'emom'}
                   />
                 )}
                   <span className="text-sm text-[#A4ACB8]">Round {currentRound} of {targetRounds}</span>

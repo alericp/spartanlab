@@ -4605,11 +4605,17 @@ export function StreamlinedWorkoutSession({
   // is the single authoritative effective-value resolver (prefers
   // scaledSets over base sets), already used by the active runner at
   // lines 2888, 3202, etc. No parallel scaling logic is introduced here.
-  const totalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
-  
+  // [AB15.6.3] Prefer execution plan's totalSets when available, as it uses
+  // normalized grouped rounds (targetRounds × memberCount) instead of raw
+  // sum of member sets. This prevents inflated progress totals for grouped
+  // blocks where members have mismatched set counts (e.g., 3+4 normalized to 3).
   // [START-CRASH-FIX] Get executionPlan from contract for grouped rendering in ready state
   // This was missing and causing undefined access crash when clicking Start Workout
   const executionPlan = machineSessionContract?.executionPlan ?? { blocks: [], hasGroupedBlocks: false, totalSets: 0 }
+  const rawSumTotalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
+  const totalSets = typeof executionPlan.totalSets === 'number' && executionPlan.totalSets > 0
+    ? executionPlan.totalSets
+    : rawSumTotalSets
   
 
   
@@ -5517,8 +5523,16 @@ failureStage: null,
     
   // Exercise counts - use centralized validation
   // [WEEK-PROGRESSION-TRUTH] Use effective values for total sets calculation
+  // [AB15.6.3] Prefer execution plan's totalSets when available, as it uses
+  // normalized grouped rounds (targetRounds × memberCount) instead of raw
+  // sum of member sets. This prevents inflated progress totals for grouped
+  // blocks where members have mismatched set counts (e.g., 3+4 normalized to 3).
   const safeExerciseCount = exercises.length
-  const safeTotalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
+  const executionPlanTotalSets = machineSessionContract?.executionPlan?.totalSets
+  const rawSumTotalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
+  const safeTotalSets = typeof executionPlanTotalSets === 'number' && executionPlanTotalSets > 0
+    ? executionPlanTotalSets
+    : rawSumTotalSets
     const safeCompletedSetsCount = normalizedCompletedSets.length
     
     // Current exercise position - use centralized validation (already clamped/validated)
@@ -5529,9 +5543,17 @@ failureStage: null,
     // [ACTIVE-WEEK-PARITY] Sets and repsOrTime come from the effective
     // contract so Week 2/3/4 scaled dosage powers the live session set
     // progress denominator and label.
+    // [AB15.6.3] For grouped blocks, use targetRounds as the visible set
+    // denominator instead of raw member effectiveSets. This ensures the
+    // active card says "Set 1/3" (grouped rounds) not "Set 1/4" (raw member).
     const currentExerciseName = safeCurrentExercise.name || 'Exercise'
     const currentExerciseCategory = safeCurrentExercise.category || 'general'
-    const currentExerciseSets = activeEffectiveContract.effectiveSets
+    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeCurrentIndex)
+    const isCurrentExerciseGrouped = blockInfo?.block?.groupType != null
+    const groupedTargetRounds = blockInfo?.block?.targetRounds
+    const currentExerciseSets = isCurrentExerciseGrouped && typeof groupedTargetRounds === 'number' && groupedTargetRounds > 0
+      ? groupedTargetRounds
+      : activeEffectiveContract.effectiveSets
     const currentExerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
     const currentExerciseNote = safeCurrentExercise.note || ''
     
@@ -10533,15 +10555,26 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         // Reuse the same effective-contract resolver the active card uses
         // so week scaling, doctrine mutations, and load-authoritative
         // session output all flow through the same single-owner path.
-        const nextSets = getEffectiveExerciseValues(nextExercise).sets
+        // [AB15.6.3] For grouped blocks, use targetRounds instead of raw
+        // member sets. This ensures up-next says "Set 1 of 3" (grouped rounds)
+        // not "Set 1 of 4" (raw member sets for Pull-Ups inside 3-round superset).
+        const nextBlockInfo = getBlockForExercise(machineSessionContract?.executionPlan, nextExerciseIndex)
+        const isNextGrouped = nextBlockInfo?.block?.groupType != null
+        const nextGroupedRounds = nextBlockInfo?.block?.targetRounds
+        const rawNextSets = getEffectiveExerciseValues(nextExercise).sets
+        const nextSets = isNextGrouped && typeof nextGroupedRounds === 'number' && nextGroupedRounds > 0
+          ? nextGroupedRounds
+          : rawNextSets
         const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
         const nextTargetRPE = nextExercise.targetRPE
         const nextLoad = nextExercise.prescribedLoad
         const segments: string[] = []
         // Set count (always "Set 1 of N" because the user is heading INTO
         // exercise N+1's first set after a between-exercise rest).
+        // [AB15.6.3] For grouped, show Round 1 of N instead of Set 1 of N
         if (nextSets > 0) {
-          segments.push(`Set 1 of ${nextSets}`)
+          const setOrRound = isNextGrouped ? 'Round' : 'Set'
+          segments.push(`${setOrRound} 1 of ${nextSets}`)
         }
         // Reps / hold prescription, exactly as the corridor would show on
         // the active card. We pass through the prescription text verbatim
@@ -10607,7 +10640,14 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     } | null = (() => {
       if (!nextExercise) return null
       try {
-        const nextSets = getEffectiveExerciseValues(nextExercise).sets
+        // [AB15.6.3] For grouped blocks, use targetRounds instead of raw member sets
+        const richNextBlockInfo = getBlockForExercise(machineSessionContract?.executionPlan, nextExerciseIndex)
+        const isNextGrouped = richNextBlockInfo?.block?.groupType != null
+        const nextGroupedRounds = richNextBlockInfo?.block?.targetRounds
+        const rawNextSets = getEffectiveExerciseValues(nextExercise).sets
+        const nextSets = isNextGrouped && typeof nextGroupedRounds === 'number' && nextGroupedRounds > 0
+          ? nextGroupedRounds
+          : rawNextSets
         const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
         const nextTargetRPE = nextExercise.targetRPE
         const nextLoad = nextExercise.prescribedLoad

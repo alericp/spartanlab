@@ -108,6 +108,8 @@ import { generateWarmUpCoaching, generateCoolDownCoaching } from '@/lib/warmup-c
 import { buildLiveSetCoaching } from '@/lib/workout/live-set-coaching-engine'
 // [AB6] Live grouped runtime hints for consistent member labels
 import { buildGroupedMemberLabel } from '@/lib/workout/live-grouped-runtime-hints'
+// [AB9] Exercise-specific prep plan for Set 1 of eligible exercises
+import { buildExercisePrepPlan } from '@/lib/workout/exercise-specific-ramp-up-plan'
 import {
   collectPostWorkoutSubstitutionEvidence,
   buildSavedProgramSubstitutionProposals,
@@ -10914,6 +10916,19 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           rampUpAdvisory: safeExerciseIndex === 0 
             ? (safeWorkoutSessionContract.warmupAdaptation?.rampUpAdvisory || null)
             : null,
+          // [AB9] Exercise-specific prep plan for Set 1 of eligible exercises
+          exercisePrepPlan: buildExercisePrepPlan({
+            exerciseName: safeCurrentExercise?.name || '',
+            exerciseCategory: safeCurrentExercise?.category,
+            setExecutionMethod: (safeCurrentExercise as { setExecutionMethod?: string })?.setExecutionMethod,
+            exerciseMethod: safeCurrentExercise?.method,
+            // prescribedLoad is an object - pass the load number for weighted detection
+            prescribedLoad: safeCurrentExercise?.prescribedLoad?.load ?? null,
+            targetRPE: safeCurrentExercise?.targetRPE ?? null,
+            currentSetNumber: validatedSetNumber,
+            currentExerciseIndex: machineState.currentExerciseIndex,
+            isWarmupOrCooldown: false, // Main exercises are never warmup/cooldown
+          }),
           // Coaching
           coachingExpression: buildCoachingExpression(machineState.currentActionPlan),
           // Build chips (unchanged contract)

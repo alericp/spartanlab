@@ -43,6 +43,7 @@
 
 import { Component, useEffect, useRef, type ReactNode, type ErrorInfo } from 'react'
 import { ActiveWorkoutStartCorridor, AWC_BUILD_CHIP } from './ActiveWorkoutStartCorridor'
+import type { ExercisePrepPlan } from '@/lib/workout/exercise-specific-ramp-up-plan'
 import type {
   CompletedSetInfo,
   SetReasonTag,
@@ -218,6 +219,10 @@ export interface LiveWorkoutSnapshot {
   // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
   // Shows on first exercise when weighted/advanced skill work detected
   rampUpAdvisory?: string | null
+  
+  // [AB9] Exercise-specific prep plan for Set 1 of eligible exercises
+  // Derived upstream and passed through snapshot - NOT invented by corridor
+  exercisePrepPlan?: ExercisePrepPlan | null
 
   // Coaching
   coachingExpression?: CoachingExpression | null
@@ -730,6 +735,8 @@ export function LiveWorkoutExecutionSurface({
         densityBlockStartedAt={snapshot.densityBlockStartedAt}
         // [AB6.1.2.1C] Ramp-up advisory for first loaded exercise
         rampUpAdvisory={snapshot.rampUpAdvisory}
+        // [AB9] Exercise-specific prep plan for Set 1
+        exercisePrepPlan={snapshot.exercisePrepPlan}
         // Coaching
         coachingExpression={snapshot.coachingExpression}
         // Handlers

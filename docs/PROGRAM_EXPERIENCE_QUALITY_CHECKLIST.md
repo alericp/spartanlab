@@ -18,6 +18,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | AB15.0-15.4 | Live Workout Ramp/Warm-Up Sets (Doctrine + UI + Weighted) | COMPLETE |
 | AB15.5.1 | Structured Prep Reopen Clamp + Graph-Backed Targets | COMPLETE |
 | AB15.6 | Warm-Up Rationale Trust Upgrade (Per-Item Coaching) | COMPLETE |
+| AB15.6.1 | Skill Prep Clarity + In-Card Prep Rest Timer | COMPLETE |
 
 ---
 
@@ -639,6 +640,54 @@ When implemented:
 - Full skill graph expansion for dragon flag, manna, Victorian, etc.
 - Full long-term load progression engine
 - Full skill readiness engine integration
+
+### AB15.6.1 — Skill Prep Clarity + In-Card Prep Rest Timer
+
+**Status:** COMPLETE
+
+**Purpose:** Clarify ambiguous graph-backed Skill Prep targets and add a compact play/pause timer inside the blue Skill Prep card.
+
+### What Changed
+
+1. **Prep Target Clarity** — `lib/workout/exercise-specific-ramp-up-plan.ts`
+   - Added `formatSkillPrepTarget()` helper for clear action semantics
+   - HSPU/elevated_pike now shows `Elevated Pike Hold (bent-arm) — 5-6 sec` instead of just `Elevated Pike — 5-6 sec`
+   - Negatives clarified with `(slow lower)` suffix
+   - Pike Push-Up, Wall HSPU clarified based on hold vs rep context
+
+2. **In-Card Prep Rest Timer** — `components/workout/ActiveWorkoutStartCorridor.tsx`
+   - Added separate prep timer state: `prepRestTimeRemaining`, `isPrepRestTimerRunning`, `prepRestTimerRef`
+   - Timer resets when prep set changes, exercise changes, or reopen
+   - Compact UI with Play/Pause and Reset buttons
+   - Timer does NOT affect workout state, working sets, or main rest mode
+
+### Preserved Behavior
+- AB15.5.1 Skill Prep: no Prep 3/2, reopen resets to Prep 1
+- AB15.6 warm-up per-item rationale
+- Main working-set rest timer unchanged
+- All prep navigation and completion handlers preserved
+
+### Future Scope (Registered, Not Implemented)
+
+1. **Discarded Workout Non-Authoritative Data Audit**
+   - If user confirms Discard, that workout must NOT:
+     - Save to workout history
+     - Feed trend/evidence tables
+     - Feed adaptation inputs
+     - Feed fatigue/readiness calculations
+     - Feed progression logic
+     - Feed band/RPE history
+     - Feed recovery/missed-workout intelligence
+   - Any transient evidence created during the abandoned session must be cleared or quarantined
+
+2. **Warm-Up/Cool-Down Transition and Micro-Rest Orchestration**
+   - Evidence-based micro-rest between warm-up/cool-down items:
+     - Low-intensity mobility/activation: no rest or ~5-10s
+     - Moderate activation/isometric drills: ~10-20s
+     - Higher-tension prep movements: ~20-45s
+   - Pre-main-work transition timer after warm-up completion: ~60-90s for skill/strength
+   - Post-final-exercise downshift timer before cool-down: ~30-60s
+   - Warm-up order audit: general → joint prep/mobility → activation → movement-specific rehearsal
 
 ---
 

@@ -5657,6 +5657,41 @@ function isAdaptiveExerciseForDisplay(
   return true
 }
 
+/**
+ * [AB15.6.2.1] Creates a display-only clone of an exercise with grouped-normalized sets.
+ * 
+ * When a grouped block resolves to a normalized round count (e.g., 3 rounds from
+ * mismatched 3+4 member sets), this adapter ensures the ExerciseRow displays the
+ * normalized count, not the raw member count.
+ * 
+ * This is a DISPLAY-ONLY clone. It does not mutate saved program data.
+ * 
+ * @param exercise - The original hydrated exercise (AdaptiveExercise)
+ * @param normalizedSets - The block-level normalized set count from the grouped resolver
+ * @returns A shallow clone with sets/scaledSets overridden for display
+ */
+function withGroupedDisplaySets<T extends AdaptiveExercise>(
+  exercise: T,
+  normalizedSets: number | null,
+): T {
+  // Only override if normalizedSets is a valid positive number
+  if (typeof normalizedSets !== 'number' || normalizedSets <= 0) {
+    return exercise
+  }
+  // Return a shallow clone with display-dose overrides
+  // Override both `sets` AND `scaledSets` because ExerciseRow uses:
+  //   effectiveSets = scaledSets ?? sets ?? 3
+  // If we only override `sets`, `scaledSets` would still win.
+  return {
+    ...exercise,
+    sets: normalizedSets,
+    // Also override scaledSets if it exists, so it doesn't override our normalized value
+    ...(typeof (exercise as { scaledSets?: number }).scaledSets === 'number'
+      ? { scaledSets: normalizedSets }
+      : {}),
+  }
+}
+
 interface MainExercisesRendererProps {
   session: AdaptiveSession
   // [FULL-VISIBLE-ROUTINE] Now accepts full routine exercises (all non-warmup/cooldown)
@@ -5934,10 +5969,17 @@ function MainExercisesRenderer({
                     // AdaptiveExercise.
                     if (!hydrated || !isAdaptiveExerciseForDisplay(hydrated)) return null
                     rawIdx++
+                    // [AB15.6.2.1] Apply grouped-normalized sets for display
+                    // The resolver's member.normalizedSets ensures all members
+                    // in this grouped block display the same set count as the header.
+                    const resolvedMember = rawPrescription.members[mIdx]
+                    const displayExercise = resolvedMember?.normalizedSets != null
+                      ? withGroupedDisplaySets(hydrated, resolvedMember.normalizedSets)
+                      : hydrated
                     return (
                       <ExerciseRow
                         key={hydrated.id}
-                        exercise={hydrated}
+                        exercise={displayExercise}
                         index={rawIdx}
                         prefix={undefined}
                         sessionId={sessionId}
@@ -6086,6 +6128,13 @@ function MainExercisesRenderer({
                   // hydration-miss members -- grouped visibility is preserved
                   // without faking prescription.
                   if (hydrated && isAdaptiveExerciseForDisplay(hydrated)) {
+                    // [AB15.6.2.1] Apply grouped-normalized sets for display
+                    // The resolver's member.normalizedSets ensures all members
+                    // in this grouped block display the same set count as the header.
+                    const resolvedMember = rawPrescription.members[mIdx]
+                    const displayExercise = resolvedMember?.normalizedSets != null
+                      ? withGroupedDisplaySets(hydrated, resolvedMember.normalizedSets)
+                      : hydrated
                     return (
                       <GroupedMemberFrame
                         key={hydrated.id}
@@ -6097,7 +6146,7 @@ function MainExercisesRenderer({
                         semanticLine={semanticLine}
                       >
                         <ExerciseRow
-                          exercise={hydrated}
+                          exercise={displayExercise}
                           index={rawIdx}
                           // [GROUPED-MEMBER-FRAME] Suppress the row's
                           // internal tiny 10px mono prefix -- the frame's
@@ -6987,6 +7036,15 @@ function MainExercisesRenderer({
                 // its faint 10px mono prefix no longer competes with the
                 // rail. Flat 'straight' groups render ExerciseRow directly
                 // to preserve their existing visual contract.
+                
+                // [AB15.6.2.1] Apply grouped-normalized sets for display
+                // The resolver's member.normalizedSets ensures all members
+                // in this grouped block display the same set count as the header.
+                const resolvedMember = groupPrescription?.members?.[exIdx]
+                const displayExercise = resolvedMember?.normalizedSets != null
+                  ? withGroupedDisplaySets(fullExercise, resolvedMember.normalizedSets)
+                  : fullExercise
+                
                 if (isSpecialGroup) {
                   return (
                     <GroupedMemberFrame
@@ -6999,7 +7057,7 @@ function MainExercisesRenderer({
                       semanticLine={semanticLine}
                     >
                       <ExerciseRow
-                        exercise={fullExercise}
+                        exercise={displayExercise}
                         index={globalExerciseIndex}
                         prefix={undefined}
                         sessionId={sessionId}
@@ -7019,7 +7077,7 @@ function MainExercisesRenderer({
                 return (
                   <ExerciseRow
                     key={fullExercise.id}
-                    exercise={fullExercise}
+                    exercise={displayExercise}
                     index={globalExerciseIndex}
                     prefix={groupExercise.prefix}
                     sessionId={sessionId}

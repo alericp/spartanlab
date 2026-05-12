@@ -67,6 +67,13 @@ export interface ResolvedGroupMember {
   prefix: string
   /** Hydrated sets count or null when the member does not bind to a real row. */
   sets: number | null
+  /**
+   * [AB15.6.2] Normalized sets count that matches the block's resolved `rounds`.
+   * Use this for display in grouped blocks to ensure all members show the same
+   * set count as the block header. This prevents confusing UI where the block
+   * says "3 paired sets" but one member row shows "4 × 10-15".
+   */
+  normalizedSets: number | null
   /** Reps / time / hold string. Null when the member is orphan. */
   reps: string | null
   /** Optional hold duration parsed from `reps` when the field is a hold (e.g. "10s hold"). */
@@ -116,6 +123,12 @@ export interface ResolvedGroupedExecutionPrescription {
    * Empty string when block is not interpretable.
    */
   executionText: string
+  /**
+   * [AB15.6.2] True when members had mismatched set counts that were normalized
+   * to the block-level rounds. UI can use this to show a subtle indicator that
+   * original prescriptions differed but will execute as a unified group.
+   */
+  hadSetsMismatch: boolean
 }
 
 // =============================================================================
@@ -299,6 +312,7 @@ export function resolveGroupedExecutionPrescription(
         name: (m.name || '').trim(),
         prefix: m.prefix,
         sets: null,
+        normalizedSets: null, // [AB15.6.2] Will be set after rounds resolution
         reps: null,
         holdSeconds: null,
         rpe: null,
@@ -351,6 +365,7 @@ export function resolveGroupedExecutionPrescription(
       name: (hydrated.name || m.name || '').trim(),
       prefix: m.prefix,
       sets,
+      normalizedSets: sets, // [AB15.6.2] Initially same as sets, will be normalized after rounds resolution
       reps,
       holdSeconds,
       rpe,
@@ -375,6 +390,28 @@ export function resolveGroupedExecutionPrescription(
     methodStructureRounds: methodStructureRounds ?? null,
     hydratedSets,
   })
+
+  // [AB15.6.2] NORMALIZE MEMBER SETS TO BLOCK ROUNDS
+  // After resolving the block-level rounds (which normalizes mismatched member
+  // sets to the minimum), update each member's normalizedSets to match. This
+  // ensures that display surfaces show consistent set counts across the block.
+  // Example: if Archer Pull-Ups has 3 sets and Pull-Ups has 4 sets, and we
+  // resolved to 3 rounds, both members should display "3 × [reps]" not their
+  // original mismatched counts.
+  const hadSetsMismatch = roundsSource === 'minMemberSets'
+  for (const member of resolvedMembers) {
+    if (member.bound && member.sets != null) {
+      member.normalizedSets = rounds
+      // Also update prescriptionText if there was a mismatch
+      if (hadSetsMismatch && member.sets !== rounds) {
+        member.prescriptionText = buildPrescriptionText({ 
+          sets: rounds, 
+          reps: member.reps, 
+          rpe: member.rpe 
+        })
+      }
+    }
+  }
 
   // Microcopy: read from the single authoritative semantic source. Density
   // and circuit have their own restProtocol; superset has the "0-15s between"
@@ -437,6 +474,7 @@ export function resolveGroupedExecutionPrescription(
     hasOrphanMembers: orphanMemberCount > 0,
     orphanMemberCount,
     executionText,
+    hadSetsMismatch, // [AB15.6.2]
   }
 }
 

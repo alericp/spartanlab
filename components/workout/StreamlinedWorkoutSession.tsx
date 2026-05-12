@@ -284,6 +284,7 @@ import {
 import {
   buildExecutionBlocksFromMethodStructures,
   evaluateLiveGroupedExecution,
+  resolveGroupedRuntimeRounds,
   type LiveGroupedExecutionResult,
 } from '@/lib/workout/live-grouped-execution-contract'
 // [PHASE-NEXT] Execution unit contract and rest resolver
@@ -466,8 +467,21 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
     }
     // Single-member blocks remain groupType = null (normal set-by-set execution)
     
-    // For grouped blocks, targetRounds = sets of each exercise
-    const targetRounds = groupType ? (firstEx.sets || 3) : 1
+    // [AB15.6.2] For grouped blocks, use unified round authority resolver
+    // This ensures mismatched member set counts are normalized to minimum
+    let targetRounds = 1
+    if (groupType) {
+      const roundsResolution = resolveGroupedRuntimeRounds(currentBlockExercises)
+      targetRounds = roundsResolution.targetRounds
+      if (roundsResolution.hadMismatch) {
+        console.log('[AB15.6.2] Local grouped rounds normalized:', {
+          blockLabel,
+          memberSetCounts: roundsResolution.memberSetCounts,
+          resolvedRounds: targetRounds,
+          reason: roundsResolution.reason,
+        })
+      }
+    }
     
     // Rest times based on group type
     let intraBlockRest = 0
@@ -3359,13 +3373,25 @@ export function StreamlinedWorkoutSession({
           continue
         }
 
+        // [AB15.6.2] Use grouped round authority resolver for consistent runtime rounds
+        const styledGroupRoundsResolution = resolveGroupedRuntimeRounds(memberExercises)
+        if (styledGroupRoundsResolution.hadMismatch) {
+          console.log('[AB15.6.2] StyledGroups rounds normalized:', {
+            blockId: group.id,
+            groupType,
+            memberSetCounts: styledGroupRoundsResolution.memberSetCounts,
+            resolvedRounds: styledGroupRoundsResolution.targetRounds,
+            reason: styledGroupRoundsResolution.reason,
+          })
+        }
+        
         blocks.push({
           blockId: group.id,
           groupType,
           blockLabel,
           memberExercises,
           memberExerciseIndexes,
-          targetRounds: memberExercises[0]?.sets || 3,
+          targetRounds: styledGroupRoundsResolution.targetRounds,
           intraBlockRestSeconds: intraBlockRest,
           postRoundRestSeconds: memberExercises[0]?.restSeconds || 90,
           postBlockRestSeconds: 120,

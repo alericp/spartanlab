@@ -678,7 +678,19 @@ function MethodDetailModalContent({
   onClearPreview: () => void
   onDismiss: () => void
 }) {
-  const safetyStyle = SAFETY_COLORS[plan.safety] || SAFETY_COLORS.not_enough_truth
+  // [AB17.2.2] Circuit-specific safety override
+  // If circuit preview exists but is not a safe candidate, override the safety display
+  const isCircuitMethod = plan.methodKey === 'circuits' || plan.methodKey === 'density_blocks'
+  const circuitCandidate = preview?.circuitCandidate
+  const isUnsafeCircuit = isCircuitMethod && circuitCandidate && !circuitCandidate.isSafeCircuitCandidate
+  
+  // Determine effective safety for display
+  const effectiveSafety = isUnsafeCircuit ? 'needs_caution' : plan.safety
+  const effectiveSafetyLabel = isUnsafeCircuit 
+    ? (circuitCandidate?.circuitSize === 2 ? 'Would Be Superset' : 'No Safe Circuit') 
+    : SAFETY_LABELS[plan.safety]
+  
+  const safetyStyle = SAFETY_COLORS[effectiveSafety] || SAFETY_COLORS.not_enough_truth
   const SafetyIcon = safetyStyle.icon
   
   const isAlreadyApplied = item.state === 'applied' || item.state === 'materialized'
@@ -703,7 +715,7 @@ function MethodDetailModalContent({
               safetyStyle.border, safetyStyle.bg, safetyStyle.text,
             )}>
               <SafetyIcon className="w-3 h-3" />
-              {SAFETY_LABELS[plan.safety]}
+              {effectiveSafetyLabel}
             </span>
           </div>
           <p className="text-sm font-medium text-[#E6E9EF]">{plan.headline}</p>
@@ -724,7 +736,8 @@ function MethodDetailModalContent({
       </div>
 
       {/* Suggested Insertion (if available) */}
-      {plan.suggestedInsertion && (
+      {/* [AB17.2.2] For circuits, show circuit-specific insertion info */}
+      {plan.suggestedInsertion && !isCircuitMethod && (
         <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
             Best Safe Insertion Point
@@ -741,6 +754,51 @@ function MethodDetailModalContent({
           <p className="text-xs text-[#9A9AAA] leading-relaxed">
             {plan.suggestedInsertion.summary}
           </p>
+        </div>
+      )}
+      
+      {/* [AB17.2.2] Circuit-specific insertion info */}
+      {isCircuitMethod && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+            Circuit Insertion Analysis
+          </span>
+          {circuitCandidate ? (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn(
+                  'px-2 py-0.5 text-[9px] font-medium rounded border',
+                  circuitCandidate.isSafeCircuitCandidate 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                )}>
+                  {circuitCandidate.isSafeCircuitCandidate 
+                    ? `${circuitCandidate.circuitSize}-exercise circuit available`
+                    : circuitCandidate.circuitSize === 2 
+                      ? '2 exercises = superset only'
+                      : 'No safe circuit candidate'}
+                </span>
+              </div>
+              <p className="text-xs text-[#9A9AAA] leading-relaxed mb-2">
+                {circuitCandidate.dayLabel}
+              </p>
+              <p className="text-[10px] text-[#7A7A8A]">
+                {circuitCandidate.candidateReason}
+              </p>
+              {circuitCandidate.selectedExercises.length > 0 && (
+                <div className="mt-2 text-[10px] text-[#8A8A9A]">
+                  <span className="text-[#6A6A7A]">Available: </span>
+                  {circuitCandidate.selectedExercises.join(', ')}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-[#9A9AAA] leading-relaxed">
+              {plan.suggestedInsertion 
+                ? `${plan.suggestedInsertion.sessionTitle} — ${plan.suggestedInsertion.summary}`
+                : 'Create preview to analyze circuit candidates across program days'}
+            </p>
+          )}
         </div>
       )}
 
@@ -850,7 +908,7 @@ function MethodDetailModalContent({
         )}
       </div>
 
-      {/* [AB16.2 / IQ6.2 / AB17.2] Structured Preview Card with Current vs Proposed */}
+      {/* [AB16.2 / IQ6.2 / AB17.2 / AB17.2.2] Structured Preview Card with Current vs Proposed */}
       {preview && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
           <div className="flex items-center gap-2 mb-3">
@@ -858,8 +916,86 @@ function MethodDetailModalContent({
             <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
           </div>
           
-          {/* [AB17.2] Concrete Day-Specific Workout Preview */}
-          {preview.workoutPreview && (
+          {/* [AB17.2.2] Circuit-Specific Preview Truth */}
+          {preview.circuitCandidate && (
+            <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
+              {/* Circuit Status Header */}
+              {preview.circuitCandidate.isSafeCircuitCandidate ? (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Circuit preview: {preview.circuitCandidate.circuitSize} exercises
+                  </span>
+                  <span className="text-[9px] text-emerald-400/60">
+                    ({preview.circuitCandidate.confidence} confidence)
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    {preview.circuitCandidate.circuitSize === 2 ? 'Would be superset (not circuit)' : 'No safe circuit candidate'}
+                  </span>
+                </div>
+              )}
+              
+              {/* Affected Day */}
+              <div className="text-[10px] font-medium text-amber-400 mb-2">
+                {preview.circuitCandidate.dayLabel}
+              </div>
+              
+              {/* Circuit Selected Exercises */}
+              {preview.circuitCandidate.selectedExercises.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                    {preview.circuitCandidate.isSafeCircuitCandidate ? 'Circuit Exercises' : 'Available Exercises'}
+                  </span>
+                  <div className="space-y-1">
+                    {preview.circuitCandidate.selectedExercises.map((exercise, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-[10px]">
+                        <span className={preview.circuitCandidate!.isSafeCircuitCandidate ? 'text-emerald-400' : 'text-amber-400'}>
+                          {idx + 1}.
+                        </span>
+                        <span className="text-[#9A9AAA]">{exercise}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Skipped Exercises */}
+              {preview.circuitCandidate.skippedExercises.length > 0 && (
+                <div className="mb-3">
+                  <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                    Not Included (skill holds / same-pattern)
+                  </span>
+                  <div className="space-y-1">
+                    {preview.circuitCandidate.skippedExercises.map((exercise, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-[10px]">
+                        <span className="text-[#5A5A6A]">-</span>
+                        <span className="text-[#6A6A7A]">{exercise}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Why This Day / Candidate Reason */}
+              <div className="text-[9px] text-[#8A8A9A] mb-2">
+                {preview.circuitCandidate.candidateReason}
+              </div>
+              
+              {/* Risk Notes */}
+              {preview.circuitCandidate.riskNotes.length > 0 && (
+                <div className="text-[9px] text-amber-400/80 p-1.5 rounded bg-amber-500/5 border border-amber-500/10">
+                  {preview.circuitCandidate.riskNotes.map((note, idx) => (
+                    <div key={idx}>{note}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* [AB17.2] Concrete Day-Specific Workout Preview (non-circuit methods) */}
+          {preview.workoutPreview && !preview.circuitCandidate && (
             <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
               <div className="text-[10px] font-medium text-amber-400 mb-2">
                 {preview.workoutPreview.affectedDayLabel}

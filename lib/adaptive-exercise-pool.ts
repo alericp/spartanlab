@@ -4,7 +4,7 @@
 
 // [loadability-truth] ISSUE C: 'weights' enables automatic weight targets for weighted exercises
 // [PHASE 14A] Added 'bench' to support bench_box equipment from onboarding
-export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall' | 'bench'
+export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall' | 'bench' | 'dip_belt'
 export type MovementPattern = 'horizontal_push' | 'vertical_push' | 'horizontal_pull' | 'vertical_pull' | 'core' | 'compression' | 'transition' | 'skill' | 'mobility'
 export type ExerciseCategory = 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown' | 'flexibility'
 
@@ -45,6 +45,10 @@ export interface Exercise {
   failureRisk?: FailureRisk // Risk level when training near failure
   dropSetProgression?: string[] // Easier variations for mechanical drop sets
   supportsBandAssistance?: boolean // Whether this exercise can use band assistance
+  // [AB12] Canonical exercise identity fields for live workout contract
+  bandSelectable?: boolean // Whether band selector should show in live workout
+  isUnilateral?: boolean // Whether exercise is performed one side at a time (reps per side)
+  isWeighted?: boolean // Whether exercise uses external load (suppresses band selector)
   // New fields for enhanced exercise library
   difficultyLevel?: DifficultyLevel // beginner/intermediate/advanced/elite
   movementCategory?: MovementCategory // push/pull/compression classification
@@ -468,7 +472,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     category: 'strength',
     movementPattern: 'vertical_pull',
     primaryMuscles: ['lats', 'biceps', 'rear_deltoid'],
-    equipment: ['pull_bar'],
+    equipment: ['pull_bar', 'dip_belt'],
     neuralDemand: 3,
     fatigueCost: 4,
     transferTo: ['front_lever', 'muscle_up'],
@@ -478,6 +482,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'intermediate',
     movementCategory: 'pull',
     supportsRPE: true,
+    isWeighted: true, // [AB12] Explicit: no band selector for weighted movements
   },
   {
     id: 'chin_up',
@@ -494,6 +499,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'beginner',
     movementCategory: 'pull',
     supportsRPE: true,
+    bandSelectable: true, // [AB12] Bands assist chin-up development
     notes: 'Supinated grip, strong bicep emphasis',
   },
   {
@@ -511,6 +517,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'intermediate',
     movementCategory: 'pull',
     supportsRPE: true,
+    bandSelectable: true, // [AB12] Bands assist full ROM pull development
     notes: 'Full ROM pull with chest contact',
   },
   {
@@ -528,6 +535,8 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'advanced',
     movementCategory: 'pull',
     supportsRPE: true,
+    isUnilateral: true, // [AB12] Per-side reps
+    bandSelectable: true, // [AB12] Bands can assist unilateral pull development
     notes: 'Unilateral pull progression',
   },
   {
@@ -606,7 +615,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     category: 'strength',
     movementPattern: 'vertical_push',
     primaryMuscles: ['chest', 'triceps', 'anterior_deltoid'],
-    equipment: ['dip_bars', 'rings'],
+    equipment: ['dip_bars', 'rings', 'dip_belt'],
     neuralDemand: 3,
     fatigueCost: 4,
     transferTo: ['planche', 'muscle_up', 'handstand_pushup'],
@@ -616,6 +625,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'intermediate',
     movementCategory: 'push',
     supportsRPE: true,
+    isWeighted: true, // [AB12] Explicit: no band selector for weighted movements
   },
   {
     id: 'ring_dip',
@@ -900,6 +910,7 @@ export const STRENGTH_EXERCISES: Exercise[] = [
     difficultyLevel: 'intermediate',
     movementCategory: 'pull',
     supportsRPE: true,
+    bandSelectable: true, // [AB12] Bands can assist explosive height development
     notes: 'Maximum acceleration',
   },
   {

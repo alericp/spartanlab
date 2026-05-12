@@ -380,6 +380,61 @@ function findCurrentNodeInGraph(exerciseName: string, graphId: SkillGraphId): Pr
 }
 
 /**
+ * [AB15.6.1] Format prep target with clear action semantics for ambiguous graph nodes.
+ * Only adds clarification when the node name alone would be confusing (e.g., "Elevated Pike").
+ * Returns the raw displayName for nodes that are already clear (e.g., "Tuck Front Lever setup").
+ */
+function formatSkillPrepTarget(
+  graphId: SkillGraphId,
+  nodeName: string,
+  displayName: string,
+  isHold: boolean,
+  durationText: string
+): string {
+  const nodeNameLower = nodeName.toLowerCase()
+  
+  // HSPU-specific clarifications - "Elevated Pike" is ambiguous without action type
+  if (graphId === 'hspu') {
+    if (nodeNameLower === 'elevated_pike') {
+      return isHold 
+        ? `Elevated Pike Hold (bent-arm) — ${durationText}`
+        : `Elevated Pike Push-Up — ${durationText}`
+    }
+    if (nodeNameLower === 'pike_push_up') {
+      return isHold
+        ? `Pike Push-Up Hold — ${durationText}`
+        : `Pike Push-Up — ${durationText}`
+    }
+    if (nodeNameLower.includes('negative')) {
+      return `${displayName} (slow lower) — ${durationText}`
+    }
+    if (nodeNameLower === 'wall_hspu') {
+      return isHold
+        ? `Wall HSPU Hold — ${durationText}`
+        : `Wall HSPU — ${durationText}`
+    }
+  }
+  
+  // General negative clarification for any graph
+  if (nodeNameLower.includes('negative') && !displayName.toLowerCase().includes('lower')) {
+    return `${displayName} (slow lower) — ${durationText}`
+  }
+  
+  // Default: use displayName with appropriate suffix
+  // For holds, add "setup" or "hold" if not already present and node looks like isometric
+  if (isHold && !displayName.toLowerCase().includes('hold') && !displayName.toLowerCase().includes('setup')) {
+    // Only for clearly isometric positions (lever, planche, l-sit, etc.)
+    const isometricKeywords = ['lever', 'planche', 'l-sit', 'v-sit', 'support', 'cross', 'hang']
+    const isIsometric = isometricKeywords.some(kw => nodeNameLower.includes(kw.replace('-', '_')))
+    if (isIsometric) {
+      return `${displayName} setup — ${durationText}`
+    }
+  }
+  
+  return `${displayName} — ${durationText}`
+}
+
+/**
  * Build prep sets using skill graph data.
  * Returns exact movement targets from the graph.
  */
@@ -396,13 +451,19 @@ function buildSkillGraphPrepSets(
   // For entry-level nodes (levelIndex 0 or 1), use 1 prep set - just rehearse the same movement
   if (currentNode && currentNode.levelIndex <= 1) {
     const isHold = isHoldBased || currentNode.movementType === 'isometric_hold'
+    // [AB15.6.1] Use formatSkillPrepTarget for clear action semantics
+    const target = formatSkillPrepTarget(
+      graphId,
+      currentNode.nodeName,
+      currentNode.displayName,
+      isHold,
+      isHold ? '5-6 sec' : '2-3 easy reps'
+    )
     return [{
       id: 'prep-1',
       label: 'Prep 1',
       unit: isHold ? 'seconds' : 'reps',
-      target: isHold 
-        ? `${currentNode.displayName} setup — 5-6 sec`
-        : `${currentNode.displayName} — 2-3 easy reps`,
+      target,
       targetValue: isHold ? 5 : 2,
       effortPercent: 50,
       restSeconds: 45,
@@ -425,13 +486,19 @@ function buildSkillGraphPrepSets(
     const prep2Node = nodes.find(n => n.levelIndex === prep2LevelIndex)
     
     if (prep1Node) {
+      // [AB15.6.1] Use formatSkillPrepTarget for clear action semantics
+      const prep1Target = formatSkillPrepTarget(
+        graphId,
+        prep1Node.nodeName,
+        prep1Node.displayName,
+        isHold,
+        isHold ? '5-6 sec' : '2-3 reps'
+      )
       prepSets.push({
         id: 'prep-1',
         label: 'Prep 1',
         unit: isHold ? 'seconds' : 'reps',
-        target: isHold 
-          ? `${prep1Node.displayName} — 5-6 sec`
-          : `${prep1Node.displayName} — 2-3 reps`,
+        target: prep1Target,
         targetValue: isHold ? 5 : 2,
         effortPercent: 50,
         restSeconds: 45,
@@ -441,13 +508,19 @@ function buildSkillGraphPrepSets(
     }
     
     if (prep2Node && prep2Node.nodeId !== prep1Node?.nodeId) {
+      // [AB15.6.1] Use formatSkillPrepTarget for clear action semantics
+      const prep2Target = formatSkillPrepTarget(
+        graphId,
+        prep2Node.nodeName,
+        prep2Node.displayName,
+        isHold,
+        isHold ? '3-5 sec' : '1-2 crisp reps'
+      )
       prepSets.push({
         id: 'prep-2',
         label: 'Prep 2',
         unit: isHold ? 'seconds' : 'reps',
-        target: isHold 
-          ? `${prep2Node.displayName} — 3-5 sec`
-          : `${prep2Node.displayName} — 1-2 crisp reps`,
+        target: prep2Target,
         targetValue: isHold ? 4 : 1,
         effortPercent: 70,
         restSeconds: 60,

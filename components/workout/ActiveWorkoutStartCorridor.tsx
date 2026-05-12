@@ -196,7 +196,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play, Pause, RotateCcw } from 'lucide-react'
 import { MethodInfoBubble, isMethodInfoBubbleMethodType } from '@/components/coaching'
 import { formatDisplayRPE, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { 
@@ -1627,6 +1627,70 @@ export function ActiveWorkoutStartCorridor({
   const nextPrepSet = hasStructuredPrepSets
     ? exercisePrepPlan?.prepSets?.[activePrepSetIndex + 1] ?? null
     : null
+  
+  // [AB15.6.1] Prep rest timer state - UI-only, does NOT affect workout state
+  // This is SEPARATE from the main working-set rest timer (restTimerRef/restTimeRemaining)
+  const [prepRestTimeRemaining, setPrepRestTimeRemaining] = useState(0)
+  const [isPrepRestTimerRunning, setIsPrepRestTimerRunning] = useState(false)
+  const prepRestTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // [AB15.6.1] Reset prep timer when prep set changes (exercise change, prep set completion, reopen)
+  useEffect(() => {
+    // Clear any running timer
+    if (prepRestTimerRef.current) {
+      clearInterval(prepRestTimerRef.current)
+      prepRestTimerRef.current = null
+    }
+    setIsPrepRestTimerRunning(false)
+    // Reset to current prep set's rest duration
+    setPrepRestTimeRemaining(currentPrepSet?.restSeconds ?? 0)
+  }, [currentPrepKey, activePrepSetIndex, currentPrepSet?.restSeconds])
+  
+  // [AB15.6.1] Cleanup prep timer on unmount
+  useEffect(() => {
+    return () => {
+      if (prepRestTimerRef.current) {
+        clearInterval(prepRestTimerRef.current)
+      }
+    }
+  }, [])
+  
+  // [AB15.6.1] Prep timer control handlers
+  const handlePrepTimerPlayPause = () => {
+    if (isPrepRestTimerRunning) {
+      // Pause
+      if (prepRestTimerRef.current) {
+        clearInterval(prepRestTimerRef.current)
+        prepRestTimerRef.current = null
+      }
+      setIsPrepRestTimerRunning(false)
+    } else {
+      // Play - only if time remaining
+      if (prepRestTimeRemaining > 0) {
+        setIsPrepRestTimerRunning(true)
+        prepRestTimerRef.current = setInterval(() => {
+          setPrepRestTimeRemaining(prev => {
+            if (prev <= 1) {
+              if (prepRestTimerRef.current) clearInterval(prepRestTimerRef.current)
+              prepRestTimerRef.current = null
+              setIsPrepRestTimerRunning(false)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      }
+    }
+  }
+  
+  const handlePrepTimerReset = () => {
+    if (prepRestTimerRef.current) {
+      clearInterval(prepRestTimerRef.current)
+      prepRestTimerRef.current = null
+    }
+    setIsPrepRestTimerRunning(false)
+    setPrepRestTimeRemaining(currentPrepSet?.restSeconds ?? 0)
+  }
   // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
   // moment so the Log Set CTA and secondary rail remain in the first
   // viewport on 640-720px-tall Android screens. User can expand with one
@@ -3044,6 +3108,38 @@ export function ActiveWorkoutStartCorridor({
                             <p className="text-xs text-[#A4ACB8]">
                               Rest ~{currentPrepSet.restSeconds}s{nextPrepSet ? `, then ${nextPrepSet.label}` : ', then start Set 1'}
                             </p>
+                          )}
+                          
+                          {/* [AB15.6.1] Compact prep rest timer */}
+                          {currentPrepSet.restSeconds > 0 && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1.5 bg-blue-900/40 rounded px-2 py-1 border border-blue-500/20">
+                                <span className="text-[10px] text-blue-300/70">Prep rest</span>
+                                <span className="text-xs font-mono font-medium text-blue-200 tabular-nums min-w-[32px] text-center">
+                                  {Math.floor(prepRestTimeRemaining / 60)}:{(prepRestTimeRemaining % 60).toString().padStart(2, '0')}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handlePrepTimerPlayPause}
+                                  className="p-0.5 rounded hover:bg-blue-500/20 text-blue-300 transition-colors"
+                                  aria-label={isPrepRestTimerRunning ? 'Pause prep timer' : 'Start prep timer'}
+                                >
+                                  {isPrepRestTimerRunning ? (
+                                    <Pause className="w-3 h-3" />
+                                  ) : (
+                                    <Play className="w-3 h-3" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handlePrepTimerReset}
+                                  className="p-0.5 rounded hover:bg-blue-500/20 text-blue-300/70 transition-colors"
+                                  aria-label="Reset prep timer"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
                           )}
                           
                           {/* Rationale */}

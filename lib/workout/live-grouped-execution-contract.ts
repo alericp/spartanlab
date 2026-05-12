@@ -173,6 +173,91 @@ const GUIDANCE_ONLY_GROUPED_FAMILIES: ReadonlySet<CanonicalMethodFamily> = new S
   // [AB7] density_block moved to executable - empty set for now
 ])
 
+// =============================================================================
+// [AB15.6.2] GROUPED ROUND AUTHORITY RESOLVER
+// =============================================================================
+
+export interface GroupedRoundsResolution {
+  targetRounds: number
+  policy: 'explicit_rounds' | 'unanimous_member_sets' | 'normalized_min_sets' | 'fallback_default'
+  memberSetCounts: number[]
+  hadMismatch: boolean
+  reason: string
+}
+
+/**
+ * [AB15.6.2] Resolves authoritative grouped runtime rounds.
+ * 
+ * For superset/circuit, there must be ONE authoritative round count.
+ * - If explicit `methodRounds` is provided and valid, use it.
+ * - If all member set counts match, use that count.
+ * - If member set counts mismatch, normalize to the MINIMUM positive member set count.
+ *   Example: Archer Pull-Ups 3, Pull-Ups 4 → grouped rounds = 3
+ * - Never create unlabeled "leftover" member work in a grouped block.
+ * 
+ * This prevents the confusing state where a 3-set and 4-set exercise appear
+ * in the same superset but the UI shows different totals for each member.
+ */
+export function resolveGroupedRuntimeRounds(
+  memberExercises: Array<{ sets?: number; name?: string }>,
+  methodRounds?: number | null,
+): GroupedRoundsResolution {
+  // Extract valid set counts from members
+  const memberSetCounts = memberExercises.map(ex => {
+    const sets = typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 0
+    return sets
+  })
+  
+  // Filter to positive counts only
+  const positiveCounts = memberSetCounts.filter(s => s > 0)
+  
+  // If explicit method rounds are provided and valid, use them
+  if (typeof methodRounds === 'number' && methodRounds > 0) {
+    return {
+      targetRounds: Math.round(methodRounds),
+      policy: 'explicit_rounds',
+      memberSetCounts,
+      hadMismatch: false,
+      reason: `Using explicit method rounds: ${methodRounds}`,
+    }
+  }
+  
+  // No valid members - return default
+  if (positiveCounts.length === 0) {
+    return {
+      targetRounds: 3,
+      policy: 'fallback_default',
+      memberSetCounts,
+      hadMismatch: false,
+      reason: 'No valid member set counts found, using default 3',
+    }
+  }
+  
+  // Check if all positive counts are unanimous
+  const uniqueCounts = new Set(positiveCounts)
+  if (uniqueCounts.size === 1) {
+    const unanimousCount = positiveCounts[0]
+    return {
+      targetRounds: unanimousCount,
+      policy: 'unanimous_member_sets',
+      memberSetCounts,
+      hadMismatch: false,
+      reason: `All ${positiveCounts.length} members have ${unanimousCount} sets`,
+    }
+  }
+  
+  // Members have mismatched set counts - normalize to minimum
+  const minCount = Math.min(...positiveCounts)
+  const maxCount = Math.max(...positiveCounts)
+  return {
+    targetRounds: minCount,
+    policy: 'normalized_min_sets',
+    memberSetCounts,
+    hadMismatch: true,
+    reason: `Normalized mismatched sets (${positiveCounts.join(', ')}) to minimum: ${minCount}. Extra work beyond ${minCount} rounds not executed in grouped block.`,
+  }
+}
+
 function safeIsArray<T = unknown>(value: unknown): value is T[] {
   return Array.isArray(value)
 }
@@ -636,10 +721,24 @@ export function buildExecutionBlocksFromMethodStructures(
         ? Math.max(0, Math.round(ms.restBetweenRoundsSeconds))
         : memberExercises[0]?.restSeconds || 90
 
-    const targetRounds =
-      typeof ms.rounds === 'number' && ms.rounds > 0
-        ? Math.round(ms.rounds)
-        : memberExercises[0]?.sets || 3
+    // [AB15.6.2] Use grouped round authority resolver for consistent runtime rounds
+    // This ensures mismatched member set counts are normalized to minimum
+    const roundsResolution = resolveGroupedRuntimeRounds(
+      memberExercises,
+      typeof ms.rounds === 'number' ? ms.rounds : null
+    )
+    const targetRounds = roundsResolution.targetRounds
+    
+    // Log mismatch for debugging (visible in dev tools)
+    if (roundsResolution.hadMismatch) {
+      console.log('[AB15.6.2] Grouped rounds normalized:', {
+        blockId: ms.id,
+        family,
+        memberSetCounts: roundsResolution.memberSetCounts,
+        resolvedRounds: targetRounds,
+        reason: roundsResolution.reason,
+      })
+    }
 
     const baseLabel =
       family === 'superset'
@@ -675,7 +774,9 @@ export function buildExecutionBlocksFromMethodStructures(
     })
 
     for (const idx of memberExerciseIndexes) consumedExerciseIndexes.add(idx)
-    for (const ex of memberExercises) totalSets += ex.sets || 3
+    // [AB15.6.2] Use resolved grouped rounds × member count for accurate executable work count
+    // NOT sum of raw member sets, which could include mismatched "leftover" sets
+    totalSets += targetRounds * memberExercises.length
   }
 
   if (blocks.length > 0) reasons.add('METHOD_STRUCTURE_MEMBERS_BOUND')

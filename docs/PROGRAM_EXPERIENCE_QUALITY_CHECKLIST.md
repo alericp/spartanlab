@@ -20,6 +20,78 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | AB15.6 | Warm-Up Rationale Trust Upgrade (Per-Item Coaching) | COMPLETE |
 | AB15.6.1 | Skill Prep Clarity + In-Card Prep Rest Timer | COMPLETE |
 | AB15.6.1.1 | Prep Timer Auto-Advance + Archer Copy Cleanup | COMPLETE |
+| AB15.6.2 | Grouped-Method Set-Count Parity + Live Completion Truth | COMPLETE |
+
+---
+
+## AB15.6.2 — Grouped-Method Set-Count Parity + Live Completion Truth
+
+**Status:** COMPLETE
+
+**Purpose:** Fix confusing grouped-method behavior where superset/circuit members showed mismatched set counts, causing the UI to display conflicting truths (e.g., "3 paired sets" header but "4 × 10-15" on one member row).
+
+### Problem Statement
+User completed a Day 3 workout and observed:
+- Program card showed a Strength Superset (alternating pair)
+- Archer Pull-Ups showed 3 × 4–6
+- Pull-Ups showed 4 × 10–15
+- Live runtime executed grouped/superset behavior
+- After completing grouped work, Pull-Ups appeared to have a "leftover" fourth set
+- Confusing display: block says "3 rounds" but Pull-Ups says "Set 2/4"
+
+### Root Cause
+1. Grouped block `targetRounds` and member `sets` were competing truths
+2. `targetRounds` used first member's sets as fallback, not normalized minimum
+3. Active card, rest screen, and completed-set list used raw member set counts
+4. Program Page displayed mismatched member counts without normalization
+
+### Resolution Policy
+For normal superset/circuit blocks:
+- If all members have matching set counts: use that count
+- If members have mismatched set counts: normalize to MINIMUM positive count
+- Example: 3-set and 4-set members → 3 grouped rounds
+- Never create unlabeled "leftover" member work in a grouped block
+- If extra work is intentional, it must be explicitly split and labeled (finisher/back-off)
+
+### Files Changed
+- `lib/workout/live-grouped-execution-contract.ts`
+  - Added `resolveGroupedRuntimeRounds()` helper with consistent min-normalization policy
+  - Updated `buildExecutionBlocksFromMethodStructures()` to use the resolver
+  - Fixed `totalSets` calculation: `targetRounds × members.length`, not sum of raw member sets
+- `components/workout/StreamlinedWorkoutSession.tsx`
+  - Imported and used `resolveGroupedRuntimeRounds` in local grouped block path
+  - Updated styledGroups path to use the resolver
+- `components/programs/lib/grouped-execution-prescription.ts`
+  - Added `normalizedSets` field to `ResolvedGroupMember` interface
+  - Added `hadSetsMismatch` field to `ResolvedGroupedExecutionPrescription` interface
+  - Post-processes members after rounds resolution to normalize sets
+  - Updates prescriptionText for mismatched members
+- `docs/PROGRAM_EXPERIENCE_QUALITY_CHECKLIST.md`
+  - Added this checklist entry
+
+### Future Doctrine Considerations (Deferred)
+The following are NOT solved in AB15.6.2 but should be addressed in future AI doctrine:
+- Pronation/supination stress evaluation (forearm fatigue accumulation)
+- Grip fatigue awareness across pulling movements
+- Band assistance level affecting superset eligibility
+- Unilateral/bilateral overlap risk (e.g., Archer Pull-Ups + Pull-Ups)
+- High-skill + volume pairing intensity check
+- RPE trend and pain log integration
+- Whether a pull + pull pairing should be downgraded, replaced, or separated
+- Full AI coach response to repeated forearm pain/grip fatigue signals
+
+### Acceptance Criteria
+- [x] Program Page: Superset header shows coherent paired-round count
+- [x] Program Page: Member rows display normalized set counts (matching header)
+- [x] Live workout: Archer Pull-Ups and Pull-Ups use same grouped round truth
+- [x] Live workout: No "Set 2/4" when block is normalized to 3 rounds
+- [x] Rest screen: Shows next round/member correctly
+- [x] Completed sets: Logged with correct round-based set numbers
+- [x] Progress count: Uses `targetRounds × members.length`, not raw sum
+- [x] No random extra unlabeled Pull-Ups set after grouped block
+- [x] Straight-set exercises: Still show normal Set X/Y based on own set count
+- [x] Skill prep timer: Remains intact (AB15.6.1/AB15.6.1.1 preserved)
+- [x] TypeScript passes with zero errors
 
 ---
 

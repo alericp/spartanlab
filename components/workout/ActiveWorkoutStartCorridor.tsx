@@ -2562,72 +2562,74 @@ export function ActiveWorkoutStartCorridor({
                   - Progress dot height h-1.5 -> h-1.
                   Net reclaim ~24-28px for this card alone. */}
               <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-1.5">
-                {/* Exercise name + inline badges */}
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight min-w-0 flex-1 truncate">
-                    {exerciseName}
-                  </h2>
-                  <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
-                    {/* [AB8.2] Method truth label - uses resolver for honest method display.
-                        Considers blockGroupType for grouped methods, exerciseMethod for
-                        row-level methods (rest-pause, drop-set, etc.), and only shows
-                        "Straight Sets" when truly no method exists. */}
-                    {(() => {
-                      const methodDisplay = resolveActiveMethodDisplay({
-                        blockGroupType,
-                        exerciseMethod,
-                        densityTimeCapSeconds,
-                      })
-                      return (
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[10px] uppercase px-1.5 py-0 ${methodDisplay.colorClass}`}
-                        >
-                          {methodDisplay.label}
-                        </Badge>
-                      )
-                    })()}
-                    <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                      {exerciseCategory}
-                    </Badge>
-                    {/* [PHASE AB6 / GROUPED-IDENTITY-FIX] Show grouped member identity when in grouped block.
-                        Member label now uses the canonical AB6 helper so circuit/cluster
-                        render "Circuit 1" / "Cluster 1" instead of inheriting superset's
-                        A/B/C idiom. Identity matches the program card. Orphan guard:
-                        when blockMemberExercises is empty (block was filtered upstream
-                        because it failed the method-minimum), the badge is suppressed
-                        so the active screen never displays a fake grouped context. */}
-                    {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
-                      const badgeText = buildGroupedMemberBadgeText({
-                        groupType: blockGroupType,
-                        memberIndex: groupedMemberIndex,
-                      })
-                      if (!badgeText) return null
-                      return (
-                        <Badge className={`${methodTone.badge} text-[10px] uppercase px-1.5 py-0`}>
-                          {badgeText}
-                        </Badge>
-                      )
-                    })()}
-                    {/* [PHASE AB6] Round badge inline next to the member badge. Only
-                        renders when the grouped block expresses round-paced execution
-                        (density_block returns null because it is time-capped). The
-                        helper clamps an over-shot currentRound so the round-rest
-                        transition cannot momentarily render "Round 4 of 3". */}
-                    {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
-                      const roundBadge = buildGroupedRoundBadgeText({
-                        groupType: blockGroupType,
-                        currentRound,
-                        targetRounds,
-                      })
-                      if (!roundBadge) return null
-                      return (
-                        <Badge className="bg-[#1A1F26] text-[#A4ACB8] border-[#2B313A] text-[10px] uppercase px-1.5 py-0">
-                          {roundBadge}
-                        </Badge>
-                      )
-                    })()}
-                  </div>
+                {/* [AB8.2.1] Exercise name on its own line to prevent truncation.
+                    Previously the title and chips shared a single flex row, causing
+                    names like "Archer Pull-Ups" to truncate into "Arc..." on mobile.
+                    Now the title gets full width and chips wrap below. */}
+                <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight break-words">
+                  {exerciseName}
+                </h2>
+                {/* [AB8.2.1] Chip row wraps naturally below the title */}
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {/* [AB8.2] Method truth label - uses resolver for honest method display.
+                      Considers blockGroupType for grouped methods, exerciseMethod for
+                      row-level methods (rest-pause, drop-set, etc.), and only shows
+                      "Straight Sets" when truly no method exists. */}
+                  {(() => {
+                    const methodDisplay = resolveActiveMethodDisplay({
+                      blockGroupType,
+                      exerciseMethod,
+                      densityTimeCapSeconds,
+                    })
+                    return (
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[10px] uppercase px-1.5 py-0 ${methodDisplay.colorClass}`}
+                      >
+                        {methodDisplay.label}
+                      </Badge>
+                    )
+                  })()}
+                  <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+                    {exerciseCategory}
+                  </Badge>
+                  {/* [PHASE AB6 / GROUPED-IDENTITY-FIX] Show grouped member identity when in grouped block.
+                      Member label now uses the canonical AB6 helper so circuit/cluster
+                      render "Circuit 1" / "Cluster 1" instead of inheriting superset's
+                      A/B/C idiom. Identity matches the program card. Orphan guard:
+                      when blockMemberExercises is empty (block was filtered upstream
+                      because it failed the method-minimum), the badge is suppressed
+                      so the active screen never displays a fake grouped context. */}
+                  {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
+                    const badgeText = buildGroupedMemberBadgeText({
+                      groupType: blockGroupType,
+                      memberIndex: groupedMemberIndex,
+                    })
+                    if (!badgeText) return null
+                    return (
+                      <Badge className={`${methodTone.badge} text-[10px] uppercase px-1.5 py-0`}>
+                        {badgeText}
+                      </Badge>
+                    )
+                  })()}
+                  {/* [PHASE AB6] Round badge inline next to the member badge. Only
+                      renders when the grouped block expresses round-paced execution
+                      (density_block returns null because it is time-capped). The
+                      helper clamps an over-shot currentRound so the round-rest
+                      transition cannot momentarily render "Round 4 of 3". */}
+                  {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
+                    const roundBadge = buildGroupedRoundBadgeText({
+                      groupType: blockGroupType,
+                      currentRound,
+                      targetRounds,
+                    })
+                    if (!roundBadge) return null
+                    return (
+                      <Badge className="bg-[#1A1F26] text-[#A4ACB8] border-[#2B313A] text-[10px] uppercase px-1.5 py-0">
+                        {roundBadge}
+                      </Badge>
+                    )
+                  })()}
                 </div>
 
                 {/* [STEP 22.3 / T.T11] Injury substitution badge — shows when exercise

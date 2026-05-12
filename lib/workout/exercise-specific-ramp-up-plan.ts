@@ -715,33 +715,40 @@ function buildAdvancedSkillPlan(exerciseName: string, isHoldBased = false): Exer
       },
     ]
   } else if (normalizedName.includes('archer') || normalizedName.includes('one arm')) {
+    // [AB15.6.1.1] Cleaned user-facing copy for Archer / one-arm movements
+    const isArcher = normalizedName.includes('archer')
+    const movementBase = normalizedName.includes('pull') ? 'Pull-Ups' : 'Push-Ups'
+    const archerName = isArcher 
+      ? (normalizedName.includes('pull') ? 'Archer Pull-Ups' : 'Archer Push-Ups')
+      : (normalizedName.includes('pull') ? 'One-Arm Pull-Up progression' : 'One-Arm Push-Up progression')
+    
     steps = [
-      'Do 3-5 standard reps of the bilateral version',
-      'Practice the assisted version for 2-3 reps each side',
-      'Focus on controlled tempo before loading one arm',
+      `Do 3-5 smooth standard ${movementBase.toLowerCase()} to prime the pattern`,
+      `Practice 2-3 ${isArcher ? 'archer' : 'assisted single-arm'} reps each side`,
+      'Focus on controlled tempo before working sets',
     ]
     prepSets = [
       {
         id: 'prep-1',
         label: 'Prep 1',
         unit: 'reps',
-        target: '3-5 bilateral reps',
+        target: `${movementBase} — 3–5 reps`,
         targetValue: 4,
         effortPercent: 50,
         restSeconds: 45,
-        cue: 'Standard version, both arms',
-        rationale: 'Prime movement pattern bilaterally',
+        cue: `Smooth standard ${movementBase.toLowerCase()}`,
+        rationale: `Prime the ${movementBase.toLowerCase().replace('-ups', '')} pattern before archer loading`,
       },
       {
         id: 'prep-2',
         label: 'Prep 2',
         unit: 'reps',
-        target: '2-3 assisted reps each side',
+        target: `${archerName} — 2–3 reps each side`,
         targetValue: 2,
         effortPercent: 65,
         restSeconds: 60,
-        cue: 'Assisted unilateral, controlled tempo',
-        rationale: 'Bridge to single-arm loading',
+        cue: 'Use one easier/thicker band than working sets if needed, or choose None',
+        rationale: 'Bridge into archer loading without fatigue',
       },
     ]
   } else if (normalizedName.includes('explosive') || normalizedName.includes('power')) {

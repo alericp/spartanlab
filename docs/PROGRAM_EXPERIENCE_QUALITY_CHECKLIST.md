@@ -19,6 +19,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | AB15.5.1 | Structured Prep Reopen Clamp + Graph-Backed Targets | COMPLETE |
 | AB15.6 | Warm-Up Rationale Trust Upgrade (Per-Item Coaching) | COMPLETE |
 | AB15.6.1 | Skill Prep Clarity + In-Card Prep Rest Timer | COMPLETE |
+| AB15.6.1.1 | Prep Timer Auto-Advance + Archer Copy Cleanup | COMPLETE |
 
 ---
 
@@ -688,6 +689,19 @@ When implemented:
    - Pre-main-work transition timer after warm-up completion: ~60-90s for skill/strength
    - Post-final-exercise downshift timer before cool-down: ~30-60s
    - Warm-up order audit: general → joint prep/mobility → activation → movement-specific rehearsal
+
+3. **Trend-Based Prep Band Guidance** (AB15.6.1.1 note)
+   - Skill Prep band guidance should eventually use band history/trend data
+   - For band-assisted working sets, prep should recommend an easier/thicker band than the working-set band
+   - Example: if working sets consistently use Purple, prep may recommend Green
+   - If user usually selects None or performance data proves no assistance is needed, prep should not force a band
+   - Must derive from the same band-history engine used by live band recommendation panel, not a duplicate map
+   - Startup fallback copy remains: "Use one easier/thicker band than working sets if needed"
+
+4. **Prep Rest Timer Auto-Advance** (AB15.6.1.1 - IMPLEMENTED)
+   - Prep rest timer auto-advances on zero, triggering same completion as manual button
+   - Manual completion preserved for users who forgot to start timer, rested off-screen, or want to move early
+   - Double-advance guard prevents skipping prep sets
 
 ---
 

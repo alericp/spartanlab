@@ -707,15 +707,14 @@ function selectedSkillToRequiredFamily(
  */
 const FAMILY_PREFERRED_CANDIDATE_IDS: Partial<Record<GoalFamily, string[]>> = {
   // straight-arm push / planche dynamic progression
-  // [AB17.2] Fixed order: standard pppu first as safe default, elevated_pppu only for advanced users
+  // [AB17.2.1] Removed elevated_pppu — it's deprecated and should never be selected
   straight_arm_push: [
-    'pppu',          // pseudo planche push-up (preferred — safe default, intermediate difficulty)
-    'elevated_pppu', // elevated pseudo planche push-up (advanced only — maximum forward lean)
+    'pppu',          // pseudo planche push-up (only valid planche dynamic press)
   ],
   // horizontal push when planche is selected but no dynamic push exists
+  // [AB17.2.1] Removed elevated_pppu — it's deprecated
   push_horizontal: [
     'pppu',
-    'elevated_pppu',
   ],
   // vertical push / HSPU progression
   push_vertical: [

@@ -10808,7 +10808,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // the lossy `mode` projection.
           machinePhase: machineState.phase,
           // Exercise identity
-          exerciseName: safeCurrentExercise?.name || 'Exercise',
+          // [AB12.1.1] Use canonical display name to fix "Planche Lean Push-Ups" -> "Elevated Pseudo Planche Push-Ups"
+          exerciseName: corridorExerciseName || 'Exercise',
           exerciseCategory: safeCurrentExercise?.category || 'general',
           // [AB8.3] Row-level method truth for honest method labels
           // setExecutionMethod is authoritative for row-level methods (top_set, drop_set, etc.)

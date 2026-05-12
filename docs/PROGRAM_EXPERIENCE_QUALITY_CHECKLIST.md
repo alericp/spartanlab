@@ -15,6 +15,8 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | PEX-5B | Intelligent Short-Session Recomposition Quality | COMPLETE |
 | PEX-5C | Short-Session UX / Tradeoff Explanation Polish | COMPLETE |
 | PEX-6 | End-to-End Runtime Proof | COMPLETE |
+| AB15.0 | Live Workout Ramp/Warm-Up Set Doctrine | REGISTERED |
+| AB15.1 | Live Ramp Set UI Implementation | NOT STARTED |
 
 ---
 
@@ -439,6 +441,83 @@ Full runtime proof documented in `docs/PEX_6_END_TO_END_RUNTIME_PROOF.md`.
 - [x] Live workout accepts all 6 modes
 - [x] TypeScript passes
 - [x] Build compiles (pre-existing Stripe issue unrelated)
+
+---
+
+---
+
+## AB15 — Live Workout Specific Ramp/Warm-Up Sets
+
+**Status:** REGISTERED / SPEC READY (NOT IMPLEMENTED)
+
+**Purpose:** Add 1-2 specific warm-up/ramp sets before working sets in the live workout UI, using science-backed preparation doctrine.
+
+### Doctrine Requirements (AB15.0 — Registered)
+
+#### Visual Progress Bars
+- [ ] Before the main red working-set bars, show 1–2 smaller/different-colored prep/ramp bars
+- [ ] Example: two small prep bars → then four red working-set bars
+- [ ] These represent specific ramp/warm-up sets, not generic Skill Prep instructions
+- [ ] Visible in the same progress-strip area so user understands they happen before working sets
+
+#### Interaction
+- [ ] Ramp sets use the same basic input style as working sets:
+  - Reps input for reps exercises
+  - Hold seconds input for hold exercises
+  - Load input for weighted exercises when relevant
+  - RPE input if needed (but lower target RPE)
+  - Band input if relevant and already supported
+- [ ] Should not feel like separate disconnected cards
+
+#### Science-Backed Effort
+- [ ] Ramp sets prepare the pattern without nearing failure
+- [ ] Use lower effort / easier progressions / lighter loads
+- [ ] Rest timer should be shorter than working sets (low fatigue)
+- [ ] Ramp set purpose: temperature, neural rehearsal, joint/tendon readiness, position specificity, confidence, technique rehearsal
+
+#### Weighted Work Ramping
+- [ ] Ramp 1: ~40–50% working load/effort, easy reps
+- [ ] Ramp 2: ~60–75% working load/effort, lower reps or same movement pattern
+- [ ] Optional heavier primer only for advanced heavy strength (not required in first implementation)
+- [ ] Avoid fatigue — do not turn ramp sets into extra working volume
+
+#### Calisthenics Progression Ramping
+- [ ] Ramp by easier progression, not only percentages
+- [ ] Examples:
+  - Main: Straddle Planche Hold → Ramp 1: Tuck Planche → Ramp 2: Advanced Tuck → Main bars
+  - Main: Full Front Lever → Ramp 1: Tuck FL → Ramp 2: Adv Tuck/One-Leg/Straddle → Main bars
+  - Main: Weighted Pull-Up → Ramp 1: Bodyweight → Ramp 2: Moderate weight → Main: Working weight
+  - Main: Explosive Pull-Ups with band → Ramp: Lower intensity explosive reps, not failure
+
+#### Future Data Model Requirements (AB15.1+)
+Ramp sets should have their own metadata:
+- `isRampSet: true`
+- `rampIndex: number`
+- `rampIntensityLabel: string` (e.g. "~50% effort")
+- `rampPurpose: string` (e.g. "pattern rehearsal")
+- `targetRPE: number` (usually lower than working sets)
+- `restSeconds: number` (shorter than working sets)
+- `progressionRegressionFromMain?: string` (if calisthenics skill)
+- `loadPercentOfWorking?: number` (if weighted)
+- `displayBarType: 'ramp'`
+- `doesNotCountAsWorkingSet: true`
+
+### Future Verification Location (AB15.1+)
+When implemented:
+1. Program Page → Start Workout → active exercise card → progress strip
+2. Confirm 1–2 small prep/ramp bars appear before the red working-set bars
+3. Tapping/advancing through ramp sets shows easier progression/lighter load/lower effort guidance
+4. Main working sets still show red bars and normal targets
+
+### Implementation Status
+
+| Subtask | Description | Status |
+|---------|-------------|--------|
+| AB15.0 | Doctrine registration and spec | REGISTERED |
+| AB15.1 | Live ramp/warm-up set UI implementation | NOT STARTED |
+| AB15.2 | Ramp-set adaptive progression-tree resolver | NOT STARTED |
+| AB15.3 | Ramp rest timer implementation | NOT STARTED |
+| AB15.4 | Weighted load ramping implementation | NOT STARTED |
 
 ---
 

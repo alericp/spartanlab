@@ -850,7 +850,7 @@ function MethodDetailModalContent({
         )}
       </div>
 
-      {/* [AB16.2 / IQ6.2] Structured Preview Card with Current vs Proposed */}
+      {/* [AB16.2 / IQ6.2 / AB17.2] Structured Preview Card with Current vs Proposed */}
       {preview && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
           <div className="flex items-center gap-2 mb-3">
@@ -858,25 +858,92 @@ function MethodDetailModalContent({
             <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
           </div>
           
-          {/* Current Structure */}
-          <div className="mb-3 p-2 rounded bg-[#1A1A22] border border-[#2A2A35]">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-1">
-              Current Structure
-            </span>
-            <p className="text-xs text-[#9A9AAA]">
-              {preview.currentStructure || 'Standard structure'}
-            </p>
-          </div>
+          {/* [AB17.2] Concrete Day-Specific Workout Preview */}
+          {preview.workoutPreview && (
+            <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
+              <div className="text-[10px] font-medium text-amber-400 mb-2">
+                {preview.workoutPreview.affectedDayLabel}
+              </div>
+              
+              {/* Current Workout Structure */}
+              <div className="mb-3">
+                <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                  Current Workout
+                </span>
+                <div className="space-y-1">
+                  {preview.workoutPreview.currentWorkoutPreview.map((block, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-[10px]">
+                      <span className="text-[#6A6A7A] min-w-[60px]">{block.label}:</span>
+                      <span className="text-[#9A9AAA]">{block.exercises.slice(0, 2).join(', ')}{block.exercises.length > 2 ? '...' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Proposed Workout Structure */}
+              <div className="mb-3 p-2 rounded bg-blue-500/5 border border-blue-500/20">
+                <span className="text-[9px] uppercase tracking-wide text-blue-400 block mb-1">
+                  Proposed Workout
+                </span>
+                <div className="space-y-1">
+                  {preview.workoutPreview.proposedWorkoutPreview.map((block, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`flex items-start gap-2 text-[10px] ${
+                        block.changeType === 'inserted' ? 'text-emerald-400' : ''
+                      }`}
+                    >
+                      <span className={`min-w-[60px] ${block.changeType === 'inserted' ? 'text-emerald-500' : 'text-[#6A6A7A]'}`}>
+                        {block.changeType === 'inserted' ? '+ ' : ''}{block.label}:
+                      </span>
+                      <span className={block.changeType === 'inserted' ? 'text-emerald-300/80' : 'text-[#9A9AAA]'}>
+                        {block.exercises.slice(0, 2).join(', ')}{block.exercises.length > 2 ? '...' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Coach Caution */}
+              {preview.workoutPreview.coachCaution && (
+                <div className="text-[9px] text-amber-400/80 mt-2 p-1.5 rounded bg-amber-500/5 border border-amber-500/10">
+                  <span className="font-medium">Coach note:</span> {preview.workoutPreview.coachCaution}
+                </div>
+              )}
+              
+              {/* Preview Limitations */}
+              {!preview.workoutPreview.isConcretePreview && (
+                <div className="text-[8px] text-[#5A5A6A] mt-2 italic">
+                  Preview structure only — exact exercises determined at apply time
+                </div>
+              )}
+            </div>
+          )}
           
-          {/* Proposed Preview */}
-          <div className="mb-3 p-2 rounded bg-blue-500/5 border border-blue-500/20">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-blue-400 block mb-1">
-              Proposed Preview
-            </span>
-            <p className="text-xs text-blue-300/80">
-              {preview.proposedStructure || preview.planSummary}
-            </p>
-          </div>
+          {/* Fallback to text summaries if no concrete preview */}
+          {!preview.workoutPreview && (
+            <>
+              {/* Current Structure */}
+              <div className="mb-3 p-2 rounded bg-[#1A1A22] border border-[#2A2A35]">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-1">
+                  Current Structure
+                </span>
+                <p className="text-xs text-[#9A9AAA]">
+                  {preview.currentStructure || 'Standard structure'}
+                </p>
+              </div>
+              
+              {/* Proposed Preview */}
+              <div className="mb-3 p-2 rounded bg-blue-500/5 border border-blue-500/20">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-blue-400 block mb-1">
+                  Proposed Preview
+                </span>
+                <p className="text-xs text-blue-300/80">
+                  {preview.proposedStructure || preview.planSummary}
+                </p>
+              </div>
+            </>
+          )}
           
           {/* Impact Summary */}
           {preview.impactSummary && (
@@ -1018,7 +1085,18 @@ function RequestedMethodsSheetContent({
   
   const handleCreatePreview = () => {
     if (!currentPlan) return
-    const preview = saveMethodOverridePreview(currentPlan)
+    
+    // [AB17.2] Extract session exercises for concrete workout preview
+    let sessionExercises: string[] = []
+    let sessionTitle: string | undefined
+    const dayIndex = currentPlan.suggestedInsertion?.dayIndex
+    if (dayIndex !== undefined && program.sessions?.[dayIndex]) {
+      const session = program.sessions[dayIndex]
+      sessionExercises = (session.exercises || []).map(e => e.name || 'Unknown')
+      sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
+    }
+    
+    const preview = saveMethodOverridePreview(currentPlan, sessionExercises, sessionTitle)
     setPreviews(getMethodOverridePreviews())
     // Stay on the detail view to show the preview
   }

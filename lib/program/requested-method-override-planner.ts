@@ -655,7 +655,38 @@ export function planMethodOverride(
 // =============================================================================
 
 /**
+ * [AB17.2] Concrete workout preview block for method override what-if display.
+ */
+export interface WorkoutPreviewBlock {
+  label: string
+  role?: string
+  exercises: string[]
+  method?: string
+  changeType: 'unchanged' | 'inserted' | 'modified' | 'warning'
+}
+
+/**
+ * [AB17.2] Day-specific workout preview for method override visualization.
+ */
+export interface MethodOverrideWorkoutPreview {
+  affectedDayIndex: number
+  affectedDayLabel: string
+  affectedSessionTitle: string
+  affectedSessionFocus?: string
+  currentWorkoutPreview: WorkoutPreviewBlock[]
+  proposedWorkoutPreview: WorkoutPreviewBlock[]
+  changedBlocks: string[]
+  affectedExercises: string[]
+  unchangedExercises: string[]
+  insertionReason: string
+  coachCaution: string
+  previewLimitations: string[]
+  isConcretePreview: boolean
+}
+
+/**
  * [AB16.2 / IQ6.2] Method Override Preview with structured diff fields.
+ * [AB17.2] Extended with concrete day-specific workout preview.
  * Provides visible Current vs Proposed structure proof.
  */
 export interface MethodOverridePreview {
@@ -681,11 +712,213 @@ export interface MethodOverridePreview {
   visibleProofLines: string[]
   /** Explicit saved-program-unchanged flag */
   savedProgramUnchanged: true
+  
+  // [AB17.2] Concrete day-specific workout preview
+  /** Day-specific what-if workout preview with before/after blocks */
+  workoutPreview?: MethodOverrideWorkoutPreview
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
 
-export function saveMethodOverridePreview(plan: RequestedMethodOverridePlan): MethodOverridePreview {
+/**
+ * [AB17.2] Converts a session title to a user-friendly day label.
+ */
+function formatDayLabel(dayIndex: number, sessionTitle?: string): string {
+  const dayNum = dayIndex + 1
+  if (!sessionTitle) return `Day ${dayNum}`
+  
+  // Convert internal titles to user-friendly labels
+  const lower = sessionTitle.toLowerCase()
+  if (lower.includes('push') && lower.includes('skill')) return `Day ${dayNum} — Push skill day`
+  if (lower.includes('pull') && lower.includes('skill')) return `Day ${dayNum} — Pull skill day`
+  if (lower.includes('heavier') || lower.includes('heavy')) return `Day ${dayNum} — Heavier strength day`
+  if (lower.includes('lighter')) return `Day ${dayNum} — Lighter skill day`
+  if (lower.includes('upper')) return `Day ${dayNum} — Upper body`
+  if (lower.includes('lower')) return `Day ${dayNum} — Lower body`
+  if (lower.includes('full')) return `Day ${dayNum} — Full body`
+  
+  return `Day ${dayNum} — ${sessionTitle}`
+}
+
+/**
+ * [AB17.2] Builds a concrete day-specific workout preview for method override visualization.
+ * 
+ * @param plan - The method override plan with suggestedInsertion
+ * @param sessionExercises - Array of exercise names from the affected session
+ * @param sessionTitle - The session title/focus
+ * @returns A concrete workout preview or undefined if not enough data
+ */
+export function buildMethodOverrideWorkoutPreview(
+  plan: RequestedMethodOverridePlan,
+  sessionExercises?: string[],
+  sessionTitle?: string
+): MethodOverrideWorkoutPreview | undefined {
+  const insertion = plan.suggestedInsertion
+  if (!insertion || insertion.dayIndex === undefined) {
+    return undefined
+  }
+  
+  const dayIndex = insertion.dayIndex
+  const dayLabel = formatDayLabel(dayIndex, sessionTitle || insertion.sessionTitle)
+  const exercises = sessionExercises || []
+  
+  // [AB17.2] Build current workout structure preview
+  const currentBlocks: WorkoutPreviewBlock[] = []
+  
+  // Categorize exercises into blocks based on common patterns
+  const skillWork = exercises.filter(e => 
+    e.toLowerCase().includes('skill') || 
+    e.toLowerCase().includes('hold') ||
+    e.toLowerCase().includes('lean') ||
+    e.toLowerCase().includes('lever')
+  )
+  const strengthWork = exercises.filter(e =>
+    !skillWork.includes(e) && (
+      e.toLowerCase().includes('push') ||
+      e.toLowerCase().includes('pull') ||
+      e.toLowerCase().includes('row') ||
+      e.toLowerCase().includes('dip') ||
+      e.toLowerCase().includes('press')
+    )
+  )
+  const accessoryWork = exercises.filter(e =>
+    !skillWork.includes(e) && !strengthWork.includes(e)
+  )
+  
+  if (skillWork.length > 0) {
+    currentBlocks.push({
+      label: 'Skill Work',
+      exercises: skillWork.slice(0, 3),
+      changeType: 'unchanged'
+    })
+  }
+  if (strengthWork.length > 0) {
+    currentBlocks.push({
+      label: 'Strength',
+      exercises: strengthWork.slice(0, 3),
+      changeType: 'unchanged'
+    })
+  }
+  if (accessoryWork.length > 0) {
+    currentBlocks.push({
+      label: 'Accessory',
+      exercises: accessoryWork.slice(0, 3),
+      changeType: 'unchanged'
+    })
+  }
+  
+  // If no exercises provided, use generic blocks
+  if (currentBlocks.length === 0) {
+    currentBlocks.push(
+      { label: 'Skill Work', exercises: ['(existing skill work)'], changeType: 'unchanged' },
+      { label: 'Strength', exercises: ['(existing strength work)'], changeType: 'unchanged' },
+      { label: 'Accessory', exercises: ['(existing accessory)'], changeType: 'unchanged' }
+    )
+  }
+  
+  // [AB17.2] Build proposed workout structure with method insertion
+  const proposedBlocks: WorkoutPreviewBlock[] = []
+  
+  // Copy current blocks as unchanged
+  for (const block of currentBlocks) {
+    proposedBlocks.push({ ...block })
+  }
+  
+  // Determine where to insert the method block
+  const insertPosition = insertion.position
+  const methodLabel = plan.label
+  
+  // Create the method insertion block
+  const methodBlock: WorkoutPreviewBlock = {
+    label: `${methodLabel} Block`,
+    role: insertPosition.replace(/_/g, ' '),
+    exercises: [],
+    method: plan.methodKey,
+    changeType: 'inserted'
+  }
+  
+  // Determine candidate exercises for the method based on method type
+  const methodKey = plan.methodKey
+  if (methodKey === 'circuits' || methodKey === 'density_blocks') {
+    // Circuits/density typically use mixed patterns
+    methodBlock.exercises = [
+      'push + core + mobility candidates',
+      '(specific grouping determined at apply time)'
+    ]
+  } else if (methodKey === 'drop_sets') {
+    // Drop sets work on single exercises
+    methodBlock.exercises = ['Target exercise with descending intensity']
+  } else if (methodKey === 'cluster' || methodKey === 'cluster_sets') {
+    // Cluster sets work on strength movements
+    methodBlock.exercises = ['Heavy compound with intra-set rest']
+  } else if (methodKey === 'rest_pause') {
+    // Rest-pause for hypertrophy
+    methodBlock.exercises = ['Target muscle group to near-failure']
+  } else if (methodKey === 'supersets') {
+    // Supersets pair exercises
+    methodBlock.exercises = ['Paired exercises (antagonist or compound)']
+  } else {
+    methodBlock.exercises = [`${methodLabel} structure`]
+  }
+  
+  // Insert at appropriate position
+  if (insertPosition === 'after_primary' || insertPosition === 'late_accessory') {
+    // Insert before last block (accessory)
+    const insertIdx = Math.max(0, proposedBlocks.length - 1)
+    proposedBlocks.splice(insertIdx, 0, methodBlock)
+  } else if (insertPosition === 'finisher') {
+    // Add at end
+    proposedBlocks.push(methodBlock)
+  } else {
+    // Default: add after strength
+    const strengthIdx = proposedBlocks.findIndex(b => b.label === 'Strength')
+    if (strengthIdx >= 0) {
+      proposedBlocks.splice(strengthIdx + 1, 0, methodBlock)
+    } else {
+      proposedBlocks.push(methodBlock)
+    }
+  }
+  
+  // [AB17.2] Build caution and limitations
+  const coachCaution = plan.currentState === 'blocked'
+    ? `Original coach decision blocked this: ${plan.reason.slice(0, 100)}`
+    : plan.safety === 'not_recommended'
+      ? `High risk: ${plan.riskNotes[0] || 'conflicts with current training goals'}`
+      : plan.safety === 'needs_caution'
+        ? `Moderate risk: ${plan.riskNotes[0] || 'may increase fatigue load'}`
+        : 'Preview only — actual exercise grouping determined at apply time'
+  
+  const previewLimitations: string[] = [
+    'Exact exercise pairing not yet finalized',
+    'Sets/reps will be calculated at apply time',
+    'Preview does not account for daily readiness',
+  ]
+  if (!sessionExercises || sessionExercises.length === 0) {
+    previewLimitations.unshift('Session exercises not available — showing generic structure')
+  }
+  
+  return {
+    affectedDayIndex: dayIndex,
+    affectedDayLabel: dayLabel,
+    affectedSessionTitle: insertion.sessionTitle || `Day ${dayIndex + 1}`,
+    affectedSessionFocus: insertion.position.replace(/_/g, ' '),
+    currentWorkoutPreview: currentBlocks,
+    proposedWorkoutPreview: proposedBlocks,
+    changedBlocks: [methodBlock.label],
+    affectedExercises: methodBlock.exercises,
+    unchangedExercises: exercises.slice(0, 5),
+    insertionReason: insertion.summary || `Add ${methodLabel} to training structure`,
+    coachCaution,
+    previewLimitations,
+    isConcretePreview: (sessionExercises?.length ?? 0) > 0,
+  }
+}
+
+export function saveMethodOverridePreview(
+  plan: RequestedMethodOverridePlan,
+  sessionExercises?: string[],
+  sessionTitle?: string
+): MethodOverridePreview {
   // [AB16.2] Derive current structure based on method state
   const currentStructure = plan.currentState === 'applied' || plan.currentState === 'materialized'
     ? `${plan.label} is already included in your program`
@@ -730,6 +963,9 @@ export function saveMethodOverridePreview(plan: RequestedMethodOverridePlan): Me
     visibleProofLines.push(`Placement: ${plan.placementNotes[0]}`)
   }
   
+  // [AB17.2] Build concrete workout preview if possible
+  const workoutPreview = buildMethodOverrideWorkoutPreview(plan, sessionExercises, sessionTitle)
+  
   const preview: MethodOverridePreview = {
     methodKey: plan.methodKey,
     label: plan.label,
@@ -746,6 +982,8 @@ export function saveMethodOverridePreview(plan: RequestedMethodOverridePlan): Me
     riskSummary,
     visibleProofLines,
     savedProgramUnchanged: true,
+    // [AB17.2] Concrete workout preview
+    workoutPreview,
   }
   
   try {

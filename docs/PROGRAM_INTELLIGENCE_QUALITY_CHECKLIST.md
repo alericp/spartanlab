@@ -335,13 +335,52 @@ Added live workout "Method active" label for method survival proof:
 - `components/programs/ProgramCoachIntelligenceHub.tsx` — Updated Method Planner detail modal to display Current vs Proposed preview
 - `components/workout/StreamlinedWorkoutSession.tsx` — Added `methodActiveLabel` to contract and rendered "Method: X" label in exercise card
 
+**IQ6.4 Implementation Summary (AB17.2):**
+
+Added concrete day-specific workout preview for method override visualization:
+
+1. **Exercise Validity Guard:** Fixed "Elevated Pseudo Planche Push-Ups" selection priority
+   - Changed `FAMILY_PREFERRED_CANDIDATE_IDS` in `goal-family-balance-guard.ts` to prefer `pppu` (intermediate) over `elevated_pppu` (advanced)
+   - Updated `resolveCanonicalExerciseName()` in `execution-unit-contract.ts` to be more conservative with "Elevated" naming — now defaults to "Pseudo Planche Push-Ups" unless explicit advanced prerequisite proof exists
+   - When elevation is explicitly warranted, renamed to clearer "Feet-Elevated Pseudo Planche Push-Ups"
+
+2. **Concrete Workout Preview Types:** Added new interfaces in `requested-method-override-planner.ts`:
+   - `WorkoutPreviewBlock` — labeled exercise block with change type (unchanged/inserted/modified/warning)
+   - `MethodOverrideWorkoutPreview` — full day-specific preview with current/proposed workout structures
+   - Added `workoutPreview?: MethodOverrideWorkoutPreview` to `MethodOverridePreview` interface
+
+3. **buildMethodOverrideWorkoutPreview():** New function that:
+   - Extracts session exercises and categorizes them into Skill Work / Strength / Accessory blocks
+   - Builds current workout structure preview
+   - Inserts method block at appropriate position (after_primary, late_accessory, finisher)
+   - Generates method-specific candidate exercises (circuits, drop sets, clusters, etc.)
+   - Produces coach caution and preview limitations
+   - Marks whether preview is concrete (has real exercises) or generic
+
+4. **Updated saveMethodOverridePreview():** Now accepts optional `sessionExercises` and `sessionTitle` parameters to build concrete preview
+
+5. **Updated ProgramCoachIntelligenceHub.tsx:**
+   - `handleCreatePreview()` now extracts affected session exercises and title from program
+   - Preview card UI now displays concrete workout blocks with:
+     - Affected day label (e.g., "Day 1 — Heavier strength day")
+     - Current workout structure (Skill Work / Strength / Accessory)
+     - Proposed workout structure with inserted method block highlighted in emerald
+     - Coach caution note
+     - Preview limitations note when not concrete
+
+**Files Changed (IQ6.4):**
+- `lib/program/goal-family-balance-guard.ts` — Fixed PPPU selection priority (pppu first, elevated_pppu second)
+- `lib/workout/execution-unit-contract.ts` — Made exercise naming more conservative, defaults to standard PPPU
+- `lib/program/requested-method-override-planner.ts` — Added WorkoutPreviewBlock and MethodOverrideWorkoutPreview types, buildMethodOverrideWorkoutPreview() function
+- `components/programs/ProgramCoachIntelligenceHub.tsx` — Updated handleCreatePreview and preview card UI
+
 ---
 
 ### IQ7 — Feedback Loop Closure
 
-**Status:** COMPLETE (including IQ7.1 visible identity repair)
+**Status:** COMPLETE (including IQ7.1 visible identity repair, IQ7.2 preserved in AB17.2)
 
-**User-facing AB alias:** AB17 / AB17.1
+**User-facing AB alias:** AB17 / AB17.1 / AB17.2
 
 **Purpose:** Prove benchmark/workout evidence changes future programming, not just proof cards. Make the evidence → generation → mutation/proof → UI chain visible and honest.
 

@@ -96,6 +96,47 @@ export interface RequestedMethodDisplayItem {
   canOverrideNow: false // Always false in this prompt
 }
 
+// =============================================================================
+// [IQ6.1 / AB16.0-B] BEST-REASON RESOLVER FOR METHOD DISPLAY
+// =============================================================================
+
+/**
+ * Resolves the best human-readable reason for a method's current state.
+ * Prioritizes richer sources and falls back to honest state-based explanations
+ * rather than generic "not yet available" text.
+ */
+function resolveBestMethodDisplayReason(
+  state: RequestedMethodState,
+  rawReason: string | undefined | null,
+  methodLabel: string,
+): string {
+  // If we have a real reason that isn't the old generic fallback, use it
+  if (rawReason &&
+      rawReason.trim().length > 10 &&
+      !rawReason.includes('not yet available from final method truth')) {
+    return rawReason
+  }
+
+  // State-based honest fallbacks that explain what happened without lying
+  switch (state) {
+    case 'materialized':
+    case 'applied':
+      return `${methodLabel} was applied because this week's exercise composition and session roles supported it without compromising primary skill quality.`
+    case 'blocked':
+      return `${methodLabel} was held back because this week's skill priorities or session roles made it a poor fit — quality would have suffered.`
+    case 'deferred':
+      return `${methodLabel} was deferred so it can rotate in when recovery, session role, or exercise mix fits better in a future week.`
+    case 'suppressed':
+      return `${methodLabel} was suppressed to preserve workout quality — the session already had enough training stress from other methods or volume.`
+    case 'not_materialized':
+      return `${methodLabel} is tracked but no safe materialization path was found this week — either the exercise mix didn't support it or the runtime writer isn't connected yet.`
+    case 'not_requested':
+      return `${methodLabel} was not requested for this profile or wasn't needed given your current training priorities.`
+    default:
+      return `${methodLabel} status is tracked but the specific reason was not captured during generation.`
+  }
+}
+
 /**
  * Safe selector that extracts requested/deferred method truth from the program.
  * Inspects available fields without throwing if absent.
@@ -150,12 +191,13 @@ function extractRequestedMethodDecisions(
         state = 'not_materialized'
       }
 
+      const methodLabel = METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' ')
       addItem({
         methodKey: methodId,
-        label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
+        label: methodLabel,
         state,
         source: 'weeklyMethodRepresentation',
-        reason: entry.reason || 'Detailed decision reason not yet available from final method truth.',
+        reason: resolveBestMethodDisplayReason(state, entry.reason, methodLabel),
         confidence: entry.reason ? 'high' : 'low',
         canOverrideNow: false,
       })
@@ -185,12 +227,13 @@ function extractRequestedMethodDecisions(
       else if (d.deferred) state = 'deferred'
       else state = 'not_materialized'
 
+      const methodLabel = METHOD_LABELS[d.methodId] ?? d.methodId.replace(/_/g, ' ')
       addItem({
         methodKey: d.methodId,
-        label: METHOD_LABELS[d.methodId] ?? d.methodId.replace(/_/g, ' '),
+        label: methodLabel,
         state,
         source: 'weeklyMethodDecisionSummary',
-        reason: d.reason ?? 'Detailed decision reason not yet available from final method truth.',
+        reason: resolveBestMethodDisplayReason(state, d.reason, methodLabel),
         confidence: d.reason ? 'medium' : 'low',
         canOverrideNow: false,
       })
@@ -219,12 +262,13 @@ function extractRequestedMethodDecisions(
       else if (status.includes('defer')) state = 'deferred'
       else if (status.includes('suppress')) state = 'suppressed'
 
+      const methodLabel = METHOD_LABELS[slot.methodId] ?? slot.methodId.replace(/_/g, ' ')
       addItem({
         methodKey: slot.methodId,
-        label: METHOD_LABELS[slot.methodId] ?? slot.methodId.replace(/_/g, ' '),
+        label: methodLabel,
         state,
         source: 'weeklyMethodMaterializationPlan',
-        reason: slot.blockedReason ?? 'Detailed decision reason not yet available from final method truth.',
+        reason: resolveBestMethodDisplayReason(state, slot.blockedReason, methodLabel),
         confidence: slot.blockedReason ? 'medium' : 'low',
         canOverrideNow: false,
       })
@@ -1100,10 +1144,8 @@ function RequestedMethodsSheetContent({
             Saved program unchanged
           </span>
         </div>
-        {/* [P2B] Smoke-test marker */}
-        <p className="text-[8px] text-[#4A4A5A] mt-2">
-          Planner display corridor: active
-        </p>
+        {/* [IQ6.1 / AB16.0-B] Removed "Planner display corridor: active" debug text.
+            Normal users shouldn't see smoke-test markers. */}
       </div>
 
       {/* Active Previews Banner */}

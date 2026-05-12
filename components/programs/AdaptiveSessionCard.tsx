@@ -4660,17 +4660,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </div>
                       )
                     })()}
-                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-mono text-[#7FA8CC]">
-                      <span>applied={appliedCount}</span>
-                      <span>mut={truth.ledger.mutated}</span>
-                      <span>vis={truth.ledger.visible}</span>
-                      <span>exec={truth.ledger.executable}</span>
-                      <span>blk={truth.ledger.blocked}</span>
-                      <span>sup={truth.ledger.suppressed}</span>
-                      <span>nt={truth.ledger.no_target}</span>
-                      <span>aud={truth.ledger.audit_only}</span>
-                      <span>state={truth.materializationState ?? 'unknown'}</span>
-                    </div>
+                    {/* [IQ6-A / AB16.0-A] Debug ledger gated behind probeActive.
+                        Normal users should see clean coaching copy, not raw key=value debug text.
+                        Dev can re-enable via probeActive flag when investigating recomposition behavior. */}
+                    {probeActive && (
+                      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-mono text-[#7FA8CC]">
+                        <span>applied={appliedCount}</span>
+                        <span>mut={truth.ledger.mutated}</span>
+                        <span>vis={truth.ledger.visible}</span>
+                        <span>exec={truth.ledger.executable}</span>
+                        <span>blk={truth.ledger.blocked}</span>
+                        <span>sup={truth.ledger.suppressed}</span>
+                        <span>nt={truth.ledger.no_target}</span>
+                        <span>aud={truth.ledger.audit_only}</span>
+                        <span>state={truth.materializationState ?? 'unknown'}</span>
+                      </div>
+                    )}
                     {/* [PHASE AB4] Honest preserved/no-safe-mutation note.
                         When applied=0 we MUST tell the user this body was
                         intentionally preserved — never let "{n} Min

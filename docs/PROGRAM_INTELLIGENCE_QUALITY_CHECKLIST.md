@@ -9,6 +9,12 @@ This checklist tracks the Program Intelligence Quality Acceptance Audit — the 
 - UI is now cleaner with proof demoted behind toggles
 - This audit answers: "Is the actual generated program quality strong enough, or is explanation masking weak decisions?"
 
+**User-Facing AB Step Mapping:**
+- AB15 covered live workout/runtime grouped-method parity (COMPLETE)
+- AB16 maps to IQ6.x — Method Decision Usefulness and Survival
+- AB17 will map to IQ7 — Feedback Loop Closure
+- AB18+ will map to subsequent IQ steps as needed
+
 ---
 
 ## Intelligence Quality Phases
@@ -266,18 +272,46 @@ The infrastructure for skill coverage tracking is already strong:
 
 ### IQ6 — Method Decision Usefulness and Survival
 
-**Status:** TODO
+**Status:** IN PROGRESS / IQ6.1 COMPLETE
+
+**User-facing AB alias:** AB16.0
 
 **Purpose:** Ensure methods are selected/blocked for real doctrine reasons and survive to visible/live workout where relevant.
 
-**Investigation Required:**
-- Verify method decisions survive from builder → session → Start Workout
-- Ensure "straight sets are deliberate" reflects actual reasoning
-- Check if methods are over-blocked due to conservative gating
+**IQ6.1 Implementation Summary (AB16.0-A through AB16.0-F):**
 
-**Files Likely in Scope:**
-- `lib/program/method-decision-engine.ts`
-- `lib/program/per-day-method-summary.ts`
+1. **Delivery Sync Gate (AB16.0-A):** Short-session debug ledger row (`applied=`, `mut=`, `vis=`, etc.) now gated behind `probeActive` flag in `AdaptiveSessionCard.tsx`. Normal users see clean coaching copy only.
+
+2. **Best-Reason Resolver (AB16.0-B):** Added `resolveBestMethodDisplayReason()` function in `ProgramCoachIntelligenceHub.tsx` that:
+   - Prioritizes real reasons from program truth when available
+   - Falls back to state-based honest explanations (applied/blocked/deferred/not_materialized)
+   - Removes generic "Detailed decision reason not yet available from final method truth" text
+   - Provides method-specific reasoning for each state
+
+3. **Method Override Planner (AB16.0-C):** Updated all three method extraction sources to use the resolver:
+   - `weeklyMethodRepresentation.byMethod` entries
+   - `weeklyMethodDecisionSummary.decisions` entries
+   - `weeklyMethodMaterializationPlan.methodSlots` entries
+   - Removed "Planner display corridor: active" debug marker
+
+4. **AI Method Decisions Modal (AB16.0-D):** `WeeklyMethodDecisionAccordion` already renders day-by-day method reasoning with:
+   - Per-day cards showing methods used/not used
+   - Real reasons from `buildPerWeekMethodCoachSummary()`
+   - Override readiness and tradeoff information
+   - Training style coaching when applicable
+
+5. **Method Survival (AB16.0-E):** Verified that:
+   - Program Page session cards display method decisions from actual session truth
+   - Grouped method labels (Strength Superset, paired sets) survive from AB15
+   - Start Workout receives same session structure and method/group labels
+
+**Files Changed:**
+- `components/programs/AdaptiveSessionCard.tsx` — Gated debug ledger behind probeActive
+- `components/programs/ProgramCoachIntelligenceHub.tsx` — Added best-reason resolver, fixed 3 fallback locations, removed debug marker
+
+**Remaining IQ6 Work:**
+- IQ6.2 — Verify method override preview produces visually different workout structures
+- IQ6.3 — Add method survival proof in live workout method labels (if not already present)
 
 ---
 
@@ -358,7 +392,7 @@ The infrastructure for skill coverage tracking is already strong:
 | IQ3 | Selected skill coverage and rotation truth | COMPLETE |
 | IQ4 | Calibration test recommendation intelligence | COMPLETE |
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
-| IQ6 | Method decision usefulness and survival | TODO |
+| IQ6 | Method decision usefulness and survival | IN PROGRESS (IQ6.1 COMPLETE) |
 | IQ7 | Feedback loop closure | TODO |
 | IQ8 | Weekly structure and recovery realism | TODO |
 | IQ9 | Explanation parity | TODO |

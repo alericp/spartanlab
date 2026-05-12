@@ -310,26 +310,66 @@ The infrastructure for skill coverage tracking is already strong:
 - `components/programs/ProgramCoachIntelligenceHub.tsx` — Added best-reason resolver, fixed 3 fallback locations, removed debug marker
 
 **Remaining IQ6 Work:**
-- IQ6.2 — Verify method override preview produces visually different workout structures
+- IQ6.2 ��� Verify method override preview produces visually different workout structures
 - IQ6.3 — Add method survival proof in live workout method labels (if not already present)
 
 ---
 
 ### IQ7 — Feedback Loop Closure
 
-**Status:** TODO
+**Status:** COMPLETE
 
-**Purpose:** Prove benchmark/workout evidence changes future programming, not just proof cards.
+**User-facing AB alias:** AB17
 
-**Investigation Required:**
-- Trace where benchmark evidence is consumed in generation
-- Verify generation actually differs when evidence exists vs baseline
-- Add visible proof that next generation used logged evidence
+**Purpose:** Prove benchmark/workout evidence changes future programming, not just proof cards. Make the evidence → generation → mutation/proof → UI chain visible and honest.
 
-**Files Likely in Scope:**
-- `lib/program/program-evidence-feedback-loop.ts`
-- `lib/program/evidence-aware-program-calibration-governor.ts`
-- `lib/adaptive-program-builder.ts` (evidence consumption)
+**Implementation Summary (AB17 / IQ7):**
+
+1. **Feedback Loop Closure State Resolver:** Added `resolveFeedbackLoopClosureDisplay()` in `FeedbackLoopProofCard.tsx` that derives one of four honest closure states from existing typed stamps:
+   - `baseline` — No evidence logged yet
+   - `evidence_reviewed` — Evidence exists but no safe mutation was needed/made
+   - `program_adjusted` — Evidence actually mutated the program (RPE caps, volume reductions)
+   - `safe_hold` — Evidence suggested changes but they were suppressed for safety
+
+2. **Visible Closure Status in Collapsed Header:** `FeedbackLoopProofCard` now shows:
+   - Clear chip label indicating closure state ("Baseline", "Adjusted", "Safe hold", or signal count)
+   - One-line collapsed summary explaining what the state means
+   - Chip variant changes based on state (default for adjusted, secondary for reviewed, outline for safe hold)
+
+3. **Mutation Proof Lines:** When evidence actually changed the program, a "What changed" section appears with concrete proof:
+   - "RPE capped on N exercises (max RPE 7)"
+   - "N sets removed for recovery protection"
+   - "Conservative progression held (no exercises required capping)"
+
+4. **Suppression Explanation:** When evidence was considered but not applied, a "Why no change was made" section appears with honest reason:
+   - "Shaping pass skipped: no active influence from evidence"
+   - "Shaping pass skipped: insufficient confidence for structural changes"
+   - "N constraints considered but suppressed"
+
+5. **Truth Sources Used:** The resolver derives display state from:
+   - `ProgramEvidenceFeedbackSummary` (signal counts)
+   - `EvidenceCalibrationGenerationInfluence` (influence status, constraints)
+   - `EvidenceCalibrationShapingProof` (mutation proof, RPE caps, volume adjustments)
+
+**Files Changed:**
+- `components/programs/FeedbackLoopProofCard.tsx` — Added closure state resolver, updated all three render paths to use derived closure display, added mutation proof and suppression note sections, added `shapingProof` prop
+- `app/(app)/program/page.tsx` — Added `shapingProof={generationShapingProof}` prop to FeedbackLoopProofCard
+
+**Files NOT Touched:**
+- Database schema/migrations
+- Evidence generation corridor (`lib/program/evidence-calibration-generation-influence.ts`, `lib/program/evidence-calibration-program-shaping.ts`)
+- Method override planner from AB16
+- Live workout reducer/state machine
+- Superset/grouped execution contracts from AB15
+
+**Acceptance Tests:**
+- No evidence: Card shows "Baseline" chip with "Using onboarding baseline until you log tests or workouts"
+- Evidence exists but no mutation: Card shows signal count with "Evidence reviewed, no changes needed"
+- Evidence with mutation: Card shows "Adjusted" chip with "Your logged data has shaped this program" and concrete mutation proof
+- Suppressed constraints: Card shows "Safe hold" chip with honest suppression explanation
+- Old programs without shaping proof: Card renders safely with summary-based display
+- TypeScript: PASS (zero errors)
+- Build: PASS
 
 ---
 
@@ -388,12 +428,12 @@ The infrastructure for skill coverage tracking is already strong:
 | Phase | Description | Status |
 |-------|-------------|--------|
 | IQ1 | Read-only program intelligence audit | COMPLETE |
-| IQ2 | Session role / label truth hardening | TODO |
+| IQ2 | Session role / label truth hardening | COMPLETE |
 | IQ3 | Selected skill coverage and rotation truth | COMPLETE |
 | IQ4 | Calibration test recommendation intelligence | COMPLETE |
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
 | IQ6 | Method decision usefulness and survival | IN PROGRESS (IQ6.1 COMPLETE) |
-| IQ7 | Feedback loop closure | TODO |
+| IQ7 | Feedback loop closure | COMPLETE |
 | IQ8 | Weekly structure and recovery realism | TODO |
 | IQ9 | Explanation parity | TODO |
 | IQ10 | Start Workout parity risk audit | VERIFIED STRONG |

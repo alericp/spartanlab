@@ -3225,6 +3225,7 @@ function ProgramDisplayWrapper({
               workoutSummary={workoutSummary}
               calibrationPlan={calibrationPlan}
               generationInfluence={generationInfluence}
+              shapingProof={generationShapingProof}
               defaultCollapsed={true}
               title="Recent adjustments"
             />

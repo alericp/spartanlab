@@ -52,6 +52,9 @@ import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-awar
 // client-side governor currently recommends. Both can render side-by-
 // side: AB12-1 is "live recommendation", AB12-2 is "what shipped".
 import type { EvidenceCalibrationGenerationInfluence } from '@/lib/program/evidence-calibration-generation-influence'
+// [IQ7 / AB17] Optional shaping proof from program generation. When present,
+// shows concrete mutation proof (RPE caps, volume reductions) in the card.
+import type { EvidenceCalibrationShapingProof } from '@/lib/program/evidence-calibration-program-shaping'
 
 interface FeedbackLoopProofCardProps {
   /** Benchmark/calibration-only summary, optional. */
@@ -81,6 +84,11 @@ interface FeedbackLoopProofCardProps {
    */
   generationInfluence?: EvidenceCalibrationGenerationInfluence | null
   /**
+   * [IQ7 / AB17] Optional shaping proof from program generation. When present,
+   * used to determine if the program was actually mutated vs just influenced.
+   */
+  shapingProof?: EvidenceCalibrationShapingProof | null
+  /**
    * [P1] When true, the card renders collapsed by default for cleaner
    * Program page hierarchy. User can expand to see full details.
    */
@@ -104,6 +112,119 @@ const DOMAIN_LABEL: Record<ProgramEvidenceDomain, string> = {
   readiness: 'readiness',
   recovery: 'recovery',
   unknown: 'general',
+}
+
+// =============================================================================
+// [IQ7 / AB17] FEEDBACK LOOP CLOSURE STATE RESOLVER
+// =============================================================================
+// Pure display-only resolver that derives the visible closure state from
+// the existing typed stamps. Never invents claims — derives from truth.
+
+type FeedbackLoopClosureState =
+  | 'baseline'           // No evidence logged yet
+  | 'evidence_reviewed'  // Evidence exists but no safe mutation was needed/made
+  | 'program_adjusted'   // Evidence actually mutated the program (RPE caps, volume, etc.)
+  | 'safe_hold'          // Evidence suggested changes but they were suppressed for safety
+
+interface FeedbackLoopClosureDisplay {
+  state: FeedbackLoopClosureState
+  headline: string
+  chipLabel: string
+  chipVariant: 'default' | 'secondary' | 'outline'
+  collapsedSummary: string
+  mutationProofLines: string[]
+  suppressionNote: string | null
+}
+
+function resolveFeedbackLoopClosureDisplay(
+  summary: ProgramEvidenceFeedbackSummary | null,
+  influence: EvidenceCalibrationGenerationInfluence | null,
+  shapingProof: EvidenceCalibrationShapingProof | null,
+): FeedbackLoopClosureDisplay {
+  const totalSignals = (summary?.benchmarkSignalsUsed ?? 0) + (summary?.workoutSignalsUsed ?? 0)
+  
+  // Case 1: No evidence at all
+  if (totalSignals === 0 && (!influence || influence.status === 'inactive')) {
+    return {
+      state: 'baseline',
+      headline: 'Feedback loop: baseline',
+      chipLabel: 'Baseline',
+      chipVariant: 'secondary',
+      collapsedSummary: 'Using onboarding baseline until you log tests or workouts',
+      mutationProofLines: [],
+      suppressionNote: null,
+    }
+  }
+  
+  // Case 2: Check if shaping actually mutated the program
+  const hasMutation = shapingProof?.appliedAtLeastOneMutation === true
+  const rpeCaps = shapingProof?.cappedExerciseCount ?? 0
+  const volumeReduced = shapingProof?.volumeAdjustment?.applied === true
+  const setsRemoved = shapingProof?.volumeAdjustment?.totalSetsRemoved ?? 0
+  
+  // Build mutation proof lines from actual shaping proof
+  const mutationProofLines: string[] = []
+  if (rpeCaps > 0) {
+    mutationProofLines.push(`RPE capped on ${rpeCaps} exercise${rpeCaps > 1 ? 's' : ''} (max RPE 7)`)
+  }
+  if (volumeReduced && setsRemoved > 0) {
+    mutationProofLines.push(`${setsRemoved} set${setsRemoved > 1 ? 's' : ''} removed for recovery protection`)
+  }
+  if (influence?.progressionAggressiveness === 'conservative' && !hasMutation) {
+    mutationProofLines.push('Conservative progression held (no exercises required capping)')
+  }
+  
+  // Case 3: Evidence exists and actually mutated the program
+  if (hasMutation) {
+    return {
+      state: 'program_adjusted',
+      headline: 'Feedback loop: program adjusted',
+      chipLabel: 'Adjusted',
+      chipVariant: 'default',
+      collapsedSummary: 'Your logged data has shaped this program',
+      mutationProofLines,
+      suppressionNote: null,
+    }
+  }
+  
+  // Case 4: Evidence exists but shaping was suppressed
+  const wasSuppressed = shapingProof?.skippedReason != null && shapingProof.skippedReason !== 'progression_not_conservative'
+  const hasConstraintsSuppressed = (influence?.suppressedConstraints?.length ?? 0) > 0
+  
+  if (wasSuppressed || hasConstraintsSuppressed) {
+    const suppressionNote = shapingProof?.skippedReason === 'no_influence'
+      ? 'Shaping pass skipped: no active influence from evidence'
+      : shapingProof?.skippedReason === 'status_not_active'
+        ? 'Shaping pass skipped: influence not active'
+        : shapingProof?.skippedReason === 'not_allowed_to_mutate'
+          ? 'Shaping pass skipped: insufficient confidence for structural changes'
+          : hasConstraintsSuppressed
+            ? `${influence!.suppressedConstraints!.length} constraint${influence!.suppressedConstraints!.length > 1 ? 's' : ''} considered but suppressed`
+            : 'Evidence considered but no safe change made'
+    
+    return {
+      state: 'safe_hold',
+      headline: 'Feedback loop: safe hold',
+      chipLabel: 'Safe hold',
+      chipVariant: 'outline',
+      collapsedSummary: 'Evidence reviewed, held at safe baseline',
+      mutationProofLines: [],
+      suppressionNote,
+    }
+  }
+  
+  // Case 5: Evidence exists, influence active, but no mutation was needed
+  return {
+    state: 'evidence_reviewed',
+    headline: 'Feedback loop: evidence reviewed',
+    chipLabel: totalSignals > 0 ? `${totalSignals} signal${totalSignals > 1 ? 's' : ''}` : 'Reviewed',
+    chipVariant: 'secondary',
+    collapsedSummary: summary?.changedProgram
+      ? 'Your logged data has shaped this program'
+      : 'Evidence reviewed, no changes needed',
+    mutationProofLines,
+    suppressionNote: null,
+  }
 }
 
 function pickDisplaySummary(
@@ -269,10 +390,14 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const summary = pickDisplaySummary(props)
   const plan = props.calibrationPlan ?? null
   const influence = props.generationInfluence ?? null
+  const shapingProof = props.shapingProof ?? null
   // [PPX-2] Custom title support - default to legacy name for backward compatibility
   const cardTitle = props.title ?? 'Coaching Feedback Loop'
   // [P1] Support collapsed by default for cleaner Program page
   const [isExpanded, setIsExpanded] = useState<boolean>(!props.defaultCollapsed)
+  
+  // [IQ7 / AB17] Derive the closure display state from all truth sources
+  const closureDisplay = resolveFeedbackLoopClosureDisplay(summary, influence, shapingProof)
   
   // No summary at all — render compact no-evidence baseline.
   if (!summary) {
@@ -281,6 +406,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
         <Card
           className={cn('mt-4', props.className)}
           data-ab11-5-feedback-proof="no-summary"
+          data-iq7-closure-state={closureDisplay.state}
           data-p1-collapsed={!isExpanded}
         >
           <CollapsibleTrigger asChild>
@@ -296,8 +422,8 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    Baseline
+                  <Badge variant={closureDisplay.chipVariant} className="text-xs">
+                    {closureDisplay.chipLabel}
                   </Badge>
                   <ChevronDown
                     className={cn(
@@ -310,7 +436,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
               </div>
               {!isExpanded && (
                 <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
-                  Using onboarding baseline until you log tests or workouts
+                  {closureDisplay.collapsedSummary}
                 </p>
               )}
             </CardHeader>
@@ -340,6 +466,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
         <Card
           className={cn('mt-4', props.className)}
           data-ab11-5-feedback-proof="no-evidence"
+          data-iq7-closure-state={closureDisplay.state}
           data-p1-collapsed={!isExpanded}
         >
           <CollapsibleTrigger asChild>
@@ -355,8 +482,8 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                   </CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    Baseline
+                  <Badge variant={closureDisplay.chipVariant} className="text-xs">
+                    {closureDisplay.chipLabel}
                   </Badge>
                   <ChevronDown
                     className={cn(
@@ -369,7 +496,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
               </div>
               {!isExpanded && (
                 <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
-                  Your program adapts as you log workouts and tests
+                  {closureDisplay.collapsedSummary}
                 </p>
               )}
             </CardHeader>
@@ -392,11 +519,6 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
   const stateAttr: string = summary.changedProgram
     ? 'changed'
     : 'considered_no_change'
-    
-  // [P1] Build summary label for collapsed state
-  const signalLabel = summary.changedProgram
-    ? `${totalSignals} signal${totalSignals > 1 ? 's' : ''} applied`
-    : `${totalSignals} signal${totalSignals > 1 ? 's' : ''} reviewed`
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -404,6 +526,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
         className={cn('mt-4', props.className)}
         data-ab11-5-feedback-proof="present"
         data-ab11-5-state={stateAttr}
+        data-iq7-closure-state={closureDisplay.state}
         data-p1-collapsed={!isExpanded}
       >
         <CollapsibleTrigger asChild>
@@ -420,10 +543,10 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge 
-                  variant={summary.changedProgram ? 'default' : 'secondary'} 
+                  variant={closureDisplay.chipVariant} 
                   className="text-xs"
                 >
-                  {signalLabel}
+                  {closureDisplay.chipLabel}
                 </Badge>
                 <ChevronDown
                   className={cn(
@@ -436,9 +559,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             </div>
             {!isExpanded && (
               <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
-                {summary.changedProgram
-                  ? 'Your logged data has shaped this program'
-                  : 'Evidence reviewed, no changes needed'}
+                {closureDisplay.collapsedSummary}
               </p>
             )}
           </CardHeader>
@@ -465,7 +586,7 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
                   {summary.workoutSignalsUsed === 1 ? '' : 's'}
                 </Badge>
               )}
-              {!summary.changedProgram && (
+              {!summary.changedProgram && closureDisplay.state !== 'program_adjusted' && (
                 <Badge variant="outline" className="text-[10px] font-medium">
                   Considered, no change needed
                 </Badge>
@@ -474,6 +595,47 @@ export function FeedbackLoopProofCard(props: FeedbackLoopProofCardProps) {
             <p className="text-sm leading-relaxed text-muted-foreground text-pretty mb-3">
               {summary.summaryText}
             </p>
+
+            {/* [IQ7 / AB17] Mutation proof lines from shaping proof */}
+            {closureDisplay.mutationProofLines.length > 0 && (
+              <div 
+                className="mb-3 rounded-md border border-border bg-secondary/30 p-3"
+                data-iq7-mutation-proof="true"
+              >
+                <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  What changed
+                </p>
+                <ul className="flex flex-col gap-1" role="list">
+                  {closureDisplay.mutationProofLines.map((line, idx) => (
+                    <li
+                      key={`${idx}-${line}`}
+                      className="flex items-start gap-2 text-sm leading-relaxed text-foreground/90 text-pretty"
+                    >
+                      <Info
+                        className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* [IQ7 / AB17] Suppression note when evidence was considered but not applied */}
+            {closureDisplay.suppressionNote && (
+              <div 
+                className="mb-3 rounded-md border border-border bg-background p-2.5"
+                data-iq7-suppression-note="true"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Why no change was made
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+                  {closureDisplay.suppressionNote}
+                </p>
+              </div>
+            )}
 
             {summary.proofLines.length > 0 && (
               <ul className="flex flex-col gap-1.5" role="list">

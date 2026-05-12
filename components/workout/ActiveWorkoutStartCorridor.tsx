@@ -1578,9 +1578,20 @@ export function ActiveWorkoutStartCorridor({
   // Key: same as currentPrepKey, Value: number of completed prep sets
   // This is SEPARATE from working set progress and does NOT call onCompleteSet
   const [prepSetProgressByKey, setPrepSetProgressByKey] = useState<Record<string, number>>({})
-  const currentPrepSetProgress = prepSetProgressByKey[currentPrepKey] || 0
+  const rawPrepSetProgress = prepSetProgressByKey[currentPrepKey] || 0
   const prepSetsTotal = exercisePrepPlan?.prepSets?.length || 0
-  const allPrepSetsCompleted = prepSetsTotal > 0 && currentPrepSetProgress >= prepSetsTotal
+  const hasStructuredPrepSets = prepSetsTotal > 0
+  
+  // [AB15.5.1] CLAMP prep progress to prevent "Prep 3/2" and out-of-range access
+  // safePrepSetProgress: clamped count of completed sets (0 to prepSetsTotal)
+  // activePrepSetIndex: clamped index for array access (0 to prepSetsTotal - 1)
+  const safePrepSetProgress = hasStructuredPrepSets
+    ? Math.min(Math.max(rawPrepSetProgress, 0), prepSetsTotal)
+    : 0
+  const activePrepSetIndex = hasStructuredPrepSets
+    ? Math.min(safePrepSetProgress, prepSetsTotal - 1)
+    : 0
+  const allPrepSetsCompleted = hasStructuredPrepSets && safePrepSetProgress >= prepSetsTotal
   
   // [AB11.1.2] Handlers for prep state changes
   const handleCompletePrepare = () => {
@@ -1589,13 +1600,18 @@ export function ActiveWorkoutStartCorridor({
   const handleSkipPrepare = () => {
     setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'skipped' }))
   }
+  // [AB15.5.1] Reopen also resets structured prep progress to 0
   const handleReopenPrepare = () => {
     setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'expanded' }))
+    if (hasStructuredPrepSets) {
+      setPrepSetProgressByKey(prev => ({ ...prev, [currentPrepKey]: 0 }))
+    }
   }
   
   // [AB15.1] Handler for completing a single prep set (does NOT affect working sets)
+  // [AB15.5.1] Uses clamped progress and clamps next progress to total
   const handleCompletePrepSet = () => {
-    const nextProgress = currentPrepSetProgress + 1
+    const nextProgress = Math.min(safePrepSetProgress + 1, prepSetsTotal)
     setPrepSetProgressByKey(prev => ({ ...prev, [currentPrepKey]: nextProgress }))
     // If all prep sets completed, auto-collapse to completed state
     if (nextProgress >= prepSetsTotal) {
@@ -1603,9 +1619,14 @@ export function ActiveWorkoutStartCorridor({
     }
   }
   
-  // [AB15.1] Get current prep set data for display
-  const currentPrepSet = exercisePrepPlan?.prepSets?.[currentPrepSetProgress] || null
-  const nextPrepSet = exercisePrepPlan?.prepSets?.[currentPrepSetProgress + 1] || null
+  // [AB15.1] Get current prep set data for display using clamped index
+  // [AB15.5.1] Uses activePrepSetIndex instead of raw progress
+  const currentPrepSet = hasStructuredPrepSets
+    ? exercisePrepPlan?.prepSets?.[activePrepSetIndex] ?? null
+    : null
+  const nextPrepSet = hasStructuredPrepSets
+    ? exercisePrepPlan?.prepSets?.[activePrepSetIndex + 1] ?? null
+    : null
   // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
   // moment so the Log Set CTA and secondary rail remain in the first
   // viewport on 640-720px-tall Android screens. User can expand with one
@@ -2874,17 +2895,18 @@ export function ActiveWorkoutStartCorridor({
             <div className="flex items-center gap-3 mt-1">
               <div className="flex items-center gap-1.5 flex-1">
                 {/* [AB15.1] Prep/ramp bars - smaller and distinct from working bars */}
-                {prepSetsTotal > 0 && currentSetNumber === 1 && (
+                {/* [AB15.5.1] Uses clamped safePrepSetProgress and activePrepSetIndex */}
+                {hasStructuredPrepSets && currentSetNumber === 1 && (
                   <>
                     {Array.from({ length: prepSetsTotal }).map((_, idx) => (
                       <div 
                         key={`prep-${idx}`}
                         className={`h-0.5 w-4 flex-shrink-0 rounded-full transition-colors ${
-                          idx < currentPrepSetProgress
+                          idx < safePrepSetProgress
                             ? 'bg-blue-400' // Completed prep
-                            : idx === currentPrepSetProgress && isPrepExpanded
+                            : idx === activePrepSetIndex && isPrepExpanded && !allPrepSetsCompleted
                               ? 'bg-blue-500' // Current prep (active)
-                              : 'bg-blue-900/50' // Future prep
+                              : 'bg-blue-900/50' // Future prep or completed state
                         }`}
                         title={`Prep ${idx + 1}`}
                       />
@@ -2991,7 +3013,8 @@ export function ActiveWorkoutStartCorridor({
                         variant="outline" 
                         className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] uppercase px-1.5 py-0.5"
                       >
-                        {prepSetsTotal > 0 ? `Prep ${currentPrepSetProgress + 1}/${prepSetsTotal}` : 'Prep'}
+                        {/* [AB15.5.1] Uses clamped activePrepSetIndex to prevent "Prep 3/2" */}
+                        {hasStructuredPrepSets ? `Prep ${activePrepSetIndex + 1}/${prepSetsTotal}` : 'Prep'}
                       </Badge>
                       <span className="text-sm font-medium text-[#E6E9EF]">
                         {exercisePrepPlan.headline}
@@ -2999,33 +3022,42 @@ export function ActiveWorkoutStartCorridor({
                     </div>
                   </div>
                   
-                  {/* [AB15.1] Show structured prep set when available */}
-                  {currentPrepSet ? (
+                  {/* [AB15.5.1] Show structured prep set - NEVER fall back to legacy when hasStructuredPrepSets */}
+                  {hasStructuredPrepSets ? (
                     <div className="space-y-2 mb-3">
-                      {/* Current prep set target */}
-                      <div className="bg-blue-900/30 rounded-lg p-2.5 border border-blue-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-blue-300">{currentPrepSet.label}</span>
-                          {currentPrepSet.effortPercent && (
-                            <span className="text-[10px] text-blue-400/70">~{currentPrepSet.effortPercent}% effort</span>
+                      {currentPrepSet ? (
+                        <>
+                          {/* Current prep set target */}
+                          <div className="bg-blue-900/30 rounded-lg p-2.5 border border-blue-500/20">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-blue-300">{currentPrepSet.label}</span>
+                              {currentPrepSet.effortPercent && (
+                                <span className="text-[10px] text-blue-400/70">~{currentPrepSet.effortPercent}% effort</span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-[#E6E9EF]">{currentPrepSet.target}</p>
+                            <p className="text-xs text-[#A4ACB8] mt-1">{currentPrepSet.cue}</p>
+                          </div>
+                          
+                          {/* Rest guidance */}
+                          {currentPrepSet.restSeconds > 0 && (
+                            <p className="text-xs text-[#A4ACB8]">
+                              Rest ~{currentPrepSet.restSeconds}s{nextPrepSet ? `, then ${nextPrepSet.label}` : ', then start Set 1'}
+                            </p>
                           )}
-                        </div>
-                        <p className="text-sm font-medium text-[#E6E9EF]">{currentPrepSet.target}</p>
-                        <p className="text-xs text-[#A4ACB8] mt-1">{currentPrepSet.cue}</p>
-                      </div>
-                      
-                      {/* Rest guidance */}
-                      {currentPrepSet.restSeconds > 0 && (
+                          
+                          {/* Rationale */}
+                          <p className="text-[10px] text-[#8B919A] italic">{currentPrepSet.rationale}</p>
+                        </>
+                      ) : (
+                        // [AB15.5.1] Safe fallback when structured prep completed - never show legacy steps
                         <p className="text-xs text-[#A4ACB8]">
-                          Rest ~{currentPrepSet.restSeconds}s{nextPrepSet ? `, then ${nextPrepSet.label}` : ', then start Set 1'}
+                          Prep complete — tap Reopen to start from Prep 1
                         </p>
                       )}
-                      
-                      {/* Rationale */}
-                      <p className="text-[10px] text-[#8B919A] italic">{currentPrepSet.rationale}</p>
                     </div>
                   ) : (
-                    // Fallback to legacy text steps
+                    // Legacy fallback ONLY for non-structured plans (prepSetsTotal === 0)
                     <>
                       <p className="text-xs text-[#A4ACB8] mb-2">
                         {exercisePrepPlan.reason}
@@ -3045,8 +3077,8 @@ export function ActiveWorkoutStartCorridor({
                   )}
                   
                   <div className="flex items-center gap-2">
-                    {/* [AB15.1] Button adapts based on whether we have structured prep sets */}
-                    {currentPrepSet ? (
+                    {/* [AB15.5.1] Button adapts based on hasStructuredPrepSets, not currentPrepSet */}
+                    {hasStructuredPrepSets ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -3054,7 +3086,7 @@ export function ActiveWorkoutStartCorridor({
                         onClick={handleCompletePrepSet}
                       >
                         <Check className="w-3.5 h-3.5 mr-1.5" />
-                        {currentPrepSetProgress + 1 < prepSetsTotal ? 'Complete Prep Set' : 'Complete Final Prep'}
+                        {safePrepSetProgress + 1 < prepSetsTotal ? 'Complete Prep Set' : 'Complete Final Prep'}
                       </Button>
                     ) : (
                       <Button
@@ -3092,8 +3124,9 @@ export function ActiveWorkoutStartCorridor({
                       Prep
                     </Badge>
                     <span className="text-xs text-[#A4ACB8]">
-                      {prepSetsTotal > 0 && currentPrepSetProgress > 0
-                        ? `${currentPrepSetProgress}/${prepSetsTotal} prep sets — primed for Set 1`
+                      {/* [AB15.5.1] Uses clamped values and shows full completion for structured prep */}
+                      {hasStructuredPrepSets
+                        ? `${prepSetsTotal}/${prepSetsTotal} prep sets — primed for Set 1`
                         : 'Skill Prep completed — primed for Set 1'}
                     </span>
                   </div>

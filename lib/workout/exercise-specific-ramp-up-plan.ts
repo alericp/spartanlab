@@ -16,6 +16,10 @@
  * - Does NOT count as a working set
  */
 
+// [AB15.5.1] Import skill graph for exact prep targets
+import { getOrderedNodes, getSkillGraph } from '../skill-progression-graph-engine'
+import type { SkillGraphId, ProgressionNode } from '../skill-progression-graph-engine'
+
 export type PrepPlanType = 'weighted_ramp' | 'advanced_skill_ramp' | 'high_intensity_ramp' | 'method_ramp' | 'none'
 
 export type PrepPlanSource = 'weighted_load' | 'advanced_skill' | 'high_rpe' | 'method' | 'none'
@@ -238,14 +242,232 @@ function isHighRPE(targetRPE?: number | null): boolean {
 }
 
 // =============================================================================
+// [AB15.5.1] SKILL GRAPH PREP TARGET HELPERS
+// =============================================================================
+
+/**
+ * Infer skill graph ID from exercise name.
+ * Returns null if no matching graph family.
+ */
+function inferSkillGraphId(exerciseName: string): SkillGraphId | null {
+  const name = normalizeString(exerciseName)
+  
+  // Front lever family
+  if (name.includes('front lever')) {
+    return 'front_lever'
+  }
+  
+  // Back lever family
+  if (name.includes('back lever')) {
+    return 'back_lever'
+  }
+  
+  // Pseudo planche push-up (specific - check before planche)
+  if (name.includes('pseudo planche push') || name.includes('pppu')) {
+    return 'pseudo_planche_pushup'
+  }
+  
+  // Planche push-up (check before general planche)
+  if (name.includes('planche push')) {
+    return 'planche_pushup'
+  }
+  
+  // Planche family (lean, hold, etc.)
+  if (name.includes('planche')) {
+    return 'planche'
+  }
+  
+  // HSPU family
+  if (name.includes('handstand push') || name.includes('hspu')) {
+    return 'hspu'
+  }
+  
+  // Handstand (balance/hold)
+  if (name.includes('handstand')) {
+    return 'handstand'
+  }
+  
+  // Ring muscle-up
+  if (name.includes('ring muscle') || name.includes('ring mu')) {
+    return 'ring_muscle_up'
+  }
+  
+  // Muscle-up
+  if (name.includes('muscle up') || name.includes('muscle-up')) {
+    return 'muscle_up'
+  }
+  
+  // One-arm pull-up
+  if (name.includes('one arm pull') || name.includes('one-arm pull') || name.includes('oap')) {
+    return 'one_arm_pull_up'
+  }
+  
+  // L-sit
+  if (name.includes('l sit') || name.includes('l-sit')) {
+    return 'l_sit'
+  }
+  
+  // V-sit
+  if (name.includes('v sit') || name.includes('v-sit')) {
+    return 'v_sit'
+  }
+  
+  // Iron cross
+  if (name.includes('iron cross')) {
+    return 'iron_cross'
+  }
+  
+  return null
+}
+
+/**
+ * Find the current exercise's position in the skill graph.
+ * Returns the matching node or null.
+ */
+function findCurrentNodeInGraph(exerciseName: string, graphId: SkillGraphId): ProgressionNode | null {
+  const nodes = getOrderedNodes(graphId)
+  if (nodes.length === 0) return null
+  
+  const name = normalizeString(exerciseName)
+  
+  // Try exact match on displayName or nodeName
+  for (const node of nodes) {
+    const displayNorm = normalizeString(node.displayName)
+    const nodeNorm = normalizeString(node.nodeName)
+    if (name.includes(displayNorm) || displayNorm.includes(name) ||
+        name.includes(nodeNorm) || nodeNorm.includes(name)) {
+      return node
+    }
+  }
+  
+  // For "tuck" exercises, match tuck node
+  if (name.includes('tuck') && !name.includes('adv')) {
+    const tuckNode = nodes.find(n => 
+      normalizeString(n.nodeName).includes('tuck') && 
+      !normalizeString(n.nodeName).includes('adv')
+    )
+    if (tuckNode) return tuckNode
+  }
+  
+  // For "advanced tuck" exercises
+  if (name.includes('adv') && name.includes('tuck')) {
+    const advTuckNode = nodes.find(n => 
+      normalizeString(n.nodeName).includes('adv') && 
+      normalizeString(n.nodeName).includes('tuck')
+    )
+    if (advTuckNode) return advTuckNode
+  }
+  
+  // For straddle
+  if (name.includes('straddle')) {
+    const straddleNode = nodes.find(n => normalizeString(n.nodeName).includes('straddle'))
+    if (straddleNode) return straddleNode
+  }
+  
+  // For one-leg
+  if (name.includes('one leg') || name.includes('one-leg') || name.includes('single leg')) {
+    const oneLegNode = nodes.find(n => normalizeString(n.nodeName).includes('one_leg'))
+    if (oneLegNode) return oneLegNode
+  }
+  
+  // For full/complete
+  if (name.includes('full') || (name.includes('front lever') && !name.includes('tuck') && !name.includes('straddle') && !name.includes('one'))) {
+    const fullNode = nodes.find(n => normalizeString(n.nodeName).includes('full'))
+    if (fullNode) return fullNode
+  }
+  
+  return null
+}
+
+/**
+ * Build prep sets using skill graph data.
+ * Returns exact movement targets from the graph.
+ */
+function buildSkillGraphPrepSets(
+  exerciseName: string, 
+  isHoldBased: boolean,
+  graphId: SkillGraphId
+): ExercisePrepSet[] | null {
+  const nodes = getOrderedNodes(graphId)
+  if (nodes.length === 0) return null
+  
+  const currentNode = findCurrentNodeInGraph(exerciseName, graphId)
+  
+  // For entry-level nodes (levelIndex 0 or 1), use 1 prep set - just rehearse the same movement
+  if (currentNode && currentNode.levelIndex <= 1) {
+    const isHold = isHoldBased || currentNode.movementType === 'isometric_hold'
+    return [{
+      id: 'prep-1',
+      label: 'Prep 1',
+      unit: isHold ? 'seconds' : 'reps',
+      target: isHold 
+        ? `${currentNode.displayName} setup — 5-6 sec`
+        : `${currentNode.displayName} — 2-3 easy reps`,
+      targetValue: isHold ? 5 : 2,
+      effortPercent: 50,
+      restSeconds: 45,
+      cue: 'Match working shape, stop fresh',
+      rationale: 'One short rehearsal primes this entry-level position',
+    }]
+  }
+  
+  // For intermediate+ nodes, find easier progressions from graph
+  if (currentNode && currentNode.levelIndex >= 2) {
+    const isHold = isHoldBased || currentNode.movementType === 'isometric_hold'
+    const prepSets: ExercisePrepSet[] = []
+    
+    // Find the node 2 levels below (or entry if not enough levels)
+    const prep1LevelIndex = Math.max(0, currentNode.levelIndex - 2)
+    const prep1Node = nodes.find(n => n.levelIndex === prep1LevelIndex) || nodes[0]
+    
+    // Find the node 1 level below
+    const prep2LevelIndex = Math.max(0, currentNode.levelIndex - 1)
+    const prep2Node = nodes.find(n => n.levelIndex === prep2LevelIndex)
+    
+    if (prep1Node) {
+      prepSets.push({
+        id: 'prep-1',
+        label: 'Prep 1',
+        unit: isHold ? 'seconds' : 'reps',
+        target: isHold 
+          ? `${prep1Node.displayName} — 5-6 sec`
+          : `${prep1Node.displayName} — 2-3 reps`,
+        targetValue: isHold ? 5 : 2,
+        effortPercent: 50,
+        restSeconds: 45,
+        cue: prep1Node.knowledgeBubble?.techniqueCues?.[0] || 'Controlled, stay fresh',
+        rationale: 'Easier progression primes the pattern',
+      })
+    }
+    
+    if (prep2Node && prep2Node.nodeId !== prep1Node?.nodeId) {
+      prepSets.push({
+        id: 'prep-2',
+        label: 'Prep 2',
+        unit: isHold ? 'seconds' : 'reps',
+        target: isHold 
+          ? `${prep2Node.displayName} — 3-5 sec`
+          : `${prep2Node.displayName} — 1-2 crisp reps`,
+        targetValue: isHold ? 4 : 1,
+        effortPercent: 70,
+        restSeconds: 60,
+        cue: 'Bridge to working intensity, no fatigue',
+        rationale: 'Near-target rehearsal before working sets',
+      })
+    }
+    
+    return prepSets.length > 0 ? prepSets : null
+  }
+  
+  return null
+}
+
+// =============================================================================
 // PLAN GENERATORS
 // =============================================================================
 
 function buildAdvancedSkillPlan(exerciseName: string, isHoldBased = false): ExercisePrepPlan {
   const normalizedName = normalizeString(exerciseName)
-  
-  let steps: string[]
-  let prepSets: ExercisePrepSet[] = []
   
   // Determine if this is a hold or reps pattern
   const isHold = isHoldBased || 
@@ -253,33 +475,78 @@ function buildAdvancedSkillPlan(exerciseName: string, isHoldBased = false): Exer
     normalizedName.includes('lever') ||
     (normalizedName.includes('planche') && !normalizedName.includes('push'))
   
+  // [AB15.5.1] Try skill graph first for exact prep targets
+  const graphId = inferSkillGraphId(exerciseName)
+  if (graphId) {
+    const graphPrepSets = buildSkillGraphPrepSets(exerciseName, isHold, graphId)
+    if (graphPrepSets && graphPrepSets.length > 0) {
+      return {
+        shouldRender: true,
+        planType: 'advanced_skill_ramp',
+        headline: 'Skill Prep',
+        reason: 'Specific warm-up for this advanced skill movement.',
+        steps: [], // Legacy steps not needed when we have exact targets
+        source: 'advanced_skill',
+        confidence: 'high',
+        prepSets: graphPrepSets,
+      }
+    }
+  }
+  
+  // Fallback to manual prep sets with improved copy
+  let steps: string[]
+  let prepSets: ExercisePrepSet[] = []
+  
   if (normalizedName.includes('lever') || (normalizedName.includes('planche') && !normalizedName.includes('push'))) {
+    // [AB15.5.1] Improved copy - exact target names instead of "easier progression"
+    const targetName = normalizedName.includes('front lever') ? 'Front Lever' : 
+                       normalizedName.includes('back lever') ? 'Back Lever' : 'Planche'
     steps = [
-      'Activate scapular retraction with band pull-aparts or face pulls',
-      'Practice the easier progression for 2-3 reps to prime the pattern',
-      'Hold the target position briefly at reduced intensity before Set 1',
+      'Activate scapular control with band pull-aparts',
+      `Practice easier ${targetName} progression for 5-6 sec`,
+      'Enter Set 1 primed, not fatigued',
     ]
     prepSets = [
       {
         id: 'prep-1',
         label: 'Prep 1',
-        unit: isHold ? 'seconds' : 'reps',
-        target: isHold ? '5-8 sec easier progression' : '2-3 easier reps',
-        targetValue: isHold ? 6 : 2,
+        unit: 'seconds',
+        target: `Tuck ${targetName} setup — 5-6 sec`,
+        targetValue: 5,
         effortPercent: 50,
         restSeconds: 45,
-        cue: 'Easier progression, prime the pattern',
-        rationale: 'Low-intensity rehearsal to activate motor patterns',
+        cue: 'Match working shape, stop fresh',
+        rationale: 'Low-intensity rehearsal primes motor patterns',
+      },
+    ]
+  } else if (normalizedName.includes('pseudo planche push') || normalizedName.includes('pppu')) {
+    // [AB15.5.1] Specific prep for pseudo planche push-ups
+    steps = [
+      'Practice reduced lean pseudo planche push-up for 2-3 reps',
+      'Focus on scapular protraction and core tension',
+      'Enter Set 1 primed, not fatigued',
+    ]
+    prepSets = [
+      {
+        id: 'prep-1',
+        label: 'Prep 1',
+        unit: 'reps',
+        target: 'Reduced-lean pseudo planche push-up — 2-3 reps',
+        targetValue: 2,
+        effortPercent: 50,
+        restSeconds: 45,
+        cue: 'Hands fixed, slight forward lean',
+        rationale: 'Activate pushing pattern at lower intensity',
       },
       {
         id: 'prep-2',
         label: 'Prep 2',
-        unit: isHold ? 'seconds' : 'reps',
-        target: isHold ? '3-5 sec closer progression' : '1-2 closer reps',
-        targetValue: isHold ? 4 : 1,
+        unit: 'reps',
+        target: 'Near-working lean pseudo planche push-up — 1-2 crisp reps',
+        targetValue: 1,
         effortPercent: 70,
         restSeconds: 60,
-        cue: 'Closer to target, stay fresh',
+        cue: 'Closer lean, crisp reps only',
         rationale: 'Bridge to working intensity without fatigue',
       },
     ]
@@ -436,9 +703,10 @@ function buildAdvancedSkillPlan(exerciseName: string, isHoldBased = false): Exer
       },
     ]
   } else {
+    // [AB15.5.1] Generic fallback with improved copy - avoid vague "easier/closer progression"
     steps = [
-      'Practice the easier regression for 2-3 reps',
-      'Focus on the key positions and tension points',
+      'Reduced-intensity version of this pattern for 2-3 reps',
+      'Focus on key positions and tension points',
       'Enter Set 1 primed, not fatigued',
     ]
     prepSets = [
@@ -446,23 +714,12 @@ function buildAdvancedSkillPlan(exerciseName: string, isHoldBased = false): Exer
         id: 'prep-1',
         label: 'Prep 1',
         unit: isHold ? 'seconds' : 'reps',
-        target: isHold ? '5-8 sec easier progression' : '2-3 easier reps',
-        targetValue: isHold ? 6 : 2,
+        target: isHold ? 'Short technical hold — 5-6 sec' : 'Controlled rehearsal — 2-3 reps',
+        targetValue: isHold ? 5 : 2,
         effortPercent: 50,
         restSeconds: 45,
-        cue: 'Easier progression, prime the pattern',
-        rationale: 'Low-intensity rehearsal to activate motor patterns',
-      },
-      {
-        id: 'prep-2',
-        label: 'Prep 2',
-        unit: isHold ? 'seconds' : 'reps',
-        target: isHold ? '3-5 sec closer progression' : '1-2 closer reps',
-        targetValue: isHold ? 4 : 1,
-        effortPercent: 70,
-        restSeconds: 60,
-        cue: 'Closer to target, stay fresh',
-        rationale: 'Bridge to working intensity without fatigue',
+        cue: 'Reduced intensity, match working shape',
+        rationale: 'Low-intensity rehearsal primes motor patterns',
       },
     ]
   }

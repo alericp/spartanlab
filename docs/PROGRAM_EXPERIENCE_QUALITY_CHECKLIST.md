@@ -21,6 +21,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | AB15.6.1 | Skill Prep Clarity + In-Card Prep Rest Timer | COMPLETE |
 | AB15.6.1.1 | Prep Timer Auto-Advance + Archer Copy Cleanup | COMPLETE |
 | AB15.6.2 | Grouped-Method Set-Count Parity + Live Completion Truth | COMPLETE |
+| AB15.6.2.1 | Grouped Mirrored Surface Parity Repair | COMPLETE |
 
 ---
 
@@ -92,6 +93,27 @@ The following are NOT solved in AB15.6.2 but should be addressed in future AI do
 - [x] Straight-set exercises: Still show normal Set X/Y based on own set count
 - [x] Skill prep timer: Remains intact (AB15.6.1/AB15.6.1.1 preserved)
 - [x] TypeScript passes with zero errors
+
+### AB15.6.2.1 — Grouped Mirrored Surface Parity Repair
+
+**Status:** COMPLETE
+
+**Problem:** AB15.6.2 normalized grouped rounds in the resolver and header, but ExerciseRow still received raw `exercise.sets` for display. Result: header shows "3 paired sets" but Pull-Ups row still shows "4 × 10–15".
+
+**Root Cause:** The `resolveGroupedExecutionPrescription` computed `normalizedSets` per member, but the Program Page member render paths passed raw `hydrated` or `fullExercise` objects directly into `ExerciseRow` without applying the normalization.
+
+**Fix:**
+- Added `withGroupedDisplaySets()` helper that creates a display-only clone with `sets` and `scaledSets` overridden to the normalized value
+- Applied the helper in all three Program Page grouped member render paths:
+  1. Raw grouped fallback - degraded branch
+  2. Raw grouped fallback - main branch with `GroupedMemberFrame`
+  3. Rich grouped - both `GroupedMemberFrame` and straight paths
+- ExerciseRow now receives the normalized set count, ensuring header and member rows agree
+
+**Mirrored Surfaces Principle:**
+- When patching display logic, ALL mirrored surfaces must be audited together
+- Program Page header, member rows, live workout active card, rest/up-next, completed sets, and progress count must all agree
+- Raw member `sets` remains as source metadata but cannot override grouped display when inside a normalized block
 
 ---
 

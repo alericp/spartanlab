@@ -618,32 +618,40 @@ export const LEGACY_EXERCISE_ID_MAP: Record<string, string> = {
  * [AB12.1.2] Evidence-aware canonical exercise display name resolver.
  * Uses both name AND ID to determine the correct display name.
  * 
- * Rules:
+ * [AB17.2] Updated rules - more conservative with "Elevated" naming:
+ * - Standard pppu ID → "Pseudo Planche Push-Ups" (safe default)
  * - Ambiguous "Planche Lean Push-Ups" → "Pseudo Planche Push-Ups" (safe default)
- * - Explicit elevated_pppu ID → "Elevated Pseudo Planche Push-Ups"
- * - Name already contains "Elevated Pseudo" → preserve as-is
- * - Standard pppu ID → "Pseudo Planche Push-Ups"
+ * - elevated_pppu ID without explicit advanced evidence → "Pseudo Planche Push-Ups" (conservative)
+ * - Only show "Elevated" when both ID and name explicitly confirm it
  * 
  * @param exerciseName - The raw exercise name from saved data or generation
  * @param exerciseId - Optional exercise ID for evidence-based resolution
+ * @param hasAdvancedPrerequisite - Optional flag indicating user has proven 10+ floor PPPU prerequisite
  * @returns The canonical display name
  */
 export function resolveCanonicalExerciseName(
   exerciseName: string,
-  exerciseId?: string | null
+  exerciseId?: string | null,
+  hasAdvancedPrerequisite?: boolean
 ): string {
   const lowerName = exerciseName.toLowerCase()
   const normalizedId = exerciseId?.toLowerCase() || ''
   
-  // [AB12.1.2] Check for explicit elevation evidence FIRST
-  // If ID explicitly says elevated, use elevated name
+  // [AB17.2] Conservative approach: only show "Elevated" if BOTH:
+  // 1. ID explicitly says elevated
+  // 2. User has proven advanced prerequisite OR name already explicitly says "Elevated"
   if (exerciseId && ELEVATED_PPPU_IDS.has(exerciseId)) {
-    return 'Elevated Pseudo Planche Push-Ups'
+    // Only preserve "Elevated" if there's explicit advanced evidence
+    if (hasAdvancedPrerequisite === true || lowerName.includes('elevated pseudo planche')) {
+      return 'Feet-Elevated Pseudo Planche Push-Ups'
+    }
+    // [AB17.2] Default to safe standard PPPU - don't show "Elevated" without proof
+    return 'Pseudo Planche Push-Ups'
   }
   
-  // If name already includes "Elevated Pseudo", preserve it
-  if (lowerName.includes('elevated pseudo planche')) {
-    return exerciseName // Keep original casing
+  // If name already includes "Elevated Pseudo", but no ID proof, normalize to standard
+  if (lowerName.includes('elevated pseudo planche') && !hasAdvancedPrerequisite) {
+    return 'Pseudo Planche Push-Ups'
   }
   
   // [AB12.1.2] Check for ambiguous legacy names

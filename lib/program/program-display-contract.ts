@@ -34,6 +34,8 @@ import {
 // re-derive method/doctrine truth from raw legacy fields.
 import type { CanonicalMethodStructure, MethodAwareCompositionReceipt } from '@/lib/program/method-structure-contract'
 import type { DoctrineBlockResolutionEntry } from '@/lib/program/doctrine-block-resolution-contract'
+// [AB12.1.3] Import canonical exercise name resolver for Program <-> Live Workout parity
+import { resolveCanonicalExerciseName } from '@/lib/workout/execution-unit-contract'
 
 // =============================================================================
 // [BUILD GREEN GATE / SESSION IDENTITY RESOLVER — DISPLAY-ONLY]
@@ -3495,6 +3497,8 @@ export interface ExerciseCardDisplayContract {
  */
 export function buildExerciseCardContract(
   exercise: {
+    // [AB12.1.3] Added optional id for evidence-aware canonical display name resolution
+    id?: string
     name: string
     category: string
     sets: number
@@ -3913,8 +3917,12 @@ export function buildExerciseCardContract(
     else if (confidence === 'low') loadConfidenceNote = 'Estimated'
   }
   
+  // [AB12.1.3] Use evidence-aware canonical display name for Program <-> Live Workout parity
+  // This ensures "Planche Lean Push-Ups" displays as "Pseudo Planche Push-Ups" on both surfaces
+  const canonicalDisplayTitle = resolveCanonicalExerciseName(exercise.name, exercise.id)
+  
   return {
-    displayTitle: exercise.name,
+    displayTitle: canonicalDisplayTitle,
     displayCategory,
     roleLabel,
     prescriptionIntent,

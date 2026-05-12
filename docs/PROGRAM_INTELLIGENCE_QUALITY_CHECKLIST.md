@@ -110,20 +110,46 @@ The intelligence is questionable or unverified in:
 
 ### IQ2 — Session Role / Label Truth Hardening
 
-**Status:** TODO
+**Status:** COMPLETE
 
 **Purpose:** Ensure visible day type, role, primary/secondary focus, and exercise content agree.
 
-**Investigation Required:**
-- Trace how `session.focusLabel` and `session.roleLabel` are derived
-- Verify derivation uses skill identity, not just movement family
-- Ensure a "Pull Strength" day cannot show planche progressions as dominant
-- Add validation that role labels match dominant skill expressions
+**Implementation Summary:**
 
-**Files Likely in Scope:**
-- `lib/adaptive-program-builder.ts` (session focus derivation)
-- `lib/program/program-display-contract.ts` (role label projection)
-- `components/programs/AdaptiveSessionCard.tsx` (consumer)
+1. **Created `SessionRoleTruthVerification` interface** in `lib/program/program-display-contract.ts`
+   - Tracks `focusLabelMatchesContent` and `weeklyRoleConsistent` flags
+   - Computes `actualDominantFamily` from exercise name patterns
+   - Detects cross-family skill work (push skills in pull sessions, vice versa)
+   - Generates `displayExplanation` when labels don't match content
+   - Includes `shouldShowInDetails` flag to control when explanation appears
+
+2. **Added `resolveSessionRoleTruth()` pure resolver** — no side effects, no mutations
+   - Analyzes exercise names/categories to determine movement family distribution
+   - Compares visible `focusLabel` and `weeklyRoleLabel` against actual content
+   - Surfaces user concern: push/planche work in pull-labeled sessions (and vice versa)
+   - Confidence scoring based on exercise count
+
+3. **Updated `buildSessionCardSurface()`** to include role truth verification
+   - Added `exercises` to session input type
+   - Computes verification and includes in `SessionCardSurface.roleTruthVerification`
+
+4. **Updated `AdaptiveSessionCard`** to display role verification
+   - Added "Role verification" section in "Why this workout" dropdown
+   - Only shows when `shouldShowInDetails` is true and explanation exists
+   - Displays pull/push/skill breakdown when cross-family skill work detected
+
+**IQ9 Same-Corridor Slice:** The role truth explanation derives from the same resolved role truth object used by visible labels, ensuring explanation and header labels cannot contradict each other.
+
+**Root Cause Found:** Labels were coming from builder-level role contracts (`weeklyRole.roleLabel`) which describe stress character, not verified content. The focus labels (`focusLabel`) describe movement family but were not verified against actual exercises. Now a display-level verification layer validates labels against content and surfaces explanations when needed.
+
+**Files Changed:**
+- `lib/program/program-display-contract.ts` — Added `SessionRoleTruthVerification` type, `resolveSessionRoleTruth()` function, `roleTruthVerification` field in `SessionCardSurface`
+- `components/programs/AdaptiveSessionCard.tsx` — Added "Role verification" section in "Why this workout" dropdown
+
+**Files NOT Touched:**
+- `lib/adaptive-program-builder.ts` — Builder logic unchanged; verification is display-only
+- Database schema — No migrations
+- Live workout runtime — AB15 grouped runtime preserved
 
 ---
 

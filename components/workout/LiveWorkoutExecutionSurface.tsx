@@ -99,6 +99,10 @@ export interface LiveWorkoutSnapshot {
   // Exercise identity
   exerciseName: string
   exerciseCategory: string
+  // [AB8.2] Row-level method truth from exercise prescription.
+  // Used to show honest method labels even when not in a grouped block.
+  // Examples: 'rest-pause', 'drop-set', 'top-set', 'cluster', 'density', etc.
+  exerciseMethod?: string
 
   // Week-scaled effective prescription (already validated in parent)
   exerciseSets: number
@@ -637,6 +641,8 @@ export function LiveWorkoutExecutionSurface({
         sessionLabel={safeSessionLabel}
         exerciseName={safeExerciseName}
         exerciseCategory={safeExerciseCategory}
+        // [AB8.2] Row-level method truth for honest method labels
+        exerciseMethod={snapshot.exerciseMethod}
         exerciseSets={safeExerciseSets}
         exerciseRepsOrTime={safeExerciseRepsOrTime}
         targetRPE={clampOptional(snapshot.targetRPE, (v): v is number => typeof v === 'number' && v >= 1 && v <= 10)}

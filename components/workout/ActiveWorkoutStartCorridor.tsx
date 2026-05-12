@@ -309,11 +309,14 @@ interface ActiveMethodDisplay {
 
 function resolveActiveMethodDisplay(params: {
   blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block'
+  setExecutionMethod?: string
   exerciseMethod?: string
   densityTimeCapSeconds?: number
 }): ActiveMethodDisplay {
-  const { blockGroupType, exerciseMethod, densityTimeCapSeconds } = params
-  const methodLower = (exerciseMethod || '').toLowerCase()
+  const { blockGroupType, setExecutionMethod, exerciseMethod, densityTimeCapSeconds } = params
+  // [AB8.3] Priority: blockGroupType (grouped blocks) > setExecutionMethod (authoritative row-level) > exerciseMethod (fallback)
+  const effectiveRowMethod = setExecutionMethod || exerciseMethod || ''
+  const methodLower = effectiveRowMethod.toLowerCase()
   
   // 1. Grouped block methods have priority when executable
   if (blockGroupType === 'superset') {
@@ -508,8 +511,10 @@ export interface ActiveWorkoutCorridorProps {
   exerciseId?: string
   exerciseName: string
   exerciseCategory: string
-  // [AB8.2] Row-level method truth from exercise prescription.
-  // Used to show honest method labels even when not in a grouped block.
+  // [AB8.3] Row-level method truth from exercise prescription.
+  // setExecutionMethod is authoritative for row-level methods (top_set, drop_set, etc.)
+  // exerciseMethod is fallback/legacy/secondary.
+  setExecutionMethod?: string
   exerciseMethod?: string
   exerciseSets: number
   exerciseRepsOrTime: string
@@ -1305,7 +1310,8 @@ export function ActiveWorkoutStartCorridor({
   exerciseName,
   mode,
   exerciseCategory,
-  // [AB8.2] Row-level method truth
+  // [AB8.3] Row-level method truth (setExecutionMethod is authoritative)
+  setExecutionMethod,
   exerciseMethod,
   exerciseSets,
   exerciseRepsOrTime,
@@ -2571,13 +2577,13 @@ export function ActiveWorkoutStartCorridor({
                 </h2>
                 {/* [AB8.2.1] Chip row wraps naturally below the title */}
                 <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {/* [AB8.2] Method truth label - uses resolver for honest method display.
-                      Considers blockGroupType for grouped methods, exerciseMethod for
-                      row-level methods (rest-pause, drop-set, etc.), and only shows
-                      "Straight Sets" when truly no method exists. */}
+                  {/* [AB8.3] Method truth label - uses resolver for honest method display.
+                      Priority: blockGroupType (grouped blocks) > setExecutionMethod 
+                      (authoritative row-level) > exerciseMethod (fallback) > straight sets */}
                   {(() => {
                     const methodDisplay = resolveActiveMethodDisplay({
                       blockGroupType,
+                      setExecutionMethod,
                       exerciseMethod,
                       densityTimeCapSeconds,
                     })
@@ -2654,13 +2660,14 @@ export function ActiveWorkoutStartCorridor({
                   </div>
                 )}
 
-                {/* [AB8.2] Compact method instruction line - shows helpful one-liner
+                {/* [AB8.3] Compact method instruction line - shows helpful one-liner
                     when the exercise has a non-straight-set method. Only renders when
                     the resolver provides a shortInstruction. Does not clutter normal
                     straight-set exercises. */}
                 {(() => {
                   const methodDisplay = resolveActiveMethodDisplay({
                     blockGroupType,
+                    setExecutionMethod,
                     exerciseMethod,
                     densityTimeCapSeconds,
                   })

@@ -10807,7 +10807,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // Exercise identity
           exerciseName: safeCurrentExercise?.name || 'Exercise',
           exerciseCategory: safeCurrentExercise?.category || 'general',
-          // [AB8.2] Row-level method truth for honest method labels
+          // [AB8.3] Row-level method truth for honest method labels
+          // setExecutionMethod is authoritative for row-level methods (top_set, drop_set, etc.)
+          // exerciseMethod is fallback/legacy/secondary
+          setExecutionMethod: (safeCurrentExercise as { setExecutionMethod?: string })?.setExecutionMethod || undefined,
           exerciseMethod: safeCurrentExercise?.method || undefined,
           // Week-scaled prescription (effective contract)
           exerciseSets: activeEffectiveContract.effectiveSets,

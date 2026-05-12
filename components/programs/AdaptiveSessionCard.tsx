@@ -104,6 +104,8 @@ import {
 // rewrites a hold's repsOrTime into a generic rep range. See
 // lib/program/exercise-prescription-unit-truth.ts.
 import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
+// [AB12.1.3] Import canonical exercise name resolver for Program <-> Live Workout parity
+import { resolveCanonicalExerciseName } from '@/lib/workout/execution-unit-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
@@ -6239,8 +6241,9 @@ function MainExercisesRenderer({
                   onProgressionAdjust={onProgressionAdjust}
                 />
               ) : (
+                // [AB12.1.3] Use canonical name resolver for fallback display
                 <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
-                  <span className="truncate">{(exercise.name || '').trim()}</span>
+                  <span className="truncate">{resolveCanonicalExerciseName(exercise.name || '', exercise.id)}</span>
                 </div>
               )}
             </div>
@@ -6333,13 +6336,14 @@ function MainExercisesRenderer({
           // (sets: number); a FullRoutineExercise without a numeric `sets`
           // renders as a minimal text row so the exercise stays visible
           // without faking a prescription.
+          // [AB12.1.3] Use canonical name resolver for fallback display
           if (!isAdaptiveExerciseForDisplay(exercise)) {
             return (
               <div
                 key={exercise.id}
                 className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
               >
-                <span className="truncate">{(exercise.name || '').trim()}</span>
+                <span className="truncate">{resolveCanonicalExerciseName(exercise.name || '', exercise.id)}</span>
               </div>
             )
           }
@@ -7401,7 +7405,9 @@ function ExerciseRow({
   
   // [EXERCISE-CARD-CONTRACT] Build canonical display contract
   // [RICH-EXPLANATION-FIX] Pass sessionContext to enable goal-aware reasoning in purpose/effort builders
+  // [AB12.1.3] Pass exercise.id for evidence-aware canonical display name resolution
   const card = buildExerciseCardContract({
+    id: exercise.id,
     name: exercise.name || 'Exercise',
     category: exercise.category || 'accessory',
     sets: effectiveSets,

@@ -716,6 +716,10 @@ export interface MethodOverridePreview {
   // [AB17.2] Concrete day-specific workout preview
   /** Day-specific what-if workout preview with before/after blocks */
   workoutPreview?: MethodOverrideWorkoutPreview
+  
+  // [AB17.2.2] Circuit-specific preview truth
+  /** For circuits only: detailed candidate info with selected/skipped exercises */
+  circuitCandidate?: CircuitPreviewCandidate
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
@@ -737,26 +741,30 @@ type MovementPattern = 'push' | 'pull' | 'core' | 'mobility' | 'skill' | 'legs' 
 
 /**
  * [AB17.2.1] Classifies an exercise name into a movement pattern.
+ * [AB17.2.2] Fixed classification order: check dynamic movements BEFORE skill holds
+ * to avoid misclassifying "Pseudo Planche Push-Ups" as a skill hold.
  */
 function classifyMovementPattern(exerciseName: string): MovementPattern {
   const lower = exerciseName.toLowerCase()
   
-  // Skill/isometric holds
-  if (lower.includes('hold') || lower.includes('lean') || lower.includes('lever') || 
-      lower.includes('planche') || lower.includes('l-sit') || lower.includes('handstand')) {
-    return 'skill'
-  }
-  
-  // Push movements
-  if (lower.includes('push') || lower.includes('dip') || lower.includes('press') ||
-      lower.includes('tricep')) {
+  // [AB17.2.2] Check dynamic movements FIRST to avoid false skill classification
+  // Push movements (check before skill to catch "Pseudo Planche Push-Ups")
+  if (lower.includes('push-up') || lower.includes('pushup') || lower.includes('push up') ||
+      lower.includes('dip') || lower.includes('press') || lower.includes('tricep')) {
     return 'push'
   }
   
-  // Pull movements
-  if (lower.includes('pull') || lower.includes('row') || lower.includes('chin') ||
-      lower.includes('curl') || lower.includes('bicep')) {
+  // Pull movements (check before skill to catch dynamic pulls)
+  if (lower.includes('pull-up') || lower.includes('pullup') || lower.includes('pull up') ||
+      lower.includes('row') || lower.includes('chin') || lower.includes('curl') || 
+      lower.includes('bicep')) {
     return 'pull'
+  }
+  
+  // Skill/isometric holds (check AFTER dynamic movements)
+  if (lower.includes('hold') || lower.includes('lean') || lower.includes('lever') || 
+      lower.includes('planche') || lower.includes('l-sit') || lower.includes('handstand')) {
+    return 'skill'
   }
   
   // Core movements
@@ -1232,6 +1240,37 @@ export function saveMethodOverridePreview(
   // [AB17.2] Build concrete workout preview if possible
   const workoutPreview = buildMethodOverrideWorkoutPreview(plan, sessionExercises, sessionTitle)
   
+  // [AB17.2.2] Build circuit-specific candidate for circuits
+  let circuitCandidate: CircuitPreviewCandidate | undefined
+  if (plan.methodKey === 'circuits' || plan.methodKey === 'density_blocks') {
+    const exercises = sessionExercises || []
+    const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
+    const dayIndex = plan.suggestedInsertion?.dayIndex ?? 0
+    const dayLabel = formatDayLabel(dayIndex, sessionTitle || plan.suggestedInsertion?.sessionTitle)
+    
+    // Score this session for circuit suitability
+    const { score, notes: riskNotes } = scoreSessionForCircuit(exercises, sessionTitle || '')
+    
+    const confidence: CircuitPreviewCandidate['confidence'] = 
+      selected.length >= 4 && score > 60 ? 'high' :
+      selected.length >= 3 && score > 30 ? 'medium' :
+      selected.length >= 3 ? 'low' : 'none'
+    
+    circuitCandidate = {
+      dayIndex,
+      dayLabel,
+      sessionTitle: sessionTitle || plan.suggestedInsertion?.sessionTitle || `Day ${dayIndex + 1}`,
+      selectedExercises: selected,
+      skippedExercises: skipped,
+      candidateReason: reason,
+      riskNotes,
+      circuitSize: selected.length,
+      confidence,
+      isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
+      patternDistribution: patterns,
+    }
+  }
+  
   const preview: MethodOverridePreview = {
     methodKey: plan.methodKey,
     label: plan.label,
@@ -1250,6 +1289,8 @@ export function saveMethodOverridePreview(
     savedProgramUnchanged: true,
     // [AB17.2] Concrete workout preview
     workoutPreview,
+    // [AB17.2.2] Circuit-specific candidate
+    circuitCandidate,
   }
   
   try {

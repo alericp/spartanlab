@@ -404,6 +404,46 @@ Added concrete day-specific workout preview for method override visualization:
 - `lib/program/requested-method-override-planner.ts` — Added circuit doctrine constants, pattern classification, circuit-compatible exercise finder, session scoring, best-day circuit finder
 - `components/programs/ProgramCoachIntelligenceHub.tsx` — Added warning styling for circuit preview blocks
 
+**IQ6.4.2 Implementation Summary (AB17.2.2):**
+
+1. **Circuit Truth-to-UI Delivery:** Added `circuitCandidate?: CircuitPreviewCandidate` to `MethodOverridePreview` interface so circuit-specific truth reaches the UI.
+
+2. **Fixed Movement Pattern Classification:** Updated `classifyMovementPattern()` to check dynamic movements (push-up, pull-up) BEFORE skill holds to avoid misclassifying "Pseudo Planche Push-Ups" as a skill hold.
+
+3. **Circuit Candidate Creation in saveMethodOverridePreview:** For circuits, now creates a proper `CircuitPreviewCandidate` with:
+   - `selectedExercises` — real exercises that pass circuit compatibility
+   - `skippedExercises` — exercises excluded (skill holds, same-pattern)
+   - `isSafeCircuitCandidate` — true only when 3+ compatible exercises exist
+   - `candidateReason` — human-readable explanation
+   - `riskNotes` — session-specific risk warnings
+
+4. **Circuit-Specific UI in Method Planner:**
+   - "Circuit Insertion Analysis" section replaces generic "Best Safe Insertion Point" for circuits
+   - Shows circuit size status badge (e.g., "3-exercise circuit available" or "2 exercises = superset only")
+   - Lists selected exercises and skipped exercises separately
+   - Displays candidate reason and risk notes
+
+5. **Honest Safety Badge:** For circuits:
+   - Overrides "Safe to Preview" to "Would Be Superset" or "No Safe Circuit" when circuit candidate is unsafe
+   - Uses amber warning styling instead of green success
+
+6. **Circuit Preview Card:**
+   - Shows full circuit candidate details when `circuitCandidate` exists
+   - Lists numbered selected exercises
+   - Shows skipped exercises with reasons
+   - Displays risk notes in amber warning box
+
+**Files Changed (IQ6.4.2):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Fixed `classifyMovementPattern()` — checks dynamic movements before skill holds
+  - Added `circuitCandidate` field to `MethodOverridePreview` interface
+  - Updated `saveMethodOverridePreview()` to create `CircuitPreviewCandidate` for circuits
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Added `isCircuitMethod`, `circuitCandidate`, `isUnsafeCircuit` variables
+  - Added `effectiveSafety` and `effectiveSafetyLabel` for circuit safety override
+  - Added circuit-specific "Circuit Insertion Analysis" section
+  - Added circuit-specific preview card rendering
+
 ---
 
 ### IQ7 — Feedback Loop Closure

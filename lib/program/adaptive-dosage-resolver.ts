@@ -293,13 +293,16 @@ export function inferExerciseSkillIdentity(exercise: Exercise): AdaptiveSkillIde
     return 'pike_push'
   }
 
-  // Planche push-up strength: PPPU, Planche Lean PU, Tuck Planche PU
+  // Planche push-up strength: PPPU, Elevated PPPU, Tuck Planche PU
+  // [AB12.1] Added elevated_pppu (renamed from planche_lean_pushup), kept legacy ID for backward compat
   if (
     id === 'pppu' ||
-    id === 'planche_lean_pushup' ||
+    id === 'elevated_pppu' ||
+    id === 'planche_lean_pushup' || // legacy backward compat
     id === 'tuck_planche_pushup' ||
     /\bpseudo\s+planche\s+push/.test(name) ||
-    /\bplanche\s+lean\s+push/.test(name) ||
+    /\belevated\s+pseudo\s+planche/.test(name) ||
+    /\bplanche\s+lean\s+push/.test(name) || // legacy backward compat
     /\btuck\s+planche\s+push/.test(name)
   ) {
     return 'planche_pushup_strength'

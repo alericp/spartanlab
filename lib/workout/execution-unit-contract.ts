@@ -571,3 +571,67 @@ export function isHoldUnit(input: string | HoldUnitContext | null | undefined): 
 
   return false
 }
+
+// =============================================================================
+// [AB12.1] CANONICAL EXERCISE DISPLAY NAME RESOLVER
+// =============================================================================
+// Resolves ambiguous or legacy exercise names to their canonical display names.
+// This ensures backward compatibility for saved programs while preventing
+// ambiguous names from appearing in the UI.
+
+/**
+ * Legacy name → canonical display name mapping.
+ * Used for backward compatibility with saved programs that contain old names.
+ */
+const LEGACY_EXERCISE_NAME_MAP: Record<string, string> = {
+  // [AB12.1] "Planche Lean Push-Ups" was ambiguous - it's actually a dynamic push-up, not a lean hold
+  'Planche Lean Push-Ups': 'Elevated Pseudo Planche Push-Ups',
+  'planche lean push-ups': 'Elevated Pseudo Planche Push-Ups',
+  'Planche Lean Pushups': 'Elevated Pseudo Planche Push-Ups',
+  'planche lean pushups': 'Elevated Pseudo Planche Push-Ups',
+}
+
+/**
+ * Legacy exercise ID → canonical ID mapping.
+ * Used when resolving exercise IDs from saved programs.
+ */
+export const LEGACY_EXERCISE_ID_MAP: Record<string, string> = {
+  'planche_lean_pushup': 'elevated_pppu',
+  'planche_lean_push_up': 'elevated_pppu',
+}
+
+/**
+ * Resolves an exercise name to its canonical display name.
+ * Handles backward compatibility for legacy/ambiguous names.
+ * 
+ * @param exerciseName - The raw exercise name from saved data or generation
+ * @returns The canonical display name
+ */
+export function resolveCanonicalExerciseName(exerciseName: string): string {
+  // Check legacy map first (case-insensitive lookup)
+  const legacyResolved = LEGACY_EXERCISE_NAME_MAP[exerciseName]
+  if (legacyResolved) {
+    return legacyResolved
+  }
+  
+  // Also check lowercase version
+  const lowerName = exerciseName.toLowerCase()
+  const lowerResolved = LEGACY_EXERCISE_NAME_MAP[lowerName]
+  if (lowerResolved) {
+    return lowerResolved
+  }
+  
+  // No mapping needed - return as-is
+  return exerciseName
+}
+
+/**
+ * Resolves an exercise ID to its canonical ID.
+ * Handles backward compatibility for legacy exercise IDs.
+ * 
+ * @param exerciseId - The raw exercise ID from saved data
+ * @returns The canonical exercise ID
+ */
+export function resolveCanonicalExerciseId(exerciseId: string): string {
+  return LEGACY_EXERCISE_ID_MAP[exerciseId] || exerciseId
+}

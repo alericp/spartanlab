@@ -146,7 +146,7 @@ import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-b
 // live workout corridor (active card, set logging, completed-set serialization,
 // history surface). Replaces 4+ divergent inline regex variants that missed
 // bare-second shorthand like "6s" and silently logged hold exercises as reps.
-import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
+import { isHoldUnit, resolveCanonicalExerciseName } from '@/lib/workout/execution-unit-contract'
 // [AB10 — START WORKOUT RUNTIME PARITY LOCK] Read the runtime proof
 // forwarded from the workout route, render a compact visible chip near the
 // Today's Plan strip, and stamp `data-ab10-*` DOM proof attributes on a
@@ -10291,7 +10291,8 @@ if (shouldShowLocalFallback) {
     // PPX-R7.8F used useMemo inside this IIFE which caused React #310 hook order violation
     // Both BandSelector card AND Live Set Guidance modal MUST consume this exact same object
     const corridorExerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || ''
-    const corridorExerciseName = safeCurrentExercise?.name || ''
+    // [AB12.1] Apply canonical name resolver to handle legacy/ambiguous exercise names
+    const corridorExerciseName = resolveCanonicalExerciseName(safeCurrentExercise?.name || '')
     
     // [PPX-R7.8G] Use pure helper function instead of useMemo to avoid React hook order crash
     const sharedBandGuidanceTruth = buildSharedBandGuidanceTruth({

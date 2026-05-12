@@ -194,7 +194,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
-import { MethodInfoBubble } from '@/components/coaching'
+import { MethodInfoBubble, isMethodInfoBubbleMethodType } from '@/components/coaching'
 import { formatDisplayRPE, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { 
   type ResistanceBandColor,
@@ -2508,10 +2508,10 @@ export function ActiveWorkoutStartCorridor({
                   {/* [AB8.5] Use centralized helper for grouped method labels */}
                   {getGroupedMethodDisplayLabel(blockGroupType)}
                 </Badge>
-                {/* [AB8.5] Method info bubble - now correctly typed to include density_block */}
-                {blockGroupType && (
+                {/* [AB8.6] Method info bubble - uses type guard for safe handoff */}
+                {blockGroupType && isMethodInfoBubbleMethodType(blockGroupType) && (
                   <MethodInfoBubble 
-                    methodType={blockGroupType as 'superset' | 'circuit' | 'cluster' | 'density_block' | 'emom'}
+                    methodType={blockGroupType}
                   />
                 )}
                   <span className="text-sm text-[#A4ACB8]">Round {currentRound} of {targetRounds}</span>
@@ -3139,7 +3139,7 @@ export function ActiveWorkoutStartCorridor({
                     </span>
                     {!showRecentSets && (
                       <span className="text-xs text-[#6B7280] truncate">
-                        Last: Set {latest.setNumber} · {latestValue} · RPE {formatDisplayRPE(latest.actualRPE)}
+                        Last: Set {latest.setNumber} �� {latestValue} · RPE {formatDisplayRPE(latest.actualRPE)}
                       </span>
                     )}
                   </div>

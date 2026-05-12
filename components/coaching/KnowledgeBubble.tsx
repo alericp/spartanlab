@@ -469,9 +469,21 @@ export function OverrideWarningBubble({
 // METHOD INFO BUBBLE - For training method explanations (Superset, Circuit, etc.)
 // =============================================================================
 
+// [AB8.6] Exported type for MethodInfoBubble consumers to use without casting
+export type MethodInfoBubbleMethodType = 'superset' | 'circuit' | 'cluster' | 'density_block' | 'emom' | 'straight_sets'
+
+// [AB8.6] Type guard for safe method type validation
+const VALID_METHOD_INFO_TYPES: ReadonlySet<string> = new Set([
+  'superset', 'circuit', 'cluster', 'density_block', 'emom', 'straight_sets'
+])
+
+export function isMethodInfoBubbleMethodType(value: unknown): value is MethodInfoBubbleMethodType {
+  return typeof value === 'string' && VALID_METHOD_INFO_TYPES.has(value)
+}
+
 interface MethodInfoBubbleProps {
   /** Training method type */
-  methodType: 'superset' | 'circuit' | 'cluster' | 'density_block' | 'emom' | 'straight_sets'
+  methodType: MethodInfoBubbleMethodType
   /** Optional additional context */
   context?: string
   /** Show as inline icon or full bubble */

@@ -63,7 +63,7 @@ import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummar
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
-import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
+import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble, isMethodInfoBubbleMethodType } from '@/components/coaching'
 // [DOMINANT-CARD-OWNERSHIP-LOCK] Import SessionCardSurface so this dominant
 // visible card can read from the SAME strengthened authoritative truth that
 // the Program-page wrapper strip already consumes. No parallel re-derivation.
@@ -6818,10 +6818,13 @@ function MainExercisesRenderer({
                     · Rest {group.restProtocol}
                   </span>
                 )}
-                <MethodInfoBubble 
-                  methodType={group.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block'}
-                  context={group.exercises[0]?.methodRationale || group.instruction || undefined}
-                />
+                {/* [AB8.6] Use type guard for safe method handoff */}
+                {isMethodInfoBubbleMethodType(group.groupType) && (
+                  <MethodInfoBubble 
+                    methodType={group.groupType}
+                    context={group.exercises[0]?.methodRationale || group.instruction || undefined}
+                  />
+                )}
               </div>
             )}
 

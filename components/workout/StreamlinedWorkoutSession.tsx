@@ -10921,6 +10921,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             ? (safeWorkoutSessionContract.warmupAdaptation?.rampUpAdvisory || null)
             : null,
           // [AB9] Exercise-specific prep plan for Set 1 of eligible exercises
+          // [AB15] Extended with working load truth for practical ramp calculations
           exercisePrepPlan: buildExercisePrepPlan({
             exerciseName: safeCurrentExercise?.name || '',
             exerciseCategory: safeCurrentExercise?.category,
@@ -10932,6 +10933,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             currentSetNumber: validatedSetNumber,
             currentExerciseIndex: machineState.currentExerciseIndex,
             isWarmupOrCooldown: false, // Main exercises are never warmup/cooldown
+            // [AB15.4] Pass working load truth for practical ramp load calculations
+            workingLoad: safeCurrentExercise?.prescribedLoad?.load ?? null,
+            loadUnit: (safeCurrentExercise?.prescribedLoad?.unit as 'lb' | 'kg') ?? 'lb',
+            loadRoundingIncrement: 2.5, // Default plate increment
+            // [AB15.2] Pass hold-based truth for exercise-specific prep
+            isHoldBased: isHoldExercise,
           }),
           // Coaching
           coachingExpression: buildCoachingExpression(machineState.currentActionPlan),

@@ -705,7 +705,62 @@ export interface SessionCardSurface {
   doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
   /** [PHASE E.E4.1] Multi-structure composition receipt. Null on legacy. */
   methodAwareCompositionReceipt?: MethodAwareCompositionReceipt | null
+
+  // ===========================================================================
+  // [IQ2 — SESSION ROLE / LABEL TRUTH HARDENING]
+  // Verification that visible session labels (weeklyRoleLabel, focusLabel)
+  // match the actual exercise content. When a mismatch exists, the card can
+  // display a compact explanation proving the label is still valid or showing
+  // what the actual dominant content is.
+  // ===========================================================================
+  /** IQ2 role truth verification result. Null on legacy sessions. */
+  roleTruthVerification?: SessionRoleTruthVerification | null
   }
+
+// =============================================================================
+// [IQ2 — SESSION ROLE / LABEL TRUTH HARDENING]
+// Pure display-only resolver that verifies visible session labels match actual
+// exercise composition. Does NOT mutate session data — only produces a read-only
+// verification result the card can use to display role truth explanations.
+// =============================================================================
+
+/**
+ * Movement family dominance detected from actual exercise content.
+ */
+export type ExerciseDominantFamily = 'pull' | 'push' | 'skill' | 'mixed' | 'balanced' | 'support'
+
+/**
+ * IQ2 session role truth verification result.
+ * Computed from actual exercise content and compared to visible labels.
+ */
+export interface SessionRoleTruthVerification {
+  /** Whether the visible focusLabel matches the actual dominant family. */
+  focusLabelMatchesContent: boolean
+  /** Whether the weeklyRoleLabel is consistent with exercise content (role labels describe stress character not family). */
+  weeklyRoleConsistent: boolean
+  /** The actual dominant movement family based on exercise names/categories. */
+  actualDominantFamily: ExerciseDominantFamily
+  /** Exercise counts by family for audit. */
+  familyBreakdown: {
+    pullCount: number
+    pushCount: number
+    skillCount: number
+    supportCount: number
+    totalCount: number
+  }
+  /** Skills actually expressed in this session (from exercise skillTargets if available). */
+  representedSkills: string[]
+  /** Push/planche skill work detected even in a "pull" labeled session (important for user concern). */
+  hasPushSkillWorkInPullSession: boolean
+  /** Pull/lever skill work detected even in a "push" labeled session. */
+  hasPullSkillWorkInPushSession: boolean
+  /** Compact display line when there's a label adjustment or verification note. Null when labels are accurate. */
+  displayExplanation: string | null
+  /** True when any mismatch or mixed-skill scenario should show explanation in expanded card details. */
+  shouldShowInDetails: boolean
+  /** Confidence level for the verification (based on available metadata). */
+  confidence: 'high' | 'medium' | 'low'
+}
 
 /**
  * Build a compact session card surface from session metadata.
@@ -788,6 +843,15 @@ export function buildSessionCardSurface(
     doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
     /** [PHASE E.E4.1] Multi-structure composition receipt */
     methodAwareCompositionReceipt?: MethodAwareCompositionReceipt | null
+    // [IQ2] Session exercises for role truth verification
+    exercises?: Array<{
+      name?: string | null
+      id?: string | null
+      category?: string | null
+      skillTargets?: string[] | null
+      skillSupportTargets?: string[] | null
+      exercise?: { name?: string | null; category?: string | null } | null
+    }> | null
   },
   weekContext: {
     isFirstWeek?: boolean
@@ -1165,12 +1229,26 @@ export function buildSessionCardSurface(
   // crashing on malformed saved programs.
   const methodStructuresPassthrough: CanonicalMethodStructure[] | null =
     Array.isArray(session.methodStructures) ? session.methodStructures : null
-const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null =
-  Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : null
+  const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null =
+    Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : null
   // [PHASE E.E4.1] Pass-through composition receipt
   const compositionReceiptPassthrough: MethodAwareCompositionReceipt | null =
-  (session.methodAwareCompositionReceipt && typeof session.methodAwareCompositionReceipt === 'object')
-    ? session.methodAwareCompositionReceipt
+    (session.methodAwareCompositionReceipt && typeof session.methodAwareCompositionReceipt === 'object')
+      ? session.methodAwareCompositionReceipt
+      : null
+
+  // ==========================================================================
+  // [IQ2 — SESSION ROLE / LABEL TRUTH HARDENING]
+  // Compute role truth verification from actual exercise content vs labels.
+  // This surfaces any mismatch between visible labels and real content.
+  // ==========================================================================
+  const roleTruthVerification: SessionRoleTruthVerification | null = session.exercises
+    ? resolveSessionRoleTruth(
+        session.exercises,
+        session.focusLabel || session.focus,
+        weeklyRole?.roleLabel,
+        skillMeta,
+      )
     : null
   
   return {
@@ -1199,6 +1277,8 @@ const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null 
   doctrineBlockResolution: doctrineBlockResolutionPassthrough,
   // [PHASE E.E4.1] Multi-structure composition receipt
   methodAwareCompositionReceipt: compositionReceiptPassthrough,
+  // [IQ2 — SESSION ROLE / LABEL TRUTH HARDENING]
+  roleTruthVerification,
   }
   }
 
@@ -1250,6 +1330,246 @@ export function hasRenderableMethodStructure(
     }
   }
   return false
+}
+
+// =============================================================================
+// [IQ2 — SESSION ROLE / LABEL TRUTH HARDENING] Pure resolver
+// =============================================================================
+
+/**
+ * Resolves session role truth verification from exercise content.
+ * Pure function — no side effects, no mutations, no DOM access.
+ *
+ * @param exercises - Array of exercises from session.exercises
+ * @param focusLabel - The visible focus label (e.g., "Pull Strength", "Push skill")
+ * @param weeklyRoleLabel - The weekly role label (e.g., "Heavier strength day")
+ * @param skillExpressionMetadata - Optional skill expression metadata from session
+ * @returns IQ2 verification result
+ */
+export function resolveSessionRoleTruth(
+  exercises: Array<{
+    name?: string | null
+    id?: string | null
+    category?: string | null
+    skillTargets?: string[] | null
+    skillSupportTargets?: string[] | null
+    exercise?: { name?: string | null; category?: string | null } | null
+  }> | null | undefined,
+  focusLabel: string | null | undefined,
+  weeklyRoleLabel: string | null | undefined,
+  skillExpressionMetadata?: {
+    directlyExpressedSkills?: string[] | null
+    technicalSlotSkills?: string[] | null
+  } | null,
+): SessionRoleTruthVerification {
+  const exList = Array.isArray(exercises) ? exercises : []
+
+  // Helper to get exercise name safely (handles nested exercise object)
+  const getExName = (ex: typeof exList[number]): string => {
+    const direct = typeof ex.name === 'string' ? ex.name.toLowerCase() : ''
+    if (direct) return direct
+    const nested = typeof ex.exercise?.name === 'string' ? ex.exercise.name.toLowerCase() : ''
+    return nested || (typeof ex.id === 'string' ? ex.id.toLowerCase() : '')
+  }
+
+  // Count exercises by movement family based on name patterns
+  let pullCount = 0
+  let pushCount = 0
+  let skillCount = 0
+  let supportCount = 0
+  const representedSkills = new Set<string>()
+
+  // Skill-specific patterns for push/pull skill detection
+  const pushSkillPatterns = ['planche', 'handstand', 'hspu', 'pike', 'maltese', 'iron cross']
+  const pullSkillPatterns = ['front lever', 'back lever', 'muscle up', 'one arm pull', 'oap']
+
+  let hasPushSkillWorkInPullSession = false
+  let hasPullSkillWorkInPushSession = false
+
+  for (const ex of exList) {
+    const name = getExName(ex)
+    const category = typeof ex.category === 'string' ? ex.category.toLowerCase() :
+                     typeof ex.exercise?.category === 'string' ? ex.exercise.category.toLowerCase() : ''
+
+    // Count skill targets if available
+    if (Array.isArray(ex.skillTargets)) {
+      for (const skill of ex.skillTargets) {
+        if (typeof skill === 'string' && skill.trim()) {
+          representedSkills.add(skill.trim().toLowerCase().replace(/_/g, ' '))
+        }
+      }
+    }
+    if (Array.isArray(ex.skillSupportTargets)) {
+      for (const skill of ex.skillSupportTargets) {
+        if (typeof skill === 'string' && skill.trim()) {
+          representedSkills.add(skill.trim().toLowerCase().replace(/_/g, ' '))
+        }
+      }
+    }
+
+    // Detect push skill exercises
+    const isPushSkill = pushSkillPatterns.some(p => name.includes(p))
+    // Detect pull skill exercises
+    const isPullSkill = pullSkillPatterns.some(p => name.includes(p.replace(' ', ''))) ||
+                        pullSkillPatterns.some(p => name.includes(p))
+
+    // Pull patterns
+    if (name.includes('pull') || name.includes('row') || name.includes('curl') ||
+        name.includes('lever') || name.includes('ring row') || category === 'pull') {
+      pullCount++
+      if (isPushSkill) {
+        // Rare but possible: a push skill counted as pull (e.g., "planche to ring row")
+      }
+    }
+    // Push patterns
+    else if (name.includes('push') || name.includes('dip') || name.includes('press') ||
+             name.includes('planche') || name.includes('pike') || name.includes('handstand') ||
+             category === 'push') {
+      pushCount++
+    }
+    // Skill patterns (not already counted as push/pull)
+    else if (name.includes('muscle up') || name.includes('l-sit') || name.includes('hold') ||
+             category === 'skill') {
+      skillCount++
+    }
+    // Support/recovery patterns
+    else if (name.includes('stretch') || name.includes('mobility') || name.includes('face pull') ||
+             name.includes('rotator') || category === 'accessory' || category === 'support') {
+      supportCount++
+    }
+    // Default to support if unclear
+    else {
+      supportCount++
+    }
+
+    // Detect cross-family skill work for user concern
+    if (isPushSkill) {
+      // If we're in a pull-labeled session but have push skill work
+      const focusLower = (focusLabel || '').toLowerCase()
+      if (focusLower.includes('pull') && !focusLower.includes('push')) {
+        hasPushSkillWorkInPullSession = true
+      }
+    }
+    if (isPullSkill) {
+      // If we're in a push-labeled session but have pull skill work
+      const focusLower = (focusLabel || '').toLowerCase()
+      if (focusLower.includes('push') && !focusLower.includes('pull')) {
+        hasPullSkillWorkInPushSession = true
+      }
+    }
+  }
+
+  // Add skills from metadata if available
+  if (skillExpressionMetadata?.directlyExpressedSkills) {
+    for (const skill of skillExpressionMetadata.directlyExpressedSkills) {
+      if (typeof skill === 'string' && skill.trim()) {
+        representedSkills.add(skill.trim().toLowerCase().replace(/_/g, ' '))
+      }
+    }
+  }
+  if (skillExpressionMetadata?.technicalSlotSkills) {
+    for (const skill of skillExpressionMetadata.technicalSlotSkills) {
+      if (typeof skill === 'string' && skill.trim()) {
+        representedSkills.add(skill.trim().toLowerCase().replace(/_/g, ' '))
+      }
+    }
+  }
+
+  const totalCount = exList.length || 1
+
+  // Determine actual dominant family
+  let actualDominantFamily: ExerciseDominantFamily = 'mixed'
+  if (pullCount >= pushCount * 1.5 && pullCount >= totalCount * 0.35) {
+    actualDominantFamily = 'pull'
+  } else if (pushCount >= pullCount * 1.5 && pushCount >= totalCount * 0.35) {
+    actualDominantFamily = 'push'
+  } else if (skillCount >= totalCount * 0.4) {
+    actualDominantFamily = 'skill'
+  } else if (supportCount >= totalCount * 0.5) {
+    actualDominantFamily = 'support'
+  } else if (Math.abs(pullCount - pushCount) <= 1 && pullCount > 0 && pushCount > 0) {
+    actualDominantFamily = 'balanced'
+  }
+
+  // Check if focusLabel matches content
+  const focusLower = (focusLabel || '').toLowerCase()
+  const focusLabelMatchesContent =
+    (focusLower.includes('pull') && (actualDominantFamily === 'pull' || actualDominantFamily === 'mixed')) ||
+    (focusLower.includes('push') && (actualDominantFamily === 'push' || actualDominantFamily === 'mixed')) ||
+    (focusLower.includes('skill') && (actualDominantFamily === 'skill' || skillCount > 0)) ||
+    (focusLower.includes('mixed') && ['mixed', 'balanced'].includes(actualDominantFamily)) ||
+    (focusLower.includes('full') && ['mixed', 'balanced'].includes(actualDominantFamily)) ||
+    (focusLower.includes('strength') && (pullCount > 0 || pushCount > 0)) ||
+    (focusLower.includes('recovery') || focusLower.includes('support')) ||
+    // Empty or generic labels are always "matching"
+    !focusLabel || focusLabel.trim().length === 0
+
+  // Weekly role labels describe STRESS CHARACTER not movement family, so they're
+  // always consistent unless the content is wildly different from any training
+  const weeklyRoleLower = (weeklyRoleLabel || '').toLowerCase()
+  const weeklyRoleConsistent =
+    !weeklyRoleLabel ||
+    weeklyRoleLabel.trim().length === 0 ||
+    weeklyRoleLower.includes('strength') ||
+    weeklyRoleLower.includes('skill') ||
+    weeklyRoleLower.includes('quality') ||
+    weeklyRoleLower.includes('balanced') ||
+    weeklyRoleLower.includes('expression') ||
+    weeklyRoleLower.includes('secondary') ||
+    weeklyRoleLower.includes('support') ||
+    weeklyRoleLower.includes('recovery') ||
+    weeklyRoleLower.includes('density') ||
+    weeklyRoleLower.includes('capacity')
+
+  // Build display explanation if needed
+  let displayExplanation: string | null = null
+  let shouldShowInDetails = false
+  let confidence: 'high' | 'medium' | 'low' = 'medium'
+
+  if (exList.length === 0) {
+    confidence = 'low'
+  } else if (exList.length >= 4) {
+    confidence = 'high'
+  }
+
+  // Primary concern: push skill work in a pull session or vice versa
+  if (hasPushSkillWorkInPullSession && pushCount > 0) {
+    displayExplanation = `Role check: mixed pull + push skill work — ${pushCount} push exercise${pushCount > 1 ? 's' : ''} supporting skill progression.`
+    shouldShowInDetails = true
+  } else if (hasPullSkillWorkInPushSession && pullCount > 0) {
+    displayExplanation = `Role check: mixed push + pull skill work — ${pullCount} pull exercise${pullCount > 1 ? 's' : ''} supporting skill progression.`
+    shouldShowInDetails = true
+  }
+  // Secondary: focusLabel doesn't match but isn't a major concern
+  else if (!focusLabelMatchesContent) {
+    const familyName = actualDominantFamily === 'mixed' ? 'balanced' : actualDominantFamily
+    displayExplanation = `Role check: ${familyName} content detected — ${pullCount} pull, ${pushCount} push exercises.`
+    shouldShowInDetails = true
+  }
+  // If labels match but it's a close call, add positive confirmation
+  else if (focusLabelMatchesContent && actualDominantFamily !== 'support' && Math.abs(pullCount - pushCount) <= 1 && pullCount > 0 && pushCount > 0) {
+    // Close to balanced but label still works — no warning needed, just track
+    shouldShowInDetails = false
+  }
+
+  return {
+    focusLabelMatchesContent,
+    weeklyRoleConsistent,
+    actualDominantFamily,
+    familyBreakdown: {
+      pullCount,
+      pushCount,
+      skillCount,
+      supportCount,
+      totalCount: exList.length,
+    },
+    representedSkills: Array.from(representedSkills),
+    hasPushSkillWorkInPullSession,
+    hasPullSkillWorkInPushSession,
+    displayExplanation,
+    shouldShowInDetails,
+    confidence,
+  }
 }
 
 /**

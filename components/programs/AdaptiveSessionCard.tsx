@@ -3135,12 +3135,16 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               // [PEX-4] Weekly role rationale (moved from header)
               const hasRoleRationale = !!(cardSurface?.weeklyRoleRationale)
               
+              // [IQ2] Role truth verification
+              const hasRoleTruthVerification = !!(cardSurface?.roleTruthVerification?.shouldShowInDetails && cardSurface.roleTruthVerification.displayExplanation)
+              
               const insightCount =
                 (hasCharacterLine ? 1 : 0) +
                 (hasStressExplanation ? 1 : 0) +
                 (hasDayPurpose ? 1 : 0) +
                 (hasMaterialAdaptations ? 1 : 0) +
                 (hasRoleRationale ? 1 : 0) +
+                (hasRoleTruthVerification ? 1 : 0) +
                 (hasTrace ? 1 : 0) +
                 (hasSlt ? 1 : 0) +
                 (hasSqaExtended ? 1 : 0)
@@ -3242,6 +3246,35 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                               </span>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {/* [IQ2] Role truth verification — compact display when labels differ from content */}
+                      {cardSurface?.roleTruthVerification?.shouldShowInDetails && cardSurface.roleTruthVerification.displayExplanation && (
+                        <div data-iq2-role-verification="true">
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                            Role verification
+                          </div>
+                          <p className="text-[11px] text-[#9CA3AF] leading-snug">
+                            {cardSurface.roleTruthVerification.displayExplanation}
+                          </p>
+                          {/* Show breakdown if significant mixed content */}
+                          {(cardSurface.roleTruthVerification.hasPushSkillWorkInPullSession || 
+                            cardSurface.roleTruthVerification.hasPullSkillWorkInPushSession) && (
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300/90 font-medium">
+                                {cardSurface.roleTruthVerification.familyBreakdown.pullCount} pull
+                              </span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300/90 font-medium">
+                                {cardSurface.roleTruthVerification.familyBreakdown.pushCount} push
+                              </span>
+                              {cardSurface.roleTruthVerification.familyBreakdown.skillCount > 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300/90 font-medium">
+                                  {cardSurface.roleTruthVerification.familyBreakdown.skillCount} skill
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 

@@ -1563,11 +1563,27 @@ export function ActiveWorkoutStartCorridor({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
   
-  // [AB9] Local prep panel dismissal state - UI-only, does not affect workout state
+  // [AB11.1] Local prep panel state - UI-only, does not affect workout state
   // Key: exerciseName + currentExerciseIndex to auto-reset when exercise changes
-  const [dismissedPrepKey, setDismissedPrepKey] = useState<string | null>(null)
+  // State: 'expanded' (default), 'completed' (after Complete Prep), 'skipped' (after Skip)
+  // [AB11.1.1] Completed/skipped collapse into compact recall row instead of disappearing
+  const [prepStateByKey, setPrepStateByKey] = useState<Record<string, 'expanded' | 'completed' | 'skipped'>>({})
   const currentPrepKey = `${exerciseName}-${currentExerciseIndex}`
-  const isPrepDismissed = dismissedPrepKey === currentPrepKey
+  const currentPrepState = prepStateByKey[currentPrepKey] || 'expanded'
+  const isPrepExpanded = currentPrepState === 'expanded'
+  const isPrepCompleted = currentPrepState === 'completed'
+  const isPrepSkipped = currentPrepState === 'skipped'
+  
+  // [AB11.1.2] Handlers for prep state changes
+  const handleCompletePrepare = () => {
+    setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'completed' }))
+  }
+  const handleSkipPrepare = () => {
+    setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'skipped' }))
+  }
+  const handleReopenPrepare = () => {
+    setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'expanded' }))
+  }
   // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
   // moment so the Log Set CTA and secondary rail remain in the first
   // viewport on 640-720px-tall Android screens. User can expand with one
@@ -2918,60 +2934,118 @@ export function ActiveWorkoutStartCorridor({
           )}
           
           {/* [AB9] Exercise-Specific Prep Panel - shows before Set 1 only when eligible */}
+          {/* [AB11.1] Three states: expanded (full card), completed (compact recall), skipped (compact recall) */}
           {exercisePrepPlan?.shouldRender && 
            currentSetNumber === 1 && 
-           mode === 'active' && 
-           !isPrepDismissed && (
-            <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30 p-3">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant="outline" 
-                    className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] uppercase px-1.5 py-0.5"
-                  >
-                    Prep
-                  </Badge>
-                  <span className="text-sm font-medium text-[#E6E9EF]">
-                    {exercisePrepPlan.headline}
-                  </span>
-                </div>
-              </div>
-              
-              <p className="text-xs text-[#A4ACB8] mb-2">
-                {exercisePrepPlan.reason}
-              </p>
-              
-              {exercisePrepPlan.steps.length > 0 && (
-                <ul className="space-y-1 mb-3">
-                  {exercisePrepPlan.steps.map((step, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-xs text-[#C8CED7]">
-                      <span className="text-blue-400 font-medium mt-0.5">{idx + 1}.</span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ul>
+           mode === 'active' && (
+            <>
+              {/* State A: Expanded - Full prep card */}
+              {isPrepExpanded && (
+                <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30 p-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="outline" 
+                        className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] uppercase px-1.5 py-0.5"
+                      >
+                        Prep
+                      </Badge>
+                      <span className="text-sm font-medium text-[#E6E9EF]">
+                        {exercisePrepPlan.headline}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-[#A4ACB8] mb-2">
+                    {exercisePrepPlan.reason}
+                  </p>
+                  
+                  {exercisePrepPlan.steps.length > 0 && (
+                    <ul className="space-y-1 mb-3">
+                      {exercisePrepPlan.steps.map((step, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-xs text-[#C8CED7]">
+                          <span className="text-blue-400 font-medium mt-0.5">{idx + 1}.</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-300 text-xs h-8"
+                      onClick={handleCompletePrepare}
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1.5" />
+                      Complete Prep
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#2B313A]/50 text-xs h-8"
+                      onClick={handleSkipPrepare}
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                </Card>
               )}
               
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-300 text-xs h-8"
-                  onClick={() => setDismissedPrepKey(currentPrepKey)}
-                >
-                  <Check className="w-3.5 h-3.5 mr-1.5" />
-                  Complete Prep
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#2B313A]/50 text-xs h-8"
-                  onClick={() => setDismissedPrepKey(currentPrepKey)}
-                >
-                  Skip
-                </Button>
-              </div>
-            </Card>
+              {/* [AB11.1.1] State B: Completed collapsed - Compact recall row */}
+              {isPrepCompleted && (
+                <div className="flex items-center justify-between bg-blue-950/20 border border-blue-500/20 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className="bg-green-500/20 text-green-300 border-green-500/40 text-[10px] uppercase px-1.5 py-0.5"
+                    >
+                      <Check className="w-2.5 h-2.5 mr-0.5" />
+                      Prep
+                    </Badge>
+                    <span className="text-xs text-[#A4ACB8]">
+                      Skill Prep completed — primed for Set 1
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 text-xs h-7 px-2"
+                    onClick={handleReopenPrepare}
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 mr-1" />
+                    Reopen
+                  </Button>
+                </div>
+              )}
+              
+              {/* [AB11.1.1] State C: Skipped collapsed - Compact recall row */}
+              {isPrepSkipped && (
+                <div className="flex items-center justify-between bg-amber-950/20 border border-amber-500/20 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] uppercase px-1.5 py-0.5"
+                    >
+                      Prep
+                    </Badge>
+                    <span className="text-xs text-[#A4ACB8]">
+                      Skill Prep skipped — tap to review
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 text-xs h-7 px-2"
+                    onClick={handleReopenPrepare}
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 mr-1" />
+                    Reopen
+                  </Button>
+                </div>
+              )}
+            </>
           )}
 
           {/* ========== INPUT CARD ========== */}

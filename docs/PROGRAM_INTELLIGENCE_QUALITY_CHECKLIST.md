@@ -339,9 +339,9 @@ Added live workout "Method active" label for method survival proof:
 
 ### IQ7 — Feedback Loop Closure
 
-**Status:** COMPLETE
+**Status:** COMPLETE (including IQ7.1 visible identity repair)
 
-**User-facing AB alias:** AB17
+**User-facing AB alias:** AB17 / AB17.1
 
 **Purpose:** Prove benchmark/workout evidence changes future programming, not just proof cards. Make the evidence → generation → mutation/proof → UI chain visible and honest.
 
@@ -387,11 +387,32 @@ Added live workout "Method active" label for method survival proof:
 **Acceptance Tests:**
 - No evidence: Card shows "Baseline" chip with "Using onboarding baseline until you log tests or workouts"
 - Evidence exists but no mutation: Card shows signal count with "Evidence reviewed, no changes needed"
-- Evidence with mutation: Card shows "Adjusted" chip with "Your logged data has shaped this program" and concrete mutation proof
+- Evidence with mutation: Card shows "Adjusted" chip with "Program adjusted — your logged data shaped this program" and concrete mutation proof
 - Suppressed constraints: Card shows "Safe hold" chip with honest suppression explanation
 - Old programs without shaping proof: Card renders safely with summary-based display
 - TypeScript: PASS (zero errors)
 - Build: PASS
+
+**IQ7.1 Visible Identity Repair (AB17.1):**
+
+After UI consolidation, the feedback-loop closure surface was hidden under the generic title "Recent adjustments." Users could not recognize where the feedback loop status lived.
+
+1. **Explicit Title:** Changed card title from "Recent adjustments" to "Feedback Loop Status" in Program Page render
+2. **Strengthened Collapsed Summaries:** Updated all four closure states to include explicit status prefix:
+   - `baseline` → "Baseline — no logged workout evidence yet"
+   - `program_adjusted` → "Program adjusted — your logged data shaped this program"
+   - `safe_hold` → "Safe hold — evidence reviewed, program unchanged"
+   - `evidence_reviewed` → "Evidence reviewed — no changes needed yet" or "Evidence reviewed — your logged data shaped this program"
+3. **Bridge to Coach Recommendation:** The existing `EvidenceCoachRecommendationCard` already shows `programShapingProofLabel` and `programShapingProofDetail` via `ProgramShapingProofLine` component — no additional bridge needed
+
+**Files Changed (IQ7.1):**
+- `app/(app)/program/page.tsx` — Changed FeedbackLoopProofCard title from "Recent adjustments" to "Feedback Loop Status"
+- `components/programs/FeedbackLoopProofCard.tsx` — Updated all four `collapsedSummary` values to include explicit status prefix
+
+**Preserved:**
+- AB16 Method Override Planner intact
+- Coach Intelligence disabled tiles remain disabled (Calibration, Coach Recs, Plan Logic) — their truth inputs are absent
+- No new clutter or duplicate cards added
 
 ---
 

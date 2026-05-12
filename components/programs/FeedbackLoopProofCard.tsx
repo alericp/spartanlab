@@ -150,7 +150,8 @@ function resolveFeedbackLoopClosureDisplay(
       headline: 'Feedback loop: baseline',
       chipLabel: 'Baseline',
       chipVariant: 'secondary',
-      collapsedSummary: 'Using onboarding baseline until you log tests or workouts',
+      // [AB17.1 / IQ7.1] Explicit feedback-loop identity in collapsed summary
+      collapsedSummary: 'Baseline — no logged workout evidence yet',
       mutationProofLines: [],
       suppressionNote: null,
     }
@@ -181,7 +182,8 @@ function resolveFeedbackLoopClosureDisplay(
       headline: 'Feedback loop: program adjusted',
       chipLabel: 'Adjusted',
       chipVariant: 'default',
-      collapsedSummary: 'Your logged data has shaped this program',
+      // [AB17.1 / IQ7.1] Explicit feedback-loop identity in collapsed summary
+      collapsedSummary: 'Program adjusted — your logged data shaped this program',
       mutationProofLines,
       suppressionNote: null,
     }
@@ -207,7 +209,8 @@ function resolveFeedbackLoopClosureDisplay(
       headline: 'Feedback loop: safe hold',
       chipLabel: 'Safe hold',
       chipVariant: 'outline',
-      collapsedSummary: 'Evidence reviewed, held at safe baseline',
+      // [AB17.1 / IQ7.1] Explicit feedback-loop identity in collapsed summary
+      collapsedSummary: 'Safe hold — evidence reviewed, program unchanged',
       mutationProofLines: [],
       suppressionNote,
     }
@@ -219,9 +222,10 @@ function resolveFeedbackLoopClosureDisplay(
     headline: 'Feedback loop: evidence reviewed',
     chipLabel: totalSignals > 0 ? `${totalSignals} signal${totalSignals > 1 ? 's' : ''}` : 'Reviewed',
     chipVariant: 'secondary',
+    // [AB17.1 / IQ7.1] Explicit feedback-loop identity in collapsed summary
     collapsedSummary: summary?.changedProgram
-      ? 'Your logged data has shaped this program'
-      : 'Evidence reviewed, no changes needed',
+      ? 'Evidence reviewed — your logged data shaped this program'
+      : 'Evidence reviewed — no changes needed yet',
     mutationProofLines,
     suppressionNote: null,
   }

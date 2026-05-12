@@ -1016,26 +1016,28 @@ function generateProgressionAwareRationale(
   const hasExplosive = exercises.some(e => e.name.toLowerCase().includes('explosive'))
   
   // TASK 4: Progression-specific rationale
+  // [AB15.6] These are session-level summaries, not per-item reasons
+  // Keep them professional and not template-like for modal/summary display
   if (firstSkillProgression) {
     const { skillType, isAdvanced } = firstSkillProgression
     
     if (skillType === 'planche' && isAdvanced) {
-      return 'Progressive prep for advanced planche: wrist/scap activation → lean exposure → skill work'
+      return 'Prepares wrists, shoulders, and scapular control for advanced planche loading.'
     }
     if (skillType === 'planche') {
-      return 'Planche preparation: wrist prep, scapular protraction, and shoulder engagement'
+      return 'Prepares wrists, scapular protraction, and shoulders for planche work.'
     }
     if (skillType === 'front_lever' && isAdvanced) {
-      return 'Front lever ramp: lat decompression → scap depression → easier FL variant → main work'
+      return 'Prepares lats, scapular depression, and straight-arm tension for front lever.'
     }
     if (skillType === 'front_lever') {
-      return 'Front lever prep: lat activation, scapular depression, and straight-arm pull patterns'
+      return 'Prepares lat activation and scapular control for front lever patterns.'
     }
     if (skillType === 'hspu') {
-      return 'HSPU preparation: shoulder opening, scapular elevation, and vertical press patterns'
+      return 'Prepares shoulder mobility and overhead pressing patterns for HSPU.'
     }
     if (skillType === 'muscle_up') {
-      return 'Muscle up prep: lat activation, explosive pull priming, and transition rehearsal'
+      return 'Prepares lat activation and explosive pulling for muscle-up transition.'
     }
   }
 

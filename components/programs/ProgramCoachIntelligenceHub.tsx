@@ -850,18 +850,59 @@ function MethodDetailModalContent({
         )}
       </div>
 
-      {/* Preview Card (if exists) */}
+      {/* [AB16.2 / IQ6.2] Structured Preview Card with Current vs Proposed */}
       {preview && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <Eye className="w-4 h-4 text-emerald-400" />
             <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
           </div>
-          <p className="text-[10px] text-[#9A9AAA] mb-2">{preview.planSummary}</p>
-          <div className="flex items-center gap-2">
+          
+          {/* Current Structure */}
+          <div className="mb-3 p-2 rounded bg-[#1A1A22] border border-[#2A2A35]">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-1">
+              Current Structure
+            </span>
+            <p className="text-xs text-[#9A9AAA]">
+              {preview.currentStructure || 'Standard structure'}
+            </p>
+          </div>
+          
+          {/* Proposed Preview */}
+          <div className="mb-3 p-2 rounded bg-blue-500/5 border border-blue-500/20">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-blue-400 block mb-1">
+              Proposed Preview
+            </span>
+            <p className="text-xs text-blue-300/80">
+              {preview.proposedStructure || preview.planSummary}
+            </p>
+          </div>
+          
+          {/* Impact Summary */}
+          {preview.impactSummary && (
+            <div className="mb-3">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-1">
+                Impact
+              </span>
+              <p className="text-[10px] text-[#8A8A9A]">{preview.impactSummary}</p>
+            </div>
+          )}
+          
+          {/* Risk Summary */}
+          {preview.riskSummary && (
+            <div className="mb-3">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-1">
+                Risk Assessment
+              </span>
+              <p className="text-[10px] text-[#8A8A9A]">{preview.riskSummary}</p>
+            </div>
+          )}
+          
+          {/* Saved Program Unchanged Proof */}
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-emerald-500/20">
             <span className="px-2 py-0.5 text-[9px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
               <Info className="w-3 h-3" />
-              Preview only — not applied to saved program
+              Preview only — saved program unchanged
             </span>
           </div>
           <p className="text-[9px] text-[#5A5A6A] mt-2">

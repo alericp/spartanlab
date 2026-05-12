@@ -272,9 +272,9 @@ The infrastructure for skill coverage tracking is already strong:
 
 ### IQ6 — Method Decision Usefulness and Survival
 
-**Status:** IN PROGRESS / IQ6.1 COMPLETE
+**Status:** COMPLETE
 
-**User-facing AB alias:** AB16.0
+**User-facing AB alias:** AB16.0 / AB16.2.1
 
 **Purpose:** Ensure methods are selected/blocked for real doctrine reasons and survive to visible/live workout where relevant.
 
@@ -305,13 +305,35 @@ The infrastructure for skill coverage tracking is already strong:
    - Grouped method labels (Strength Superset, paired sets) survive from AB15
    - Start Workout receives same session structure and method/group labels
 
-**Files Changed:**
-- `components/programs/AdaptiveSessionCard.tsx` — Gated debug ledger behind probeActive
-- `components/programs/ProgramCoachIntelligenceHub.tsx` — Added best-reason resolver, fixed 3 fallback locations, removed debug marker
+**IQ6.2 Implementation Summary (AB16.2 / AB16.2.1):**
 
-**Remaining IQ6 Work:**
-- IQ6.2 ��� Verify method override preview produces visually different workout structures
-- IQ6.3 — Add method survival proof in live workout method labels (if not already present)
+Enhanced `MethodOverridePreview` with structured diff fields for visible Current vs Proposed preview:
+1. Added `currentStructure` field showing what the program has now
+2. Added `proposedStructure` field showing what the preview would add
+3. Added `impactSummary` field for user understanding
+4. Added `riskSummary` field derived from safety and risk notes
+5. Added `visibleProofLines` array for display
+6. Added `savedProgramUnchanged: true` explicit flag
+7. Updated Method Planner detail modal to display structured preview with:
+   - "Current Structure" section
+   - "Proposed Preview" section
+   - "Impact" section
+   - "Risk Assessment" section
+   - "Preview only — saved program unchanged" proof
+
+**IQ6.3 Implementation Summary (AB16.2.1):**
+
+Added live workout "Method active" label for method survival proof:
+1. Added `methodActiveLabel` to `activeEntryContract` in `StreamlinedWorkoutSession.tsx`
+2. Derives label from `groupType`: Superset, Circuit, Cluster, Density Block
+3. Renders compact emerald chip next to exercise category badge: "Method: Superset"
+4. Only shows when grouped method truth exists (non-null groupType)
+5. Includes `data-iq6-3-method-survival="true"` data attribute for testing
+
+**Files Changed:**
+- `lib/program/requested-method-override-planner.ts` — Enhanced `MethodOverridePreview` interface and `saveMethodOverridePreview()` with structured diff fields
+- `components/programs/ProgramCoachIntelligenceHub.tsx` — Updated Method Planner detail modal to display Current vs Proposed preview
+- `components/workout/StreamlinedWorkoutSession.tsx` — Added `methodActiveLabel` to contract and rendered "Method: X" label in exercise card
 
 ---
 
@@ -432,7 +454,7 @@ The infrastructure for skill coverage tracking is already strong:
 | IQ3 | Selected skill coverage and rotation truth | COMPLETE |
 | IQ4 | Calibration test recommendation intelligence | COMPLETE |
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
-| IQ6 | Method decision usefulness and survival | IN PROGRESS (IQ6.1 COMPLETE) |
+| IQ6 | Method decision usefulness and survival | COMPLETE |
 | IQ7 | Feedback loop closure | COMPLETE |
 | IQ8 | Weekly structure and recovery realism | TODO |
 | IQ9 | Explanation parity | TODO |

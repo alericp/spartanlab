@@ -22,6 +22,7 @@ program page delivers real coaching intelligence, not cosmetic surfaces.
 | AB15.6.1.1 | Prep Timer Auto-Advance + Archer Copy Cleanup | COMPLETE |
 | AB15.6.2 | Grouped-Method Set-Count Parity + Live Completion Truth | COMPLETE |
 | AB15.6.2.1 | Grouped Mirrored Surface Parity Repair | COMPLETE |
+| AB15.6.3 | Live Grouped Runtime Mirror Hardening | COMPLETE |
 
 ---
 
@@ -114,6 +115,35 @@ The following are NOT solved in AB15.6.2 but should be addressed in future AI do
 - When patching display logic, ALL mirrored surfaces must be audited together
 - Program Page header, member rows, live workout active card, rest/up-next, completed sets, and progress count must all agree
 - Raw member `sets` remains as source metadata but cannot override grouped display when inside a normalized block
+
+### AB15.6.3 — Live Grouped Runtime Mirror Hardening
+
+**Status:** COMPLETE
+
+**Problem:** Program Page was fixed in AB15.6.2.1, but live workout runtime surfaces still read raw member sets in several places:
+- Active card `currentExerciseSets` used raw `effectiveSets` instead of grouped `targetRounds`
+- `nextExerciseSetup` and `nextExerciseRich` used raw next exercise sets for up-next copy
+- `safeTotalSets` and `totalSets` summed raw exercise sets instead of using execution plan's grouped-aware total
+- Summary received `totalSets` that could still include inflated grouped work
+
+**Fixes Applied:**
+1. **Active card grouped denominator** - When current exercise is in a grouped block, `currentExerciseSets` now uses `blockInfo.block.targetRounds` instead of raw `activeEffectiveContract.effectiveSets`
+2. **Next exercise setup grouped** - `nextExerciseSetup` and `nextExerciseRich` now resolve grouped `targetRounds` for next exercise, showing "Round 1 of 3" for grouped instead of "Set 1 of 4"
+3. **Total sets progress** - Both `safeTotalSets` (in view model) and `totalSets` (in main component scope) now prefer `executionPlan.totalSets` when available, which uses normalized grouped totals
+4. **Summary receives corrected totals** - `getSessionStats()` now returns the corrected `totalSets` value
+
+**Verification Points:**
+- Active card: Pull-Ups inside 3-round superset shows "Set 1/3", not "Set 1/4"
+- Rest/up-next: After completing Round 1, shows "Round 2 of 3", not "Set 2 of 4"
+- Progress: Grouped block of 2 members × 3 rounds = 6 executable sets, not 7
+- Summary: No hidden fourth Pull-Ups set implied
+
+**Future Doctrine (Deferred):**
+- Pairing quality assessment (Archer Pull-Ups + Pull-Ups overlap)
+- Pronation/supination stress evaluation
+- Grip fatigue tracking
+- Band-assisted superset eligibility rules
+- Forearm pain adaptive responses
 
 ---
 

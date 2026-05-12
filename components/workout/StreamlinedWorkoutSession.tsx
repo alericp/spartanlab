@@ -10291,8 +10291,10 @@ if (shouldShowLocalFallback) {
     // PPX-R7.8F used useMemo inside this IIFE which caused React #310 hook order violation
     // Both BandSelector card AND Live Set Guidance modal MUST consume this exact same object
     const corridorExerciseId = safeCurrentExercise?.id || safeCurrentExercise?.name?.toLowerCase().replace(/\s+/g, '_') || ''
-    // [AB12.1] Apply canonical name resolver to handle legacy/ambiguous exercise names
-    const corridorExerciseName = resolveCanonicalExerciseName(safeCurrentExercise?.name || '')
+    // [AB12.1.2] Apply evidence-aware canonical name resolver using both name AND ID
+    // Ambiguous legacy "Planche Lean Push-Ups" -> "Pseudo Planche Push-Ups" by default
+    // Only explicit elevated_pppu ID displays "Elevated Pseudo Planche Push-Ups"
+    const corridorExerciseName = resolveCanonicalExerciseName(safeCurrentExercise?.name || '', safeCurrentExercise?.id)
     
     // [PPX-R7.8G] Use pure helper function instead of useMemo to avoid React hook order crash
     const sharedBandGuidanceTruth = buildSharedBandGuidanceTruth({

@@ -1610,14 +1610,15 @@ export function ActiveWorkoutStartCorridor({
   
   // [AB15.1] Handler for completing a single prep set (does NOT affect working sets)
   // [AB15.5.1] Uses clamped progress and clamps next progress to total
-  const handleCompletePrepSet = () => {
+  // [AB15.6.1.1] Wrapped in useCallback for stable reference in auto-advance effect
+  const handleCompletePrepSet = useCallback(() => {
     const nextProgress = Math.min(safePrepSetProgress + 1, prepSetsTotal)
     setPrepSetProgressByKey(prev => ({ ...prev, [currentPrepKey]: nextProgress }))
     // If all prep sets completed, auto-collapse to completed state
     if (nextProgress >= prepSetsTotal) {
       setPrepStateByKey(prev => ({ ...prev, [currentPrepKey]: 'completed' }))
     }
-  }
+  }, [safePrepSetProgress, prepSetsTotal, currentPrepKey])
   
   // [AB15.1] Get current prep set data for display using clamped index
   // [AB15.5.1] Uses activePrepSetIndex instead of raw progress
@@ -1691,6 +1692,49 @@ export function ActiveWorkoutStartCorridor({
     setIsPrepRestTimerRunning(false)
     setPrepRestTimeRemaining(currentPrepSet?.restSeconds ?? 0)
   }
+  
+  // [AB15.6.1.1] Auto-advance guard: unique key per prep set to prevent double-advance
+  const prepTimerAdvanceKey = `${currentPrepKey}:${activePrepSetIndex}:${currentPrepSet?.id ?? 'no-prep'}`
+  const lastAutoAdvancedPrepTimerKeyRef = useRef<string | null>(null)
+  
+  // [AB15.6.1.1] Reset auto-advance guard when prep context changes
+  useEffect(() => {
+    lastAutoAdvancedPrepTimerKeyRef.current = null
+  }, [prepTimerAdvanceKey])
+  
+  // [AB15.6.1.1] Auto-advance prep when timer reaches 0
+  // This effect watches for timer completion and triggers the same handler as manual completion
+  // Guards prevent: double-advance, stale exercise advance, advance when not running
+  useEffect(() => {
+    if (!hasStructuredPrepSets) return
+    if (!isPrepExpanded) return
+    if (!currentPrepSet) return
+    if (!isPrepRestTimerRunning && prepRestTimeRemaining !== 0) return // Only auto-advance if timer was running OR hit exactly 0
+    if (prepRestTimeRemaining !== 0) return
+    if (lastAutoAdvancedPrepTimerKeyRef.current === prepTimerAdvanceKey) return
+    
+    // Mark as auto-advanced to prevent double-trigger
+    lastAutoAdvancedPrepTimerKeyRef.current = prepTimerAdvanceKey
+    
+    // Clear interval safely (should already be cleared, but defensive)
+    if (prepRestTimerRef.current) {
+      clearInterval(prepRestTimerRef.current)
+      prepRestTimerRef.current = null
+    }
+    setIsPrepRestTimerRunning(false)
+    
+    // Trigger prep completion - same as manual button
+    handleCompletePrepSet()
+  }, [
+    hasStructuredPrepSets,
+    isPrepExpanded,
+    currentPrepSet,
+    isPrepRestTimerRunning,
+    prepRestTimeRemaining,
+    prepTimerAdvanceKey,
+    handleCompletePrepSet,
+  ])
+  
   // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
   // moment so the Log Set CTA and secondary rail remain in the first
   // viewport on 640-720px-tall Android screens. User can expand with one

@@ -3218,16 +3218,16 @@ function ProgramDisplayWrapper({
           <div className="flex flex-col gap-3">
             {/* [PPX-1] FeedbackLoopProofCard now defaults to collapsed for cleaner
                 Program page hierarchy. User can expand to see full evidence details.
-                [PPX-2] Custom title "Recent adjustments" to distinguish from
-                the benchmark-side "Calibration evidence" card nested inside
-                CalibrationCheckpointCard. */}
+                [PPX-2] [AB17.1 / IQ7.1] Title explicitly includes "Feedback loop" for
+                visible identity — user can now recognize this as the feedback-loop
+                closure surface, not just generic "Recent adjustments". */}
             <FeedbackLoopProofCard
               workoutSummary={workoutSummary}
               calibrationPlan={calibrationPlan}
               generationInfluence={generationInfluence}
               shapingProof={generationShapingProof}
               defaultCollapsed={true}
-              title="Recent adjustments"
+              title="Feedback Loop Status"
             />
             <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
             {/* [AB13-10] Gated visual proof overlay. Renders absolutely

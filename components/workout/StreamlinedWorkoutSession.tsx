@@ -3100,6 +3100,13 @@ export function StreamlinedWorkoutSession({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       compositionMetadata: compositionMetadataValue as any,
       
+      // [AB20.4.5.4] Preserve methodStructures for live grouped runtime binding.
+      // This is the canonical Phase 4P structure written by the Method Override Planner
+      // when applying Circuit/Density/Cluster overrides. Without this, the live
+      // grouped execution contract cannot bind methods to interactive runtime.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      methodStructures: readUnknownObjectField(session, 'methodStructures') as any,
+      
       // [PHASE K8] Preserve Phase K stress/recovery context for live rest guidance.
       // These fields are stamped by weekly-stress-distribution-contract during
       // program generation and survive through load-authoritative-session spread.

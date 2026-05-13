@@ -4077,12 +4077,43 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   </span>
                 )}
                 
-                {/* Finishers badge - only show if blocked */}
-                {!weekCharacter.finishersAllowed && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
-                    No Finishers
-                  </span>
-                )}
+                {/* Finishers badge - only show if blocked AND no actual finisher exists */}
+                {/* [AB20.4.5.4] Check actual session content, not just weekCharacter permission */}
+                {(() => {
+                  // Check for actual finisher content in the session
+                  const hasNativeFinisher = !!(session.finisher && session.finisherIncluded)
+                  // Check for conditioning finisher from Method Override Planner
+                  const hasConditioningFinisher = Array.isArray(session.exercises) && session.exercises.some((ex: { 
+                    isFinisher?: boolean; 
+                    method?: string; 
+                    trainingMethod?: string;
+                    name?: string;
+                  }) => 
+                    ex.isFinisher || 
+                    ex.method === 'endurance_density' || 
+                    ex.trainingMethod === 'endurance_density' ||
+                    (typeof ex.name === 'string' && ex.name.toLowerCase().includes('finisher'))
+                  )
+                  const actuallyHasFinisher = hasNativeFinisher || hasConditioningFinisher
+                  
+                  // Only show "No Finishers" if week blocked them AND no actual finisher exists
+                  if (!weekCharacter.finishersAllowed && !actuallyHasFinisher) {
+                    return (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                        No Finishers
+                      </span>
+                    )
+                  }
+                  // If finisher exists (even though week may have blocked), show that a finisher was added
+                  if (actuallyHasFinisher && !weekCharacter.finishersAllowed) {
+                    return (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Finisher (Override)
+                      </span>
+                    )
+                  }
+                  return null
+                })()}
                 
                 {/* Peak week indicator */}
                 {weekCharacter.phaseLabel === 'peak' && (

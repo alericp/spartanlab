@@ -2393,25 +2393,61 @@ function RequestedMethodsSheetContent({
             Saved program unchanged
           </span>
         </div>
-        {/* [IQ6.1 / AB16.0-B] Removed "Planner display corridor: active" debug text.
-            Normal users shouldn't see smoke-test markers. */}
-      </div>
+      {/* [IQ6.1 / AB16.0-B] Removed "Planner display corridor: active" debug text.
+          Normal users shouldn't see smoke-test markers. */}
+    </div>
 
-      {/* Active Previews Banner */}
-      {previews.length > 0 && (
-        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <Eye className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-medium text-emerald-400">
-              {previews.length} Override Preview{previews.length > 1 ? 's' : ''} Active
-            </span>
+    {/* [AB20.4.5.4] Active Previews Banner - only count truly unapplied previews */}
+    {(() => {
+      // [AB20.4.5.4] Derive actual active preview count by excluding methods that have verified artifacts
+      const artifacts = collectMethodOverrideArtifacts(program)
+      const activePreviewsOnly = previews.filter(p => {
+        const canonicalKey = normalizeOverrideMethodKey(p.methodKey)
+        const hasAppliedArtifact = artifacts.some(a => 
+          a.canonicalKey === canonicalKey && a.isRenderable && a.isUserAppliedOverride
+        )
+        return !hasAppliedArtifact // Only count if NOT already applied
+      })
+      const appliedOverrideCount = artifacts.filter(a => a.isUserAppliedOverride && a.isRenderable).length
+      
+      if (activePreviewsOnly.length > 0) {
+        return (
+          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <Eye className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-medium text-amber-400">
+                {activePreviewsOnly.length} Override Preview{activePreviewsOnly.length > 1 ? 's' : ''} Active
+                {appliedOverrideCount > 0 && (
+                  <span className="text-emerald-400 ml-2">
+                    · {appliedOverrideCount} Applied
+                  </span>
+                )}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#8A8A9A]">
+              Preview{activePreviewsOnly.length > 1 ? 's are' : ' is'} not applied to your saved program. 
+              Tap a method to view or clear the preview.
+            </p>
           </div>
-          <p className="text-[10px] text-[#8A8A9A]">
-            Preview{previews.length > 1 ? 's are' : ' is'} not applied to your saved program. 
-            Tap a method to view or clear the preview.
-          </p>
-        </div>
-      )}
+        )
+      } else if (appliedOverrideCount > 0) {
+        // All previews have been applied - show applied-only banner
+        return (
+          <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-400">
+                {appliedOverrideCount} Method Override{appliedOverrideCount > 1 ? 's' : ''} Applied
+              </span>
+            </div>
+            <p className="text-[10px] text-[#8A8A9A]">
+              These overrides are saved into your program and have render artifacts.
+            </p>
+          </div>
+        )
+      }
+      return null
+    })()}
 
       {/* [AB20.4.2] Reset All Overrides Section */}
       {onResetAllMethodOverrides && (

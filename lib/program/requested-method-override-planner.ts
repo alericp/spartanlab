@@ -3082,8 +3082,8 @@ function applyEnduranceConditioningFinisher(args: {
   }
 
   if (!targetSession.exercises) targetSession.exercises = []
-  // Cast finisher exercise to match the array type
-  targetSession.exercises.push(finisherExercise as typeof targetSession.exercises[number])
+  // Cast finisher exercise to match the array type via unknown
+  targetSession.exercises.push(finisherExercise as unknown as typeof targetSession.exercises[number])
 
   // Use type assertion for dynamic styleMetadata properties
   const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>

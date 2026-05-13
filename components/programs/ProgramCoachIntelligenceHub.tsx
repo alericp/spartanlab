@@ -1160,16 +1160,17 @@ function MethodDetailModalContent({
           {circuitCandidate ? (
             <>
               <div className="flex items-center gap-2 mb-2">
-                {/* [AB17.2.2.6] Use candidateStatus for accurate semantic labeling */}
-                <span className={cn(
-                  'px-2 py-0.5 text-[9px] font-medium rounded border',
-                  circuitCandidate.candidateStatus === 'safe_circuit'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : circuitCandidate.candidateStatus === 'override_with_caution'
-                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      : circuitCandidate.candidateStatus === 'would_be_superset'
-                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+              {/* [AB17.2.2.6] Use candidateStatus for accurate semantic labeling */}
+              {/* [AB20.4.5.3] Manual override candidates use amber/orange, not green */}
+              <span className={cn(
+                'px-2 py-0.5 text-[9px] font-medium rounded border',
+                circuitCandidate.candidateStatus === 'safe_circuit'
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : circuitCandidate.candidateStatus === 'override_with_caution'
+                    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                    : circuitCandidate.candidateStatus === 'would_be_superset'
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : 'bg-red-500/10 text-red-400 border-red-500/20'
                 )}>
                   {circuitCandidate.candidateStatus === 'safe_circuit'
                     ? `${circuitCandidate.circuitSize}-exercise circuit available`
@@ -1207,12 +1208,13 @@ function MethodDetailModalContent({
       {plan.placementNotes.length > 0 && (
         <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
           <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
-            Placement Guidelines
-          </span>
-          <ul className="space-y-1">
-            {plan.placementNotes.map((note, i) => (
-              <li key={i} className="text-[10px] text-[#8A8A9A] flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">•</span>
+                Placement Guidelines
+              </span>
+              <ul className="space-y-1">
+                {plan.placementNotes.map((note, i) => (
+                  <li key={i} className="text-[10px] text-[#8A8A9A] flex items-start gap-2">
+                    {/* [AB20.4.5.3] Manual override notes use amber bullets */}
+                    <span className="text-amber-400 mt-0.5">•</span>
                 <span>{note}</span>
               </li>
             ))}
@@ -1277,24 +1279,25 @@ function MethodDetailModalContent({
         <span className="text-[10px] font-medium uppercase tracking-wide text-[#5A5A6A] block mb-2">
           Truth Sources Used
         </span>
+        {/* [AB20.4.5.3] Truth source badges use blue (informational), not green */}
         <div className="flex flex-wrap gap-2 mb-2">
           {plan.proof.usedProgramTruth && (
-            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
               Program
             </span>
           )}
           {plan.proof.usedSessionTruth && (
-            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
               Sessions
             </span>
           )}
           {plan.proof.usedMethodTruth && (
-            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
               Method Decision
             </span>
           )}
           {plan.proof.usedExercisePatternTruth && (
-            <span className="px-2 py-0.5 text-[9px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
               Exercise Patterns
             </span>
           )}
@@ -1309,12 +1312,13 @@ function MethodDetailModalContent({
         )}
       </div>
 
-      {/* [AB16.2 / IQ6.2 / AB17.2 / AB17.2.2] Structured Preview Card with Current vs Proposed */}
-      {preview && (
-        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-          <div className="flex items-center gap-2 mb-3">
-            <Eye className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
+    {/* [AB16.2 / IQ6.2 / AB17.2 / AB17.2.2] Structured Preview Card with Current vs Proposed */}
+    {/* [AB20.4.5.3] Manual override preview cards use amber, not green */}
+    {preview && (
+      <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+        <div className="flex items-center gap-2 mb-3">
+          <Eye className="w-4 h-4 text-amber-400" />
+          <span className="text-xs font-medium text-amber-400">Override Preview Created</span>
           </div>
           
           {/* [AB20.4.4.1] Severity / Practicality Assessment Card for Row-Level Methods */}
@@ -1328,13 +1332,14 @@ function MethodDetailModalContent({
               
               {/* Severity Level Chip */}
               <div className="flex items-center gap-2 mb-2">
-                <span className={cn(
-                  'px-2 py-0.5 text-[9px] font-medium rounded border',
-                  preview.severityAssessment.level === 'recommended'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : preview.severityAssessment.level === 'acceptable_with_caution'
+                  <span className={cn(
+                    'px-2 py-0.5 text-[9px] font-medium rounded border',
+                    // [AB20.4.5.3] Manual override severity uses amber for recommended, not green
+                    preview.severityAssessment.level === 'recommended'
                       ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      : preview.severityAssessment.level === 'not_recommended'
+                      : preview.severityAssessment.level === 'acceptable_with_caution'
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        : preview.severityAssessment.level === 'not_recommended'
                         ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
                         : preview.severityAssessment.level === 'strongly_discouraged'
                           ? 'bg-red-500/10 text-red-400 border-red-500/20'
@@ -1402,9 +1407,10 @@ function MethodDetailModalContent({
                     <div className="text-amber-400/70">
                       Top blockers: {preview.severityAssessment.candidateScanSummary.topBlockerReasons.slice(0, 2).join(', ')}
                     </div>
-                  )}
-                  <div className="flex gap-2 mt-1 text-[8px]">
-                    <span className="text-emerald-400/60">Safe: {preview.severityAssessment.candidateScanSummary.safeTargetsFound}</span>
+                )}
+                {/* [AB20.4.5.3] Manual override target counts use amber, not green */}
+                <div className="flex gap-2 mt-1 text-[8px]">
+                  <span className="text-amber-400/60">Safe: {preview.severityAssessment.candidateScanSummary.safeTargetsFound}</span>
                     <span className="text-amber-400/60">Caution: {preview.severityAssessment.candidateScanSummary.cautionTargetsFound}</span>
                     <span className="text-red-400/60">Blocked: {preview.severityAssessment.candidateScanSummary.blockedTargetsFound}</span>
                   </div>
@@ -1430,13 +1436,14 @@ function MethodDetailModalContent({
           {preview.circuitCandidate && (
             <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
               {/* [AB17.2.2.2] Circuit Status Header - uses candidateStatus for clear states */}
-              <div className="flex items-center gap-2 mb-2">
-                {preview.circuitCandidate.candidateStatus === 'safe_circuit' ? (
-                  <>
-                    <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      {preview.circuitCandidate.statusLabel}
-                    </span>
-                    <span className="text-[9px] text-emerald-400/60">
+                  {/* [AB20.4.5.3] Manual override safe_circuit uses amber, not green */}
+                  <div className="flex items-center gap-2 mb-2">
+                    {preview.circuitCandidate.candidateStatus === 'safe_circuit' ? (
+                      <>
+                        <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          {preview.circuitCandidate.statusLabel}
+                        </span>
+                        <span className="text-[9px] text-amber-400/60">
                       ({preview.circuitCandidate.confidence} confidence)
                     </span>
                   </>
@@ -1473,13 +1480,14 @@ function MethodDetailModalContent({
                   </span>
                   <div className="space-y-1">
                     {preview.circuitCandidate.selectedExercises.map((exercise, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-[10px]">
-                        <span className={
-                          preview.circuitCandidate!.candidateStatus === 'safe_circuit' 
-                            ? 'text-emerald-400' 
-                            : preview.circuitCandidate!.candidateStatus === 'override_with_caution'
-                              ? 'text-amber-400'
-                              : 'text-[#7A7A8A]'
+                          <div key={idx} className="flex items-center gap-2 text-[10px]">
+                            {/* [AB20.4.5.3] Manual override exercise checks use amber, not green */}
+                            <span className={
+                              preview.circuitCandidate!.candidateStatus === 'safe_circuit'
+                                ? 'text-amber-400'
+                                : preview.circuitCandidate!.candidateStatus === 'override_with_caution'
+                                  ? 'text-amber-400'
+                                  : 'text-[#7A7A8A]'
                         }>
                           {idx + 1}.
                         </span>
@@ -2236,12 +2244,13 @@ function RequestedMethodsSheetContent({
             }
             
             return (
-              <li 
-                key={item.methodKey} 
+                <li
+                key={item.methodKey}
                 className={cn(
                   'flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-all',
                   'hover:bg-[#2A2A35]/50 border border-transparent',
-                  hasPreview && 'border-emerald-500/20 bg-emerald-500/5',
+                  // [AB20.4.5.3] Manual override previews use amber, not green
+                  hasPreview && 'border-amber-500/20 bg-amber-500/5',
                 )}
                 onClick={() => handleItemClick(item)}
               >
@@ -2265,9 +2274,10 @@ function RequestedMethodsSheetContent({
                     {item.reason}
                   </p>
                   {/* [P2B] Action hint — makes rows obviously actionable */}
+                  {/* [AB20.4.5.3] Manual override applied/preview use amber, not green */}
                   <p className={cn(
                     'text-[9px] mt-1 flex items-center gap-1',
-                    isApplied ? 'text-emerald-400/70' : hasPreview ? 'text-emerald-400/70' : 'text-purple-400/70'
+                    isApplied ? 'text-amber-400/70' : hasPreview ? 'text-amber-400/70' : 'text-purple-400/70'
                   )}>
                     {isApplied ? (
                       <CheckCircle2 className="w-2.5 h-2.5" />

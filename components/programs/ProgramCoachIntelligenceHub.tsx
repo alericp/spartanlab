@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -500,7 +500,51 @@ function classifyApplyEligibility(
     }
   }
   
-  // General method preview safety check (non-grouped-block methods)
+  // [AB20.4.3] Row-level methods: check targetExercises and applicationPatchPreview
+  if (capability.writerKind === 'row_level_method') {
+    // Check if preview-level apply is disabled
+    if (preview.applyDisabledReason) {
+      return {
+        eligibility: 'not_applyable_no_candidate',
+        reason: preview.applyDisabledReason
+      }
+    }
+    
+    // Check if we have valid targets
+    const targets = preview.targetExercises || preview.applicationPatchPreview?.targetExercises
+    if (!targets || targets.length === 0) {
+      return {
+        eligibility: 'not_applyable_no_candidate',
+        reason: `No safe target found for ${capability.displayLabel}`
+      }
+    }
+    
+    const primaryTarget = targets[0]
+    
+    // Safe target = applyable
+    if (primaryTarget.safety === 'safe') {
+      return {
+        eligibility: 'applyable_safe',
+        reason: `Ready to apply ${capability.displayLabel} to ${primaryTarget.exerciseName}`
+      }
+    }
+    
+    // Caution target = applyable with review
+    if (primaryTarget.safety === 'caution') {
+      return {
+        eligibility: 'applyable_caution_review',
+        reason: `Review required: ${primaryTarget.cautions[0] || 'Caution target'}`
+      }
+    }
+    
+    // Blocked target
+    return {
+      eligibility: 'not_applyable_no_candidate',
+      reason: primaryTarget.cautions[0] || 'Target blocked for this method'
+    }
+  }
+  
+  // General method preview safety check (unsupported methods)
   if (preview.safety === 'safe_preview') {
     return { 
       eligibility: 'not_applyable_unsupported_method', 
@@ -2363,11 +2407,39 @@ export function ProgramCoachIntelligenceHub({
   }, [requestedMethodsOpen])
   const hasActivePreviews = activePreviews.length > 0
   
-  // [AB20.4.2] Simple page reload handler - replaces complex in-sheet refresh
-  const handleReloadPage = () => {
+  // [AB20.4.3] Reload context state
+  const [isReloadingPlanner, setIsReloadingPlanner] = useState(false)
+  const RELOAD_CONTEXT_KEY = 'spartanlab:methodOverridePlannerReloadContext'
+  
+  // [AB20.4.3] Save reload context and reload page
+  const handleReloadPage = useCallback(() => {
     if (typeof window === 'undefined') return
+    try {
+      const reloadContext = { openPlanner: true, createdAt: new Date().toISOString() }
+      window.sessionStorage.setItem(RELOAD_CONTEXT_KEY, JSON.stringify(reloadContext))
+    } catch { /* Storage not available */ }
+    setIsReloadingPlanner(true)
     window.location.reload()
-  }
+  }, [RELOAD_CONTEXT_KEY])
+  
+  // [AB20.4.3] Restore reload context on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const stored = window.sessionStorage.getItem(RELOAD_CONTEXT_KEY)
+      if (stored) {
+        const context = JSON.parse(stored) as { openPlanner?: boolean; createdAt?: string }
+        const createdAt = context.createdAt ? new Date(context.createdAt).getTime() : 0
+        const isExpired = Date.now() - createdAt > 30000
+        if (!isExpired && context.openPlanner) {
+          window.sessionStorage.removeItem(RELOAD_CONTEXT_KEY)
+          setRequestedMethodsOpen(true)
+        } else {
+          window.sessionStorage.removeItem(RELOAD_CONTEXT_KEY)
+        }
+      }
+    } catch { /* Storage not available or parse error */ }
+  }, [RELOAD_CONTEXT_KEY])
   
   // [AB20.4.2] Handler for reset all method overrides with confirmation
   const handleResetAllOverrides = async () => {
@@ -2742,15 +2814,28 @@ export function ProgramCoachIntelligenceHub({
       {/* [P2B] Method Override Planner Sheet — clearly labeled entry point */}
       <Sheet open={requestedMethodsOpen} onOpenChange={setRequestedMethodsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
-          {/* [AB20.4.2] Reload page button positioned absolutely, left of the default close X */}
+          {/* [AB20.4.3] Reload overlay when reloading */}
+          {isReloadingPlanner && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0F0F12]/95">
+              <div className="flex flex-col items-center gap-2">
+                <RefreshCw className="h-6 w-6 text-purple-400 animate-spin" />
+                <span className="text-sm text-[#9A9AAA]">Reloading Method Planner...</span>
+              </div>
+            </div>
+          )}
+          {/* [AB20.4.3] Reload page button with feedback */}
           <button
             type="button"
             onClick={handleReloadPage}
+            disabled={isReloadingPlanner}
             aria-label="Reload page"
             title="Reload page"
-            className="absolute right-12 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#2A2A35] bg-[#111116]/90 transition-colors text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
+            className={cn(
+              "absolute right-12 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#2A2A35] bg-[#111116]/90 transition-colors",
+              isReloadingPlanner ? "cursor-not-allowed text-[#5A5A6A]" : "text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
+            )}
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={cn("h-4 w-4", isReloadingPlanner && "animate-spin")} />
           </button>
           <SheetHeader className="pr-20">
             <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">

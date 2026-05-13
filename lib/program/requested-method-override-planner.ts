@@ -182,10 +182,9 @@ const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapa
     displayLabel: 'Endurance/Conditioning',
     canPlan: true,
     canCreatePreview: true,
-    canApplyToSavedProgramNow: false,
-    canRevert: false,
-    writerKind: 'preview_only',
-    applyUnsupportedReason: 'Endurance/Conditioning writer not connected yet. Density Blocks are related but not the same.',
+    canApplyToSavedProgramNow: true, // [AB20.4.3] Enabled with session-level finisher writer
+    canRevert: true,
+    writerKind: 'row_level_method',
     previewDescription: 'Endurance-focused conditioning preview',
     methodDescription: 'Extended conditioning work focused on aerobic capacity and work tolerance.',
   },
@@ -194,10 +193,9 @@ const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapa
     displayLabel: 'Top Set + Backoff',
     canPlan: true,
     canCreatePreview: true,
-    canApplyToSavedProgramNow: false,
-    canRevert: false,
-    writerKind: 'preview_only',
-    applyUnsupportedReason: 'Top Set + Backoff needs a row-level strength writer before saved-program mutation.',
+    canApplyToSavedProgramNow: true, // [AB20.4.3] Enabled with row-level writer
+    canRevert: true,
+    writerKind: 'row_level_method',
     previewDescription: 'Heavy first set with reduced backoff sets',
     methodDescription: 'Heavy first working set near max effort followed by lighter backoff sets to accumulate volume safely.',
   },
@@ -206,10 +204,9 @@ const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapa
     displayLabel: 'Drop Sets',
     canPlan: true,
     canCreatePreview: true,
-    canApplyToSavedProgramNow: false,
-    canRevert: false,
-    writerKind: 'preview_only',
-    applyUnsupportedReason: 'Drop Set row-level writer not connected yet.',
+    canApplyToSavedProgramNow: true, // [AB20.4.3] Enabled with row-level writer
+    canRevert: true,
+    writerKind: 'row_level_method',
     previewDescription: 'Progressive weight reduction for fatigue',
     methodDescription: 'Single exercise extended with progressive weight reductions after near-failure to maximize muscle fatigue.',
   },
@@ -218,10 +215,9 @@ const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapa
     displayLabel: 'Cluster Sets',
     canPlan: true,
     canCreatePreview: true,
-    canApplyToSavedProgramNow: false, // Could enable if cluster styledGroup writer exists
-    canRevert: false,
-    writerKind: 'preview_only',
-    applyUnsupportedReason: 'Cluster writer not connected yet.',
+    canApplyToSavedProgramNow: true, // [AB20.4.3] Enabled with row-level writer
+    canRevert: true,
+    writerKind: 'row_level_method',
     previewDescription: 'Intra-set rest cluster preview',
     methodDescription: 'Heavy compound work with short intra-set rest periods to maintain force output across more total reps.',
   },
@@ -230,10 +226,9 @@ const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapa
     displayLabel: 'Rest-Pause',
     canPlan: true,
     canCreatePreview: true,
-    canApplyToSavedProgramNow: false,
-    canRevert: false,
-    writerKind: 'preview_only',
-    applyUnsupportedReason: 'Rest-Pause row-level writer not connected yet.',
+    canApplyToSavedProgramNow: true, // [AB20.4.3] Enabled with row-level writer
+    canRevert: true,
+    writerKind: 'row_level_method',
     previewDescription: 'Mini-rest extended set preview',
     methodDescription: 'Single exercise extended with short breath/mini-rests after near-failure. Best for late accessory/hypertrophy work, not primary skill or heavy technical movements.',
   },
@@ -1103,9 +1098,201 @@ export interface MethodOverridePreview {
   methodCapability?: MethodOverrideCapability
   /** Target group type for grouped block methods */
   targetGroupType?: 'circuit' | 'density_block' | 'cluster'
+  // [AB20.4.3] Row-level method target model
+  targetExercises?: MethodOverrideTargetExercise[]
+  applicationPatchPreview?: MethodOverrideSavedProgramPatchPreview
+  applyDisabledReason?: string
+}
+
+// =============================================================================
+// [AB20.4.3] ROW-LEVEL METHOD TARGET MODEL
+// =============================================================================
+
+export type MethodOverrideTargetRole = 
+  | 'primary_strength' | 'late_accessory' | 'hypertrophy_accessory' 
+  | 'conditioning_finisher' | 'quality_strength'
+
+export type MethodOverrideTargetSafety = 'safe' | 'caution' | 'blocked'
+
+export interface MethodOverrideTargetExercise {
+  sessionIndex: number
+  dayLabel: string
+  sessionTitle: string
+  exerciseIndex: number
+  exerciseName: string
+  methodKey: CanonicalOverrideMethodKey
+  targetRole: MethodOverrideTargetRole
+  score: number
+  safety: MethodOverrideTargetSafety
+  reasons: string[]
+  cautions: string[]
+}
+
+export interface MethodOverrideSavedProgramPatchPreview {
+  methodKey: CanonicalOverrideMethodKey
+  patchKind: 'row_level_method' | 'session_finisher' | 'grouped_block'
+  targetExercises: MethodOverrideTargetExercise[]
+  affectedSessionIndexes: number[]
+  visibleBefore: string[]
+  visibleAfter: string[]
+  exactMutationSummary: string[]
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
+
+// =============================================================================
+// [AB20.4.3] ROW-LEVEL METHOD TARGETING HELPERS
+// =============================================================================
+
+const SKILL_HOLD_PATTERNS = [
+  'front lever', 'back lever', 'planche', 'l-sit', 'v-sit',
+  'handstand', 'frog stand', 'tuck planche', 'straddle planche',
+  'manna', 'iron cross', 'maltese', 'victorian', 'one arm hang', 'dead hang', 'active hang'
+]
+
+const EXPLOSIVE_PATTERNS = ['explosive', 'plyometric', 'plyo', 'jump', 'bound', 'clapping', 'kipping', 'swing']
+
+function isSkillHoldExercise(name: string): boolean {
+  const lower = name.toLowerCase()
+  return SKILL_HOLD_PATTERNS.some(pattern => lower.includes(pattern))
+}
+
+function isExplosiveExercise(name: string): boolean {
+  const lower = name.toLowerCase()
+  return EXPLOSIVE_PATTERNS.some(pattern => lower.includes(pattern))
+}
+
+function isHeavyStrengthCandidate(exerciseName: string): boolean {
+  const lower = exerciseName.toLowerCase()
+  const patterns = ['pull-up', 'pullup', 'pull up', 'chin-up', 'chinup', 'chin up', 'dip', 'push-up', 'pushup', 'push up', 'row', 'press', 'squat', 'lunge', 'deadlift', 'pike']
+  return patterns.some(p => lower.includes(p))
+}
+
+function isAccessoryHypertrophyCandidate(exerciseName: string): boolean {
+  const lower = exerciseName.toLowerCase()
+  const patterns = ['curl', 'extension', 'raise', 'fly', 'flye', 'face pull', 'shrug', 'calf', 'bicep', 'tricep', 'lateral', 'rear delt', 'front delt', 'hammer', 'ring row', 'body row', 'inverted row', 'australian']
+  return patterns.some(p => lower.includes(p))
+}
+
+function hasClearRepTarget(exercise: { sets?: string; reps?: string; name?: string }): boolean {
+  if (exercise.name && isSkillHoldExercise(exercise.name)) return false
+  const reps = exercise.reps?.toLowerCase() || ''
+  if (reps.includes('s') || reps.includes('sec') || reps.includes('hold')) return false
+  return /\d/.test(reps) || !reps
+}
+
+function isLateAccessoryPosition(exerciseIndex: number, totalExercises: number): boolean {
+  if (totalExercises <= 2) return exerciseIndex > 0
+  return exerciseIndex >= Math.floor(totalExercises * 0.66)
+}
+
+function isTechnicalSkillPrioritySession(session: AdaptiveSession): boolean {
+  const exercises = session.exercises || []
+  const firstHalf = exercises.slice(0, Math.ceil(exercises.length / 2))
+  return firstHalf.some(ex => isSkillHoldExercise(ex.name || ''))
+}
+
+function scoreExerciseForMethod(args: {
+  exercise: { name?: string; sets?: number | string; reps?: string }
+  exerciseIndex: number
+  totalExercises: number
+  session: AdaptiveSession
+  sessionIndex: number
+  methodKey: CanonicalOverrideMethodKey
+  existingMethods: string[]
+}): { score: number; reasons: string[]; cautions: string[]; safety: MethodOverrideTargetSafety } {
+  const { exercise, exerciseIndex, totalExercises, session, methodKey, existingMethods } = args
+  const name = exercise.name || ''
+  const reasons: string[] = []
+  const cautions: string[] = []
+  let score = 50
+  let safety: MethodOverrideTargetSafety = 'safe'
+
+  if (isSkillHoldExercise(name)) return { score: -100, reasons: ['Skill hold - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
+  if (isExplosiveExercise(name)) return { score: -100, reasons: ['Explosive movement - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
+  if (!hasClearRepTarget({ name: exercise.name, reps: exercise.reps })) return { score: -100, reasons: ['Time-based hold - no clear rep target'], cautions: [], safety: 'blocked' }
+
+  const normalizedMethodKey = normalizeOverrideMethodKey(methodKey)
+  if (existingMethods.some(m => normalizeOverrideMethodKey(m) === normalizedMethodKey)) {
+    return { score: -50, reasons: ['Method already applied to this session'], cautions: [], safety: 'blocked' }
+  }
+
+  // Check if session already has a finisher via exercises
+  const hasExistingFinisher = session.exercises?.some(ex => 
+    (ex.name || '').toLowerCase().includes('finisher') || 
+    ((ex as unknown as Record<string, unknown>).methodOverrideMethodKey === 'endurance_density')
+  )
+
+  switch (methodKey) {
+    case 'drop_set':
+    case 'rest_pause':
+      if (isLateAccessoryPosition(exerciseIndex, totalExercises)) { score += 30; reasons.push('Late session position - ideal for fatigue method') }
+      else if (exerciseIndex === 0) { score -= 20; cautions.push('First exercise - fatigue could affect remaining work'); safety = 'caution' }
+      if (isAccessoryHypertrophyCandidate(name)) { score += 25; reasons.push('Accessory/hypertrophy exercise - safe for extended sets') }
+      if (isHeavyStrengthCandidate(name) && exerciseIndex < totalExercises / 2) { score -= 15; cautions.push('Primary strength movement - consider late accessory instead'); safety = 'caution' }
+      break
+    case 'top_set_backoff':
+      if (isHeavyStrengthCandidate(name)) { score += 30; reasons.push('Strength movement - good for top set structure') }
+      if (exerciseIndex <= 2) { score += 20; reasons.push('Early session - fresh for heavy top set') }
+      else { score -= 10; cautions.push('Later in session - may be fatigued for top set') }
+      if (isTechnicalSkillPrioritySession(session)) { score -= 15; cautions.push('Skill-priority session - heavy work may interfere'); safety = 'caution' }
+      break
+    case 'cluster':
+      if (isHeavyStrengthCandidate(name)) { score += 25; reasons.push('Compound movement - good for cluster sets') }
+      if (isAccessoryHypertrophyCandidate(name)) { score -= 10; cautions.push('Accessory work - clusters typically for compounds') }
+      if (exerciseIndex <= 3) { score += 15; reasons.push('Early-mid session position - good for quality clusters') }
+      break
+    case 'endurance_density':
+      if (hasExistingFinisher) return { score: -30, reasons: ['Session already has a finisher'], cautions: [], safety: 'blocked' }
+      if ((session.exercises?.length || 0) > 7) { score -= 20; cautions.push('Dense session - finisher adds more fatigue'); safety = 'caution' }
+      if (isTechnicalSkillPrioritySession(session)) { score -= 15; cautions.push('Skill session - conditioning may interfere with quality'); safety = 'caution' }
+      reasons.push('Conditioning finisher would end session with cardio focus')
+      break
+  }
+  return { score, reasons, cautions, safety }
+}
+
+export function findBestMethodOverrideTargets(args: {
+  program: AdaptiveProgram
+  methodKey: CanonicalOverrideMethodKey
+  maxTargets?: number
+}): MethodOverrideTargetExercise[] {
+  const { program, methodKey, maxTargets = 1 } = args
+  const sessions = program.sessions || []
+  const allTargets: MethodOverrideTargetExercise[] = []
+
+  for (let sessionIndex = 0; sessionIndex < sessions.length; sessionIndex++) {
+    const session = sessions[sessionIndex]
+    const exercises = session.exercises || []
+    const dayLabel = session.focusLabel || session.focus || session.dayLabel || `Day ${sessionIndex + 1}`
+    const sessionTitle = dayLabel
+    const existingMethods = session.styleMetadata?.appliedMethods || []
+
+    if (methodKey === 'endurance_density') {
+      const lastExIndex = exercises.length - 1
+      if (lastExIndex >= 0) {
+        const lastEx = exercises[lastExIndex]
+        const result = scoreExerciseForMethod({ exercise: { name: lastEx.name, reps: (lastEx as unknown as Record<string, unknown>).reps as string | undefined, sets: lastEx.sets }, exerciseIndex: lastExIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+        if (result.score > 0) {
+          allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex: -1, exerciseName: 'Session Finisher', methodKey, targetRole: 'conditioning_finisher', score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
+        }
+      }
+      continue
+    }
+
+    for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
+      const exercise = exercises[exerciseIndex]
+      const result = scoreExerciseForMethod({ exercise: { name: exercise.name, reps: (exercise as unknown as Record<string, unknown>).reps as string | undefined, sets: exercise.sets }, exerciseIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+      if (result.score > 0) {
+        const targetRole: MethodOverrideTargetRole = methodKey === 'top_set_backoff' ? 'primary_strength' : isLateAccessoryPosition(exerciseIndex, exercises.length) ? 'late_accessory' : isAccessoryHypertrophyCandidate(exercise.name || '') ? 'hypertrophy_accessory' : 'quality_strength'
+        allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex, exerciseName: exercise.name || `Exercise ${exerciseIndex + 1}`, methodKey, targetRole, score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
+      }
+    }
+  }
+
+  allTargets.sort((a, b) => b.score - a.score)
+  return allTargets.slice(0, maxTargets)
+}
 
 // =============================================================================
 // [AB17.2.1] CIRCUIT PREVIEW DOCTRINE
@@ -1869,6 +2056,43 @@ export function saveMethodOverridePreview(
   const canonicalKey = normalizeOverrideMethodKey(plan.methodKey)
   const capability = getMethodOverrideCapability(plan.methodKey)
   
+  // [AB20.4.3] Build row-level method target and patch preview
+  let targetExercises: MethodOverrideTargetExercise[] | undefined
+  let applicationPatchPreview: MethodOverrideSavedProgramPatchPreview | undefined
+  let applyDisabledReason: string | undefined
+  let finalCanApply = capability.canApplyToSavedProgramNow
+  let finalSuggestedDayIndex = plan.suggestedInsertion?.dayIndex
+
+  // [AB20.4.3] For row-level methods, find best targets across program
+  if (capability.writerKind === 'row_level_method' && context?.programSessions) {
+    const programForTargeting = { id: 'targeting-temp', sessions: context.programSessions as AdaptiveSession[] }
+    targetExercises = findBestMethodOverrideTargets({ program: programForTargeting as AdaptiveProgram, methodKey: canonicalKey, maxTargets: 1 })
+
+    if (targetExercises.length > 0) {
+      const primaryTarget = targetExercises[0]
+      finalSuggestedDayIndex = primaryTarget.sessionIndex
+      visibleProofLines.push(`Scanned all ${context.programSessions.length} program days`)
+      visibleProofLines.push(`Target: ${primaryTarget.dayLabel} — ${primaryTarget.exerciseName}`)
+      visibleProofLines.push(`Why chosen: ${primaryTarget.reasons[0] || 'Best scoring target'}`)
+      if (primaryTarget.cautions.length > 0) visibleProofLines.push(`Caution: ${primaryTarget.cautions[0]}`)
+
+      applicationPatchPreview = {
+        methodKey: canonicalKey,
+        patchKind: canonicalKey === 'endurance_density' ? 'session_finisher' : 'row_level_method',
+        targetExercises,
+        affectedSessionIndexes: [primaryTarget.sessionIndex],
+        visibleBefore: [`${primaryTarget.exerciseName}: Standard sets`],
+        visibleAfter: [`${primaryTarget.exerciseName}: ${capability.displayLabel} applied`],
+        exactMutationSummary: [`Apply ${capability.displayLabel} to ${primaryTarget.exerciseName}`, `On ${primaryTarget.dayLabel}`, `Method metadata added to exercise`],
+      }
+    } else {
+      finalCanApply = false
+      applyDisabledReason = `No safe target exercise found for ${capability.displayLabel} in this program.`
+      visibleProofLines.push(`Scanned all ${context.programSessions.length} program days`)
+      visibleProofLines.push(`No safe target: All exercises blocked by safety rules`)
+    }
+  }
+  
   const preview: MethodOverridePreview = {
     methodKey: canonicalKey, // [AB20.4] Always use canonical key
     label: capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : plan.label,
@@ -1876,8 +2100,8 @@ export function saveMethodOverridePreview(
     planSummary: plan.suggestedInsertion?.summary || plan.headline,
     placement: plan.placement,
     safety: plan.safety,
-    suggestedDayIndex: plan.suggestedInsertion?.dayIndex,
-    canApplyToSavedProgramNow: capability.canApplyToSavedProgramNow, // [AB20.4] Get from capability
+    suggestedDayIndex: finalSuggestedDayIndex, // [AB20.4.3] Use target-derived day
+    canApplyToSavedProgramNow: finalCanApply, // [AB20.4.3] May be disabled if no target
     // [AB16.2] Structured diff fields
     currentStructure,
     proposedStructure,
@@ -1895,6 +2119,10 @@ export function saveMethodOverridePreview(
       : capability.writerKind === 'grouped_density_block' ? 'density_block'
       : capability.writerKind === 'grouped_cluster' ? 'cluster'
       : undefined,
+    // [AB20.4.3] Row-level method targets
+    targetExercises,
+    applicationPatchPreview,
+    applyDisabledReason,
   }
   
   try {
@@ -1991,6 +2219,8 @@ export type MethodOverrideApplyStatus =
 export type MethodOverrideApplyReasonCode =
   | 'applied_safe_circuit'
   | 'applied_caution_circuit'
+  | 'applied_row_level_override'
+  | 'applied_circuit_override'
   | 'no_program'
   | 'no_preview'
   | 'unsupported_method'
@@ -2098,7 +2328,17 @@ export function applyMethodOverridePreviewToProgram(args: {
   // [AB20.3] Get capability and check if apply is supported
   const capability = preview.methodCapability || getMethodOverrideCapability(preview.methodKey)
   
-  if (!capability.canApplyToSavedProgramNow) {
+  // [AB20.4.3] Check preview-level apply disabled reason first
+  if (preview.applyDisabledReason) {
+    return {
+      status: 'blocked',
+      visibleSummary: preview.applyDisabledReason,
+      evidence: [`methodKey: ${preview.methodKey}`, `applyDisabledReason set on preview`],
+      reasonCode: 'no_candidate',
+    }
+  }
+  
+  if (!capability.canApplyToSavedProgramNow && !preview.canApplyToSavedProgramNow) {
     return {
       status: 'blocked',
       visibleSummary: capability.applyUnsupportedReason || 'Apply not supported for this method.',
@@ -2109,6 +2349,11 @@ export function applyMethodOverridePreviewToProgram(args: {
       ],
       reasonCode: 'unsupported_method',
     }
+  }
+  
+  // [AB20.4.3] Route to row-level writer if applicable
+  if (capability.writerKind === 'row_level_method') {
+    return applyRowLevelMethodOverride({ program, preview, capability, allowCautionApply })
   }
   
   // [AB20.3] Determine target group type
@@ -2711,6 +2956,146 @@ export function revertMethodOverrideFromProgram(args: {
 }
 
 // =============================================================================
+// [AB20.4.3] ROW-LEVEL METHOD WRITER
+// =============================================================================
+
+const METHOD_INSTRUCTIONS: Record<CanonicalOverrideMethodKey, { instruction: string; riskNote: string }> = {
+  drop_set: { instruction: 'Last set only: complete prescribed reps, reduce load/progression 20-30%, continue with clean reps until form degrades. Stop before failure.', riskNote: 'Monitor form quality. If technique breaks, end the set immediately.' },
+  rest_pause: { instruction: 'Last set only: reach strong effort, rest 10-15 seconds, continue with mini-set of 2-4 more reps. Stop before form breaks.', riskNote: 'Do not push to absolute failure. Quality reps only.' },
+  top_set_backoff: { instruction: 'First working set is top set at RPE 8-9. Remaining sets are backoff at RPE 7-8 with same or slightly reduced load.', riskNote: 'Do not max out. Top set should be challenging but controlled.' },
+  cluster: { instruction: 'Final working set: use 10-20 second intra-set rest to complete quality reps. Not a separate exercise.', riskNote: 'Clusters are for strength maintenance, not exhaustion.' },
+  endurance_density: { instruction: 'Add 5-8 minute conditioning finisher at end of session. Low-moderate intensity, focus on sustained work capacity.', riskNote: 'Keep intensity conservative. This is conditioning, not max effort.' },
+  circuits: { instruction: '', riskNote: '' },
+  density_block: { instruction: '', riskNote: '' },
+  superset: { instruction: '', riskNote: '' },
+  finisher: { instruction: '', riskNote: '' },
+  unknown: { instruction: '', riskNote: '' },
+}
+
+function applyRowLevelMethodOverride(args: {
+  program: AdaptiveProgram
+  preview: MethodOverridePreview
+  capability: MethodOverrideCapability
+  allowCautionApply: boolean
+}): MethodOverrideApplyResult {
+  const { program, preview, capability, allowCautionApply } = args
+  const canonicalKey = capability.canonicalKey
+
+  const targets = preview.targetExercises || preview.applicationPatchPreview?.targetExercises
+  if (!targets || targets.length === 0) {
+    return { status: 'blocked', visibleSummary: `No target exercise found for ${capability.displayLabel}.`, evidence: ['preview.targetExercises is empty or missing'], reasonCode: 'no_candidate' }
+  }
+
+  const primaryTarget = targets[0]
+
+  if (primaryTarget.safety === 'blocked') {
+    return { status: 'blocked', visibleSummary: primaryTarget.cautions[0] || 'Target exercise is blocked for this method.', evidence: [`Target safety: blocked`, ...primaryTarget.reasons], reasonCode: 'not_circuit_candidate' }
+  }
+
+  if (primaryTarget.safety === 'caution' && !allowCautionApply) {
+    return { status: 'blocked', visibleSummary: 'Caution target requires manual review confirmation.', evidence: ['Target safety: caution', 'allowCautionApply is false', ...primaryTarget.cautions], reasonCode: 'not_circuit_candidate' }
+  }
+
+  const sessions = program.sessions || []
+  if (primaryTarget.sessionIndex < 0 || primaryTarget.sessionIndex >= sessions.length) {
+    return { status: 'blocked', visibleSummary: 'Target session not found.', evidence: [`sessionIndex: ${primaryTarget.sessionIndex}`, `sessions.length: ${sessions.length}`], reasonCode: 'candidate_missing_session' }
+  }
+
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  const targetSession = updatedProgram.sessions![primaryTarget.sessionIndex]
+
+  if (canonicalKey === 'endurance_density') {
+    return applyEnduranceConditioningFinisher({ updatedProgram, targetSession, primaryTarget, capability })
+  }
+
+  const exercises = targetSession.exercises || []
+  if (primaryTarget.exerciseIndex < 0 || primaryTarget.exerciseIndex >= exercises.length) {
+    return { status: 'blocked', visibleSummary: 'Target exercise not found in session.', evidence: [`exerciseIndex: ${primaryTarget.exerciseIndex}`, `exercises.length: ${exercises.length}`], reasonCode: 'selected_exercise_not_found' }
+  }
+
+  const targetExercise = exercises[primaryTarget.exerciseIndex]
+  const normalizedTarget = normalizeExerciseName(primaryTarget.exerciseName)
+  const normalizedExercise = normalizeExerciseName(targetExercise.name || '')
+  if (normalizedTarget !== normalizedExercise) {
+    return { status: 'blocked', visibleSummary: `Exercise changed since preview: expected "${primaryTarget.exerciseName}", found "${targetExercise.name}"`, evidence: [`Expected: ${normalizedTarget}`, `Found: ${normalizedExercise}`], reasonCode: 'selected_exercise_not_found' }
+  }
+
+  const methodInfo = METHOD_INSTRUCTIONS[canonicalKey] || METHOD_INSTRUCTIONS.unknown
+  const methodMetadata = {
+    trainingMethod: canonicalKey,
+    methodOverrideApplied: true,
+    methodOverrideMethodKey: canonicalKey,
+    methodOverrideAppliedAt: new Date().toISOString(),
+    methodOverrideCanRevert: true,
+    methodRationale: primaryTarget.reasons[0] || `Applied via Method Override Planner`,
+    methodInstructions: methodInfo.instruction,
+    methodRiskNote: methodInfo.riskNote,
+  }
+
+  Object.assign(targetExercise, methodMetadata)
+
+  // Use type assertion for dynamic styleMetadata properties
+  const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
+  if (!styleMetadata.appliedMethods) styleMetadata.appliedMethods = []
+  const appliedMethods = styleMetadata.appliedMethods as string[]
+  if (!appliedMethods.includes(canonicalKey)) appliedMethods.push(canonicalKey)
+  if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
+  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
+  rowApplications.push({ methodKey: canonicalKey, exerciseIndex: primaryTarget.exerciseIndex, exerciseName: primaryTarget.exerciseName, appliedAt: new Date().toISOString() })
+  ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
+
+  if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
+    const methodEntry = updatedProgram.weeklyMethodRepresentation.byMethod.find(m => (m.methodId?.toLowerCase() || '').includes(canonicalKey.replace(/_/g, '')))
+    if (methodEntry) { methodEntry.status = 'APPLIED'; methodEntry.materializedCount = (methodEntry.materializedCount || 0) + 1; methodEntry.reason = `Applied via Method Override Planner to ${primaryTarget.exerciseName} on ${primaryTarget.dayLabel}` }
+  }
+
+  const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
+  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} applied to ${primaryTarget.exerciseName} on ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Target: ${primaryTarget.exerciseName}`, `Session: ${dayLabel}`, `Exercise index: ${primaryTarget.exerciseIndex}`, `Safety: ${primaryTarget.safety}`, ...primaryTarget.reasons.slice(0, 2)], reasonCode: 'applied_row_level_override' }
+}
+
+function applyEnduranceConditioningFinisher(args: {
+  updatedProgram: AdaptiveProgram
+  targetSession: AdaptiveSession
+  primaryTarget: MethodOverrideTargetExercise
+  capability: MethodOverrideCapability
+}): MethodOverrideApplyResult {
+  const { updatedProgram, targetSession, primaryTarget, capability } = args
+
+  const finisherExercise = {
+    name: 'Conditioning Finisher',
+    sets: '1',
+    reps: '5-8 min',
+    notes: 'Low-moderate intensity sustained work. Choose: row, bike, jump rope, or bodyweight circuit.',
+    trainingMethod: 'endurance_density',
+    methodOverrideApplied: true,
+    methodOverrideMethodKey: 'endurance_density',
+    methodOverrideAppliedAt: new Date().toISOString(),
+    methodOverrideCanRevert: true,
+    methodRationale: 'Conditioning finisher added via Method Override Planner',
+    methodInstructions: METHOD_INSTRUCTIONS.endurance_density.instruction,
+    methodRiskNote: METHOD_INSTRUCTIONS.endurance_density.riskNote,
+  }
+
+  if (!targetSession.exercises) targetSession.exercises = []
+  // Cast finisher exercise to match the array type via unknown
+  targetSession.exercises.push(finisherExercise as unknown as typeof targetSession.exercises[number])
+
+  // Use type assertion for dynamic styleMetadata properties
+  const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
+  styleMetadata.hasFinisher = true
+  if (!styleMetadata.appliedMethods) styleMetadata.appliedMethods = []
+  const appliedMethods = styleMetadata.appliedMethods as string[]
+  if (!appliedMethods.includes('endurance_density')) appliedMethods.push('endurance_density')
+  if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
+  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
+  rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString() })
+  ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
+
+  const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
+  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`], reasonCode: 'applied_row_level_override' }
+}
+
+// =============================================================================
 // [AB20.4.2] RESET ALL METHOD OVERRIDES
 // =============================================================================
 
@@ -2852,6 +3237,52 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
           )
         }
       }
+    }
+    
+    // [AB20.4.3] Also remove row-level method override artifacts from exercises
+    const exercises = session.exercises || []
+    const exercisesToRemove: number[] = []
+    
+    for (let exIndex = 0; exIndex < exercises.length; exIndex++) {
+      const exercise = exercises[exIndex] as { methodOverrideApplied?: boolean; methodOverrideMethodKey?: string; name?: string }
+      
+      if (exercise.methodOverrideApplied) {
+        removedCount++
+        const methodKey = exercise.methodOverrideMethodKey || ''
+        if (methodKey && !removedMethodKeys.includes(methodKey)) removedMethodKeys.push(methodKey)
+        
+        const sessionLabel = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
+        if (!affectedSessions.includes(sessionLabel)) affectedSessions.push(sessionLabel)
+
+        if (exercise.methodOverrideMethodKey === 'endurance_density' && exercise.name?.toLowerCase().includes('conditioning finisher')) {
+          exercisesToRemove.push(exIndex)
+        } else {
+          delete (exercise as Record<string, unknown>).trainingMethod
+          delete (exercise as Record<string, unknown>).methodOverrideApplied
+          delete (exercise as Record<string, unknown>).methodOverrideMethodKey
+          delete (exercise as Record<string, unknown>).methodOverrideAppliedAt
+          delete (exercise as Record<string, unknown>).methodOverrideCanRevert
+          delete (exercise as Record<string, unknown>).methodRationale
+          delete (exercise as Record<string, unknown>).methodInstructions
+          delete (exercise as Record<string, unknown>).methodRiskNote
+        }
+      }
+    }
+
+    if (exercisesToRemove.length > 0) {
+      session.exercises = exercises.filter((_, idx) => !exercisesToRemove.includes(idx))
+      // Use type assertion for hasFinisher property
+      const meta = session.styleMetadata as Record<string, unknown> | undefined
+      if (meta) meta.hasFinisher = session.exercises.some(ex => (ex as { name?: string }).name?.toLowerCase().includes('finisher'))
+    }
+
+    // Use type assertion for methodOverrideRowApplications property
+    const styleMeta = session.styleMetadata as Record<string, unknown> | undefined
+    if (styleMeta?.methodOverrideRowApplications) delete styleMeta.methodOverrideRowApplications
+
+    const rowLevelMethodKeys = ['drop_set', 'rest_pause', 'top_set_backoff', 'cluster', 'endurance_density']
+    if (Array.isArray(session.styleMetadata?.appliedMethods)) {
+      session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter((m: string) => !rowLevelMethodKeys.includes(normalizeOverrideMethodKey(m)))
     }
   }
 

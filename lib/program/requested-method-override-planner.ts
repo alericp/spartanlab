@@ -3451,6 +3451,44 @@ const METHOD_INSTRUCTIONS: Record<CanonicalOverrideMethodKey, { instruction: str
   unknown: { instruction: '', riskNote: '' },
 }
 
+// =============================================================================
+// [AB20.4.4.3] CANONICAL METHOD KEY MAPPING
+// Maps canonical planner keys to the fields actually consumed by the UI.
+// This ensures row-level methods actually render on Program Page exercise rows.
+// =============================================================================
+
+/**
+ * Maps canonical override method key to AdaptiveExercise.setExecutionMethod value.
+ * This is the PRIMARY field that `resolveRowMethodTruth` in AdaptiveSessionCard reads!
+ * Without this, methods show "applied" in planner but don't render on exercise rows.
+ */
+function toRowSetExecutionMethod(canonicalKey: CanonicalOverrideMethodKey): 'cluster' | 'rest_pause' | 'top_set' | 'drop_set' | null {
+  switch (canonicalKey) {
+    case 'cluster': return 'cluster'
+    case 'rest_pause': return 'rest_pause'
+    case 'drop_set': return 'drop_set'
+    case 'top_set_backoff': return 'top_set' // AdaptiveExercise only supports 'top_set'
+    default: return null // Grouped methods (circuits, density_block) don't use setExecutionMethod
+  }
+}
+
+/**
+ * Maps canonical override method key to display label for UI panels.
+ */
+function toMethodDisplayLabel(canonicalKey: CanonicalOverrideMethodKey): string {
+  switch (canonicalKey) {
+    case 'cluster': return 'Cluster Set'
+    case 'rest_pause': return 'Rest-Pause'
+    case 'drop_set': return 'Drop Set'
+    case 'top_set_backoff': return 'Top Set + Back-Off'
+    case 'endurance_density': return 'Endurance/Conditioning'
+    case 'density_block': return 'Density Block'
+    case 'circuits': return 'Circuit'
+    case 'superset': return 'Superset'
+    default: return 'Unknown Method'
+  }
+}
+
 function applyRowLevelMethodOverride(args: {
   program: AdaptiveProgram
   preview: MethodOverridePreview
@@ -3500,18 +3538,38 @@ function applyRowLevelMethodOverride(args: {
   }
 
   const methodInfo = METHOD_INSTRUCTIONS[canonicalKey] || METHOD_INSTRUCTIONS.unknown
-  const methodMetadata = {
+  
+  // [AB20.4.4.3] Map to setExecutionMethod - THE field that resolveRowMethodTruth reads!
+  const setExecutionMethodValue = toRowSetExecutionMethod(canonicalKey)
+  const methodLabel = toMethodDisplayLabel(canonicalKey)
+  
+  const methodMetadata: Record<string, unknown> = {
+    // PRIMARY RENDER FIELD - this is what AdaptiveSessionCard.resolveRowMethodTruth reads!
+    setExecutionMethod: setExecutionMethodValue,
+    // Secondary display field
+    methodLabel: methodLabel,
+    // Legacy method field for back-compat (some paths still read this)
+    method: setExecutionMethodValue || canonicalKey,
+    // Original planner tracking fields
     trainingMethod: canonicalKey,
     methodOverrideApplied: true,
     methodOverrideMethodKey: canonicalKey,
     methodOverrideAppliedAt: new Date().toISOString(),
     methodOverrideCanRevert: true,
-    methodRationale: primaryTarget.reasons[0] || `Applied via Method Override Planner`,
+    methodRationale: `Applied via Method Override Planner to ${primaryTarget.exerciseName}. ${primaryTarget.reasons[0] || ''}`.trim(),
     methodInstructions: methodInfo.instruction,
     methodRiskNote: methodInfo.riskNote,
   }
-
-  Object.assign(targetExercise, methodMetadata)
+  
+  // Only assign non-null values to avoid type issues
+  if (setExecutionMethodValue) {
+    Object.assign(targetExercise, methodMetadata)
+  } else {
+    // For methods without a setExecutionMethod mapping, assign without it
+    const { setExecutionMethod: _unused, ...restMetadata } = methodMetadata
+    void _unused // Suppress unused variable warning
+    Object.assign(targetExercise, restMetadata)
+  }
 
   // Use type assertion for dynamic styleMetadata properties
   const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>

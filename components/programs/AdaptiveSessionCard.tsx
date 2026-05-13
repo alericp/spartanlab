@@ -7172,7 +7172,8 @@ function MainExercisesRenderer({
 // anywhere inside ExerciseRow after this refactor -- the two old IIFEs
 // call this resolver so the Row 1 chip and Row 2b panel cannot disagree.
 // =============================================================================
-type RowMethodFamily = 'cluster' | 'density' | 'superset' | 'circuit' | 'rest_pause' | 'top_set' | 'drop_set' | null
+  // [AB20.4.5.2] Added 'finisher' for endurance/conditioning support
+  type RowMethodFamily = 'cluster' | 'density' | 'superset' | 'circuit' | 'rest_pause' | 'top_set' | 'drop_set' | 'finisher' | null
 
 interface RowMethodTruth {
   /** Present (raw) method string found on the exercise, lowercased. Null if none. */
@@ -7204,7 +7205,8 @@ interface RowMethodTruth {
    */
   shouldPaintPanel: boolean
   /** Set-execution panel variant when shouldPaintPanel, else null. */
-  panelVariant: 'cluster' | 'density' | 'top_set' | 'drop_set' | 'rest_pause' | null
+  // [AB20.4.5.2] Added 'finisher' for endurance/conditioning support
+  panelVariant: 'cluster' | 'density' | 'top_set' | 'drop_set' | 'rest_pause' | 'finisher' | null
   /** Uppercase-ready label for panel or chip. */
   label: string | null
   /** One-sentence execution-focused description for the panel. */
@@ -7250,6 +7252,8 @@ function resolveRowMethodTruth(
   else if (raw === 'rest_pause') family = 'rest_pause'
   else if (raw === 'top_set') family = 'top_set'
   else if (raw === 'drop_set') family = 'drop_set'
+  // [AB20.4.5.2] Add endurance/conditioning finisher support
+  else if (raw === 'endurance_density' || raw === 'endurance' || raw === 'conditioning' || raw === 'finisher') family = 'finisher'
 
   // [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK] Orphan grouped-method defense.
   //
@@ -7297,15 +7301,17 @@ function resolveRowMethodTruth(
   }
 
   // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
-  // The row-level set-execution family set is taxonomy-locked to these five.
+  // The row-level set-execution family set is taxonomy-locked to these values.
   // Superset/circuit are grouped-structure -- not row-level -- and never
   // paint the flat panel even when they leak onto a flat row.
+  // [AB20.4.5.2] Added finisher support for endurance/conditioning
   const paintableFamily =
     family === 'cluster' ||
     family === 'density' ||
     family === 'top_set' ||
     family === 'drop_set' ||
-    family === 'rest_pause'
+    family === 'rest_pause' ||
+    family === 'finisher'
   const shouldPaintPanel = paintableFamily && !isGroupedMember && !isWarmup
 
   let label: string | null = null
@@ -7339,6 +7345,11 @@ function resolveRowMethodTruth(
     label = 'Rest-Pause'
     execLine = 'Push the working set to target effort, rack-pause 10-20s, then resume for additional reps until cap.'
     if (shouldPaintPanel) panelVariant = 'rest_pause'
+  } else if (family === 'finisher') {
+    // [AB20.4.5.2] Endurance/conditioning finisher - session-ending conditioning work
+    label = 'Conditioning Finisher'
+    execLine = 'Low-moderate intensity sustained work (5-8 min). Choose: row, bike, jump rope, or bodyweight circuit.'
+    if (shouldPaintPanel) panelVariant = 'finisher'
   } else if (family === 'superset') {
     label = 'Superset'
   } else if (family === 'circuit') {

@@ -370,11 +370,12 @@ export interface SessionMethodLoad {
 export function getSessionMethodLoad(session: AdaptiveSession): SessionMethodLoad {
   const exercises = session.exercises || []
   const styleMetadata = (session.styleMetadata || {}) as Record<string, unknown>
-  const styledGroups = (session as unknown as { styledGroups?: Array<{ groupType?: string; source?: string }> }).styledGroups || []
+  // [AB20.4.5.2] FIX: styledGroups is inside styleMetadata, not directly on session
+  const styledGroups = (styleMetadata.styledGroups || []) as Array<{ groupType?: string; source?: string; methodOverrideApplied?: boolean }>
   
   // Check for user-applied grouped overrides (circuits, density blocks)
   const userAppliedGroups = styledGroups.filter(g => 
-    g.source === 'method_override_planner' && 
+    (g.source === 'method_override_planner' || g.methodOverrideApplied === true) && 
     (g.groupType === 'circuit' || g.groupType === 'density_block')
   )
   const hasUserAppliedGroupedOverride = userAppliedGroups.length > 0
@@ -3570,6 +3571,8 @@ export function collectMethodOverrideArtifacts(program: AdaptiveProgram | null):
         method?: string
         methodLabel?: string
         name?: string
+        trainingMethod?: string
+        isFinisher?: boolean
       }
       
       // Only count as artifact if methodOverrideApplied is true
@@ -3578,16 +3581,26 @@ export function collectMethodOverrideArtifacts(program: AdaptiveProgram | null):
       const methodKey = exercise.methodOverrideMethodKey || exercise.setExecutionMethod || ''
       const canonicalKey = normalizeOverrideMethodKey(methodKey)
       
-      // Check if renderable - setExecutionMethod is the PRIMARY render field
+      // [AB20.4.5.2] Check if renderable - multiple valid render fields
+      // - setExecutionMethod is PRIMARY for row-level methods (cluster, drop_set, etc.)
+      // - method field is secondary (works for all method types)
+      // - trainingMethod + isFinisher is valid for endurance/conditioning finishers
       const hasSetExecutionMethod = !!exercise.setExecutionMethod
       const hasMethodField = !!exercise.method
-      const isRenderable = hasSetExecutionMethod || hasMethodField
+      const isValidFinisher = !!exercise.isFinisher && !!exercise.trainingMethod
+      const isRenderable = hasSetExecutionMethod || hasMethodField || isValidFinisher
       
       // Determine artifact kind
       let artifactKind: MethodOverrideArtifact['artifactKind'] = 'row_level'
-      if (canonicalKey === 'endurance_density' || exercise.name?.toLowerCase().includes('finisher')) {
+      if (canonicalKey === 'endurance_density' || exercise.name?.toLowerCase().includes('finisher') || exercise.isFinisher) {
         artifactKind = 'finisher'
       }
+      
+      // [AB20.4.5.2] Determine which render field was found for debugging
+      let renderFieldFound: string | null = null
+      if (hasSetExecutionMethod) renderFieldFound = 'setExecutionMethod'
+      else if (hasMethodField) renderFieldFound = 'method'
+      else if (isValidFinisher) renderFieldFound = 'trainingMethod+isFinisher'
       
       artifacts.push({
         methodKey,
@@ -3601,7 +3614,7 @@ export function collectMethodOverrideArtifacts(program: AdaptiveProgram | null):
         exerciseName: exercise.name,
         isUserAppliedOverride: true,
         isRenderable,
-        renderFieldFound: hasSetExecutionMethod ? 'setExecutionMethod' : (hasMethodField ? 'method' : null),
+        renderFieldFound,
         canReset: true,
       })
     }
@@ -3778,13 +3791,17 @@ function applyEnduranceConditioningFinisher(args: {
 }): MethodOverrideApplyResult {
   const { updatedProgram, targetSession, primaryTarget, capability, isForceOverride, severityLevel } = args
 
-  // [AB20.4.4.2] FIX: Use numeric sets (not string) to pass saveAdaptiveProgram validation
+  // [AB20.4.5.2] FIX: Add method field for renderability check in collectMethodOverrideArtifacts
+  // The artifact collector checks for setExecutionMethod OR method - finishers use method
   const finisherExercise = {
     name: 'Conditioning Finisher',
     sets: 1, // NUMERIC, not '1' string - required by saveAdaptiveProgram validation
     reps: '5-8 min',
     notes: 'Low-moderate intensity sustained work. Choose: row, bike, jump rope, or bodyweight circuit.',
     trainingMethod: 'endurance_density',
+    // [AB20.4.5.2] CRITICAL: method field enables artifact renderability detection
+    method: 'endurance_density',
+    methodLabel: 'Endurance/Conditioning Finisher',
     methodOverrideApplied: true,
     methodOverrideMethodKey: 'endurance_density',
     methodOverrideAppliedAt: new Date().toISOString(),
@@ -3796,7 +3813,7 @@ function applyEnduranceConditioningFinisher(args: {
     methodOverrideApplyMode: isForceOverride ? 'force_override' : 'normal',
     methodOverrideSeverityLevel: severityLevel || 'recommended',
     methodOverrideUserForced: isForceOverride || false,
-    // [AB20.4.4.2] Additional fields for exercise validation
+    // [AB20.4.5.2] Finisher-specific fields for Program UI and artifact detection
     isFinisher: true,
     category: 'conditioning',
   }

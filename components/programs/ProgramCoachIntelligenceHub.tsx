@@ -378,35 +378,55 @@ function classifyApplyEligibility(
   
   // Circuit-specific: check candidateStatus
   if (preview.circuitCandidate) {
-    const status = preview.circuitCandidate.candidateStatus
+    const candidate = preview.circuitCandidate
+    const status = candidate.candidateStatus
+    const selectedCount = candidate.selectedExercises?.length ?? 0
+    
+    // [AB20.1A] Safe circuits with 3+ exercises are applyable
     if (status === 'safe_circuit') {
-      // [AB20] For now, even safe circuits are preview-only until full apply corridor is built
-      return { 
-        eligibility: 'not_applyable_unsupported_method', 
-        reason: 'Circuit apply coming soon' 
+      if (selectedCount >= 3) {
+        return { 
+          eligibility: 'applyable_safe', 
+          reason: 'Ready to apply circuit preview' 
+        }
+      }
+      return {
+        eligibility: 'not_applyable_insufficient_data',
+        reason: 'Circuit requires at least 3 exercises'
       }
     }
+    
+    // [AB20.1A] Caution circuits with 3+ exercises are applyable with manual review
     if (status === 'override_with_caution') {
-      return { 
-        eligibility: 'preview_only_caution', 
-        reason: 'Caution preview — manual review needed' 
+      if (selectedCount >= 3) {
+        return { 
+          eligibility: 'applyable_caution_review', 
+          reason: 'Manual review required before applying' 
+        }
+      }
+      return {
+        eligibility: 'not_applyable_insufficient_data',
+        reason: 'Circuit requires at least 3 exercises'
       }
     }
+    
     if (status === 'would_be_superset') {
       return { 
         eligibility: 'not_applyable_no_candidate', 
         reason: 'Only 2 exercises — would be superset, not circuit' 
       }
     }
+    
+    // no_candidate or missing status
     return { 
       eligibility: 'not_applyable_no_candidate', 
       reason: 'No valid circuit candidate found' 
     }
   }
   
-  // General method preview safety check
+  // General method preview safety check (non-circuit methods)
   if (preview.safety === 'safe_preview') {
-    // [AB20] For now, all safe previews are still preview-only
+    // [AB20.1E] Non-circuit safe previews are still preview-only
     return { 
       eligibility: 'not_applyable_unsupported_method', 
       reason: 'Apply coming soon' 
@@ -441,6 +461,8 @@ function getApplyButtonText(eligibility: MethodOverrideApplyEligibility): string
   switch (eligibility) {
     case 'applyable_safe':
       return 'Apply Override Preview'
+    case 'applyable_caution_review':
+      return 'Review & Apply'
     case 'preview_only_caution':
       return 'Preview Only'
     case 'not_applyable_no_candidate':
@@ -478,6 +500,11 @@ interface ProgramCoachIntelligenceHubProps {
   goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] | null
   /** [AB20 / IQ10] Callback to update parent program state after successful apply */
   onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
+  /** [AB20.1D] Dedicated callback for method override apply that saves via saveAdaptiveProgram */
+  onApplyMethodOverridePreview?: (
+    preview: MethodOverridePreview, 
+    options: { allowCautionApply: boolean }
+  ) => Promise<MethodOverrideApplyResult>
 }
 
 // =============================================================================
@@ -1943,7 +1970,8 @@ export function ProgramCoachIntelligenceHub({
   truthExplanation,
   rulePopulationLedger,
   goalFamilyBalanceAudit,
-  onProgramUpdate, // [AB20 / IQ10] Callback for apply
+  onProgramUpdate, // [AB20 / IQ10] Callback for state update
+  onApplyMethodOverridePreview, // [AB20.1D] Dedicated callback for apply with save
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -1978,12 +2006,22 @@ export function ProgramCoachIntelligenceHub({
   }, [requestedMethodsOpen])
   const hasActivePreviews = activePreviews.length > 0
   
-  // [AB20 / IQ10] Apply handler that wraps the pure helper and calls parent update
+  // [AB20.1D] Apply handler that routes through dedicated save callback or falls back to state-only
   const handleApplyMethodOverride = async (
     preview: MethodOverridePreview,
     options: { allowCautionApply: boolean }
   ): Promise<MethodOverrideApplyResult> => {
-    // Call the pure helper
+    // [AB20.1D] If dedicated save callback is provided, use it (proper persistence path)
+    if (onApplyMethodOverridePreview) {
+      const result = await onApplyMethodOverridePreview(preview, options)
+      // Refresh active previews after successful apply
+      if (result.status === 'success') {
+        setActivePreviews(getMethodOverridePreviews())
+      }
+      return result
+    }
+    
+    // Fallback: call pure helper directly (state-only, no save persistence)
     const result = applyMethodOverridePreviewToProgram({
       program,
       preview,
@@ -1995,15 +2033,16 @@ export function ProgramCoachIntelligenceHub({
       return result
     }
     
-    // If onProgramUpdate is provided, call it with the updated program
-    // The parent (Program Page) is responsible for saving via saveAdaptiveProgram
+    // Fallback: update state only (not persisted to storage)
     if (onProgramUpdate) {
       onProgramUpdate(result.updatedProgram)
-      // Refresh active previews after successful apply
       setActivePreviews(getMethodOverridePreviews())
     }
     
-    return result
+    return {
+      ...result,
+      evidence: [...result.evidence, 'WARNING: State-only update, not persisted via saveAdaptiveProgram'],
+    }
   }
   
   // Compute button summary for Method Planner
@@ -2315,7 +2354,7 @@ export function ProgramCoachIntelligenceHub({
               Method Override Planner
             </SheetTitle>
             <SheetDescription className="text-[#7A7A8A]">
-              {onProgramUpdate 
+              {onApplyMethodOverridePreview 
                 ? 'Review and apply method override previews to your saved program.'
                 : 'Preview-only. Create safe override previews without changing your saved program.'}
             </SheetDescription>
@@ -2323,7 +2362,7 @@ export function ProgramCoachIntelligenceHub({
           <div className="mt-4">
             <RequestedMethodsSheetContent 
               program={program} 
-              onApplyMethodOverride={onProgramUpdate ? handleApplyMethodOverride : undefined}
+              onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
             />
           </div>
         </SheetContent>

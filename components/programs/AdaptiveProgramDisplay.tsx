@@ -8,6 +8,8 @@ import { BuildIdentityStamp } from './BuildIdentityStamp'
 import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 // [SPARTANLAB-P2B] Coach Intelligence Hub — method planner corridor
 import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
+// [AB20.1D] Types for method override apply callback
+import type { MethodOverridePreview, MethodOverrideApplyResult } from '@/lib/program/requested-method-override-planner'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -290,7 +292,13 @@ interface AdaptiveProgramDisplayProps {
   // [AB20 / IQ10] Callback for Method Override Apply — user-confirmed mutation only.
   // Program Page owns the save path. Display requests via Hub, Page persists.
   onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
-  }
+  // [AB20.1D] Dedicated callback for method override apply that saves via saveAdaptiveProgram.
+  // Program Page owns the save path. Hub requests, Page persists.
+  onApplyMethodOverridePreview?: (
+    preview: MethodOverridePreview, 
+    options: { allowCautionApply: boolean }
+  ) => Promise<MethodOverrideApplyResult>
+}
 
 // =============================================================================
 // [BUILD GREEN GATE / DISPLAY STRING-ARRAY NORMALIZER — DISPLAY-ONLY]
@@ -446,8 +454,10 @@ export function AdaptiveProgramDisplay({
   onConfirmProtectRecoverySpacing,
   // [STEP 24.6 / V.V6] Multi-session push-forward callback
   onConfirmMultiSessionPushForward,
-  // [AB20 / IQ10] Method Override Apply callback
+  // [AB20 / IQ10] Method Override Apply callback (state-only, deprecated)
   onProgramUpdate,
+  // [AB20.1D] Dedicated method override apply callback with save persistence
+  onApplyMethodOverridePreview,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1329,7 +1339,8 @@ export function AdaptiveProgramDisplay({
         selectedSkillRepresentations={selectedSkillRepresentations}
         intelligenceContract={intelligenceContract}
         currentWeekNumber={currentWeekNumber}
-        onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for apply
+        onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
+        onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
       />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

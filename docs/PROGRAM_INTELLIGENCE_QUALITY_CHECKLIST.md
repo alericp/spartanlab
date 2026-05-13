@@ -476,6 +476,48 @@ Added concrete day-specific workout preview for method override visualization:
   - Updated `handleCreatePreview()` to pass full `program.sessions` in context for circuit methods
   - Updated safety label logic to show "Scan Required" for circuits before preview
 
+**IQ6.4.4 Implementation Summary (AB17.2.2.2):**
+
+1. **Circuit Preview Gate Unblock:** Updated `planMethodOverride()` to allow circuits to create previews even when safety is `not_enough_truth`. Circuits now use `canPreview = hasProgramExerciseTruth` instead of requiring `safe_preview` or `needs_caution`.
+
+2. **Circuit-Specific canPreview Logic:**
+   - Added `isCircuitLikeMethod` check for methodKey containing 'circuit' or 'density'
+   - Added `hasProgramExerciseTruth` check for sessions with exercises
+   - Circuits can preview when program has exercises — scan is the diagnostic gate
+
+3. **Candidate Status Types:** Added `CircuitCandidateStatus` type with four clear states:
+   - `safe_circuit` — 3+ exercises with good score
+   - `override_with_caution` — 3+ exercises but risky (score <= 0)
+   - `would_be_superset` — exactly 2 exercises
+   - `no_candidate` — fewer than 2 exercises
+
+4. **Extended CircuitPreviewCandidate Interface:**
+   - Added `isOverrideCandidate: boolean` — true when 3+ exercises exist
+   - Added `candidateStatus: CircuitCandidateStatus`
+   - Added `statusLabel: string` — human-readable status
+
+5. **Best Override Candidate with Caution:** `findBestCircuitPreviewCandidate()` now returns best available candidate with priority:
+   1. Safe circuit (3+ exercises, good score)
+   2. Override with caution (3+ exercises, risky)
+   3. Superset (2 exercises)
+   4. null (no candidate)
+
+6. **UI Updates for Candidate States:**
+   - Circuit status header now uses `candidateStatus` for clear visual states
+   - "Override candidate with caution" shows amber styling with exercise count
+   - Exercise list labels differentiate between safe, caution, and available exercises
+
+**Files Changed (IQ6.4.4):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Updated `planMethodOverride()` to allow circuit previews when program has exercises
+  - Added `CircuitCandidateStatus` type
+  - Extended `CircuitPreviewCandidate` interface with status fields
+  - Updated `findBestCircuitPreviewCandidate()` to track and return best available candidate
+  - Updated fallback circuit path to populate new status fields
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Updated circuit preview card to use `candidateStatus` for rendering
+  - Updated exercise list labels for different candidate states
+
 ---
 
 ### IQ7 — Feedback Loop Closure

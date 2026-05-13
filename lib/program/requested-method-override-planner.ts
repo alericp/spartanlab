@@ -2088,7 +2088,9 @@ export function revertMethodOverrideFromProgram(args: {
     
     for (const group of originalGroups) {
       // Only remove circuits that were applied by Method Override Planner
-      if (group.groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
+      // Cast groupType to string for comparison since styledGroups may have narrower type
+      const groupType = (group as { groupType?: string }).groupType
+      if (groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
         removedCount++
         sessionHadOverrideCircuit = true
         if (group.id) removedGroupIds.push(group.id)
@@ -2106,7 +2108,9 @@ export function revertMethodOverrideFromProgram(args: {
       session.styleMetadata.styledGroups = remainingGroups
       
       // Recalculate hasCircuitsApplied - only true if non-override circuits remain
-      const hasRemainingCircuits = remainingGroups.some(g => g.groupType === 'circuit')
+      const hasRemainingCircuits = remainingGroups.some(g => 
+        (g as { groupType?: string }).groupType === 'circuit'
+      )
       session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
       
       // Remove 'circuits' from appliedMethods only if no circuits remain
@@ -2134,7 +2138,9 @@ export function revertMethodOverrideFromProgram(args: {
     
     // Check if any circuit styledGroups remain in the entire program
     const anyCircuitsRemain = sessions.some(session =>
-      session.styleMetadata?.styledGroups?.some(g => g.groupType === 'circuit')
+      session.styleMetadata?.styledGroups?.some(g => 
+        (g as { groupType?: string }).groupType === 'circuit'
+      )
     )
     
     // Find circuit entry in the byMethod array
@@ -2143,8 +2149,8 @@ export function revertMethodOverrideFromProgram(args: {
     )
     
     if (circuitEntry && !anyCircuitsRemain) {
-      // No circuits remain anywhere - mark as not materialized
-      circuitEntry.status = 'NOT_MATERIALIZED'
+      // No circuits remain anywhere - mark as blocked (user removed override)
+      circuitEntry.status = 'BLOCKED_BY_SAFETY'
       circuitEntry.materializedCount = 0
       circuitEntry.reason = 'Removed Method Override Planner circuit override.'
     }

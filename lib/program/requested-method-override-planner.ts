@@ -60,23 +60,254 @@ export type MethodStructure =
  * These normalize singular/plural/variant method keys to ensure consistent detection.
  */
 
-/** Returns true for any circuit-like method key (circuit, circuits, density_circuit, etc.) */
+// =============================================================================
+// [AB20.3] METHOD CAPABILITY REGISTRY
+// =============================================================================
+
+/**
+ * [AB20.3] Canonical method keys for override planning.
+ * Normalizes all known variants to a single canonical form.
+ */
+export type CanonicalOverrideMethodKey =
+  | 'circuits'
+  | 'density_block'
+  | 'endurance_density'
+  | 'top_set_backoff'
+  | 'drop_set'
+  | 'cluster'
+  | 'rest_pause'
+  | 'superset'
+  | 'finisher'
+  | 'unknown'
+
+/**
+ * [AB20.3] Writer support classification for method override apply.
+ */
+export type MethodOverrideWriterKind =
+  | 'grouped_circuit'      // Creates a circuit styledGroup
+  | 'grouped_density_block' // Creates a density_block styledGroup
+  | 'grouped_cluster'      // Creates a cluster styledGroup
+  | 'row_level_method'     // Applies to individual exercise rows
+  | 'preview_only'         // Preview supported but no writer yet
+  | 'unsupported'          // Not supported for override
+
+/**
+ * [AB20.3] Method override capability definition.
+ * Determines what actions are available for each method.
+ */
+export interface MethodOverrideCapability {
+  canonicalKey: CanonicalOverrideMethodKey
+  displayLabel: string
+  canPlan: boolean
+  canCreatePreview: boolean
+  canApplyToSavedProgramNow: boolean
+  canRevert: boolean
+  writerKind: MethodOverrideWriterKind
+  applyUnsupportedReason?: string
+  previewDescription: string
+  methodDescription: string
+}
+
+/**
+ * [AB20.3] Normalizes any method key variant to its canonical form.
+ */
+export function normalizeOverrideMethodKey(raw: string | null | undefined): CanonicalOverrideMethodKey {
+  if (!raw) return 'unknown'
+  const normalized = raw.toLowerCase().trim().replace(/-/g, '_').replace(/\s+/g, '_')
+  
+  // Circuits
+  if (normalized === 'circuit' || normalized === 'circuits') return 'circuits'
+  
+  // Density blocks
+  if (normalized === 'density' || normalized === 'density_block' || normalized === 'density_blocks') return 'density_block'
+  
+  // Endurance/Conditioning
+  if (normalized === 'endurance' || normalized === 'conditioning' || normalized === 'endurance_density' || 
+      normalized === 'endurance_conditioning') return 'endurance_density'
+  
+  // Top Set + Backoff
+  if (normalized === 'top_set' || normalized === 'top_set_backoff' || normalized === 'top_set_and_backoff' ||
+      normalized === 'top_set_back_off' || normalized === 'topset' || normalized === 'topset_backoff') return 'top_set_backoff'
+  
+  // Drop Sets
+  if (normalized === 'drop_set' || normalized === 'drop_sets' || normalized === 'dropset' || 
+      normalized === 'dropsets') return 'drop_set'
+  
+  // Cluster Sets
+  if (normalized === 'cluster' || normalized === 'cluster_sets' || normalized === 'clusters' ||
+      normalized === 'cluster_set') return 'cluster'
+  
+  // Rest-Pause
+  if (normalized === 'rest_pause' || normalized === 'rest_pauses' || normalized === 'restpause' ||
+      normalized === 'rest_pause_sets') return 'rest_pause'
+  
+  // Supersets
+  if (normalized === 'superset' || normalized === 'supersets') return 'superset'
+  
+  // Finishers
+  if (normalized === 'finisher' || normalized === 'finishers' || normalized === 'endurance_finisher') return 'finisher'
+  
+  return 'unknown'
+}
+
+/**
+ * [AB20.3] Method capability registry.
+ * Defines what each method can do in the override planner.
+ */
+const METHOD_CAPABILITIES: Record<CanonicalOverrideMethodKey, MethodOverrideCapability> = {
+  circuits: {
+    canonicalKey: 'circuits',
+    displayLabel: 'Circuits',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: true,
+    canRevert: true,
+    writerKind: 'grouped_circuit',
+    previewDescription: 'Circuit preview with exercise rotation',
+    methodDescription: 'Rotate through multiple stations for rounds with minimal rest between exercises.',
+  },
+  density_block: {
+    canonicalKey: 'density_block',
+    displayLabel: 'Density Blocks',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: true, // Enabled - we have density_block styledGroup support
+    canRevert: true,
+    writerKind: 'grouped_density_block',
+    previewDescription: 'Timed density block candidate',
+    methodDescription: 'Short time-capped block with AMRAP/EMOM-style controlled volume and conservative fatigue guardrails.',
+  },
+  endurance_density: {
+    canonicalKey: 'endurance_density',
+    displayLabel: 'Endurance/Conditioning',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Endurance/Conditioning writer not connected yet. Density Blocks are related but not the same.',
+    previewDescription: 'Endurance-focused conditioning preview',
+    methodDescription: 'Extended conditioning work focused on aerobic capacity and work tolerance.',
+  },
+  top_set_backoff: {
+    canonicalKey: 'top_set_backoff',
+    displayLabel: 'Top Set + Backoff',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Top Set + Backoff needs a row-level strength writer before saved-program mutation.',
+    previewDescription: 'Heavy first set with reduced backoff sets',
+    methodDescription: 'Heavy first working set near max effort followed by lighter backoff sets to accumulate volume safely.',
+  },
+  drop_set: {
+    canonicalKey: 'drop_set',
+    displayLabel: 'Drop Sets',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Drop Set row-level writer not connected yet.',
+    previewDescription: 'Progressive weight reduction for fatigue',
+    methodDescription: 'Single exercise extended with progressive weight reductions after near-failure to maximize muscle fatigue.',
+  },
+  cluster: {
+    canonicalKey: 'cluster',
+    displayLabel: 'Cluster Sets',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false, // Could enable if cluster styledGroup writer exists
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Cluster writer not connected yet.',
+    previewDescription: 'Intra-set rest cluster preview',
+    methodDescription: 'Heavy compound work with short intra-set rest periods to maintain force output across more total reps.',
+  },
+  rest_pause: {
+    canonicalKey: 'rest_pause',
+    displayLabel: 'Rest-Pause',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Rest-Pause row-level writer not connected yet.',
+    previewDescription: 'Mini-rest extended set preview',
+    methodDescription: 'Single exercise extended with short breath/mini-rests after near-failure. Best for late accessory/hypertrophy work, not primary skill or heavy technical movements.',
+  },
+  superset: {
+    canonicalKey: 'superset',
+    displayLabel: 'Supersets',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false, // Native/generated only
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Supersets are generated natively. Override apply not available.',
+    previewDescription: 'Antagonist pairing preview',
+    methodDescription: 'Two exercises paired back-to-back targeting non-competing muscle groups for time efficiency.',
+  },
+  finisher: {
+    canonicalKey: 'finisher',
+    displayLabel: 'Finishers',
+    canPlan: true,
+    canCreatePreview: true,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'preview_only',
+    applyUnsupportedReason: 'Finisher placement writer not connected yet.',
+    previewDescription: 'End-of-session metabolic finisher',
+    methodDescription: 'Last 5-8 minutes of the session with goal-specific, fatigue-aware conditioning work.',
+  },
+  unknown: {
+    canonicalKey: 'unknown',
+    displayLabel: 'Unknown Method',
+    canPlan: false,
+    canCreatePreview: false,
+    canApplyToSavedProgramNow: false,
+    canRevert: false,
+    writerKind: 'unsupported',
+    applyUnsupportedReason: 'Unknown method type.',
+    previewDescription: 'Method not recognized',
+    methodDescription: 'This method type is not recognized by the override planner.',
+  },
+}
+
+/**
+ * [AB20.3] Gets the capability definition for a method key.
+ */
+export function getMethodOverrideCapability(methodKey: string | null | undefined): MethodOverrideCapability {
+  const canonical = normalizeOverrideMethodKey(methodKey)
+  return METHOD_CAPABILITIES[canonical]
+}
+
+/** Returns true for circuit method keys only (not density) */
 export function isCircuitOverrideMethodKey(methodKey: string | null | undefined): boolean {
-  if (!methodKey) return false
-  const normalized = methodKey.toLowerCase().trim()
-  return normalized.includes('circuit')
+  return normalizeOverrideMethodKey(methodKey) === 'circuits'
 }
 
-/** Returns true for density-block method keys */
+/** Returns true for density-block method keys only (not circuit) */
 export function isDensityOverrideMethodKey(methodKey: string | null | undefined): boolean {
-  if (!methodKey) return false
-  const normalized = methodKey.toLowerCase().trim()
-  return normalized === 'density_blocks' || normalized === 'density' || normalized.includes('density_block')
+  return normalizeOverrideMethodKey(methodKey) === 'density_block'
 }
 
-/** Returns true for methods that use the circuit preview scan path (circuits OR density blocks) */
+/** 
+ * [AB20.3] Returns true for methods that use the grouped block preview scan path.
+ * Both circuits and density blocks use similar exercise scanning but different writers.
+ */
+export function isGroupedBlockPreviewMethodKey(methodKey: string | null | undefined): boolean {
+  const canonical = normalizeOverrideMethodKey(methodKey)
+  return canonical === 'circuits' || canonical === 'density_block'
+}
+
+/** 
+ * [AB20.3] Legacy alias for isGroupedBlockPreviewMethodKey.
+ * Kept for backward compatibility but prefer isGroupedBlockPreviewMethodKey for clarity.
+ */
 export function isCircuitLikePreviewMethodKey(methodKey: string | null | undefined): boolean {
-  return isCircuitOverrideMethodKey(methodKey) || isDensityOverrideMethodKey(methodKey)
+  return isGroupedBlockPreviewMethodKey(methodKey)
 }
 
 export interface RequestedMethodOverridePlan {
@@ -754,6 +985,12 @@ export interface MethodOverridePreview {
   // [AB17.2.2] Circuit-specific preview truth
   /** For circuits only: detailed candidate info with selected/skipped exercises */
   circuitCandidate?: CircuitPreviewCandidate
+  
+  // [AB20.3] Optional cached capability for apply eligibility checks
+  /** Cached capability info (avoids re-lookup during apply eligibility) */
+  methodCapability?: MethodOverrideCapability
+  /** Target group type for grouped block methods */
+  targetGroupType?: 'circuit' | 'density_block' | 'cluster'
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'
@@ -1681,7 +1918,7 @@ function normalizeExerciseName(name: string): string {
  * It does NOT mutate the original program.
  * It does NOT persist to storage (caller must handle that).
  * 
- * Only circuits are supported in AB20.
+ * Supports circuits and density blocks in AB20.3.
  */
 export function applyMethodOverridePreviewToProgram(args: {
   program: AdaptiveProgram
@@ -1710,24 +1947,47 @@ export function applyMethodOverridePreviewToProgram(args: {
     }
   }
   
-  // [AB20] Only support circuit previews in this step
-  if (!preview.circuitCandidate) {
+  // [AB20.3] Get capability and check if apply is supported
+  const capability = preview.methodCapability || getMethodOverrideCapability(preview.methodKey)
+  
+  if (!capability.canApplyToSavedProgramNow) {
     return {
       status: 'blocked',
-      visibleSummary: 'Only circuit method overrides are supported in this version.',
+      visibleSummary: capability.applyUnsupportedReason || 'Apply not supported for this method.',
+      evidence: [
+        `methodKey: ${preview.methodKey}`,
+        `canonicalKey: ${capability.canonicalKey}`,
+        `writerKind: ${capability.writerKind}`,
+      ],
+      reasonCode: 'unsupported_method',
+    }
+  }
+  
+  // [AB20.3] Determine target group type
+  const targetGroupType = preview.targetGroupType || 
+    (capability.writerKind === 'grouped_circuit' ? 'circuit' : 
+     capability.writerKind === 'grouped_density_block' ? 'density_block' : 
+     capability.writerKind === 'grouped_cluster' ? 'cluster' : undefined)
+  
+  // [AB20.3] Must have grouped block candidate for grouped writers
+  if ((targetGroupType === 'circuit' || targetGroupType === 'density_block' || targetGroupType === 'cluster') 
+      && !preview.circuitCandidate) {
+    return {
+      status: 'blocked',
+      visibleSummary: `No grouped block candidate found for ${capability.displayLabel}.`,
       evidence: ['preview.circuitCandidate is missing', `methodKey: ${preview.methodKey}`],
       reasonCode: 'unsupported_method',
     }
   }
   
-  const candidate = preview.circuitCandidate
+  const candidate = preview.circuitCandidate!
   const status = candidate.candidateStatus
   
   // Check candidate status
   if (status === 'no_candidate') {
     return {
       status: 'blocked',
-      visibleSummary: 'No valid circuit candidate found.',
+      visibleSummary: `No valid ${capability.displayLabel} candidate found.`,
       evidence: ['candidateStatus is no_candidate'],
       reasonCode: 'no_candidate',
     }
@@ -1736,7 +1996,7 @@ export function applyMethodOverridePreviewToProgram(args: {
   if (status === 'would_be_superset') {
     return {
       status: 'blocked',
-      visibleSummary: 'Only 2 exercises — would be superset, not circuit.',
+      visibleSummary: 'Only 2 exercises — would be superset, not grouped block.',
       evidence: ['candidateStatus is would_be_superset', `circuitSize: ${candidate.circuitSize}`],
       reasonCode: 'would_be_superset',
     }
@@ -1752,11 +2012,12 @@ export function applyMethodOverridePreviewToProgram(args: {
     }
   }
   
-  // Verify minimum exercises
-  if (candidate.selectedExercises.length < 3) {
+  // Verify minimum exercises (3 for circuit, 2 for density block)
+  const minExercises = targetGroupType === 'density_block' ? 2 : 3
+  if (candidate.selectedExercises.length < minExercises) {
     return {
       status: 'blocked',
-      visibleSummary: 'Circuit requires at least 3 exercises.',
+      visibleSummary: `${capability.displayLabel} requires at least ${minExercises} exercises.`,
       evidence: [`selectedExercises.length: ${candidate.selectedExercises.length}`],
       reasonCode: 'candidate_missing_exercises',
     }
@@ -1809,10 +2070,10 @@ export function applyMethodOverridePreviewToProgram(args: {
     matchedExercises.push({ name: selectedName, index: foundIndex })
   }
   
-  // Check if circuit is already applied with same exercises
+  // [AB20.3] Check if group is already applied with same exercises
   const existingStyledGroups = targetSession.styleMetadata?.styledGroups || []
-  const existingCircuit = existingStyledGroups.find(g => 
-    g.groupType === 'circuit' && 
+  const existingGroup = existingStyledGroups.find(g => 
+    (g.groupType === targetGroupType) && 
     g.exercises?.length === matchedExercises.length &&
     g.exercises?.every(ex => 
       candidate.selectedExercises.some(sel => 
@@ -1821,10 +2082,10 @@ export function applyMethodOverridePreviewToProgram(args: {
     )
   )
   
-  if (existingCircuit) {
+  if (existingGroup) {
     return {
       status: 'already_applied',
-      visibleSummary: 'Circuit already applied with these exercises.',
+      visibleSummary: `${capability.displayLabel} already applied with these exercises.`,
       evidence: ['Matching styledGroup already exists'],
       reasonCode: 'already_materialized',
     }
@@ -1840,35 +2101,61 @@ export function applyMethodOverridePreviewToProgram(args: {
   const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
   const updatedSession = updatedProgram.sessions![dayIndex]
   
-  // Build the circuit styledGroup entry
-  const circuitGroupId = `method-override-circuit-day-${dayIndex + 1}-${Date.now()}`
-  const circuitExercises = matchedExercises.map((matched, idx) => {
+  // [AB20.3] Determine method-specific labels and settings
+  const canonicalKey = capability.canonicalKey
+  const isCircuit = targetGroupType === 'circuit'
+  const isDensity = targetGroupType === 'density_block'
+  
+  // [AB20.3] Method-specific group ID prefix
+  const groupIdPrefix = isDensity 
+    ? `method-override-density-block-day-${dayIndex + 1}` 
+    : `method-override-circuit-day-${dayIndex + 1}`
+  const groupId = `${groupIdPrefix}-${Date.now()}`
+  
+  // [AB20.3] Method-specific training method label
+  const trainingMethodLabel = isDensity ? 'density_blocks' : 'circuits'
+  
+  // Build the grouped block exercises
+  const groupExercises = matchedExercises.map((matched, idx) => {
     const originalEx = targetSession.exercises![matched.index]
     return {
-      id: originalEx.id || `circuit-ex-${idx}`,
+      id: originalEx.id || `${isDensity ? 'density' : 'circuit'}-ex-${idx}`,
       name: originalEx.name || matched.name,
-      prefix: `C${idx + 1}`,
-      trainingMethod: 'circuits' as const,
+      prefix: isDensity ? `D${idx + 1}` : `C${idx + 1}`,
+      trainingMethod: trainingMethodLabel as 'circuits' | 'density_blocks',
       methodRationale: isCaution
-        ? 'Applied from Method Override Planner caution preview after manual review.'
-        : 'Applied from Method Override Planner safe circuit preview.',
+        ? `Applied from Method Override Planner caution preview (${capability.displayLabel}) after manual review.`
+        : `Applied from Method Override Planner safe ${capability.displayLabel} preview.`,
     }
   })
   
-  const newCircuitGroup = {
-    id: circuitGroupId,
-    groupType: 'circuit' as const,
-    exercises: circuitExercises,
-    instruction: isCaution
-      ? 'Manual-review circuit: keep technical quality high and stop if skill quality or tendon tension degrades.'
-      : 'Move through these exercises as a controlled circuit while preserving clean reps.',
-    restProtocol: isCaution
-      ? 'Use conservative pacing; rest enough to preserve skill quality.'
-      : 'Minimal rest between stations; moderate rest between rounds.',
+  // [AB20.3] Method-specific instructions
+  const instruction = isDensity
+    ? (isCaution
+        ? 'Manual-review density block: maintain controlled tempo and stop if fatigue compromises form.'
+        : 'Timed density block: complete as many quality reps as possible within the time cap.')
+    : (isCaution
+        ? 'Manual-review circuit: keep technical quality high and stop if skill quality or tendon tension degrades.'
+        : 'Move through these exercises as a controlled circuit while preserving clean reps.')
+  
+  const restProtocol = isDensity
+    ? (isCaution
+        ? 'Use conservative pacing; prioritize form over speed.'
+        : '10-15s between exercises; 30-60s between rounds.')
+    : (isCaution
+        ? 'Use conservative pacing; rest enough to preserve skill quality.'
+        : 'Minimal rest between stations; moderate rest between rounds.')
+  
+  const newGroup = {
+    id: groupId,
+    groupType: (isDensity ? 'density_block' : 'circuit') as 'circuit' | 'density_block',
+    exercises: groupExercises,
+    instruction,
+    restProtocol,
     // [AB20.2] Reversible metadata for future revert operations
     source: 'method_override_planner' as const,
     methodOverrideApplied: true,
-    methodOverrideMethodKey: 'circuits',
+    methodOverrideMethodKey: canonicalKey,
     methodOverrideAppliedAt: new Date().toISOString(),
     methodOverrideCandidateStatus: status,
     methodOverrideTargetDayIndex: dayIndex,
@@ -1883,35 +2170,39 @@ export function applyMethodOverridePreviewToProgram(args: {
     ? [...existingMeta.appliedMethods] 
     : []
   
-  // Add circuits to appliedMethods if not present
-  if (!existingAppliedMethods.includes('circuits')) {
-    existingAppliedMethods.push('circuits')
+  // [AB20.3] Add the correct method to appliedMethods
+  const methodToAdd = isDensity ? 'density_blocks' : 'circuits'
+  if (!existingAppliedMethods.includes(methodToAdd)) {
+    existingAppliedMethods.push(methodToAdd)
   }
   
-  // Remove circuits from rejectedMethods if present
+  // Remove from rejectedMethods if present
   type RejectedMethod = { method: string; reason: string }
   let updatedRejectedMethods: RejectedMethod[] = existingMeta.rejectedMethods || []
   if (Array.isArray(updatedRejectedMethods)) {
+    const methodsToRemove = isDensity 
+      ? ['density_blocks', 'density_block', 'density'] 
+      : ['circuits', 'circuit']
     updatedRejectedMethods = updatedRejectedMethods.filter((r: RejectedMethod) => 
-      r.method !== 'circuits' && r.method !== 'circuit'
+      !methodsToRemove.includes(r.method)
     )
   }
   
   // Build updated styledGroups
   const updatedStyledGroups = [
     ...(existingMeta.styledGroups || []),
-    newCircuitGroup,
+    newGroup,
   ]
   
   // Apply to session.styleMetadata - preserve all existing fields
   updatedSession.styleMetadata = {
-    primaryStyle: existingMeta.primaryStyle || 'circuits',
+    primaryStyle: existingMeta.primaryStyle || methodToAdd,
     hasSupersetsApplied: existingMeta.hasSupersetsApplied || false,
-    hasCircuitsApplied: true,
-    hasDensityApplied: existingMeta.hasDensityApplied || false,
+    hasCircuitsApplied: isCircuit ? true : (existingMeta.hasCircuitsApplied || false),
+    hasDensityApplied: isDensity ? true : (existingMeta.hasDensityApplied || false),
     hasClusterApplied: existingMeta.hasClusterApplied,
     clusterDecision: existingMeta.clusterDecision,
-    structureDescription: existingMeta.structureDescription || 'Circuit override applied',
+    structureDescription: existingMeta.structureDescription || `${capability.displayLabel} override applied`,
     appliedMethods: existingAppliedMethods as SessionStyleMetadata['appliedMethods'],
     rejectedMethods: updatedRejectedMethods,
     styledGroups: updatedStyledGroups as SessionStyleMetadata['styledGroups'],
@@ -1927,15 +2218,19 @@ export function applyMethodOverridePreviewToProgram(args: {
   if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
     const byMethod = updatedProgram.weeklyMethodRepresentation.byMethod
     
-    // Find circuit entry in the byMethod array
-    const circuitEntry = byMethod.find(m => 
-      m.methodId?.toLowerCase().includes('circuit')
-    )
+    // [AB20.3] Find the correct method entry based on target type
+    const methodEntry = byMethod.find(m => {
+      const methodId = m.methodId?.toLowerCase() || ''
+      if (isDensity) {
+        return methodId.includes('density')
+      }
+      return methodId.includes('circuit')
+    })
     
-    if (circuitEntry) {
-      circuitEntry.status = 'APPLIED'
-      circuitEntry.materializedCount = Math.max(circuitEntry.materializedCount || 0, 1)
-      circuitEntry.reason = 'Applied from Method Override Planner override preview.'
+    if (methodEntry) {
+      methodEntry.status = 'APPLIED'
+      methodEntry.materializedCount = Math.max(methodEntry.materializedCount || 0, 1)
+      methodEntry.reason = `Applied from Method Override Planner (${capability.displayLabel}) override preview.`
     }
     
     // Update totals if present
@@ -1946,9 +2241,9 @@ export function applyMethodOverridePreviewToProgram(args: {
     
     // Update oneLineExplanation
     const existingExplanation = updatedProgram.weeklyMethodRepresentation.oneLineExplanation || ''
-    if (!existingExplanation.includes('Circuit override')) {
+    if (!existingExplanation.includes(`${capability.displayLabel} override`)) {
       updatedProgram.weeklyMethodRepresentation.oneLineExplanation = 
-        existingExplanation + ' Circuit override applied to 1 session from the Method Override Planner.'
+        existingExplanation + ` ${capability.displayLabel} override applied to 1 session from the Method Override Planner.`
     }
   }
   
@@ -1960,14 +2255,14 @@ export function applyMethodOverridePreviewToProgram(args: {
     status: 'success',
     updatedProgram,
     visibleSummary: isCaution 
-      ? 'Circuit override applied with caution — saved program updated.'
-      : 'Circuit override applied — saved program updated.',
+      ? `${capability.displayLabel} override applied with caution — saved program updated.`
+      : `${capability.displayLabel} override applied — saved program updated.`,
     evidence: [
-      `Applied circuit to Day ${dayIndex + 1} (${candidate.sessionTitle})`,
+      `Applied ${capability.displayLabel} to Day ${dayIndex + 1} (${candidate.sessionTitle})`,
       `Exercises: ${candidate.selectedExercises.join(', ')}`,
-      `Circuit size: ${candidate.circuitSize}`,
-      isCaution ? 'Applied with caution after manual review' : 'Applied as safe circuit',
-      `styledGroup id: ${circuitGroupId}`,
+      `Block size: ${candidate.circuitSize}`,
+      isCaution ? 'Applied with caution after manual review' : `Applied as safe ${capability.displayLabel}`,
+      `styledGroup id: ${groupId}`,
     ],
     reasonCode: isCaution ? 'applied_caution_circuit' : 'applied_safe_circuit',
   }
@@ -1978,7 +2273,7 @@ export function applyMethodOverridePreviewToProgram(args: {
 // =============================================================================
 
 /**
- * [AB20.2] Checks if a styledGroup was applied by the Method Override Planner.
+ * [AB20.2 / AB20.3] Checks if a styledGroup was applied by the Method Override Planner.
  * Uses multiple detection methods for backward compatibility with AB20.1 circuits.
  */
 function isMethodOverridePlannerAppliedGroup(group: {
@@ -1991,8 +2286,9 @@ function isMethodOverridePlannerAppliedGroup(group: {
   if (group.methodOverrideApplied === true) return true
   if (group.source === 'method_override_planner') return true
   
-  // [AB20.2C] Fallback detection for AB20.1 circuits (before reversible metadata)
+  // [AB20.2C / AB20.3] Fallback detection for AB20.1 circuits and AB20.3 density blocks
   if (group.id?.startsWith('method-override-circuit-')) return true
+  if (group.id?.startsWith('method-override-density-block-')) return true
   
   // Check if any exercise mentions Method Override Planner in rationale
   if (group.exercises?.some(ex => 
@@ -2005,7 +2301,7 @@ function isMethodOverridePlannerAppliedGroup(group: {
 }
 
 /**
- * [AB20.2] Checks if a program has any Method Override Planner-applied circuit.
+ * [AB20.2 / AB20.3] Checks if a program has any Method Override Planner-applied grouped block.
  * Used by UI to determine if "Remove Override" action should be shown.
  */
 export function hasMethodOverrideAppliedCircuit(program: AdaptiveProgram | null): boolean {
@@ -2014,7 +2310,9 @@ export function hasMethodOverrideAppliedCircuit(program: AdaptiveProgram | null)
   for (const session of program.sessions) {
     const styledGroups = session.styleMetadata?.styledGroups || []
     for (const group of styledGroups) {
-      if (group.groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
+      // [AB20.3] Check both circuits and density blocks
+      if ((group.groupType === 'circuit' || group.groupType === 'density_block') && 
+          isMethodOverridePlannerAppliedGroup(group)) {
         return true
       }
     }
@@ -2030,7 +2328,7 @@ export function hasMethodOverrideAppliedCircuit(program: AdaptiveProgram | null)
  * It does NOT mutate the original program.
  * It does NOT persist to storage (caller must handle that).
  * 
- * Only circuits are supported in AB20.2.
+ * Circuits and density blocks are supported in AB20.3.
  */
 export function revertMethodOverrideFromProgram(args: {
   program: AdaptiveProgram
@@ -2058,14 +2356,24 @@ export function revertMethodOverrideFromProgram(args: {
     }
   }
   
-  // [AB20.2] Only support circuit revert in this step
-  if (!isCircuitOverrideMethodKey(methodKey)) {
+  // [AB20.3] Get capability and check if revert is supported
+  const capability = getMethodOverrideCapability(methodKey)
+  
+  if (!capability.canRevert) {
     return {
       status: 'blocked',
-      visibleSummary: 'Only circuit method overrides can be reverted in this version.',
-      evidence: [`methodKey: ${methodKey}`, 'Only circuits supported'],
+      visibleSummary: `${capability.displayLabel} overrides cannot be reverted yet.`,
+      evidence: [`methodKey: ${methodKey}`, `canonicalKey: ${capability.canonicalKey}`],
       reasonCode: 'unsupported_method',
     }
+  }
+  
+  // Determine which group types to target
+  const targetGroupTypes: string[] = []
+  if (capability.canonicalKey === 'circuits') {
+    targetGroupTypes.push('circuit')
+  } else if (capability.canonicalKey === 'density_block') {
+    targetGroupTypes.push('density_block')
   }
   
   // Deep clone the program to avoid mutation
@@ -2077,20 +2385,21 @@ export function revertMethodOverrideFromProgram(args: {
   const removedFromSessions: string[] = []
   const removedGroupIds: string[] = []
   
-  // Scan all sessions for Method Override Planner-applied circuits
+  // Scan all sessions for Method Override Planner-applied groups
   for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
     const session = sessions[dayIndex]
     if (!session.styleMetadata?.styledGroups) continue
     
     const originalGroups = session.styleMetadata.styledGroups
     const remainingGroups: typeof originalGroups = []
-    let sessionHadOverrideCircuit = false
+    let sessionHadOverrideGroup = false
     
     for (const group of originalGroups) {
-      // Only remove circuits that were applied by Method Override Planner
-      if (group.groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
+      // Only remove groups that match target type and were applied by Method Override Planner
+      const isTargetType = targetGroupTypes.includes(group.groupType)
+      if (isTargetType && isMethodOverridePlannerAppliedGroup(group)) {
         removedCount++
-        sessionHadOverrideCircuit = true
+        sessionHadOverrideGroup = true
         if (group.id) removedGroupIds.push(group.id)
       } else {
         // Keep all other groups (supersets, native circuits, etc.)
@@ -2098,22 +2407,31 @@ export function revertMethodOverrideFromProgram(args: {
       }
     }
     
-    if (sessionHadOverrideCircuit) {
+    if (sessionHadOverrideGroup) {
       const sessionLabel = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
       removedFromSessions.push(sessionLabel)
       
       // Update the session's styledGroups
       session.styleMetadata.styledGroups = remainingGroups
       
-      // Recalculate hasCircuitsApplied - only true if non-override circuits remain
+      // Recalculate flags based on remaining groups
       const hasRemainingCircuits = remainingGroups.some(g => g.groupType === 'circuit')
+      const hasRemainingDensity = remainingGroups.some(g => g.groupType === 'density_block')
       session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
+      session.styleMetadata.hasDensityApplied = hasRemainingDensity
       
-      // Remove 'circuits' from appliedMethods only if no circuits remain
-      if (!hasRemainingCircuits && Array.isArray(session.styleMetadata.appliedMethods)) {
-        session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
-          (m: string) => m !== 'circuits' && m !== 'circuit'
-        )
+      // Remove method from appliedMethods only if no groups of that type remain
+      if (Array.isArray(session.styleMetadata.appliedMethods)) {
+        if (!hasRemainingCircuits) {
+          session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+            (m: string) => m !== 'circuits' && m !== 'circuit'
+          )
+        }
+        if (!hasRemainingDensity) {
+          session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+            (m: string) => m !== 'density_blocks' && m !== 'density_block' && m !== 'density'
+          )
+        }
       }
     }
   }
@@ -2122,7 +2440,7 @@ export function revertMethodOverrideFromProgram(args: {
   if (removedCount === 0) {
     return {
       status: 'not_found',
-      visibleSummary: 'No Method Override Planner circuit override was found to remove.',
+      visibleSummary: `No Method Override Planner ${capability.displayLabel} override was found to remove.`,
       evidence: ['No styledGroups matched Method Override Planner markers'],
       reasonCode: 'override_artifact_not_found',
     }
@@ -2132,37 +2450,41 @@ export function revertMethodOverrideFromProgram(args: {
   if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
     const byMethod = updatedProgram.weeklyMethodRepresentation.byMethod
     
-    // Check if any circuit styledGroups remain in the entire program
-    const anyCircuitsRemain = sessions.some(session =>
-      session.styleMetadata?.styledGroups?.some(g => g.groupType === 'circuit')
+    // Check if any groups of the target type remain
+    const anyTargetGroupsRemain = sessions.some(session =>
+      session.styleMetadata?.styledGroups?.some(g => targetGroupTypes.includes(g.groupType))
     )
     
-    // Find circuit entry in the byMethod array
-    const circuitEntry = byMethod.find(m => 
-      m.methodId?.toLowerCase().includes('circuit')
-    )
+    // Find the method entry in byMethod
+    const methodEntry = byMethod.find(m => {
+      const methodId = m.methodId?.toLowerCase() || ''
+      if (capability.canonicalKey === 'density_block') {
+        return methodId.includes('density')
+      }
+      return methodId.includes('circuit')
+    })
     
-    if (circuitEntry && !anyCircuitsRemain) {
-      // No circuits remain anywhere - mark as blocked (user removed override, returns to coach-held-back state)
-      circuitEntry.status = 'BLOCKED_BY_SAFETY'
-      circuitEntry.materializedCount = 0
-      circuitEntry.reason = 'Circuit override removed. Method is no longer materialized and remains held back by the current weekly method decision.'
+    if (methodEntry && !anyTargetGroupsRemain) {
+      // No groups remain - mark as blocked (user removed override, returns to coach-held-back state)
+      methodEntry.status = 'BLOCKED_BY_SAFETY'
+      methodEntry.materializedCount = 0
+      methodEntry.reason = `${capability.displayLabel} override removed. Method is no longer materialized and remains held back by the current weekly method decision.`
     }
     
     // Update oneLineExplanation
     const existingExplanation = updatedProgram.weeklyMethodRepresentation.oneLineExplanation || ''
-    if (existingExplanation.includes('Circuit override applied')) {
+    if (existingExplanation.includes(`${capability.displayLabel} override applied`)) {
       updatedProgram.weeklyMethodRepresentation.oneLineExplanation = 
-        existingExplanation.replace(/Circuit override applied[^.]*\./g, '').trim()
+        existingExplanation.replace(new RegExp(`${capability.displayLabel} override applied[^.]*\\.`, 'g'), '').trim()
     }
   }
   
   return {
     status: 'success',
     updatedProgram,
-    visibleSummary: `Circuit override removed — saved program updated.`,
+    visibleSummary: `${capability.displayLabel} override removed — saved program updated.`,
     evidence: [
-      `Removed ${removedCount} Method Override Planner circuit(s)`,
+      `Removed ${removedCount} Method Override Planner ${capability.displayLabel}(s)`,
       `From sessions: ${removedFromSessions.join(', ')}`,
       `Group IDs: ${removedGroupIds.join(', ')}`,
     ],

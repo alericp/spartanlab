@@ -71,12 +71,16 @@ import {
   getMethodOverridePreviews,
   clearMethodOverridePreview,
   isCircuitLikePreviewMethodKey,
+  isGroupedBlockPreviewMethodKey,
+  getMethodOverrideCapability,
+  normalizeOverrideMethodKey,
   applyMethodOverridePreviewToProgram,
   hasMethodOverrideAppliedCircuit,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
   type MethodOverrideRevertResult,
+  type MethodOverrideCapability,
 } from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
@@ -379,29 +383,43 @@ function classifyApplyEligibility(
     }
   }
   
-  // Circuit-specific: check candidateStatus
+  // [AB20.3] Get method capability to check apply support
+  const capability = preview.methodCapability || getMethodOverrideCapability(preview.methodKey)
+  
+  // [AB20.3] Check if method supports apply
+  if (!capability.canApplyToSavedProgramNow) {
+    return {
+      eligibility: 'not_applyable_unsupported_method',
+      reason: capability.applyUnsupportedReason || `${capability.displayLabel} apply not available yet.`
+    }
+  }
+  
+  // [AB20.3] Grouped block methods (circuits, density blocks): check candidateStatus
   if (preview.circuitCandidate) {
     const candidate = preview.circuitCandidate
     const status = candidate.candidateStatus
     const selectedCount = candidate.selectedExercises?.length ?? 0
     
-    // [AB20.1A] Safe circuits with 3+ exercises are applyable
+    // [AB20.3] Minimum exercises: 3 for circuits, 2 for density blocks
+    const minExercises = capability.canonicalKey === 'density_block' ? 2 : 3
+    
+    // Safe candidate with enough exercises are applyable
     if (status === 'safe_circuit') {
-      if (selectedCount >= 3) {
+      if (selectedCount >= minExercises) {
         return { 
           eligibility: 'applyable_safe', 
-          reason: 'Ready to apply circuit preview' 
+          reason: `Ready to apply ${capability.displayLabel} preview` 
         }
       }
       return {
         eligibility: 'not_applyable_insufficient_data',
-        reason: 'Circuit requires at least 3 exercises'
+        reason: `${capability.displayLabel} requires at least ${minExercises} exercises`
       }
     }
     
-    // [AB20.1A] Caution circuits with 3+ exercises are applyable with manual review
+    // Caution candidate with enough exercises are applyable with manual review
     if (status === 'override_with_caution') {
-      if (selectedCount >= 3) {
+      if (selectedCount >= minExercises) {
         return { 
           eligibility: 'applyable_caution_review', 
           reason: 'Manual review required before applying' 
@@ -409,30 +427,29 @@ function classifyApplyEligibility(
       }
       return {
         eligibility: 'not_applyable_insufficient_data',
-        reason: 'Circuit requires at least 3 exercises'
+        reason: `${capability.displayLabel} requires at least ${minExercises} exercises`
       }
     }
     
     if (status === 'would_be_superset') {
       return { 
         eligibility: 'not_applyable_no_candidate', 
-        reason: 'Only 2 exercises — would be superset, not circuit' 
+        reason: 'Only 2 exercises — would be superset, not grouped block' 
       }
     }
     
     // no_candidate or missing status
     return { 
       eligibility: 'not_applyable_no_candidate', 
-      reason: 'No valid circuit candidate found' 
+      reason: `No valid ${capability.displayLabel} candidate found` 
     }
   }
   
-  // General method preview safety check (non-circuit methods)
+  // General method preview safety check (non-grouped-block methods)
   if (preview.safety === 'safe_preview') {
-    // [AB20.1E] Non-circuit safe previews are still preview-only
     return { 
       eligibility: 'not_applyable_unsupported_method', 
-      reason: 'Apply coming soon' 
+      reason: capability.applyUnsupportedReason || 'Apply coming soon' 
     }
   }
   
@@ -453,7 +470,7 @@ function classifyApplyEligibility(
   // Default fallback
   return { 
     eligibility: 'not_applyable_unsupported_method', 
-    reason: 'Apply not available for this method yet' 
+    reason: capability.applyUnsupportedReason || 'Apply not available for this method yet' 
   }
 }
 
@@ -873,9 +890,18 @@ function MethodDetailModalContent({
   // [AB17.2.2] Circuit-specific safety override
   // If circuit preview exists but is not a safe candidate, override the safety display
   // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection
+  // [AB20.3] Get method capability for method-specific labels
+  const capability = getMethodOverrideCapability(plan.methodKey)
+  const isDensityMethod = capability.canonicalKey === 'density_block'
+  
   const isCircuitMethod = isCircuitLikePreviewMethodKey(plan.methodKey)
   const circuitCandidate = preview?.circuitCandidate
   const isUnsafeCircuit = isCircuitMethod && circuitCandidate && !circuitCandidate.isSafeCircuitCandidate
+  
+  // [AB20.3] Method-specific labels
+  const blockTypeName = isDensityMethod ? 'Density Block' : 'Circuit'
+  const exerciseLabelSafe = isDensityMethod ? 'Density Block Exercises' : 'Circuit Exercises'
+  const exerciseLabelCaution = isDensityMethod ? 'Density Block Exercises (with caution)' : 'Circuit Exercises (with caution)'
   
   // [AB17.2.2.1] Determine effective safety for display
   // For circuits before preview: show "Scan Required" instead of "Insufficient Data"
@@ -890,13 +916,13 @@ function MethodDetailModalContent({
       effectiveSafety = 'not_enough_truth'
       effectiveSafetyLabel = 'Scan Required'
     } else if (circuitCandidate?.isSafeCircuitCandidate) {
-      // After preview with valid 3+ exercise candidate
+      // After preview with valid exercise candidate
       effectiveSafety = 'safe_preview'
-      effectiveSafetyLabel = 'Safe to Preview'
+      effectiveSafetyLabel = `Safe to Preview`
     } else if (isUnsafeCircuit) {
       // After preview without safe candidate
       effectiveSafety = 'needs_caution'
-      effectiveSafetyLabel = circuitCandidate?.circuitSize === 2 ? 'Would Be Superset' : 'No Safe Circuit'
+      effectiveSafetyLabel = circuitCandidate?.circuitSize === 2 ? 'Would Be Superset' : `No Safe ${blockTypeName}`
     }
   }
   
@@ -1168,14 +1194,14 @@ function MethodDetailModalContent({
                 {preview.circuitCandidate.dayLabel}
               </div>
               
-              {/* Circuit Selected Exercises */}
+              {/* Grouped Block Selected Exercises */}
               {preview.circuitCandidate.selectedExercises.length > 0 && (
                 <div className="mb-3">
                   <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
                     {preview.circuitCandidate.candidateStatus === 'safe_circuit' 
-                      ? 'Circuit Exercises' 
+                      ? exerciseLabelSafe 
                       : preview.circuitCandidate.candidateStatus === 'override_with_caution'
-                        ? 'Circuit Exercises (with caution)'
+                        ? exerciseLabelCaution
                         : 'Available Exercises'}
                   </span>
                   <div className="space-y-1">

@@ -1738,7 +1738,8 @@ export function ProgramCoachIntelligenceHub({
           />
         </div>
         
-        {/* [AB18 / IQ8] Weekly Recovery Check — compact proof line from weeklyStressDistributionPlan */}
+        {/* [AB18 / IQ8 / AB19] Weekly Recovery Check — compact proof line from weeklyStressDistributionPlan */}
+        {/* [AB19 / IQ9] Explanation Parity: source classification added for transparency */}
         {(() => {
           const stressPlan = program.weeklyStressDistributionPlan
           const rootCause = (program as unknown as { flexibleFrequencyRootCause?: { 
@@ -1749,6 +1750,14 @@ export function ProgramCoachIntelligenceHub({
           }}).flexibleFrequencyRootCause
           const sessionCount = program.sessions?.length || 0
           const headline = stressPlan?.summary?.weeklyHeadline
+          
+          // [AB19 / IQ9] Determine explanation parity status
+          const hasStressPlan = !!stressPlan?.summary
+          const hasRootCause = !!rootCause
+          const parityStatus: 'authoritative' | 'derived' | 'fallback' = 
+            hasStressPlan && headline ? 'authoritative' :
+            hasStressPlan || hasRootCause ? 'derived' :
+            sessionCount > 0 ? 'fallback' : 'fallback'
           
           // Build a compact recovery proof line
           const proofParts: string[] = []
@@ -1778,12 +1787,25 @@ export function ProgramCoachIntelligenceHub({
           
           if (!displayHeadline) return null
           
+          // [AB19] Parity-aware icon color: authoritative=emerald, derived=blue, fallback=amber
+          const iconColor = parityStatus === 'authoritative' 
+            ? 'text-emerald-400/70' 
+            : parityStatus === 'derived' 
+              ? 'text-blue-400/70' 
+              : 'text-amber-400/70'
+          
           return (
             <div className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400/70 flex-shrink-0" />
+                <CheckCircle2 className={cn('w-3 h-3 flex-shrink-0', iconColor)} />
                 <span className="text-[9px] text-[#8A8A9A] leading-relaxed">
                   <span className="text-[#6A6A7A]">Weekly check:</span> {displayHeadline}
+                  {/* [AB19] Show parity source only for non-authoritative */}
+                  {parityStatus !== 'authoritative' && (
+                    <span className="text-[#5A5A6A] ml-1">
+                      ({parityStatus === 'derived' ? 'derived' : 'limited'})
+                    </span>
+                  )}
                 </span>
               </div>
             </div>

@@ -1002,6 +1002,7 @@ function MethodDetailModalContent({
   item,
   plan,
   preview,
+  program,
   onCreatePreview,
   onClearPreview,
   onDismiss,
@@ -1024,6 +1025,7 @@ function MethodDetailModalContent({
   item: RequestedMethodDisplayItem
   plan: RequestedMethodOverridePlan
   preview: MethodOverridePreview | null
+  program: AdaptiveProgram | null
   onCreatePreview: () => void
   onClearPreview: () => void
   onDismiss: () => void
@@ -2309,6 +2311,7 @@ function RequestedMethodsSheetContent({
           item={selectedItem}
           plan={currentPlan}
           preview={getCurrentPreview(selectedItem.methodKey)}
+          program={program}
           onCreatePreview={handleCreatePreview}
           onClearPreview={handleClearPreview}
           onDismiss={handleDismiss}

@@ -1584,23 +1584,24 @@ function MethodDetailModalContent({
                 </span>
                 <div className="space-y-1">
                   {preview.workoutPreview.proposedWorkoutPreview.map((block, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`flex items-start gap-2 text-[10px] ${
-                        block.changeType === 'inserted' ? 'text-emerald-400' : 
-                        block.changeType === 'warning' ? 'text-amber-400' : ''
-                      }`}
-                    >
-                      <span className={`min-w-[60px] ${
-                        block.changeType === 'inserted' ? 'text-emerald-500' : 
-                        block.changeType === 'warning' ? 'text-amber-500' : 'text-[#6A6A7A]'
-                      }`}>
-                        {block.changeType === 'inserted' ? '+ ' : block.changeType === 'warning' ? '! ' : ''}{block.label}:
-                      </span>
-                      <span className={
-                        block.changeType === 'inserted' ? 'text-emerald-300/80' : 
-                        block.changeType === 'warning' ? 'text-amber-300/80' : 'text-[#9A9AAA]'
-                      }>
+                  <div
+                  key={idx}
+                  className={`flex items-start gap-2 text-[10px] ${
+                    // [AB20.4.5.3] Manual override inserted blocks use amber, not green
+                    block.changeType === 'inserted' ? 'text-amber-400' :
+                    block.changeType === 'warning' ? 'text-orange-400' : ''
+                  }`}
+                  >
+                  <span className={`min-w-[60px] ${
+                    block.changeType === 'inserted' ? 'text-amber-500' :
+                    block.changeType === 'warning' ? 'text-orange-500' : 'text-[#6A6A7A]'
+                  }`}>
+                  {block.changeType === 'inserted' ? '+ ' : block.changeType === 'warning' ? '! ' : ''}{block.label}:
+                  </span>
+                  <span className={
+                    block.changeType === 'inserted' ? 'text-amber-300/80' :
+                    block.changeType === 'warning' ? 'text-orange-300/80' : 'text-[#9A9AAA]'
+                  }>
                         {block.exercises.slice(0, 3).join(', ')}{block.exercises.length > 3 ? '...' : ''}
                       </span>
                     </div>
@@ -1669,8 +1670,9 @@ function MethodDetailModalContent({
             </div>
           )}
           
-          {/* Saved Program Unchanged Proof */}
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-emerald-500/20">
+      {/* Saved Program Unchanged Proof */}
+      {/* [AB20.4.5.3] Manual override preview border uses amber */}
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-500/20">
             <span className="px-2 py-0.5 text-[9px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
               <Info className="w-3 h-3" />
               Preview only — saved program unchanged
@@ -1724,25 +1726,27 @@ function MethodDetailModalContent({
                   </Button>
                 </div>
               </div>
-            ) : revertResult?.status === 'success' ? (
-              // [AB20.2] Show success state after revert
-              <div className="flex-1 flex flex-col">
-                <div className="h-10 flex items-center justify-center bg-emerald-600/20 border border-emerald-500/30 rounded-md">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 mr-2" />
-                  <span className="text-xs text-emerald-400 font-medium">Removed</span>
-                </div>
-                <span className="text-[8px] text-emerald-400/70 text-center mt-1 leading-tight">
+        ) : revertResult?.status === 'success' ? (
+          // [AB20.2] Show success state after revert
+          // [AB20.4.5.3] Use amber for user-initiated revert success
+          <div className="flex-1 flex flex-col">
+            <div className="h-10 flex items-center justify-center bg-amber-600/20 border border-amber-500/30 rounded-md">
+              <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />
+              <span className="text-xs text-amber-400 font-medium">Removed</span>
+            </div>
+            <span className="text-[8px] text-amber-400/70 text-center mt-1 leading-tight">
                   {revertResult.visibleSummary}
                 </span>
               </div>
-            ) : (
-              // [AB20.2] Show remove override button
-              <div className="flex-1 flex flex-col">
-                <div className="flex gap-2">
-                  <div className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                    <span className="text-xs text-emerald-400 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Applied from Method Override Planner
+        ) : (
+          // [AB20.2] Show remove override button
+          // [AB20.4.5.3] User-applied overrides use amber, not green
+          <div className="flex-1 flex flex-col">
+            <div className="flex gap-2">
+              <div className="flex-1 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <span className="text-xs text-amber-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Applied from Method Override Planner
                     </span>
                   </div>
                   <Button
@@ -1928,13 +1932,14 @@ function MethodDetailModalContent({
                     size="sm"
                     disabled={(!isApplyable && !isBlockedImpossible) || isApplying}
                     onClick={isApplyable ? handleUnifiedApply : undefined}
-                    className={cn(
-                      'h-10',
-                      isApplyableSafe 
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : isApplyableCaution
-                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                        : isApplyableForce
+                className={cn(
+                  'h-10',
+                  // [AB20.4.5.3] All manual override apply buttons use amber, not green
+                  isApplyableSafe
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : isApplyableCaution
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : isApplyableForce
                         ? 'bg-orange-600 hover:bg-orange-700 text-white'
                         : isBlockedImpossible
                         ? 'text-red-400/50 border-red-500/20 cursor-not-allowed'
@@ -2263,8 +2268,9 @@ function RequestedMethodsSheetContent({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-medium text-[#E6E9EF]">{item.label}</p>
+                    {/* [AB20.4.5.3] Manual override preview badge uses amber, not green */}
                     {hasPreview && (
-                      <span className="px-1.5 py-0.5 text-[8px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="px-1.5 py-0.5 text-[8px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                         Preview
                       </span>
                     )}
@@ -2363,20 +2369,21 @@ function RequestedMethodsSheetContent({
         </p>
         {/* Status chips */}
         <div className="flex flex-wrap gap-1.5">
-          <span className={cn(
-            'px-2 py-0.5 text-[9px] rounded border',
-            hasProgramTruth 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-              : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
-          )}>
-            {hasProgramTruth ? 'Program truth detected' : 'No program truth'}
-          </span>
-          <span className={cn(
-            'px-2 py-0.5 text-[9px] rounded border',
-            hasMethodDecisionTruth 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-              : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
-          )}>
+                  {/* [AB20.4.5.3] Program/method truth badges use blue (informational) */}
+                  <span className={cn(
+                    'px-2 py-0.5 text-[9px] rounded border',
+                    hasProgramTruth
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
+                  )}>
+                    {hasProgramTruth ? 'Program truth detected' : 'No program truth'}
+                  </span>
+                  <span className={cn(
+                    'px-2 py-0.5 text-[9px] rounded border',
+                    hasMethodDecisionTruth
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A4A]'
+                  )}>
             {hasMethodDecisionTruth ? 'Method decisions detected' : 'No method decisions'}
           </span>
           <span className="px-2 py-0.5 text-[9px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">

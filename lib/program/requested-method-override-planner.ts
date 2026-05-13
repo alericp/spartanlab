@@ -2526,7 +2526,7 @@ export function hasMethodOverrideAppliedGroup(
       
       // [AB20.4.1] For backward compatibility with older AB20 groups without methodOverrideMethodKey:
       // Match by group ID prefix pattern
-      const groupId = group.groupId || ''
+      const groupId = group.id || ''
       if (canonicalKey === 'circuits' && groupId.startsWith('method-override-circuit-')) {
         return true
       }

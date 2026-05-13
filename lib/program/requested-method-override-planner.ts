@@ -1225,7 +1225,7 @@ function scoreExerciseForMethod(args: {
   // Check if session already has a finisher via exercises
   const hasExistingFinisher = session.exercises?.some(ex => 
     (ex.name || '').toLowerCase().includes('finisher') || 
-    (ex as Record<string, unknown>).methodOverrideMethodKey === 'endurance_density'
+    ((ex as unknown as Record<string, unknown>).methodOverrideMethodKey === 'endurance_density')
   )
 
   switch (methodKey) {
@@ -1276,7 +1276,8 @@ export function findBestMethodOverrideTargets(args: {
     if (methodKey === 'endurance_density') {
       const lastExIndex = exercises.length - 1
       if (lastExIndex >= 0) {
-        const result = scoreExerciseForMethod({ exercise: { name: exercises[lastExIndex].name, reps: exercises[lastExIndex].reps, sets: exercises[lastExIndex].sets }, exerciseIndex: lastExIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+        const lastEx = exercises[lastExIndex]
+        const result = scoreExerciseForMethod({ exercise: { name: lastEx.name, reps: (lastEx as unknown as Record<string, unknown>).reps as string | undefined, sets: lastEx.sets }, exerciseIndex: lastExIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
         if (result.score > 0) {
           allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex: -1, exerciseName: 'Session Finisher', methodKey, targetRole: 'conditioning_finisher', score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
         }
@@ -1286,7 +1287,7 @@ export function findBestMethodOverrideTargets(args: {
 
     for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
       const exercise = exercises[exerciseIndex]
-      const result = scoreExerciseForMethod({ exercise: { name: exercise.name, reps: exercise.reps, sets: exercise.sets }, exerciseIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+      const result = scoreExerciseForMethod({ exercise: { name: exercise.name, reps: (exercise as unknown as Record<string, unknown>).reps as string | undefined, sets: exercise.sets }, exerciseIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
       if (result.score > 0) {
         const targetRole: MethodOverrideTargetRole = methodKey === 'top_set_backoff' ? 'primary_strength' : isLateAccessoryPosition(exerciseIndex, exercises.length) ? 'late_accessory' : isAccessoryHypertrophyCandidate(exercise.name || '') ? 'hypertrophy_accessory' : 'quality_strength'
         allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex, exerciseName: exercise.name || `Exercise ${exerciseIndex + 1}`, methodKey, targetRole, score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
@@ -2223,6 +2224,8 @@ export type MethodOverrideApplyStatus =
 export type MethodOverrideApplyReasonCode =
   | 'applied_safe_circuit'
   | 'applied_caution_circuit'
+  | 'applied_row_level_override'
+  | 'applied_circuit_override'
   | 'no_program'
   | 'no_preview'
   | 'unsupported_method'
@@ -3044,7 +3047,7 @@ function applyRowLevelMethodOverride(args: {
   if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
   const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
   rowApplications.push({ methodKey: canonicalKey, exerciseIndex: primaryTarget.exerciseIndex, exerciseName: primaryTarget.exerciseName, appliedAt: new Date().toISOString() })
-  ;(targetSession as Record<string, unknown>).styleMetadata = styleMetadata
+  ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
 
   if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
     const methodEntry = updatedProgram.weeklyMethodRepresentation.byMethod.find(m => (m.methodId?.toLowerCase() || '').includes(canonicalKey.replace(/_/g, '')))
@@ -3052,7 +3055,7 @@ function applyRowLevelMethodOverride(args: {
   }
 
   const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
-  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} applied to ${primaryTarget.exerciseName} on ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Target: ${primaryTarget.exerciseName}`, `Session: ${dayLabel}`, `Exercise index: ${primaryTarget.exerciseIndex}`, `Safety: ${primaryTarget.safety}`, ...primaryTarget.reasons.slice(0, 2)], reasonCode: 'applied_circuit_override' }
+  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} applied to ${primaryTarget.exerciseName} on ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Target: ${primaryTarget.exerciseName}`, `Session: ${dayLabel}`, `Exercise index: ${primaryTarget.exerciseIndex}`, `Safety: ${primaryTarget.safety}`, ...primaryTarget.reasons.slice(0, 2)], reasonCode: 'applied_row_level_override' }
 }
 
 function applyEnduranceConditioningFinisher(args: {
@@ -3079,7 +3082,8 @@ function applyEnduranceConditioningFinisher(args: {
   }
 
   if (!targetSession.exercises) targetSession.exercises = []
-  targetSession.exercises.push(finisherExercise as AdaptiveExercise)
+  // Cast finisher exercise to match the array type
+  targetSession.exercises.push(finisherExercise as typeof targetSession.exercises[number])
 
   // Use type assertion for dynamic styleMetadata properties
   const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
@@ -3090,10 +3094,10 @@ function applyEnduranceConditioningFinisher(args: {
   if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
   const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
   rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString() })
-  ;(targetSession as Record<string, unknown>).styleMetadata = styleMetadata
+  ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
 
   const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
-  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`], reasonCode: 'applied_circuit_override' }
+  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`], reasonCode: 'applied_row_level_override' }
 }
 
 // =============================================================================
@@ -3272,10 +3276,14 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
 
     if (exercisesToRemove.length > 0) {
       session.exercises = exercises.filter((_, idx) => !exercisesToRemove.includes(idx))
-      if (session.styleMetadata) session.styleMetadata.hasFinisher = session.exercises.some(ex => (ex as { name?: string }).name?.toLowerCase().includes('finisher'))
+      // Use type assertion for hasFinisher property
+      const meta = session.styleMetadata as Record<string, unknown> | undefined
+      if (meta) meta.hasFinisher = session.exercises.some(ex => (ex as { name?: string }).name?.toLowerCase().includes('finisher'))
     }
 
-    if (session.styleMetadata?.methodOverrideRowApplications) delete session.styleMetadata.methodOverrideRowApplications
+    // Use type assertion for methodOverrideRowApplications property
+    const styleMeta = session.styleMetadata as Record<string, unknown> | undefined
+    if (styleMeta?.methodOverrideRowApplications) delete styleMeta.methodOverrideRowApplications
 
     const rowLevelMethodKeys = ['drop_set', 'rest_pause', 'top_set_backoff', 'cluster', 'endurance_density']
     if (Array.isArray(session.styleMetadata?.appliedMethods)) {

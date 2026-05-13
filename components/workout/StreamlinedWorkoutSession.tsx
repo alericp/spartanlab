@@ -435,6 +435,8 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
     
     const firstEx = currentBlockExercises[0]
     const method = (firstEx.method || '').toLowerCase()
+    // [AB20.4.5.4.1] Also check blockMethod field set by Method Override Planner
+    const blockMethod = ((firstEx as { blockMethod?: string }).blockMethod || '').toLowerCase()
     const memberCount = currentBlockExercises.length
     
     // Determine group type
@@ -446,14 +448,15 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
     
     // Only classify as grouped if there are actually multiple members in the block
     if (memberCount >= 2) {
-      if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
+      if (method.includes('superset') || (memberCount === 2 && currentBlockId && !blockMethod.includes('circuit') && !blockMethod.includes('density'))) {
         groupType = 'superset'
         blockCounter++
         // [GROUPED-IDENTITY-FIX] Match session card display convention
         // Session card shows just "Superset" header, not "Superset A/B"
         // The member exercises within are labeled A, B, C
         blockLabel = 'Superset'
-      } else if (method.includes('circuit') || memberCount > 2) {
+      } else if (method.includes('circuit') || blockMethod.includes('circuit') || (memberCount > 2 && !blockMethod.includes('density'))) {
+        // [AB20.4.5.4.1] Check blockMethod for circuit detection (Method Override Planner)
         groupType = 'circuit'
         blockCounter++
         // [GROUPED-IDENTITY-FIX] Match session card display convention - just "Circuit"
@@ -463,6 +466,11 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
         blockCounter++
         // [GROUPED-IDENTITY-FIX] Match session card display convention - just "Cluster Set"
         blockLabel = 'Cluster Set'
+      } else if (method.includes('density') || blockMethod.includes('density')) {
+        // [AB20.4.5.4.1] Check blockMethod for density_block detection
+        groupType = 'density_block'
+        blockCounter++
+        blockLabel = 'Density Block'
       }
     }
     // Single-member blocks remain groupType = null (normal set-by-set execution)

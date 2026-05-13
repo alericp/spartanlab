@@ -3139,22 +3139,27 @@ export function applyMethodOverridePreviewToProgram(args: {
   // This is the canonical structure the live-grouped-execution-contract uses
   methodStructureSession.methodStructures = updatedMethodStructures
   
-  // [AB20.4.5.4.1] CRITICAL: Update actual session exercises with blockId and method
+  // [AB20.4.5.4.1] CRITICAL: Update actual session exercises with blockId and blockMethod
   // The live runtime's deriveExecutionPlanFromExercises groups by blockId
   // Without this, each exercise becomes its own flat block and Circuit runtime fails
   if (updatedSession.exercises && Array.isArray(updatedSession.exercises)) {
     for (const matched of matchedExercises) {
       const exercise = updatedSession.exercises[matched.index]
       if (exercise) {
-        // Cast to extended type to add blockId and method
+        // Cast to extended type to add blockId and blockMethod (custom field for grouped runtime)
         const extendedExercise = exercise as typeof exercise & { 
           blockId?: string
-          method?: string
+          blockMethod?: string  // Custom field - not the typed 'method' field
+          circuitGroupId?: string  // Explicit circuit group reference
         }
         // Set blockId to the group ID so live runtime groups these exercises together
         extendedExercise.blockId = groupId
-        // Set method to 'circuit' or 'density_block' so groupType detection works
-        extendedExercise.method = isDensity ? 'density_block' : 'circuit'
+        // Set blockMethod to identify the group type for live runtime groupType detection
+        extendedExercise.blockMethod = isDensity ? 'density_block' : 'circuit'
+        // Also set explicit circuit group reference for clarity
+        if (!isDensity) {
+          extendedExercise.circuitGroupId = groupId
+        }
       }
     }
   }

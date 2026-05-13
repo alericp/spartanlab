@@ -1760,7 +1760,7 @@ function MethodDetailModalContent({
                 const capability = preview?.methodCapability || getMethodOverrideCapability(item.methodKey)
                 const methodLabel = capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : item.label
                 const target = preview?.targetExercises?.[0] || preview?.circuitCandidate
-                const dayLabel = target?.dayLabel || preview?.suggestedInsertion?.dayLabel || 'selected day'
+                const dayLabel = target?.dayLabel || 'selected day'
                 
                 // [AB20.4.4.2] Generate confirmation text based on severity/eligibility
                 const isSafeApply = isApplyableSafe

@@ -3058,8 +3058,10 @@ function applyEnduranceConditioningFinisher(args: {
   targetSession: AdaptiveSession
   primaryTarget: MethodOverrideTargetExercise
   capability: MethodOverrideCapability
+  isForceOverride?: boolean
+  severityLevel?: string
 }): MethodOverrideApplyResult {
-  const { updatedProgram, targetSession, primaryTarget, capability } = args
+  const { updatedProgram, targetSession, primaryTarget, capability, isForceOverride, severityLevel } = args
 
   const finisherExercise = {
     name: 'Conditioning Finisher',
@@ -3074,6 +3076,10 @@ function applyEnduranceConditioningFinisher(args: {
     methodRationale: 'Conditioning finisher added via Method Override Planner',
     methodInstructions: METHOD_INSTRUCTIONS.endurance_density.instruction,
     methodRiskNote: METHOD_INSTRUCTIONS.endurance_density.riskNote,
+    // [AB20.4.4] Severity tracking
+    methodOverrideApplyMode: isForceOverride ? 'force_override' : 'normal',
+    methodOverrideSeverityLevel: severityLevel || 'recommended',
+    methodOverrideUserForced: isForceOverride || false,
   }
 
   if (!targetSession.exercises) targetSession.exercises = []
@@ -3087,12 +3093,13 @@ function applyEnduranceConditioningFinisher(args: {
   const appliedMethods = styleMetadata.appliedMethods as string[]
   if (!appliedMethods.includes('endurance_density')) appliedMethods.push('endurance_density')
   if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
-  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
-  rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString() })
+  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string; userForced?: boolean; severityLevel?: string }>
+  rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString(), userForced: isForceOverride, severityLevel })
   ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
 
   const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
-  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`], reasonCode: 'applied_row_level_override' }
+  const forceSuffix = isForceOverride ? ' (forced override)' : ''
+  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}${forceSuffix}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`, `Apply mode: ${isForceOverride ? 'force_override' : 'normal'}`], reasonCode: 'applied_row_level_override' }
 }
 
 // =============================================================================

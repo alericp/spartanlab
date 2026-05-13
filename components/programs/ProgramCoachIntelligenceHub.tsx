@@ -51,6 +51,7 @@ import {
   ArrowRight,
   Eye,
   Info,
+  Loader2,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -69,8 +70,10 @@ import {
   getMethodOverridePreviews,
   clearMethodOverridePreview,
   isCircuitLikePreviewMethodKey,
+  applyMethodOverridePreviewToProgram,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
+  type MethodOverrideApplyResult,
 } from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
@@ -341,6 +344,7 @@ function extractRequestedMethodDecisions(
  */
 export type MethodOverrideApplyEligibility =
   | 'applyable_safe'           // Safe preview with real program patch - Apply enabled
+  | 'applyable_caution_review' // [AB20] Caution preview eligible for manual review apply
   | 'preview_only_caution'     // Caution preview (skill hold, etc.) - Apply disabled
   | 'not_applyable_no_candidate'       // No valid candidate found - Apply disabled
   | 'not_applyable_insufficient_data'  // Missing truth to generate patch - Apply disabled
@@ -796,6 +800,13 @@ function MethodDetailModalContent({
   onCreatePreview,
   onClearPreview,
   onDismiss,
+  onApplySafe,
+  onRequestCautionApply,
+  isApplying,
+  applyResult,
+  showCautionConfirmation,
+  onCancelCautionApply,
+  onConfirmCautionApply,
 }: {
   item: RequestedMethodDisplayItem
   plan: RequestedMethodOverridePlan
@@ -803,6 +814,13 @@ function MethodDetailModalContent({
   onCreatePreview: () => void
   onClearPreview: () => void
   onDismiss: () => void
+  onApplySafe?: () => void
+  onRequestCautionApply?: () => void
+  isApplying?: boolean
+  applyResult?: MethodOverrideApplyResult | null
+  showCautionConfirmation?: boolean
+  onCancelCautionApply?: () => void
+  onConfirmCautionApply?: () => void
 }) {
   // [AB17.2.2] Circuit-specific safety override
   // If circuit preview exists but is not a safe candidate, override the safety display
@@ -1339,27 +1357,98 @@ function MethodDetailModalContent({
             {/* [AB20 / IQ10] Apply button with eligibility classification */}
             {(() => {
               const { eligibility, reason } = classifyApplyEligibility(preview, isAlreadyApplied)
-              const isApplyable = eligibility === 'applyable_safe'
+              const isApplyableSafe = eligibility === 'applyable_safe'
+              const isApplyableCaution = eligibility === 'applyable_caution_review'
+              const isApplyable = isApplyableSafe || isApplyableCaution
               const buttonText = getApplyButtonText(eligibility)
+              
+              // [AB20] Show success state if apply was successful
+              if (applyResult?.status === 'success') {
+                return (
+                  <div className="flex-1 flex flex-col">
+                    <div className="h-10 flex items-center justify-center bg-emerald-600/20 border border-emerald-500/30 rounded-md">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mr-2" />
+                      <span className="text-xs text-emerald-400 font-medium">Applied</span>
+                    </div>
+                    <span className="text-[8px] text-emerald-400/70 text-center mt-1 leading-tight">
+                      {applyResult.visibleSummary}
+                    </span>
+                  </div>
+                )
+              }
+              
+              // [AB20] Show caution confirmation dialog
+              if (showCautionConfirmation && isApplyableCaution) {
+                return (
+                  <div className="flex-1 flex flex-col space-y-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-amber-200 leading-relaxed">
+                        This will change your saved program. This circuit includes a skill/technical station, so keep the pace conservative and preserve technique quality.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onCancelCautionApply}
+                        className="flex-1 h-8 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35] text-xs"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={onConfirmCautionApply}
+                        disabled={isApplying}
+                        className="flex-1 h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                      >
+                        {isApplying ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Applying...
+                          </>
+                        ) : (
+                          'Apply Caution Preview'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              }
               
               return (
                 <div className="flex-1 flex flex-col">
                   <Button
                     variant={isApplyable ? 'default' : 'outline'}
                     size="sm"
-                    disabled={!isApplyable}
+                    disabled={!isApplyable || isApplying}
+                    onClick={isApplyableSafe ? onApplySafe : isApplyableCaution ? onRequestCautionApply : undefined}
                     className={cn(
                       'h-10',
-                      isApplyable 
+                      isApplyableSafe 
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : isApplyableCaution
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
                         : 'text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed'
                     )}
                   >
-                    {buttonText}
+                    {isApplying ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        Applying...
+                      </>
+                    ) : (
+                      buttonText
+                    )}
                   </Button>
                   {!isApplyable && (
                     <span className="text-[8px] text-[#5A5A6A] text-center mt-1 leading-tight">
                       {reason}
+                    </span>
+                  )}
+                  {applyResult?.status === 'blocked' && (
+                    <span className="text-[8px] text-red-400/70 text-center mt-1 leading-tight">
+                      {applyResult.visibleSummary}
                     </span>
                   )}
                 </div>
@@ -1413,13 +1502,20 @@ function MethodDetailModalContent({
 
 function RequestedMethodsSheetContent({
   program,
+  onApplyMethodOverride,
 }: {
   program: AdaptiveProgram
+  onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
   const [currentPlan, setCurrentPlan] = useState<RequestedMethodOverridePlan | null>(null)
   const [previews, setPreviews] = useState<MethodOverridePreview[]>([])
+  
+  // [AB20] Apply state management
+  const [isApplying, setIsApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<MethodOverrideApplyResult | null>(null)
+  const [showCautionConfirmation, setShowCautionConfirmation] = useState(false)
   
   // Load previews from storage on mount
   useEffect(() => {
@@ -1475,11 +1571,88 @@ function RequestedMethodsSheetContent({
     if (!selectedItem) return
     clearMethodOverridePreview(selectedItem.methodKey)
     setPreviews(getMethodOverridePreviews())
+    // [AB20] Clear apply state when clearing preview
+    setApplyResult(null)
+    setShowCautionConfirmation(false)
   }
   
   const handleDismiss = () => {
     setSelectedItem(null)
     setCurrentPlan(null)
+    // [AB20] Clear apply state when dismissing
+    setApplyResult(null)
+    setShowCautionConfirmation(false)
+  }
+  
+  // [AB20] Apply handler for safe previews
+  const handleApplySafe = async () => {
+    if (!selectedItem || !onApplyMethodOverride) return
+    const preview = getCurrentPreview(selectedItem.methodKey)
+    if (!preview) return
+    
+    setIsApplying(true)
+    setApplyResult(null)
+    
+    try {
+      const result = await onApplyMethodOverride(preview, { allowCautionApply: false })
+      setApplyResult(result)
+      
+      if (result.status === 'success') {
+        // Clear preview from storage after successful apply
+        clearMethodOverridePreview(selectedItem.methodKey)
+        setPreviews(getMethodOverridePreviews())
+      }
+    } catch (error) {
+      setApplyResult({
+        status: 'blocked',
+        visibleSummary: 'Failed to apply override.',
+        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+        reasonCode: 'save_failed',
+      })
+    } finally {
+      setIsApplying(false)
+    }
+  }
+  
+  // [AB20] Request caution confirmation
+  const handleRequestCautionApply = () => {
+    setShowCautionConfirmation(true)
+  }
+  
+  // [AB20] Cancel caution confirmation
+  const handleCancelCautionApply = () => {
+    setShowCautionConfirmation(false)
+  }
+  
+  // [AB20] Confirm and apply caution preview
+  const handleConfirmCautionApply = async () => {
+    if (!selectedItem || !onApplyMethodOverride) return
+    const preview = getCurrentPreview(selectedItem.methodKey)
+    if (!preview) return
+    
+    setShowCautionConfirmation(false)
+    setIsApplying(true)
+    setApplyResult(null)
+    
+    try {
+      const result = await onApplyMethodOverride(preview, { allowCautionApply: true })
+      setApplyResult(result)
+      
+      if (result.status === 'success') {
+        // Clear preview from storage after successful apply
+        clearMethodOverridePreview(selectedItem.methodKey)
+        setPreviews(getMethodOverridePreviews())
+      }
+    } catch (error) {
+      setApplyResult({
+        status: 'blocked',
+        visibleSummary: 'Failed to apply override.',
+        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+        reasonCode: 'save_failed',
+      })
+    } finally {
+      setIsApplying(false)
+    }
   }
   
   const getCurrentPreview = (methodKey: string) => {
@@ -1587,6 +1760,13 @@ function RequestedMethodsSheetContent({
           onCreatePreview={handleCreatePreview}
           onClearPreview={handleClearPreview}
           onDismiss={handleDismiss}
+          onApplySafe={handleApplySafe}
+          onRequestCautionApply={handleRequestCautionApply}
+          isApplying={isApplying}
+          applyResult={applyResult}
+          showCautionConfirmation={showCautionConfirmation}
+          onCancelCautionApply={handleCancelCautionApply}
+          onConfirmCautionApply={handleConfirmCautionApply}
         />
       </div>
     )
@@ -1797,6 +1977,34 @@ export function ProgramCoachIntelligenceHub({
     setActivePreviews(getMethodOverridePreviews())
   }, [requestedMethodsOpen])
   const hasActivePreviews = activePreviews.length > 0
+  
+  // [AB20 / IQ10] Apply handler that wraps the pure helper and calls parent update
+  const handleApplyMethodOverride = async (
+    preview: MethodOverridePreview,
+    options: { allowCautionApply: boolean }
+  ): Promise<MethodOverrideApplyResult> => {
+    // Call the pure helper
+    const result = applyMethodOverridePreviewToProgram({
+      program,
+      preview,
+      allowCautionApply: options.allowCautionApply,
+    })
+    
+    // If blocked or no updated program, return early
+    if (result.status !== 'success' || !result.updatedProgram) {
+      return result
+    }
+    
+    // If onProgramUpdate is provided, call it with the updated program
+    // The parent (Program Page) is responsible for saving via saveAdaptiveProgram
+    if (onProgramUpdate) {
+      onProgramUpdate(result.updatedProgram)
+      // Refresh active previews after successful apply
+      setActivePreviews(getMethodOverridePreviews())
+    }
+    
+    return result
+  }
   
   // Compute button summary for Method Planner
   let methodPlannerSummary = 'Preview'
@@ -2107,11 +2315,16 @@ export function ProgramCoachIntelligenceHub({
               Method Override Planner
             </SheetTitle>
             <SheetDescription className="text-[#7A7A8A]">
-              Preview-only. Create safe override previews without changing your saved program.
+              {onProgramUpdate 
+                ? 'Review and apply method override previews to your saved program.'
+                : 'Preview-only. Create safe override previews without changing your saved program.'}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-            <RequestedMethodsSheetContent program={program} />
+            <RequestedMethodsSheetContent 
+              program={program} 
+              onApplyMethodOverride={onProgramUpdate ? handleApplyMethodOverride : undefined}
+            />
           </div>
         </SheetContent>
       </Sheet>

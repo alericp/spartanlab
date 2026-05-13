@@ -779,18 +779,66 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 
 ### IQ9 — Explanation Parity
 
-**Status:** TODO
+**Status:** COMPLETE
 
-**Purpose:** Ensure chips/explanations are derived from actual program truth.
+**User-facing AB alias:** AB19
 
-**Investigation Required:**
-- Verify every visible chip corresponds to computed truth
-- Identify any cosmetic-only explanations
-- Ensure explanation surfaces don't claim more than logic delivered
+**Purpose:** Ensure chips/explanations are derived from actual program truth, not cosmetic fallbacks.
 
-**Files Likely in Scope:**
-- `components/programs/*.tsx` (all explanation renders)
-- `lib/coaching-explanation-contract.ts`
+**Audit Findings (AB19):**
+
+1. **Coaching Explanation Contract Architecture:**
+   - `lib/coaching-explanation-contract.ts` already implements proper `source` classification:
+     - `'authoritative'` — directly from program object truth
+     - `'derived'` — safely derived from program truth
+     - `'fallback'` — labeled as limited
+   - All major UI surfaces (`AdaptiveProgramDisplay`, `AdaptiveSessionCard`, `ProgramCoachIntelligenceHub`) consume this contract
+
+2. **Weekly Check Line (AB18):**
+   - Now includes explicit parity status classification
+   - Source: `weeklyStressDistributionPlan.summary.weeklyHeadline` (authoritative) or derived from stress counts
+   - Visual indicator: emerald=authoritative, blue=derived, amber=fallback
+   - Displays "(derived)" or "(limited)" suffix when not authoritative
+
+3. **Method Override Planner:**
+   - Circuit candidate uses `candidateStatus` for accurate semantic labeling
+   - "Override candidate with caution" derives from real circuit eligibility logic
+   - No cosmetic claims found
+
+4. **Day/Session Cards:**
+   - Chips derive from `ProgramExplanationSurface` via coaching contract
+   - Method chips use `CanonicalMethodStructure` from Phase 4S
+   - Stress labels derive from `stressDistributionProof`
+
+5. **Calibration/Feedback States:**
+   - Stale labels are truthfully computed from evidence age
+   - "Observing" state appears when evidence is insufficient
+
+**Explanation Parity Classification Results:**
+- **Authoritative surfaces:** Weekly headline (when present), method materialization chips, session stress labels
+- **Derived surfaces:** Weekly check counts, exercise purpose lines, day role rationale
+- **Fallback/limited surfaces:** Session count only (when stress plan missing)
+- **Unsafe/cosmetic surfaces:** NONE FOUND
+
+**Implementation (AB19):**
+- Enhanced weekly check line with explicit parity status indicator
+- Icon color changes based on source (emerald/blue/amber)
+- Text suffix shows "(derived)" or "(limited)" for non-authoritative sources
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Added parity status classification to weekly check line
+  - Added visual parity indicator (icon color)
+  - Added text suffix for non-authoritative sources
+
+**TypeScript:** PASS (zero errors)
+**Build:** PASS
+
+**Visible Verification Location:**
+- Program Page → Coach Intelligence Hub → Weekly check line
+- Authoritative: emerald icon, no suffix
+- Derived: blue icon, "(derived)" suffix  
+- Limited: amber icon, "(limited)" suffix
 
 ---
 
@@ -820,7 +868,7 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 | IQ6 | Method decision usefulness and survival | COMPLETE |
 | IQ7 | Feedback loop closure | COMPLETE |
 | IQ8 | Weekly structure and recovery realism | COMPLETE |
-| IQ9 | Explanation parity | TODO |
+| IQ9 | Explanation parity | COMPLETE |
 | IQ10 | Start Workout parity risk audit | VERIFIED STRONG |
 
 ---

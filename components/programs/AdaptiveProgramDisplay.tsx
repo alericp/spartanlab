@@ -287,6 +287,9 @@ interface AdaptiveProgramDisplayProps {
   advisory: MissedWorkoutRecompositionAdvisory,
   targetSessionIndices: number[]
   ) => Promise<MultiSessionPushForwardResult> | MultiSessionPushForwardResult
+  // [AB20 / IQ10] Callback for Method Override Apply — user-confirmed mutation only.
+  // Program Page owns the save path. Display requests via Hub, Page persists.
+  onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
   }
 
 // =============================================================================
@@ -443,6 +446,8 @@ export function AdaptiveProgramDisplay({
   onConfirmProtectRecoverySpacing,
   // [STEP 24.6 / V.V6] Multi-session push-forward callback
   onConfirmMultiSessionPushForward,
+  // [AB20 / IQ10] Method Override Apply callback
+  onProgramUpdate,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1324,6 +1329,7 @@ export function AdaptiveProgramDisplay({
         selectedSkillRepresentations={selectedSkillRepresentations}
         intelligenceContract={intelligenceContract}
         currentWeekNumber={currentWeekNumber}
+        onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for apply
       />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

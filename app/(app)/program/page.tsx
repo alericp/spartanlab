@@ -144,6 +144,12 @@ import {
   type ProtectRecoverySpacingResult,
   type MultiSessionPushForwardResult,
 } from '@/lib/program/missed-workout-recomposition-advisory'
+// [AB20.1D] Method Override Apply — Program Page owns save persistence
+import {
+  applyMethodOverridePreviewToProgram,
+  type MethodOverridePreview,
+  type MethodOverrideApplyResult,
+} from '@/lib/program/requested-method-override-planner'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -2700,6 +2706,86 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [AB20.1D] Method Override Apply Callback
+  // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
+  // This is the authoritative save corridor for method override apply actions.
+  // ==========================================================================
+  const handleApplyMethodOverridePreview = useCallback(
+    async (
+      preview: MethodOverridePreview,
+      options: { allowCautionApply: boolean }
+    ): Promise<MethodOverrideApplyResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          evidence: ['program is null or undefined'],
+          reasonCode: 'no_program',
+        }
+      }
+      
+      console.log('[AB20.1D-method-override-apply] Starting apply', {
+        methodKey: preview.methodKey,
+        allowCautionApply: options.allowCautionApply,
+        programId: program.id,
+        sessionCount: program.sessions?.length,
+      })
+      
+      // Call the pure helper
+      const result = applyMethodOverridePreviewToProgram({
+        program,
+        preview,
+        allowCautionApply: options.allowCautionApply,
+      })
+      
+      console.log('[AB20.1D-method-override-apply] Helper result', {
+        status: result.status,
+        visibleSummary: result.visibleSummary,
+        evidence: result.evidence,
+      })
+      
+      // If blocked or no updated program, return early — do not save
+      if (result.status !== 'success' || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        // [AB20.1D] Dynamic import to access canonical save function
+        // This preserves Program Page's dynamic-module isolation pattern
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram)
+        
+        // [AB20.1D] Update Program Page state via parent callback
+        // onProgramUpdate is passed from parent, which owns setProgram
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[AB20.1D-method-override-apply] Program saved successfully', {
+          programId: savedProgram.id,
+          sessionCount: savedProgram.sessions?.length,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+        }
+      } catch (saveError) {
+        console.error('[AB20.1D-method-override-apply] Save failed', saveError)
+        return {
+          status: 'blocked',
+          visibleSummary: 'Failed to save the updated program.',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+          reasonCode: 'save_failed',
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -3373,6 +3459,9 @@ function ProgramDisplayWrapper({
   /* [AB20 / IQ10] Method Override Apply callback — user-confirmed mutation only.
   Program Page owns setProgram. Display requests via Hub, Page updates. */
   onProgramUpdate={onProgramUpdate}
+  /* [AB20.1D] Dedicated method override apply callback with saveAdaptiveProgram.
+  Program Page owns the save path. Hub requests, Page persists. */
+  onApplyMethodOverridePreview={handleApplyMethodOverridePreview}
   />
       </ErrorBoundary>
     </div>

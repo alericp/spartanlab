@@ -444,6 +444,38 @@ Added concrete day-specific workout preview for method override visualization:
   - Added circuit-specific "Circuit Insertion Analysis" section
   - Added circuit-specific preview card rendering
 
+**IQ6.4.3 Implementation Summary (AB17.2.2.1):**
+
+1. **Authoritative Circuit Candidate Wiring:** `saveMethodOverridePreview()` now calls `findBestCircuitPreviewCandidate(programSessions)` when full program sessions are available, instead of building circuit candidate from only a single session's exercises.
+
+2. **Full Program Sessions Context:** Added `PreviewCreationContext` interface with `programSessions` field. `handleCreatePreview()` in the UI now passes full `program.sessions` for circuit methods so all program days can be scanned.
+
+3. **Honest Pre-Preview Guidance:** Updated `planCircuit()` to use `safety: 'not_enough_truth'` before preview, with headline "Create preview to scan all program days for circuit candidates" — no longer falsely claims "Safe to Preview" or shows specific day as final truth before scan.
+
+4. **Circuit Safety Badge Updates:**
+   - Before preview: "Scan Required" (not "Safe to Preview" or "Insufficient Data")
+   - After preview with 3+ exercises: "Safe to Preview"
+   - After preview with 2 exercises: "Would Be Superset"
+   - After preview with no safe candidate: "No Safe Circuit"
+
+5. **All-Program Day Scan Proof:** When circuit candidate is created via `findBestCircuitPreviewCandidate()`, a risk note "Scanned all N program days" is added to prove the preview checked all days, not just the stale suggested insertion day.
+
+6. **Generic Circuit Strings Removed from Final Truth:**
+   - `planCircuit()` no longer shows `Circuit can be previewed on ${bestSession?.title}` as final pre-preview truth
+   - Summary changed to "Preview will scan all days for 3+ compatible exercises"
+   - Risk notes now explain circuit doctrine (3+ exercises required, 2 = superset)
+
+**Files Changed (IQ6.4.3):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Added `PreviewCreationContext` interface
+  - Updated `saveMethodOverridePreview()` signature to accept optional `context` parameter
+  - Updated circuit candidate creation to use `findBestCircuitPreviewCandidate(context.programSessions)` when available
+  - Updated `findBestCircuitPreviewCandidate()` to accept sessions with optional exercises array
+  - Updated `planCircuit()` to use `not_enough_truth` safety and honest headline
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Updated `handleCreatePreview()` to pass full `program.sessions` in context for circuit methods
+  - Updated safety label logic to show "Scan Required" for circuits before preview
+
 ---
 
 ### IQ7 — Feedback Loop Closure

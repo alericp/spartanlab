@@ -684,11 +684,28 @@ function MethodDetailModalContent({
   const circuitCandidate = preview?.circuitCandidate
   const isUnsafeCircuit = isCircuitMethod && circuitCandidate && !circuitCandidate.isSafeCircuitCandidate
   
-  // Determine effective safety for display
-  const effectiveSafety = isUnsafeCircuit ? 'needs_caution' : plan.safety
-  const effectiveSafetyLabel = isUnsafeCircuit 
-    ? (circuitCandidate?.circuitSize === 2 ? 'Would Be Superset' : 'No Safe Circuit') 
-    : SAFETY_LABELS[plan.safety]
+  // [AB17.2.2.1] Determine effective safety for display
+  // For circuits before preview: show "Scan Required" instead of "Insufficient Data"
+  // For circuits after preview with safe candidate: show "Safe to Preview"
+  // For circuits after preview without safe candidate: show specific reason
+  let effectiveSafety = plan.safety
+  let effectiveSafetyLabel = SAFETY_LABELS[plan.safety]
+  
+  if (isCircuitMethod) {
+    if (!preview) {
+      // Before preview: guide user to scan
+      effectiveSafety = 'not_enough_truth'
+      effectiveSafetyLabel = 'Scan Required'
+    } else if (circuitCandidate?.isSafeCircuitCandidate) {
+      // After preview with valid 3+ exercise candidate
+      effectiveSafety = 'safe_preview'
+      effectiveSafetyLabel = 'Safe to Preview'
+    } else if (isUnsafeCircuit) {
+      // After preview without safe candidate
+      effectiveSafety = 'needs_caution'
+      effectiveSafetyLabel = circuitCandidate?.circuitSize === 2 ? 'Would Be Superset' : 'No Safe Circuit'
+    }
+  }
   
   const safetyStyle = SAFETY_COLORS[effectiveSafety] || SAFETY_COLORS.not_enough_truth
   const SafetyIcon = safetyStyle.icon
@@ -1239,7 +1256,18 @@ function RequestedMethodsSheetContent({
       sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
     }
     
-    const preview = saveMethodOverridePreview(currentPlan, sessionExercises, sessionTitle)
+    // [AB17.2.2.1] For circuits, pass full program sessions so findBestCircuitPreviewCandidate() can scan all days
+    const isCircuitMethod = currentPlan.methodKey === 'circuits' || currentPlan.methodKey === 'density_blocks'
+    const context = isCircuitMethod && program.sessions ? {
+      programSessions: program.sessions.map(s => ({
+        exercises: s.exercises,
+        focus: s.focus,
+        focusLabel: s.focusLabel,
+        title: s.focusLabel || s.focus,
+      }))
+    } : undefined
+    
+    const preview = saveMethodOverridePreview(currentPlan, sessionExercises, sessionTitle, context)
     setPreviews(getMethodOverridePreviews())
     // Stay on the detail view to show the preview
   }

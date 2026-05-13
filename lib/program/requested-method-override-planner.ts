@@ -2143,10 +2143,10 @@ export function revertMethodOverrideFromProgram(args: {
     )
     
     if (circuitEntry && !anyCircuitsRemain) {
-      // No circuits remain anywhere - mark as not materialized
-      circuitEntry.status = 'NOT_MATERIALIZED'
+      // No circuits remain anywhere - mark as blocked (user removed override, returns to coach-held-back state)
+      circuitEntry.status = 'BLOCKED_BY_SAFETY'
       circuitEntry.materializedCount = 0
-      circuitEntry.reason = 'Removed Method Override Planner circuit override.'
+      circuitEntry.reason = 'Circuit override removed. Method is no longer materialized and remains held back by the current weekly method decision.'
     }
     
     // Update oneLineExplanation

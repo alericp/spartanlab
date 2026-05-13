@@ -409,8 +409,10 @@ function extractRequestedMethodDecisions(
 export type MethodOverrideApplyEligibility =
   | 'applyable_safe'           // Safe preview with real program patch - Apply enabled
   | 'applyable_caution_review' // [AB20] Caution preview eligible for manual review apply
+  | 'applyable_force_override' // [AB20.4.4.1] Not recommended but force override available
   | 'preview_only_caution'     // Caution preview (skill hold, etc.) - Apply disabled
   | 'not_applyable_no_candidate'       // No valid candidate found - Apply disabled
+  | 'not_applyable_blocked_impossible' // [AB20.4.4.1] Blocked/impossible - no force override
   | 'not_applyable_insufficient_data'  // Missing truth to generate patch - Apply disabled
   | 'not_applyable_stale_program'      // Program changed since preview - Apply disabled
   | 'not_applyable_already_materialized' // Method already in program - Apply disabled
@@ -604,7 +606,6 @@ function getApplyButtonText(eligibility: MethodOverrideApplyEligibility): string
   return 'Not Available'
   }
   }
-}
 
 interface ProgramCoachIntelligenceHubProps {
   program: AdaptiveProgram
@@ -1728,8 +1729,15 @@ function MethodDetailModalContent({
               const { eligibility, reason } = classifyApplyEligibility(preview, isAlreadyApplied)
               const isApplyableSafe = eligibility === 'applyable_safe'
               const isApplyableCaution = eligibility === 'applyable_caution_review'
-              const isApplyable = isApplyableSafe || isApplyableCaution
+              const isApplyableForce = eligibility === 'applyable_force_override'
+              const isBlockedImpossible = eligibility === 'not_applyable_blocked_impossible'
+              const isApplyable = isApplyableSafe || isApplyableCaution || isApplyableForce
               const buttonText = getApplyButtonText(eligibility)
+              
+              // [AB20.4.4.2] Unified handler for all apply types
+              const handleUnifiedApply = () => {
+                onRequestCautionApply?.()
+              }
               
               // [AB20] Show success state if apply was successful
               if (applyResult?.status === 'success') {
@@ -1752,7 +1760,7 @@ function MethodDetailModalContent({
                 const capability = preview?.methodCapability || getMethodOverrideCapability(item.methodKey)
                 const methodLabel = capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : item.label
                 const target = preview?.targetExercises?.[0] || preview?.circuitCandidate
-                const dayLabel = target?.dayLabel || preview?.suggestedInsertionSummary?.split(' — ')[0] || 'selected day'
+                const dayLabel = target?.dayLabel || preview?.suggestedInsertion?.dayLabel || 'selected day'
                 
                 // [AB20.4.4.2] Generate confirmation text based on severity/eligibility
                 const isSafeApply = isApplyableSafe
@@ -1839,7 +1847,7 @@ function MethodDetailModalContent({
                     variant={isApplyable ? 'default' : 'outline'}
                     size="sm"
                     disabled={(!isApplyable && !isBlockedImpossible) || isApplying}
-                    onClick={isApplyable ? handleRequestApply : undefined}
+                    onClick={isApplyable ? handleUnifiedApply : undefined}
                     className={cn(
                       'h-10',
                       isApplyableSafe 
@@ -2035,8 +2043,8 @@ function RequestedMethodsSheetContent({
   }
   
   // [AB20.4.4.2] All apply paths now show confirmation first
-  // handleApplySafe renamed to handleRequestApply - shows confirmation before applying
-  const handleRequestApply = () => {
+  // handleApplySafe now triggers confirmation instead of directly applying
+  const handleApplySafe = () => {
   setShowCautionConfirmation(true)
   }
   

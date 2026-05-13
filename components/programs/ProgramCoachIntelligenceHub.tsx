@@ -933,26 +933,35 @@ function MethodDetailModalContent({
             <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
           </div>
           
-          {/* [AB17.2.2] Circuit-Specific Preview Truth */}
+          {/* [AB17.2.2 / AB17.2.2.2] Circuit-Specific Preview Truth */}
           {preview.circuitCandidate && (
             <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
-              {/* Circuit Status Header */}
-              {preview.circuitCandidate.isSafeCircuitCandidate ? (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Circuit preview: {preview.circuitCandidate.circuitSize} exercises
-                  </span>
-                  <span className="text-[9px] text-emerald-400/60">
-                    ({preview.circuitCandidate.confidence} confidence)
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 mb-2">
+              {/* [AB17.2.2.2] Circuit Status Header - uses candidateStatus for clear states */}
+              <div className="flex items-center gap-2 mb-2">
+                {preview.circuitCandidate.candidateStatus === 'safe_circuit' ? (
+                  <>
+                    <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      {preview.circuitCandidate.statusLabel}
+                    </span>
+                    <span className="text-[9px] text-emerald-400/60">
+                      ({preview.circuitCandidate.confidence} confidence)
+                    </span>
+                  </>
+                ) : preview.circuitCandidate.candidateStatus === 'override_with_caution' ? (
+                  <>
+                    <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {preview.circuitCandidate.statusLabel}
+                    </span>
+                    <span className="text-[9px] text-amber-400/60">
+                      ({preview.circuitCandidate.circuitSize} exercises)
+                    </span>
+                  </>
+                ) : (
                   <span className="px-2 py-0.5 text-[9px] font-medium rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    {preview.circuitCandidate.circuitSize === 2 ? 'Would be superset (not circuit)' : 'No safe circuit candidate'}
+                    {preview.circuitCandidate.statusLabel}
                   </span>
-                </div>
-              )}
+                )}
+              </div>
               
               {/* Affected Day */}
               <div className="text-[10px] font-medium text-amber-400 mb-2">
@@ -963,12 +972,22 @@ function MethodDetailModalContent({
               {preview.circuitCandidate.selectedExercises.length > 0 && (
                 <div className="mb-3">
                   <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
-                    {preview.circuitCandidate.isSafeCircuitCandidate ? 'Circuit Exercises' : 'Available Exercises'}
+                    {preview.circuitCandidate.candidateStatus === 'safe_circuit' 
+                      ? 'Circuit Exercises' 
+                      : preview.circuitCandidate.candidateStatus === 'override_with_caution'
+                        ? 'Circuit Exercises (with caution)'
+                        : 'Available Exercises'}
                   </span>
                   <div className="space-y-1">
                     {preview.circuitCandidate.selectedExercises.map((exercise, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-[10px]">
-                        <span className={preview.circuitCandidate!.isSafeCircuitCandidate ? 'text-emerald-400' : 'text-amber-400'}>
+                        <span className={
+                          preview.circuitCandidate!.candidateStatus === 'safe_circuit' 
+                            ? 'text-emerald-400' 
+                            : preview.circuitCandidate!.candidateStatus === 'override_with_caution'
+                              ? 'text-amber-400'
+                              : 'text-[#7A7A8A]'
+                        }>
                           {idx + 1}.
                         </span>
                         <span className="text-[#9A9AAA]">{exercise}</span>

@@ -630,10 +630,15 @@ export function planMethodOverride(
     proof.missingTruth.push('Unknown method type for automatic planning')
   }
   
-  // Determine if preview is safe
-  const canPreview = 
-    methodPlan.safety === 'safe_preview' || 
-    methodPlan.safety === 'needs_caution'
+  // [AB17.2.2.2] Determine if preview is allowed
+  // For most methods: require safe_preview or needs_caution
+  // For Circuits/Density: allow preview when program has exercises (scan is the diagnostic)
+  const isCircuitLikeMethod = methodKey.includes('circuit') || methodKey.includes('density')
+  const hasProgramExerciseTruth = sessions.some(s => s.exerciseCount > 0)
+  
+  const canPreview = isCircuitLikeMethod
+    ? hasProgramExerciseTruth  // Circuits use preview scan as the diagnostic gate
+    : (methodPlan.safety === 'safe_preview' || methodPlan.safety === 'needs_caution')
   
   return {
     methodKey: methodItem.methodKey,
@@ -794,7 +799,17 @@ function classifyMovementPattern(exerciseName: string): MovementPattern {
 }
 
 /**
+ * [AB17.2.2.2] Circuit candidate status for clear UI rendering.
+ */
+export type CircuitCandidateStatus = 
+  | 'safe_circuit'           // 3+ exercises, good score
+  | 'override_with_caution'  // 3+ exercises, but risky (score <= 0)
+  | 'would_be_superset'      // exactly 2 exercises
+  | 'no_candidate'           // < 2 exercises
+
+/**
  * [AB17.2.1] Circuit candidate result for a specific day.
+ * [AB17.2.2.2] Extended with candidateStatus for clearer UI states.
  */
 export interface CircuitPreviewCandidate {
   dayIndex: number
@@ -807,6 +822,12 @@ export interface CircuitPreviewCandidate {
   circuitSize: number
   confidence: 'high' | 'medium' | 'low' | 'none'
   isSafeCircuitCandidate: boolean
+  /** [AB17.2.2.2] True when 3+ exercises exist, even if not perfectly safe */
+  isOverrideCandidate: boolean
+  /** [AB17.2.2.2] Clear status for UI rendering */
+  candidateStatus: CircuitCandidateStatus
+  /** [AB17.2.2.2] Human-readable status label */
+  statusLabel: string
   patternDistribution: Record<MovementPattern, number>
 }
 
@@ -912,16 +933,21 @@ function scoreSessionForCircuit(
 
 /**
  * [AB17.2.1] Finds the best circuit preview candidate across all program sessions.
- * Returns null if no safe circuit candidate exists.
  * [AB17.2.2.1] Updated to handle sessions with optional exercises array.
+ * [AB17.2.2.2] Now returns best override candidate with caution if no safe candidate exists.
+ * Returns null only if no 2+ exercise candidates exist anywhere.
  */
 export function findBestCircuitPreviewCandidate(
   sessions: Array<{ exercises?: Array<{ name?: string }>; focus?: string; focusLabel?: string }>,
 ): CircuitPreviewCandidate | null {
   if (!sessions || sessions.length === 0) return null
   
-  let bestCandidate: CircuitPreviewCandidate | null = null
-  let bestScore = -Infinity
+  let bestSafeCandidate: CircuitPreviewCandidate | null = null
+  let bestOverrideCandidate: CircuitPreviewCandidate | null = null
+  let bestSupersetCandidate: CircuitPreviewCandidate | null = null
+  let bestSafeScore = -Infinity
+  let bestOverrideScore = -Infinity
+  let bestSupersetScore = -Infinity
   
   for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
     const session = sessions[dayIndex]
@@ -938,6 +964,28 @@ export function findBestCircuitPreviewCandidate(
       selected.length >= 3 && score > 30 ? 'medium' :
       selected.length >= 3 ? 'low' : 'none'
     
+    // [AB17.2.2.2] Determine candidate status
+    const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0
+    const isOverride = selected.length >= CIRCUIT_MINIMUM_EXERCISES && !isSafe
+    const isSuperset = selected.length === 2
+    
+    let candidateStatus: CircuitCandidateStatus
+    let statusLabel: string
+    
+    if (isSafe) {
+      candidateStatus = 'safe_circuit'
+      statusLabel = `Circuit preview: ${selected.length} exercises`
+    } else if (isOverride) {
+      candidateStatus = 'override_with_caution'
+      statusLabel = 'Override candidate with caution'
+    } else if (isSuperset) {
+      candidateStatus = 'would_be_superset'
+      statusLabel = 'Would be superset (not circuit)'
+    } else {
+      candidateStatus = 'no_candidate'
+      statusLabel = 'No safe circuit candidate'
+    }
+    
     const candidate: CircuitPreviewCandidate = {
       dayIndex,
       dayLabel,
@@ -948,17 +996,32 @@ export function findBestCircuitPreviewCandidate(
       riskNotes: notes,
       circuitSize: selected.length,
       confidence,
-      isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
+      isSafeCircuitCandidate: isSafe,
+      isOverrideCandidate: isOverride || isSafe, // 3+ exercises = override candidate
+      candidateStatus,
+      statusLabel,
       patternDistribution: patterns,
     }
     
-    if (score > bestScore) {
-      bestScore = score
-      bestCandidate = candidate
+    // Track best candidates by category
+    if (isSafe && score > bestSafeScore) {
+      bestSafeScore = score
+      bestSafeCandidate = candidate
+    } else if (isOverride && score > bestOverrideScore) {
+      bestOverrideScore = score
+      bestOverrideCandidate = candidate
+    } else if (isSuperset && score > bestSupersetScore) {
+      bestSupersetScore = score
+      bestSupersetCandidate = candidate
     }
   }
   
-  return bestCandidate
+  // [AB17.2.2.2] Return best available candidate with priority:
+  // 1. Safe circuit (3+ exercises, good score)
+  // 2. Override with caution (3+ exercises, risky)
+  // 3. Superset (2 exercises)
+  // 4. null (no candidate)
+  return bestSafeCandidate || bestOverrideCandidate || bestSupersetCandidate
 }
 
 /**
@@ -1292,6 +1355,28 @@ export function saveMethodOverridePreview(
         selected.length >= 3 && score > 30 ? 'medium' :
         selected.length >= 3 ? 'low' : 'none'
       
+      // [AB17.2.2.2] Determine candidate status for fallback path
+      const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0
+      const isOverride = selected.length >= CIRCUIT_MINIMUM_EXERCISES && !isSafe
+      const isSuperset = selected.length === 2
+      
+      let candidateStatus: CircuitCandidateStatus
+      let statusLabel: string
+      
+      if (isSafe) {
+        candidateStatus = 'safe_circuit'
+        statusLabel = `Circuit preview: ${selected.length} exercises`
+      } else if (isOverride) {
+        candidateStatus = 'override_with_caution'
+        statusLabel = 'Override candidate with caution'
+      } else if (isSuperset) {
+        candidateStatus = 'would_be_superset'
+        statusLabel = 'Would be superset (not circuit)'
+      } else {
+        candidateStatus = 'no_candidate'
+        statusLabel = 'No safe circuit candidate'
+      }
+      
       circuitCandidate = {
         dayIndex,
         dayLabel,
@@ -1302,7 +1387,10 @@ export function saveMethodOverridePreview(
         riskNotes: ['Single-session preview only — full program scan unavailable', ...riskNotes],
         circuitSize: selected.length,
         confidence,
-        isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
+        isSafeCircuitCandidate: isSafe,
+        isOverrideCandidate: isOverride || isSafe,
+        candidateStatus,
+        statusLabel,
         patternDistribution: patterns,
       }
     }

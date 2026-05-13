@@ -349,6 +349,85 @@ export interface MethodOverridePlannerInput {
 // HELPER: SESSION ANALYSIS
 // =============================================================================
 
+// =============================================================================
+// [AB20.4.4.2] SESSION METHOD LOAD DETECTION
+// =============================================================================
+
+/**
+ * [AB20.4.4.2] Detects existing method overrides on a session.
+ * Used to prevent blind stacking of multiple methods on the same day.
+ */
+export interface SessionMethodLoad {
+  hasUserAppliedGroupedOverride: boolean
+  hasUserAppliedRowOverride: boolean
+  appliedOverrideCount: number
+  appliedOverrideMethodKeys: string[]
+  hasNativeSuperset: boolean
+  hasFinisher: boolean
+  methodLoadPenalty: number // Score penalty for additional method targeting
+}
+
+export function getSessionMethodLoad(session: AdaptiveSession): SessionMethodLoad {
+  const exercises = session.exercises || []
+  const styleMetadata = (session.styleMetadata || {}) as Record<string, unknown>
+  const styledGroups = (session as unknown as { styledGroups?: Array<{ groupType?: string; source?: string }> }).styledGroups || []
+  
+  // Check for user-applied grouped overrides (circuits, density blocks)
+  const userAppliedGroups = styledGroups.filter(g => 
+    g.source === 'method_override_planner' && 
+    (g.groupType === 'circuit' || g.groupType === 'density_block')
+  )
+  const hasUserAppliedGroupedOverride = userAppliedGroups.length > 0
+  
+  // Check for user-applied row-level overrides
+  const rowApplications = (styleMetadata.methodOverrideRowApplications || []) as Array<{ methodKey: string }>
+  const rowOverrideExercises = exercises.filter(ex => 
+    (ex as unknown as { methodOverrideApplied?: boolean }).methodOverrideApplied === true
+  )
+  const hasUserAppliedRowOverride = rowApplications.length > 0 || rowOverrideExercises.length > 0
+  
+  // Collect all applied override method keys
+  const appliedOverrideMethodKeys: string[] = [
+    ...userAppliedGroups.map(g => g.groupType || 'unknown'),
+    ...rowApplications.map(r => r.methodKey),
+  ]
+  const appliedOverrideCount = appliedOverrideMethodKeys.length
+  
+  // Check for native supersets (not penalized as heavily)
+  const hasNativeSuperset = styledGroups.some(g => 
+    g.groupType === 'superset' && g.source !== 'method_override_planner'
+  ) || exercises.some(ex => 
+    (ex as unknown as { groupType?: string }).groupType === 'superset' ||
+    (ex as unknown as { blockGroupType?: string }).blockGroupType === 'superset'
+  )
+  
+  // Check for finisher
+  const hasFinisher = (styleMetadata.hasFinisher === true) || exercises.some(ex => 
+    (ex as unknown as { isFinisher?: boolean }).isFinisher === true ||
+    (ex.name || '').toLowerCase().includes('finisher') ||
+    (ex as unknown as { methodOverrideMethodKey?: string }).methodOverrideMethodKey === 'endurance_density'
+  )
+  
+  // Calculate penalty for targeting this session with another method
+  // Higher penalty = less desirable target
+  let methodLoadPenalty = 0
+  if (hasUserAppliedGroupedOverride) methodLoadPenalty += 50 // Heavy penalty for existing grouped override
+  if (hasUserAppliedRowOverride) methodLoadPenalty += 30 // Moderate penalty for existing row override
+  if (hasFinisher) methodLoadPenalty += 20 // Some penalty for existing finisher
+  if (hasNativeSuperset) methodLoadPenalty += 5 // Light penalty for native supersets
+  methodLoadPenalty += appliedOverrideCount * 15 // Penalty per override already applied
+  
+  return {
+    hasUserAppliedGroupedOverride,
+    hasUserAppliedRowOverride,
+    appliedOverrideCount,
+    appliedOverrideMethodKeys,
+    hasNativeSuperset,
+    hasFinisher,
+    methodLoadPenalty,
+  }
+}
+
 interface SessionAnalysis {
   dayIndex: number
   title: string
@@ -1253,16 +1332,34 @@ function scoreExerciseForMethod(args: {
   const cautions: string[] = []
   let score = 50
   let safety: MethodOverrideTargetSafety = 'safe'
-
+  
   if (isSkillHoldExercise(name)) return { score: -100, reasons: ['Skill hold - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
   if (isExplosiveExercise(name)) return { score: -100, reasons: ['Explosive movement - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
   if (!hasClearRepTarget({ name: exercise.name, reps: exercise.reps })) return { score: -100, reasons: ['Time-based hold - no clear rep target'], cautions: [], safety: 'blocked' }
-
+  
   const normalizedMethodKey = normalizeOverrideMethodKey(methodKey)
   if (existingMethods.some(m => normalizeOverrideMethodKey(m) === normalizedMethodKey)) {
-    return { score: -50, reasons: ['Method already applied to this session'], cautions: [], safety: 'blocked' }
+  return { score: -50, reasons: ['Method already applied to this session'], cautions: [], safety: 'blocked' }
   }
-
+  
+  // [AB20.4.4.2] Apply method load penalty to avoid blind stacking
+  const methodLoad = getSessionMethodLoad(session)
+  if (methodLoad.methodLoadPenalty > 0) {
+    score -= methodLoad.methodLoadPenalty
+    if (methodLoad.hasUserAppliedGroupedOverride) {
+      cautions.push(`Session already has a ${methodLoad.appliedOverrideMethodKeys[0] || 'grouped'} override`)
+      if (methodLoad.methodLoadPenalty >= 50) safety = 'caution'
+    }
+    if (methodLoad.hasUserAppliedRowOverride) {
+      cautions.push('Session already has row-level method override')
+      if (safety === 'safe') safety = 'caution'
+    }
+    if (methodLoad.appliedOverrideCount >= 2) {
+      reasons.push(`Session has ${methodLoad.appliedOverrideCount} existing overrides - stacking not recommended`)
+      safety = 'caution'
+    }
+  }
+  
   // Check if session already has a finisher via exercises
   const hasExistingFinisher = session.exercises?.some(ex => 
     (ex.name || '').toLowerCase().includes('finisher') || 
@@ -1937,7 +2034,19 @@ export function findBestCircuitPreviewCandidate(
     const sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
     
     const { selected, skipped, patterns, reason, hasSkillHoldCaution, hasSamePatternCaution, safeCount } = findCircuitCompatibleExercises(exercises)
-    const { score, notes } = scoreSessionForCircuit(exercises, sessionTitle)
+    let { score, notes } = scoreSessionForCircuit(exercises, sessionTitle)
+    
+    // [AB20.4.4.2] Apply method load penalty for grouped block targeting
+    const methodLoad = getSessionMethodLoad(session as AdaptiveSession)
+    if (methodLoad.methodLoadPenalty > 0) {
+      score -= methodLoad.methodLoadPenalty
+      if (methodLoad.hasUserAppliedGroupedOverride) {
+        notes.push(`Session already has ${methodLoad.appliedOverrideMethodKeys[0] || 'grouped'} override - choosing next-best day`)
+      }
+      if (methodLoad.hasUserAppliedRowOverride) {
+        notes.push('Session has row-level method override')
+      }
+    }
     
     const dayLabel = formatDayLabel(dayIndex, sessionTitle)
     
@@ -3433,9 +3542,10 @@ function applyEnduranceConditioningFinisher(args: {
 }): MethodOverrideApplyResult {
   const { updatedProgram, targetSession, primaryTarget, capability, isForceOverride, severityLevel } = args
 
+  // [AB20.4.4.2] FIX: Use numeric sets (not string) to pass saveAdaptiveProgram validation
   const finisherExercise = {
     name: 'Conditioning Finisher',
-    sets: '1',
+    sets: 1, // NUMERIC, not '1' string - required by saveAdaptiveProgram validation
     reps: '5-8 min',
     notes: 'Low-moderate intensity sustained work. Choose: row, bike, jump rope, or bodyweight circuit.',
     trainingMethod: 'endurance_density',
@@ -3450,6 +3560,9 @@ function applyEnduranceConditioningFinisher(args: {
     methodOverrideApplyMode: isForceOverride ? 'force_override' : 'normal',
     methodOverrideSeverityLevel: severityLevel || 'recommended',
     methodOverrideUserForced: isForceOverride || false,
+    // [AB20.4.4.2] Additional fields for exercise validation
+    isFinisher: true,
+    category: 'conditioning',
   }
 
   if (!targetSession.exercises) targetSession.exercises = []

@@ -409,8 +409,10 @@ function extractRequestedMethodDecisions(
 export type MethodOverrideApplyEligibility =
   | 'applyable_safe'           // Safe preview with real program patch - Apply enabled
   | 'applyable_caution_review' // [AB20] Caution preview eligible for manual review apply
+  | 'applyable_force_override' // [AB20.4.4.1] Not recommended but force override available
   | 'preview_only_caution'     // Caution preview (skill hold, etc.) - Apply disabled
   | 'not_applyable_no_candidate'       // No valid candidate found - Apply disabled
+  | 'not_applyable_blocked_impossible' // [AB20.4.4.1] Blocked/impossible - no force override
   | 'not_applyable_insufficient_data'  // Missing truth to generate patch - Apply disabled
   | 'not_applyable_stale_program'      // Program changed since preview - Apply disabled
   | 'not_applyable_already_materialized' // Method already in program - Apply disabled
@@ -580,26 +582,30 @@ function classifyApplyEligibility(
  */
 function getApplyButtonText(eligibility: MethodOverrideApplyEligibility): string {
   switch (eligibility) {
-    case 'applyable_safe':
-      return 'Apply Override Preview'
-    case 'applyable_caution_review':
-      return 'Review & Apply'
-    case 'preview_only_caution':
-      return 'Preview Only'
-    case 'not_applyable_no_candidate':
-      return 'No Safe Candidate'
-    case 'not_applyable_insufficient_data':
-      return 'Insufficient Data'
-    case 'not_applyable_stale_program':
-      return 'Refresh Program First'
-    case 'not_applyable_already_materialized':
-      return 'Already Included'
-    case 'not_applyable_unsupported_method':
-      return 'Apply Coming Soon'
-    default:
-      return 'Not Available'
+  case 'applyable_safe':
+  return 'Review & Apply' // [AB20.4.4.2] All applies now go through confirmation
+  case 'applyable_caution_review':
+  return 'Review & Apply'
+  case 'applyable_force_override':
+  return 'Review Override'
+  case 'preview_only_caution':
+  return 'Preview Only'
+  case 'not_applyable_no_candidate':
+  return 'No Safe Candidate'
+  case 'not_applyable_blocked_impossible':
+  return 'Blocked / Impossible'
+  case 'not_applyable_insufficient_data':
+  return 'Insufficient Data'
+  case 'not_applyable_stale_program':
+  return 'Refresh Program First'
+  case 'not_applyable_already_materialized':
+  return 'Already Included'
+  case 'not_applyable_unsupported_method':
+  return 'Apply Coming Soon'
+  default:
+  return 'Not Available'
   }
-}
+  }
 
 interface ProgramCoachIntelligenceHubProps {
   program: AdaptiveProgram
@@ -1723,8 +1729,15 @@ function MethodDetailModalContent({
               const { eligibility, reason } = classifyApplyEligibility(preview, isAlreadyApplied)
               const isApplyableSafe = eligibility === 'applyable_safe'
               const isApplyableCaution = eligibility === 'applyable_caution_review'
-              const isApplyable = isApplyableSafe || isApplyableCaution
+              const isApplyableForce = eligibility === 'applyable_force_override'
+              const isBlockedImpossible = eligibility === 'not_applyable_blocked_impossible'
+              const isApplyable = isApplyableSafe || isApplyableCaution || isApplyableForce
               const buttonText = getApplyButtonText(eligibility)
+              
+              // [AB20.4.4.2] Unified handler for all apply types
+              const handleUnifiedApply = () => {
+                onRequestCautionApply?.()
+              }
               
               // [AB20] Show success state if apply was successful
               if (applyResult?.status === 'success') {
@@ -1742,27 +1755,62 @@ function MethodDetailModalContent({
               }
               
               // [AB20] Show caution confirmation dialog
-              // [AB20.4] Method-specific confirmation text
-              if (showCautionConfirmation && isApplyableCaution) {
+              // [AB20.4.4.2] Unified confirmation panel for ALL apply types
+              if (showCautionConfirmation && isApplyable) {
                 const capability = preview?.methodCapability || getMethodOverrideCapability(item.methodKey)
                 const methodLabel = capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : item.label
+                const target = preview?.targetExercises?.[0] || preview?.circuitCandidate
+                const dayLabel = target?.dayLabel || 'selected day'
                 
-                // [AB20.4] Generate method-specific caution text
-                const cautionText = capability.canonicalKey === 'density_block'
-                  ? `This will change your saved program. This density block includes a skill/technical station, so maintain form quality with adequate rest.`
-                  : capability.canonicalKey === 'circuits'
-                    ? `This will change your saved program. This circuit includes a skill/technical station, so keep the pace conservative and preserve technique quality.`
-                    : capability.canonicalKey === 'cluster'
-                      ? `This will change your saved program. Cluster sets will be applied — use only on final sets when form would otherwise collapse.`
-                      : `This will change your saved program. ${methodLabel} will be applied with caution — review the placement carefully.`
+                // [AB20.4.4.2] Generate confirmation text based on severity/eligibility
+                const isSafeApply = isApplyableSafe
+                const isCautionApply = isApplyableCaution
+                const isForceApply = isApplyableForce
+                
+                const confirmText = isForceApply
+                  ? `The AI coach does not recommend ${methodLabel} for this program. Applying anyway may reduce training quality.`
+                  : isCautionApply
+                    ? `This will change your saved program. ${methodLabel} will be applied with caution — review the placement carefully.`
+                    : `This will update your saved program by applying ${methodLabel} to ${dayLabel}.`
+                
+                const bgColor = isForceApply 
+                  ? 'bg-orange-500/5 border-orange-500/20' 
+                  : isCautionApply 
+                    ? 'bg-amber-500/5 border-amber-500/20'
+                    : 'bg-emerald-500/5 border-emerald-500/20'
+                
+                const iconColor = isForceApply ? 'text-orange-400' : isCautionApply ? 'text-amber-400' : 'text-emerald-400'
+                const textColor = isForceApply ? 'text-orange-200' : isCautionApply ? 'text-amber-200' : 'text-emerald-200'
+                const buttonColor = isForceApply 
+                  ? 'bg-orange-600 hover:bg-orange-700'
+                  : isCautionApply 
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                const buttonText = isForceApply ? 'Force Override Anyway' : isCautionApply ? 'Apply Caution Preview' : 'Apply Override'
                 
                 return (
-                  <div className="flex-1 flex flex-col space-y-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                  <div className={cn('flex-1 flex flex-col space-y-2 p-2 rounded-lg border', bgColor)}>
                     <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-amber-200 leading-relaxed">
-                        {cautionText}
-                      </p>
+                      {isForceApply || isCautionApply ? (
+                        <AlertTriangle className={cn('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
+                      ) : (
+                        <CheckCircle2 className={cn('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
+                      )}
+                      <div className="flex-1">
+                        <p className={cn('text-[10px] leading-relaxed', textColor)}>
+                          {confirmText}
+                        </p>
+                        {target && 'exerciseName' in target && (
+                          <p className="text-[9px] text-[#8A8A9A] mt-1">
+                            Target: {target.dayLabel} — {target.exerciseName}
+                          </p>
+                        )}
+                        {preview?.severityAssessment && (
+                          <p className={cn('text-[9px] mt-1', iconColor)}>
+                            Severity: {preview.severityAssessment.label}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -1777,7 +1825,7 @@ function MethodDetailModalContent({
                         size="sm"
                         onClick={onConfirmCautionApply}
                         disabled={isApplying}
-                        className="flex-1 h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                        className={cn('flex-1 h-8 text-white text-xs', buttonColor)}
                       >
                         {isApplying ? (
                           <>
@@ -1785,7 +1833,7 @@ function MethodDetailModalContent({
                             Applying...
                           </>
                         ) : (
-                          'Apply Caution Preview'
+                          buttonText
                         )}
                       </Button>
                     </div>
@@ -1798,14 +1846,18 @@ function MethodDetailModalContent({
                   <Button
                     variant={isApplyable ? 'default' : 'outline'}
                     size="sm"
-                    disabled={!isApplyable || isApplying}
-                    onClick={isApplyableSafe ? onApplySafe : isApplyableCaution ? onRequestCautionApply : undefined}
+                    disabled={(!isApplyable && !isBlockedImpossible) || isApplying}
+                    onClick={isApplyable ? handleUnifiedApply : undefined}
                     className={cn(
                       'h-10',
                       isApplyableSafe 
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : isApplyableCaution
                         ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                        : isApplyableForce
+                        ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                        : isBlockedImpossible
+                        ? 'text-red-400/50 border-red-500/20 cursor-not-allowed'
                         : 'text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed'
                     )}
                   >
@@ -1990,39 +2042,15 @@ function RequestedMethodsSheetContent({
     setShowCautionConfirmation(false)
   }
   
-  // [AB20] Apply handler for safe previews
-  const handleApplySafe = async () => {
-    if (!selectedItem || !onApplyMethodOverride) return
-    const preview = getCurrentPreview(selectedItem.methodKey)
-    if (!preview) return
-    
-    setIsApplying(true)
-    setApplyResult(null)
-    
-    try {
-      const result = await onApplyMethodOverride(preview, { allowCautionApply: false })
-      setApplyResult(result)
-      
-      if (result.status === 'success') {
-        // Clear preview from storage after successful apply
-        clearMethodOverridePreview(selectedItem.methodKey)
-        setPreviews(getMethodOverridePreviews())
-      }
-    } catch (error) {
-      setApplyResult({
-        status: 'blocked',
-        visibleSummary: 'Failed to apply override.',
-        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
-        reasonCode: 'save_failed',
-      })
-    } finally {
-      setIsApplying(false)
-    }
+  // [AB20.4.4.2] All apply paths now show confirmation first
+  // handleApplySafe now triggers confirmation instead of directly applying
+  const handleApplySafe = () => {
+  setShowCautionConfirmation(true)
   }
   
-  // [AB20] Request caution confirmation
+  // [AB20] Request caution confirmation (kept for backwards compatibility)
   const handleRequestCautionApply = () => {
-    setShowCautionConfirmation(true)
+  setShowCautionConfirmation(true)
   }
   
   // [AB20] Cancel caution confirmation

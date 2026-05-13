@@ -727,20 +727,53 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 
 ### IQ8 — Weekly Structure and Recovery Realism
 
-**Status:** TODO
+**Status:** COMPLETE (audit-first repair + display parity)
+
+**User-facing AB alias:** AB18
 
 **Purpose:** Audit frequency, spacing, tendon stress, deload/protection, and first-week ramp logic.
 
-**Investigation Required:**
-- Verify 6-session flexible week is justified for the athlete
-- Check if tendon-stress days are spaced appropriately
-- Verify first-week protection logic is sensible
-- Check if "low recent volume 0 sessions +1" makes sense or inflates frequency
+**Audit Findings:**
 
-**Files Likely in Scope:**
-- `lib/flexible-schedule-engine.ts`
-- `lib/program-structure-engine.ts`
-- `lib/adaptive-program-builder.ts` (week character logic)
+1. **Weekly session count owner:** `lib/flexible-schedule-engine.ts` — `resolveFlexibleFrequency()`
+2. **Flexible schedule interpretation owner:** `lib/flexible-schedule-engine.ts` — `FlexibleWeekStructure.rationale` + `rootCauseAudit`
+3. **Low recent volume logic owner:** `lib/flexible-schedule-engine.ts` lines 613+ — uses `recentWorkoutCount` conservatively
+4. **Tendon-stress spacing owner:** `lib/program/weekly-stress-distribution-contract.ts` — Phase K with `STRAIGHT_ARM_KEYWORDS`, `HIGH_TENDON_GOALS`, `nextDayRisk` classifier
+5. **First-week ramp owner:** `lib/program/weekly-session-role-contract.ts` + Phase K's protected weeks handling
+6. **Program Page visible proof owner:** `weeklyStressDistributionPlan.summary.weeklyHeadline` + `flexibleFrequencyRootCause`
+
+**Root Cause Analysis:**
+- **Primary finding**: The computation layer is sophisticated and correct. The Phase K weekly stress distribution contract already:
+  - Classifies sessions by actual stress sources (tendon/neural/density/load)
+  - Computes `nextDayRisk` for adjacent high-stress days
+  - Applies `StressAdjustmentDelta` softening on second exposures
+  - Produces `weeklyHeadline` and `exposurePatterns` for proof surfaces
+- **Secondary finding**: The flexible schedule engine already:
+  - Produces conservative frequency when `recentWorkoutCount` is low/zero
+  - Applies `jointCautionPenalty` and `recoveryScore` modifiers
+  - Generates detailed `rootCauseAudit` explaining the frequency decision
+- **Actual issue**: Display parity gap — the computed recovery/frequency truth was NOT visually rendered
+
+**AB18 Implementation Summary:**
+- Added "Weekly check" proof line to Coach Intelligence Hub
+- Displays `weeklyHeadline` when available, or constructs proof from stress plan summary
+- Shows session count, high-stress days, adjacency softens, joint caution flags, recovery reductions
+- Zero logic changes — display parity fix only
+
+**Bundled Carryover:**
+- **AB17.2.2.6 / IQ6.4.8**: Fixed circuit detail card badge — now uses `candidateStatus` for accurate semantic labeling ("Caution preview" vs "No circuit candidate")
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Fixed circuit detail card badge (lines ~785-810) to use `candidateStatus`
+  - Added weekly recovery proof line (lines ~1740-1790) in Coach Intelligence Hub container
+
+**TypeScript:** PASS (zero errors)
+**Build:** PASS
+
+**Visible Verification Location:**
+- Program Page → Coach Intelligence Hub → "Weekly check:" proof line (below hub buttons)
+- Method Override Planner → Circuits detail card → "Caution preview (3 exercises)" instead of "No safe circuit candidate"
 
 ---
 
@@ -786,7 +819,7 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 | IQ5 | Exercise prescription unit/type truth | VERIFIED STRONG |
 | IQ6 | Method decision usefulness and survival | COMPLETE |
 | IQ7 | Feedback loop closure | COMPLETE |
-| IQ8 | Weekly structure and recovery realism | TODO |
+| IQ8 | Weekly structure and recovery realism | COMPLETE |
 | IQ9 | Explanation parity | TODO |
 | IQ10 | Start Workout parity risk audit | VERIFIED STRONG |
 

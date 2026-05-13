@@ -785,17 +785,24 @@ function MethodDetailModalContent({
           {circuitCandidate ? (
             <>
               <div className="flex items-center gap-2 mb-2">
+                {/* [AB17.2.2.6] Use candidateStatus for accurate semantic labeling */}
                 <span className={cn(
                   'px-2 py-0.5 text-[9px] font-medium rounded border',
-                  circuitCandidate.isSafeCircuitCandidate 
+                  circuitCandidate.candidateStatus === 'safe_circuit'
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : circuitCandidate.candidateStatus === 'override_with_caution'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : circuitCandidate.candidateStatus === 'would_be_superset'
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        : 'bg-red-500/10 text-red-400 border-red-500/20'
                 )}>
-                  {circuitCandidate.isSafeCircuitCandidate 
+                  {circuitCandidate.candidateStatus === 'safe_circuit'
                     ? `${circuitCandidate.circuitSize}-exercise circuit available`
-                    : circuitCandidate.circuitSize === 2 
-                      ? '2 exercises = superset only'
-                      : 'No safe circuit candidate'}
+                    : circuitCandidate.candidateStatus === 'override_with_caution'
+                      ? `Caution preview (${circuitCandidate.circuitSize} exercises)`
+                      : circuitCandidate.candidateStatus === 'would_be_superset'
+                        ? 'Would be superset (2 exercises)'
+                        : 'No circuit candidate'}
                 </span>
               </div>
               <p className="text-xs text-[#9A9AAA] leading-relaxed mb-2">
@@ -1730,6 +1737,59 @@ export function ProgramCoachIntelligenceHub({
             disabled={!truthExplanation}
           />
         </div>
+        
+        {/* [AB18 / IQ8] Weekly Recovery Check — compact proof line from weeklyStressDistributionPlan */}
+        {(() => {
+          const stressPlan = program.weeklyStressDistributionPlan
+          const rootCause = (program as unknown as { flexibleFrequencyRootCause?: { 
+            finalReasonCategory?: string
+            jointCautionPenalty?: number
+            recoveryScore?: number
+            goalTypical?: number
+          }}).flexibleFrequencyRootCause
+          const sessionCount = program.sessions?.length || 0
+          const headline = stressPlan?.summary?.weeklyHeadline
+          
+          // Build a compact recovery proof line
+          const proofParts: string[] = []
+          
+          if (sessionCount > 0) {
+            proofParts.push(`${sessionCount} sessions`)
+          }
+          if (stressPlan?.summary?.highStressDays != null && stressPlan.summary.highStressDays > 0) {
+            proofParts.push(`${stressPlan.summary.highStressDays} high-stress`)
+          }
+          if (stressPlan?.summary?.highRiskAdjacencies != null && stressPlan.summary.highRiskAdjacencies > 0) {
+            proofParts.push(`${stressPlan.summary.highRiskAdjacencies} adjacency soften`)
+          }
+          if (rootCause?.jointCautionPenalty != null && rootCause.jointCautionPenalty > 0) {
+            proofParts.push('joint caution applied')
+          }
+          if (rootCause?.recoveryScore != null && rootCause.recoveryScore < 0.5) {
+            proofParts.push('recovery-reduced')
+          }
+          
+          // Use headline if available, else generic
+          const displayHeadline = headline && headline.length > 5 
+            ? headline 
+            : proofParts.length > 0
+              ? proofParts.join(' • ')
+              : null
+          
+          if (!displayHeadline) return null
+          
+          return (
+            <div className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400/70 flex-shrink-0" />
+                <span className="text-[9px] text-[#8A8A9A] leading-relaxed">
+                  <span className="text-[#6A6A7A]">Weekly check:</span> {displayHeadline}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
+        
         {/* [P2B] Compact helper line */}
         <p className="text-[9px] text-[#5A5A6A] mt-2 px-1">
           Review method decisions, plan logic, and coach recommendations.

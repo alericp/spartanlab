@@ -151,6 +151,7 @@ function resolveBestMethodDisplayReason(
 /**
  * Safe selector that extracts requested/deferred method truth from the program.
  * Inspects available fields without throwing if absent.
+ * [AB20.4] Now canonicalizes method keys to prevent duplicate rows.
  */
 function extractRequestedMethodDecisions(
   program: AdaptiveProgram | null | undefined,
@@ -158,26 +159,77 @@ function extractRequestedMethodDecisions(
   if (!program) return []
 
   const items: RequestedMethodDisplayItem[] = []
-  const seen = new Set<string>()
+  // [AB20.4] Use canonical key for deduplication to prevent duplicate rows
+  const seenCanonical = new Set<string>()
+  
+  // [AB20.4] Track best item per canonical key for merging duplicates
+  const bestByCanonical = new Map<string, RequestedMethodDisplayItem>()
 
   // Method labels for display
   const METHOD_LABELS: Record<string, string> = {
     superset: 'Supersets',
     circuit: 'Circuits',
+    circuits: 'Circuits',
     density_block: 'Density Blocks',
+    density: 'Density Blocks',
     cluster: 'Cluster Sets',
+    cluster_sets: 'Cluster Sets',
     top_set_backoff: 'Top Set + Backoff',
+    top_set: 'Top Set + Backoff',
     drop_set: 'Drop Sets',
+    drop_sets: 'Drop Sets',
     rest_pause: 'Rest-Pause',
+    rest_pause_sets: 'Rest-Pause',
     endurance_density: 'Endurance/Conditioning',
+    endurance: 'Endurance/Conditioning',
+    conditioning: 'Endurance/Conditioning',
     finisher: 'Finishers',
   }
+  
+  // [AB20.4] State priority for merging duplicates (higher = stronger)
+  const STATE_PRIORITY: Record<RequestedMethodState, number> = {
+    applied: 6,
+    materialized: 5,
+    blocked: 4,
+    not_materialized: 3,
+    deferred: 2,
+    suppressed: 1,
+    not_requested: 0,
+    unknown: -1,
+  }
 
-  // Helper to add item if not seen
-  const addItem = (item: RequestedMethodDisplayItem) => {
-    if (!seen.has(item.methodKey)) {
-      seen.add(item.methodKey)
-      items.push(item)
+  // [AB20.4] Helper to add/merge item using canonical key
+  const addOrMergeItem = (item: RequestedMethodDisplayItem) => {
+    const canonicalKey = normalizeOverrideMethodKey(item.methodKey)
+    
+    // Get the canonical display label
+    const capability = getMethodOverrideCapability(item.methodKey)
+    const canonicalLabel = capability.displayLabel !== 'Unknown Method' 
+      ? capability.displayLabel 
+      : METHOD_LABELS[item.methodKey] ?? item.methodKey.replace(/_/g, ' ')
+    
+    // Normalize the item to use canonical key and label
+    const normalizedItem: RequestedMethodDisplayItem = {
+      ...item,
+      methodKey: canonicalKey,
+      label: canonicalLabel,
+    }
+    
+    if (!seenCanonical.has(canonicalKey)) {
+      seenCanonical.add(canonicalKey)
+      bestByCanonical.set(canonicalKey, normalizedItem)
+    } else {
+      // Merge: keep the item with the strongest state
+      const existing = bestByCanonical.get(canonicalKey)!
+      const existingPriority = STATE_PRIORITY[existing.state] ?? -1
+      const newPriority = STATE_PRIORITY[normalizedItem.state] ?? -1
+      
+      if (newPriority > existingPriority) {
+        bestByCanonical.set(canonicalKey, normalizedItem)
+      } else if (newPriority === existingPriority && normalizedItem.confidence === 'high' && existing.confidence !== 'high') {
+        // Same state but higher confidence - prefer the higher confidence item
+        bestByCanonical.set(canonicalKey, normalizedItem)
+      }
     }
   }
 
@@ -203,7 +255,7 @@ function extractRequestedMethodDecisions(
       }
 
       const methodLabel = METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: methodLabel,
         state,
@@ -230,7 +282,8 @@ function extractRequestedMethodDecisions(
 
   if (decisionSummary?.decisions) {
     for (const d of decisionSummary.decisions) {
-      if (!d.methodId || seen.has(d.methodId)) continue
+      if (!d.methodId) continue
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
 
       let state: RequestedMethodState = 'unknown'
       if (d.applied) state = 'applied'
@@ -239,7 +292,7 @@ function extractRequestedMethodDecisions(
       else state = 'not_materialized'
 
       const methodLabel = METHOD_LABELS[d.methodId] ?? d.methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: d.methodId,
         label: methodLabel,
         state,
@@ -264,7 +317,8 @@ function extractRequestedMethodDecisions(
 
   if (matPlan?.methodSlots) {
     for (const slot of matPlan.methodSlots) {
-      if (!slot.methodId || seen.has(slot.methodId)) continue
+      if (!slot.methodId) continue
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
 
       let state: RequestedMethodState = 'unknown'
       const status = slot.status?.toLowerCase() ?? ''
@@ -274,7 +328,7 @@ function extractRequestedMethodDecisions(
       else if (status.includes('suppress')) state = 'suppressed'
 
       const methodLabel = METHOD_LABELS[slot.methodId] ?? slot.methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: slot.methodId,
         label: methodLabel,
         state,
@@ -297,8 +351,8 @@ function extractRequestedMethodDecisions(
 
   if (matSummary) {
     for (const methodId of matSummary.applied ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'applied',
@@ -309,8 +363,7 @@ function extractRequestedMethodDecisions(
       })
     }
     for (const methodId of matSummary.blocked ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'blocked',
@@ -321,8 +374,7 @@ function extractRequestedMethodDecisions(
       })
     }
     for (const methodId of matSummary.deferred ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'deferred',
@@ -334,7 +386,8 @@ function extractRequestedMethodDecisions(
     }
   }
 
-  return items
+  // [AB20.4] Return merged items from canonical map
+  return Array.from(bestByCanonical.values())
 }
 
 // =============================================================================
@@ -1854,12 +1907,15 @@ function RequestedMethodsSheetContent({
   }
   
   // [AB20.2] Check if the selected method has an override-applied circuit
+  // [AB20.4] Check if the selected method has an override-applied grouped block
   const isOverrideAppliedForSelectedMethod = selectedItem && 
-    isCircuitLikePreviewMethodKey(selectedItem.methodKey) &&
+    isGroupedBlockPreviewMethodKey(selectedItem.methodKey) &&
     hasMethodOverrideAppliedCircuit(program)
   
+  // [AB20.4] Use canonical key for preview lookup
   const getCurrentPreview = (methodKey: string) => {
-    return previews.find(p => p.methodKey === methodKey) || null
+    const canonicalKey = normalizeOverrideMethodKey(methodKey)
+    return previews.find(p => normalizeOverrideMethodKey(p.methodKey) === canonicalKey) || null
   }
 
   const renderGroup = (items: RequestedMethodDisplayItem[], title: string) => {

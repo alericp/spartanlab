@@ -68,6 +68,7 @@ import {
   saveMethodOverridePreview,
   getMethodOverridePreviews,
   clearMethodOverridePreview,
+  isCircuitLikePreviewMethodKey,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
 } from '@/lib/program/requested-method-override-planner'
@@ -680,7 +681,8 @@ function MethodDetailModalContent({
 }) {
   // [AB17.2.2] Circuit-specific safety override
   // If circuit preview exists but is not a safe candidate, override the safety display
-  const isCircuitMethod = plan.methodKey === 'circuits' || plan.methodKey === 'density_blocks'
+  // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection
+  const isCircuitMethod = isCircuitLikePreviewMethodKey(plan.methodKey)
   const circuitCandidate = preview?.circuitCandidate
   const isUnsafeCircuit = isCircuitMethod && circuitCandidate && !circuitCandidate.isSafeCircuitCandidate
   
@@ -1030,8 +1032,32 @@ function MethodDetailModalContent({
             </div>
           )}
           
-          {/* [AB17.2] Concrete Day-Specific Workout Preview (non-circuit methods) */}
-          {preview.workoutPreview && !preview.circuitCandidate && (
+          {/* [AB17.2.2.3] No-silent-fallback guard for circuits */}
+          {/* If circuit-like method has preview but no circuitCandidate, show diagnostic instead of generic fallback */}
+          {isCircuitMethod && preview && !preview.circuitCandidate && (
+            <div className="mb-4 p-2 rounded bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-3 h-3 text-red-400" />
+                <span className="text-[10px] font-medium text-red-400">
+                  Circuit preview scan did not return candidate
+                </span>
+              </div>
+              <div className="space-y-1 text-[9px] text-[#8A8A9A]">
+                <div>This preview should scan all program days. The circuit candidate payload was missing, so the generic workout preview was blocked to avoid a fake circuit preview.</div>
+                <div className="mt-2 font-mono text-[8px] text-[#6A6A7A]">
+                  <div>Method key: {plan.methodKey}</div>
+                  <div>Preview created but circuitCandidate missing</div>
+                </div>
+                <div className="mt-2 px-2 py-1 bg-[#1A1A25] rounded text-[8px] text-amber-400/80">
+                  Preview only — saved program unchanged
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* [AB17.2] Concrete Day-Specific Workout Preview (non-circuit methods only) */}
+          {/* [AB17.2.2.3] This fallback is now blocked for circuit-like methods via the guard above */}
+          {preview.workoutPreview && !preview.circuitCandidate && !isCircuitMethod && (
             <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
               <div className="text-[10px] font-medium text-amber-400 mb-2">
                 {preview.workoutPreview.affectedDayLabel}
@@ -1276,7 +1302,8 @@ function RequestedMethodsSheetContent({
     }
     
     // [AB17.2.2.1] For circuits, pass full program sessions so findBestCircuitPreviewCandidate() can scan all days
-    const isCircuitMethod = currentPlan.methodKey === 'circuits' || currentPlan.methodKey === 'density_blocks'
+    // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection (singular/plural)
+    const isCircuitMethod = isCircuitLikePreviewMethodKey(currentPlan.methodKey)
     const context = isCircuitMethod && program.sessions ? {
       programSessions: program.sessions.map(s => ({
         exercises: s.exercises,

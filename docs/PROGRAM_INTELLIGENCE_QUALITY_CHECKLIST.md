@@ -518,6 +518,38 @@ Added concrete day-specific workout preview for method override visualization:
   - Updated circuit preview card to use `candidateStatus` for rendering
   - Updated exercise list labels for different candidate states
 
+**IQ6.4.5 Implementation Summary (AB17.2.2.3):**
+
+1. **Shared Method-Key Helper Functions:** Added three helper functions in `requested-method-override-planner.ts`:
+   - `isCircuitOverrideMethodKey()` — returns true for any key containing 'circuit'
+   - `isDensityOverrideMethodKey()` — returns true for density_blocks/density
+   - `isCircuitLikePreviewMethodKey()` — combines both for preview path detection
+
+2. **Normalized Circuit Detection:** Replaced all exact `=== 'circuits'` checks with the shared helper. This fixes the singular/plural method-key mismatch where `circuit` was bypassing the circuit candidate creation path.
+
+3. **Exact Checks Replaced:**
+   - `planMethodOverride()` canPreview derivation
+   - `buildMethodOverrideWorkoutPreview()` circuit block creation
+   - `buildMethodOverrideWorkoutPreview()` coachCaution generation
+   - `buildMethodOverrideWorkoutPreview()` circuit limitations
+   - `saveMethodOverridePreview()` circuit candidate branch (CRITICAL FIX)
+   - `MethodDetailModalContent()` isCircuitMethod detection
+   - `handleCreatePreview()` context passing
+
+4. **No-Silent-Fallback Guard:** Added explicit diagnostic card in render path. If a circuit-like method has a preview but `circuitCandidate` is missing, the UI shows an error diagnostic instead of the generic "+ Circuit Block: Circuit structure" fallback. This ensures circuits NEVER silently render fake generic previews.
+
+5. **Generic Fallback Blocked:** Added `!isCircuitMethod` check to the generic `workoutPreview` render branch. Circuit-like methods now require the circuit candidate path or show the diagnostic.
+
+**Files Changed (IQ6.4.5):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Added `isCircuitOverrideMethodKey()`, `isDensityOverrideMethodKey()`, `isCircuitLikePreviewMethodKey()`
+  - Replaced 5 exact circuit checks with shared helper
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Imported `isCircuitLikePreviewMethodKey`
+  - Replaced 2 exact circuit checks with shared helper
+  - Added no-silent-fallback diagnostic guard
+  - Blocked generic workout preview for circuit-like methods
+
 ---
 
 ### IQ7 — Feedback Loop Closure

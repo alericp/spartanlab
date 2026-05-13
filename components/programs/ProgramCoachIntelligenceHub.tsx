@@ -77,6 +77,7 @@ import {
   normalizeOverrideMethodKey,
   applyMethodOverridePreviewToProgram,
   hasMethodOverrideAppliedGroup,
+  collectMethodOverrideArtifacts,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
@@ -85,6 +86,7 @@ import {
   type MethodOverrideCapability,
   type MethodOverrideSeverityLevel,
   type MethodOverrideSeverityAssessment,
+  type MethodOverrideArtifact,
 } from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
@@ -390,8 +392,50 @@ function extractRequestedMethodDecisions(
     }
   }
 
-  // [AB20.4] Return merged items from canonical map
-  return Array.from(bestByCanonical.values())
+  // [AB20.4.4.4] CRITICAL: Cross-check against actual saved artifacts
+  // This prevents "summary says applied" while "reset finds nothing"
+  const artifacts = collectMethodOverrideArtifacts(program)
+  const artifactsByCanonical = new Map<string, MethodOverrideArtifact[]>()
+  for (const artifact of artifacts) {
+    const key = artifact.canonicalKey
+    if (!artifactsByCanonical.has(key)) artifactsByCanonical.set(key, [])
+    artifactsByCanonical.get(key)!.push(artifact)
+  }
+  
+  // Validate and potentially downgrade items that claim applied/materialized
+  const finalItems = Array.from(bestByCanonical.values()).map(item => {
+    // Only validate applied/materialized states
+    if (item.state !== 'applied' && item.state !== 'materialized') {
+      return item
+    }
+    
+    const canonicalKey = normalizeOverrideMethodKey(item.methodKey)
+    const matchingArtifacts = artifactsByCanonical.get(canonicalKey) || []
+    
+    // Check if any artifact actually exists and is renderable
+    const hasRenderableArtifact = matchingArtifacts.some(a => a.isRenderable)
+    
+    if (hasRenderableArtifact) {
+      // Artifact exists and is renderable - keep the state
+      // But upgrade confidence since we verified against actual artifacts
+      return {
+        ...item,
+        confidence: 'high' as const,
+        reason: item.reason || `${item.label} is applied to the program with verifiable render artifact.`,
+      }
+    }
+    
+    // No renderable artifact found - downgrade to not_materialized
+    // This is the fix for "applied in summary but reset finds nothing"
+    return {
+      ...item,
+      state: 'not_materialized' as RequestedMethodState,
+      confidence: 'low' as const,
+      reason: `${item.label} was tracked as applied but no verifiable render artifact was found. The method may need to be re-applied.`,
+    }
+  })
+  
+  return finalItems
 }
 
 // =============================================================================

@@ -11141,10 +11141,24 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     // executable to fall back to). H.H5 forbids silent flattening — this
     // banner is the user-visible "we preserved the method as guidance" notice
     // with the exact stable reason code in dev-only small text.
-    const showGuidanceBanner =
+    //
+    // [AB20.4.5.4.1] CRITICAL FIX: The guidance banner should ONLY show when
+    // the ACTUAL execution plan has no grouped blocks. If the execution plan
+    // successfully built Circuit/Superset/Cluster blocks, we should NOT show
+    // guidance-only even if the evaluator verdict says otherwise.
+    const actualExecutionPlanHasGroupedBlocks = 
+      machineSessionContract?.executionPlan?.hasGroupedBlocks &&
+      machineSessionContract.executionPlan.blocks.some(
+        (b) => b.groupType !== null && b.memberExercises && b.memberExercises.length >= 2
+      )
+    
+    // Only show guidance banner when evaluator says guidance-only AND
+    // the actual execution plan doesn't have working grouped blocks
+    const showGuidanceBanner = (
       liveGroupedExecutionResult.parityVerdict === 'LIVE_GUIDANCE_PRESERVED_ONLY' ||
       liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_BLOCKED' ||
       liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
+    ) && !actualExecutionPlanHasGroupedBlocks
     // [AB7] Updated reason codes - DENSITY_RUNTIME_NOT_SUPPORTED_YET replaced
     // by DENSITY_TIME_CAP_MISSING which only appears when density truly can't run
     const guidanceBannerReason =

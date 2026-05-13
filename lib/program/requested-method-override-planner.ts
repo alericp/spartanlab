@@ -55,6 +55,30 @@ export type MethodStructure =
   | 'cluster'
   | 'unknown'
 
+/**
+ * [AB17.2.2.3] Shared method-key detection helpers for circuit override preview.
+ * These normalize singular/plural/variant method keys to ensure consistent detection.
+ */
+
+/** Returns true for any circuit-like method key (circuit, circuits, density_circuit, etc.) */
+export function isCircuitOverrideMethodKey(methodKey: string | null | undefined): boolean {
+  if (!methodKey) return false
+  const normalized = methodKey.toLowerCase().trim()
+  return normalized.includes('circuit')
+}
+
+/** Returns true for density-block method keys */
+export function isDensityOverrideMethodKey(methodKey: string | null | undefined): boolean {
+  if (!methodKey) return false
+  const normalized = methodKey.toLowerCase().trim()
+  return normalized === 'density_blocks' || normalized === 'density' || normalized.includes('density_block')
+}
+
+/** Returns true for methods that use the circuit preview scan path (circuits OR density blocks) */
+export function isCircuitLikePreviewMethodKey(methodKey: string | null | undefined): boolean {
+  return isCircuitOverrideMethodKey(methodKey) || isDensityOverrideMethodKey(methodKey)
+}
+
 export interface RequestedMethodOverridePlan {
   methodKey: string
   label: string
@@ -633,7 +657,7 @@ export function planMethodOverride(
   // [AB17.2.2.2] Determine if preview is allowed
   // For most methods: require safe_preview or needs_caution
   // For Circuits/Density: allow preview when program has exercises (scan is the diagnostic)
-  const isCircuitLikeMethod = methodKey.includes('circuit') || methodKey.includes('density')
+  const isCircuitLikeMethod = isCircuitLikePreviewMethodKey(methodKey)
   const hasProgramExerciseTruth = sessions.some(s => s.exerciseCount > 0)
   
   const canPreview = isCircuitLikeMethod
@@ -1143,7 +1167,8 @@ export function buildMethodOverrideWorkoutPreview(
   
   // Determine candidate exercises for the method based on method type
   const methodKey = plan.methodKey
-  if (methodKey === 'circuits' || methodKey === 'density_blocks') {
+  // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection
+  if (isCircuitLikePreviewMethodKey(methodKey)) {
     // [AB17.2.1] Circuit doctrine: must use real exercises, minimum 3
     const { selected, skipped, reason } = findCircuitCompatibleExercises(exercises)
     
@@ -1203,7 +1228,8 @@ export function buildMethodOverrideWorkoutPreview(
   
   // [AB17.2.1] Build caution and limitations with circuit-specific handling
   let coachCaution: string
-  if (methodKey === 'circuits' || methodKey === 'density_blocks') {
+  // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection
+  if (isCircuitLikePreviewMethodKey(methodKey)) {
     const { selected } = findCircuitCompatibleExercises(exercises)
     if (selected.length < CIRCUIT_MINIMUM_EXERCISES) {
       coachCaution = selected.length === 2
@@ -1233,7 +1259,8 @@ export function buildMethodOverrideWorkoutPreview(
     previewLimitations.unshift('Session exercises not available — showing generic structure')
   }
   // [AB17.2.1] Add circuit-specific limitations
-  if ((methodKey === 'circuits' || methodKey === 'density_blocks') && exercises.length > 0) {
+  // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection
+  if (isCircuitLikePreviewMethodKey(methodKey) && exercises.length > 0) {
     const { selected } = findCircuitCompatibleExercises(exercises)
     if (selected.length < CIRCUIT_MINIMUM_EXERCISES) {
       previewLimitations.unshift('Circuit not possible with current exercises')
@@ -1325,8 +1352,9 @@ export function saveMethodOverridePreview(
   
   // [AB17.2.2.1] Build circuit-specific candidate for circuits
   // Use findBestCircuitPreviewCandidate() when full program sessions are available
+  // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection (singular/plural)
   let circuitCandidate: CircuitPreviewCandidate | undefined
-  if (plan.methodKey === 'circuits' || plan.methodKey === 'density_blocks') {
+  if (isCircuitLikePreviewMethodKey(plan.methodKey)) {
     const programSessions = context?.programSessions
     
     if (programSessions && programSessions.length > 0) {

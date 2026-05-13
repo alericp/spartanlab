@@ -9,7 +9,7 @@ import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 // [SPARTANLAB-P2B] Coach Intelligence Hub — method planner corridor
 import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
 // [AB20.1D] Types for method override apply callback
-import type { MethodOverridePreview, MethodOverrideApplyResult } from '@/lib/program/requested-method-override-planner'
+import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRevertResult } from '@/lib/program/requested-method-override-planner'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -298,6 +298,9 @@ interface AdaptiveProgramDisplayProps {
     preview: MethodOverridePreview, 
     options: { allowCautionApply: boolean }
   ) => Promise<MethodOverrideApplyResult>
+  // [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram.
+  // Program Page owns the save path. Hub requests, Page persists.
+  onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
 }
 
 // =============================================================================
@@ -458,6 +461,8 @@ export function AdaptiveProgramDisplay({
   onProgramUpdate,
   // [AB20.1D] Dedicated method override apply callback with save persistence
   onApplyMethodOverridePreview,
+  // [AB20.2] Dedicated method override revert callback with save persistence
+  onRevertMethodOverride,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1341,6 +1346,7 @@ export function AdaptiveProgramDisplay({
         currentWeekNumber={currentWeekNumber}
         onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
         onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
+        onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
       />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

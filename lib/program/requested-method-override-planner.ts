@@ -1630,6 +1630,43 @@ export interface MethodOverrideApplyResult {
   reasonCode: MethodOverrideApplyReasonCode
 }
 
+// =============================================================================
+// [AB20.2 / IQ10.2] METHOD OVERRIDE REVERT CORRIDOR
+// =============================================================================
+
+/**
+ * [AB20.2] Revert status for method override removal result.
+ */
+export type MethodOverrideRevertStatus =
+  | 'success'
+  | 'blocked'
+  | 'not_found'
+  | 'cancelled'
+
+/**
+ * [AB20.2] Reason codes for revert results.
+ */
+export type MethodOverrideRevertReasonCode =
+  | 'reverted_circuit_override'
+  | 'no_program'
+  | 'unsupported_method'
+  | 'override_artifact_not_found'
+  | 'native_method_not_revertible'
+  | 'save_failed'
+  | 'stale_program'
+  | 'invalid_method_key'
+
+/**
+ * [AB20.2] Result of reverting a method override from a program.
+ */
+export interface MethodOverrideRevertResult {
+  status: MethodOverrideRevertStatus
+  updatedProgram?: AdaptiveProgram
+  visibleSummary: string
+  evidence: string[]
+  reasonCode: MethodOverrideRevertReasonCode
+}
+
 /**
  * [AB20] Normalizes exercise name for matching.
  */
@@ -1828,6 +1865,15 @@ export function applyMethodOverridePreviewToProgram(args: {
     restProtocol: isCaution
       ? 'Use conservative pacing; rest enough to preserve skill quality.'
       : 'Minimal rest between stations; moderate rest between rounds.',
+    // [AB20.2] Reversible metadata for future revert operations
+    source: 'method_override_planner' as const,
+    methodOverrideApplied: true,
+    methodOverrideMethodKey: 'circuits',
+    methodOverrideAppliedAt: new Date().toISOString(),
+    methodOverrideCandidateStatus: status,
+    methodOverrideTargetDayIndex: dayIndex,
+    methodOverrideExerciseNames: candidate.selectedExercises,
+    methodOverrideCanRevert: true,
   }
   
   // Update session.styleMetadata
@@ -1924,5 +1970,202 @@ export function applyMethodOverridePreviewToProgram(args: {
       `styledGroup id: ${circuitGroupId}`,
     ],
     reasonCode: isCaution ? 'applied_caution_circuit' : 'applied_safe_circuit',
+  }
+}
+
+// =============================================================================
+// [AB20.2] REVERT METHOD OVERRIDE HELPER
+// =============================================================================
+
+/**
+ * [AB20.2] Checks if a styledGroup was applied by the Method Override Planner.
+ * Uses multiple detection methods for backward compatibility with AB20.1 circuits.
+ */
+function isMethodOverridePlannerAppliedGroup(group: {
+  id?: string
+  source?: string
+  methodOverrideApplied?: boolean
+  exercises?: Array<{ methodRationale?: string }>
+}): boolean {
+  // [AB20.2B] Check explicit markers from future applies
+  if (group.methodOverrideApplied === true) return true
+  if (group.source === 'method_override_planner') return true
+  
+  // [AB20.2C] Fallback detection for AB20.1 circuits (before reversible metadata)
+  if (group.id?.startsWith('method-override-circuit-')) return true
+  
+  // Check if any exercise mentions Method Override Planner in rationale
+  if (group.exercises?.some(ex => 
+    ex.methodRationale?.includes('Method Override Planner')
+  )) {
+    return true
+  }
+  
+  return false
+}
+
+/**
+ * [AB20.2] Checks if a program has any Method Override Planner-applied circuit.
+ * Used by UI to determine if "Remove Override" action should be shown.
+ */
+export function hasMethodOverrideAppliedCircuit(program: AdaptiveProgram | null): boolean {
+  if (!program?.sessions) return false
+  
+  for (const session of program.sessions) {
+    const styledGroups = session.styleMetadata?.styledGroups || []
+    for (const group of styledGroups) {
+      if (group.groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
+        return true
+      }
+    }
+  }
+  
+  return false
+}
+
+/**
+ * [AB20.2] Reverts a method override from a program.
+ * 
+ * This is a PURE function that returns a new program object.
+ * It does NOT mutate the original program.
+ * It does NOT persist to storage (caller must handle that).
+ * 
+ * Only circuits are supported in AB20.2.
+ */
+export function revertMethodOverrideFromProgram(args: {
+  program: AdaptiveProgram
+  methodKey: string
+}): MethodOverrideRevertResult {
+  const { program, methodKey } = args
+  
+  // Guard: Must have program
+  if (!program) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      reasonCode: 'no_program',
+    }
+  }
+  
+  // Guard: Must have valid methodKey
+  if (!methodKey || typeof methodKey !== 'string') {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Invalid method key.',
+      evidence: [`methodKey: ${methodKey}`],
+      reasonCode: 'invalid_method_key',
+    }
+  }
+  
+  // [AB20.2] Only support circuit revert in this step
+  if (!isCircuitOverrideMethodKey(methodKey)) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Only circuit method overrides can be reverted in this version.',
+      evidence: [`methodKey: ${methodKey}`, 'Only circuits supported'],
+      reasonCode: 'unsupported_method',
+    }
+  }
+  
+  // Deep clone the program to avoid mutation
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  const sessions = updatedProgram.sessions || []
+  
+  // Track what we removed
+  let removedCount = 0
+  const removedFromSessions: string[] = []
+  const removedGroupIds: string[] = []
+  
+  // Scan all sessions for Method Override Planner-applied circuits
+  for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
+    const session = sessions[dayIndex]
+    if (!session.styleMetadata?.styledGroups) continue
+    
+    const originalGroups = session.styleMetadata.styledGroups
+    const remainingGroups: typeof originalGroups = []
+    let sessionHadOverrideCircuit = false
+    
+    for (const group of originalGroups) {
+      // Only remove circuits that were applied by Method Override Planner
+      if (group.groupType === 'circuit' && isMethodOverridePlannerAppliedGroup(group)) {
+        removedCount++
+        sessionHadOverrideCircuit = true
+        if (group.id) removedGroupIds.push(group.id)
+      } else {
+        // Keep all other groups (supersets, native circuits, etc.)
+        remainingGroups.push(group)
+      }
+    }
+    
+    if (sessionHadOverrideCircuit) {
+      const sessionLabel = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
+      removedFromSessions.push(sessionLabel)
+      
+      // Update the session's styledGroups
+      session.styleMetadata.styledGroups = remainingGroups
+      
+      // Recalculate hasCircuitsApplied - only true if non-override circuits remain
+      const hasRemainingCircuits = remainingGroups.some(g => g.groupType === 'circuit')
+      session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
+      
+      // Remove 'circuits' from appliedMethods only if no circuits remain
+      if (!hasRemainingCircuits && Array.isArray(session.styleMetadata.appliedMethods)) {
+        session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+          (m: string) => m !== 'circuits' && m !== 'circuit'
+        )
+      }
+    }
+  }
+  
+  // If nothing was removed, return not_found
+  if (removedCount === 0) {
+    return {
+      status: 'not_found',
+      visibleSummary: 'No Method Override Planner circuit override was found to remove.',
+      evidence: ['No styledGroups matched Method Override Planner markers'],
+      reasonCode: 'override_artifact_not_found',
+    }
+  }
+  
+  // Update program-level weeklyMethodRepresentation (if exists)
+  if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
+    const byMethod = updatedProgram.weeklyMethodRepresentation.byMethod
+    
+    // Check if any circuit styledGroups remain in the entire program
+    const anyCircuitsRemain = sessions.some(session =>
+      session.styleMetadata?.styledGroups?.some(g => g.groupType === 'circuit')
+    )
+    
+    // Find circuit entry in the byMethod array
+    const circuitEntry = byMethod.find(m => 
+      m.methodId?.toLowerCase().includes('circuit')
+    )
+    
+    if (circuitEntry && !anyCircuitsRemain) {
+      // No circuits remain anywhere - mark as not materialized
+      circuitEntry.status = 'NOT_MATERIALIZED'
+      circuitEntry.materializedCount = 0
+      circuitEntry.reason = 'Removed Method Override Planner circuit override.'
+    }
+    
+    // Update oneLineExplanation
+    const existingExplanation = updatedProgram.weeklyMethodRepresentation.oneLineExplanation || ''
+    if (existingExplanation.includes('Circuit override applied')) {
+      updatedProgram.weeklyMethodRepresentation.oneLineExplanation = 
+        existingExplanation.replace(/Circuit override applied[^.]*\./g, '').trim()
+    }
+  }
+  
+  return {
+    status: 'success',
+    updatedProgram,
+    visibleSummary: `Circuit override removed — saved program updated.`,
+    evidence: [
+      `Removed ${removedCount} Method Override Planner circuit(s)`,
+      `From sessions: ${removedFromSessions.join(', ')}`,
+      `Group IDs: ${removedGroupIds.join(', ')}`,
+    ],
+    reasonCode: 'reverted_circuit_override',
   }
 }

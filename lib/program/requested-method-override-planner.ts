@@ -3019,12 +3019,18 @@ export function applyMethodOverridePreviewToProgram(args: {
         ? 'Use conservative pacing; rest enough to preserve skill quality.'
         : 'Minimal rest between stations; moderate rest between rounds.')
   
+  // [AB20.4.5.3] Density blocks need timeCapMinutes for live runtime execution
+  // Default: 8 minutes for standard density block, 10 for cautious
+  const densityTimeCapMinutes = isDensity ? (isCaution ? 10 : 8) : undefined
+
   const newGroup = {
     id: groupId,
     groupType: (isDensity ? 'density_block' : 'circuit') as 'circuit' | 'density_block',
     exercises: groupExercises,
     instruction,
     restProtocol,
+    // [AB20.4.5.3] Time cap for density blocks - required for live runtime execution
+    ...(isDensity && { timeCapMinutes: densityTimeCapMinutes }),
     // [AB20.2] Reversible metadata for future revert operations
     source: 'method_override_planner' as const,
     methodOverrideApplied: true,
@@ -3034,6 +3040,21 @@ export function applyMethodOverridePreviewToProgram(args: {
     methodOverrideTargetDayIndex: dayIndex,
     methodOverrideExerciseNames: candidate.selectedExercises,
     methodOverrideCanRevert: true,
+  }
+
+  // [AB20.4.5.3] Create methodStructure for live runtime binding
+  // This is the canonical structure the live-grouped-execution-contract uses
+  const newMethodStructure = {
+    id: groupId,
+    family: (isDensity ? 'density_block' : 'circuit') as 'circuit' | 'density_block',
+    status: 'applied' as const,
+    exerciseIds: groupExercises.map((ex: { id?: string }) => ex.id || ''),
+    exerciseNames: groupExercises.map((ex: { name?: string }) => ex.name || ''),
+    label: isDensity ? 'Skill Density Block' : 'Skill Circuit',
+    rounds: isDensity ? undefined : 3, // Circuits default to 3 rounds
+    ...(isDensity && { timeCapMinutes: densityTimeCapMinutes }),
+    source: 'method_override_planner' as const,
+    methodOverrideApplied: true,
   }
   
   // Update session.styleMetadata
@@ -3066,7 +3087,20 @@ export function applyMethodOverridePreviewToProgram(args: {
     ...(existingMeta.styledGroups || []),
     newGroup,
   ]
-  
+
+  // [AB20.4.5.3] Build updated methodStructures for live runtime binding
+  const existingMethodStructures = (updatedSession.methodStructures || []) as Array<{
+    id: string
+    family: string
+    status: string
+    exerciseIds?: string[]
+    exerciseNames?: string[]
+  }>
+  const updatedMethodStructures = [
+    ...existingMethodStructures,
+    newMethodStructure,
+  ]
+
   // Apply to session.styleMetadata - preserve all existing fields
   updatedSession.styleMetadata = {
     primaryStyle: existingMeta.primaryStyle || methodToAdd,
@@ -3083,6 +3117,10 @@ export function applyMethodOverridePreviewToProgram(args: {
     methodIntentContract: existingMeta.methodIntentContract,
     methodMaterializationSummary: existingMeta.methodMaterializationSummary,
   } as SessionStyleMetadata
+
+  // [AB20.4.5.3] Add methodStructures to session for live runtime binding
+  // This is the canonical structure the live-grouped-execution-contract uses
+  ;(updatedSession as unknown as { methodStructures: typeof updatedMethodStructures }).methodStructures = updatedMethodStructures
   
   // ==========================================================================
   // UPDATE PROGRAM-LEVEL weeklyMethodRepresentation (if exists)

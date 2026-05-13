@@ -81,6 +81,7 @@ import {
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
   type MethodOverrideRevertResult,
+  type MethodOverrideResetAllResult,
   type MethodOverrideCapability,
 } from '@/lib/program/requested-method-override-planner'
 
@@ -581,8 +582,8 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<MethodOverrideApplyResult>
   /** [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram */
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
-  /** [AB20.4] Optional callback to refresh program data without closing the sheet */
-  onRefreshProgramData?: () => Promise<void> | void
+  /** [AB20.4.2] Callback to reset all user-applied method overrides at once */
+  onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
   }
 
 // =============================================================================
@@ -1725,12 +1726,22 @@ function RequestedMethodsSheetContent({
   program,
   onApplyMethodOverride,
   onRevertMethodOverride,
-  refreshVersion = 0,
+  onResetAllMethodOverrides,
+  showResetAllConfirmation,
+  setShowResetAllConfirmation,
+  isResettingAllOverrides,
+  resetAllResult,
+  onResetAllOverrides,
 }: {
   program: AdaptiveProgram
   onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
-  refreshVersion?: number
+  onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
+  showResetAllConfirmation: boolean
+  setShowResetAllConfirmation: (show: boolean) => void
+  isResettingAllOverrides: boolean
+  resetAllResult: MethodOverrideResetAllResult | null
+  onResetAllOverrides: () => void
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -1747,15 +1758,10 @@ function RequestedMethodsSheetContent({
   const [revertResult, setRevertResult] = useState<MethodOverrideRevertResult | null>(null)
   const [showRevertConfirmation, setShowRevertConfirmation] = useState(false)
   
-  // [AB20.4.1] Load previews from storage on mount AND when refreshVersion changes
+  // [AB20.4.2] Load previews from storage on mount
   useEffect(() => {
     setPreviews(getMethodOverridePreviews())
-    // Clear stale result banners on refresh
-    setApplyResult(null)
-    setRevertResult(null)
-    setShowCautionConfirmation(false)
-    setShowRevertConfirmation(false)
-  }, [refreshVersion])
+  }, [])
 
   // Group by state
   const applied = methodItems.filter(m => m.state === 'applied' || m.state === 'materialized')
@@ -2124,6 +2130,87 @@ function RequestedMethodsSheetContent({
         </div>
       )}
 
+      {/* [AB20.4.2] Reset All Overrides Section */}
+      {onResetAllMethodOverrides && (
+        <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+          {/* Reset All Result Banner */}
+          {resetAllResult && (
+            <div className={cn(
+              'p-2 rounded-md mb-3 text-xs',
+              resetAllResult.status === 'success' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : resetAllResult.status === 'not_found'
+                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            )}>
+              {resetAllResult.visibleSummary}
+            </div>
+          )}
+          
+          {/* Confirmation Dialog */}
+          {showResetAllConfirmation ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-[#E6E9EF]">Reset all method overrides?</p>
+                  <p className="text-[10px] text-[#8A8A9A] mt-1 leading-relaxed">
+                    This will remove Method Override Planner changes you applied manually 
+                    and return the program to the AI/native method structure. 
+                    Original AI-selected methods such as native supersets stay.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowResetAllConfirmation(false)}
+                  disabled={isResettingAllOverrides}
+                  className="flex-1 h-8 text-xs border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#2A2A35]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={onResetAllOverrides}
+                  disabled={isResettingAllOverrides}
+                  className="flex-1 h-8 text-xs bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                >
+                  {isResettingAllOverrides ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    'Confirm Reset'
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#9A9AAA]">Reset overrides</p>
+                <p className="text-[10px] text-[#6A6A7A] mt-0.5">
+                  Removes user-applied method overrides only. AI-selected methods stay.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowResetAllConfirmation(true)}
+                className="h-7 px-3 text-[10px] border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
+              >
+                <Trash2 className="w-3 h-3 mr-1.5" />
+                Reset
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* [P2B] Improved empty state with diagnostic */}
       {!hasAnyData && (
         <div className="p-4 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
@@ -2237,7 +2324,7 @@ export function ProgramCoachIntelligenceHub({
   onProgramUpdate, // [AB20 / IQ10] Callback for state update
   onApplyMethodOverridePreview, // [AB20.1D] Dedicated callback for apply with save
   onRevertMethodOverride, // [AB20.2] Dedicated callback for revert with save
-  onRefreshProgramData, // [AB20.4] Callback to refresh program data
+  onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -2246,10 +2333,10 @@ export function ProgramCoachIntelligenceHub({
   const [coachRecsOpen, setCoachRecsOpen] = useState(false)
   const [requestedMethodsOpen, setRequestedMethodsOpen] = useState(false)
   const [planLogicOpen, setPlanLogicOpen] = useState(false)
-  // [AB20.4] Refresh state
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  // [AB20.4.1] Version counter to signal child components to refresh
-  const [refreshVersion, setRefreshVersion] = useState(0)
+  // [AB20.4.2] Reset-all state
+  const [isResettingAllOverrides, setIsResettingAllOverrides] = useState(false)
+  const [showResetAllConfirmation, setShowResetAllConfirmation] = useState(false)
+  const [resetAllResult, setResetAllResult] = useState<MethodOverrideResetAllResult | null>(null)
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(
@@ -2276,21 +2363,40 @@ export function ProgramCoachIntelligenceHub({
   }, [requestedMethodsOpen])
   const hasActivePreviews = activePreviews.length > 0
   
-  // [AB20.4] Handler for in-modal refresh
-  const handleRefreshProgramData = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
+  // [AB20.4.2] Simple page reload handler - replaces complex in-sheet refresh
+  const handleReloadPage = () => {
+    if (typeof window === 'undefined') return
+    window.location.reload()
+  }
+  
+  // [AB20.4.2] Handler for reset all method overrides with confirmation
+  const handleResetAllOverrides = async () => {
+    if (!onResetAllMethodOverrides || isResettingAllOverrides) return
+    
+    setIsResettingAllOverrides(true)
+    setResetAllResult(null)
+    
     try {
-      // Call the refresh callback if provided
-      if (onRefreshProgramData) {
-        await onRefreshProgramData()
+      const result = await onResetAllMethodOverrides()
+      setResetAllResult(result)
+      
+      if (result.status === 'success') {
+        // Refresh active previews from storage (should be cleared)
+        setActivePreviews(getMethodOverridePreviews())
+        setShowResetAllConfirmation(false)
       }
-      // Always refresh active previews from storage
-      setActivePreviews(getMethodOverridePreviews())
-      // [AB20.4.1] Increment refresh version to signal child components
-      setRefreshVersion(v => v + 1)
+    } catch (error) {
+      setResetAllResult({
+        status: 'blocked',
+        visibleSummary: 'Failed to reset overrides.',
+        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+        removedCount: 0,
+        removedMethodKeys: [],
+        affectedSessions: [],
+        reasonCode: 'invalid_program',
+      })
     } finally {
-      setIsRefreshing(false)
+      setIsResettingAllOverrides(false)
     }
   }
   
@@ -2636,21 +2742,15 @@ export function ProgramCoachIntelligenceHub({
       {/* [P2B] Method Override Planner Sheet — clearly labeled entry point */}
       <Sheet open={requestedMethodsOpen} onOpenChange={setRequestedMethodsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
-          {/* [AB20.4.1] Refresh button positioned absolutely, left of the default close X */}
+          {/* [AB20.4.2] Reload page button positioned absolutely, left of the default close X */}
           <button
             type="button"
-            onClick={handleRefreshProgramData}
-            disabled={isRefreshing}
-            aria-label="Refresh program data"
-            title="Refresh program data"
-            className={cn(
-              "absolute right-12 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#2A2A35] bg-[#111116]/90 transition-colors",
-              isRefreshing
-                ? "cursor-not-allowed text-[#5A5A6A]"
-                : "text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
-            )}
+            onClick={handleReloadPage}
+            aria-label="Reload page"
+            title="Reload page"
+            className="absolute right-12 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#2A2A35] bg-[#111116]/90 transition-colors text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
           >
-            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            <RefreshCw className="h-4 w-4" />
           </button>
           <SheetHeader className="pr-20">
             <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
@@ -2668,7 +2768,12 @@ export function ProgramCoachIntelligenceHub({
               program={program} 
               onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
               onRevertMethodOverride={onRevertMethodOverride}
-              refreshVersion={refreshVersion}
+              onResetAllMethodOverrides={onResetAllMethodOverrides}
+              showResetAllConfirmation={showResetAllConfirmation}
+              setShowResetAllConfirmation={setShowResetAllConfirmation}
+              isResettingAllOverrides={isResettingAllOverrides}
+              resetAllResult={resetAllResult}
+              onResetAllOverrides={handleResetAllOverrides}
             />
           </div>
         </SheetContent>

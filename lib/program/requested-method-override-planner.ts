@@ -2709,3 +2709,217 @@ export function revertMethodOverrideFromProgram(args: {
     reasonCode: 'reverted_circuit_override',
   }
 }
+
+// =============================================================================
+// [AB20.4.2] RESET ALL METHOD OVERRIDES
+// =============================================================================
+
+/**
+ * [AB20.4.2] Status for reset-all operation.
+ */
+export type MethodOverrideResetAllStatus =
+  | 'success'
+  | 'not_found'
+  | 'blocked'
+
+/**
+ * [AB20.4.2] Reason codes for reset-all operation.
+ */
+export type MethodOverrideResetAllReasonCode =
+  | 'reset_all_overrides'
+  | 'no_program'
+  | 'no_override_artifacts_found'
+  | 'invalid_program'
+
+/**
+ * [AB20.4.2] Result of reset-all operation.
+ */
+export interface MethodOverrideResetAllResult {
+  status: MethodOverrideResetAllStatus
+  updatedProgram?: AdaptiveProgram
+  visibleSummary: string
+  evidence: string[]
+  removedCount: number
+  removedMethodKeys: string[]
+  affectedSessions: string[]
+  reasonCode: MethodOverrideResetAllReasonCode
+}
+
+/**
+ * [AB20.4.2] Resets ALL Method Override Planner-applied overrides from a program.
+ * Removes only user-applied override groups, preserving native AI-generated methods.
+ * 
+ * @param program - The program to reset
+ * @returns Result with updated program (if successful) and evidence
+ */
+export function resetAllMethodOverridePlannerOverridesFromProgram(
+  program: AdaptiveProgram | null
+): MethodOverrideResetAllResult {
+  // Guard: Must have program
+  if (!program) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      removedCount: 0,
+      removedMethodKeys: [],
+      affectedSessions: [],
+      reasonCode: 'no_program',
+    }
+  }
+
+  // Guard: Must have valid sessions
+  if (!Array.isArray(program.sessions) || program.sessions.length === 0) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Program has no sessions.',
+      evidence: ['program.sessions is empty or not an array'],
+      removedCount: 0,
+      removedMethodKeys: [],
+      affectedSessions: [],
+      reasonCode: 'invalid_program',
+    }
+  }
+
+  // Deep clone the program to avoid mutation
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  const sessions = updatedProgram.sessions || []
+
+  // Track what we removed
+  let removedCount = 0
+  const removedGroupIds: string[] = []
+  const removedMethodKeys: string[] = []
+  const affectedSessions: string[] = []
+
+  // Scan all sessions for Method Override Planner-applied groups
+  for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
+    const session = sessions[dayIndex]
+    if (!session.styleMetadata?.styledGroups) continue
+
+    const originalGroups = session.styleMetadata.styledGroups
+    const remainingGroups: typeof originalGroups = []
+    let sessionHadOverrideGroup = false
+
+    for (const group of originalGroups) {
+      // Remove only groups that were applied by Method Override Planner
+      if (isMethodOverridePlannerAppliedGroup(group)) {
+        removedCount++
+        sessionHadOverrideGroup = true
+        if (group.id) removedGroupIds.push(group.id)
+        
+        // Track the method key if present
+        const methodKey = (group as { methodOverrideMethodKey?: string }).methodOverrideMethodKey
+        if (methodKey && !removedMethodKeys.includes(methodKey)) {
+          removedMethodKeys.push(methodKey)
+        }
+        
+        // Also track by group type
+        if (group.groupType === 'circuit' && !removedMethodKeys.includes('circuits')) {
+          removedMethodKeys.push('circuits')
+        }
+        if (group.groupType === 'density_block' && !removedMethodKeys.includes('density_block')) {
+          removedMethodKeys.push('density_block')
+        }
+      } else {
+        // Keep all other groups (supersets, native circuits/density, etc.)
+        remainingGroups.push(group)
+      }
+    }
+
+    if (sessionHadOverrideGroup) {
+      const sessionLabel = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
+      affectedSessions.push(sessionLabel)
+
+      // Update the session's styledGroups
+      session.styleMetadata.styledGroups = remainingGroups
+
+      // Recalculate flags based on remaining groups
+      const hasRemainingCircuits = remainingGroups.some(g => g.groupType === 'circuit')
+      const hasRemainingDensity = remainingGroups.some(g => g.groupType === 'density_block')
+      session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
+      session.styleMetadata.hasDensityApplied = hasRemainingDensity
+
+      // Remove method from appliedMethods only if no groups of that type remain
+      if (Array.isArray(session.styleMetadata.appliedMethods)) {
+        if (!hasRemainingCircuits) {
+          session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+            (m: string) => m !== 'circuits' && m !== 'circuit'
+          )
+        }
+        if (!hasRemainingDensity) {
+          session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+            (m: string) => m !== 'density_blocks' && m !== 'density_block' && m !== 'density'
+          )
+        }
+      }
+    }
+  }
+
+  // If nothing was removed, return not_found
+  if (removedCount === 0) {
+    return {
+      status: 'not_found',
+      visibleSummary: 'No user-applied method overrides found.',
+      evidence: ['No styledGroups matched Method Override Planner markers'],
+      removedCount: 0,
+      removedMethodKeys: [],
+      affectedSessions: [],
+      reasonCode: 'no_override_artifacts_found',
+    }
+  }
+
+  // Update program-level weeklyMethodRepresentation for removed method types
+  if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
+    const byMethod = updatedProgram.weeklyMethodRepresentation.byMethod
+
+    // Check if any circuits or density blocks remain (native or override)
+    const anyCircuitsRemain = sessions.some(session =>
+      session.styleMetadata?.styledGroups?.some(g => g.groupType === 'circuit')
+    )
+    const anyDensityRemain = sessions.some(session =>
+      session.styleMetadata?.styledGroups?.some(g => g.groupType === 'density_block')
+    )
+
+    // Update circuit method entry if no circuits remain
+    if (!anyCircuitsRemain) {
+      const circuitEntry = byMethod.find(m => {
+        const methodId = m.methodId?.toLowerCase() || ''
+        return methodId.includes('circuit')
+      })
+      if (circuitEntry) {
+        circuitEntry.status = 'BLOCKED_BY_SAFETY'
+        circuitEntry.materializedCount = 0
+        circuitEntry.reason = 'Circuit override removed. Method returns to coach-held-back state.'
+      }
+    }
+
+    // Update density method entry if no density blocks remain
+    if (!anyDensityRemain) {
+      const densityEntry = byMethod.find(m => {
+        const methodId = m.methodId?.toLowerCase() || ''
+        return methodId.includes('density')
+      })
+      if (densityEntry) {
+        densityEntry.status = 'BLOCKED_BY_SAFETY'
+        densityEntry.materializedCount = 0
+        densityEntry.reason = 'Density Block override removed. Method returns to coach-held-back state.'
+      }
+    }
+  }
+
+  return {
+    status: 'success',
+    updatedProgram,
+    visibleSummary: 'All user-applied method overrides reset — AI/native methods preserved.',
+    evidence: [
+      `Removed ${removedCount} Method Override Planner group(s)`,
+      `Method types: ${removedMethodKeys.join(', ') || 'none tracked'}`,
+      `From sessions: ${affectedSessions.join(', ')}`,
+      `Group IDs: ${removedGroupIds.join(', ')}`,
+    ],
+    removedCount,
+    removedMethodKeys,
+    affectedSessions,
+    reasonCode: 'reset_all_overrides',
+  }
+}

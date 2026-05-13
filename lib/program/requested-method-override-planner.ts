@@ -985,6 +985,12 @@ export interface MethodOverridePreview {
   // [AB17.2.2] Circuit-specific preview truth
   /** For circuits only: detailed candidate info with selected/skipped exercises */
   circuitCandidate?: CircuitPreviewCandidate
+  
+  // [AB20.3] Optional cached capability for apply eligibility checks
+  /** Cached capability info (avoids re-lookup during apply eligibility) */
+  methodCapability?: MethodOverrideCapability
+  /** Target group type for grouped block methods */
+  targetGroupType?: 'circuit' | 'density_block' | 'cluster'
 }
 
 const PREVIEW_STORAGE_KEY = 'spartanlab:requestedMethodOverridePreview'

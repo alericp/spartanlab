@@ -147,8 +147,10 @@ import {
 // [AB20.1D] Method Override Apply — Program Page owns save persistence
 import {
   applyMethodOverridePreviewToProgram,
+  revertMethodOverrideFromProgram,
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
+  type MethodOverrideRevertResult,
 } from '@/lib/program/requested-method-override-planner'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2786,6 +2788,79 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [AB20.2] Method Override Revert Callback
+  // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
+  // This is the authoritative save corridor for method override revert actions.
+  // ==========================================================================
+  const handleRevertMethodOverride = useCallback(
+    async (methodKey: string): Promise<MethodOverrideRevertResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          evidence: ['program is null or undefined'],
+          reasonCode: 'no_program',
+        }
+      }
+      
+      console.log('[AB20.2-method-override-revert] Starting revert', {
+        methodKey,
+        programId: program.id,
+        sessionCount: program.sessions?.length,
+      })
+      
+      // Call the pure helper
+      const result = revertMethodOverrideFromProgram({
+        program,
+        methodKey,
+      })
+      
+      console.log('[AB20.2-method-override-revert] Helper result', {
+        status: result.status,
+        visibleSummary: result.visibleSummary,
+        evidence: result.evidence,
+      })
+      
+      // If not success or no updated program, return early — do not save
+      if (result.status !== 'success' || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        // [AB20.2] Dynamic import to access canonical save function
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram)
+        
+        // [AB20.2] Update Program Page state via parent callback
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[AB20.2-method-override-revert] Program saved successfully', {
+          programId: savedProgram.id,
+          sessionCount: savedProgram.sessions?.length,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated after method override revert'],
+        }
+      } catch (saveError) {
+        console.error('[AB20.2-method-override-revert] Save failed', saveError)
+        return {
+          status: 'blocked',
+          visibleSummary: 'Failed to save the updated program.',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+          reasonCode: 'save_failed',
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -3462,6 +3537,9 @@ function ProgramDisplayWrapper({
   /* [AB20.1D] Dedicated method override apply callback with saveAdaptiveProgram.
   Program Page owns the save path. Hub requests, Page persists. */
   onApplyMethodOverridePreview={handleApplyMethodOverridePreview}
+  /* [AB20.2] Dedicated method override revert callback with saveAdaptiveProgram.
+  Program Page owns the save path. Hub requests, Page persists. */
+  onRevertMethodOverride={handleRevertMethodOverride}
   />
       </ErrorBoundary>
     </div>

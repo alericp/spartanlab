@@ -52,6 +52,7 @@ import {
   Eye,
   Info,
   Loader2,
+  Trash2,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -71,9 +72,11 @@ import {
   clearMethodOverridePreview,
   isCircuitLikePreviewMethodKey,
   applyMethodOverridePreviewToProgram,
+  hasMethodOverrideAppliedCircuit,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
+  type MethodOverrideRevertResult,
 } from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
@@ -505,6 +508,8 @@ interface ProgramCoachIntelligenceHubProps {
     preview: MethodOverridePreview, 
     options: { allowCautionApply: boolean }
   ) => Promise<MethodOverrideApplyResult>
+  /** [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram */
+  onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
 }
 
 // =============================================================================
@@ -834,6 +839,14 @@ function MethodDetailModalContent({
   showCautionConfirmation,
   onCancelCautionApply,
   onConfirmCautionApply,
+  // [AB20.2] Revert props
+  isOverrideApplied,
+  onRequestRevert,
+  isReverting,
+  revertResult,
+  showRevertConfirmation,
+  onCancelRevert,
+  onConfirmRevert,
 }: {
   item: RequestedMethodDisplayItem
   plan: RequestedMethodOverridePlan
@@ -848,6 +861,14 @@ function MethodDetailModalContent({
   showCautionConfirmation?: boolean
   onCancelCautionApply?: () => void
   onConfirmCautionApply?: () => void
+  // [AB20.2] Revert props
+  isOverrideApplied?: boolean
+  onRequestRevert?: () => void
+  isReverting?: boolean
+  revertResult?: MethodOverrideRevertResult | null
+  showRevertConfirmation?: boolean
+  onCancelRevert?: () => void
+  onConfirmRevert?: () => void
 }) {
   // [AB17.2.2] Circuit-specific safety override
   // If circuit preview exists but is not a safe candidate, override the safety display
@@ -1365,12 +1386,90 @@ function MethodDetailModalContent({
       <div className="sticky bottom-0 z-10 border-t border-[#2A2A35] bg-[#0F0F12]/95 backdrop-blur-sm px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex gap-2">
         {isAlreadyApplied ? (
-          <div className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
-            <span className="text-xs text-emerald-400 flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              Already included — no override needed
-            </span>
-          </div>
+          // [AB20.2] Show different UI based on whether it's an override-applied method
+          isOverrideApplied && onRequestRevert ? (
+            // [AB20.2] Show revert confirmation dialog
+            showRevertConfirmation ? (
+              <div className="flex-1 flex flex-col space-y-2 p-2 bg-red-500/5 border border-red-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-red-200 leading-relaxed">
+                    This will remove the Method Override Planner circuit from your saved program. Your original program structure will be preserved.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onCancelRevert}
+                    className="flex-1 h-8 text-[#9A9AAA] border-[#3A3A4A] hover:bg-[#2A2A35] text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={onConfirmRevert}
+                    disabled={isReverting}
+                    className="flex-1 h-8 bg-red-600 hover:bg-red-700 text-white text-xs"
+                  >
+                    {isReverting ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Removing...
+                      </>
+                    ) : (
+                      'Remove Override'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : revertResult?.status === 'success' ? (
+              // [AB20.2] Show success state after revert
+              <div className="flex-1 flex flex-col">
+                <div className="h-10 flex items-center justify-center bg-emerald-600/20 border border-emerald-500/30 rounded-md">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 mr-2" />
+                  <span className="text-xs text-emerald-400 font-medium">Removed</span>
+                </div>
+                <span className="text-[8px] text-emerald-400/70 text-center mt-1 leading-tight">
+                  {revertResult.visibleSummary}
+                </span>
+              </div>
+            ) : (
+              // [AB20.2] Show remove override button
+              <div className="flex-1 flex flex-col">
+                <div className="flex gap-2">
+                  <div className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="text-xs text-emerald-400 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Applied from Method Override Planner
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRequestRevert}
+                    className="h-10 px-3 text-red-400 border-red-500/30 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+                {revertResult?.status === 'blocked' && (
+                  <span className="text-[8px] text-red-400/70 text-center mt-1 leading-tight">
+                    {revertResult.visibleSummary}
+                  </span>
+                )}
+              </div>
+            )
+          ) : (
+            // Native/generated method — no remove option
+            <div className="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
+              <span className="text-xs text-emerald-400 flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Already included from generated program
+              </span>
+            </div>
+          )
         ) : preview ? (
           <>
             <Button
@@ -1530,9 +1629,11 @@ function MethodDetailModalContent({
 function RequestedMethodsSheetContent({
   program,
   onApplyMethodOverride,
+  onRevertMethodOverride,
 }: {
   program: AdaptiveProgram
   onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
+  onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -1543,6 +1644,11 @@ function RequestedMethodsSheetContent({
   const [isApplying, setIsApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<MethodOverrideApplyResult | null>(null)
   const [showCautionConfirmation, setShowCautionConfirmation] = useState(false)
+  
+  // [AB20.2] Revert state management
+  const [isReverting, setIsReverting] = useState(false)
+  const [revertResult, setRevertResult] = useState<MethodOverrideRevertResult | null>(null)
+  const [showRevertConfirmation, setShowRevertConfirmation] = useState(false)
   
   // Load previews from storage on mount
   useEffect(() => {
@@ -1682,6 +1788,50 @@ function RequestedMethodsSheetContent({
     }
   }
   
+  // [AB20.2] Request revert confirmation
+  const handleRequestRevert = () => {
+    setShowRevertConfirmation(true)
+  }
+  
+  // [AB20.2] Cancel revert confirmation
+  const handleCancelRevert = () => {
+    setShowRevertConfirmation(false)
+  }
+  
+  // [AB20.2] Confirm and execute revert
+  const handleConfirmRevert = async () => {
+    if (!selectedItem || !onRevertMethodOverride) return
+    
+    setShowRevertConfirmation(false)
+    setIsReverting(true)
+    setRevertResult(null)
+    
+    try {
+      const result = await onRevertMethodOverride(selectedItem.methodKey)
+      setRevertResult(result)
+      
+      if (result.status === 'success') {
+        // Clear any preview from storage after successful revert
+        clearMethodOverridePreview(selectedItem.methodKey)
+        setPreviews(getMethodOverridePreviews())
+      }
+    } catch (error) {
+      setRevertResult({
+        status: 'blocked',
+        visibleSummary: 'Failed to remove override.',
+        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+        reasonCode: 'save_failed',
+      })
+    } finally {
+      setIsReverting(false)
+    }
+  }
+  
+  // [AB20.2] Check if the selected method has an override-applied circuit
+  const isOverrideAppliedForSelectedMethod = selectedItem && 
+    isCircuitLikePreviewMethodKey(selectedItem.methodKey) &&
+    hasMethodOverrideAppliedCircuit(program)
+  
   const getCurrentPreview = (methodKey: string) => {
     return previews.find(p => p.methodKey === methodKey) || null
   }
@@ -1794,6 +1944,14 @@ function RequestedMethodsSheetContent({
           showCautionConfirmation={showCautionConfirmation}
           onCancelCautionApply={handleCancelCautionApply}
           onConfirmCautionApply={handleConfirmCautionApply}
+          // [AB20.2] Revert props
+          isOverrideApplied={isOverrideAppliedForSelectedMethod || false}
+          onRequestRevert={handleRequestRevert}
+          isReverting={isReverting}
+          revertResult={revertResult}
+          showRevertConfirmation={showRevertConfirmation}
+          onCancelRevert={handleCancelRevert}
+          onConfirmRevert={handleConfirmRevert}
         />
       </div>
     )
@@ -1972,6 +2130,7 @@ export function ProgramCoachIntelligenceHub({
   goalFamilyBalanceAudit,
   onProgramUpdate, // [AB20 / IQ10] Callback for state update
   onApplyMethodOverridePreview, // [AB20.1D] Dedicated callback for apply with save
+  onRevertMethodOverride, // [AB20.2] Dedicated callback for revert with save
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -2363,6 +2522,7 @@ export function ProgramCoachIntelligenceHub({
             <RequestedMethodsSheetContent 
               program={program} 
               onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
+              onRevertMethodOverride={onRevertMethodOverride}
             />
           </div>
         </SheetContent>

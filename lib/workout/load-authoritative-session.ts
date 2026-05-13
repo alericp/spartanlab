@@ -267,6 +267,19 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     result.compositionMetadata = session.compositionMetadata as AdaptiveSession['compositionMetadata']
   }
   
+  // [AB20.4.5.4.2] Preserve methodStructures for live grouped runtime binding.
+  // This is the canonical Phase 4P structure written by the Method Override Planner
+  // when applying Circuit/Density/Cluster overrides. Without this preservation,
+  // the live grouped execution contract cannot bind methods to interactive runtime
+  // (buildExecutionBlocksFromMethodStructures requires methodStructures).
+  // The session's methodStructures is a custom runtime field not on AdaptiveSession type,
+  // so we use a type-safe extension pattern.
+  const sessionWithMethods = session as typeof session & { methodStructures?: unknown }
+  if (Array.isArray(sessionWithMethods.methodStructures) && sessionWithMethods.methodStructures.length > 0) {
+    const resultWithMethods = result as typeof result & { methodStructures?: unknown }
+    resultWithMethods.methodStructures = sessionWithMethods.methodStructures
+  }
+  
   return result
 }
 

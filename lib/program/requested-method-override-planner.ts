@@ -1102,6 +1102,8 @@ export interface MethodOverridePreview {
   targetExercises?: MethodOverrideTargetExercise[]
   applicationPatchPreview?: MethodOverrideSavedProgramPatchPreview
   applyDisabledReason?: string
+  // [AB20.4.4.1] Severity assessment for practicality display
+  severityAssessment?: MethodOverrideSeverityAssessment
 }
 
 // =============================================================================
@@ -1113,6 +1115,50 @@ export type MethodOverrideTargetRole =
   | 'conditioning_finisher' | 'quality_strength'
 
 export type MethodOverrideTargetSafety = 'safe' | 'caution' | 'blocked'
+
+// =============================================================================
+// [AB20.4.4.1] SEVERITY / PRACTICALITY ASSESSMENT SYSTEM
+// =============================================================================
+
+/**
+ * [AB20.4.4.1] Severity level classification for method override practicality.
+ * Determines UI state and available actions.
+ */
+export type MethodOverrideSeverityLevel =
+  | 'recommended'           // Safe target exists, no major cautions
+  | 'acceptable_with_caution' // Target exists with cautions, applyable after confirmation
+  | 'not_recommended'       // No ideal target, but forceable target may exist
+  | 'strongly_discouraged'  // Only poor targets exist, force override with significant warnings
+  | 'blocked_impossible'    // No valid mutation path, cannot apply
+
+/**
+ * [AB20.4.4.1] Comprehensive severity assessment for method override.
+ * Provides all information needed for UI rendering and decision flow.
+ */
+export interface MethodOverrideSeverityAssessment {
+  level: MethodOverrideSeverityLevel
+  label: string
+  summary: string
+  whyThisLevel: string[]
+  trainingTradeoffs: string[]
+  riskDrivers: string[]
+  protectiveConditions: string[]
+  candidateScanSummary: {
+    totalSessionsScanned: number
+    totalExercisesScanned: number
+    safeTargetsFound: number
+    cautionTargetsFound: number
+    blockedTargetsFound: number
+    forceableTargetsFound: number
+    bestTargetDescription?: string
+    topBlockerReasons: string[]
+  }
+  canForceOverride: boolean
+  forceOverrideLabel?: string
+  forceOverrideWarning?: string
+  forceOverrideDisabledReason?: string
+  blockedReasonCode?: string
+}
 
 export interface MethodOverrideTargetExercise {
   sessionIndex: number
@@ -1292,6 +1338,293 @@ export function findBestMethodOverrideTargets(args: {
 
   allTargets.sort((a, b) => b.score - a.score)
   return allTargets.slice(0, maxTargets)
+}
+
+/**
+ * [AB20.4.4.1] Analyzes all candidate targets and returns diagnostic information.
+ * Includes safe, caution, forceable, and blocked targets with reasons.
+ */
+export function analyzeMethodOverrideTargetCandidates(args: {
+  program: AdaptiveProgram
+  methodKey: CanonicalOverrideMethodKey
+}): {
+  safeTargets: MethodOverrideTargetExercise[]
+  cautionTargets: MethodOverrideTargetExercise[]
+  forceableTargets: MethodOverrideTargetExercise[]
+  blockedTargets: Array<{ sessionIndex: number; exerciseName: string; reason: string }>
+  diagnostics: {
+    totalSessionsScanned: number
+    totalExercisesScanned: number
+    topBlockerReasons: string[]
+  }
+} {
+  const { program, methodKey } = args
+  const sessions = program.sessions || []
+  
+  const safeTargets: MethodOverrideTargetExercise[] = []
+  const cautionTargets: MethodOverrideTargetExercise[] = []
+  const forceableTargets: MethodOverrideTargetExercise[] = []
+  const blockedTargets: Array<{ sessionIndex: number; exerciseName: string; reason: string }> = []
+  const blockerReasonCounts: Record<string, number> = {}
+  
+  let totalExercisesScanned = 0
+  
+  for (let sessionIndex = 0; sessionIndex < sessions.length; sessionIndex++) {
+    const session = sessions[sessionIndex]
+    const exercises = session.exercises || []
+    const dayLabel = session.focusLabel || session.focus || session.dayLabel || `Day ${sessionIndex + 1}`
+    const existingMethods = session.styleMetadata?.appliedMethods || []
+    
+    // For endurance_density, we target session-level finisher position
+    if (methodKey === 'endurance_density') {
+      totalExercisesScanned++
+      const lastExIndex = exercises.length - 1
+      if (lastExIndex >= 0) {
+        const lastEx = exercises[lastExIndex]
+        const result = scoreExerciseForMethod({
+          exercise: { name: lastEx.name, reps: (lastEx as unknown as Record<string, unknown>).reps as string | undefined, sets: lastEx.sets },
+          exerciseIndex: lastExIndex,
+          totalExercises: exercises.length,
+          session,
+          sessionIndex,
+          methodKey,
+          existingMethods
+        })
+        
+        const target: MethodOverrideTargetExercise = {
+          sessionIndex,
+          dayLabel,
+          sessionTitle: dayLabel,
+          exerciseIndex: -1,
+          exerciseName: 'Session Finisher',
+          methodKey,
+          targetRole: 'conditioning_finisher',
+          score: result.score,
+          safety: result.safety,
+          reasons: result.reasons,
+          cautions: result.cautions
+        }
+        
+        if (result.safety === 'safe' && result.score > 0) {
+          safeTargets.push(target)
+        } else if (result.safety === 'caution' && result.score > 0) {
+          cautionTargets.push(target)
+          forceableTargets.push(target)
+        } else if (result.score > -50) {
+          forceableTargets.push(target)
+        } else {
+          blockedTargets.push({ sessionIndex, exerciseName: 'Session Finisher', reason: result.reasons[0] || 'Blocked' })
+          const reason = result.reasons[0] || 'Unknown blocker'
+          blockerReasonCounts[reason] = (blockerReasonCounts[reason] || 0) + 1
+        }
+      }
+      continue
+    }
+    
+    // For other row-level methods, scan each exercise
+    for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
+      const exercise = exercises[exerciseIndex]
+      totalExercisesScanned++
+      
+      const result = scoreExerciseForMethod({
+        exercise: { name: exercise.name, reps: (exercise as unknown as Record<string, unknown>).reps as string | undefined, sets: exercise.sets },
+        exerciseIndex,
+        totalExercises: exercises.length,
+        session,
+        sessionIndex,
+        methodKey,
+        existingMethods
+      })
+      
+      const targetRole: MethodOverrideTargetRole = 
+        methodKey === 'top_set_backoff' ? 'primary_strength' :
+        isLateAccessoryPosition(exerciseIndex, exercises.length) ? 'late_accessory' :
+        isAccessoryHypertrophyCandidate(exercise.name || '') ? 'hypertrophy_accessory' : 'quality_strength'
+      
+      const target: MethodOverrideTargetExercise = {
+        sessionIndex,
+        dayLabel,
+        sessionTitle: dayLabel,
+        exerciseIndex,
+        exerciseName: exercise.name || `Exercise ${exerciseIndex + 1}`,
+        methodKey,
+        targetRole,
+        score: result.score,
+        safety: result.safety,
+        reasons: result.reasons,
+        cautions: result.cautions
+      }
+      
+      if (result.safety === 'safe' && result.score > 0) {
+        safeTargets.push(target)
+      } else if (result.safety === 'caution' && result.score > 0) {
+        cautionTargets.push(target)
+        forceableTargets.push(target)
+      } else if (result.score > -50 && result.safety !== 'blocked') {
+        // Marginally acceptable - forceable but not recommended
+        forceableTargets.push(target)
+      } else {
+        blockedTargets.push({ sessionIndex, exerciseName: exercise.name || 'Unknown', reason: result.reasons[0] || 'Blocked' })
+        const reason = result.reasons[0] || 'Unknown blocker'
+        blockerReasonCounts[reason] = (blockerReasonCounts[reason] || 0) + 1
+      }
+    }
+  }
+  
+  // Sort targets by score
+  safeTargets.sort((a, b) => b.score - a.score)
+  cautionTargets.sort((a, b) => b.score - a.score)
+  forceableTargets.sort((a, b) => b.score - a.score)
+  
+  // Get top blocker reasons
+  const topBlockerReasons = Object.entries(blockerReasonCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([reason]) => reason)
+  
+  return {
+    safeTargets,
+    cautionTargets,
+    forceableTargets,
+    blockedTargets,
+    diagnostics: {
+      totalSessionsScanned: sessions.length,
+      totalExercisesScanned,
+      topBlockerReasons
+    }
+  }
+}
+
+/**
+ * [AB20.4.4.1] Computes severity assessment for a method override based on target analysis.
+ */
+export function computeSeverityAssessment(args: {
+  methodKey: CanonicalOverrideMethodKey
+  capability: MethodOverrideCapability
+  safeTargets: MethodOverrideTargetExercise[]
+  cautionTargets: MethodOverrideTargetExercise[]
+  forceableTargets: MethodOverrideTargetExercise[]
+  blockedTargets: Array<{ sessionIndex: number; exerciseName: string; reason: string }>
+  diagnostics: { totalSessionsScanned: number; totalExercisesScanned: number; topBlockerReasons: string[] }
+}): MethodOverrideSeverityAssessment {
+  const { methodKey, capability, safeTargets, cautionTargets, forceableTargets, blockedTargets, diagnostics } = args
+  
+  const hasSafeTarget = safeTargets.length > 0
+  const hasCautionTarget = cautionTargets.length > 0
+  const hasForceableTarget = forceableTargets.length > 0
+  const bestSafe = safeTargets[0]
+  const bestCaution = cautionTargets[0]
+  const bestForceable = forceableTargets[0]
+  
+  // Method-specific tradeoff descriptions
+  const methodTradeoffs: Record<CanonicalOverrideMethodKey, string[]> = {
+    drop_set: ['Creates significant muscle fatigue', 'Recovery impact on subsequent sessions', 'Best for hypertrophy, not strength'],
+    rest_pause: ['High fatigue accumulation', 'Not suitable for primary skill work', 'Recovery cost on heavy days'],
+    cluster: ['Extends set duration', 'Quality degradation if overused', 'Best for final sets, not default approach'],
+    top_set_backoff: ['Heavy CNS demand on first set', 'May interfere with skill quality if placed poorly', 'Requires established form'],
+    endurance_density: ['Adds conditioning stress at session end', 'Recovery impact if session already dense', 'May interfere with skill-focused days'],
+    circuits: ['Pattern interference if same-muscle exercises grouped', 'Skill hold quality may degrade under fatigue'],
+    density_block: ['Timed stress adds fatigue', 'Technical quality may suffer under time pressure'],
+    superset: ['Recovery between exercises reduced', 'May create unwanted fatigue accumulation'],
+    finisher: ['End-of-session fatigue', 'Recovery impact on next day'],
+    unknown: ['Unknown method - cannot assess tradeoffs']
+  }
+  
+  const tradeoffs = methodTradeoffs[methodKey] || methodTradeoffs.unknown
+  
+  let level: MethodOverrideSeverityLevel
+  let label: string
+  let summary: string
+  const whyThisLevel: string[] = []
+  const riskDrivers: string[] = []
+  const protectiveConditions: string[] = []
+  let canForceOverride = false
+  let forceOverrideLabel: string | undefined
+  let forceOverrideWarning: string | undefined
+  let forceOverrideDisabledReason: string | undefined
+  let blockedReasonCode: string | undefined
+  
+  if (hasSafeTarget) {
+    level = 'recommended'
+    label = 'Recommended'
+    summary = `Safe target found: ${bestSafe.dayLabel} — ${bestSafe.exerciseName}`
+    whyThisLevel.push('A safe target exercise was found with good positioning')
+    whyThisLevel.push(...bestSafe.reasons.slice(0, 2))
+    protectiveConditions.push('Exercise is in a late/accessory position')
+    protectiveConditions.push('No conflicting methods already applied')
+  } else if (hasCautionTarget) {
+    level = 'acceptable_with_caution'
+    label = 'Acceptable with caution'
+    summary = `Caution target found: ${bestCaution.dayLabel} — ${bestCaution.exerciseName}`
+    whyThisLevel.push('Target exists but requires careful application')
+    whyThisLevel.push(...bestCaution.cautions.slice(0, 2))
+    riskDrivers.push(...bestCaution.cautions)
+    canForceOverride = false // Normal caution apply, not force
+  } else if (hasForceableTarget) {
+    level = 'not_recommended'
+    label = 'Not recommended'
+    summary = `No ideal target, but ${bestForceable.dayLabel} — ${bestForceable.exerciseName} is technically possible`
+    whyThisLevel.push('No safe or recommended target found')
+    whyThisLevel.push('A technically possible target exists with significant tradeoffs')
+    riskDrivers.push(...(bestForceable.cautions.length > 0 ? bestForceable.cautions : ['Target is not ideally positioned']))
+    riskDrivers.push(...tradeoffs.slice(0, 2))
+    canForceOverride = true
+    forceOverrideLabel = 'Force Override Anyway'
+    forceOverrideWarning = `Applying ${capability.displayLabel} to ${bestForceable.exerciseName} may reduce training quality. ${tradeoffs[0] || ''}`
+  } else if (blockedTargets.length > 0 && diagnostics.totalExercisesScanned > 0) {
+    // Some exercises exist but all are blocked
+    const uniqueBlockReasons = [...new Set(blockedTargets.map(b => b.reason))].slice(0, 3)
+    if (uniqueBlockReasons.every(r => r.includes('Skill hold') || r.includes('explosive') || r.includes('Time-based'))) {
+      level = 'blocked_impossible'
+      label = 'Blocked / Impossible'
+      summary = 'All exercises are skill holds, explosive movements, or time-based holds'
+      blockedReasonCode = 'all_exercises_blocked_by_type'
+    } else {
+      level = 'strongly_discouraged'
+      label = 'Strongly discouraged'
+      summary = 'All candidates blocked but program structure exists'
+      canForceOverride = false // Truly no valid target
+      forceOverrideDisabledReason = 'No exercise can safely receive this method'
+    }
+    whyThisLevel.push('Scanned all program exercises')
+    whyThisLevel.push(...uniqueBlockReasons.map(r => `Blocker: ${r}`))
+    riskDrivers.push(...diagnostics.topBlockerReasons)
+  } else {
+    level = 'blocked_impossible'
+    label = 'Blocked / Impossible'
+    summary = diagnostics.totalSessionsScanned === 0 
+      ? 'No program sessions available to scan'
+      : 'No exercises found in program sessions'
+    blockedReasonCode = diagnostics.totalSessionsScanned === 0 ? 'no_sessions' : 'no_exercises'
+    whyThisLevel.push(summary)
+  }
+  
+  return {
+    level,
+    label,
+    summary,
+    whyThisLevel,
+    trainingTradeoffs: tradeoffs,
+    riskDrivers,
+    protectiveConditions,
+    candidateScanSummary: {
+      totalSessionsScanned: diagnostics.totalSessionsScanned,
+      totalExercisesScanned: diagnostics.totalExercisesScanned,
+      safeTargetsFound: safeTargets.length,
+      cautionTargetsFound: cautionTargets.length,
+      blockedTargetsFound: blockedTargets.length,
+      forceableTargetsFound: forceableTargets.length,
+      bestTargetDescription: bestSafe ? `${bestSafe.dayLabel} — ${bestSafe.exerciseName}` :
+        bestCaution ? `${bestCaution.dayLabel} — ${bestCaution.exerciseName} (caution)` :
+        bestForceable ? `${bestForceable.dayLabel} — ${bestForceable.exerciseName} (forceable)` : undefined,
+      topBlockerReasons: diagnostics.topBlockerReasons
+    },
+    canForceOverride,
+    forceOverrideLabel,
+    forceOverrideWarning,
+    forceOverrideDisabledReason,
+    blockedReasonCode
+  }
 }
 
 // =============================================================================
@@ -2062,34 +2395,69 @@ export function saveMethodOverridePreview(
   let applyDisabledReason: string | undefined
   let finalCanApply = capability.canApplyToSavedProgramNow
   let finalSuggestedDayIndex = plan.suggestedInsertion?.dayIndex
+  let severityAssessment: MethodOverrideSeverityAssessment | undefined
 
-  // [AB20.4.3] For row-level methods, find best targets across program
+  // [AB20.4.4.1] For row-level methods, use full candidate analysis with severity assessment
   if (capability.writerKind === 'row_level_method' && context?.programSessions) {
     const programForTargeting = { id: 'targeting-temp', sessions: context.programSessions as AdaptiveSession[] }
-    targetExercises = findBestMethodOverrideTargets({ program: programForTargeting as AdaptiveProgram, methodKey: canonicalKey, maxTargets: 1 })
-
-    if (targetExercises.length > 0) {
-      const primaryTarget = targetExercises[0]
-      finalSuggestedDayIndex = primaryTarget.sessionIndex
+    
+    // [AB20.4.4.1] Run full candidate analysis for diagnostics and severity
+    const analysis = analyzeMethodOverrideTargetCandidates({ 
+      program: programForTargeting as AdaptiveProgram, 
+      methodKey: canonicalKey 
+    })
+    
+    // [AB20.4.4.1] Compute severity assessment
+    severityAssessment = computeSeverityAssessment({
+      methodKey: canonicalKey,
+      capability,
+      safeTargets: analysis.safeTargets,
+      cautionTargets: analysis.cautionTargets,
+      forceableTargets: analysis.forceableTargets,
+      blockedTargets: analysis.blockedTargets,
+      diagnostics: analysis.diagnostics
+    })
+    
+    // Use best available target
+    const bestTarget = analysis.safeTargets[0] || analysis.cautionTargets[0]
+    if (bestTarget) {
+      targetExercises = [bestTarget]
+      finalSuggestedDayIndex = bestTarget.sessionIndex
       visibleProofLines.push(`Scanned all ${context.programSessions.length} program days`)
-      visibleProofLines.push(`Target: ${primaryTarget.dayLabel} — ${primaryTarget.exerciseName}`)
-      visibleProofLines.push(`Why chosen: ${primaryTarget.reasons[0] || 'Best scoring target'}`)
-      if (primaryTarget.cautions.length > 0) visibleProofLines.push(`Caution: ${primaryTarget.cautions[0]}`)
+      visibleProofLines.push(`Target: ${bestTarget.dayLabel} — ${bestTarget.exerciseName}`)
+      visibleProofLines.push(`Why chosen: ${bestTarget.reasons[0] || 'Best scoring target'}`)
+      if (bestTarget.cautions.length > 0) visibleProofLines.push(`Caution: ${bestTarget.cautions[0]}`)
 
       applicationPatchPreview = {
         methodKey: canonicalKey,
         patchKind: canonicalKey === 'endurance_density' ? 'session_finisher' : 'row_level_method',
-        targetExercises,
-        affectedSessionIndexes: [primaryTarget.sessionIndex],
-        visibleBefore: [`${primaryTarget.exerciseName}: Standard sets`],
-        visibleAfter: [`${primaryTarget.exerciseName}: ${capability.displayLabel} applied`],
-        exactMutationSummary: [`Apply ${capability.displayLabel} to ${primaryTarget.exerciseName}`, `On ${primaryTarget.dayLabel}`, `Method metadata added to exercise`],
+        targetExercises: [bestTarget],
+        affectedSessionIndexes: [bestTarget.sessionIndex],
+        visibleBefore: [`${bestTarget.exerciseName}: Standard sets`],
+        visibleAfter: [`${bestTarget.exerciseName}: ${capability.displayLabel} applied`],
+        exactMutationSummary: [`Apply ${capability.displayLabel} to ${bestTarget.exerciseName}`, `On ${bestTarget.dayLabel}`, `Method metadata added to exercise`],
       }
+    } else if (severityAssessment.canForceOverride && analysis.forceableTargets[0]) {
+      // [AB20.4.4.1] No safe/caution target but forceable exists
+      const forceTarget = analysis.forceableTargets[0]
+      targetExercises = [forceTarget]
+      finalSuggestedDayIndex = forceTarget.sessionIndex
+      finalCanApply = false // Requires force override flow
+      applyDisabledReason = `No recommended target. Force override available for ${forceTarget.exerciseName}.`
+      visibleProofLines.push(`Scanned all ${context.programSessions.length} program days`)
+      visibleProofLines.push(`No safe target found`)
+      visibleProofLines.push(`Forceable: ${forceTarget.dayLabel} — ${forceTarget.exerciseName}`)
+      visibleProofLines.push(`Warning: ${severityAssessment.forceOverrideWarning || 'Not recommended'}`)
     } else {
       finalCanApply = false
-      applyDisabledReason = `No safe target exercise found for ${capability.displayLabel} in this program.`
+      applyDisabledReason = severityAssessment.blockedReasonCode 
+        ? `Blocked: ${severityAssessment.summary}`
+        : `No safe target exercise found for ${capability.displayLabel} in this program.`
       visibleProofLines.push(`Scanned all ${context.programSessions.length} program days`)
-      visibleProofLines.push(`No safe target: All exercises blocked by safety rules`)
+      visibleProofLines.push(`No safe target: ${analysis.diagnostics.topBlockerReasons[0] || 'All exercises blocked by safety rules'}`)
+      if (analysis.diagnostics.topBlockerReasons.length > 1) {
+        visibleProofLines.push(`Also: ${analysis.diagnostics.topBlockerReasons.slice(1).join(', ')}`)
+      }
     }
   }
   
@@ -2123,6 +2491,8 @@ export function saveMethodOverridePreview(
     targetExercises,
     applicationPatchPreview,
     applyDisabledReason,
+    // [AB20.4.4.1] Severity assessment
+    severityAssessment,
   }
   
   try {

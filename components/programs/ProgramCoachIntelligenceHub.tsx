@@ -83,6 +83,8 @@ import {
   type MethodOverrideRevertResult,
   type MethodOverrideResetAllResult,
   type MethodOverrideCapability,
+  type MethodOverrideSeverityLevel,
+  type MethodOverrideSeverityAssessment,
 } from '@/lib/program/requested-method-override-planner'
 
 // =============================================================================
@@ -1260,6 +1262,115 @@ function MethodDetailModalContent({
             <span className="text-xs font-medium text-emerald-400">Override Preview Created</span>
           </div>
           
+          {/* [AB20.4.4.1] Severity / Practicality Assessment Card for Row-Level Methods */}
+          {preview.severityAssessment && (
+            <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A]">
+                  Practicality / Severity
+                </span>
+              </div>
+              
+              {/* Severity Level Chip */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn(
+                  'px-2 py-0.5 text-[9px] font-medium rounded border',
+                  preview.severityAssessment.level === 'recommended'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : preview.severityAssessment.level === 'acceptable_with_caution'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : preview.severityAssessment.level === 'not_recommended'
+                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                        : preview.severityAssessment.level === 'strongly_discouraged'
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                          : 'bg-red-600/10 text-red-500 border-red-600/20'
+                )}>
+                  {preview.severityAssessment.label}
+                </span>
+              </div>
+              
+              {/* Summary */}
+              <p className="text-[10px] text-[#9A9AAA] mb-2">
+                {preview.severityAssessment.summary}
+              </p>
+              
+              {/* Why This Rating */}
+              {preview.severityAssessment.whyThisLevel.length > 0 && (
+                <div className="mb-2">
+                  <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                    Why this rating
+                  </span>
+                  <ul className="space-y-0.5">
+                    {preview.severityAssessment.whyThisLevel.slice(0, 3).map((reason, idx) => (
+                      <li key={idx} className="text-[9px] text-[#8A8A9A] flex items-start gap-1">
+                        <span className="text-[#5A5A6A] mt-0.5">•</span>
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Training Tradeoffs */}
+              {preview.severityAssessment.trainingTradeoffs.length > 0 && (
+                <div className="mb-2">
+                  <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                    What this could affect
+                  </span>
+                  <ul className="space-y-0.5">
+                    {preview.severityAssessment.trainingTradeoffs.slice(0, 2).map((tradeoff, idx) => (
+                      <li key={idx} className="text-[9px] text-amber-400/70 flex items-start gap-1">
+                        <span className="mt-0.5">•</span>
+                        <span>{tradeoff}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Target Scan Summary */}
+              <div className="p-1.5 rounded bg-[#0F0F15] border border-[#1A1A25]">
+                <span className="text-[9px] uppercase tracking-wide text-[#5A5A6A] block mb-1">
+                  Target scan
+                </span>
+                <div className="text-[9px] text-[#7A7A8A] space-y-0.5">
+                  <div>
+                    Scanned: {preview.severityAssessment.candidateScanSummary.totalSessionsScanned} days / {preview.severityAssessment.candidateScanSummary.totalExercisesScanned} exercises
+                  </div>
+                  {preview.severityAssessment.candidateScanSummary.bestTargetDescription && (
+                    <div className="text-[#9A9AAA]">
+                      Best target: {preview.severityAssessment.candidateScanSummary.bestTargetDescription}
+                    </div>
+                  )}
+                  {!preview.severityAssessment.candidateScanSummary.bestTargetDescription && 
+                   preview.severityAssessment.candidateScanSummary.topBlockerReasons.length > 0 && (
+                    <div className="text-amber-400/70">
+                      Top blockers: {preview.severityAssessment.candidateScanSummary.topBlockerReasons.slice(0, 2).join(', ')}
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-1 text-[8px]">
+                    <span className="text-emerald-400/60">Safe: {preview.severityAssessment.candidateScanSummary.safeTargetsFound}</span>
+                    <span className="text-amber-400/60">Caution: {preview.severityAssessment.candidateScanSummary.cautionTargetsFound}</span>
+                    <span className="text-red-400/60">Blocked: {preview.severityAssessment.candidateScanSummary.blockedTargetsFound}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Force Override Warning */}
+              {preview.severityAssessment.canForceOverride && preview.severityAssessment.forceOverrideWarning && (
+                <div className="mt-2 p-1.5 rounded bg-orange-500/5 border border-orange-500/20">
+                  <div className="flex items-center gap-1 text-[9px] text-orange-400">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span className="font-medium">Force override available</span>
+                  </div>
+                  <p className="text-[8px] text-orange-300/70 mt-1">
+                    {preview.severityAssessment.forceOverrideWarning}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          
           {/* [AB17.2.2 / AB17.2.2.2] Circuit-Specific Preview Truth */}
           {preview.circuitCandidate && (
             <div className="mb-4 p-2 rounded bg-[#12121A] border border-[#2A2A35]">
@@ -1835,17 +1946,27 @@ function RequestedMethodsSheetContent({
       sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
     }
     
-    // [AB17.2.2.1] For circuits, pass full program sessions so findBestCircuitPreviewCandidate() can scan all days
-    // [AB17.2.2.3] Use shared helper for consistent circuit-like method detection (singular/plural)
-    const isCircuitMethod = isCircuitLikePreviewMethodKey(currentPlan.methodKey)
-    const context = isCircuitMethod && program.sessions ? {
-      programSessions: program.sessions.map(s => ({
-        exercises: s.exercises,
-        focus: s.focus,
-        focusLabel: s.focusLabel,
-        title: s.focusLabel || s.focus,
-      }))
-    } : undefined
+  // [AB20.4.4.1] Pass full program sessions to ALL methods that need target scanning
+  // Row-level methods (drop_set, rest_pause, cluster, top_set_backoff, endurance_density) need full program
+  // context to scan all days for the best target, not just the suggested day.
+  // Grouped block methods (circuits, density_block) also need full program context.
+  const capability = getMethodOverrideCapability(currentPlan.methodKey)
+  const needsFullProgramContext = 
+    capability.writerKind === 'row_level_method' || 
+    capability.writerKind === 'grouped_circuit' || 
+    capability.writerKind === 'grouped_density_block'
+  
+  const context = needsFullProgramContext && program.sessions ? {
+  programSessions: program.sessions.map(s => ({
+  exercises: s.exercises,
+  focus: s.focus,
+  focusLabel: s.focusLabel,
+  title: s.focusLabel || s.focus,
+  dayLabel: s.dayLabel,
+  estimatedMinutes: s.estimatedMinutes,
+  styleMetadata: s.styleMetadata,
+  }))
+  } : undefined
     
     const preview = saveMethodOverridePreview(currentPlan, sessionExercises, sessionTitle, context)
     setPreviews(getMethodOverridePreviews())

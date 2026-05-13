@@ -3370,6 +3370,9 @@ function ProgramDisplayWrapper({
   /* [STEP 24.6 / V.V6] Multi-session push-forward callback — user-confirmed mutation only.
   Third saved-program mutation corridor in Phase V. */
   onConfirmMultiSessionPushForward={handleConfirmMultiSessionPushForward}
+  /* [AB20 / IQ10] Method Override Apply callback — user-confirmed mutation only.
+  Program Page owns setProgram. Display requests via Hub, Page updates. */
+  onProgramUpdate={onProgramUpdate}
   />
       </ErrorBoundary>
     </div>

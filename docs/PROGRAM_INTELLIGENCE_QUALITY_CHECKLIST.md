@@ -856,6 +856,77 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 
 ---
 
+### IQ11 — Method Override Apply Activation (AB20)
+
+**Status:** PARTIAL (Infrastructure complete, all previews currently preview-only)
+
+**User-facing AB alias:** AB20
+
+**Purpose:** Enable Apply button for safe method override previews while keeping caution/no-candidate previews disabled.
+
+**Implementation Summary:**
+
+1. **Apply Eligibility Classification System:**
+   - Added `MethodOverrideApplyEligibility` type with 7 states:
+     - `applyable_safe` — Safe preview with real program patch (Apply enabled)
+     - `preview_only_caution` — Caution preview (Apply disabled)
+     - `not_applyable_no_candidate` — No valid candidate (Apply disabled)
+     - `not_applyable_insufficient_data` — Missing truth (Apply disabled)
+     - `not_applyable_stale_program` — Program changed since preview (Apply disabled)
+     - `not_applyable_already_materialized` — Method already applied (Apply disabled)
+     - `not_applyable_unsupported_method` — Method type not yet supported (Apply disabled)
+
+2. **Apply Button Behavior:**
+   - Button text reflects actual eligibility state:
+     - "Apply Override Preview" (when applyable)
+     - "Preview Only" (for caution previews)
+     - "No Safe Candidate" (when no candidate exists)
+     - "Already Included" (when method already materialized)
+     - "Apply Coming Soon" (for unsupported methods)
+   - Reason text displayed below disabled buttons
+
+3. **Props Chain:**
+   - Added `onProgramUpdate` callback prop to `ProgramCoachIntelligenceHub`
+   - Wired through `AdaptiveProgramDisplay` → `ProgramDisplayWrapper` → `setProgram`
+   - Infrastructure ready for future safe applies
+
+4. **Current Behavior:**
+   - All current previews remain preview-only (no safe candidates exist yet)
+   - Circuits caution preview remains disabled with clear reason
+   - Supersets shows "Already Included" when already materialized
+
+**Circuits Caution Preservation:**
+- Current Circuits preview with Tuck Front Lever Hold + Explosive Pull-Ups + Elevated Pseudo Planche Push-Ups correctly classified as `preview_only_caution`
+- Apply button shows "Preview Only" with reason "Caution preview — manual review needed"
+- No regression from AB17.2.2
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Added `MethodOverrideApplyEligibility` type
+  - Added `classifyApplyEligibility()` function
+  - Added `getApplyButtonText()` function
+  - Added `onProgramUpdate` prop
+  - Updated Apply button to use eligibility system
+- `components/programs/AdaptiveProgramDisplay.tsx`:
+  - Added `onProgramUpdate` prop and wired to Hub
+- `app/(app)/program/page.tsx`:
+  - Wired `onProgramUpdate` through to Display
+
+**TypeScript:** PASS (zero errors)
+**Build:** PASS
+
+**Visible Verification:**
+- Program Page → Method Override Planner → Circuits → Create Override Preview
+- Apply button shows "Preview Only" with reason text
+- Saved program unchanged label still visible
+
+**Next Steps:**
+- Implement actual program mutation for safe candidates when one exists
+- Add stale program version check
+- Add success/applied state UI
+
+---
+
 ## Phase Status Summary
 
 | Phase | Description | Status |
@@ -870,6 +941,7 @@ After UI consolidation, the feedback-loop closure surface was hidden under the g
 | IQ8 | Weekly structure and recovery realism | COMPLETE |
 | IQ9 | Explanation parity | COMPLETE |
 | IQ10 | Start Workout parity risk audit | VERIFIED STRONG |
+| IQ11 | Method Override Apply activation | PARTIAL |
 
 ---
 

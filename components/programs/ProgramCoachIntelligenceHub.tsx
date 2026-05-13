@@ -331,6 +331,129 @@ function extractRequestedMethodDecisions(
 // PROPS
 // =============================================================================
 
+// =============================================================================
+// [AB20 / IQ10] APPLY ELIGIBILITY CLASSIFICATION
+// =============================================================================
+
+/**
+ * [AB20 / IQ10] Apply eligibility status for method override previews.
+ * Determines whether Apply button should be enabled and what message to show.
+ */
+export type MethodOverrideApplyEligibility =
+  | 'applyable_safe'           // Safe preview with real program patch - Apply enabled
+  | 'preview_only_caution'     // Caution preview (skill hold, etc.) - Apply disabled
+  | 'not_applyable_no_candidate'       // No valid candidate found - Apply disabled
+  | 'not_applyable_insufficient_data'  // Missing truth to generate patch - Apply disabled
+  | 'not_applyable_stale_program'      // Program changed since preview - Apply disabled
+  | 'not_applyable_already_materialized' // Method already in program - Apply disabled
+  | 'not_applyable_unsupported_method' // Method type not supported for apply - Apply disabled
+
+/**
+ * [AB20 / IQ10] Classify apply eligibility for a method override preview.
+ */
+function classifyApplyEligibility(
+  preview: MethodOverridePreview | null,
+  isAlreadyApplied: boolean,
+  _programId?: string
+): { eligibility: MethodOverrideApplyEligibility; reason: string } {
+  // Already materialized
+  if (isAlreadyApplied) {
+    return { 
+      eligibility: 'not_applyable_already_materialized', 
+      reason: 'Already included in your program' 
+    }
+  }
+  
+  // No preview exists
+  if (!preview) {
+    return { 
+      eligibility: 'not_applyable_no_candidate', 
+      reason: 'Create a preview first' 
+    }
+  }
+  
+  // Circuit-specific: check candidateStatus
+  if (preview.circuitCandidate) {
+    const status = preview.circuitCandidate.candidateStatus
+    if (status === 'safe_circuit') {
+      // [AB20] For now, even safe circuits are preview-only until full apply corridor is built
+      return { 
+        eligibility: 'not_applyable_unsupported_method', 
+        reason: 'Circuit apply coming soon' 
+      }
+    }
+    if (status === 'override_with_caution') {
+      return { 
+        eligibility: 'preview_only_caution', 
+        reason: 'Caution preview — manual review needed' 
+      }
+    }
+    if (status === 'would_be_superset') {
+      return { 
+        eligibility: 'not_applyable_no_candidate', 
+        reason: 'Only 2 exercises — would be superset, not circuit' 
+      }
+    }
+    return { 
+      eligibility: 'not_applyable_no_candidate', 
+      reason: 'No valid circuit candidate found' 
+    }
+  }
+  
+  // General method preview safety check
+  if (preview.safety === 'safe_preview') {
+    // [AB20] For now, all safe previews are still preview-only
+    return { 
+      eligibility: 'not_applyable_unsupported_method', 
+      reason: 'Apply coming soon' 
+    }
+  }
+  
+  if (preview.safety === 'needs_caution') {
+    return { 
+      eligibility: 'preview_only_caution', 
+      reason: 'Caution preview — manual review needed' 
+    }
+  }
+  
+  if (preview.safety === 'not_enough_truth') {
+    return { 
+      eligibility: 'not_applyable_insufficient_data', 
+      reason: 'Insufficient program data for apply' 
+    }
+  }
+  
+  // Default fallback
+  return { 
+    eligibility: 'not_applyable_unsupported_method', 
+    reason: 'Apply not available for this method yet' 
+  }
+}
+
+/**
+ * [AB20 / IQ10] Get user-friendly Apply button text based on eligibility.
+ */
+function getApplyButtonText(eligibility: MethodOverrideApplyEligibility): string {
+  switch (eligibility) {
+    case 'applyable_safe':
+      return 'Apply Override Preview'
+    case 'preview_only_caution':
+      return 'Preview Only'
+    case 'not_applyable_no_candidate':
+      return 'No Safe Candidate'
+    case 'not_applyable_insufficient_data':
+      return 'Insufficient Data'
+    case 'not_applyable_stale_program':
+      return 'Refresh Program First'
+    case 'not_applyable_already_materialized':
+      return 'Already Included'
+    case 'not_applyable_unsupported_method':
+      return 'Apply Coming Soon'
+    default:
+      return 'Not Available'
+  }
+}
+
 interface ProgramCoachIntelligenceHubProps {
   program: AdaptiveProgram
   /** Selected skill representations for the skill map surface */
@@ -349,6 +472,8 @@ interface ProgramCoachIntelligenceHubProps {
   rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] | null
   /** [P2F-3] Goal family balance audit for Plan Logic sheet */
   goalFamilyBalanceAudit?: Parameters<typeof ProgramTruthSummary>[0]['goalFamilyBalanceAudit'] | null
+  /** [AB20 / IQ10] Callback to update parent program state after successful apply */
+  onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
 }
 
 // =============================================================================
@@ -1211,14 +1336,35 @@ function MethodDetailModalContent({
             >
               Clear Preview
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="flex-1 h-10 text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed"
-            >
-              Apply (Coming Next)
-            </Button>
+            {/* [AB20 / IQ10] Apply button with eligibility classification */}
+            {(() => {
+              const { eligibility, reason } = classifyApplyEligibility(preview, isAlreadyApplied)
+              const isApplyable = eligibility === 'applyable_safe'
+              const buttonText = getApplyButtonText(eligibility)
+              
+              return (
+                <div className="flex-1 flex flex-col">
+                  <Button
+                    variant={isApplyable ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={!isApplyable}
+                    className={cn(
+                      'h-10',
+                      isApplyable 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : 'text-[#5A5A6A] border-[#2A2A35] cursor-not-allowed'
+                    )}
+                  >
+                    {buttonText}
+                  </Button>
+                  {!isApplyable && (
+                    <span className="text-[8px] text-[#5A5A6A] text-center mt-1 leading-tight">
+                      {reason}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
           </>
         ) : canCreatePreview ? (
           <>
@@ -1617,6 +1763,7 @@ export function ProgramCoachIntelligenceHub({
   truthExplanation,
   rulePopulationLedger,
   goalFamilyBalanceAudit,
+  onProgramUpdate, // [AB20 / IQ10] Callback for apply
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)

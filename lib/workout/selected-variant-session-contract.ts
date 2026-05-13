@@ -482,6 +482,30 @@ export interface SelectedBodySnapshot {
    * SessionStyleMetadata shape is added by this module.
    */
   styleMetadata?: unknown | null
+  
+  /**
+   * [AB20.4.5.4.2] The card's already-pruned methodStructures for this exact
+   * selected body. methodStructures is the canonical Phase 4P structure the
+   * live-grouped-execution-contract uses to build executable Circuit/Superset/
+   * Density blocks via buildExecutionBlocksFromMethodStructures(). When a
+   * variant prunes exercises, we must also prune methodStructures so the live
+   * runtime only tries to bind members that actually exist in the variant body.
+   *
+   * Semantics:
+   *   - undefined : snapshot was stamped before AB20.4.5.4.2, or no
+   *                 methodStructures exists upstream. Route falls back to
+   *                 whatever finalSession.methodStructures is already
+   *                 populated from the loader.
+   *   - null      : card intentionally has no methodStructures for this
+   *                 selected body (e.g. all structures were pruned, or session
+   *                 has no grouped methods). Route should CLEAR
+   *                 finalSession.methodStructures.
+   *   - array     : card's authoritative pruned methodStructures. Route
+   *                 should assign it directly into finalSession.
+   *
+   * Loose `unknown` typing matches the pattern used for styleMetadata above.
+   */
+  methodStructures?: unknown | null
 }
 
 export interface LaunchFingerprintPayload {

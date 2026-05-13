@@ -3089,16 +3089,33 @@ export function applyMethodOverridePreviewToProgram(args: {
   ]
 
   // [AB20.4.5.3] Build updated methodStructures for live runtime binding
-  const existingMethodStructures = ((updatedSession as Record<string, unknown>).methodStructures || []) as Array<{
+  // Define local type for runtime-bindable method structures
+  type RuntimeBindableMethodStructure = {
     id: string
     family: string
     status: string
     exerciseIds?: string[]
     exerciseNames?: string[]
-  }>
-  const updatedMethodStructures = [
+    label?: string
+    rounds?: number
+    timeCapMinutes?: number
+    source?: string
+    methodOverrideApplied?: boolean
+  }
+  
+  // Use typed session extension to safely access methodStructures
+  type SessionWithMethodStructures = AdaptiveSession & {
+    methodStructures?: RuntimeBindableMethodStructure[]
+  }
+  
+  const methodStructureSession = updatedSession as SessionWithMethodStructures
+  const existingMethodStructures: RuntimeBindableMethodStructure[] = Array.isArray(methodStructureSession.methodStructures)
+    ? methodStructureSession.methodStructures
+    : []
+  
+  const updatedMethodStructures: RuntimeBindableMethodStructure[] = [
     ...existingMethodStructures,
-    newMethodStructure,
+    newMethodStructure as RuntimeBindableMethodStructure,
   ]
 
   // Apply to session.styleMetadata - preserve all existing fields
@@ -3120,7 +3137,7 @@ export function applyMethodOverridePreviewToProgram(args: {
 
   // [AB20.4.5.3] Add methodStructures to session for live runtime binding
   // This is the canonical structure the live-grouped-execution-contract uses
-  ;(updatedSession as unknown as { methodStructures: typeof updatedMethodStructures }).methodStructures = updatedMethodStructures
+  methodStructureSession.methodStructures = updatedMethodStructures
   
   // ==========================================================================
   // UPDATE PROGRAM-LEVEL weeklyMethodRepresentation (if exists)

@@ -856,14 +856,37 @@ export interface CircuitPreviewCandidate {
 }
 
 /**
+ * [AB17.2.2.5] Circuit station tier for override preview.
+ * Determines how an exercise is treated in circuit eligibility.
+ */
+type CircuitStationTier = 'safe' | 'caution_skill_hold' | 'caution_same_pattern' | 'excluded'
+
+/**
+ * [AB17.2.2.5] Decision record for each exercise in circuit eligibility.
+ */
+interface CircuitStationDecision {
+  name: string
+  pattern: MovementPattern
+  tier: CircuitStationTier
+  included: boolean
+  reason: string
+}
+
+/**
  * [AB17.2.1] Finds circuit-compatible exercises from a list.
- * Avoids same-pattern overload and high-fatigue skill work.
+ * [AB17.2.2.5] Skill holds are now caution stations, not hard excluded.
+ * This allows 3+ exercise days with skill holds to become override candidates.
  */
 function findCircuitCompatibleExercises(exercises: string[]): {
   selected: string[]
   skipped: string[]
   patterns: Record<MovementPattern, number>
   reason: string
+  stationDecisions: CircuitStationDecision[]
+  hasSkillHoldCaution: boolean
+  hasSamePatternCaution: boolean
+  safeCount: number
+  cautionCount: number
 } {
   const patterns: Record<MovementPattern, number> = {
     push: 0, pull: 0, core: 0, mobility: 0, skill: 0, legs: 0, unknown: 0
@@ -871,31 +894,70 @@ function findCircuitCompatibleExercises(exercises: string[]): {
   
   const selected: string[] = []
   const skipped: string[] = []
+  const stationDecisions: CircuitStationDecision[] = []
+  let hasSkillHoldCaution = false
+  let hasSamePatternCaution = false
+  let safeCount = 0
+  let cautionCount = 0
   
   for (const exercise of exercises) {
     const pattern = classifyMovementPattern(exercise)
     
-    // [AB17.2.1] Skip high-skill isometric holds — they don't belong in circuits
+    // [AB17.2.2.5] Skill holds are CAUTION STATIONS, not excluded
+    // They can help reach 3+ exercises for override preview
     if (pattern === 'skill') {
-      skipped.push(exercise)
+      selected.push(exercise)
+      patterns[pattern]++
+      hasSkillHoldCaution = true
+      cautionCount++
+      stationDecisions.push({
+        name: exercise,
+        pattern,
+        tier: 'caution_skill_hold',
+        included: true,
+        reason: 'Skill hold included as caution station — preserve technique quality'
+      })
       continue
     }
     
-    // [AB17.2.1] Avoid same-pattern overload (max 1 per pattern in a circuit)
+    // [AB17.2.1] Same-pattern overload: include as caution, not excluded
     if (patterns[pattern] >= 1 && pattern !== 'unknown') {
-      skipped.push(exercise)
+      selected.push(exercise)
+      patterns[pattern]++
+      hasSamePatternCaution = true
+      cautionCount++
+      stationDecisions.push({
+        name: exercise,
+        pattern,
+        tier: 'caution_same_pattern',
+        included: true,
+        reason: `Same pattern (${pattern}) already present — redundancy caution`
+      })
       continue
     }
     
+    // Safe inclusion
     patterns[pattern]++
     selected.push(exercise)
+    safeCount++
+    stationDecisions.push({
+      name: exercise,
+      pattern,
+      tier: 'safe',
+      included: true,
+      reason: 'Safe circuit station'
+    })
   }
   
   // Determine reason based on what we found
   const uniquePatterns = Object.entries(patterns).filter(([_, count]) => count > 0).length
   let reason = ''
   if (selected.length >= CIRCUIT_MINIMUM_EXERCISES) {
-    reason = `${selected.length} compatible exercises with ${uniquePatterns} distinct patterns`
+    if (hasSkillHoldCaution || hasSamePatternCaution) {
+      reason = `${selected.length} exercises available; includes ${cautionCount} caution station(s)`
+    } else {
+      reason = `${selected.length} compatible exercises with ${uniquePatterns} distinct patterns`
+    }
   } else if (selected.length === 2) {
     reason = '2 exercises = superset, not a circuit'
   } else if (selected.length === 1) {
@@ -904,31 +966,57 @@ function findCircuitCompatibleExercises(exercises: string[]): {
     reason = 'No compatible circuit exercises found'
   }
   
-  return { selected, skipped, patterns, reason }
+  return { 
+    selected, 
+    skipped, 
+    patterns, 
+    reason, 
+    stationDecisions,
+    hasSkillHoldCaution,
+    hasSamePatternCaution,
+    safeCount,
+    cautionCount
+  }
 }
 
 /**
  * [AB17.2.1] Scores a session for circuit suitability.
+ * [AB17.2.2.5] Updated to handle caution stations properly.
  * Higher score = better circuit candidate.
  */
 function scoreSessionForCircuit(
   exercises: string[],
   sessionTitle: string
-): { score: number; notes: string[] } {
+): { score: number; notes: string[]; hasSkillHoldCaution: boolean; hasSamePatternCaution: boolean } {
   let score = 0
   const notes: string[] = []
   
-  const { selected, patterns } = findCircuitCompatibleExercises(exercises)
+  const { selected, patterns, hasSkillHoldCaution, hasSamePatternCaution, safeCount, cautionCount } = findCircuitCompatibleExercises(exercises)
   
-  // Base score for having enough exercises
+  // [AB17.2.2.5] Base score for having enough exercises
   if (selected.length >= CIRCUIT_MINIMUM_EXERCISES) {
-    score += 50
+    if (safeCount >= CIRCUIT_MINIMUM_EXERCISES) {
+      score += 50 // Full safe circuit
+    } else {
+      score += 30 // Caution circuit but still valid
+      notes.push(`${cautionCount} caution station(s) included`)
+    }
   } else if (selected.length === 2) {
     score -= 100 // Strongly penalize — would be superset
     notes.push('Only 2 exercises: would be superset, not circuit')
   } else {
     score -= 200 // Very bad
     notes.push('Insufficient exercises for circuit')
+  }
+  
+  // [AB17.2.2.5] Caution penalties (but don't prevent override candidate)
+  if (hasSkillHoldCaution) {
+    score -= 15
+    notes.push('Skill hold included as caution station — preserve technique quality')
+  }
+  if (hasSamePatternCaution) {
+    score -= 10
+    notes.push('Same-pattern exercises included — redundancy caution')
   }
   
   // Bonus for pattern diversity
@@ -952,13 +1040,14 @@ function scoreSessionForCircuit(
     score += 20
   }
   
-  return { score, notes }
+  return { score, notes, hasSkillHoldCaution, hasSamePatternCaution }
 }
 
 /**
  * [AB17.2.1] Finds the best circuit preview candidate across all program sessions.
  * [AB17.2.2.1] Updated to handle sessions with optional exercises array.
  * [AB17.2.2.2] Now returns best override candidate with caution if no safe candidate exists.
+ * [AB17.2.2.5] Skill holds are now caution stations, allowing 3+ exercise days to become override candidates.
  * Returns null only if no 2+ exercise candidates exist anywhere.
  */
 export function findBestCircuitPreviewCandidate(
@@ -978,7 +1067,7 @@ export function findBestCircuitPreviewCandidate(
     const exercises = (session.exercises || []).map(e => e.name || 'Unknown')
     const sessionTitle = session.focusLabel || session.focus || `Day ${dayIndex + 1}`
     
-    const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
+    const { selected, skipped, patterns, reason, hasSkillHoldCaution, hasSamePatternCaution, safeCount } = findCircuitCompatibleExercises(exercises)
     const { score, notes } = scoreSessionForCircuit(exercises, sessionTitle)
     
     const dayLabel = formatDayLabel(dayIndex, sessionTitle)
@@ -988,8 +1077,10 @@ export function findBestCircuitPreviewCandidate(
       selected.length >= 3 && score > 30 ? 'medium' :
       selected.length >= 3 ? 'low' : 'none'
     
-    // [AB17.2.2.2] Determine candidate status
-    const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0
+    // [AB17.2.2.5] Determine candidate status using caution flags
+    // A day with 3+ exercises including skill holds is an override candidate, not superset
+    const hasCautionStations = hasSkillHoldCaution || hasSamePatternCaution
+    const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && safeCount >= CIRCUIT_MINIMUM_EXERCISES && !hasCautionStations
     const isOverride = selected.length >= CIRCUIT_MINIMUM_EXERCISES && !isSafe
     const isSuperset = selected.length === 2
     
@@ -1001,7 +1092,7 @@ export function findBestCircuitPreviewCandidate(
       statusLabel = `Circuit preview: ${selected.length} exercises`
     } else if (isOverride) {
       candidateStatus = 'override_with_caution'
-      statusLabel = 'Override candidate with caution'
+      statusLabel = `Override candidate with caution`
     } else if (isSuperset) {
       candidateStatus = 'would_be_superset'
       statusLabel = 'Would be superset (not circuit)'
@@ -1371,7 +1462,7 @@ export function saveMethodOverridePreview(
     } else {
       // [AB17.2.2.1] FALLBACK PATH: Single-session preview when full program not available
       const exercises = sessionExercises || []
-      const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
+      const { selected, skipped, patterns, reason, hasSkillHoldCaution, hasSamePatternCaution, safeCount } = findCircuitCompatibleExercises(exercises)
       const dayIndex = plan.suggestedInsertion?.dayIndex ?? 0
       const dayLabel = formatDayLabel(dayIndex, sessionTitle || plan.suggestedInsertion?.sessionTitle)
       
@@ -1383,8 +1474,9 @@ export function saveMethodOverridePreview(
         selected.length >= 3 && score > 30 ? 'medium' :
         selected.length >= 3 ? 'low' : 'none'
       
-      // [AB17.2.2.2] Determine candidate status for fallback path
-      const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0
+      // [AB17.2.2.5] Determine candidate status using caution flags (same logic as main path)
+      const hasCautionStations = hasSkillHoldCaution || hasSamePatternCaution
+      const isSafe = selected.length >= CIRCUIT_MINIMUM_EXERCISES && safeCount >= CIRCUIT_MINIMUM_EXERCISES && !hasCautionStations
       const isOverride = selected.length >= CIRCUIT_MINIMUM_EXERCISES && !isSafe
       const isSuperset = selected.length === 2
       

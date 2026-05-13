@@ -600,6 +600,50 @@ Added concrete day-specific workout preview for method override visualization:
   - Added scan proof section showing scannedDayCount and selectionReason
   - Added collapsible per-day scan results details
 
+**IQ6.4.7 Implementation Summary (AB17.2.2.5):**
+
+1. **Skill Holds Are Now Caution Stations:** `findCircuitCompatibleExercises()` no longer hard-excludes skill exercises. Instead:
+   - Skill holds (front lever, planche, L-sit, handstand) are included as `caution_skill_hold` tier
+   - They count toward the 3+ exercise requirement for circuits
+   - They are flagged for UI warnings but NOT removed from selection
+
+2. **Circuit Station Tier System:** Added new types for explicit eligibility tracking:
+   - `CircuitStationTier`: 'safe' | 'caution_skill_hold' | 'caution_same_pattern' | 'excluded'
+   - `CircuitStationDecision`: per-exercise record of tier, inclusion status, and reason
+
+3. **Revised Return Shape:** `findCircuitCompatibleExercises()` now returns:
+   - `stationDecisions`: array of per-exercise tier decisions
+   - `hasSkillHoldCaution`: true if any skill hold is included
+   - `hasSamePatternCaution`: true if any same-pattern duplicate is included
+   - `safeCount` / `cautionCount`: counts of each tier
+
+4. **Updated Scoring:** `scoreSessionForCircuit()` now:
+   - Uses caution flags to penalize but not reject
+   - Returns `hasSkillHoldCaution` and `hasSamePatternCaution` for downstream logic
+   - Ensures 3+ exercises with skill holds get positive (not deeply negative) scores
+
+5. **Updated Candidate Selection:** `findBestCircuitPreviewCandidate()` now:
+   - Treats 3+ exercises with caution stations as `override_with_caution`, NOT `would_be_superset`
+   - Only marks as `safe_circuit` if ALL exercises are safe tier
+   - Day 1 with Tuck Front Lever Hold + Explosive Pull-Ups + Elevated PPPU = override candidate
+
+6. **Updated Fallback Path:** Single-session preview in `saveMethodOverridePreview()` uses same caution logic.
+
+**Expected Day 1 Result After Fix:**
+- Input: Tuck Front Lever Hold, Explosive Pull-Ups, Elevated Pseudo Planche Push-Ups
+- Output: `candidateStatus: 'override_with_caution'`
+- Selected: All 3 exercises
+- Warnings: "Skill hold included as caution station — preserve technique quality"
+- NOT "Would be superset (not circuit)"
+
+**Files Changed (IQ6.4.7):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Added `CircuitStationTier` type and `CircuitStationDecision` interface
+  - Rewrote `findCircuitCompatibleExercises()` with caution station logic
+  - Updated `scoreSessionForCircuit()` to return caution flags
+  - Updated `findBestCircuitPreviewCandidate()` to use caution flags for status determination
+  - Updated fallback path in `saveMethodOverridePreview()` with same logic
+
 ---
 
 ### IQ7 — Feedback Loop Closure

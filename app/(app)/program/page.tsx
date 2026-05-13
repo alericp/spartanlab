@@ -151,6 +151,7 @@ import {
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
   type MethodOverrideRevertResult,
+  type MethodOverrideResetAllResult,
 } from '@/lib/program/requested-method-override-planner'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
@@ -2861,58 +2862,79 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
-  // [AB20.4.1] Refresh Program Data Callback
-  // Reloads the current saved program into state without regenerating.
-  // Used by the Coach Hub refresh button to update display after apply/revert.
+  // [AB20.4.2] Reset All Method Overrides Callback
+  // Removes all Method Override Planner-applied overrides while preserving
+  // native AI-generated methods. Saves through canonical save corridor.
   // ==========================================================================
-  const handleRefreshProgramData = useCallback(async () => {
-    if (typeof window === 'undefined') return
+  const handleResetAllMethodOverrides = useCallback(async (): Promise<MethodOverrideResetAllResult> => {
+    // Guard: Must have program
+    if (!program) {
+      return {
+        status: 'blocked',
+        visibleSummary: 'No program available.',
+        evidence: ['program is null'],
+        removedCount: 0,
+        removedMethodKeys: [],
+        affectedSessions: [],
+        reasonCode: 'no_program',
+      }
+    }
     
     try {
-      const { getSavedAdaptivePrograms } = await import('@/lib/adaptive-program-builder')
+      const { 
+        resetAllMethodOverridePlannerOverridesFromProgram,
+        clearAllMethodOverridePreviews 
+      } = await import('@/lib/program/requested-method-override-planner')
+      const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
       
-      let refreshed: AdaptiveProgram | null = null
+      // Call the pure reset helper
+      const result = resetAllMethodOverridePlannerOverridesFromProgram(program)
       
-      // Try to read from spartanlab_active_program first (canonical active program)
-      const activeRaw = window.localStorage.getItem('spartanlab_active_program')
-      if (activeRaw) {
-        try {
-          const parsed = JSON.parse(activeRaw)
-          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.sessions)) {
-            refreshed = parsed as AdaptiveProgram
-          }
-        } catch {
-          // Parse failed, try next source
-        }
+      // If not successful or no updated program, return result as-is
+      if (result.status !== 'success' || !result.updatedProgram) {
+        return result
       }
       
-      // If active program not found, try to find by ID in saved programs
-      if (!refreshed) {
-        const savedPrograms = getSavedAdaptivePrograms()
-        if (program?.id) {
-          refreshed = savedPrograms.find(p => p.id === program.id) as AdaptiveProgram ?? null
-        }
-        if (!refreshed && savedPrograms.length > 0) {
-          refreshed = savedPrograms[0] as AdaptiveProgram
-        }
+      // Save the updated program through canonical save path
+      const savedProgram = saveAdaptiveProgram(result.updatedProgram)
+      
+      // Update Program Page state
+      if (onProgramUpdate) {
+        onProgramUpdate(savedProgram)
       }
       
-      // If found a valid program, update state
-      if (refreshed?.sessions?.length) {
-        if (onProgramUpdate) {
-          onProgramUpdate(refreshed)
-        }
-        console.log('[AB20.4.1-refresh-program-data] Refreshed current program', {
-          programId: refreshed.id,
-          sessionCount: refreshed.sessions.length,
-        })
-      } else {
-        console.warn('[AB20.4.1-refresh-program-data] No valid saved program found; keeping current state')
+      // Clear all Method Override Planner preview storage
+      clearAllMethodOverridePreviews()
+      
+      console.log('[AB20.4.2-reset-all-method-overrides] Program saved successfully', {
+        programId: savedProgram.id,
+        sessionCount: savedProgram.sessions?.length,
+        removedCount: result.removedCount,
+        removedMethodKeys: result.removedMethodKeys,
+      })
+      
+      return {
+        ...result,
+        evidence: [
+          ...result.evidence, 
+          'Program saved via saveAdaptiveProgram',
+          'Program Page state updated after reset all method overrides',
+          'Method Override Planner previews cleared',
+        ],
       }
     } catch (error) {
-      console.error('[AB20.4.1-refresh-program-data] Failed; keeping current state', error)
+      console.error('[AB20.4.2-reset-all-method-overrides] Failed', error)
+      return {
+        status: 'blocked',
+        visibleSummary: 'Failed to reset method overrides.',
+        evidence: [`Error: ${error instanceof Error ? error.message : 'unknown'}`],
+        removedCount: 0,
+        removedMethodKeys: [],
+        affectedSessions: [],
+        reasonCode: 'invalid_program',
+      }
     }
-  }, [program?.id, onProgramUpdate])
+  }, [program, onProgramUpdate])
   
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
@@ -3594,9 +3616,9 @@ function ProgramDisplayWrapper({
   /* [AB20.2] Dedicated method override revert callback with saveAdaptiveProgram.
   Program Page owns the save path. Hub requests, Page persists. */
   onRevertMethodOverride={handleRevertMethodOverride}
-  /* [AB20.4.1] Refresh program data callback for Coach Hub in-modal refresh.
-  Reloads saved program into state without regenerating. */
-  onRefreshProgramData={handleRefreshProgramData}
+  /* [AB20.4.2] Reset all method overrides callback with saveAdaptiveProgram.
+  Removes all user-applied overrides while preserving native AI methods. */
+  onResetAllMethodOverrides={handleResetAllMethodOverrides}
   />
       </ErrorBoundary>
     </div>

@@ -9,7 +9,7 @@ import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 // [SPARTANLAB-P2B] Coach Intelligence Hub — method planner corridor
 import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
 // [AB20.1D] Types for method override apply callback
-import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRevertResult } from '@/lib/program/requested-method-override-planner'
+import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRevertResult, MethodOverrideResetAllResult } from '@/lib/program/requested-method-override-planner'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -301,8 +301,9 @@ interface AdaptiveProgramDisplayProps {
   // [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram.
   // Program Page owns the save path. Hub requests, Page persists.
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
-  // [AB20.4.1] Callback to refresh program data from saved state without regenerating
-  onRefreshProgramData?: () => Promise<void> | void
+  // [AB20.4.2] Callback to reset all user-applied method overrides at once.
+  // Removes override artifacts, preserves native AI-generated methods, saves through canonical path.
+  onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
 }
 
 // =============================================================================
@@ -465,8 +466,8 @@ export function AdaptiveProgramDisplay({
   onApplyMethodOverridePreview,
   // [AB20.2] Dedicated method override revert callback with save persistence
   onRevertMethodOverride,
-  // [AB20.4.1] Refresh program data from saved state
-  onRefreshProgramData,
+  // [AB20.4.2] Reset all method overrides callback with save persistence
+  onResetAllMethodOverrides,
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1351,7 +1352,7 @@ export function AdaptiveProgramDisplay({
         onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
         onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
         onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
-        onRefreshProgramData={onRefreshProgramData} // [AB20.4.1] Wire through for refresh
+        onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
       />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

@@ -1586,3 +1586,343 @@ export function clearAllMethodOverridePreviews(): void {
     // Storage not available
   }
 }
+
+// =============================================================================
+// [AB20 / IQ10] METHOD OVERRIDE APPLY CORRIDOR
+// =============================================================================
+
+/**
+ * [AB20] Apply status for method override application result.
+ */
+export type MethodOverrideApplyStatus =
+  | 'success'
+  | 'blocked'
+  | 'cancelled'
+  | 'already_applied'
+
+/**
+ * [AB20] Reason codes for apply results.
+ */
+export type MethodOverrideApplyReasonCode =
+  | 'applied_safe_circuit'
+  | 'applied_caution_circuit'
+  | 'no_program'
+  | 'no_preview'
+  | 'unsupported_method'
+  | 'not_circuit_candidate'
+  | 'would_be_superset'
+  | 'no_candidate'
+  | 'candidate_missing_session'
+  | 'candidate_missing_exercises'
+  | 'selected_exercise_not_found'
+  | 'already_materialized'
+  | 'stale_preview'
+  | 'save_failed'
+
+/**
+ * [AB20] Result of applying a method override preview to a program.
+ */
+export interface MethodOverrideApplyResult {
+  status: MethodOverrideApplyStatus
+  updatedProgram?: AdaptiveProgram
+  visibleSummary: string
+  evidence: string[]
+  reasonCode: MethodOverrideApplyReasonCode
+}
+
+/**
+ * [AB20] Normalizes exercise name for matching.
+ */
+function normalizeExerciseName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+/**
+ * [AB20] Applies a method override preview to a program.
+ * 
+ * This is a PURE function that returns a new program object.
+ * It does NOT mutate the original program.
+ * It does NOT persist to storage (caller must handle that).
+ * 
+ * Only circuits are supported in AB20.
+ */
+export function applyMethodOverridePreviewToProgram(args: {
+  program: AdaptiveProgram
+  preview: MethodOverridePreview
+  allowCautionApply: boolean
+}): MethodOverrideApplyResult {
+  const { program, preview, allowCautionApply } = args
+  
+  // Guard: Must have program
+  if (!program) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      evidence: ['program is null or undefined'],
+      reasonCode: 'no_program',
+    }
+  }
+  
+  // Guard: Must have preview
+  if (!preview) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No preview available.',
+      evidence: ['preview is null or undefined'],
+      reasonCode: 'no_preview',
+    }
+  }
+  
+  // [AB20] Only support circuit previews in this step
+  if (!preview.circuitCandidate) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Only circuit method overrides are supported in this version.',
+      evidence: ['preview.circuitCandidate is missing', `methodKey: ${preview.methodKey}`],
+      reasonCode: 'unsupported_method',
+    }
+  }
+  
+  const candidate = preview.circuitCandidate
+  const status = candidate.candidateStatus
+  
+  // Check candidate status
+  if (status === 'no_candidate') {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No valid circuit candidate found.',
+      evidence: ['candidateStatus is no_candidate'],
+      reasonCode: 'no_candidate',
+    }
+  }
+  
+  if (status === 'would_be_superset') {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Only 2 exercises — would be superset, not circuit.',
+      evidence: ['candidateStatus is would_be_superset', `circuitSize: ${candidate.circuitSize}`],
+      reasonCode: 'would_be_superset',
+    }
+  }
+  
+  // Check for caution apply permission
+  if (status === 'override_with_caution' && !allowCautionApply) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Caution preview requires manual review confirmation.',
+      evidence: ['candidateStatus is override_with_caution', 'allowCautionApply is false'],
+      reasonCode: 'not_circuit_candidate',
+    }
+  }
+  
+  // Verify minimum exercises
+  if (candidate.selectedExercises.length < 3) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Circuit requires at least 3 exercises.',
+      evidence: [`selectedExercises.length: ${candidate.selectedExercises.length}`],
+      reasonCode: 'candidate_missing_exercises',
+    }
+  }
+  
+  // Find target session
+  const dayIndex = candidate.dayIndex
+  const sessions = program.sessions || []
+  
+  if (dayIndex < 0 || dayIndex >= sessions.length) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Target session not found.',
+      evidence: [`dayIndex: ${dayIndex}`, `sessions.length: ${sessions.length}`],
+      reasonCode: 'candidate_missing_session',
+    }
+  }
+  
+  const targetSession = sessions[dayIndex]
+  if (!targetSession || !targetSession.exercises) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'Target session has no exercises.',
+      evidence: ['targetSession.exercises is missing'],
+      reasonCode: 'candidate_missing_session',
+    }
+  }
+  
+  // [AB20] Verify all selected exercises exist in the target session
+  const sessionExerciseNames = targetSession.exercises.map(ex => normalizeExerciseName(ex.name || ''))
+  const matchedExercises: Array<{ name: string; index: number }> = []
+  
+  for (const selectedName of candidate.selectedExercises) {
+    const normalized = normalizeExerciseName(selectedName)
+    const foundIndex = sessionExerciseNames.findIndex(n => n === normalized)
+    
+    if (foundIndex === -1) {
+      return {
+        status: 'blocked',
+        visibleSummary: `Exercise not found in session: ${selectedName}`,
+        evidence: [
+          `selectedExercise: ${selectedName}`,
+          `normalized: ${normalized}`,
+          `sessionExercises: ${sessionExerciseNames.join(', ')}`,
+        ],
+        reasonCode: 'selected_exercise_not_found',
+      }
+    }
+    
+    matchedExercises.push({ name: selectedName, index: foundIndex })
+  }
+  
+  // Check if circuit is already applied with same exercises
+  const existingStyledGroups = targetSession.styleMetadata?.styledGroups || []
+  const existingCircuit = existingStyledGroups.find(g => 
+    g.groupType === 'circuit' && 
+    g.exercises?.length === matchedExercises.length &&
+    g.exercises?.every(ex => 
+      candidate.selectedExercises.some(sel => 
+        normalizeExerciseName(sel) === normalizeExerciseName(ex.name || '')
+      )
+    )
+  )
+  
+  if (existingCircuit) {
+    return {
+      status: 'already_applied',
+      visibleSummary: 'Circuit already applied with these exercises.',
+      evidence: ['Matching styledGroup already exists'],
+      reasonCode: 'already_materialized',
+    }
+  }
+  
+  // ==========================================================================
+  // BUILD THE UPDATED PROGRAM
+  // ==========================================================================
+  
+  const isCaution = status === 'override_with_caution'
+  
+  // Deep clone the program to avoid mutation
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  const updatedSession = updatedProgram.sessions![dayIndex]
+  
+  // Build the circuit styledGroup entry
+  const circuitGroupId = `method-override-circuit-day-${dayIndex + 1}-${Date.now()}`
+  const circuitExercises = matchedExercises.map((matched, idx) => {
+    const originalEx = targetSession.exercises![matched.index]
+    return {
+      id: originalEx.id || `circuit-ex-${idx}`,
+      name: originalEx.name || matched.name,
+      prefix: `C${idx + 1}`,
+      trainingMethod: 'circuits' as const,
+      methodRationale: isCaution
+        ? 'Applied from Method Override Planner caution preview after manual review.'
+        : 'Applied from Method Override Planner safe circuit preview.',
+    }
+  })
+  
+  const newCircuitGroup = {
+    id: circuitGroupId,
+    groupType: 'circuit' as const,
+    exercises: circuitExercises,
+    instruction: isCaution
+      ? 'Manual-review circuit: keep technical quality high and stop if skill quality or tendon tension degrades.'
+      : 'Move through these exercises as a controlled circuit while preserving clean reps.',
+    restProtocol: isCaution
+      ? 'Use conservative pacing; rest enough to preserve skill quality.'
+      : 'Minimal rest between stations; moderate rest between rounds.',
+  }
+  
+  // Update session.styleMetadata
+  type SessionStyleMetadata = NonNullable<AdaptiveSession['styleMetadata']>
+  const existingMeta = (updatedSession.styleMetadata || {}) as Partial<SessionStyleMetadata>
+  const existingAppliedMethods: string[] = Array.isArray(existingMeta.appliedMethods) 
+    ? [...existingMeta.appliedMethods] 
+    : []
+  
+  // Add circuits to appliedMethods if not present
+  if (!existingAppliedMethods.includes('circuits')) {
+    existingAppliedMethods.push('circuits')
+  }
+  
+  // Remove circuits from rejectedMethods if present
+  type RejectedMethod = { method: string; reason: string }
+  let updatedRejectedMethods: RejectedMethod[] = existingMeta.rejectedMethods || []
+  if (Array.isArray(updatedRejectedMethods)) {
+    updatedRejectedMethods = updatedRejectedMethods.filter((r: RejectedMethod) => 
+      r.method !== 'circuits' && r.method !== 'circuit'
+    )
+  }
+  
+  // Build updated styledGroups
+  const updatedStyledGroups = [
+    ...(existingMeta.styledGroups || []),
+    newCircuitGroup,
+  ]
+  
+  // Apply to session.styleMetadata - preserve all existing fields
+  updatedSession.styleMetadata = {
+    primaryStyle: existingMeta.primaryStyle || 'circuits',
+    hasSupersetsApplied: existingMeta.hasSupersetsApplied || false,
+    hasCircuitsApplied: true,
+    hasDensityApplied: existingMeta.hasDensityApplied || false,
+    hasClusterApplied: existingMeta.hasClusterApplied,
+    clusterDecision: existingMeta.clusterDecision,
+    structureDescription: existingMeta.structureDescription || 'Circuit override applied',
+    appliedMethods: existingAppliedMethods as SessionStyleMetadata['appliedMethods'],
+    rejectedMethods: updatedRejectedMethods,
+    styledGroups: updatedStyledGroups as SessionStyleMetadata['styledGroups'],
+    materializationAudit: existingMeta.materializationAudit,
+    methodIntentContract: existingMeta.methodIntentContract,
+    methodMaterializationSummary: existingMeta.methodMaterializationSummary,
+  } as SessionStyleMetadata
+  
+  // ==========================================================================
+  // UPDATE PROGRAM-LEVEL weeklyMethodRepresentation (if exists)
+  // ==========================================================================
+  
+  if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
+    const byMethod = updatedProgram.weeklyMethodRepresentation.byMethod
+    
+    // Find circuit entry in the byMethod array
+    const circuitEntry = byMethod.find(m => 
+      m.methodId?.toLowerCase().includes('circuit')
+    )
+    
+    if (circuitEntry) {
+      circuitEntry.status = 'APPLIED'
+      circuitEntry.materializedCount = Math.max(circuitEntry.materializedCount || 0, 1)
+      circuitEntry.reason = 'Applied from Method Override Planner override preview.'
+    }
+    
+    // Update totals if present
+    if (updatedProgram.weeklyMethodRepresentation.totals) {
+      const totals = updatedProgram.weeklyMethodRepresentation.totals
+      totals.methodsApplied = Math.max(totals.methodsApplied || 0, 1)
+    }
+    
+    // Update oneLineExplanation
+    const existingExplanation = updatedProgram.weeklyMethodRepresentation.oneLineExplanation || ''
+    if (!existingExplanation.includes('Circuit override')) {
+      updatedProgram.weeklyMethodRepresentation.oneLineExplanation = 
+        existingExplanation + ' Circuit override applied to 1 session from the Method Override Planner.'
+    }
+  }
+  
+  // ==========================================================================
+  // RETURN SUCCESS
+  // ==========================================================================
+  
+  return {
+    status: 'success',
+    updatedProgram,
+    visibleSummary: isCaution 
+      ? 'Circuit override applied with caution — saved program updated.'
+      : 'Circuit override applied — saved program updated.',
+    evidence: [
+      `Applied circuit to Day ${dayIndex + 1} (${candidate.sessionTitle})`,
+      `Exercises: ${candidate.selectedExercises.join(', ')}`,
+      `Circuit size: ${candidate.circuitSize}`,
+      isCaution ? 'Applied with caution after manual review' : 'Applied as safe circuit',
+      `styledGroup id: ${circuitGroupId}`,
+    ],
+    reasonCode: isCaution ? 'applied_caution_circuit' : 'applied_safe_circuit',
+  }
+}

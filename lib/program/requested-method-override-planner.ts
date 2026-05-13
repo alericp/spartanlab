@@ -1198,7 +1198,7 @@ function isTechnicalSkillPrioritySession(session: AdaptiveSession): boolean {
 }
 
 function scoreExerciseForMethod(args: {
-  exercise: { name?: string; sets?: string; reps?: string }
+  exercise: { name?: string; sets?: number | string; reps?: string }
   exerciseIndex: number
   totalExercises: number
   session: AdaptiveSession
@@ -1215,12 +1215,18 @@ function scoreExerciseForMethod(args: {
 
   if (isSkillHoldExercise(name)) return { score: -100, reasons: ['Skill hold - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
   if (isExplosiveExercise(name)) return { score: -100, reasons: ['Explosive movement - not safe for fatigue methods'], cautions: [], safety: 'blocked' }
-  if (!hasClearRepTarget(exercise)) return { score: -100, reasons: ['Time-based hold - no clear rep target'], cautions: [], safety: 'blocked' }
+  if (!hasClearRepTarget({ name: exercise.name, reps: exercise.reps })) return { score: -100, reasons: ['Time-based hold - no clear rep target'], cautions: [], safety: 'blocked' }
 
   const normalizedMethodKey = normalizeOverrideMethodKey(methodKey)
   if (existingMethods.some(m => normalizeOverrideMethodKey(m) === normalizedMethodKey)) {
     return { score: -50, reasons: ['Method already applied to this session'], cautions: [], safety: 'blocked' }
   }
+
+  // Check if session already has a finisher via exercises
+  const hasExistingFinisher = session.exercises?.some(ex => 
+    (ex.name || '').toLowerCase().includes('finisher') || 
+    (ex as Record<string, unknown>).methodOverrideMethodKey === 'endurance_density'
+  )
 
   switch (methodKey) {
     case 'drop_set':
@@ -1242,7 +1248,7 @@ function scoreExerciseForMethod(args: {
       if (exerciseIndex <= 3) { score += 15; reasons.push('Early-mid session position - good for quality clusters') }
       break
     case 'endurance_density':
-      if (session.styleMetadata?.hasFinisher) return { score: -30, reasons: ['Session already has a finisher'], cautions: [], safety: 'blocked' }
+      if (hasExistingFinisher) return { score: -30, reasons: ['Session already has a finisher'], cautions: [], safety: 'blocked' }
       if ((session.exercises?.length || 0) > 7) { score -= 20; cautions.push('Dense session - finisher adds more fatigue'); safety = 'caution' }
       if (isTechnicalSkillPrioritySession(session)) { score -= 15; cautions.push('Skill session - conditioning may interfere with quality'); safety = 'caution' }
       reasons.push('Conditioning finisher would end session with cardio focus')
@@ -1263,14 +1269,14 @@ export function findBestMethodOverrideTargets(args: {
   for (let sessionIndex = 0; sessionIndex < sessions.length; sessionIndex++) {
     const session = sessions[sessionIndex]
     const exercises = session.exercises || []
-    const dayLabel = session.focusLabel || session.focus || `Day ${sessionIndex + 1}`
-    const sessionTitle = session.sessionTitle || session.title || dayLabel
+    const dayLabel = session.focusLabel || session.focus || session.dayLabel || `Day ${sessionIndex + 1}`
+    const sessionTitle = dayLabel
     const existingMethods = session.styleMetadata?.appliedMethods || []
 
     if (methodKey === 'endurance_density') {
       const lastExIndex = exercises.length - 1
       if (lastExIndex >= 0) {
-        const result = scoreExerciseForMethod({ exercise: exercises[lastExIndex], exerciseIndex: lastExIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+        const result = scoreExerciseForMethod({ exercise: { name: exercises[lastExIndex].name, reps: exercises[lastExIndex].reps, sets: exercises[lastExIndex].sets }, exerciseIndex: lastExIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
         if (result.score > 0) {
           allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex: -1, exerciseName: 'Session Finisher', methodKey, targetRole: 'conditioning_finisher', score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
         }
@@ -1280,7 +1286,7 @@ export function findBestMethodOverrideTargets(args: {
 
     for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
       const exercise = exercises[exerciseIndex]
-      const result = scoreExerciseForMethod({ exercise, exerciseIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
+      const result = scoreExerciseForMethod({ exercise: { name: exercise.name, reps: exercise.reps, sets: exercise.sets }, exerciseIndex, totalExercises: exercises.length, session, sessionIndex, methodKey, existingMethods })
       if (result.score > 0) {
         const targetRole: MethodOverrideTargetRole = methodKey === 'top_set_backoff' ? 'primary_strength' : isLateAccessoryPosition(exerciseIndex, exercises.length) ? 'late_accessory' : isAccessoryHypertrophyCandidate(exercise.name || '') ? 'hypertrophy_accessory' : 'quality_strength'
         allTargets.push({ sessionIndex, dayLabel, sessionTitle, exerciseIndex, exerciseName: exercise.name || `Exercise ${exerciseIndex + 1}`, methodKey, targetRole, score: result.score, safety: result.safety, reasons: result.reasons, cautions: result.cautions })
@@ -2063,8 +2069,8 @@ export function saveMethodOverridePreview(
 
   // [AB20.4.3] For row-level methods, find best targets across program
   if (capability.writerKind === 'row_level_method' && context?.programSessions) {
-    const programForTargeting: AdaptiveProgram = { id: 'targeting-temp', sessions: context.programSessions }
-    targetExercises = findBestMethodOverrideTargets({ program: programForTargeting, methodKey: canonicalKey, maxTargets: 1 })
+    const programForTargeting = { id: 'targeting-temp', sessions: context.programSessions as AdaptiveSession[] }
+    targetExercises = findBestMethodOverrideTargets({ program: programForTargeting as AdaptiveProgram, methodKey: canonicalKey, maxTargets: 1 })
 
     if (targetExercises.length > 0) {
       const primaryTarget = targetExercises[0]
@@ -3030,11 +3036,15 @@ function applyRowLevelMethodOverride(args: {
 
   Object.assign(targetExercise, methodMetadata)
 
-  if (!targetSession.styleMetadata) targetSession.styleMetadata = {}
-  if (!targetSession.styleMetadata.appliedMethods) targetSession.styleMetadata.appliedMethods = []
-  if (!targetSession.styleMetadata.appliedMethods.includes(canonicalKey)) targetSession.styleMetadata.appliedMethods.push(canonicalKey)
-  if (!targetSession.styleMetadata.methodOverrideRowApplications) targetSession.styleMetadata.methodOverrideRowApplications = []
-  targetSession.styleMetadata.methodOverrideRowApplications.push({ methodKey: canonicalKey, exerciseIndex: primaryTarget.exerciseIndex, exerciseName: primaryTarget.exerciseName, appliedAt: new Date().toISOString() })
+  // Use type assertion for dynamic styleMetadata properties
+  const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
+  if (!styleMetadata.appliedMethods) styleMetadata.appliedMethods = []
+  const appliedMethods = styleMetadata.appliedMethods as string[]
+  if (!appliedMethods.includes(canonicalKey)) appliedMethods.push(canonicalKey)
+  if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
+  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
+  rowApplications.push({ methodKey: canonicalKey, exerciseIndex: primaryTarget.exerciseIndex, exerciseName: primaryTarget.exerciseName, appliedAt: new Date().toISOString() })
+  ;(targetSession as Record<string, unknown>).styleMetadata = styleMetadata
 
   if (updatedProgram.weeklyMethodRepresentation?.byMethod) {
     const methodEntry = updatedProgram.weeklyMethodRepresentation.byMethod.find(m => (m.methodId?.toLowerCase() || '').includes(canonicalKey.replace(/_/g, '')))
@@ -3069,14 +3079,18 @@ function applyEnduranceConditioningFinisher(args: {
   }
 
   if (!targetSession.exercises) targetSession.exercises = []
-  targetSession.exercises.push(finisherExercise)
+  targetSession.exercises.push(finisherExercise as AdaptiveExercise)
 
-  if (!targetSession.styleMetadata) targetSession.styleMetadata = {}
-  targetSession.styleMetadata.hasFinisher = true
-  if (!targetSession.styleMetadata.appliedMethods) targetSession.styleMetadata.appliedMethods = []
-  if (!targetSession.styleMetadata.appliedMethods.includes('endurance_density')) targetSession.styleMetadata.appliedMethods.push('endurance_density')
-  if (!targetSession.styleMetadata.methodOverrideRowApplications) targetSession.styleMetadata.methodOverrideRowApplications = []
-  targetSession.styleMetadata.methodOverrideRowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString() })
+  // Use type assertion for dynamic styleMetadata properties
+  const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
+  styleMetadata.hasFinisher = true
+  if (!styleMetadata.appliedMethods) styleMetadata.appliedMethods = []
+  const appliedMethods = styleMetadata.appliedMethods as string[]
+  if (!appliedMethods.includes('endurance_density')) appliedMethods.push('endurance_density')
+  if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
+  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string }>
+  rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString() })
+  ;(targetSession as Record<string, unknown>).styleMetadata = styleMetadata
 
   const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
   return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`], reasonCode: 'applied_circuit_override' }

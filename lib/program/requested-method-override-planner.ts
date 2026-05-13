@@ -2470,6 +2470,76 @@ export function hasMethodOverrideAppliedCircuit(program: AdaptiveProgram | null)
 }
 
 /**
+ * [AB20.4.1] Checks if a program has a Method Override Planner-applied group for a SPECIFIC method.
+ * This is the selected-method-specific version - only returns true if the override applies to
+ * the given methodKey, not just any override.
+ * 
+ * @param program - The program to check
+ * @param methodKey - The specific method key to check for (will be canonicalized)
+ * @returns true only if the specific method has an applied override group
+ */
+export function hasMethodOverrideAppliedGroup(
+  program: AdaptiveProgram | null,
+  methodKey: string
+): boolean {
+  if (!program?.sessions || !methodKey) return false
+  
+  const canonicalKey = normalizeOverrideMethodKey(methodKey)
+  const capability = getMethodOverrideCapability(methodKey)
+  
+  // [AB20.4.1] Determine which group types this method maps to
+  let targetGroupTypes: string[] = []
+  if (capability.canonicalKey === 'circuits') {
+    targetGroupTypes = ['circuit']
+  } else if (capability.canonicalKey === 'density_block') {
+    targetGroupTypes = ['density_block']
+  } else if (capability.canonicalKey === 'cluster') {
+    // Cluster writer not yet connected - return false for now
+    // When cluster writer is implemented, add: targetGroupTypes = ['cluster']
+    return false
+  } else {
+    // Row-level methods (drop_set, rest_pause, top_set_backoff, endurance) 
+    // don't have grouped block reverts yet
+    return false
+  }
+  
+  for (const session of program.sessions) {
+    const styledGroups = session.styleMetadata?.styledGroups || []
+    for (const group of styledGroups) {
+      // Check if group type matches the method's target type
+      if (!targetGroupTypes.includes(group.groupType)) continue
+      
+      // Must be a Method Override Planner-applied group
+      if (!isMethodOverridePlannerAppliedGroup(group)) continue
+      
+      // [AB20.4.1] If group has methodOverrideMethodKey, it must match
+      // This handles new AB20.4+ groups that track their source method
+      const groupMethodKey = (group as { methodOverrideMethodKey?: string }).methodOverrideMethodKey
+      if (groupMethodKey) {
+        const groupCanonicalKey = normalizeOverrideMethodKey(groupMethodKey)
+        if (groupCanonicalKey === canonicalKey) {
+          return true
+        }
+        // If methodOverrideMethodKey exists but doesn't match, skip this group
+        continue
+      }
+      
+      // [AB20.4.1] For backward compatibility with older AB20 groups without methodOverrideMethodKey:
+      // Match by group ID prefix pattern
+      const groupId = group.groupId || ''
+      if (canonicalKey === 'circuits' && groupId.startsWith('method-override-circuit-')) {
+        return true
+      }
+      if (canonicalKey === 'density_block' && groupId.startsWith('method-override-density-block-')) {
+        return true
+      }
+    }
+  }
+  
+  return false
+}
+
+/**
  * [AB20.2] Reverts a method override from a program.
  * 
  * This is a PURE function that returns a new program object.

@@ -76,7 +76,7 @@ import {
   getMethodOverrideCapability,
   normalizeOverrideMethodKey,
   applyMethodOverridePreviewToProgram,
-  hasMethodOverrideAppliedCircuit,
+  hasMethodOverrideAppliedGroup,
   type RequestedMethodOverridePlan,
   type MethodOverridePreview,
   type MethodOverrideApplyResult,
@@ -1725,10 +1725,12 @@ function RequestedMethodsSheetContent({
   program,
   onApplyMethodOverride,
   onRevertMethodOverride,
+  refreshVersion = 0,
 }: {
   program: AdaptiveProgram
   onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
+  refreshVersion?: number
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -1745,10 +1747,15 @@ function RequestedMethodsSheetContent({
   const [revertResult, setRevertResult] = useState<MethodOverrideRevertResult | null>(null)
   const [showRevertConfirmation, setShowRevertConfirmation] = useState(false)
   
-  // Load previews from storage on mount
+  // [AB20.4.1] Load previews from storage on mount AND when refreshVersion changes
   useEffect(() => {
     setPreviews(getMethodOverridePreviews())
-  }, [])
+    // Clear stale result banners on refresh
+    setApplyResult(null)
+    setRevertResult(null)
+    setShowCautionConfirmation(false)
+    setShowRevertConfirmation(false)
+  }, [refreshVersion])
 
   // Group by state
   const applied = methodItems.filter(m => m.state === 'applied' || m.state === 'materialized')
@@ -1923,10 +1930,11 @@ function RequestedMethodsSheetContent({
   }
   
   // [AB20.2] Check if the selected method has an override-applied circuit
-  // [AB20.4] Check if the selected method has an override-applied grouped block
-  const isOverrideAppliedForSelectedMethod = selectedItem && 
-    isGroupedBlockPreviewMethodKey(selectedItem.methodKey) &&
-    hasMethodOverrideAppliedCircuit(program)
+  // [AB20.4.1] Check if the selected method has an override-applied grouped block
+  // Uses method-specific detection instead of global "any override exists" check
+  const isOverrideAppliedForSelectedMethod = selectedItem
+    ? hasMethodOverrideAppliedGroup(program, selectedItem.methodKey)
+    : false
   
   // [AB20.4] Use canonical key for preview lookup
   const getCurrentPreview = (methodKey: string) => {
@@ -2240,6 +2248,8 @@ export function ProgramCoachIntelligenceHub({
   const [planLogicOpen, setPlanLogicOpen] = useState(false)
   // [AB20.4] Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // [AB20.4.1] Version counter to signal child components to refresh
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(
@@ -2277,6 +2287,8 @@ export function ProgramCoachIntelligenceHub({
       }
       // Always refresh active previews from storage
       setActivePreviews(getMethodOverridePreviews())
+      // [AB20.4.1] Increment refresh version to signal child components
+      setRefreshVersion(v => v + 1)
     } finally {
       setIsRefreshing(false)
     }
@@ -2624,27 +2636,27 @@ export function ProgramCoachIntelligenceHub({
       {/* [P2B] Method Override Planner Sheet — clearly labeled entry point */}
       <Sheet open={requestedMethodsOpen} onOpenChange={setRequestedMethodsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
-          <SheetHeader>
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
-                <Eye className="w-4 h-4 text-purple-400" />
-                Method Override Planner
-              </SheetTitle>
-              {/* [AB20.4] In-modal refresh button */}
-              <button
-                onClick={handleRefreshProgramData}
-                disabled={isRefreshing}
-                aria-label="Refresh program data"
-                className={cn(
-                  "p-1.5 rounded-md transition-colors",
-                  isRefreshing 
-                    ? "text-[#5A5A6A] cursor-not-allowed"
-                    : "text-[#7A7A8A] hover:text-[#E6E9EF] hover:bg-[#2A2A35]"
-                )}
-              >
-                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-              </button>
-            </div>
+          {/* [AB20.4.1] Refresh button positioned absolutely, left of the default close X */}
+          <button
+            type="button"
+            onClick={handleRefreshProgramData}
+            disabled={isRefreshing}
+            aria-label="Refresh program data"
+            title="Refresh program data"
+            className={cn(
+              "absolute right-12 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#2A2A35] bg-[#111116]/90 transition-colors",
+              isRefreshing
+                ? "cursor-not-allowed text-[#5A5A6A]"
+                : "text-[#9A9AAA] hover:bg-[#2A2A35] hover:text-[#E6E9EF]"
+            )}
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          </button>
+          <SheetHeader className="pr-20">
+            <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <Eye className="w-4 h-4 text-purple-400" />
+              Method Override Planner
+            </SheetTitle>
             <SheetDescription className="text-[#7A7A8A]">
               {onApplyMethodOverridePreview 
                 ? 'Review and apply method override previews to your saved program.'
@@ -2656,6 +2668,7 @@ export function ProgramCoachIntelligenceHub({
               program={program} 
               onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
               onRevertMethodOverride={onRevertMethodOverride}
+              refreshVersion={refreshVersion}
             />
           </div>
         </SheetContent>

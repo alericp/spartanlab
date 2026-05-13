@@ -2861,6 +2861,60 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [AB20.4.1] Refresh Program Data Callback
+  // Reloads the current saved program into state without regenerating.
+  // Used by the Coach Hub refresh button to update display after apply/revert.
+  // ==========================================================================
+  const handleRefreshProgramData = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    
+    try {
+      const { getSavedAdaptivePrograms } = await import('@/lib/adaptive-program-builder')
+      
+      let refreshed: AdaptiveProgram | null = null
+      
+      // Try to read from spartanlab_active_program first (canonical active program)
+      const activeRaw = window.localStorage.getItem('spartanlab_active_program')
+      if (activeRaw) {
+        try {
+          const parsed = JSON.parse(activeRaw)
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.sessions)) {
+            refreshed = parsed as AdaptiveProgram
+          }
+        } catch {
+          // Parse failed, try next source
+        }
+      }
+      
+      // If active program not found, try to find by ID in saved programs
+      if (!refreshed) {
+        const savedPrograms = getSavedAdaptivePrograms()
+        if (program?.id) {
+          refreshed = savedPrograms.find(p => p.id === program.id) as AdaptiveProgram ?? null
+        }
+        if (!refreshed && savedPrograms.length > 0) {
+          refreshed = savedPrograms[0] as AdaptiveProgram
+        }
+      }
+      
+      // If found a valid program, update state
+      if (refreshed?.sessions?.length) {
+        if (onProgramUpdate) {
+          onProgramUpdate(refreshed)
+        }
+        console.log('[AB20.4.1-refresh-program-data] Refreshed current program', {
+          programId: refreshed.id,
+          sessionCount: refreshed.sessions.length,
+        })
+      } else {
+        console.warn('[AB20.4.1-refresh-program-data] No valid saved program found; keeping current state')
+      }
+    } catch (error) {
+      console.error('[AB20.4.1-refresh-program-data] Failed; keeping current state', error)
+    }
+  }, [program?.id, onProgramUpdate])
+  
+  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -3540,6 +3594,9 @@ function ProgramDisplayWrapper({
   /* [AB20.2] Dedicated method override revert callback with saveAdaptiveProgram.
   Program Page owns the save path. Hub requests, Page persists. */
   onRevertMethodOverride={handleRevertMethodOverride}
+  /* [AB20.4.1] Refresh program data callback for Coach Hub in-modal refresh.
+  Reloads saved program into state without regenerating. */
+  onRefreshProgramData={handleRefreshProgramData}
   />
       </ErrorBoundary>
     </div>

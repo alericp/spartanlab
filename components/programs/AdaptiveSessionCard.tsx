@@ -608,6 +608,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const builderHasStyledGroups = !!(sessionStyleMetadata?.styledGroups && sessionStyleMetadata.styledGroups.length > 0)
   const hasNonStraightGroups = sessionStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false
   
+  // [AB20.4.5.4.2] Read methodStructures for live grouped runtime binding.
+  // This is the canonical Phase 4P structure written by the Method Override Planner
+  // when applying Circuit/Density/Cluster overrides. Must be preserved and passed
+  // through the Start Workout stamp for buildExecutionBlocksFromMethodStructures.
+  type MethodStructure = {
+    id: string
+    family: string
+    status: string
+    exerciseIds?: string[]
+    exerciseNames?: string[]
+    label?: string
+    rounds?: number
+    timeCapMinutes?: number
+    source?: string
+    methodOverrideApplied?: boolean
+  }
+  const sessionMethodStructures: MethodStructure[] | undefined = (() => {
+    const sessionWithMethods = rawSession as typeof rawSession & { methodStructures?: unknown }
+    if (Array.isArray(sessionWithMethods.methodStructures) && sessionWithMethods.methodStructures.length > 0) {
+      return sessionWithMethods.methodStructures as MethodStructure[]
+    }
+    return undefined
+  })()
+  
   // ==========================================================================
   // [AI-EVIDENCE-BRIDGE] Build unified session evidence surface
   // Single source of truth for session-level AI reasoning display
@@ -1001,6 +1025,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
           Array.isArray(variantPrunedStyleMetadata.styledGroups) &&
           variantPrunedStyleMetadata.styledGroups.length > 0
             ? variantPrunedStyleMetadata
+            : null,
+        // [AB20.4.5.4.2] methodStructures for live grouped runtime binding.
+        // This is the canonical Phase 4P structure buildExecutionBlocksFromMethodStructures
+        // uses to construct executable Circuit/Superset/Density blocks. Without this,
+        // the live workout's methodStructures fallback path cannot find any grouped
+        // methods and falls through to flat execution (showing STRAIGHT SETS).
+        methodStructures:
+          variantPrunedMethodStructures && variantPrunedMethodStructures.length > 0
+            ? variantPrunedMethodStructures
             : null,
       },
     })
@@ -1430,6 +1463,56 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       ...sessionStyleMetadata,
       styledGroups: prunedGroups,
     }
+  })()
+
+  // ==========================================================================
+  // [AB20.4.5.4.2] VARIANT-PRUNED METHOD STRUCTURES FOR LIVE GROUPED RUNTIME
+  // 
+  // methodStructures is the canonical Phase 4P structure the live-grouped-
+  // execution-contract uses to build executable Circuit/Superset/Density
+  // blocks via buildExecutionBlocksFromMethodStructures(). When a variant
+  // prunes exercises, we must also prune methodStructures so the live
+  // runtime only tries to bind members that actually exist in the variant
+  // body. This mirrors the styleMetadata prune above.
+  // ==========================================================================
+  const variantPrunedMethodStructures: typeof sessionMethodStructures = (() => {
+    if (!sessionMethodStructures || sessionMethodStructures.length === 0) {
+      return sessionMethodStructures
+    }
+    if (!selectedVariantData) {
+      return sessionMethodStructures
+    }
+    const normalizeKey = (s: string): string =>
+      (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+    const survivingIds = new Set(fullVisibleExercises.map(e => e.id).filter(Boolean))
+    const survivingNames = new Set(fullVisibleExercises.map(e => normalizeKey(e.name)).filter(Boolean))
+    
+    return sessionMethodStructures
+      .map(ms => {
+        // Prune exerciseIds and exerciseNames to only include survivors
+        const prunedIds = (ms.exerciseIds || []).filter(id => survivingIds.has(id))
+        const prunedNames = (ms.exerciseNames || []).filter(name => survivingNames.has(normalizeKey(name)))
+        // Use the larger surviving count (id match OR name match)
+        const survivorCount = Math.max(prunedIds.length, prunedNames.length)
+        return {
+          ...ms,
+          exerciseIds: prunedIds,
+          exerciseNames: prunedNames,
+          _survivorCount: survivorCount,
+        }
+      })
+      .filter(ms => {
+        // Same minimums as styledGroups: superset/circuit need >= 2, others >= 1
+        const family = (ms.family || '').toLowerCase()
+        const minMembers = (family === 'superset' || family === 'circuit') ? 2 : 1
+        return (ms as typeof ms & { _survivorCount: number })._survivorCount >= minMembers
+      })
+      .map(ms => {
+        // Remove the temporary _survivorCount field
+        const { _survivorCount, ...clean } = ms as typeof ms & { _survivorCount?: number }
+        void _survivorCount
+        return clean
+      })
   })()
 
   // ==========================================================================

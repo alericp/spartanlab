@@ -3485,6 +3485,14 @@ export function StreamlinedWorkoutSession({
           flatBlocks: flatBlocks.length,
           consumedExerciseIndexes: Array.from(msBuild.consumedExerciseIndexes),
           reasons: msBuild.reasons,
+          // [AB20.4.5.4.2] Detailed block info for Circuit/Superset verification
+          blockDetails: msBuild.blocks.map(b => ({
+            blockId: b.blockId,
+            groupType: b.groupType,
+            memberCount: b.memberExercises.length,
+            memberNames: b.memberExercises.map(m => m.name),
+            targetRounds: b.targetRounds,
+          })),
           note:
             'styledGroups was unavailable or rejected by shadow-owner guard; methodStructures fallback built grouped runtime instead of flattening.',
         })
@@ -10513,6 +10521,22 @@ if (shouldShowLocalFallback) {
   const blockLabel = currentBlock?.block.blockLabel || 'Block'
   // [AB7] Type now includes density_block
   const blockGroupType = currentBlock?.block.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | 'density_block' | undefined
+  
+  // [AB20.4.5.4.2] Diagnostic log proving Circuit/Superset is reaching the live snapshot
+  // This should show blockGroupType: 'circuit' for Day 1 Circuit exercises
+  if (blockGroupType) {
+    console.log('[AB20.4.5.4.2] live grouped snapshot proof', {
+      currentExerciseIndex: machineState.currentExerciseIndex,
+      currentExerciseName: safeCurrentExercise?.name,
+      blockGroupType,
+      blockLabel,
+      blockMemberCount: currentBlock?.block.memberExercises?.length ?? 0,
+      targetRounds: currentBlock?.block.targetRounds,
+      memberNames: currentBlock?.block.memberExercises?.map(m => m.name) ?? [],
+      executionPlanSource: machineSessionContract?.executionPlan?.hasGroupedBlocks ? 'grouped' : 'flat',
+    })
+  }
+  
   const currentRound = machineState.currentRound || 1
   const targetRounds = currentBlock?.block.targetRounds || 3
   // [AB7] Density block timer - derive time cap from execution block

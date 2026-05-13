@@ -1288,6 +1288,26 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
             mergedSession = withoutStyleMetadata
           }
         }
+        // [AB20.4.5.4.2] Apply methodStructures from snapshot for live grouped runtime.
+        // This is the canonical Phase 4P structure buildExecutionBlocksFromMethodStructures
+        // uses to construct executable Circuit/Superset/Density blocks. Without this,
+        // the live workout methodStructures fallback path cannot find grouped methods.
+        const snapshotHasExplicitMethodStructures = 'methodStructures' in sb
+        const snapshotMethodStructures = (sb as { methodStructures?: unknown }).methodStructures
+        if (snapshotHasExplicitMethodStructures) {
+          if (Array.isArray(snapshotMethodStructures) && snapshotMethodStructures.length > 0) {
+            // Apply the pruned methodStructures from the card's stamp
+            const mergedWithMethods = mergedSession as typeof mergedSession & { methodStructures?: unknown }
+            mergedWithMethods.methodStructures = snapshotMethodStructures
+            mergedSession = mergedWithMethods
+          } else if (snapshotMethodStructures === null) {
+            // null -> explicitly clear methodStructures (card determined no valid structures)
+            const mergedWithMethods = mergedSession as typeof mergedSession & { methodStructures?: unknown }
+            mergedWithMethods.methodStructures = undefined
+            mergedSession = mergedWithMethods
+          }
+          // undefined -> pre-lockdown stamp, preserve whatever finalSession had
+        }
         finalSession = mergedSession
         setBootSource('visible_snapshot')
         console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_SNAPSHOT', {
@@ -1316,6 +1336,14 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
             )
               ? (snapshotMeta as { styledGroups: unknown[] }).styledGroups.length
               : 0,
+          // [AB20.4.5.4.2] methodStructures audit for live grouped runtime
+          snapshotHasExplicitMethodStructures,
+          snapshotMethodStructuresCount:
+            Array.isArray(snapshotMethodStructures) ? snapshotMethodStructures.length : 0,
+          snapshotMethodStructuresFamilies:
+            Array.isArray(snapshotMethodStructures)
+              ? snapshotMethodStructures.map((ms: { family?: string }) => ms.family ?? 'unknown')
+              : [],
           // Loader-side derivation was NOT used for boot, but we show what
           // it would have produced for diagnostic value.
           loaderDerivedExerciseCount: loaderDerivedExercises.length,

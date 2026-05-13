@@ -1073,7 +1073,8 @@ export interface MethodOverridePreview {
   placement: RequestedMethodOverridePlacement
   safety: RequestedMethodOverrideSafety
   suggestedDayIndex?: number
-  canApplyToSavedProgramNow: false
+  /** [AB20.4] Whether the preview can be applied to saved program now (based on capability) */
+  canApplyToSavedProgramNow: boolean
   
   // [AB16.2] Structured preview diff fields
   /** Current structure summary (what the program has now) */

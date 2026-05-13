@@ -550,6 +550,56 @@ Added concrete day-specific workout preview for method override visualization:
   - Added no-silent-fallback diagnostic guard
   - Blocked generic workout preview for circuit-like methods
 
+**IQ6.4.6 Implementation Summary (AB17.2.2.4):**
+
+1. **Revised Compatibility Filtering:** `findCircuitCompatibleExercises()` no longer rejects all skill exercises. Instead:
+   - Skill exercises are marked as "caution" and still counted toward circuit candidate
+   - Same-pattern duplicates are marked as "caution" instead of rejected
+   - Returns `compatibilityTier`: 'safe', 'caution', 'superset_only', or 'none'
+   - Returns `cautionExercises` array showing which exercises need caution
+
+2. **Extended CircuitPreviewCandidate Interface:** Added new fields for scan transparency:
+   - `scannedDayCount?: number` — how many days were scanned
+   - `dayScanResults?: DayScanResult[]` — per-day scan results
+   - `selectionReason?: string` — why this day was chosen
+   - `candidateScore?: number` — score used for selection
+
+3. **Added DayScanResult Interface:** New type for per-day scan transparency:
+   - `dayIndex`, `dayLabel`, `totalExercises`, `usableExercises`
+   - `status`: 'safe', 'caution', 'superset', or 'insufficient'
+   - `reason`, `selectedExercises`, `skippedExercises`
+
+4. **Revised Scoring Function:** `scoreSessionForCircuit()` now:
+   - Uses `compatibilityTier` for base scoring
+   - Gives positive scores even to caution/superset candidates
+   - Penalizes skill exercises but doesn't reject them
+   - Returns `compatibilityTier` for downstream use
+
+5. **Rewrote findBestCircuitPreviewCandidate():**
+   - Now ALWAYS returns a candidate when sessions exist (never null unless sessions empty)
+   - Tracks 4 candidate categories: safe, caution, superset, no-candidate
+   - Extracts exercises using multiple field names (name, title, exerciseName, displayName, label)
+   - Adds scan proof (scannedDayCount, dayScanResults, selectionReason) to result
+   - Falls back to "no_candidate" with scan table when no circuit exists
+
+6. **Added Scan Proof UI:** Circuit preview card now shows:
+   - "Scanned all X program days" confirmation
+   - Selection reason explaining why this day was chosen
+   - Collapsible per-day scan results with status indicators
+   - Each day shows usable/total exercises and status
+
+**Files Changed (IQ6.4.6):**
+- `lib/program/requested-method-override-planner.ts`:
+  - Added `DayScanResult` interface and `mapTierToScanStatus()` helper
+  - Rewrote `findCircuitCompatibleExercises()` with caution-tier support
+  - Updated `scoreSessionForCircuit()` to return compatibilityTier
+  - Extended `CircuitPreviewCandidate` with scan proof fields
+  - Rewrote `findBestCircuitPreviewCandidate()` to always return candidate with scan proof
+  - Updated fallback path in `saveMethodOverridePreview()` with new fields
+- `components/programs/ProgramCoachIntelligenceHub.tsx`:
+  - Added scan proof section showing scannedDayCount and selectionReason
+  - Added collapsible per-day scan results details
+
 ---
 
 ### IQ7 — Feedback Loop Closure

@@ -301,6 +301,8 @@ interface AdaptiveProgramDisplayProps {
   // [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram.
   // Program Page owns the save path. Hub requests, Page persists.
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
+  // [AB20.4.1] Callback to refresh program data from saved state without regenerating
+  onRefreshProgramData?: () => Promise<void> | void
 }
 
 // =============================================================================
@@ -463,7 +465,9 @@ export function AdaptiveProgramDisplay({
   onApplyMethodOverridePreview,
   // [AB20.2] Dedicated method override revert callback with save persistence
   onRevertMethodOverride,
-  }: AdaptiveProgramDisplayProps) {
+  // [AB20.4.1] Refresh program data from saved state
+  onRefreshProgramData,
+}: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
@@ -1347,6 +1351,7 @@ export function AdaptiveProgramDisplay({
         onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
         onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
         onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
+        onRefreshProgramData={onRefreshProgramData} // [AB20.4.1] Wire through for refresh
       />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

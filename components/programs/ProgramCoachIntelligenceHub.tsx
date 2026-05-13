@@ -53,6 +53,7 @@ import {
   Info,
   Loader2,
   Trash2,
+  RefreshCw,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -151,6 +152,7 @@ function resolveBestMethodDisplayReason(
 /**
  * Safe selector that extracts requested/deferred method truth from the program.
  * Inspects available fields without throwing if absent.
+ * [AB20.4] Now canonicalizes method keys to prevent duplicate rows.
  */
 function extractRequestedMethodDecisions(
   program: AdaptiveProgram | null | undefined,
@@ -158,26 +160,77 @@ function extractRequestedMethodDecisions(
   if (!program) return []
 
   const items: RequestedMethodDisplayItem[] = []
-  const seen = new Set<string>()
+  // [AB20.4] Use canonical key for deduplication to prevent duplicate rows
+  const seenCanonical = new Set<string>()
+  
+  // [AB20.4] Track best item per canonical key for merging duplicates
+  const bestByCanonical = new Map<string, RequestedMethodDisplayItem>()
 
   // Method labels for display
   const METHOD_LABELS: Record<string, string> = {
     superset: 'Supersets',
     circuit: 'Circuits',
+    circuits: 'Circuits',
     density_block: 'Density Blocks',
+    density: 'Density Blocks',
     cluster: 'Cluster Sets',
+    cluster_sets: 'Cluster Sets',
     top_set_backoff: 'Top Set + Backoff',
+    top_set: 'Top Set + Backoff',
     drop_set: 'Drop Sets',
+    drop_sets: 'Drop Sets',
     rest_pause: 'Rest-Pause',
+    rest_pause_sets: 'Rest-Pause',
     endurance_density: 'Endurance/Conditioning',
+    endurance: 'Endurance/Conditioning',
+    conditioning: 'Endurance/Conditioning',
     finisher: 'Finishers',
   }
+  
+  // [AB20.4] State priority for merging duplicates (higher = stronger)
+  const STATE_PRIORITY: Record<RequestedMethodState, number> = {
+    applied: 6,
+    materialized: 5,
+    blocked: 4,
+    not_materialized: 3,
+    deferred: 2,
+    suppressed: 1,
+    not_requested: 0,
+    unknown: -1,
+  }
 
-  // Helper to add item if not seen
-  const addItem = (item: RequestedMethodDisplayItem) => {
-    if (!seen.has(item.methodKey)) {
-      seen.add(item.methodKey)
-      items.push(item)
+  // [AB20.4] Helper to add/merge item using canonical key
+  const addOrMergeItem = (item: RequestedMethodDisplayItem) => {
+    const canonicalKey = normalizeOverrideMethodKey(item.methodKey)
+    
+    // Get the canonical display label
+    const capability = getMethodOverrideCapability(item.methodKey)
+    const canonicalLabel = capability.displayLabel !== 'Unknown Method' 
+      ? capability.displayLabel 
+      : METHOD_LABELS[item.methodKey] ?? item.methodKey.replace(/_/g, ' ')
+    
+    // Normalize the item to use canonical key and label
+    const normalizedItem: RequestedMethodDisplayItem = {
+      ...item,
+      methodKey: canonicalKey,
+      label: canonicalLabel,
+    }
+    
+    if (!seenCanonical.has(canonicalKey)) {
+      seenCanonical.add(canonicalKey)
+      bestByCanonical.set(canonicalKey, normalizedItem)
+    } else {
+      // Merge: keep the item with the strongest state
+      const existing = bestByCanonical.get(canonicalKey)!
+      const existingPriority = STATE_PRIORITY[existing.state] ?? -1
+      const newPriority = STATE_PRIORITY[normalizedItem.state] ?? -1
+      
+      if (newPriority > existingPriority) {
+        bestByCanonical.set(canonicalKey, normalizedItem)
+      } else if (newPriority === existingPriority && normalizedItem.confidence === 'high' && existing.confidence !== 'high') {
+        // Same state but higher confidence - prefer the higher confidence item
+        bestByCanonical.set(canonicalKey, normalizedItem)
+      }
     }
   }
 
@@ -203,7 +256,7 @@ function extractRequestedMethodDecisions(
       }
 
       const methodLabel = METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: methodLabel,
         state,
@@ -230,7 +283,8 @@ function extractRequestedMethodDecisions(
 
   if (decisionSummary?.decisions) {
     for (const d of decisionSummary.decisions) {
-      if (!d.methodId || seen.has(d.methodId)) continue
+      if (!d.methodId) continue
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
 
       let state: RequestedMethodState = 'unknown'
       if (d.applied) state = 'applied'
@@ -239,7 +293,7 @@ function extractRequestedMethodDecisions(
       else state = 'not_materialized'
 
       const methodLabel = METHOD_LABELS[d.methodId] ?? d.methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: d.methodId,
         label: methodLabel,
         state,
@@ -264,7 +318,8 @@ function extractRequestedMethodDecisions(
 
   if (matPlan?.methodSlots) {
     for (const slot of matPlan.methodSlots) {
-      if (!slot.methodId || seen.has(slot.methodId)) continue
+      if (!slot.methodId) continue
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
 
       let state: RequestedMethodState = 'unknown'
       const status = slot.status?.toLowerCase() ?? ''
@@ -274,7 +329,7 @@ function extractRequestedMethodDecisions(
       else if (status.includes('suppress')) state = 'suppressed'
 
       const methodLabel = METHOD_LABELS[slot.methodId] ?? slot.methodId.replace(/_/g, ' ')
-      addItem({
+      addOrMergeItem({
         methodKey: slot.methodId,
         label: methodLabel,
         state,
@@ -297,8 +352,8 @@ function extractRequestedMethodDecisions(
 
   if (matSummary) {
     for (const methodId of matSummary.applied ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      // [AB20.4] Remove raw seen check - addOrMergeItem handles deduplication
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'applied',
@@ -309,8 +364,7 @@ function extractRequestedMethodDecisions(
       })
     }
     for (const methodId of matSummary.blocked ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'blocked',
@@ -321,8 +375,7 @@ function extractRequestedMethodDecisions(
       })
     }
     for (const methodId of matSummary.deferred ?? []) {
-      if (seen.has(methodId)) continue
-      addItem({
+      addOrMergeItem({
         methodKey: methodId,
         label: METHOD_LABELS[methodId] ?? methodId.replace(/_/g, ' '),
         state: 'deferred',
@@ -334,7 +387,8 @@ function extractRequestedMethodDecisions(
     }
   }
 
-  return items
+  // [AB20.4] Return merged items from canonical map
+  return Array.from(bestByCanonical.values())
 }
 
 // =============================================================================
@@ -527,7 +581,9 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<MethodOverrideApplyResult>
   /** [AB20.2] Dedicated callback for method override revert that saves via saveAdaptiveProgram */
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
-}
+  /** [AB20.4] Optional callback to refresh program data without closing the sheet */
+  onRefreshProgramData?: () => Promise<void> | void
+  }
 
 // =============================================================================
 // HUB BUTTON COMPONENT
@@ -1530,13 +1586,26 @@ function MethodDetailModalContent({
               }
               
               // [AB20] Show caution confirmation dialog
+              // [AB20.4] Method-specific confirmation text
               if (showCautionConfirmation && isApplyableCaution) {
+                const capability = preview?.methodCapability || getMethodOverrideCapability(item.methodKey)
+                const methodLabel = capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : item.label
+                
+                // [AB20.4] Generate method-specific caution text
+                const cautionText = capability.canonicalKey === 'density_block'
+                  ? `This will change your saved program. This density block includes a skill/technical station, so maintain form quality with adequate rest.`
+                  : capability.canonicalKey === 'circuits'
+                    ? `This will change your saved program. This circuit includes a skill/technical station, so keep the pace conservative and preserve technique quality.`
+                    : capability.canonicalKey === 'cluster'
+                      ? `This will change your saved program. Cluster sets will be applied — use only on final sets when form would otherwise collapse.`
+                      : `This will change your saved program. ${methodLabel} will be applied with caution — review the placement carefully.`
+                
                 return (
                   <div className="flex-1 flex flex-col space-y-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded-lg">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <p className="text-[10px] text-amber-200 leading-relaxed">
-                        This will change your saved program. This circuit includes a skill/technical station, so keep the pace conservative and preserve technique quality.
+                        {cautionText}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -1854,12 +1923,15 @@ function RequestedMethodsSheetContent({
   }
   
   // [AB20.2] Check if the selected method has an override-applied circuit
+  // [AB20.4] Check if the selected method has an override-applied grouped block
   const isOverrideAppliedForSelectedMethod = selectedItem && 
-    isCircuitLikePreviewMethodKey(selectedItem.methodKey) &&
+    isGroupedBlockPreviewMethodKey(selectedItem.methodKey) &&
     hasMethodOverrideAppliedCircuit(program)
   
+  // [AB20.4] Use canonical key for preview lookup
   const getCurrentPreview = (methodKey: string) => {
-    return previews.find(p => p.methodKey === methodKey) || null
+    const canonicalKey = normalizeOverrideMethodKey(methodKey)
+    return previews.find(p => normalizeOverrideMethodKey(p.methodKey) === canonicalKey) || null
   }
 
   const renderGroup = (items: RequestedMethodDisplayItem[], title: string) => {
@@ -2157,6 +2229,7 @@ export function ProgramCoachIntelligenceHub({
   onProgramUpdate, // [AB20 / IQ10] Callback for state update
   onApplyMethodOverridePreview, // [AB20.1D] Dedicated callback for apply with save
   onRevertMethodOverride, // [AB20.2] Dedicated callback for revert with save
+  onRefreshProgramData, // [AB20.4] Callback to refresh program data
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -2165,6 +2238,8 @@ export function ProgramCoachIntelligenceHub({
   const [coachRecsOpen, setCoachRecsOpen] = useState(false)
   const [requestedMethodsOpen, setRequestedMethodsOpen] = useState(false)
   const [planLogicOpen, setPlanLogicOpen] = useState(false)
+  // [AB20.4] Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(
@@ -2190,6 +2265,22 @@ export function ProgramCoachIntelligenceHub({
     setActivePreviews(getMethodOverridePreviews())
   }, [requestedMethodsOpen])
   const hasActivePreviews = activePreviews.length > 0
+  
+  // [AB20.4] Handler for in-modal refresh
+  const handleRefreshProgramData = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      // Call the refresh callback if provided
+      if (onRefreshProgramData) {
+        await onRefreshProgramData()
+      }
+      // Always refresh active previews from storage
+      setActivePreviews(getMethodOverridePreviews())
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
   
   // [AB20.1D] Apply handler that routes through dedicated save callback or falls back to state-only
   const handleApplyMethodOverride = async (
@@ -2534,10 +2625,26 @@ export function ProgramCoachIntelligenceHub({
       <Sheet open={requestedMethodsOpen} onOpenChange={setRequestedMethodsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
           <SheetHeader>
-            <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
-              <Eye className="w-4 h-4 text-purple-400" />
-              Method Override Planner
-            </SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
+                <Eye className="w-4 h-4 text-purple-400" />
+                Method Override Planner
+              </SheetTitle>
+              {/* [AB20.4] In-modal refresh button */}
+              <button
+                onClick={handleRefreshProgramData}
+                disabled={isRefreshing}
+                aria-label="Refresh program data"
+                className={cn(
+                  "p-1.5 rounded-md transition-colors",
+                  isRefreshing 
+                    ? "text-[#5A5A6A] cursor-not-allowed"
+                    : "text-[#7A7A8A] hover:text-[#E6E9EF] hover:bg-[#2A2A35]"
+                )}
+              >
+                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+              </button>
+            </div>
             <SheetDescription className="text-[#7A7A8A]">
               {onApplyMethodOverridePreview 
                 ? 'Review and apply method override previews to your saved program.'

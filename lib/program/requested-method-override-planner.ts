@@ -800,6 +800,101 @@ function planCluster(
   }
 }
 
+/**
+ * [AB20.4] Plan Rest-Pause method override.
+ * Rest-Pause is a row-level hypertrophy method for late accessory work.
+ */
+function planRestPause(
+  input: MethodOverridePlannerInput,
+  sessions: SessionAnalysis[],
+): Partial<RequestedMethodOverridePlan> {
+  // Rest-Pause is for late accessory/hypertrophy work, not primary skill or heavy technical movements
+  const bestSession = sessions.find(s => !s.hasPrimarySkillWork && !s.isOverloaded)
+    || sessions.find(s => !s.isOverloaded)
+  
+  return {
+    safety: bestSession ? 'safe_preview' : 'needs_caution',
+    placement: bestSession ? 'same_session_late' : 'different_day',
+    headline: bestSession 
+      ? `Rest-Pause can be previewed on ${bestSession.title} as late accessory`
+      : 'Rest-Pause placement needs caution — consider a different day',
+    suggestedInsertion: bestSession ? {
+      dayIndex: bestSession.dayIndex,
+      sessionTitle: bestSession.title,
+      position: 'late_accessory',
+      structure: 'unknown', // Row-level method, not a structure
+      summary: 'Mini-rest extended set for hypertrophy on a late accessory movement',
+    } : undefined,
+    riskNotes: [
+      'Rest-Pause creates significant fatigue — avoid primary skill holds',
+      'Not suitable for heavy technical work or explosive movements',
+      'Best for isolation/accessory exercises with established form',
+    ],
+    placementNotes: [
+      'Target a late accessory movement, not the primary exercise',
+      'Works well on isolation exercises (curls, extensions, lateral raises)',
+      'After near-failure, rest 10-15 seconds, then continue to next mini-set',
+    ],
+    dosageGuardrails: [
+      'Limit to 1-2 rest-pause applications per session',
+      'Use on movements where form breakdown is safe',
+      'Reserve for hypertrophy-focused blocks, not strength phases',
+    ],
+    avoids: [
+      'Primary skill holds (planche, front lever, etc.)',
+      'Heavy weighted pull-ups/dips at max effort',
+      'Complex technical movements',
+      'Movements with injury risk under fatigue',
+    ],
+  }
+}
+
+/**
+ * [AB20.4] Plan Endurance/Conditioning method override.
+ * Distinct from density blocks - focuses on aerobic capacity and work tolerance.
+ */
+function planEndurance(
+  input: MethodOverridePlannerInput,
+  sessions: SessionAnalysis[],
+): Partial<RequestedMethodOverridePlan> {
+  // Endurance/Conditioning is distinct from density blocks
+  const bestSession = sessions.find(s => !s.hasPrimarySkillWork && !s.isOverloaded && s.hasFinisher === false)
+    || sessions.find(s => !s.isOverloaded)
+  
+  return {
+    safety: 'needs_caution',
+    placement: bestSession ? 'same_session_late' : 'different_day',
+    headline: 'Endurance/Conditioning is distinct from Density Blocks — requires dedicated finisher writer',
+    suggestedInsertion: bestSession ? {
+      dayIndex: bestSession.dayIndex,
+      sessionTitle: bestSession.title,
+      position: 'finisher',
+      structure: 'finisher',
+      summary: 'Conditioning finisher focused on aerobic capacity and work tolerance',
+    } : undefined,
+    riskNotes: [
+      'Endurance/Conditioning is NOT the same as Density Blocks',
+      'Density Blocks are time-capped AMRAP/EMOM for controlled volume',
+      'Endurance/Conditioning focuses on sustained aerobic capacity',
+    ],
+    placementNotes: [
+      'Place at end of session as dedicated conditioning work',
+      'Distinct from density blocks which are mid-session quality work',
+      'May require separate day for longer conditioning sessions',
+    ],
+    dosageGuardrails: [
+      'Do not substitute for density blocks without understanding the difference',
+      'Conditioning should not compete with primary skill work recovery',
+      'Consider recovery impact on subsequent training days',
+    ],
+    avoids: [
+      'Conflating with density blocks (they serve different purposes)',
+      'Placing before skill work in the same session',
+      'High-intensity conditioning on skill-focused days',
+    ],
+  }
+}
+
 // =============================================================================
 // MAIN PLANNER FUNCTION
 // =============================================================================
@@ -854,41 +949,57 @@ export function planMethodOverride(
   }
   
   // Get method-specific planning logic
+  // [AB20.4] Use canonical key normalization for consistent method detection
   let methodPlan: Partial<RequestedMethodOverridePlan> = {}
-  const methodKey = methodItem.methodKey.toLowerCase()
+  const canonicalKey = normalizeOverrideMethodKey(methodItem.methodKey)
   
-  if (methodKey.includes('top_set') || methodKey.includes('topset')) {
-    methodPlan = planTopSet(input, sessions)
-  } else if (methodKey.includes('drop_set') || methodKey.includes('dropset')) {
-    methodPlan = planDropSet(input, sessions)
-  } else if (methodKey.includes('finisher')) {
-    methodPlan = planFinisher(input, sessions)
-  } else if (methodKey.includes('circuit')) {
-    methodPlan = planCircuit(input, sessions)
-  } else if (methodKey.includes('superset')) {
-    methodPlan = planSuperset(input, sessions)
-  } else if (methodKey.includes('density')) {
-    methodPlan = planDensity(input, sessions)
-  } else if (methodKey.includes('cluster')) {
-    methodPlan = planCluster(input, sessions)
-  } else {
-    // Unknown method
-    methodPlan = {
-      safety: 'not_enough_truth',
-      placement: 'not_placeable',
-      headline: 'Method type not recognized for automatic planning',
-      riskNotes: ['The app can identify this request but cannot safely plan placement'],
-      placementNotes: ['Manual planning may be required'],
-      dosageGuardrails: [],
-      avoids: [],
-    }
-    proof.missingTruth.push('Unknown method type for automatic planning')
+  switch (canonicalKey) {
+    case 'top_set_backoff':
+      methodPlan = planTopSet(input, sessions)
+      break
+    case 'drop_set':
+      methodPlan = planDropSet(input, sessions)
+      break
+    case 'finisher':
+      methodPlan = planFinisher(input, sessions)
+      break
+    case 'circuits':
+      methodPlan = planCircuit(input, sessions)
+      break
+    case 'superset':
+      methodPlan = planSuperset(input, sessions)
+      break
+    case 'density_block':
+      methodPlan = planDensity(input, sessions)
+      break
+    case 'cluster':
+      methodPlan = planCluster(input, sessions)
+      break
+    case 'rest_pause':
+      methodPlan = planRestPause(input, sessions)
+      break
+    case 'endurance_density':
+      methodPlan = planEndurance(input, sessions)
+      break
+    default:
+      // Unknown method
+      methodPlan = {
+        safety: 'not_enough_truth',
+        placement: 'not_placeable',
+        headline: 'Method type not recognized for automatic planning',
+        riskNotes: ['The app can identify this request but cannot safely plan placement'],
+        placementNotes: ['Manual planning may be required'],
+        dosageGuardrails: [],
+        avoids: [],
+      }
+      proof.missingTruth.push('Unknown method type for automatic planning')
   }
   
   // [AB17.2.2.2] Determine if preview is allowed
   // For most methods: require safe_preview or needs_caution
   // For Circuits/Density: allow preview when program has exercises (scan is the diagnostic)
-  const isCircuitLikeMethod = isCircuitLikePreviewMethodKey(methodKey)
+  // [AB20.4] Use canonicalKey for consistent method detection
+  const isCircuitLikeMethod = isGroupedBlockPreviewMethodKey(canonicalKey)
   const hasProgramExerciseTruth = sessions.some(s => s.exerciseCount > 0)
   
   const canPreview = isCircuitLikeMethod
@@ -962,7 +1073,8 @@ export interface MethodOverridePreview {
   placement: RequestedMethodOverridePlacement
   safety: RequestedMethodOverrideSafety
   suggestedDayIndex?: number
-  canApplyToSavedProgramNow: false
+  /** [AB20.4] Whether the preview can be applied to saved program now (based on capability) */
+  canApplyToSavedProgramNow: boolean
   
   // [AB16.2] Structured preview diff fields
   /** Current structure summary (what the program has now) */
@@ -1753,15 +1865,19 @@ export function saveMethodOverridePreview(
     }
   }
   
+  // [AB20.4] Store with canonical key for consistent lookup
+  const canonicalKey = normalizeOverrideMethodKey(plan.methodKey)
+  const capability = getMethodOverrideCapability(plan.methodKey)
+  
   const preview: MethodOverridePreview = {
-    methodKey: plan.methodKey,
-    label: plan.label,
+    methodKey: canonicalKey, // [AB20.4] Always use canonical key
+    label: capability.displayLabel !== 'Unknown Method' ? capability.displayLabel : plan.label,
     generatedAt: new Date().toISOString(),
     planSummary: plan.suggestedInsertion?.summary || plan.headline,
     placement: plan.placement,
     safety: plan.safety,
     suggestedDayIndex: plan.suggestedInsertion?.dayIndex,
-    canApplyToSavedProgramNow: false,
+    canApplyToSavedProgramNow: capability.canApplyToSavedProgramNow, // [AB20.4] Get from capability
     // [AB16.2] Structured diff fields
     currentStructure,
     proposedStructure,
@@ -1773,27 +1889,55 @@ export function saveMethodOverridePreview(
     workoutPreview,
     // [AB17.2.2] Circuit-specific candidate
     circuitCandidate,
+    // [AB20.4] Cached capability for apply eligibility
+    methodCapability: capability,
+    targetGroupType: capability.writerKind === 'grouped_circuit' ? 'circuit' 
+      : capability.writerKind === 'grouped_density_block' ? 'density_block'
+      : capability.writerKind === 'grouped_cluster' ? 'cluster'
+      : undefined,
   }
   
   try {
     if (typeof window !== 'undefined' && window.sessionStorage) {
       const existing = getMethodOverridePreviews()
-      const updated = [...existing.filter(p => p.methodKey !== plan.methodKey), preview]
+      // [AB20.4] Filter by canonical key for deduplication
+      const updated = [...existing.filter(p => normalizeOverrideMethodKey(p.methodKey) !== canonicalKey), preview]
       window.sessionStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(updated))
     }
   } catch {
-    // Storage not available �� preview is component-state only
+    // Storage not available — preview is component-state only
   }
   
   return preview
 }
 
+/**
+ * [AB20.4] Get all method override previews from storage.
+ * Sanitizes old stored previews by canonicalizing keys and deduping.
+ */
 export function getMethodOverridePreviews(): MethodOverridePreview[] {
   try {
     if (typeof window !== 'undefined' && window.sessionStorage) {
       const stored = window.sessionStorage.getItem(PREVIEW_STORAGE_KEY)
       if (stored) {
-        return JSON.parse(stored) as MethodOverridePreview[]
+        const rawPreviews = JSON.parse(stored) as MethodOverridePreview[]
+        
+        // [AB20.4] Sanitize: canonicalize keys and dedupe (keep newest)
+        const byCanonical = new Map<string, MethodOverridePreview>()
+        for (const preview of rawPreviews) {
+          const canonicalKey = normalizeOverrideMethodKey(preview.methodKey)
+          const existing = byCanonical.get(canonicalKey)
+          
+          // Keep the newest preview if duplicates exist
+          if (!existing || (preview.generatedAt && existing.generatedAt && preview.generatedAt > existing.generatedAt)) {
+            byCanonical.set(canonicalKey, {
+              ...preview,
+              methodKey: canonicalKey, // Normalize stored key
+            })
+          }
+        }
+        
+        return Array.from(byCanonical.values())
       }
     }
   } catch {
@@ -1802,11 +1946,15 @@ export function getMethodOverridePreviews(): MethodOverridePreview[] {
   return []
 }
 
+/**
+ * [AB20.4] Clear method override preview by canonical key.
+ */
 export function clearMethodOverridePreview(methodKey: string): void {
   try {
     if (typeof window !== 'undefined' && window.sessionStorage) {
+      const canonicalKey = normalizeOverrideMethodKey(methodKey)
       const existing = getMethodOverridePreviews()
-      const updated = existing.filter(p => p.methodKey !== methodKey)
+      const updated = existing.filter(p => normalizeOverrideMethodKey(p.methodKey) !== canonicalKey)
       window.sessionStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(updated))
     }
   } catch {

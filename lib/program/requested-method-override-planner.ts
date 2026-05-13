@@ -3089,7 +3089,7 @@ export function applyMethodOverridePreviewToProgram(args: {
   ]
 
   // [AB20.4.5.3] Build updated methodStructures for live runtime binding
-  const existingMethodStructures = (updatedSession.methodStructures || []) as Array<{
+  const existingMethodStructures = ((updatedSession as Record<string, unknown>).methodStructures || []) as Array<{
     id: string
     family: string
     status: string

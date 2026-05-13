@@ -355,7 +355,8 @@ function planCircuit(
   input: MethodOverridePlannerInput,
   sessions: SessionAnalysis[],
 ): Partial<RequestedMethodOverridePlan> {
-  // Circuits need non-conflicting patterns
+  // [AB17.2.2.1] Circuits need pattern variety across sessions
+  // But we cannot claim a safe candidate until we run findBestCircuitPreviewCandidate()
   const bestSession = sessions.find(s => 
     s.movementPatterns.length >= 2 && // Has variety
     s.pullDensity < 0.6 && // Not pull-heavy
@@ -368,24 +369,28 @@ function planCircuit(
     ? bestSession.movementPatterns.length >= 2
     : false
   
+  // [AB17.2.2.1] Honest pre-preview guidance
+  // Do NOT claim safe_preview or show specific day until preview scans all program days
   return {
-    safety: hasPatternVariety ? 'safe_preview' : 'needs_caution',
+    // Before preview, cannot confirm safety — preview will scan all days
+    safety: 'not_enough_truth',
     placement: hasPatternVariety ? 'same_session_accessory' : 'different_day',
-    headline: hasPatternVariety
-      ? `Circuit can be previewed on ${bestSession?.title} with non-competing patterns`
-      : 'Circuit needs exercises with different movement patterns',
+    // [AB17.2.2.1] Honest headline — guide user to create preview
+    headline: 'Create preview to scan all program days for circuit candidates',
     suggestedInsertion: hasPatternVariety && bestSession ? {
       dayIndex: bestSession.dayIndex,
       sessionTitle: bestSession.title,
       position: 'late_accessory',
       structure: 'circuit',
-      summary: 'Low-interference circuit combining different movement patterns',
+      // [AB17.2.2.1] Updated summary — honest about needing preview scan
+      summary: 'Preview will scan all days for 3+ compatible exercises',
     } : undefined,
     riskNotes: [
-      'Do NOT simply group adjacent exercises into a circuit',
-      'Avoid same-pattern pairings (e.g., pull + pull)',
+      'Circuit requires at least 3 compatible exercises',
+      '2 exercises = superset, not circuit',
+      'Preview will check all program days for best candidate',
       bestSession?.pullDensity && bestSession.pullDensity > 0.4 
-        ? 'Session has high pull density — avoid pull-heavy circuits'
+        ? 'Some sessions have high pull density — avoid pull-heavy circuits'
         : '',
     ].filter(Boolean),
     placementNotes: [
@@ -908,9 +913,10 @@ function scoreSessionForCircuit(
 /**
  * [AB17.2.1] Finds the best circuit preview candidate across all program sessions.
  * Returns null if no safe circuit candidate exists.
+ * [AB17.2.2.1] Updated to handle sessions with optional exercises array.
  */
 export function findBestCircuitPreviewCandidate(
-  sessions: Array<{ exercises: Array<{ name?: string }>; focus?: string; focusLabel?: string }>,
+  sessions: Array<{ exercises?: Array<{ name?: string }>; focus?: string; focusLabel?: string }>,
 ): CircuitPreviewCandidate | null {
   if (!sessions || sessions.length === 0) return null
   
@@ -1188,10 +1194,24 @@ export function buildMethodOverrideWorkoutPreview(
   }
 }
 
+/**
+ * [AB17.2.2.1] Program session context for circuit preview creation.
+ * Allows circuits to scan all program days for the best candidate.
+ */
+export interface PreviewCreationContext {
+  programSessions?: Array<{
+    exercises?: Array<{ name?: string }>
+    focus?: string
+    focusLabel?: string
+    title?: string
+  }>
+}
+
 export function saveMethodOverridePreview(
   plan: RequestedMethodOverridePlan,
   sessionExercises?: string[],
-  sessionTitle?: string
+  sessionTitle?: string,
+  context?: PreviewCreationContext
 ): MethodOverridePreview {
   // [AB16.2] Derive current structure based on method state
   const currentStructure = plan.currentState === 'applied' || plan.currentState === 'materialized'
@@ -1240,34 +1260,51 @@ export function saveMethodOverridePreview(
   // [AB17.2] Build concrete workout preview if possible
   const workoutPreview = buildMethodOverrideWorkoutPreview(plan, sessionExercises, sessionTitle)
   
-  // [AB17.2.2] Build circuit-specific candidate for circuits
+  // [AB17.2.2.1] Build circuit-specific candidate for circuits
+  // Use findBestCircuitPreviewCandidate() when full program sessions are available
   let circuitCandidate: CircuitPreviewCandidate | undefined
   if (plan.methodKey === 'circuits' || plan.methodKey === 'density_blocks') {
-    const exercises = sessionExercises || []
-    const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
-    const dayIndex = plan.suggestedInsertion?.dayIndex ?? 0
-    const dayLabel = formatDayLabel(dayIndex, sessionTitle || plan.suggestedInsertion?.sessionTitle)
+    const programSessions = context?.programSessions
     
-    // Score this session for circuit suitability
-    const { score, notes: riskNotes } = scoreSessionForCircuit(exercises, sessionTitle || '')
-    
-    const confidence: CircuitPreviewCandidate['confidence'] = 
-      selected.length >= 4 && score > 60 ? 'high' :
-      selected.length >= 3 && score > 30 ? 'medium' :
-      selected.length >= 3 ? 'low' : 'none'
-    
-    circuitCandidate = {
-      dayIndex,
-      dayLabel,
-      sessionTitle: sessionTitle || plan.suggestedInsertion?.sessionTitle || `Day ${dayIndex + 1}`,
-      selectedExercises: selected,
-      skippedExercises: skipped,
-      candidateReason: reason,
-      riskNotes,
-      circuitSize: selected.length,
-      confidence,
-      isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
-      patternDistribution: patterns,
+    if (programSessions && programSessions.length > 0) {
+      // [AB17.2.2.1] AUTHORITATIVE PATH: Use findBestCircuitPreviewCandidate to scan ALL program days
+      circuitCandidate = findBestCircuitPreviewCandidate(programSessions) ?? undefined
+      
+      // Add proof that we scanned all program days
+      if (circuitCandidate) {
+        circuitCandidate.riskNotes = [
+          `Scanned all ${programSessions.length} program days`,
+          ...circuitCandidate.riskNotes
+        ]
+      }
+    } else {
+      // [AB17.2.2.1] FALLBACK PATH: Single-session preview when full program not available
+      const exercises = sessionExercises || []
+      const { selected, skipped, patterns, reason } = findCircuitCompatibleExercises(exercises)
+      const dayIndex = plan.suggestedInsertion?.dayIndex ?? 0
+      const dayLabel = formatDayLabel(dayIndex, sessionTitle || plan.suggestedInsertion?.sessionTitle)
+      
+      // Score this session for circuit suitability
+      const { score, notes: riskNotes } = scoreSessionForCircuit(exercises, sessionTitle || '')
+      
+      const confidence: CircuitPreviewCandidate['confidence'] = 
+        selected.length >= 4 && score > 60 ? 'high' :
+        selected.length >= 3 && score > 30 ? 'medium' :
+        selected.length >= 3 ? 'low' : 'none'
+      
+      circuitCandidate = {
+        dayIndex,
+        dayLabel,
+        sessionTitle: sessionTitle || plan.suggestedInsertion?.sessionTitle || `Day ${dayIndex + 1}`,
+        selectedExercises: selected,
+        skippedExercises: skipped,
+        candidateReason: reason,
+        riskNotes: ['Single-session preview only — full program scan unavailable', ...riskNotes],
+        circuitSize: selected.length,
+        confidence,
+        isSafeCircuitCandidate: selected.length >= CIRCUIT_MINIMUM_EXERCISES && score > 0,
+        patternDistribution: patterns,
+      }
     }
   }
   
@@ -1300,7 +1337,7 @@ export function saveMethodOverridePreview(
       window.sessionStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(updated))
     }
   } catch {
-    // Storage not available — preview is component-state only
+    // Storage not available �� preview is component-state only
   }
   
   return preview

@@ -3489,6 +3489,184 @@ function toMethodDisplayLabel(canonicalKey: CanonicalOverrideMethodKey): string 
   }
 }
 
+// =============================================================================
+// [AB20.4.4.4] CANONICAL METHOD ARTIFACT COLLECTION
+// Single source of truth for what methods are ACTUALLY saved and renderable.
+// This prevents the split between "summary says applied" vs "reset finds nothing".
+// =============================================================================
+
+export interface MethodOverrideArtifact {
+  methodKey: string
+  canonicalKey: CanonicalOverrideMethodKey
+  displayLabel: string
+  artifactKind: 'grouped_block' | 'row_level' | 'finisher' | 'native_ai'
+  source: 'method_override_planner' | 'native_ai' | 'unknown'
+  sessionIndex: number
+  sessionLabel: string
+  exerciseIndex?: number
+  exerciseName?: string
+  groupId?: string
+  isUserAppliedOverride: boolean
+  isRenderable: boolean
+  renderFieldFound: string | null
+  canReset: boolean
+}
+
+/**
+ * [AB20.4.4.4] Collects ALL actual method override artifacts from a saved program.
+ * This is the SINGLE SOURCE OF TRUTH for what methods are actually applied and renderable.
+ * 
+ * Uses this contract:
+ * - Grouped blocks: styledGroups with methodOverrideApplied or source === 'method_override_planner'
+ * - Row-level: exercises with methodOverrideApplied === true AND setExecutionMethod
+ * - Native AI: styledGroups without methodOverrideApplied markers (supersets, etc.)
+ * 
+ * Returns artifacts sorted by session index, then by artifact kind.
+ */
+export function collectMethodOverrideArtifacts(program: AdaptiveProgram | null): MethodOverrideArtifact[] {
+  if (!program || !Array.isArray(program.sessions)) return []
+  
+  const artifacts: MethodOverrideArtifact[] = []
+  
+  for (let sessionIndex = 0; sessionIndex < program.sessions.length; sessionIndex++) {
+    const session = program.sessions[sessionIndex]
+    const sessionLabel = session.focusLabel || session.focus || `Day ${sessionIndex + 1}`
+    
+    // 1. Scan styledGroups for grouped method artifacts
+    const styledGroups = session.styleMetadata?.styledGroups || []
+    for (const group of styledGroups) {
+      const isUserApplied = isMethodOverridePlannerAppliedGroup(group)
+      const groupType = group.groupType
+      
+      // Map group type to canonical key
+      let canonicalKey: CanonicalOverrideMethodKey = 'unknown'
+      if (groupType === 'circuit') canonicalKey = 'circuits'
+      else if (groupType === 'density_block') canonicalKey = 'density_block'
+      else if (groupType === 'superset') canonicalKey = 'superset'
+      
+      artifacts.push({
+        methodKey: (group as { methodOverrideMethodKey?: string }).methodOverrideMethodKey || groupType,
+        canonicalKey,
+        displayLabel: toMethodDisplayLabel(canonicalKey),
+        artifactKind: 'grouped_block',
+        source: isUserApplied ? 'method_override_planner' : 'native_ai',
+        sessionIndex,
+        sessionLabel,
+        groupId: group.id,
+        isUserAppliedOverride: isUserApplied,
+        isRenderable: true, // styledGroups are always renderable
+        renderFieldFound: 'styledGroups',
+        canReset: isUserApplied,
+      })
+    }
+    
+    // 2. Scan exercises for row-level method artifacts
+    const exercises = session.exercises || []
+    for (let exIndex = 0; exIndex < exercises.length; exIndex++) {
+      const exercise = exercises[exIndex] as {
+        methodOverrideApplied?: boolean
+        methodOverrideMethodKey?: string
+        setExecutionMethod?: string
+        method?: string
+        methodLabel?: string
+        name?: string
+      }
+      
+      // Only count as artifact if methodOverrideApplied is true
+      if (!exercise.methodOverrideApplied) continue
+      
+      const methodKey = exercise.methodOverrideMethodKey || exercise.setExecutionMethod || ''
+      const canonicalKey = normalizeOverrideMethodKey(methodKey)
+      
+      // Check if renderable - setExecutionMethod is the PRIMARY render field
+      const hasSetExecutionMethod = !!exercise.setExecutionMethod
+      const hasMethodField = !!exercise.method
+      const isRenderable = hasSetExecutionMethod || hasMethodField
+      
+      // Determine artifact kind
+      let artifactKind: MethodOverrideArtifact['artifactKind'] = 'row_level'
+      if (canonicalKey === 'endurance_density' || exercise.name?.toLowerCase().includes('finisher')) {
+        artifactKind = 'finisher'
+      }
+      
+      artifacts.push({
+        methodKey,
+        canonicalKey,
+        displayLabel: exercise.methodLabel || toMethodDisplayLabel(canonicalKey),
+        artifactKind,
+        source: 'method_override_planner',
+        sessionIndex,
+        sessionLabel,
+        exerciseIndex: exIndex,
+        exerciseName: exercise.name,
+        isUserAppliedOverride: true,
+        isRenderable,
+        renderFieldFound: hasSetExecutionMethod ? 'setExecutionMethod' : (hasMethodField ? 'method' : null),
+        canReset: true,
+      })
+    }
+  }
+  
+  return artifacts
+}
+
+/**
+ * [AB20.4.4.4] Validates that a method artifact is actually renderable after apply.
+ * Used as a gate to prevent "applied" status without actual render truth.
+ */
+export function assertRenderableMethodArtifact(
+  program: AdaptiveProgram,
+  methodKey: string,
+  targetInfo: { sessionIndex?: number; exerciseName?: string }
+): { valid: boolean; evidence: string[]; missingField?: string } {
+  const artifacts = collectMethodOverrideArtifacts(program)
+  const canonicalKey = normalizeOverrideMethodKey(methodKey)
+  
+  // Find matching artifact
+  const matchingArtifacts = artifacts.filter(a => {
+    if (a.canonicalKey !== canonicalKey) return false
+    if (targetInfo.sessionIndex !== undefined && a.sessionIndex !== targetInfo.sessionIndex) return false
+    if (targetInfo.exerciseName && a.exerciseName && 
+        a.exerciseName.toLowerCase() !== targetInfo.exerciseName.toLowerCase()) return false
+    return true
+  })
+  
+  if (matchingArtifacts.length === 0) {
+    return {
+      valid: false,
+      evidence: [
+        `No artifact found for method ${methodKey}`,
+        `Searched session ${targetInfo.sessionIndex ?? 'any'}`,
+        `Target exercise: ${targetInfo.exerciseName ?? 'any'}`,
+      ],
+      missingField: 'No artifact found',
+    }
+  }
+  
+  const artifact = matchingArtifacts[0]
+  if (!artifact.isRenderable) {
+    return {
+      valid: false,
+      evidence: [
+        `Artifact exists but is not renderable`,
+        `Missing render field: ${artifact.renderFieldFound === null ? 'setExecutionMethod' : 'unknown'}`,
+        `Artifact kind: ${artifact.artifactKind}`,
+      ],
+      missingField: artifact.renderFieldFound === null ? 'setExecutionMethod' : 'renderField',
+    }
+  }
+  
+  return {
+    valid: true,
+    evidence: [
+      `Artifact is renderable`,
+      `Render field: ${artifact.renderFieldFound}`,
+      `Session: ${artifact.sessionLabel}`,
+      artifact.exerciseName ? `Exercise: ${artifact.exerciseName}` : `Group: ${artifact.groupId}`,
+    ],
+  }
+}
+
 function applyRowLevelMethodOverride(args: {
   program: AdaptiveProgram
   preview: MethodOverridePreview
@@ -3805,6 +3983,7 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
         if (exercise.methodOverrideMethodKey === 'endurance_density' && exercise.name?.toLowerCase().includes('conditioning finisher')) {
           exercisesToRemove.push(exIndex)
         } else {
+          // [AB20.4.4.4] Remove ALL method-related fields including render fields
           delete (exercise as Record<string, unknown>).trainingMethod
           delete (exercise as Record<string, unknown>).methodOverrideApplied
           delete (exercise as Record<string, unknown>).methodOverrideMethodKey
@@ -3813,6 +3992,10 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
           delete (exercise as Record<string, unknown>).methodRationale
           delete (exercise as Record<string, unknown>).methodInstructions
           delete (exercise as Record<string, unknown>).methodRiskNote
+          // [AB20.4.4.4] CRITICAL: Also remove render fields to ensure Program card updates
+          delete (exercise as Record<string, unknown>).setExecutionMethod
+          delete (exercise as Record<string, unknown>).method
+          delete (exercise as Record<string, unknown>).methodLabel
         }
       }
     }

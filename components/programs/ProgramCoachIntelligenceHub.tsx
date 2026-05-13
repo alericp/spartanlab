@@ -954,10 +954,11 @@ function SkillPhaseSheetContent({
 // REQUESTED/DEFERRED METHODS SHEET CONTENT
 // =============================================================================
 
-// Shared state colors and labels
-const METHOD_STATE_COLORS: Record<RequestedMethodState, string> = {
-  applied: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  materialized: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+  // Shared state colors and labels
+  // [AB20.4.4.5] User-applied manual overrides use amber, native AI uses emerald
+  const METHOD_STATE_COLORS: Record<RequestedMethodState, string> = {
+    applied: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
+    materialized: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
   blocked: 'border-red-500/30 bg-red-500/10 text-red-400',
   deferred: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
   suppressed: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
@@ -977,17 +978,19 @@ const METHOD_STATE_LABELS: Record<RequestedMethodState, string> = {
   unknown: 'Unknown',
 }
 
-// Safety verdict colors
-const SAFETY_COLORS: Record<string, { border: string; bg: string; text: string; icon: typeof CheckCircle2 }> = {
-  safe_preview: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: CheckCircle2 },
-  needs_caution: { border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-400', icon: AlertTriangle },
-  not_recommended: { border: 'border-red-500/30', bg: 'bg-red-500/10', text: 'text-red-400', icon: XCircle },
-  not_enough_truth: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#7A7A8A]', icon: HelpCircle },
-  unsupported_now: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#6A6A7A]', icon: XCircle },
-}
-
-const SAFETY_LABELS: Record<string, string> = {
-  safe_preview: 'Safe to Preview',
+  // Safety verdict colors
+  // [AB20.4.4.5] Manual Method Override Planner applies use amber/orange, not green
+  // Green is reserved for native AI methods only
+  const SAFETY_COLORS: Record<string, { border: string; bg: string; text: string; icon: typeof CheckCircle2 }> = {
+    safe_preview: { border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-400', icon: CheckCircle2 },
+    needs_caution: { border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-400', icon: AlertTriangle },
+    not_recommended: { border: 'border-red-500/30', bg: 'bg-red-500/10', text: 'text-red-400', icon: XCircle },
+    not_enough_truth: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#7A7A8A]', icon: HelpCircle },
+    unsupported_now: { border: 'border-[#3A3A4A]', bg: 'bg-[#2A2A35]', text: 'text-[#6A6A7A]', icon: XCircle },
+  }
+  
+  const SAFETY_LABELS: Record<string, string> = {
+    safe_preview: 'Preview Available',
   needs_caution: 'Needs Caution',
   not_recommended: 'Not Recommended',
   not_enough_truth: 'Insufficient Data',
@@ -1783,16 +1786,44 @@ function MethodDetailModalContent({
                 onRequestCautionApply?.()
               }
               
-              // [AB20] Show success state if apply was successful
-              if (applyResult?.status === 'success') {
+              // [AB20.4.4.5] CANONICAL TRUTH CHECK: Sticky footer must verify artifact exists
+              // Local applyResult cannot override artifact truth - prevents "Not Materialized" + "Applied" contradiction
+              const canonicalKey = normalizeOverrideMethodKey(preview?.methodKey || item.methodKey)
+              const artifacts = collectMethodOverrideArtifacts(program)
+              const hasVerifiedArtifact = artifacts.some(a => 
+                a.canonicalKey === canonicalKey && a.isRenderable && a.isUserAppliedOverride
+              )
+              
+              // [AB20.4.4.5] Show verified override applied state ONLY if artifact exists
+              // Use amber/orange for manual overrides, not green
+              if (hasVerifiedArtifact) {
+                const matchingArtifact = artifacts.find(a => a.canonicalKey === canonicalKey && a.isRenderable)
                 return (
                   <div className="flex-1 flex flex-col">
-                    <div className="h-10 flex items-center justify-center bg-emerald-600/20 border border-emerald-500/30 rounded-md">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mr-2" />
-                      <span className="text-xs text-emerald-400 font-medium">Applied</span>
+                    <div className="h-10 flex items-center justify-center bg-amber-600/20 border border-amber-500/30 rounded-md">
+                      <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />
+                      <span className="text-xs text-amber-400 font-medium">Override Applied</span>
                     </div>
-                    <span className="text-[8px] text-emerald-400/70 text-center mt-1 leading-tight">
-                      {applyResult.visibleSummary}
+                    <span className="text-[8px] text-amber-400/70 text-center mt-1 leading-tight">
+                      {matchingArtifact?.exerciseName 
+                        ? `Applied to ${matchingArtifact.exerciseName} on ${matchingArtifact.sessionLabel}`
+                        : `Applied to ${matchingArtifact?.sessionLabel || 'program'}`}
+                    </span>
+                  </div>
+                )
+              }
+              
+              // [AB20.4.4.5] If applyResult says success but no artifact exists, show error state
+              // This prevents the contradiction where local state says "Applied" but artifact truth says "Not Materialized"
+              if (applyResult?.status === 'success' && !hasVerifiedArtifact) {
+                return (
+                  <div className="flex-1 flex flex-col">
+                    <div className="h-10 flex items-center justify-center bg-red-600/20 border border-red-500/30 rounded-md">
+                      <AlertTriangle className="w-4 h-4 text-red-400 mr-2" />
+                      <span className="text-xs text-red-400 font-medium">Apply Failed</span>
+                    </div>
+                    <span className="text-[8px] text-red-400/70 text-center mt-1 leading-tight">
+                      No render artifact found — method may need re-apply
                     </span>
                   </div>
                 )
@@ -1817,29 +1848,24 @@ function MethodDetailModalContent({
                     ? `This will change your saved program. ${methodLabel} will be applied with caution — review the placement carefully.`
                     : `This will update your saved program by applying ${methodLabel} to ${dayLabel}.`
                 
+                // [AB20.4.4.5] All manual overrides use amber/orange styling
+                // Force overrides use orange, all others use amber
                 const bgColor = isForceApply 
                   ? 'bg-orange-500/5 border-orange-500/20' 
-                  : isCautionApply 
-                    ? 'bg-amber-500/5 border-amber-500/20'
-                    : 'bg-emerald-500/5 border-emerald-500/20'
+                  : 'bg-amber-500/5 border-amber-500/20'
                 
-                const iconColor = isForceApply ? 'text-orange-400' : isCautionApply ? 'text-amber-400' : 'text-emerald-400'
-                const textColor = isForceApply ? 'text-orange-200' : isCautionApply ? 'text-amber-200' : 'text-emerald-200'
+                const iconColor = isForceApply ? 'text-orange-400' : 'text-amber-400'
+                const textColor = isForceApply ? 'text-orange-200' : 'text-amber-200'
                 const buttonColor = isForceApply 
                   ? 'bg-orange-600 hover:bg-orange-700'
-                  : isCautionApply 
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
-                const buttonText = isForceApply ? 'Force Override Anyway' : isCautionApply ? 'Apply Caution Preview' : 'Apply Override'
+                  : 'bg-amber-600 hover:bg-amber-700'
+                const buttonText = isForceApply ? 'Force Override Anyway' : 'Apply Override'
                 
                 return (
                   <div className={cn('flex-1 flex flex-col space-y-2 p-2 rounded-lg border', bgColor)}>
                     <div className="flex items-start gap-2">
-                      {isForceApply || isCautionApply ? (
-                        <AlertTriangle className={cn('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
-                      ) : (
-                        <CheckCircle2 className={cn('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
-                      )}
+                      {/* [AB20.4.4.5] All manual overrides show AlertTriangle - modifying user's saved program */}
+                      <AlertTriangle className={cn('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
                       <div className="flex-1">
                         <p className={cn('text-[10px] leading-relaxed', textColor)}>
                           {confirmText}

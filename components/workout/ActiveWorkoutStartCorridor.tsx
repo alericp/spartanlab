@@ -1932,6 +1932,17 @@ export function ActiveWorkoutStartCorridor({
           button: 'bg-purple-600 hover:bg-purple-700 text-white',
           indicator: 'bg-purple-500',
         }
+      // [AB20.4.5.4.6] Added density_block to method tones
+      case 'density_block':
+        return {
+          badge: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+          text: 'text-teal-300/85',
+          card: 'bg-teal-500/10 border-teal-500/30',
+          cardDone: 'bg-teal-500/15 border-teal-500/40',
+          icon: 'text-teal-400',
+          button: 'bg-teal-600 hover:bg-teal-700 text-white',
+          indicator: 'bg-teal-500',
+        }
       case 'emom':
         return {
           badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',

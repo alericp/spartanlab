@@ -2850,7 +2850,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     (reconciledGroupedRows !== null && reconciledGroupedRows < 2) ||
     finalVisibleBodyModel.mode === 'simple_order_grouped' ||
     shortVariantSuppressedGroupedTruth
+  // [AB20.4.5.4.7] Collapsed chip owner — this row must mirror expanded grouped body method truth.
+  // The authoritative source for collapsed method chips is now `groupedRenderContract` which
+  // directly contains the counts that will actually render in the expanded body. This fixes
+  // the parity issue where collapsed chips showed nothing while expanded body showed Circuit.
   const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
+    // [AB20.4.5.4.7] PRIORITY 1: Use groupedRenderContract counts directly when it has grouped truth.
+    // This is the same source that feeds the expanded body rendering, ensuring parity.
+    if (groupedRenderContract.hasGroupedTruth && !shortVariantSuppressedGroupedTruth) {
+      const renderContractTally = {
+        superset: groupedRenderContract.supersetCount ?? 0,
+        circuit: groupedRenderContract.circuitCount ?? 0,
+        density: groupedRenderContract.densityCount ?? 0,
+        cluster: groupedRenderContract.clusterCount ?? 0,
+      }
+      // Only use render contract if it actually has counts
+      if (renderContractTally.superset > 0 || renderContractTally.circuit > 0 || 
+          renderContractTally.density > 0 || renderContractTally.cluster > 0) {
+        return renderContractTally
+      }
+    }
+    
     if (integrityForcesFlat) {
       // Cluster is row-level execution; preserve only that count. Grouped
       // method claims are dropped because the final executable structure

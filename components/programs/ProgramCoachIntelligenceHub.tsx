@@ -448,6 +448,181 @@ function extractRequestedMethodDecisions(
 }
 
 // =============================================================================
+// [MASTER-8A.1.1] CANONICAL METHOD PLANNER SUMMARY
+// =============================================================================
+// This creates ONE shared source of truth for all Method Planner visible counts.
+// The tile, banner, and grouped rows must all consume this same summary.
+
+type PlannerSummaryBadgeVariant = 'warning' | 'success' | 'secondary' | 'info'
+
+interface CanonicalMethodPlannerSummary {
+  // Unique canonical method keys by category
+  appliedOverrideMethodKeys: string[]
+  nativeMaterializedMethodKeys: string[]
+  activePreviewOnlyMethodKeys: string[]
+  reviewMethodKeys: string[]
+  notRequestedMethodKeys: string[]
+  visibleMethodKeys: string[]
+
+  // Counts derived from the above key arrays
+  appliedOverrideCount: number
+  nativeMaterializedCount: number
+  activePreviewOnlyCount: number
+  reviewCount: number
+  visibleMethodCount: number
+
+  // Tile display fields
+  tileSummary: string
+  tileBadge?: string
+  tileBadgeVariant: PlannerSummaryBadgeVariant
+
+  // Banner display fields
+  bannerHeadline: string | null
+  bannerTone: 'applied' | 'preview' | 'review' | 'none'
+  bannerBody: string | null
+
+  // Compact proof line for visible parity verification
+  proofLine: string
+}
+
+/**
+ * [MASTER-8A.1.1] Builds the canonical planner summary from all truth sources.
+ * This is the ONLY source for Method Planner visible counts.
+ */
+function buildCanonicalMethodPlannerSummary(
+  program: AdaptiveProgram | null | undefined,
+  methodItems: RequestedMethodDisplayItem[],
+  previews: MethodOverridePreview[]
+): CanonicalMethodPlannerSummary {
+  // Collect artifacts to identify user-applied overrides
+  const artifacts = program ? collectMethodOverrideArtifacts(program) : []
+  
+  // Build set of user-applied override canonical keys
+  const userAppliedOverrideKeySet = new Set<string>()
+  for (const artifact of artifacts) {
+    if (artifact.isUserAppliedOverride && artifact.isRenderable) {
+      userAppliedOverrideKeySet.add(artifact.canonicalKey)
+    }
+  }
+  
+  // Build set of preview canonical keys that are NOT already applied
+  const activePreviewOnlyKeySet = new Set<string>()
+  for (const preview of previews) {
+    const canonicalKey = normalizeOverrideMethodKey(preview.methodKey)
+    if (!userAppliedOverrideKeySet.has(canonicalKey)) {
+      activePreviewOnlyKeySet.add(canonicalKey)
+    }
+  }
+  
+  // Categorize method items
+  const nativeMaterializedKeySet = new Set<string>()
+  const reviewKeySet = new Set<string>()
+  const notRequestedKeySet = new Set<string>()
+  const visibleKeySet = new Set<string>()
+  
+  for (const item of methodItems) {
+    const canonicalKey = normalizeOverrideMethodKey(item.methodKey)
+    
+    if (item.state === 'not_requested') {
+      notRequestedKeySet.add(canonicalKey)
+      // not_requested items are still visible in the planner
+      visibleKeySet.add(canonicalKey)
+      continue
+    }
+    
+    visibleKeySet.add(canonicalKey)
+    
+    if (item.state === 'applied' || item.state === 'materialized') {
+      // Only count as native materialized if NOT in user-applied set
+      if (!userAppliedOverrideKeySet.has(canonicalKey)) {
+        nativeMaterializedKeySet.add(canonicalKey)
+      }
+    } else if (['blocked', 'deferred', 'suppressed', 'not_materialized', 'unknown'].includes(item.state)) {
+      reviewKeySet.add(canonicalKey)
+    }
+  }
+  
+  // Convert sets to arrays
+  const appliedOverrideMethodKeys = Array.from(userAppliedOverrideKeySet)
+  const nativeMaterializedMethodKeys = Array.from(nativeMaterializedKeySet)
+  const activePreviewOnlyMethodKeys = Array.from(activePreviewOnlyKeySet)
+  const reviewMethodKeys = Array.from(reviewKeySet)
+  const notRequestedMethodKeys = Array.from(notRequestedKeySet)
+  const visibleMethodKeys = Array.from(visibleKeySet)
+  
+  // Derive counts
+  const appliedOverrideCount = appliedOverrideMethodKeys.length
+  const nativeMaterializedCount = nativeMaterializedMethodKeys.length
+  const activePreviewOnlyCount = activePreviewOnlyMethodKeys.length
+  const reviewCount = reviewMethodKeys.length
+  const visibleMethodCount = visibleMethodKeys.length
+  
+  // Compute tile display (priority: preview > applied > review > native > view)
+  let tileSummary = 'View'
+  let tileBadge: string | undefined
+  let tileBadgeVariant: PlannerSummaryBadgeVariant = 'secondary'
+  
+  if (activePreviewOnlyCount > 0) {
+    tileSummary = 'Preview Active'
+    tileBadge = `${activePreviewOnlyCount}`
+    tileBadgeVariant = 'warning'
+  } else if (appliedOverrideCount > 0) {
+    // If both applied and review, show applied with count
+    tileSummary = reviewCount > 0 ? 'Applied' : 'Applied'
+    tileBadge = `${appliedOverrideCount}`
+    tileBadgeVariant = 'success'
+  } else if (reviewCount > 0) {
+    tileSummary = 'Review'
+    tileBadge = `${reviewCount}`
+    tileBadgeVariant = 'warning'
+  } else if (nativeMaterializedCount > 0) {
+    tileSummary = 'Included'
+    // No badge for native only
+  }
+  
+  // Compute banner display
+  let bannerHeadline: string | null = null
+  let bannerTone: 'applied' | 'preview' | 'review' | 'none' = 'none'
+  let bannerBody: string | null = null
+  
+  if (activePreviewOnlyCount > 0) {
+    bannerHeadline = `${activePreviewOnlyCount} Override Preview${activePreviewOnlyCount > 1 ? 's' : ''} Active`
+    bannerTone = 'preview'
+    bannerBody = appliedOverrideCount > 0 
+      ? `${appliedOverrideCount} method${appliedOverrideCount > 1 ? 's' : ''} already applied. Preview${activePreviewOnlyCount > 1 ? 's are' : ' is'} not yet saved.`
+      : `Preview${activePreviewOnlyCount > 1 ? 's are' : ' is'} not applied to your saved program.`
+  } else if (appliedOverrideCount > 0) {
+    bannerHeadline = `${appliedOverrideCount} Method Override${appliedOverrideCount > 1 ? 's' : ''} Applied`
+    bannerTone = 'applied'
+    bannerBody = reviewCount > 0 ? `${reviewCount} method${reviewCount > 1 ? 's' : ''} need review.` : null
+  }
+  
+  // Compact proof line for visible parity verification
+  const proofLine = `Planner truth: ${appliedOverrideCount} applied · ${reviewCount} review · ${activePreviewOnlyCount} preview`
+  
+  return {
+    appliedOverrideMethodKeys,
+    nativeMaterializedMethodKeys,
+    activePreviewOnlyMethodKeys,
+    reviewMethodKeys,
+    notRequestedMethodKeys,
+    visibleMethodKeys,
+    appliedOverrideCount,
+    nativeMaterializedCount,
+    activePreviewOnlyCount,
+    reviewCount,
+    visibleMethodCount,
+    tileSummary,
+    tileBadge,
+    tileBadgeVariant,
+    bannerHeadline,
+    bannerTone,
+    bannerBody,
+    proofLine,
+  }
+}
+
+// =============================================================================
 // PROPS
 // =============================================================================
 
@@ -2528,6 +2703,7 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
 
 function RequestedMethodsSheetContent({
   program,
+  plannerSummary,
   onApplyMethodOverride,
   onRevertMethodOverride,
   onResetAllMethodOverrides,
@@ -2538,6 +2714,7 @@ function RequestedMethodsSheetContent({
   onResetAllOverrides,
 }: {
   program: AdaptiveProgram
+  plannerSummary: CanonicalMethodPlannerSummary
   onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
   onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
@@ -2909,66 +3086,44 @@ function RequestedMethodsSheetContent({
           Normal users shouldn't see smoke-test markers. */}
     </div>
 
-    {/* [AB20.4.5.4] Active Previews Banner - only count truly unapplied previews */}
-    {(() => {
-      // [AB20.4.5.4] Derive actual active preview count by excluding methods that have verified artifacts
-      const artifacts = collectMethodOverrideArtifacts(program)
-      const activePreviewsOnly = previews.filter(p => {
-        const canonicalKey = normalizeOverrideMethodKey(p.methodKey)
-        const hasAppliedArtifact = artifacts.some(a => 
-          a.canonicalKey === canonicalKey && a.isRenderable && a.isUserAppliedOverride
-        )
-        return !hasAppliedArtifact // Only count if NOT already applied
-      })
-      
-      // [MASTER-8A.1] FIX: Count unique canonical method keys, NOT raw artifact count
-      // One method can have multiple render artifacts (e.g., supersets on 3 sessions = 3 artifacts, but 1 method)
-      const userAppliedOverrideMethodKeys = new Set<string>()
-      for (const artifact of artifacts) {
-        if (artifact.isUserAppliedOverride && artifact.isRenderable) {
-          userAppliedOverrideMethodKeys.add(artifact.canonicalKey)
-        }
-      }
-      const appliedOverrideCount = userAppliedOverrideMethodKeys.size
-      
-      if (activePreviewsOnly.length > 0) {
-        return (
-          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-            <div className="flex items-center gap-2 mb-2">
-              <Eye className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-medium text-amber-400">
-                {activePreviewsOnly.length} Override Preview{activePreviewsOnly.length > 1 ? 's' : ''} Active
-                {appliedOverrideCount > 0 && (
-                  <span className="text-emerald-400 ml-2">
-                    · {appliedOverrideCount} Applied
-                  </span>
-                )}
-              </span>
-            </div>
-            <p className="text-[10px] text-[#8A8A9A]">
-              Preview{activePreviewsOnly.length > 1 ? 's are' : ' is'} not applied to your saved program. 
-              Tap a method to view or clear the preview.
-            </p>
-          </div>
-        )
-      } else if (appliedOverrideCount > 0) {
-        // All previews have been applied - show applied-only banner
-        return (
-          <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400">
-                {appliedOverrideCount} Method Override{appliedOverrideCount > 1 ? 's' : ''} Applied
-              </span>
-            </div>
-            <p className="text-[10px] text-[#8A8A9A]">
-              These overrides are saved into your program and have render artifacts.
-            </p>
-          </div>
-        )
-      }
-      return null
-    })()}
+    {/* [MASTER-8A.1.1] Proof line for visible parity verification */}
+    <div className="text-[10px] text-[#6A6A7A] px-1 py-0.5 bg-[#0A0A0F] rounded border border-[#1A1A22]">
+      {plannerSummary.proofLine}
+    </div>
+
+    {/* [MASTER-8A.1.1] Unified Banner - uses canonical plannerSummary, NOT local IIFE counts */}
+    {plannerSummary.bannerHeadline && (
+      <div className={cn(
+        'p-3 rounded-lg',
+        plannerSummary.bannerTone === 'preview' 
+          ? 'bg-amber-500/5 border border-amber-500/20'
+          : plannerSummary.bannerTone === 'applied'
+          ? 'bg-emerald-500/5 border border-emerald-500/20'
+          : 'bg-blue-500/5 border border-blue-500/20'
+      )}>
+        <div className="flex items-center gap-2 mb-2">
+          {plannerSummary.bannerTone === 'preview' ? (
+            <Eye className="w-4 h-4 text-amber-400" />
+          ) : plannerSummary.bannerTone === 'applied' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-blue-400" />
+          )}
+          <span className={cn(
+            'text-xs font-medium',
+            plannerSummary.bannerTone === 'preview' ? 'text-amber-400' :
+            plannerSummary.bannerTone === 'applied' ? 'text-emerald-400' : 'text-blue-400'
+          )}>
+            {plannerSummary.bannerHeadline}
+          </span>
+        </div>
+        {plannerSummary.bannerBody && (
+          <p className="text-[10px] text-[#8A8A9A]">
+            {plannerSummary.bannerBody}
+          </p>
+        )}
+      </div>
+    )}
 
       {/* [AB20.4.2] Reset All Overrides Section */}
       {onResetAllMethodOverrides && (
@@ -3189,21 +3344,16 @@ export function ProgramCoachIntelligenceHub({
     : `${selectedSkillRepresentations.length} selected`
 
   const methodItems = extractRequestedMethodDecisions(program)
-  // [P2B] Broaden badge count to include useful planner rows
-  const attentionMethodCount = methodItems.filter(
-    m => ['blocked', 'deferred', 'suppressed', 'not_materialized', 'unknown'].includes(m.state)
-  ).length
-  const appliedMethodCount = methodItems.filter(
-    m => ['applied', 'materialized'].includes(m.state)
-  ).length
-  const reviewableMethodCount = methodItems.filter(m => m.state !== 'not_requested').length
   
   // [P2B] Check for active previews
   const [activePreviews, setActivePreviews] = useState<MethodOverridePreview[]>([])
   useEffect(() => {
     setActivePreviews(getMethodOverridePreviews())
   }, [requestedMethodsOpen])
-  const hasActivePreviews = activePreviews.length > 0
+  
+  // [MASTER-8A.1.1] Build ONE canonical planner summary for all visible counts
+  // This replaces the scattered attentionMethodCount, appliedMethodCount, hasActivePreviews logic
+  const plannerSummary = buildCanonicalMethodPlannerSummary(program, methodItems, activePreviews)
   
   // [AB20.4.3] Reload context state
   const [isReloadingPlanner, setIsReloadingPlanner] = useState(false)
@@ -3309,23 +3459,12 @@ export function ProgramCoachIntelligenceHub({
     }
   }
   
-  // Compute button summary for Method Planner
-  let methodPlannerSummary = 'Preview'
-  let methodPlannerBadge: string | undefined
-  let methodPlannerBadgeVariant: 'warning' | 'success' | 'secondary' = 'secondary'
+  // [MASTER-8A.1.1] Use canonical planner summary for tile display
+  // This replaces the old scattered if/else logic
+  const methodPlannerSummary = plannerSummary.tileSummary
+  const methodPlannerBadge = plannerSummary.tileBadge
+  const methodPlannerBadgeVariant = plannerSummary.tileBadgeVariant
   
-  if (hasActivePreviews) {
-    methodPlannerSummary = 'Preview Active'
-    methodPlannerBadge = `${activePreviews.length}`
-    methodPlannerBadgeVariant = 'success'
-  } else if (attentionMethodCount > 0) {
-    methodPlannerSummary = 'Review'
-    methodPlannerBadge = `${attentionMethodCount}`
-    methodPlannerBadgeVariant = 'warning'
-  } else if (appliedMethodCount > 0) {
-    methodPlannerSummary = 'Included'
-  }
-
   // [P2F-3] Fixed: check that bundle exists AND primary is not null/undefined
   const hasCoachRecs = Boolean(coachRecommendationBundle?.primary)
 
@@ -3708,17 +3847,18 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-            <RequestedMethodsSheetContent 
-              program={program} 
-              onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
-              onRevertMethodOverride={onRevertMethodOverride}
-              onResetAllMethodOverrides={onResetAllMethodOverrides}
-              showResetAllConfirmation={showResetAllConfirmation}
-              setShowResetAllConfirmation={setShowResetAllConfirmation}
-              isResettingAllOverrides={isResettingAllOverrides}
-              resetAllResult={resetAllResult}
-              onResetAllOverrides={handleResetAllOverrides}
-            />
+<RequestedMethodsSheetContent
+                  program={program}
+                  plannerSummary={plannerSummary}
+                  onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
+                  onRevertMethodOverride={onRevertMethodOverride}
+                  onResetAllMethodOverrides={onResetAllMethodOverrides}
+                  showResetAllConfirmation={showResetAllConfirmation}
+                  setShowResetAllConfirmation={setShowResetAllConfirmation}
+                  isResettingAllOverrides={isResettingAllOverrides}
+                  resetAllResult={resetAllResult}
+                  onResetAllOverrides={handleResetAllOverrides}
+                />
           </div>
         </SheetContent>
       </Sheet>

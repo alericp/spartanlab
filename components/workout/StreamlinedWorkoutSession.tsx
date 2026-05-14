@@ -11646,8 +11646,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     </div>
   </div>
   )}
-        {/* [AB20.4.5.4.5] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
-        {ab20RuntimeProof && (
+        {/* [AB20.4.5.4.6] RUNTIME PROOF STRIP - Development only */}
+        {process.env.NODE_ENV === 'development' && ab20RuntimeProof && (
           <div
             className="mx-3 mt-2 mb-1 rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-1.5"
             role="status"
@@ -11667,28 +11667,42 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             )}
           </div>
         )}
+        {/* [AB20.4.5.4.6] Method-specific guidance cards instead of generic GROUPED METHOD banner */}
         {showGuidanceBanner && (
           <div
-            className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"
+            className={`mx-3 mt-3 mb-2 rounded-md border px-3 py-2 ${
+              guidanceBannerReason === 'DENSITY_TIME_CAP_MISSING' || guidanceBannerReason === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET'
+                ? 'border-teal-500/30 bg-teal-500/10'
+                : 'border-amber-500/30 bg-amber-500/10'
+            }`}
             role="status"
             aria-live="polite"
           >
-            <span className="mt-0.5 text-[#D4A045] text-xs font-semibold tracking-wide">
-              GROUPED METHOD
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#E6E9EF] leading-relaxed">
-                Grouped method preserved as guidance only.{' '}
-                {liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
-                  ? 'Some grouped blocks will run interactively; others are guidance.'
-                  : 'You will execute the rows in order with normal logging.'}
-              </p>
-              {process.env.NODE_ENV === 'development' && (
-                <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
-                  reason: {guidanceBannerReason} · verdict:{' '}
-                  {liveGroupedExecutionResult.parityVerdict}
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 text-xs font-semibold tracking-wide ${
+                guidanceBannerReason === 'DENSITY_TIME_CAP_MISSING' || guidanceBannerReason === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET'
+                  ? 'text-teal-300'
+                  : 'text-amber-300'
+              }`}>
+                {guidanceBannerReason === 'DENSITY_TIME_CAP_MISSING' || guidanceBannerReason === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET'
+                  ? 'DENSITY'
+                  : 'METHOD GUIDANCE'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#E6E9EF] leading-relaxed">
+                  {guidanceBannerReason === 'DENSITY_TIME_CAP_MISSING' || guidanceBannerReason === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET'
+                    ? 'Work for quality reps at your own pace. This conditioning block is tracked as guidance for now.'
+                    : liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
+                      ? 'Some exercises run as grouped blocks; others as standard sets.'
+                      : 'Log each exercise in order with normal set tracking.'}
                 </p>
-              )}
+                {process.env.NODE_ENV === 'development' && (
+                  <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
+                    reason: {guidanceBannerReason} · verdict:{' '}
+                    {liveGroupedExecutionResult.parityVerdict}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}

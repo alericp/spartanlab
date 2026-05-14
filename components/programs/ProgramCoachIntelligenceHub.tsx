@@ -592,13 +592,17 @@ function buildCanonicalMethodPlannerSummary(
       ? `${appliedOverrideCount} method${appliedOverrideCount > 1 ? 's' : ''} already applied. Preview${activePreviewOnlyCount > 1 ? 's are' : ' is'} not yet saved.`
       : `Preview${activePreviewOnlyCount > 1 ? 's are' : ' is'} not applied to your saved program.`
   } else if (appliedOverrideCount > 0) {
-    bannerHeadline = `${appliedOverrideCount} Method Override${appliedOverrideCount > 1 ? 's' : ''} Applied`
+    bannerHeadline = `${appliedOverrideCount} Method Planner Addition${appliedOverrideCount > 1 ? 's' : ''} Saved`
     bannerTone = 'applied'
-    bannerBody = reviewCount > 0 ? `${reviewCount} method${reviewCount > 1 ? 's' : ''} need review.` : null
+    const notAppliedCount = visibleMethodCount - appliedOverrideCount - nativeMaterializedCount
+    bannerBody = notAppliedCount > 0 
+      ? `${notAppliedCount} other method${notAppliedCount > 1 ? 's' : ''} available to review.` 
+      : 'All requested methods are applied.'
   }
   
-  // Compact proof line for visible parity verification
-  const proofLine = `Planner truth: ${appliedOverrideCount} applied · ${reviewCount} review · ${activePreviewOnlyCount} preview`
+  // Compact proof line for visible parity verification - use clearer terms
+  const notAppliedCount = visibleMethodCount - appliedOverrideCount - nativeMaterializedCount
+  const proofLine = `Planner truth: ${appliedOverrideCount} saved · ${activePreviewOnlyCount} preview · ${notAppliedCount > 0 ? notAppliedCount + ' not applied' : 'all applied'}`
   
   return {
     appliedOverrideMethodKeys,
@@ -620,6 +624,143 @@ function buildCanonicalMethodPlannerSummary(
     bannerBody,
     proofLine,
   }
+}
+
+// =============================================================================
+// [MASTER-8A.2] CANONICAL METHOD PLANNER ROWS
+// =============================================================================
+// This promotes rows to "Applied" when artifact truth confirms they are applied,
+// regardless of stale source state (blocked/not_materialized/etc).
+
+type MethodPlannerRowStatus = 'applied' | 'recommended' | 'caution' | 'high_risk' | 'not_available'
+
+interface CanonicalMethodPlannerRow {
+  methodKey: string
+  label: string
+  status: MethodPlannerRowStatus
+  sourceState: RequestedMethodState
+  isAppliedByArtifact: boolean
+  reason: string
+  actionHint: string
+  hasPreview: boolean
+  sortRank: number
+}
+
+/**
+ * [MASTER-8A.2] Builds canonical rows that reflect artifact truth.
+ * If an artifact proves a method is applied/renderable, the row status MUST be 'applied'
+ * regardless of stale source state.
+ */
+function buildCanonicalMethodPlannerRows(args: {
+  program: AdaptiveProgram | null | undefined
+  methodItems: RequestedMethodDisplayItem[]
+  plannerSummary: CanonicalMethodPlannerSummary
+  previews: MethodOverridePreview[]
+}): CanonicalMethodPlannerRow[] {
+  const { program, methodItems, plannerSummary, previews } = args
+  
+  const appliedOverrideSet = new Set(plannerSummary.appliedOverrideMethodKeys)
+  const previewSet = new Set(plannerSummary.activePreviewOnlyMethodKeys)
+  const rows: CanonicalMethodPlannerRow[] = []
+  const seenKeys = new Set<string>()
+  
+  // Process all methodItems first
+  for (const item of methodItems) {
+    const canonicalKey = normalizeOverrideMethodKey(item.methodKey)
+    if (seenKeys.has(canonicalKey)) continue
+    seenKeys.add(canonicalKey)
+    
+    const hasPreview = previewSet.has(canonicalKey)
+    const isAppliedByArtifact = appliedOverrideSet.has(canonicalKey)
+    
+    // Determine status - artifact truth overrides stale source state
+    let status: MethodPlannerRowStatus
+    let reason: string
+    let actionHint: string
+    let sortRank: number
+    
+    if (isAppliedByArtifact) {
+      // Artifact truth says applied - this is the fix!
+      status = 'applied'
+      reason = 'Saved in your program via Method Planner'
+      actionHint = 'Already in program'
+      sortRank = 0
+    } else if (item.state === 'applied' || item.state === 'materialized') {
+      // Native/original AI method (not user-applied override)
+      status = 'applied'
+      reason = 'Included in original program design'
+      actionHint = 'Native method'
+      sortRank = 1
+    } else if (item.state === 'not_requested') {
+      status = 'not_available'
+      reason = 'Not requested in your skill profile'
+      actionHint = 'Update profile to enable'
+      sortRank = 400
+    } else if (item.state === 'blocked') {
+      status = 'high_risk'
+      reason = item.reason || 'Currently blocked by program constraints'
+      actionHint = 'Tap to see why'
+      sortRank = 300
+    } else if (hasPreview) {
+      // Has preview - classify as recommended/caution based on preview
+      status = 'recommended'
+      reason = 'Preview available'
+      actionHint = 'Tap to review and apply'
+      sortRank = 100
+    } else if (item.state === 'not_materialized' || item.state === 'deferred' || item.state === 'suppressed') {
+      status = 'caution'
+      reason = item.reason || 'May be available with tradeoffs'
+      actionHint = 'Tap to review tradeoffs'
+      sortRank = 200
+    } else {
+      // Unknown state
+      status = 'caution'
+      reason = 'Status unclear'
+      actionHint = 'Tap for details'
+      sortRank = 250
+    }
+    
+    rows.push({
+      methodKey: canonicalKey,
+      label: item.label,
+      status,
+      sourceState: item.state,
+      isAppliedByArtifact,
+      reason,
+      actionHint,
+      hasPreview,
+      sortRank,
+    })
+  }
+  
+  // Add any artifact-only applied keys that weren't in methodItems
+  // This ensures Applied count matches row count
+  for (const key of plannerSummary.appliedOverrideMethodKeys) {
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+      // Get label from capability if available
+      const capability = getMethodOverrideCapability(key)
+      rows.push({
+        methodKey: key,
+        label: capability?.displayLabel || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        status: 'applied',
+        sourceState: 'applied',
+        isAppliedByArtifact: true,
+        reason: 'Confirmed by saved-program method artifact',
+        actionHint: 'Already in program',
+        hasPreview: false,
+        sortRank: 0,
+      })
+    }
+  }
+  
+  // Sort: applied first, then by sortRank, then alphabetically
+  rows.sort((a, b) => {
+    if (a.sortRank !== b.sortRank) return a.sortRank - b.sortRank
+    return a.label.localeCompare(b.label)
+  })
+  
+  return rows
 }
 
 // =============================================================================
@@ -2744,14 +2885,22 @@ function RequestedMethodsSheetContent({
     setPreviews(getMethodOverridePreviews())
   }, [])
 
-  // Group by state
-  const applied = methodItems.filter(m => m.state === 'applied' || m.state === 'materialized')
-  const blocked = methodItems.filter(m => m.state === 'blocked')
-  const deferred = methodItems.filter(m => m.state === 'deferred')
-  const suppressed = methodItems.filter(m => m.state === 'suppressed')
-  const notMaterialized = methodItems.filter(m => m.state === 'not_materialized')
-  const notRequested = methodItems.filter(m => m.state === 'not_requested')
-  const unknown = methodItems.filter(m => m.state === 'unknown')
+  // [MASTER-8A.2] Build canonical rows from artifact truth - replaces stale grouped sections
+  const canonicalRows = buildCanonicalMethodPlannerRows({
+    program,
+    methodItems,
+    plannerSummary,
+    previews,
+  })
+  
+  // [MASTER-8A.2] Info bubble state for explaining "Applied" count
+  const [showAppliedInfo, setShowAppliedInfo] = useState(false)
+  useEffect(() => {
+    if (showAppliedInfo) {
+      const timer = setTimeout(() => setShowAppliedInfo(false), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [showAppliedInfo])
 
   const handleItemClick = (item: RequestedMethodDisplayItem) => {
     setSelectedItem(item)
@@ -2914,83 +3063,174 @@ function RequestedMethodsSheetContent({
     const canonicalKey = normalizeOverrideMethodKey(methodKey)
     return previews.find(p => normalizeOverrideMethodKey(p.methodKey) === canonicalKey) || null
   }
-
-  const renderGroup = (items: RequestedMethodDisplayItem[], title: string) => {
-    if (items.length === 0) return null
+  
+  // [MASTER-8A.2] Handle row click - find the matching methodItem for detail view
+  const handleCanonicalRowClick = (row: CanonicalMethodPlannerRow) => {
+    // Find matching methodItem (or create a minimal one for artifact-only rows)
+    const existingItem = methodItems.find(
+      m => normalizeOverrideMethodKey(m.methodKey) === row.methodKey
+    )
+    
+    if (existingItem) {
+      setSelectedItem(existingItem)
+      const plan = planMethodOverride({ methodItem: existingItem, program })
+      setCurrentPlan(plan)
+    } else {
+      // Artifact-only row - create minimal item for detail view
+      const minimalItem: RequestedMethodDisplayItem = {
+        methodKey: row.methodKey,
+        label: row.label,
+        state: 'applied',
+        source: 'artifact',
+        reason: row.reason,
+        confidence: 'high',
+        canOverrideNow: false,
+      }
+      setSelectedItem(minimalItem)
+      const plan = planMethodOverride({ methodItem: minimalItem, program })
+      setCurrentPlan(plan)
+    }
+  }
+  
+  // [MASTER-8A.2] Status chip colors and labels
+  const STATUS_CHIP_STYLES: Record<MethodPlannerRowStatus, { bg: string; text: string; border: string; label: string }> = {
+    applied: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30', label: 'Applied' },
+    recommended: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30', label: 'Recommended' },
+    caution: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30', label: 'Caution' },
+    high_risk: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30', label: 'High Risk' },
+    not_available: { bg: 'bg-[#2A2A35]', text: 'text-[#6A6A7A]', border: 'border-[#3A3A4A]', label: 'Not Available' },
+  }
+  
+  // [MASTER-8A.2] Render canonical method list - replaces old renderGroup sections
+  const renderCanonicalMethodList = () => {
+    if (canonicalRows.length === 0) return null
+    
+    const appliedRows = canonicalRows.filter(r => r.status === 'applied')
+    const otherRows = canonicalRows.filter(r => r.status !== 'applied')
+    
     return (
-      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
-          {title} ({items.length})
-        </span>
-        <ul className="space-y-2">
-          {items.map((item) => {
-            const hasPreview = !!getCurrentPreview(item.methodKey)
-            const isApplied = item.state === 'applied' || item.state === 'materialized'
-            
-            // [P2B] Compute action hint based on state
-            let actionHint = 'Tap for override plan'
-            if (isApplied) {
-              actionHint = 'Already included'
-            } else if (hasPreview) {
-              actionHint = 'View preview'
-            } else if (item.confidence === 'low') {
-              actionHint = 'Needs more truth'
-            }
-            
-            return (
-                <li
-                key={item.methodKey}
-                className={cn(
-                  'flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-all',
-                  'hover:bg-[#2A2A35]/50 border border-transparent',
-                  // [AB20.4.5.3] Manual override previews use amber, not green
-                  hasPreview && 'border-amber-500/20 bg-amber-500/5',
-                )}
-                onClick={() => handleItemClick(item)}
+      <div className="space-y-3">
+        {/* Applied section */}
+        {appliedRows.length > 0 && (
+          <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A]">
+                Applied ({appliedRows.length})
+              </span>
+              <button
+                onClick={() => setShowAppliedInfo(true)}
+                className="p-0.5 rounded hover:bg-[#2A2A35] transition-colors"
+                aria-label="What does Applied mean?"
               >
-                <span className={cn(
-                  'px-2 py-0.5 text-[9px] font-medium rounded border shrink-0 mt-0.5',
-                  METHOD_STATE_COLORS[item.state],
-                )}>
-                  {METHOD_STATE_LABELS[item.state]}
+                <Info className="w-3 h-3 text-[#5A5A6A]" />
+              </button>
+              {showAppliedInfo && (
+                <span className="text-[9px] text-[#8A8A9A] bg-[#2A2A35] px-2 py-1 rounded animate-in fade-in duration-200">
+                  Applied = Method Planner additions saved to your program
                 </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-medium text-[#E6E9EF]">{item.label}</p>
-                    {/* [AB20.4.5.3] Manual override preview badge uses amber, not green */}
-                    {hasPreview && (
-                      <span className="px-1.5 py-0.5 text-[8px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        Preview
-                      </span>
-                    )}
-                    <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto shrink-0" />
-                  </div>
-                  <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5 line-clamp-2">
-                    {item.reason}
-                  </p>
-                  {/* [P2B] Action hint — makes rows obviously actionable */}
-                  {/* [AB20.4.5.3] Manual override applied/preview use amber, not green */}
-                  <p className={cn(
-                    'text-[9px] mt-1 flex items-center gap-1',
-                    isApplied ? 'text-amber-400/70' : hasPreview ? 'text-amber-400/70' : 'text-purple-400/70'
+              )}
+            </div>
+            <ul className="space-y-2">
+              {appliedRows.map((row) => (
+                <li
+                  key={row.methodKey}
+                  className="flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-all hover:bg-[#2A2A35]/50 border border-transparent"
+                  onClick={() => handleCanonicalRowClick(row)}
+                >
+                  <span className={cn(
+                    'px-2 py-0.5 text-[9px] font-medium rounded border shrink-0 mt-0.5',
+                    STATUS_CHIP_STYLES[row.status].bg,
+                    STATUS_CHIP_STYLES[row.status].text,
+                    STATUS_CHIP_STYLES[row.status].border,
                   )}>
-                    {isApplied ? (
+                    {STATUS_CHIP_STYLES[row.status].label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-medium text-[#E6E9EF]">{row.label}</p>
+                      {row.isAppliedByArtifact && (
+                        <span className="px-1.5 py-0.5 text-[8px] rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Saved
+                        </span>
+                      )}
+                      <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto shrink-0" />
+                    </div>
+                    <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5 line-clamp-2">
+                      {row.reason}
+                    </p>
+                    <p className="text-[9px] mt-1 flex items-center gap-1 text-emerald-400/70">
                       <CheckCircle2 className="w-2.5 h-2.5" />
-                    ) : (
-                      <ArrowRight className="w-2.5 h-2.5" />
+                      {row.actionHint}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {/* Other methods section */}
+        {otherRows.length > 0 && (
+          <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-[#6A6A7A] block mb-2">
+              Other Methods ({otherRows.length})
+            </span>
+            <ul className="space-y-2">
+              {otherRows.map((row) => {
+                const hasPreview = row.hasPreview
+                return (
+                  <li
+                    key={row.methodKey}
+                    className={cn(
+                      'flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-all',
+                      'hover:bg-[#2A2A35]/50 border border-transparent',
+                      hasPreview && 'border-amber-500/20 bg-amber-500/5',
                     )}
-                    {actionHint}
-                  </p>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                    onClick={() => handleCanonicalRowClick(row)}
+                  >
+                    <span className={cn(
+                      'px-2 py-0.5 text-[9px] font-medium rounded border shrink-0 mt-0.5',
+                      STATUS_CHIP_STYLES[row.status].bg,
+                      STATUS_CHIP_STYLES[row.status].text,
+                      STATUS_CHIP_STYLES[row.status].border,
+                    )}>
+                      {STATUS_CHIP_STYLES[row.status].label}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium text-[#E6E9EF]">{row.label}</p>
+                        {hasPreview && (
+                          <span className="px-1.5 py-0.5 text-[8px] rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Preview
+                          </span>
+                        )}
+                        <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto shrink-0" />
+                      </div>
+                      <p className="text-[10px] text-[#7A7A8A] leading-relaxed mt-0.5 line-clamp-2">
+                        {row.reason}
+                      </p>
+                      <p className={cn(
+                        'text-[9px] mt-1 flex items-center gap-1',
+                        row.status === 'recommended' ? 'text-blue-400/70' :
+                        row.status === 'caution' ? 'text-amber-400/70' :
+                        row.status === 'high_risk' ? 'text-red-400/70' : 'text-[#5A5A6A]'
+                      )}>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                        {row.actionHint}
+                      </p>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     )
   }
-
-  const hasAnyData = methodItems.length > 0
+  
+  // [MASTER-8A.2] Use canonical rows for data presence check
+  const hasAnyData = canonicalRows.length > 0
 
   // If an item is selected, show the detail view
   if (selectedItem && currentPlan) {
@@ -3291,13 +3531,8 @@ function RequestedMethodsSheetContent({
         </p>
       )}
 
-      {renderGroup(applied, 'Applied / Materialized')}
-      {renderGroup(blocked, 'Blocked')}
-      {renderGroup(deferred, 'Deferred')}
-      {renderGroup(suppressed, 'Suppressed')}
-      {renderGroup(notMaterialized, 'Not Materialized')}
-      {renderGroup(notRequested, 'Not Requested (Profile)')}
-      {renderGroup(unknown, 'Unknown Status')}
+      {/* [MASTER-8A.2] Use canonical method list instead of stale grouped sections */}
+      {renderCanonicalMethodList()}
     </div>
   )
 }

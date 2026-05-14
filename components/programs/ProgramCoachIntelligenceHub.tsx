@@ -54,6 +54,8 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Activity,
+  Shield,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -2031,8 +2033,41 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
   model: AdaptiveFoundationModel | null
   isCanonical: boolean
 } {
-  // Prefer program-stamped model
+  // Prefer program-stamped model, but enrich with safeguard intelligence if missing
   if (program.adaptiveFoundationModel) {
+    // If canonical model exists but lacks safeguardIntelligence, enrich it for display
+    if (!program.adaptiveFoundationModel.safeguardIntelligence) {
+      try {
+        const enrichedModel = buildAdaptiveFoundationModel({
+          experienceLevel: program.experienceLevel ?? null,
+          trainingStyle: program.trainingPathType ?? null,
+          trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
+          equipment: program.equipmentProfile?.available ?? null,
+          primaryGoal: program.primaryGoal ?? null,
+          selectedGoals: program.goalCategories ?? null,
+          selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
+          constraintInsight: program.constraintInsight ?? null,
+          authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
+          hasWorkoutHistory: false,
+          hasSkillLogs: false,
+          hasReadinessData: false,
+          // [MASTER-5/6] Pass sessions for safeguard analysis
+          programSessions: program.sessions ?? null,
+          jointCautions: null, // Future: wire from profile
+        })
+        // Return canonical model base with display-enriched safeguard
+        return {
+          model: {
+            ...program.adaptiveFoundationModel,
+            safeguardIntelligence: enrichedModel.safeguardIntelligence,
+          },
+          isCanonical: true,
+        }
+      } catch {
+        // Fallback to canonical without enrichment
+        return { model: program.adaptiveFoundationModel, isCanonical: true }
+      }
+    }
     return { model: program.adaptiveFoundationModel, isCanonical: true }
   }
   
@@ -2051,6 +2086,9 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
       hasWorkoutHistory: false,
       hasSkillLogs: false,
       hasReadinessData: false,
+      // [MASTER-5/6] Pass sessions for safeguard analysis
+      programSessions: program.sessions ?? null,
+      jointCautions: null, // Future: wire from profile
     })
     return { model, isCanonical: false }
   } catch {
@@ -2183,7 +2221,99 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
         </div>
       )}
       
-      {/* Constraint Signals */}
+      {/* [MASTER-5/6] Movement Stress Map */}
+      {model.safeguardIntelligence && model.safeguardIntelligence.movementFamilies.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+          <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-violet-400" />
+            Movement Stress Map
+          </h4>
+          <div className="space-y-2">
+            {model.safeguardIntelligence.movementFamilies.slice(0, 6).map((mf, i) => {
+              const stressColors: Record<string, string> = {
+                'high': 'text-red-400 bg-red-500/10 border-red-500/20',
+                'elevated': 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                'moderate': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+                'low': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                'unknown': 'text-[#7A7A8A] bg-[#2A2A35] border-[#3A3A45]',
+              }
+              const stressClass = stressColors[mf.estimatedStress] || stressColors['unknown']
+              
+              return (
+                <div key={i} className="flex flex-col gap-1 text-[10px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#B0B0C0] font-medium">{mf.label}</span>
+                    <span className={cn('px-1.5 py-0.5 rounded text-[9px] border', stressClass)}>
+                      {mf.estimatedStress}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[9px] text-[#6A6A7A]">
+                    <span>{mf.exposureCount} exercises</span>
+                    <span>·</span>
+                    <span>{mf.sessionCount} sessions</span>
+                    {mf.linkedSkills.length > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="text-violet-400/70">{mf.linkedSkills.slice(0, 2).join(', ')}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-[#5A5A6A]">{mf.whyItMatters}</p>
+                </div>
+              )
+            })}
+          </div>
+          {model.safeguardIntelligence.headline && (
+            <p className="mt-3 pt-2 border-t border-[#2A2A35] text-[10px] text-[#8A8A9A]">
+              {model.safeguardIntelligence.headline}
+            </p>
+          )}
+        </div>
+      )}
+      
+      {/* [MASTER-5/6] Tendon / Joint Safeguards */}
+      {model.safeguardIntelligence && model.safeguardIntelligence.tissueSignals.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+          <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-rose-400" />
+            Tendon / Joint Safeguards
+          </h4>
+          <div className="space-y-2">
+            {model.safeguardIntelligence.tissueSignals.slice(0, 5).map((ts, i) => {
+              const riskColors: Record<string, string> = {
+                'high': 'text-red-400',
+                'elevated': 'text-amber-400',
+                'moderate': 'text-blue-400',
+                'low': 'text-emerald-400',
+                'unknown': 'text-[#7A7A8A]',
+              }
+              const riskColor = riskColors[ts.riskLevel] || riskColors['unknown']
+              
+              const postureLabels: Record<string, string> = {
+                'monitor': 'Monitor',
+                'hold_steady': 'Hold steady',
+                'prep_first': 'Prep-first',
+                'reduce_next': 'Reduce next',
+                'needs_data': 'Needs data',
+              }
+              
+              return (
+                <div key={i} className="flex flex-col gap-1 text-[10px]">
+                  <div className="flex items-center justify-between">
+                    <span className={cn('font-medium', riskColor)}>{ts.label}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#2A2A35] text-[#8A8A9A]">
+                      {postureLabels[ts.suggestedPosture] || ts.suggestedPosture}
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-[#6A6A7A]">{ts.explanation}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Constraint Signals — improved to not look empty when safeguard signals exist */}
       <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
         <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
@@ -2205,6 +2335,11 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
               </div>
             ))}
           </div>
+        ) : model.safeguardIntelligence && model.safeguardIntelligence.tissueSignals.length > 0 ? (
+          <div className="text-[10px] text-[#6A6A7A] space-y-1">
+            <p>No formal constraint engine blocker detected.</p>
+            <p className="text-[#5A5A6A]">Safeguard monitoring is still active from movement/tissue exposure above.</p>
+          </div>
         ) : (
           <p className="text-[10px] text-[#6A6A7A]">
             No strong constraint signal detected yet.
@@ -2221,15 +2356,19 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
         <ul className="text-[10px] text-[#8A8A9A] space-y-1">
           <li className="flex items-start gap-1.5">
             <CheckCircle2 className="w-3 h-3 text-emerald-400 mt-0.5 flex-shrink-0" />
-            <span>Used as foundation visibility and monitoring.</span>
+            <span>Flags movement-family and tissue-stress patterns for coaching visibility.</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <span>Recommends {model.safeguardIntelligence?.currentPosture?.replace('_', '-') || 'monitor'} safeguard posture.</span>
           </li>
           <li className="flex items-start gap-1.5">
             <Info className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
-            <span>Does not automatically mutate this saved program yet.</span>
+            <span>Does not rewrite exercises or doses yet.</span>
           </li>
           <li className="flex items-start gap-1.5">
             <ArrowRight className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
-            <span>Future safeguard steps will use this to guide tissue stress, tendon exposure, and safer adaptation decisions.</span>
+            <span>Future adaptation gates can use this to guide safer progression.</span>
           </li>
         </ul>
       </div>
@@ -2245,8 +2384,10 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
             <li>• Log sets and RPE after workouts</li>
           )}
           <li>• Record discomfort or tension notes</li>
-          <li>• Complete calibration benchmarks</li>
-          <li>• Train consistently so trends become meaningful</li>
+          <li>• Exercise-level completion quality</li>
+          <li>• RPE and set drop-off trends</li>
+          <li>• Joint/tendon check-ins and warm-up feedback</li>
+          <li>• Train consistently so patterns become meaningful</li>
         </ul>
       </div>
       
@@ -3095,11 +3236,28 @@ export function ProgramCoachIntelligenceHub({
                                  model.sourceStatus.dataQuality === 'partial' ? 'Partial' : 'Building'
             const badgeVariant = model.sourceStatus.dataQuality === 'strong' || model.sourceStatus.dataQuality === 'usable' ? 'success' : 'info'
             
+            // [MASTER-5/6] Smarter summary from safeguard intelligence
+            let tileSummary = model.display.actionabilityLabel
+            const safeguard = model.safeguardIntelligence
+            if (safeguard) {
+              if (safeguard.currentPosture === 'prep_first') {
+                tileSummary = 'Prep-first watch'
+              } else if (safeguard.currentPosture === 'hold_steady') {
+                tileSummary = 'Tissue monitor'
+              } else if (safeguard.currentPosture === 'needs_data') {
+                tileSummary = 'Needs data'
+              } else if (safeguard.movementFamilies.some(mf => mf.family.includes('straight_arm'))) {
+                tileSummary = 'Straight-arm watch'
+              } else if (safeguard.tissueSignals.length > 0) {
+                tileSummary = 'Joint monitor'
+              }
+            }
+            
             return (
               <HubButton
                 icon={<Brain className="w-3.5 h-3.5 text-violet-400" />}
                 label="Adaptive Foundation"
-                summary={model.display.actionabilityLabel}
+                summary={tileSummary}
                 badge={qualityBadge}
                 badgeVariant={badgeVariant}
                 onClick={() => setAdaptiveFoundationOpen(true)}

@@ -57,6 +57,83 @@ export type SuggestedConstraintAction =
   | 'deload'
 
 // =============================================================================
+// [MASTER-5/6] MOVEMENT FAMILY + TISSUE STRESS + SAFEGUARD TYPES
+// =============================================================================
+// This is display-first safeguard intelligence. It is non-mutating and intended
+// for MASTER-5/6 visibility. Future adaptation gates may consume it, but this
+// step must not change program prescriptions.
+
+export type MovementFamilyKey =
+  | 'straight_arm_push'
+  | 'straight_arm_pull'
+  | 'bent_arm_push'
+  | 'bent_arm_pull'
+  | 'vertical_push'
+  | 'vertical_pull'
+  | 'horizontal_push'
+  | 'horizontal_pull'
+  | 'core_compression'
+  | 'core_bracing'
+  | 'explosive_pull'
+  | 'weighted_strength'
+  | 'rings_support'
+  | 'mobility_flexibility'
+  | 'lower_body_chain'
+  | 'unknown'
+
+export type TissueAreaKey =
+  | 'shoulders'
+  | 'elbows'
+  | 'wrists'
+  | 'biceps_tendon'
+  | 'forearms'
+  | 'lats'
+  | 'scapula'
+  | 'core'
+  | 'lower_back'
+  | 'hips'
+  | 'hamstrings'
+  | 'knees'
+  | 'ankles'
+  | 'unknown'
+
+export type SafeguardRiskLevel = 'low' | 'moderate' | 'elevated' | 'high' | 'unknown'
+
+export type SafeguardPosture = 'monitor' | 'hold_steady' | 'prep_first' | 'reduce_next' | 'needs_data'
+
+export interface AdaptiveMovementFamilyExposure {
+  family: MovementFamilyKey
+  label: string
+  exposureCount: number
+  sessionCount: number
+  estimatedStress: SafeguardRiskLevel
+  linkedSkills: string[]
+  whyItMatters: string
+}
+
+export interface AdaptiveTissueStressSignal {
+  area: TissueAreaKey
+  label: string
+  riskLevel: SafeguardRiskLevel
+  drivers: string[]
+  linkedMovementFamilies: MovementFamilyKey[]
+  suggestedPosture: SafeguardPosture
+  explanation: string
+}
+
+export interface AdaptiveSafeguardIntelligence {
+  overallRiskLevel: SafeguardRiskLevel
+  currentPosture: SafeguardPosture
+  headline: string
+  summary: string
+  movementFamilies: AdaptiveMovementFamilyExposure[]
+  tissueSignals: AdaptiveTissueStressSignal[]
+  safeguardNotes: string[]
+  dataGaps: string[]
+  mutationApplied: false // Always false — this is visibility-only
+}
+
+// =============================================================================
 // SOURCE STATUS — tracks what data was available for model building
 // =============================================================================
 
@@ -157,6 +234,8 @@ export interface AdaptiveFoundationModel {
   dominantLimiters: string[]
   allowedActions: AdaptiveAllowedActions
   display: AdaptiveFoundationDisplay
+  // [MASTER-5/6] Optional safeguard intelligence — movement-family / tissue-stress / tendon-joint visibility
+  safeguardIntelligence?: AdaptiveSafeguardIntelligence
 }
 
 // =============================================================================
@@ -203,11 +282,446 @@ export interface AdaptiveFoundationInput {
   hasWorkoutHistory?: boolean
   hasSkillLogs?: boolean
   hasReadinessData?: boolean
+
+  // [MASTER-5/6] Program session/exercise data for safeguard analysis
+  programSessions?: unknown[] | null
+  jointCautions?: string[] | null
 }
 
 // =============================================================================
 // PURE RESOLVER
 // =============================================================================
+
+// =============================================================================
+// [MASTER-5/6] SAFEGUARD INTELLIGENCE HELPERS
+// =============================================================================
+
+const MOVEMENT_FAMILY_LABELS: Record<MovementFamilyKey, string> = {
+  straight_arm_push: 'Straight-arm push',
+  straight_arm_pull: 'Straight-arm pull',
+  bent_arm_push: 'Bent-arm push',
+  bent_arm_pull: 'Bent-arm pull',
+  vertical_push: 'Vertical push',
+  vertical_pull: 'Vertical pull',
+  horizontal_push: 'Horizontal push',
+  horizontal_pull: 'Horizontal pull',
+  core_compression: 'Core compression',
+  core_bracing: 'Core bracing',
+  explosive_pull: 'Explosive pull',
+  weighted_strength: 'Weighted strength',
+  rings_support: 'Rings support',
+  mobility_flexibility: 'Mobility / flexibility',
+  lower_body_chain: 'Lower body',
+  unknown: 'Unknown',
+}
+
+const TISSUE_AREA_LABELS: Record<TissueAreaKey, string> = {
+  shoulders: 'Shoulders',
+  elbows: 'Elbows',
+  wrists: 'Wrists',
+  biceps_tendon: 'Biceps tendon',
+  forearms: 'Forearms',
+  lats: 'Lats',
+  scapula: 'Scapula',
+  core: 'Core',
+  lower_back: 'Lower back',
+  hips: 'Hips',
+  hamstrings: 'Hamstrings',
+  knees: 'Knees',
+  ankles: 'Ankles',
+  unknown: 'Unknown',
+}
+
+const MOVEMENT_FAMILY_TISSUE_MAP: Record<MovementFamilyKey, TissueAreaKey[]> = {
+  straight_arm_push: ['shoulders', 'wrists', 'elbows'],
+  straight_arm_pull: ['biceps_tendon', 'shoulders', 'lats'],
+  bent_arm_push: ['shoulders', 'elbows'],
+  bent_arm_pull: ['biceps_tendon', 'elbows', 'forearms'],
+  vertical_push: ['shoulders', 'wrists'],
+  vertical_pull: ['biceps_tendon', 'elbows', 'lats'],
+  horizontal_push: ['shoulders', 'elbows'],
+  horizontal_pull: ['biceps_tendon', 'elbows', 'lats'],
+  core_compression: ['hips', 'core'],
+  core_bracing: ['core', 'lower_back'],
+  explosive_pull: ['biceps_tendon', 'shoulders', 'elbows'],
+  weighted_strength: ['shoulders', 'elbows', 'lower_back'],
+  rings_support: ['shoulders', 'wrists', 'elbows'],
+  mobility_flexibility: ['hips', 'hamstrings', 'shoulders'],
+  lower_body_chain: ['knees', 'ankles', 'hips'],
+  unknown: [],
+}
+
+const SKILL_MOVEMENT_FAMILY_MAP: Record<string, MovementFamilyKey[]> = {
+  planche: ['straight_arm_push'],
+  'pseudo_planche': ['straight_arm_push'],
+  'planche_lean': ['straight_arm_push'],
+  'front_lever': ['straight_arm_pull'],
+  'back_lever': ['straight_arm_pull'],
+  'muscle_up': ['explosive_pull', 'vertical_pull'],
+  'bar_muscle_up': ['explosive_pull', 'vertical_pull'],
+  'ring_muscle_up': ['explosive_pull', 'rings_support'],
+  hspu: ['vertical_push'],
+  'handstand_push_up': ['vertical_push'],
+  'pike_push_up': ['vertical_push'],
+  'one_arm_pull_up': ['vertical_pull', 'weighted_strength'],
+  'one_arm_chin_up': ['vertical_pull', 'weighted_strength'],
+  'l_sit': ['core_compression'],
+  'v_sit': ['core_compression'],
+  'straddle_l': ['core_compression'],
+  'manna': ['core_compression', 'straight_arm_push'],
+  'iron_cross': ['straight_arm_push', 'rings_support'],
+  'maltese': ['straight_arm_push', 'rings_support'],
+  'pull_up': ['vertical_pull'],
+  'chin_up': ['vertical_pull'],
+  'dip': ['vertical_push'],
+  'ring_dip': ['vertical_push', 'rings_support'],
+  'push_up': ['horizontal_push'],
+  'row': ['horizontal_pull'],
+  'dragon_flag': ['core_bracing'],
+  'human_flag': ['straight_arm_push', 'core_bracing'],
+}
+
+const WHY_IT_MATTERS: Record<MovementFamilyKey, string> = {
+  straight_arm_push: 'High shoulder/wrist connective tissue demand; requires careful volume management.',
+  straight_arm_pull: 'High biceps tendon load; vulnerable to overuse if not managed.',
+  bent_arm_push: 'Standard push volume; generally safe with progressive loading.',
+  bent_arm_pull: 'Moderate biceps tendon exposure; manageable with balanced training.',
+  vertical_push: 'Overhead position loads shoulders; benefits from prep and mobility.',
+  vertical_pull: 'Moderate tendon demand; safer than straight-arm variants.',
+  horizontal_push: 'Moderate shoulder/chest load; generally well-tolerated.',
+  horizontal_pull: 'Moderate back load; supports balance with push movements.',
+  core_compression: 'High hip flexor demand; can fatigue quickly if over-trained.',
+  core_bracing: 'Lower back stabilization; important for heavier compound work.',
+  explosive_pull: 'High-force tendon loading; requires adequate prep and recovery.',
+  weighted_strength: 'Progressive overload pattern; connective tissue needs time to adapt.',
+  rings_support: 'Demands shoulder stability under instability; careful progression needed.',
+  mobility_flexibility: 'Generally restorative; supports tissue health when balanced.',
+  lower_body_chain: 'Supports overall athleticism; low direct skill transfer for upper-body skills.',
+  unknown: 'Movement pattern not classified.',
+}
+
+/** Safely read exercises from a session, handling different shapes */
+function readSessionExercises(session: unknown): unknown[] {
+  if (!session || typeof session !== 'object') return []
+  const s = session as Record<string, unknown>
+  if (Array.isArray(s.exercises)) return s.exercises
+  if (Array.isArray(s.mainExercises)) return s.mainExercises
+  if (Array.isArray(s.blocks)) {
+    // Flatten block exercises
+    const results: unknown[] = []
+    for (const block of s.blocks) {
+      if (block && typeof block === 'object') {
+        const b = block as Record<string, unknown>
+        if (Array.isArray(b.exercises)) results.push(...b.exercises)
+      }
+    }
+    return results
+  }
+  return []
+}
+
+/** Safely read exercise name */
+function readExerciseName(ex: unknown): string {
+  if (!ex || typeof ex !== 'object') return ''
+  const e = ex as Record<string, unknown>
+  if (typeof e.name === 'string') return e.name
+  if (e.exercise && typeof e.exercise === 'object') {
+    const nested = e.exercise as Record<string, unknown>
+    if (typeof nested.name === 'string') return nested.name
+  }
+  return ''
+}
+
+/** Safely read movement family from exercise */
+function readExerciseMovementFamily(ex: unknown): string {
+  if (!ex || typeof ex !== 'object') return ''
+  const e = ex as Record<string, unknown>
+  if (typeof e.movementFamily === 'string') return e.movementFamily
+  if (typeof e.movementPattern === 'string') return e.movementPattern
+  if (typeof e.category === 'string') return e.category
+  if (e.exercise && typeof e.exercise === 'object') {
+    const nested = e.exercise as Record<string, unknown>
+    if (typeof nested.movementFamily === 'string') return nested.movementFamily
+    if (typeof nested.movementPattern === 'string') return nested.movementPattern
+    if (typeof nested.category === 'string') return nested.category
+  }
+  return ''
+}
+
+/** Infer movement family from exercise name */
+function inferMovementFamilyFromName(name: string): MovementFamilyKey {
+  const n = name.toLowerCase()
+  
+  // Straight-arm patterns
+  if (n.includes('planche') || n.includes('lean') || n.includes('pseudo')) return 'straight_arm_push'
+  if (n.includes('front lever') || n.includes('back lever')) return 'straight_arm_pull'
+  if (n.includes('maltese') || n.includes('iron cross')) return 'straight_arm_push'
+  if (n.includes('human flag')) return 'straight_arm_push'
+  
+  // Explosive
+  if (n.includes('muscle up') || n.includes('muscle-up') || n.includes('high pull') || n.includes('explosive')) return 'explosive_pull'
+  
+  // Rings
+  if (n.includes('ring support') || n.includes('support hold') || n.includes('rings')) return 'rings_support'
+  
+  // Vertical push
+  if (n.includes('hspu') || n.includes('handstand push') || n.includes('pike push')) return 'vertical_push'
+  if (n.includes('dip')) return 'vertical_push'
+  
+  // Vertical pull
+  if (n.includes('pull up') || n.includes('pull-up') || n.includes('chin up') || n.includes('chin-up')) return 'vertical_pull'
+  if (n.includes('one arm pull') || n.includes('one-arm pull')) return 'vertical_pull'
+  
+  // Horizontal
+  if (n.includes('push up') || n.includes('push-up') || n.includes('pushup')) return 'horizontal_push'
+  if (n.includes('row')) return 'horizontal_pull'
+  
+  // Core
+  if (n.includes('l-sit') || n.includes('l sit') || n.includes('v-sit') || n.includes('v sit') || n.includes('manna') || n.includes('straddle')) return 'core_compression'
+  if (n.includes('dragon flag') || n.includes('hollow') || n.includes('arch')) return 'core_bracing'
+  if (n.includes('plank') || n.includes('dead bug')) return 'core_bracing'
+  
+  // Weighted
+  if (n.includes('weighted')) return 'weighted_strength'
+  
+  // Mobility
+  if (n.includes('stretch') || n.includes('pancake') || n.includes('split') || n.includes('mobility') || n.includes('flexibility')) return 'mobility_flexibility'
+  
+  // Lower body
+  if (n.includes('squat') || n.includes('lunge') || n.includes('calf') || n.includes('tibialis') || n.includes('pistol')) return 'lower_body_chain'
+  
+  return 'unknown'
+}
+
+/** Build safeguard intelligence from program sessions and skills */
+function buildSafeguardIntelligence(
+  input: AdaptiveFoundationInput,
+  skillStates: AdaptiveSkillState[]
+): AdaptiveSafeguardIntelligence {
+  const sessions = input.programSessions || []
+  const jointCautions = input.jointCautions || []
+  const selectedSkills = input.selectedSkills || []
+  
+  // Track movement family exposures
+  const familyExposures = new Map<MovementFamilyKey, { count: number; sessions: Set<number>; skills: Set<string> }>()
+  
+  // Add skill-implied families
+  for (const skill of selectedSkills) {
+    const normalizedSkill = skill.toLowerCase().replace(/[- ]/g, '_')
+    const families = SKILL_MOVEMENT_FAMILY_MAP[normalizedSkill] || []
+    for (const family of families) {
+      const existing = familyExposures.get(family) || { count: 0, sessions: new Set(), skills: new Set() }
+      existing.skills.add(skill)
+      familyExposures.set(family, existing)
+    }
+  }
+  
+  // Scan sessions for exercise families
+  sessions.forEach((session, sessionIndex) => {
+    const exercises = readSessionExercises(session)
+    for (const ex of exercises) {
+      const name = readExerciseName(ex)
+      const explicitFamily = readExerciseMovementFamily(ex)
+      let family: MovementFamilyKey = 'unknown'
+      
+      if (explicitFamily) {
+        // Try to map explicit value to our keys
+        const normalized = explicitFamily.toLowerCase().replace(/[- ]/g, '_') as MovementFamilyKey
+        if (normalized in MOVEMENT_FAMILY_LABELS) {
+          family = normalized
+        } else {
+          family = inferMovementFamilyFromName(name)
+        }
+      } else {
+        family = inferMovementFamilyFromName(name)
+      }
+      
+      if (family !== 'unknown') {
+        const existing = familyExposures.get(family) || { count: 0, sessions: new Set(), skills: new Set() }
+        existing.count++
+        existing.sessions.add(sessionIndex)
+        familyExposures.set(family, existing)
+      }
+    }
+  })
+  
+  // Convert to sorted array
+  const movementFamilies: AdaptiveMovementFamilyExposure[] = []
+  for (const [family, data] of familyExposures.entries()) {
+    // Calculate stress level
+    let estimatedStress: SafeguardRiskLevel = 'low'
+    const isHighRiskFamily = ['straight_arm_push', 'straight_arm_pull', 'explosive_pull', 'rings_support'].includes(family)
+    
+    if (isHighRiskFamily) {
+      if (data.sessions.size >= 4 || data.count >= 8) estimatedStress = 'high'
+      else if (data.sessions.size >= 3 || data.count >= 5) estimatedStress = 'elevated'
+      else if (data.sessions.size >= 2 || data.count >= 3) estimatedStress = 'moderate'
+    } else {
+      if (data.sessions.size >= 5 || data.count >= 10) estimatedStress = 'elevated'
+      else if (data.sessions.size >= 3 || data.count >= 6) estimatedStress = 'moderate'
+    }
+    
+    movementFamilies.push({
+      family,
+      label: MOVEMENT_FAMILY_LABELS[family],
+      exposureCount: data.count,
+      sessionCount: data.sessions.size,
+      estimatedStress,
+      linkedSkills: Array.from(data.skills),
+      whyItMatters: WHY_IT_MATTERS[family],
+    })
+  }
+  
+  // Sort by stress level and exposure
+  const stressOrder: Record<SafeguardRiskLevel, number> = { high: 0, elevated: 1, moderate: 2, low: 3, unknown: 4 }
+  movementFamilies.sort((a, b) => {
+    const stressDiff = stressOrder[a.estimatedStress] - stressOrder[b.estimatedStress]
+    if (stressDiff !== 0) return stressDiff
+    return b.exposureCount - a.exposureCount
+  })
+  
+  // Build tissue signals from movement families
+  const tissueStressMap = new Map<TissueAreaKey, { 
+    riskLevel: SafeguardRiskLevel
+    drivers: string[]
+    families: Set<MovementFamilyKey>
+  }>()
+  
+  for (const mf of movementFamilies) {
+    const tissues = MOVEMENT_FAMILY_TISSUE_MAP[mf.family]
+    for (const tissue of tissues) {
+      const existing = tissueStressMap.get(tissue) || { riskLevel: 'low', drivers: [], families: new Set() }
+      
+      // Escalate risk level
+      if (stressOrder[mf.estimatedStress] < stressOrder[existing.riskLevel]) {
+        existing.riskLevel = mf.estimatedStress
+      }
+      
+      existing.drivers.push(mf.label)
+      existing.families.add(mf.family)
+      tissueStressMap.set(tissue, existing)
+    }
+  }
+  
+  // Check for joint cautions from profile
+  for (const caution of jointCautions) {
+    const normalizedCaution = caution.toLowerCase()
+    let tissueArea: TissueAreaKey | null = null
+    
+    if (normalizedCaution.includes('shoulder')) tissueArea = 'shoulders'
+    else if (normalizedCaution.includes('elbow')) tissueArea = 'elbows'
+    else if (normalizedCaution.includes('wrist')) tissueArea = 'wrists'
+    else if (normalizedCaution.includes('bicep') || normalizedCaution.includes('tendon')) tissueArea = 'biceps_tendon'
+    else if (normalizedCaution.includes('back') || normalizedCaution.includes('spine')) tissueArea = 'lower_back'
+    else if (normalizedCaution.includes('hip')) tissueArea = 'hips'
+    else if (normalizedCaution.includes('knee')) tissueArea = 'knees'
+    
+    if (tissueArea) {
+      const existing = tissueStressMap.get(tissueArea) || { riskLevel: 'low', drivers: [], families: new Set() }
+      existing.riskLevel = 'elevated' // Joint caution elevates concern
+      existing.drivers.push(`Profile caution: ${caution}`)
+      tissueStressMap.set(tissueArea, existing)
+    }
+  }
+  
+  // Convert tissue signals to array
+  const tissueSignals: AdaptiveTissueStressSignal[] = []
+  for (const [area, data] of tissueStressMap.entries()) {
+    if (data.riskLevel === 'low' && data.drivers.length <= 1) continue // Skip low-signal tissues
+    
+    let suggestedPosture: SafeguardPosture = 'monitor'
+    if (data.riskLevel === 'high') suggestedPosture = 'prep_first'
+    else if (data.riskLevel === 'elevated') suggestedPosture = 'hold_steady'
+    
+    const familiesArray = Array.from(data.families)
+    const explanation = data.riskLevel === 'high' || data.riskLevel === 'elevated'
+      ? `${TISSUE_AREA_LABELS[area]} under notable stress from ${data.drivers.slice(0, 3).join(', ')}. Safeguard posture: ${suggestedPosture.replace('_', '-')}.`
+      : `${TISSUE_AREA_LABELS[area]} receiving moderate exposure. Monitor for fatigue signals.`
+    
+    tissueSignals.push({
+      area,
+      label: TISSUE_AREA_LABELS[area],
+      riskLevel: data.riskLevel,
+      drivers: data.drivers,
+      linkedMovementFamilies: familiesArray,
+      suggestedPosture,
+      explanation,
+    })
+  }
+  
+  // Sort tissue signals by risk
+  tissueSignals.sort((a, b) => stressOrder[a.riskLevel] - stressOrder[b.riskLevel])
+  
+  // Determine overall posture
+  const hasHighRisk = movementFamilies.some(mf => mf.estimatedStress === 'high') || tissueSignals.some(ts => ts.riskLevel === 'high')
+  const hasElevatedRisk = movementFamilies.some(mf => mf.estimatedStress === 'elevated') || tissueSignals.some(ts => ts.riskLevel === 'elevated')
+  const hasAnySessions = sessions.length > 0
+  
+  let overallRiskLevel: SafeguardRiskLevel = 'low'
+  let currentPosture: SafeguardPosture = 'needs_data'
+  
+  if (!hasAnySessions && selectedSkills.length === 0) {
+    overallRiskLevel = 'unknown'
+    currentPosture = 'needs_data'
+  } else if (hasHighRisk) {
+    overallRiskLevel = 'high'
+    currentPosture = 'prep_first'
+  } else if (hasElevatedRisk) {
+    overallRiskLevel = 'elevated'
+    currentPosture = 'hold_steady'
+  } else if (movementFamilies.length > 0) {
+    overallRiskLevel = 'moderate'
+    currentPosture = 'monitor'
+  } else {
+    overallRiskLevel = 'low'
+    currentPosture = 'monitor'
+  }
+  
+  // Build headline and summary
+  const headline = currentPosture === 'needs_data'
+    ? 'Building safeguard baseline'
+    : currentPosture === 'prep_first'
+    ? 'Prep-first safeguard recommended'
+    : currentPosture === 'hold_steady'
+    ? 'Hold-steady monitoring active'
+    : 'Standard monitoring active'
+  
+  const highRiskFamilies = movementFamilies.filter(mf => mf.estimatedStress === 'high' || mf.estimatedStress === 'elevated')
+  const summary = highRiskFamilies.length > 0
+    ? `Monitoring ${highRiskFamilies.map(mf => mf.label.toLowerCase()).slice(0, 2).join(', ')} exposure for tissue safety.`
+    : sessions.length > 0
+    ? 'Movement stress patterns analyzed; no elevated concerns detected.'
+    : 'Awaiting session data for movement stress analysis.'
+  
+  // Build notes and gaps
+  const safeguardNotes: string[] = []
+  const dataGaps: string[] = []
+  
+  if (currentPosture === 'prep_first') {
+    safeguardNotes.push('Prep-first safeguard recommended for future adaptation; no automatic program changes applied yet.')
+  }
+  if (hasElevatedRisk || hasHighRisk) {
+    safeguardNotes.push('Consider adequate warm-up and prehab for high-stress movement patterns.')
+  }
+  safeguardNotes.push('This is visibility-only analysis; program structure is unchanged.')
+  
+  if (!input.hasWorkoutHistory) dataGaps.push('Logged workout performance')
+  if (!input.hasSkillLogs) dataGaps.push('Skill session evidence')
+  dataGaps.push('RPE and set completion quality')
+  dataGaps.push('Discomfort/tension notes')
+  
+  return {
+    overallRiskLevel,
+    currentPosture,
+    headline,
+    summary,
+    movementFamilies: movementFamilies.slice(0, 8), // Cap at 8 for display
+    tissueSignals: tissueSignals.slice(0, 6), // Cap at 6 for display
+    safeguardNotes,
+    dataGaps,
+    mutationApplied: false,
+  }
+}
 
 function resolveDataQuality(input: AdaptiveFoundationInput): DataQualityLevel {
   let score = 0
@@ -453,6 +967,9 @@ export function buildAdaptiveFoundationModel(
   // Display
   const display = resolveDisplay(sourceStatus, constraints, skillStates, allowedActions)
 
+  // [MASTER-5/6] Safeguard intelligence — movement family / tissue stress / tendon-joint visibility
+  const safeguardIntelligence = buildSafeguardIntelligence(input, skillStates)
+
   return {
     version: 'adaptive-foundation-v1',
     generatedAt: new Date().toISOString(),
@@ -463,6 +980,7 @@ export function buildAdaptiveFoundationModel(
     dominantLimiters,
     allowedActions,
     display,
+    safeguardIntelligence,
   }
 }
 

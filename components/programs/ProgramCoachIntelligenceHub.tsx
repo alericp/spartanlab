@@ -2019,6 +2019,247 @@ function MethodDetailModalContent({
   )
 }
 
+// =============================================================================
+// [MASTER-4.2] ADAPTIVE FOUNDATION SHEET CONTENT
+// =============================================================================
+
+/**
+ * Resolves the visible adaptive foundation model, using program-stamped model
+ * if available, otherwise deriving a display-only fallback from current program truth.
+ */
+function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
+  model: AdaptiveFoundationModel | null
+  isCanonical: boolean
+} {
+  // Prefer program-stamped model
+  if (program.adaptiveFoundationModel) {
+    return { model: program.adaptiveFoundationModel, isCanonical: true }
+  }
+  
+  // Derive display-only fallback
+  try {
+    const model = buildAdaptiveFoundationModel({
+      experienceLevel: program.experienceLevel ?? null,
+      trainingStyle: program.trainingPathType ?? null,
+      trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
+      equipment: program.equipmentProfile?.available ?? null,
+      primaryGoal: program.primaryGoal ?? null,
+      selectedGoals: program.goalCategories ?? null,
+      selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
+      constraintInsight: program.constraintInsight ?? null,
+      authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
+      hasWorkoutHistory: false,
+      hasSkillLogs: false,
+      hasReadinessData: false,
+    })
+    return { model, isCanonical: false }
+  } catch {
+    return { model: null, isCanonical: false }
+  }
+}
+
+function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram }) {
+  const { model, isCanonical } = resolveVisibleAdaptiveFoundation(program)
+  
+  if (!model) {
+    return (
+      <div className="p-4 text-center text-[#7A7A8A]">
+        <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">Unable to resolve adaptive foundation model.</p>
+        <p className="text-xs mt-1">This may happen if profile data is incomplete.</p>
+      </div>
+    )
+  }
+  
+  const { sourceStatus, display, skillStates, constraints, allowedActions } = model
+  
+  // Quality colors
+  const qualityColors: Record<string, string> = {
+    'insufficient': 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    'partial': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    'usable': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    'strong': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  }
+  
+  const qualityClass = qualityColors[sourceStatus.dataQuality] || qualityColors['partial']
+  
+  // Count skill expression types
+  const directCount = skillStates.filter(s => s.expressionStatus === 'direct_priority').length
+  const supportCount = skillStates.filter(s => s.expressionStatus === 'support').length
+  const carryoverCount = skillStates.filter(s => s.expressionStatus === 'carryover').length
+  const deferredCount = skillStates.filter(s => s.expressionStatus === 'deferred').length
+  
+  return (
+    <div className="space-y-4 pb-6">
+      {/* Foundation Status Header */}
+      <div className={cn('p-3 rounded-lg border', qualityClass)}>
+        <div className="flex items-center gap-2 mb-2">
+          <Brain className="w-5 h-5" />
+          <span className="font-medium">{display.confidenceLabel}</span>
+        </div>
+        <p className="text-sm opacity-80">{display.headline}</p>
+        <div className="mt-2 flex items-center gap-2 text-xs opacity-70">
+          <span className="px-2 py-0.5 rounded bg-black/20">
+            {isCanonical ? 'Program-stamped' : 'Derived from plan'}
+          </span>
+          <span>{display.actionabilityLabel}</span>
+        </div>
+      </div>
+      
+      {/* Evidence Quality Section */}
+      <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+        <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+          <ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />
+          Evidence Quality
+        </h4>
+        <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="flex items-center gap-1.5">
+            {sourceStatus.hasProfileTruth ? (
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <XCircle className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="text-[#8A8A9A]">Profile truth</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {sourceStatus.hasSelectedSkills ? (
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <XCircle className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="text-[#8A8A9A]">Selected skills</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {sourceStatus.hasWorkoutEvidence ? (
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <XCircle className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="text-[#8A8A9A]">Workout history</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {sourceStatus.hasReadinessEvidence ? (
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <XCircle className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="text-[#8A8A9A]">Readiness data</span>
+          </div>
+        </div>
+      </div>
+      
+      {/* Skill State Summary */}
+      {skillStates.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+          <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+            <Target className="w-3.5 h-3.5 text-[#E63946]" />
+            Skill State Summary
+          </h4>
+          <div className="flex flex-wrap gap-2 text-[10px]">
+            {directCount > 0 && (
+              <span className="px-2 py-1 rounded bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20">
+                {directCount} direct
+              </span>
+            )}
+            {supportCount > 0 && (
+              <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                {supportCount} support
+              </span>
+            )}
+            {carryoverCount > 0 && (
+              <span className="px-2 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                {carryoverCount} rotating
+              </span>
+            )}
+            {deferredCount > 0 && (
+              <span className="px-2 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                {deferredCount} deferred
+              </span>
+            )}
+          </div>
+          {display.skillSummary && (
+            <p className="mt-2 text-[10px] text-[#7A7A8A]">{display.skillSummary}</p>
+          )}
+        </div>
+      )}
+      
+      {/* Constraint Signals */}
+      <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+        <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+          Constraint Signals
+        </h4>
+        {constraints.length > 0 ? (
+          <div className="space-y-2">
+            {constraints.slice(0, 4).map((c, i) => (
+              <div key={i} className="flex items-start gap-2 text-[10px]">
+                <span className={cn(
+                  'px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide',
+                  c.severity === 'major' ? 'bg-red-500/10 text-red-400' :
+                  c.severity === 'moderate' ? 'bg-amber-500/10 text-amber-400' :
+                  'bg-[#2A2A35] text-[#8A8A9A]'
+                )}>
+                  {c.severity}
+                </span>
+                <span className="text-[#8A8A9A]">{c.label}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-[#6A6A7A]">
+            No strong constraint signal detected yet.
+          </p>
+        )}
+      </div>
+      
+      {/* Current Engine Posture */}
+      <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+        <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5 text-purple-400" />
+          What This Affects Now
+        </h4>
+        <ul className="text-[10px] text-[#8A8A9A] space-y-1">
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <span>Used as foundation visibility and monitoring.</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <Info className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
+            <span>Does not automatically mutate this saved program yet.</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <ArrowRight className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
+            <span>Future safeguard steps will use this to guide tissue stress, tendon exposure, and safer adaptation decisions.</span>
+          </li>
+        </ul>
+      </div>
+      
+      {/* What Improves It */}
+      <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+        <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          What Improves the Model
+        </h4>
+        <ul className="text-[10px] text-[#7A7A8A] space-y-1">
+          {!sourceStatus.hasWorkoutEvidence && (
+            <li>• Log sets and RPE after workouts</li>
+          )}
+          <li>• Record discomfort or tension notes</li>
+          <li>• Complete calibration benchmarks</li>
+          <li>• Train consistently so trends become meaningful</li>
+        </ul>
+      </div>
+      
+      {/* Foundation-only disclaimer */}
+      <div className="px-3 py-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
+        {isCanonical
+          ? 'Program-stamped foundation — no automatic program changes applied by this layer.'
+          : 'Derived from current plan — foundation only, no automatic program changes applied.'}
+      </div>
+    </div>
+  )
+}
+
 function RequestedMethodsSheetContent({
   program,
   onApplyMethodOverride,
@@ -2657,6 +2898,8 @@ export function ProgramCoachIntelligenceHub({
   const [coachRecsOpen, setCoachRecsOpen] = useState(false)
   const [requestedMethodsOpen, setRequestedMethodsOpen] = useState(false)
   const [planLogicOpen, setPlanLogicOpen] = useState(false)
+  // [MASTER-4.2] Adaptive Foundation sheet state
+  const [adaptiveFoundationOpen, setAdaptiveFoundationOpen] = useState(false)
   // [AB20.4.2] Reset-all state
   const [isResettingAllOverrides, setIsResettingAllOverrides] = useState(false)
   const [showResetAllConfirmation, setShowResetAllConfirmation] = useState(false)
@@ -2841,6 +3084,28 @@ export function ProgramCoachIntelligenceHub({
             label="Method Decisions"
             onClick={() => setMethodDecisionsOpen(true)}
           />
+
+          {/* [MASTER-4.2] Adaptive Foundation tile — first-class Coach Intelligence module */}
+          {(() => {
+            const { model } = resolveVisibleAdaptiveFoundation(program)
+            if (!model) return null
+            
+            const qualityBadge = model.sourceStatus.dataQuality === 'strong' ? 'Strong' :
+                                 model.sourceStatus.dataQuality === 'usable' ? 'Usable' :
+                                 model.sourceStatus.dataQuality === 'partial' ? 'Partial' : 'Building'
+            const badgeVariant = model.sourceStatus.dataQuality === 'strong' || model.sourceStatus.dataQuality === 'usable' ? 'success' : 'info'
+            
+            return (
+              <HubButton
+                icon={<Brain className="w-3.5 h-3.5 text-violet-400" />}
+                label="Adaptive Foundation"
+                summary={model.display.actionabilityLabel}
+                badge={qualityBadge}
+                badgeVariant={badgeVariant}
+                onClick={() => setAdaptiveFoundationOpen(true)}
+              />
+            )
+          })()}
 
           <HubButton
             icon={<ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />}
@@ -3029,7 +3294,10 @@ export function ProgramCoachIntelligenceHub({
           const iconColor = qualityColors[sourceStatus.dataQuality] || 'text-blue-400/70'
           
           return (
-            <div className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50">
+            <button
+              onClick={() => setAdaptiveFoundationOpen(true)}
+              className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50 w-full text-left hover:bg-[#1A1A22]/80 hover:border-[#3A3A45]/60 transition-colors cursor-pointer"
+            >
               <div className="flex items-center gap-2">
                 <Brain className={cn('w-3 h-3 flex-shrink-0', iconColor)} />
                 <span className="text-[9px] text-[#8A8A9A] leading-relaxed">
@@ -3037,6 +3305,7 @@ export function ProgramCoachIntelligenceHub({
                   <span className={iconColor}>{display.confidenceLabel.toLowerCase()}</span>
                   {displayText && <span className="text-[#7A7A8A]"> — {displayText}</span>}
                 </span>
+                <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto flex-shrink-0" />
               </div>
               {/* Foundation-only note — distinguish canonical vs derived */}
               <div className="mt-1 text-[8px] text-[#5A5A6A] pl-5">
@@ -3044,7 +3313,7 @@ export function ProgramCoachIntelligenceHub({
                   ? 'Program-stamped foundation — no automatic program changes applied by this layer.'
                   : 'Derived from current plan — foundation only, no automatic program changes applied.'}
               </div>
-            </div>
+            </button>
           )
         })()}
         
@@ -3091,6 +3360,24 @@ export function ProgramCoachIntelligenceHub({
           </SheetHeader>
           <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
             <WeeklyMethodDecisionAccordion program={program} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* [MASTER-4.2] Adaptive Foundation Sheet */}
+      <Sheet open={adaptiveFoundationOpen} onOpenChange={setAdaptiveFoundationOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
+          <SheetHeader>
+            <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <Brain className="w-4 h-4 text-violet-400" />
+              Adaptive Foundation
+            </SheetTitle>
+            <SheetDescription className="text-[#7A7A8A]">
+              Athlete model, skill states, and constraint detection
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+            <AdaptiveFoundationSheetContent program={program} />
           </div>
         </SheetContent>
       </Sheet>

@@ -3081,9 +3081,10 @@ function RequestedMethodsSheetContent({
         methodKey: row.methodKey,
         label: row.label,
         state: 'applied',
+        source: 'artifact',
         reason: row.reason,
         confidence: 'high',
-        sourceField: 'artifact',
+        canOverrideNow: false,
       }
       setSelectedItem(minimalItem)
       const plan = planMethodOverride({ methodItem: minimalItem, program })

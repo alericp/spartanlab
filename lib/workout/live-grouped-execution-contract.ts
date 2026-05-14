@@ -694,7 +694,7 @@ export function buildExecutionBlocksFromMethodStructures(
     if (ex.id) exerciseIndexById.set(ex.id, i)
     if (ex.name) exerciseIndexByName.set(normalizeName(ex.name), i)
     // [AB20.4.5.4.4] Support alternative ID fields for binding
-    const exAny = ex as Record<string, unknown>
+    const exAny = ex as unknown as Record<string, unknown>
     if (typeof exAny.exerciseId === 'string' && exAny.exerciseId) {
       exerciseIndexByExerciseId.set(exAny.exerciseId, i)
     }

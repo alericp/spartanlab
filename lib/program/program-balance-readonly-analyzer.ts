@@ -308,14 +308,15 @@ export function summarizeSelectedSkillExpression(
       expressionStatus = 'support_only'
       severity = 'moderate'
       rationale = `Only support exercises, no direct skill work`
+    } else if (totalCount > 0 && directCount === 0) {
+      // Has some exposure but no direct work - underexpressed
+      expressionStatus = 'underexpressed'
+      severity = 'moderate'
+      rationale = `Selected skill has insufficient direct exposure (${totalCount} indirect only)`
     } else if (totalCount > 0) {
       expressionStatus = 'maintenance_only'
       severity = 'moderate'
       rationale = `Minimal exposure, maintenance level only`
-    } else if (totalCount === 0 && !skillEntry) {
-      expressionStatus = 'unknown'
-      severity = 'watch'
-      rationale = `Cannot assess - skill not in knowledge seed`
     } else {
       expressionStatus = 'absent'
       severity = 'high'

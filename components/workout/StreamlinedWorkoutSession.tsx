@@ -3264,7 +3264,155 @@ export function StreamlinedWorkoutSession({
       )
     }
 
+    // [AB20.4.5.4.5] Extract executable grouped blocks from styledGroups even when
+    // order doesn't match. This preserves the Program card's grouped structure
+    // (Circuit, Superset, etc.) while respecting the exercises array order for
+    // non-grouped exercises.
+    const extractGroupedBlocksFromStyledGroups = (): {
+      blocks: ExecutionBlock[]
+      consumedIndexes: Set<number>
+      hasGroupedBlocks: boolean
+      totalSets: number
+      source: 'styledGroups'
+    } | null => {
+      if (!styledGroups || styledGroups.length === 0) return null
+      
+      const trulyGroupedGroups = styledGroups.filter(
+        g => g.groupType && g.groupType !== 'straight'
+      )
+      if (trulyGroupedGroups.length === 0) return null
+      
+      // Build lookup maps for binding
+      const exerciseIndexById = new Map<string, number>()
+      const exerciseIndexByName = new Map<string, number>()
+      const normalizeName = (s: string): string =>
+        (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+      
+      exercises.forEach((ex, i) => {
+        if (ex.id) exerciseIndexById.set(ex.id, i)
+        if (ex.name) exerciseIndexByName.set(normalizeName(ex.name), i)
+      })
+      
+      const blocks: ExecutionBlock[] = []
+      const consumedIndexes = new Set<number>()
+      let hasGroupedBlocks = false
+      let totalSets = 0
+      
+      // Track counters for block identity letters
+      const groupTypeCounters: Record<string, number> = {
+        superset: 0,
+        circuit: 0,
+        cluster: 0,
+        density_block: 0,
+      }
+      
+      for (const group of trulyGroupedGroups) {
+        const groupType: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = 
+          group.groupType === 'superset' ? 'superset'
+          : group.groupType === 'circuit' ? 'circuit'
+          : group.groupType === 'cluster' ? 'cluster'
+          : group.groupType === 'density_block' ? 'density_block'
+          : null
+        
+        if (!groupType) continue
+        
+        // Find matching exercises
+        const memberExercises: MachineExercise[] = []
+        const memberExerciseIndexes: number[] = []
+        
+        for (const groupEx of group.exercises) {
+          let exIndex = -1
+          // Try ID first
+          if (groupEx.id && exerciseIndexById.has(groupEx.id)) {
+            exIndex = exerciseIndexById.get(groupEx.id)!
+          }
+          // Try name as fallback
+          if (exIndex === -1 && groupEx.name) {
+            exIndex = exerciseIndexByName.get(normalizeName(groupEx.name)) ?? -1
+          }
+          
+          if (exIndex !== -1 && !consumedIndexes.has(exIndex)) {
+            memberExercises.push(exercises[exIndex])
+            memberExerciseIndexes.push(exIndex)
+            consumedIndexes.add(exIndex)
+            totalSets += exercises[exIndex].sets || 3
+          }
+        }
+        
+        // Need minimum 2 members for superset/circuit, 1 for density/cluster
+        const minMembers = (groupType === 'superset' || groupType === 'circuit') ? 2 : 1
+        if (memberExercises.length < minMembers) {
+          console.log('[AB20.4.5.4.5] Dropping under-minimum styledGroup', {
+            groupType,
+            groupId: group.id,
+            foundMembers: memberExercises.length,
+            minRequired: minMembers,
+            groupExerciseNames: group.exercises.map(e => e.name),
+          })
+          // Release consumed indexes back
+          memberExerciseIndexes.forEach(i => consumedIndexes.delete(i))
+          continue
+        }
+        
+        hasGroupedBlocks = true
+        
+        // Sort member indexes by their position in exercises array
+        const sortedPairs = memberExerciseIndexes.map((idx, i) => ({
+          idx,
+          exercise: memberExercises[i]
+        })).sort((a, b) => a.idx - b.idx)
+        
+        const sortedMemberIndexes = sortedPairs.map(p => p.idx)
+        const sortedMemberExercises = sortedPairs.map(p => p.exercise)
+        
+        // Compute block letter
+        let blockLetter = ''
+        if (groupTypeCounters[groupType] !== undefined) {
+          blockLetter = String.fromCharCode(65 + groupTypeCounters[groupType])
+          groupTypeCounters[groupType]++
+        }
+        
+        const baseLabel = groupType === 'superset' ? 'Superset'
+          : groupType === 'circuit' ? 'Circuit'
+          : groupType === 'cluster' ? 'Cluster Set'
+          : groupType === 'density_block' ? 'Density Block'
+          : 'Group'
+        
+        const blockLabel = blockLetter ? `${baseLabel} ${blockLetter}` : baseLabel
+        
+        const intraBlockRest = groupType === 'superset' ? 0 
+          : groupType === 'circuit' ? 10 
+          : groupType === 'cluster' ? 15
+          : groupType === 'density_block' ? 0
+          : 15
+        
+        blocks.push({
+          blockId: `sg-${group.id || groupType}-${Date.now()}`,
+          groupType,
+          blockLabel,
+          memberExercises: sortedMemberExercises,
+          memberExerciseIndexes: sortedMemberIndexes,
+          targetRounds: sortedMemberExercises[0]?.sets || 3,
+          intraBlockRestSeconds: intraBlockRest,
+          postRoundRestSeconds: 90,
+          postBlockRestSeconds: 120,
+        })
+      }
+      
+      if (!hasGroupedBlocks) return null
+      
+      console.log('[AB20.4.5.4.5] Extracted grouped blocks from styledGroups', {
+        groupedBlocksCount: blocks.length,
+        blockTypes: blocks.map(b => b.groupType),
+        blockMembers: blocks.map(b => b.memberExercises.map(m => m.name)),
+        consumedIndexes: Array.from(consumedIndexes),
+      })
+      
+      return { blocks, consumedIndexes, hasGroupedBlocks, totalSets, source: 'styledGroups' }
+    }
+
     let executionPlan: ExecutionPlan
+    let executionPlanSource: string = 'unknown'
 
     if (styledGroupsCanOwnOrder && styledGroups && styledGroups.length > 0) {
       // AUTHORITATIVE PATH: Convert styledGroups to ExecutionPlan
@@ -3517,28 +3665,82 @@ export function StreamlinedWorkoutSession({
       } else {
         // styledGroups produced valid grouped blocks, use them
         executionPlan = { blocks, hasGroupedBlocks, totalSets }
+        executionPlanSource = 'styledGroups-ordered'
       }
     } else {
-      // [PHASE 4Y / H.H5] METHOD-STRUCTURES FALLBACK PATH.
-      //
-      // Before the flat fallback, attempt to build executable grouped blocks
-      // directly from the canonical Phase 4P `session.methodStructures[]`.
-      // This closes the case where styledGroups was rejected by the
-      // shadow-owner guard (or never written) but methodStructures still
-      // carries applied superset/circuit/cluster blocks bound to real
-      // session rows. Without this path, those grouped methods would be
-      // silently flattened into independent rows — exactly the
-      // "silent flattening" H.H5 forbids.
-      const candidateMethodStructures = Array.isArray(
-        (safeSession as unknown as { methodStructures?: unknown }).methodStructures,
-      )
-        ? ((safeSession as unknown as { methodStructures?: unknown }).methodStructures as
-            Parameters<typeof buildExecutionBlocksFromMethodStructures>[0]['methodStructures'])
-        : []
-      const msBuild = buildExecutionBlocksFromMethodStructures({
-        methodStructures: candidateMethodStructures,
-        exercises,
-      })
+      // [AB20.4.5.4.5] PRIORITY 1: Extract grouped blocks from styledGroups even 
+      // when order doesn't match. This preserves the Program card's visible 
+      // grouped structure (Circuit, Superset, etc.) which is the authoritative
+      // truth the user sees.
+      const extractedFromStyledGroups = extractGroupedBlocksFromStyledGroups()
+      
+      if (extractedFromStyledGroups && extractedFromStyledGroups.hasGroupedBlocks) {
+        // Build flat blocks for unconsumed exercises
+        const flatBlocks: ExecutionBlock[] = []
+        let flatTotalSets = 0
+        for (let i = 0; i < exercises.length; i++) {
+          if (extractedFromStyledGroups.consumedIndexes.has(i)) continue
+          const ex = exercises[i]
+          flatBlocks.push({
+            blockId: `flat-${ex.id || i}`,
+            groupType: null,
+            blockLabel: ex.name,
+            memberExercises: [ex],
+            memberExerciseIndexes: [i],
+            targetRounds: ex.sets || 3,
+            intraBlockRestSeconds: 0,
+            postRoundRestSeconds: ex.restSeconds || 90,
+            postBlockRestSeconds: 90,
+          })
+          flatTotalSets += ex.sets || 3
+        }
+        
+        const mergedBlocks = [...extractedFromStyledGroups.blocks, ...flatBlocks]
+        // Sort by first member index to preserve visible card order
+        mergedBlocks.sort(
+          (a, b) => (a.memberExerciseIndexes[0] ?? 0) - (b.memberExerciseIndexes[0] ?? 0)
+        )
+        
+        executionPlan = {
+          blocks: mergedBlocks,
+          hasGroupedBlocks: true,
+          totalSets: extractedFromStyledGroups.totalSets + flatTotalSets,
+        }
+        executionPlanSource = 'styledGroups-extracted'
+        
+        console.log('[AB20.4.5.4.5] executionPlan from styledGroups extraction', {
+          source: 'styledGroups-extracted',
+          groupedBlocks: extractedFromStyledGroups.blocks.length,
+          flatBlocks: flatBlocks.length,
+          consumedIndexes: Array.from(extractedFromStyledGroups.consumedIndexes),
+          blockDetails: extractedFromStyledGroups.blocks.map(b => ({
+            blockId: b.blockId,
+            groupType: b.groupType,
+            memberCount: b.memberExercises.length,
+            memberNames: b.memberExercises.map(m => m.name),
+          })),
+        })
+      } else {
+        // [PHASE 4Y / H.H5] PRIORITY 2: METHOD-STRUCTURES FALLBACK PATH.
+        //
+        // Before the flat fallback, attempt to build executable grouped blocks
+        // directly from the canonical Phase 4P `session.methodStructures[]`.
+        // This closes the case where styledGroups was rejected by the
+        // shadow-owner guard (or never written) but methodStructures still
+        // carries applied superset/circuit/cluster blocks bound to real
+        // session rows. Without this path, those grouped methods would be
+        // silently flattened into independent rows — exactly the
+        // "silent flattening" H.H5 forbids.
+        const candidateMethodStructures = Array.isArray(
+          (safeSession as unknown as { methodStructures?: unknown }).methodStructures,
+        )
+          ? ((safeSession as unknown as { methodStructures?: unknown }).methodStructures as
+              Parameters<typeof buildExecutionBlocksFromMethodStructures>[0]['methodStructures'])
+          : []
+        const msBuild = buildExecutionBlocksFromMethodStructures({
+          methodStructures: candidateMethodStructures,
+          exercises,
+        })
 
       if (msBuild.hasGroupedBlocks) {
         // Append flat blocks for any exercise NOT consumed by a grouped
@@ -3576,6 +3778,7 @@ export function StreamlinedWorkoutSession({
           hasGroupedBlocks: true,
           totalSets: msBuild.totalSets + flatTotalSets,
         }
+        executionPlanSource = 'methodStructures'
         console.log('[phase4y-method-structures-execution-plan]', {
           source: 'methodStructures',
           groupedBlocks: msBuild.blocks.length,
@@ -3596,7 +3799,9 @@ export function StreamlinedWorkoutSession({
       } else {
         // FALLBACK PATH: Derive from flat exercise blockId fields
         executionPlan = deriveExecutionPlanFromExercises(exercises)
+        executionPlanSource = 'flatRows'
       }
+    }
     }
 
     return {
@@ -3673,35 +3878,48 @@ export function StreamlinedWorkoutSession({
     // Determine the source based on block IDs
     let source: string = 'unknown'
     if (groupedBlocks.length > 0) {
-      // Check if blocks came from methodStructures (block IDs start with ms- or method-)
+      // [AB20.4.5.4.5] Check if blocks came from styledGroups extraction (sg-prefix)
       const firstBlockId = groupedBlocks[0].blockId || ''
-      if (firstBlockId.startsWith('ms-') || firstBlockId.startsWith('method-') || firstBlockId.includes('circuit') || firstBlockId.includes('superset')) {
+      if (firstBlockId.startsWith('sg-')) {
+        source = 'styledGroups-extracted'
+      } else if (firstBlockId.startsWith('ms-') || firstBlockId.startsWith('method-')) {
         source = 'methodStructures'
       } else if (firstBlockId.startsWith('flat-')) {
         source = 'flatRows'
       } else {
-        source = 'styledGroups'
+        source = 'styledGroups-ordered'
       }
     } else if (blocks.length > 0) {
       source = 'flatRows'
     }
     
-    // [AB20.4.5.4.4] Extract failure reasons for diagnostic
+    // [AB20.4.5.4.5] Extract failure reasons for diagnostic
     const failureReasons: string[] = []
+    
+    // Check if styledGroups has grouped entries that weren't built
+    if (styledGroupsWithGroupType.length > 0 && groupedBlocks.length === 0) {
+      for (const sg of styledGroupsWithGroupType) {
+        const sgObj = sg as { groupType?: string; id?: string; exercises?: { name?: string }[] }
+        const groupType = sgObj.groupType || 'unknown'
+        const memberCount = sgObj.exercises?.length ?? 0
+        failureReasons.push(`sg:${groupType}:members${memberCount}`)
+      }
+    }
+    
+    // Check if methodStructures has grouped entries that weren't built
     if (groupedMethodStructures.length > 0 && groupedBlocks.length === 0) {
-      // We have grouped method structures but no grouped blocks - binding failed
       for (const ms of groupedMethodStructures) {
         const msObj = ms as { family?: string; status?: string; exerciseIds?: string[]; exerciseNames?: string[] }
         const family = msObj.family || 'unknown'
         const status = msObj.status || 'unknown'
         const idsCount = msObj.exerciseIds?.length ?? 0
         const namesCount = msObj.exerciseNames?.length ?? 0
-        failureReasons.push(`${family}:${status}:ids${idsCount}:names${namesCount}`)
+        failureReasons.push(`ms:${family}:${status}:ids${idsCount}:names${namesCount}`)
       }
     }
     
     return {
-      stamp: 'AB20.4.5.4.4',
+      stamp: 'AB20.4.5.4.5',
       source,
       methodStructuresCount: methodStructures?.length ?? 0,
       groupedMethodStructuresCount: groupedMethodStructures.length,
@@ -11428,19 +11646,18 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     </div>
   </div>
   )}
-        {/* [AB20.4.5.4.4] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
+        {/* [AB20.4.5.4.5] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
         {ab20RuntimeProof && (
           <div
             className="mx-3 mt-2 mb-1 rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-1.5"
             role="status"
           >
             <p className="text-[10px] text-emerald-400/90 font-mono tabular-nums leading-tight">
-              {ab20RuntimeProof.stamp} · src: {ab20RuntimeProof.source} · 
-              gms: {ab20RuntimeProof.groupedMethodStructuresCount} ({ab20RuntimeProof.methodStructuresFamilies.join(',') || 'none'}) · 
-              status: ({ab20RuntimeProof.methodStructuresStatuses.join(',') || 'none'}) ·
-              styled: {ab20RuntimeProof.styledGroupsGrouped}/{ab20RuntimeProof.styledGroupsTotal} · 
-              built: {ab20RuntimeProof.groupedBlocksBuilt} · 
-              first: {ab20RuntimeProof.firstGroupedType} · 
+              {ab20RuntimeProof.stamp} · src: {ab20RuntimeProof.source} ·
+              sg: {ab20RuntimeProof.styledGroupsGrouped}/{ab20RuntimeProof.styledGroupsTotal} ·
+              ms: {ab20RuntimeProof.groupedMethodStructuresCount} ({ab20RuntimeProof.methodStructuresStatuses.join(',') || 'none'}) ·
+              built: {ab20RuntimeProof.groupedBlocksBuilt} ·
+              first: {ab20RuntimeProof.firstGroupedType} ·
               snap: {blockGroupType || 'none'}
             </p>
             {ab20RuntimeProof.failureReasons.length > 0 && (

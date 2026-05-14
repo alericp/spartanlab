@@ -3638,7 +3638,7 @@ export function StreamlinedWorkoutSession({
     })
   }, [safeSession, machineSessionContract])
 
-  // [AB20.4.5.4.3] VISIBLE RUNTIME PROOF INFO
+  // [AB20.4.5.4.4] VISIBLE RUNTIME PROOF INFO
   // Computes the proof strip data from executionPlan and methodStructures.
   // This is rendered as a visible strip on the live workout screen.
   const ab20RuntimeProof = useMemo(() => {
@@ -3656,6 +3656,13 @@ export function StreamlinedWorkoutSession({
       ? (safeSession as unknown as { methodStructures?: unknown[] }).methodStructures
       : []
     
+    // [AB20.4.5.4.4] Filter to only grouped families for display
+    const groupedMethodStructures = (methodStructures ?? []).filter((ms: unknown) => {
+      if (!ms || typeof ms !== 'object') return false
+      const family = ('family' in ms) ? (ms as { family?: string }).family : ''
+      return family === 'circuit' || family === 'superset' || family === 'cluster' || family === 'density_block'
+    })
+    
     // Read styleMetadata
     const styleMetadata = (safeSession as unknown as { styleMetadata?: { styledGroups?: unknown[] } }).styleMetadata
     const styledGroups = Array.isArray(styleMetadata?.styledGroups) ? styleMetadata.styledGroups : []
@@ -3668,7 +3675,7 @@ export function StreamlinedWorkoutSession({
     if (groupedBlocks.length > 0) {
       // Check if blocks came from methodStructures (block IDs start with ms- or method-)
       const firstBlockId = groupedBlocks[0].blockId || ''
-      if (firstBlockId.startsWith('ms-') || firstBlockId.startsWith('method-')) {
+      if (firstBlockId.startsWith('ms-') || firstBlockId.startsWith('method-') || firstBlockId.includes('circuit') || firstBlockId.includes('superset')) {
         source = 'methodStructures'
       } else if (firstBlockId.startsWith('flat-')) {
         source = 'flatRows'
@@ -3679,12 +3686,30 @@ export function StreamlinedWorkoutSession({
       source = 'flatRows'
     }
     
+    // [AB20.4.5.4.4] Extract failure reasons for diagnostic
+    const failureReasons: string[] = []
+    if (groupedMethodStructures.length > 0 && groupedBlocks.length === 0) {
+      // We have grouped method structures but no grouped blocks - binding failed
+      for (const ms of groupedMethodStructures) {
+        const msObj = ms as { family?: string; status?: string; exerciseIds?: string[]; exerciseNames?: string[] }
+        const family = msObj.family || 'unknown'
+        const status = msObj.status || 'unknown'
+        const idsCount = msObj.exerciseIds?.length ?? 0
+        const namesCount = msObj.exerciseNames?.length ?? 0
+        failureReasons.push(`${family}:${status}:ids${idsCount}:names${namesCount}`)
+      }
+    }
+    
     return {
-      stamp: 'AB20.4.5.4.3',
+      stamp: 'AB20.4.5.4.4',
       source,
       methodStructuresCount: methodStructures?.length ?? 0,
-      methodStructuresFamilies: (methodStructures ?? []).map((ms: unknown) => 
+      groupedMethodStructuresCount: groupedMethodStructures.length,
+      methodStructuresFamilies: groupedMethodStructures.map((ms: unknown) => 
         (ms && typeof ms === 'object' && 'family' in ms) ? (ms as { family?: string }).family : 'unknown'
+      ),
+      methodStructuresStatuses: groupedMethodStructures.map((ms: unknown) =>
+        (ms && typeof ms === 'object' && 'status' in ms) ? (ms as { status?: string }).status : 'unknown'
       ),
       styledGroupsTotal: styledGroups.length,
       styledGroupsGrouped: styledGroupsWithGroupType.length,
@@ -3693,6 +3718,7 @@ export function StreamlinedWorkoutSession({
       firstGroupedLabel: firstGroupedBlock?.blockLabel ?? 'none',
       firstGroupedMemberCount: firstGroupedBlock?.memberExercises?.length ?? 0,
       hasGroupedBlocks: executionPlan?.hasGroupedBlocks ?? false,
+      failureReasons,
     }
   }, [safeSession, machineSessionContract])
 
@@ -11402,7 +11428,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     </div>
   </div>
   )}
-        {/* [AB20.4.5.4.3] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
+        {/* [AB20.4.5.4.4] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
         {ab20RuntimeProof && (
           <div
             className="mx-3 mt-2 mb-1 rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-1.5"
@@ -11410,12 +11436,18 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           >
             <p className="text-[10px] text-emerald-400/90 font-mono tabular-nums leading-tight">
               {ab20RuntimeProof.stamp} · src: {ab20RuntimeProof.source} · 
-              ms: {ab20RuntimeProof.methodStructuresCount} ({ab20RuntimeProof.methodStructuresFamilies.join(',') || 'none'}) · 
+              gms: {ab20RuntimeProof.groupedMethodStructuresCount} ({ab20RuntimeProof.methodStructuresFamilies.join(',') || 'none'}) · 
+              status: ({ab20RuntimeProof.methodStructuresStatuses.join(',') || 'none'}) ·
               styled: {ab20RuntimeProof.styledGroupsGrouped}/{ab20RuntimeProof.styledGroupsTotal} · 
               built: {ab20RuntimeProof.groupedBlocksBuilt} · 
               first: {ab20RuntimeProof.firstGroupedType} · 
               snap: {blockGroupType || 'none'}
             </p>
+            {ab20RuntimeProof.failureReasons.length > 0 && (
+              <p className="text-[9px] text-amber-400/80 font-mono leading-tight mt-0.5">
+                fail: {ab20RuntimeProof.failureReasons.join('; ')}
+              </p>
+            )}
           </div>
         )}
         {showGuidanceBanner && (

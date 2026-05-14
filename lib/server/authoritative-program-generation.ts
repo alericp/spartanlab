@@ -131,6 +131,9 @@ import {
   type EvidenceCalibrationShapingProof,
 } from '@/lib/program/evidence-calibration-program-shaping'
 import type { ProgramEvidenceCalibrationPlan } from '@/lib/program/evidence-aware-program-calibration-governor'
+// [MASTER-3/4] Adaptive foundation model — synthesizes athlete state, skill
+// priorities, and constraint detection into a single typed structure.
+import { buildAdaptiveFoundationModel } from '@/lib/program/adaptive-foundation-model'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -3536,6 +3539,52 @@ export async function executeAuthoritativeGeneration(
       ...ab13_4Diagnostic,
     })
     markStage('ab13_4_conservative_progression_shaping_done')
+
+    // ==========================================================================
+    // [MASTER-3/4] ADAPTIVE FOUNDATION MODEL STAMP
+    // ----------------------------------------------------------------------
+    // Runs AFTER all builder + post-builder phases. Pure deterministic stamper
+    // that synthesizes athlete state, skill priorities, and constraint detection
+    // into a single typed structure for future adaptive layers to consume.
+    //
+    // This is read-only proof — no program structure mutation.
+    // ==========================================================================
+    try {
+      const foundationModel = buildAdaptiveFoundationModel({
+        experienceLevel: program.experienceLevel,
+        trainingStyle: program.trainingPathType || null,
+        trainingDaysPerWeek: program.trainingDaysPerWeek,
+        equipment: program.equipmentProfile?.available || null,
+        primaryGoal: program.primaryGoal,
+        selectedGoals: program.goalCategories || null,
+        selectedSkills: program.selectedSkills || null,
+        constraintInsight: program.constraintInsight || null,
+        weeklyExpressionAllocation: program.weeklyExpressionAllocationContract || null,
+        hasWorkoutHistory: (request.recentWorkoutLogs?.length ?? 0) > 0,
+        hasSkillLogs: false, // Future: wire skill session evidence
+        hasReadinessData: truthIngestion?.recoveryTruth?.recoveryRisk != null,
+      })
+      program = {
+        ...program,
+        adaptiveFoundationModel: foundationModel,
+      }
+      console.log('[master-3-4-adaptive-foundation-model]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        dataQuality: foundationModel.sourceStatus.dataQuality,
+        skillStateCount: foundationModel.skillStates.length,
+        constraintCount: foundationModel.constraints.length,
+        actionabilityLabel: foundationModel.display.actionabilityLabel,
+      })
+    } catch (foundationErr) {
+      console.log('[master-3-4-adaptive-foundation-model-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(foundationErr),
+      })
+      // Non-blocking: program returned without foundation model
+    }
+    markStage('master_3_4_adaptive_foundation_model_done')
 
     // ==========================================================================
     // STAGE: Success

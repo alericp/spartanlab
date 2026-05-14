@@ -87,11 +87,21 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ### MASTER-8B.1 — Cross-Branch True-Source Foundation Registry / Contracts
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 **Purpose:** Create typed contracts/registry describing all true-source branches and their ownership boundaries without changing program behavior.
 
-**Branches to Include:**
+**What This Step Delivered:**
+- Created `lib/program/true-source-registry.ts` (998 lines)
+- Defined 16 true-source branches with complete ownership contracts
+- Defined 7 Coach Intelligence tile contracts
+- Method Planner protected as `protected_active` with existing_writer_only mutation authority
+- Active-week mutation service classified as `primitive_placeholder` (NOT the final adaptation writer)
+- Adaptive Foundation remains `read_only_active`
+- No runtime behavior changed
+- Report: `docs/MASTER_8B_1_TRUE_SOURCE_FOUNDATION_REGISTRY_REPORT.md`
+
+**Branches Registered:**
 - Skill Map / selected skill representation
 - Method Planner / requested method override truth
 - Adaptive Foundation / athlete model
@@ -100,22 +110,25 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Plan Logic / construction rationale
 - Recovery/Readiness
 - Prehab/Rehab/Tendon/Joint Safeguards
-- Program Balance / skill and movement distribution
+- Program Balance / skill and movement distribution (missing_needed)
 - Exercise Knowledge Base
 - Evidence / workout history / logged sets / RPE / band usage / discomfort notes
 - Program Cards
-- Live Workout Runtime
+- Live Workout Runtime (protected)
 - Saved Program Persistence
+- Active Week Mutation Placeholder (primitive_placeholder)
 
-**Files Expected to Change:**
-- New `lib/program/true-source-registry.ts` or similar
-- Possibly `lib/program/program-display-contract.ts` extensions
+**Files Changed:**
+- Created `lib/program/true-source-registry.ts`
+- Created `docs/MASTER_8B_1_TRUE_SOURCE_FOUNDATION_REGISTRY_REPORT.md`
+- Updated `docs/OFFICIAL_CHECKLIST_MAY_14_2026.md`
 
-**Files NOT to Touch:**
+**Files NOT Touched:**
 - Live workout runtime
 - Method Planner apply/revert/reset writers
 - Generator logic
 - Database schema
+- Any UI components
 
 ---
 

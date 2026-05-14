@@ -177,14 +177,26 @@ export interface AdaptiveFoundationInput {
   constraintResult?: ConstraintResult | null
   constraintInsight?: { hasInsight: boolean; label: string } | null
 
-  // Skill/readiness context from existing program fields
-  weeklyExpressionAllocation?: {
-    skillExposures?: Array<{
-      skillKey: string
-      label?: string
-      priorityRank?: number
-      exposureType?: string
+  // [MASTER-3/4] Authoritative skill intent from program builder
+  authoritativeMultiSkillIntentContract?: {
+    selectedSkills?: string[]
+    primarySkill?: string | null
+    secondarySkill?: string | null
+    supportSkills?: string[]
+    deferredSkills?: Array<{
+      skill: string
+      reasonCode: string
+      reasonLabel: string
+      details?: string
     }>
+    materiallyExpressedSkills?: string[]
+    skillPriorityOrder?: Array<{
+      skill: string
+      role: 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred'
+      priorityScore: number
+      exposureSessions: number
+    }>
+    coverageVerdict?: 'strong' | 'adequate' | 'weak'
   } | null
 
   // Evidence flags
@@ -215,33 +227,37 @@ function resolveDataQuality(input: AdaptiveFoundationInput): DataQualityLevel {
 
 function resolveSkillStates(input: AdaptiveFoundationInput): AdaptiveSkillState[] {
   const selectedSkills = input.selectedSkills || []
-  const exposures = input.weeklyExpressionAllocation?.skillExposures || []
+  const intentContract = input.authoritativeMultiSkillIntentContract
+  const priorityOrder = intentContract?.skillPriorityOrder || []
+  const deferredSkills = new Set((intentContract?.deferredSkills || []).map(d => d.skill))
+  const supportSkills = new Set(intentContract?.supportSkills || [])
+  const materialSkills = new Set(intentContract?.materiallyExpressedSkills || [])
 
-  // Map exposures by skillKey for quick lookup
-  const exposureMap = new Map(
-    exposures.map((e) => [e.skillKey, e])
+  // Map priority order by skill for quick lookup
+  const priorityMap = new Map(
+    priorityOrder.map((p) => [p.skill, p])
   )
 
   return selectedSkills.map((skillKey, index) => {
-    const exposure = exposureMap.get(skillKey)
-    const exposureType = exposure?.exposureType || 'unknown'
+    const priority = priorityMap.get(skillKey)
+    const role = priority?.role || 'unknown'
 
     let expressionStatus: SkillExpressionStatus = 'unknown'
-    if (exposureType === 'direct_priority' || exposureType === 'primary') {
+    if (role === 'primary' || role === 'secondary') {
       expressionStatus = 'direct_priority'
-    } else if (exposureType === 'support' || exposureType === 'secondary') {
+    } else if (role === 'support' || supportSkills.has(skillKey)) {
       expressionStatus = 'support'
-    } else if (exposureType === 'carryover' || exposureType === 'rotating') {
+    } else if (role === 'tertiary' || materialSkills.has(skillKey)) {
       expressionStatus = 'carryover'
-    } else if (exposureType === 'deferred') {
+    } else if (role === 'deferred' || deferredSkills.has(skillKey)) {
       expressionStatus = 'deferred'
     }
 
     return {
       skillKey,
-      label: exposure?.label || skillKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      label: skillKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
       selected: true,
-      priorityRank: exposure?.priorityRank ?? index + 1,
+      priorityRank: priority?.priorityScore ?? index + 1,
       expressionStatus,
       readinessStatus: null, // Future: consume readiness engine output
       limiterCodes: [],

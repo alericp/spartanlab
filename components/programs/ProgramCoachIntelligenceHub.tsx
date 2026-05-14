@@ -54,6 +54,7 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Brain,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'

@@ -3559,7 +3559,7 @@ export async function executeAuthoritativeGeneration(
         selectedGoals: program.goalCategories || null,
         selectedSkills: program.selectedSkills || null,
         constraintInsight: program.constraintInsight || null,
-        weeklyExpressionAllocation: program.weeklyExpressionAllocationContract || null,
+        authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract || null,
         hasWorkoutHistory: (request.recentWorkoutLogs?.length ?? 0) > 0,
         hasSkillLogs: false, // Future: wire skill session evidence
         hasReadinessData: truthIngestion?.recoveryTruth?.recoveryRisk != null,

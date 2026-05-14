@@ -56,6 +56,7 @@ import {
   RefreshCw,
   Activity,
   Shield,
+  Database,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -2035,9 +2036,10 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
 } {
   // Prefer program-stamped model, but enrich with safeguard/preview intelligence if missing
   if (program.adaptiveFoundationModel) {
-    // If canonical model exists but lacks safeguardIntelligence or guardedAdaptationPreview, enrich it for display
+    // If canonical model exists but lacks safeguardIntelligence, guardedAdaptationPreview, or evidenceSnapshot, enrich it for display
     const needsEnrichment = !program.adaptiveFoundationModel.safeguardIntelligence || 
-                            !program.adaptiveFoundationModel.guardedAdaptationPreview
+                            !program.adaptiveFoundationModel.guardedAdaptationPreview ||
+                            !program.adaptiveFoundationModel.evidenceSnapshot
     if (needsEnrichment) {
       try {
         const enrichedModel = buildAdaptiveFoundationModel({
@@ -2050,19 +2052,25 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
           selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
           constraintInsight: program.constraintInsight ?? null,
           authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
-          hasWorkoutHistory: false,
+          // [MASTER-8A] Honestly mark evidence as unavailable at client display boundary
+          // Pass undefined (not null) to signal "not connected" vs "checked but missing"
+          hasWorkoutHistory: false, // Cannot verify from client component
           hasSkillLogs: false,
           hasReadinessData: false,
+          recentWorkoutLogs: undefined, // Not connected at this view
+          skillLogEvidence: undefined, // Not connected at this view
+          readinessEvidence: undefined, // Not connected at this view
           // [MASTER-5/6] Pass sessions for safeguard analysis
           programSessions: program.sessions ?? null,
           jointCautions: null, // Future: wire from profile
         })
-        // Return canonical model base with display-enriched safeguard and preview
+        // Return canonical model base with display-enriched safeguard, preview, and evidence
         return {
           model: {
             ...program.adaptiveFoundationModel,
             safeguardIntelligence: program.adaptiveFoundationModel.safeguardIntelligence ?? enrichedModel.safeguardIntelligence,
             guardedAdaptationPreview: program.adaptiveFoundationModel.guardedAdaptationPreview ?? enrichedModel.guardedAdaptationPreview,
+            evidenceSnapshot: program.adaptiveFoundationModel.evidenceSnapshot ?? enrichedModel.evidenceSnapshot,
           },
           isCanonical: true,
         }
@@ -2086,9 +2094,13 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
       selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
       constraintInsight: program.constraintInsight ?? null,
       authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
+      // [MASTER-8A] Honestly mark evidence as unavailable at client display boundary
       hasWorkoutHistory: false,
       hasSkillLogs: false,
       hasReadinessData: false,
+      recentWorkoutLogs: undefined, // Not connected at this view
+      skillLogEvidence: undefined, // Not connected at this view
+      readinessEvidence: undefined, // Not connected at this view
       // [MASTER-5/6] Pass sessions for safeguard analysis
       programSessions: program.sessions ?? null,
       jointCautions: null, // Future: wire from profile
@@ -2194,6 +2206,57 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
           </div>
         </div>
       </div>
+      
+      {/* [MASTER-8A] Evidence Sources / Provenance Section */}
+      {model.evidenceSnapshot && (
+        <div className="p-3 rounded-lg bg-[#12121A] border border-[#2A2A35]">
+          <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5 text-blue-400" />
+            Evidence Sources
+            <span className={cn(
+              'ml-auto px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wide',
+              model.evidenceSnapshot.status === 'live_evidence_active'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : model.evidenceSnapshot.status === 'partial_live_evidence'
+                ? 'bg-blue-500/20 text-blue-400'
+                : 'bg-amber-500/20 text-amber-400'
+            )}>
+              {model.evidenceSnapshot.headline}
+            </span>
+          </h4>
+          <p className="text-[10px] text-[#7A7A8A] mb-3">{model.evidenceSnapshot.summary}</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {model.evidenceSnapshot.sources.map((source) => {
+              const statusColors: Record<string, string> = {
+                'active': 'text-emerald-400',
+                'partial': 'text-blue-400',
+                'missing': 'text-amber-400',
+                'not_connected': 'text-[#5A5A6A]',
+              }
+              const statusIcons: Record<string, React.ReactNode> = {
+                'active': <CheckCircle2 className="w-3 h-3 text-emerald-400" />,
+                'partial': <AlertCircle className="w-3 h-3 text-blue-400" />,
+                'missing': <XCircle className="w-3 h-3 text-amber-400" />,
+                'not_connected': <XCircle className="w-3 h-3 text-[#4A4A5A]" />,
+              }
+              return (
+                <div key={source.key} className="flex items-center gap-1.5 text-[9px]">
+                  {statusIcons[source.status] || statusIcons['missing']}
+                  <span className={cn('truncate', statusColors[source.status] || 'text-[#8A8A9A]')}>
+                    {source.label}
+                    {source.count > 0 && <span className="text-[#6A6A7A] ml-1">({source.count})</span>}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {model.evidenceSnapshot.status === 'plan_only' && (
+            <p className="mt-2 pt-2 border-t border-[#1A1A22] text-[8px] text-[#5A5A6A]">
+              Live workout evidence is not connected to this view yet. Complete workouts to enable evidence-based adaptation.
+            </p>
+          )}
+        </div>
+      )}
       
       {/* Skill State Summary */}
       {skillStates.length > 0 && (

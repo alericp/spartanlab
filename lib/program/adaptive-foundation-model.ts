@@ -177,6 +177,56 @@ export interface GuardedAdaptationPreview {
 }
 
 // =============================================================================
+// [MASTER-8A] EVIDENCE SNAPSHOT TYPES
+// =============================================================================
+// This is a typed, read-only snapshot of what evidence sources are feeding
+// the Adaptive Foundation. It enables honest provenance display so users can
+// see whether intelligence is based on plan-only or live workout evidence.
+
+export type AdaptiveEvidenceSourceKey =
+  | 'profile_truth'
+  | 'selected_skills'
+  | 'planned_program_sessions'
+  | 'completed_workout_history'
+  | 'logged_set_rpe'
+  | 'band_usage'
+  | 'readiness_recovery'
+  | 'discomfort_notes'
+  | 'skill_logs'
+
+export type AdaptiveEvidenceSourceStatus =
+  | 'active'
+  | 'partial'
+  | 'missing'
+  | 'not_connected'
+
+export interface AdaptiveEvidenceSourceSummary {
+  key: AdaptiveEvidenceSourceKey
+  label: string
+  status: AdaptiveEvidenceSourceStatus
+  count: number
+  detail: string
+}
+
+export interface AdaptiveCompletedWorkoutEvidence {
+  completedSessionCount: number
+  loggedSetCount: number
+  rpeSetCount: number
+  averageRpe: number | null
+  bandLoggedSetCount: number
+  discomfortNoteCount: number
+  latestWorkoutAt: string | null
+}
+
+export interface AdaptiveEvidenceSnapshot {
+  status: 'plan_only' | 'partial_live_evidence' | 'live_evidence_active'
+  headline: string
+  summary: string
+  sources: AdaptiveEvidenceSourceSummary[]
+  completedWorkoutEvidence: AdaptiveCompletedWorkoutEvidence
+}
+
+// =============================================================================
 // SOURCE STATUS — tracks what data was available for model building
 // =============================================================================
 
@@ -281,6 +331,8 @@ export interface AdaptiveFoundationModel {
   safeguardIntelligence?: AdaptiveSafeguardIntelligence
   // [MASTER-7] Optional guarded adaptation preview — non-mutating preview of what AI would consider doing
   guardedAdaptationPreview?: GuardedAdaptationPreview
+  // [MASTER-8A] Optional evidence snapshot — provenance proof showing what data sources are feeding the model
+  evidenceSnapshot?: AdaptiveEvidenceSnapshot
 }
 
 // =============================================================================
@@ -327,6 +379,12 @@ export interface AdaptiveFoundationInput {
   hasWorkoutHistory?: boolean
   hasSkillLogs?: boolean
   hasReadinessData?: boolean
+
+  // [MASTER-8A] Optional detailed evidence inputs for provenance
+  recentWorkoutLogs?: unknown[] | null
+  completedWorkoutEvidence?: AdaptiveCompletedWorkoutEvidence | null
+  readinessEvidence?: unknown | null
+  skillLogEvidence?: unknown[] | null
 
   // [MASTER-5/6] Program session/exercise data for safeguard analysis
   programSessions?: unknown[] | null
@@ -536,9 +594,242 @@ function inferMovementFamilyFromName(name: string): MovementFamilyKey {
   if (n.includes('squat') || n.includes('lunge') || n.includes('calf') || n.includes('tibialis') || n.includes('pistol')) return 'lower_body_chain'
   
   return 'unknown'
+  }
+  
+// =============================================================================
+// [MASTER-8A] EVIDENCE SNAPSHOT HELPERS
+// =============================================================================
+
+/** Safely extract completed workout evidence from unknown log shapes */
+function summarizeCompletedWorkoutEvidence(logs: unknown[] | null | undefined): AdaptiveCompletedWorkoutEvidence {
+  const empty: AdaptiveCompletedWorkoutEvidence = {
+    completedSessionCount: 0,
+    loggedSetCount: 0,
+    rpeSetCount: 0,
+    averageRpe: null,
+    bandLoggedSetCount: 0,
+    discomfortNoteCount: 0,
+    latestWorkoutAt: null,
+  }
+  
+  if (!logs || !Array.isArray(logs) || logs.length === 0) {
+    return empty
+  }
+  
+  let completedSessionCount = 0
+  let loggedSetCount = 0
+  let rpeSetCount = 0
+  let rpeSum = 0
+  let bandLoggedSetCount = 0
+  let discomfortNoteCount = 0
+  let latestWorkoutAt: string | null = null
+  
+  for (const log of logs) {
+    if (!log || typeof log !== 'object') continue
+    const rec = log as Record<string, unknown>
+    
+    completedSessionCount++
+    
+    // Try to extract date
+    const dateStr = rec['completedAt'] ?? rec['createdAt'] ?? rec['date'] ?? rec['timestamp']
+    if (typeof dateStr === 'string' && dateStr) {
+      if (!latestWorkoutAt || dateStr > latestWorkoutAt) {
+        latestWorkoutAt = dateStr
+      }
+    }
+    
+    // Try to extract exercises array
+    const exercises = rec['exercises'] ?? rec['loggedExercises'] ?? rec['exerciseData']
+    if (Array.isArray(exercises)) {
+      for (const ex of exercises) {
+        if (!ex || typeof ex !== 'object') continue
+        const exRec = ex as Record<string, unknown>
+        
+        // Try to extract sets
+        const sets = exRec['sets'] ?? exRec['loggedSets'] ?? exRec['setData']
+        if (Array.isArray(sets)) {
+          for (const set of sets) {
+            if (!set || typeof set !== 'object') continue
+            const setRec = set as Record<string, unknown>
+            
+            loggedSetCount++
+            
+            // Check for RPE
+            const rpe = setRec['actualRPE'] ?? setRec['rpe'] ?? setRec['selectedRPE'] ?? setRec['averageRPE']
+            if (typeof rpe === 'number' && rpe > 0 && rpe <= 10) {
+              rpeSetCount++
+              rpeSum += rpe
+            }
+            
+            // Check for band usage
+            const band = setRec['bandUsed'] ?? setRec['selectedBand'] ?? setRec['band'] ?? setRec['bands']
+            if (band && (typeof band === 'string' || typeof band === 'object')) {
+              bandLoggedSetCount++
+            }
+            
+            // Check for discomfort notes
+            const notes = setRec['discomfortNotes'] ?? setRec['painNotes'] ?? setRec['notes'] ?? setRec['tension']
+            if (typeof notes === 'string' && notes.trim().length > 0) {
+              discomfortNoteCount++
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return {
+    completedSessionCount,
+    loggedSetCount,
+    rpeSetCount,
+    averageRpe: rpeSetCount > 0 ? Math.round((rpeSum / rpeSetCount) * 10) / 10 : null,
+    bandLoggedSetCount,
+    discomfortNoteCount,
+    latestWorkoutAt,
+  }
 }
 
-/** Build safeguard intelligence from program sessions and skills */
+/** Build evidence snapshot from input showing what sources are feeding the model */
+function buildAdaptiveEvidenceSnapshot(input: AdaptiveFoundationInput): AdaptiveEvidenceSnapshot {
+  const sources: AdaptiveEvidenceSourceSummary[] = []
+  
+  // Derive completed workout evidence from logs if not pre-summarized
+  const workoutEvidence: AdaptiveCompletedWorkoutEvidence = 
+    input.completedWorkoutEvidence ?? summarizeCompletedWorkoutEvidence(input.recentWorkoutLogs)
+  
+  // 1. Profile truth
+  const hasProfile = !!(input.experienceLevel || input.trainingStyle || input.primaryGoal)
+  sources.push({
+    key: 'profile_truth',
+    label: 'Profile truth',
+    status: hasProfile ? 'active' : 'missing',
+    count: hasProfile ? 1 : 0,
+    detail: hasProfile ? 'Experience, goals, and training context loaded' : 'No profile data found',
+  })
+  
+  // 2. Selected skills
+  const skillCount = input.selectedSkills?.length ?? 
+                     input.authoritativeMultiSkillIntentContract?.selectedSkills?.length ?? 0
+  sources.push({
+    key: 'selected_skills',
+    label: 'Selected skills',
+    status: skillCount > 0 ? 'active' : 'missing',
+    count: skillCount,
+    detail: skillCount > 0 ? `${skillCount} skill(s) in focus` : 'No skills selected',
+  })
+  
+  // 3. Planned program sessions
+  const sessionCount = Array.isArray(input.programSessions) ? input.programSessions.length : 0
+  sources.push({
+    key: 'planned_program_sessions',
+    label: 'Planned sessions',
+    status: sessionCount > 0 ? 'active' : 'missing',
+    count: sessionCount,
+    detail: sessionCount > 0 ? `${sessionCount} session(s) in current plan` : 'No planned sessions',
+  })
+  
+  // 4. Completed workout history
+  const hasWorkoutHistory = input.hasWorkoutHistory || workoutEvidence.completedSessionCount > 0
+  sources.push({
+    key: 'completed_workout_history',
+    label: 'Completed workouts',
+    status: hasWorkoutHistory 
+      ? (workoutEvidence.completedSessionCount > 0 ? 'active' : 'partial')
+      : (input.recentWorkoutLogs === undefined ? 'not_connected' : 'missing'),
+    count: workoutEvidence.completedSessionCount,
+    detail: workoutEvidence.completedSessionCount > 0 
+      ? `${workoutEvidence.completedSessionCount} workout(s) logged`
+      : (input.recentWorkoutLogs === undefined 
+          ? 'Live workout logs not connected to this view'
+          : 'No completed workouts found'),
+  })
+  
+  // 5. Logged set RPE
+  sources.push({
+    key: 'logged_set_rpe',
+    label: 'Set/RPE logs',
+    status: workoutEvidence.rpeSetCount > 0 
+      ? 'active' 
+      : (workoutEvidence.loggedSetCount > 0 ? 'partial' : 'missing'),
+    count: workoutEvidence.rpeSetCount,
+    detail: workoutEvidence.rpeSetCount > 0 
+      ? `${workoutEvidence.rpeSetCount} set(s) with RPE${workoutEvidence.averageRpe ? ` (avg ${workoutEvidence.averageRpe})` : ''}`
+      : (workoutEvidence.loggedSetCount > 0 
+          ? `${workoutEvidence.loggedSetCount} set(s) logged, no RPE`
+          : 'No set logs found'),
+  })
+  
+  // 6. Band usage
+  sources.push({
+    key: 'band_usage',
+    label: 'Band usage',
+    status: workoutEvidence.bandLoggedSetCount > 0 ? 'active' : 'missing',
+    count: workoutEvidence.bandLoggedSetCount,
+    detail: workoutEvidence.bandLoggedSetCount > 0 
+      ? `${workoutEvidence.bandLoggedSetCount} set(s) with band data`
+      : 'No band usage logged',
+  })
+  
+  // 7. Readiness/recovery
+  const hasReadiness = input.hasReadinessData || (input.readinessEvidence != null)
+  sources.push({
+    key: 'readiness_recovery',
+    label: 'Readiness/recovery',
+    status: hasReadiness ? 'active' : (input.readinessEvidence === undefined ? 'not_connected' : 'missing'),
+    count: hasReadiness ? 1 : 0,
+    detail: hasReadiness ? 'Recovery data contributing' : 'No readiness data found',
+  })
+  
+  // 8. Discomfort notes
+  sources.push({
+    key: 'discomfort_notes',
+    label: 'Discomfort notes',
+    status: workoutEvidence.discomfortNoteCount > 0 ? 'active' : 'missing',
+    count: workoutEvidence.discomfortNoteCount,
+    detail: workoutEvidence.discomfortNoteCount > 0 
+      ? `${workoutEvidence.discomfortNoteCount} note(s) logged`
+      : 'No discomfort notes found',
+  })
+  
+  // 9. Skill logs
+  const hasSkillLogs = input.hasSkillLogs || (Array.isArray(input.skillLogEvidence) && input.skillLogEvidence.length > 0)
+  const skillLogCount = Array.isArray(input.skillLogEvidence) ? input.skillLogEvidence.length : 0
+  sources.push({
+    key: 'skill_logs',
+    label: 'Skill logs',
+    status: hasSkillLogs ? 'active' : (input.skillLogEvidence === undefined ? 'not_connected' : 'missing'),
+    count: skillLogCount,
+    detail: hasSkillLogs ? `${skillLogCount} skill log(s) found` : 'No skill logs found',
+  })
+  
+  // Determine overall status
+  const hasLiveEvidence = workoutEvidence.completedSessionCount > 0 || hasReadiness || hasSkillLogs
+  const hasRichEvidence = workoutEvidence.rpeSetCount > 0 || workoutEvidence.bandLoggedSetCount > 0 || workoutEvidence.discomfortNoteCount > 0
+  
+  let status: AdaptiveEvidenceSnapshot['status'] = 'plan_only'
+  let headline = 'Plan-derived only'
+  let summary = 'Intelligence is based on your program plan and profile. Live workout evidence is not connected yet.'
+  
+  if (hasLiveEvidence && hasRichEvidence) {
+    status = 'live_evidence_active'
+    headline = 'Live evidence active'
+    summary = `Recent workout logs are contributing to preview confidence. ${workoutEvidence.completedSessionCount} workout(s), ${workoutEvidence.loggedSetCount} set(s)${workoutEvidence.rpeSetCount > 0 ? `, ${workoutEvidence.rpeSetCount} RPE` : ''}.`
+  } else if (hasLiveEvidence) {
+    status = 'partial_live_evidence'
+    headline = 'Partial live evidence'
+    summary = `Some workout data found (${workoutEvidence.completedSessionCount} workout(s)), but RPE/band/discomfort detail is limited.`
+  }
+  
+  return {
+    status,
+    headline,
+    summary,
+    sources,
+    completedWorkoutEvidence: workoutEvidence,
+  }
+}
+
+  /** Build safeguard intelligence from program sessions and skills */
 function buildSafeguardIntelligence(
   input: AdaptiveFoundationInput,
   skillStates: AdaptiveSkillState[]
@@ -1156,6 +1447,9 @@ export function buildAdaptiveFoundationModel(
   // [MASTER-7] Guarded adaptation preview — non-mutating preview of what AI would consider
   const guardedAdaptationPreview = buildGuardedAdaptationPreview(input, sourceStatus, safeguardIntelligence)
 
+  // [MASTER-8A] Evidence snapshot — provenance proof showing what sources are feeding the model
+  const evidenceSnapshot = buildAdaptiveEvidenceSnapshot(input)
+
   return {
     version: 'adaptive-foundation-v1',
     generatedAt: new Date().toISOString(),
@@ -1168,6 +1462,7 @@ export function buildAdaptiveFoundationModel(
     display,
     safeguardIntelligence,
     guardedAdaptationPreview,
+    evidenceSnapshot,
   }
 }
 

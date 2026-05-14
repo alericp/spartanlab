@@ -3563,6 +3563,10 @@ export async function executeAuthoritativeGeneration(
         hasWorkoutHistory: (request.recentWorkoutLogs?.length ?? 0) > 0,
         hasSkillLogs: false, // Future: wire skill session evidence
         hasReadinessData: truthIngestion?.recoveryTruth?.recoveryRisk != null,
+        // [MASTER-8A] Pass actual workout logs for evidence provenance
+        recentWorkoutLogs: request.recentWorkoutLogs ?? null,
+        // [MASTER-8A] Pass program sessions for safeguard analysis
+        programSessions: program.sessions ?? null,
       })
       program = {
         ...program,

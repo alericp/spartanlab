@@ -134,6 +134,49 @@ export interface AdaptiveSafeguardIntelligence {
 }
 
 // =============================================================================
+// [MASTER-7] GUARDED ADAPTATION PREVIEW TYPES
+// =============================================================================
+// This is a non-mutating preview of what the AI would consider doing if
+// adaptation was allowed. It is derived from safeguardIntelligence and
+// cannot apply changes to the saved program.
+
+export type GuardedAdaptationActionType =
+  | 'add_prep'
+  | 'hold_progression'
+  | 'cap_exposure'
+  | 'reduce_next_exposure'
+  | 'rotate_skill_stress'
+  | 'monitor_only'
+  | 'needs_data'
+
+export type GuardedAdaptationApplyStatus =
+  | 'preview_only'
+  | 'blocked_needs_evidence'
+  | 'blocked_requires_user_confirmation'
+  | 'blocked_no_writer_yet'
+
+export interface GuardedAdaptationCandidate {
+  id: string
+  actionType: GuardedAdaptationActionType
+  label: string
+  target: string
+  trigger: string
+  reason: string
+  expectedEffect: string
+  applyStatus: GuardedAdaptationApplyStatus
+  blockedReason: string
+  confidence: DataQualityLevel
+}
+
+export interface GuardedAdaptationPreview {
+  status: 'preview_ready' | 'needs_data' | 'no_action_needed'
+  headline: string
+  summary: string
+  candidates: GuardedAdaptationCandidate[]
+  nonMutationNote: string
+}
+
+// =============================================================================
 // SOURCE STATUS — tracks what data was available for model building
 // =============================================================================
 
@@ -236,6 +279,8 @@ export interface AdaptiveFoundationModel {
   display: AdaptiveFoundationDisplay
   // [MASTER-5/6] Optional safeguard intelligence — movement-family / tissue-stress / tendon-joint visibility
   safeguardIntelligence?: AdaptiveSafeguardIntelligence
+  // [MASTER-7] Optional guarded adaptation preview — non-mutating preview of what AI would consider doing
+  guardedAdaptationPreview?: GuardedAdaptationPreview
 }
 
 // =============================================================================
@@ -723,6 +768,144 @@ function buildSafeguardIntelligence(
   }
 }
 
+// =============================================================================
+// [MASTER-7] GUARDED ADAPTATION PREVIEW BUILDER
+// =============================================================================
+// This builds a non-mutating preview of what the AI would consider doing
+// if adaptation was allowed. It derives candidates from safeguard intelligence.
+
+function buildGuardedAdaptationPreview(
+  input: AdaptiveFoundationInput,
+  sourceStatus: AdaptiveFoundationSourceStatus,
+  safeguard: AdaptiveSafeguardIntelligence
+): GuardedAdaptationPreview {
+  const candidates: GuardedAdaptationCandidate[] = []
+  let candidateIndex = 0
+  
+  // Helper to create stable IDs
+  const makeId = (prefix: string) => `gac_${prefix}_${candidateIndex++}`
+  
+  // 1. Check for prep-first tissue signals
+  const prepFirstSignals = safeguard.tissueSignals.filter(ts => ts.suggestedPosture === 'prep_first')
+  if (prepFirstSignals.length > 0) {
+    const targetAreas = prepFirstSignals.map(ts => ts.label).slice(0, 3).join(', ')
+    candidates.push({
+      id: makeId('prep'),
+      actionType: 'add_prep',
+      label: 'Add prep-first safeguard',
+      target: targetAreas,
+      trigger: `Prep-first posture on ${prepFirstSignals.length} tissue area(s)`,
+      reason: 'High/elevated tissue exposure needs preparation before progression.',
+      expectedEffect: 'Future adaptation could add or emphasize warm-up/prehab work before increasing load.',
+      applyStatus: 'blocked_no_writer_yet',
+      blockedReason: 'MASTER-7 is preview-only; no program writer is allowed yet.',
+      confidence: sourceStatus.dataQuality,
+    })
+  }
+  
+  // 2. Check for high-stress movement families
+  const highStressFamilies = safeguard.movementFamilies.filter(mf => mf.estimatedStress === 'high')
+  if (highStressFamilies.length > 0) {
+    const targetFamilies = highStressFamilies.map(mf => mf.label).slice(0, 2).join(', ')
+    const totalExposure = highStressFamilies.reduce((sum, mf) => sum + mf.exposureCount, 0)
+    candidates.push({
+      id: makeId('cap'),
+      actionType: 'cap_exposure',
+      label: 'Cap high-stress exposure',
+      target: targetFamilies,
+      trigger: `High stress with ${totalExposure} exposures across ${highStressFamilies.length} family(ies)`,
+      reason: 'Excessive high-force work can overwhelm connective tissue recovery.',
+      expectedEffect: 'Future adaptation could hold or limit additional exposure instead of adding more work.',
+      applyStatus: 'blocked_no_writer_yet',
+      blockedReason: 'Requires future guarded writer.',
+      confidence: sourceStatus.dataQuality,
+    })
+  }
+  
+  // 3. Check for elevated straight-arm families
+  const straightArmFamilies = safeguard.movementFamilies.filter(
+    mf => (mf.family === 'straight_arm_push' || mf.family === 'straight_arm_pull') &&
+          (mf.estimatedStress === 'elevated' || mf.estimatedStress === 'high')
+  )
+  if (straightArmFamilies.length > 0) {
+    const targetFamilies = straightArmFamilies.map(mf => mf.label).join(', ')
+    candidates.push({
+      id: makeId('hold_sa'),
+      actionType: 'hold_progression',
+      label: 'Hold straight-arm progression',
+      target: targetFamilies,
+      trigger: `Elevated/high straight-arm exposure`,
+      reason: 'Straight-arm work places high demand on tendons; progression should be gradual.',
+      expectedEffect: 'Future adaptation could hold progression level until completion/RPE/discomfort evidence supports progression.',
+      applyStatus: 'blocked_no_writer_yet',
+      blockedReason: 'Requires future guarded writer.',
+      confidence: sourceStatus.dataQuality,
+    })
+  }
+  
+  // 4. Check for explosive pull stress
+  const explosivePull = safeguard.movementFamilies.find(
+    mf => mf.family === 'explosive_pull' && (mf.estimatedStress === 'elevated' || mf.estimatedStress === 'high')
+  )
+  if (explosivePull) {
+    candidates.push({
+      id: makeId('hold_exp'),
+      actionType: 'hold_progression',
+      label: 'Monitor explosive pull load',
+      target: explosivePull.label,
+      trigger: `${explosivePull.estimatedStress} stress with ${explosivePull.exposureCount} exposures`,
+      reason: 'Explosive movements create high peak forces on biceps tendon and connective tissue.',
+      expectedEffect: 'Future adaptation could pace explosive work progression based on logged performance.',
+      applyStatus: 'blocked_no_writer_yet',
+      blockedReason: 'Requires future guarded writer.',
+      confidence: sourceStatus.dataQuality,
+    })
+  }
+  
+  // 5. Check if data is insufficient
+  if (sourceStatus.dataQuality === 'insufficient' || sourceStatus.dataQuality === 'partial') {
+    candidates.push({
+      id: makeId('data'),
+      actionType: 'needs_data',
+      label: 'Collect evidence before applying',
+      target: 'Workout/RPE/readiness data',
+      trigger: `Data quality is ${sourceStatus.dataQuality}`,
+      reason: 'Safe adaptation requires evidence from actual training.',
+      expectedEffect: 'Logging sets, RPE, and discomfort notes unlocks safer application.',
+      applyStatus: 'blocked_needs_evidence',
+      blockedReason: 'Insufficient training history to safely apply changes.',
+      confidence: sourceStatus.dataQuality,
+    })
+  }
+  
+  // Determine overall status
+  let status: GuardedAdaptationPreview['status'] = 'no_action_needed'
+  let headline = 'No guarded adaptation needed'
+  let summary = 'Current safeguard map does not indicate any adaptation candidates.'
+  
+  if (candidates.length === 0) {
+    status = 'no_action_needed'
+    headline = 'No adaptation candidates'
+    summary = 'Current training stress is within safe ranges; no changes would be considered.'
+  } else if (sourceStatus.dataQuality === 'insufficient') {
+    status = 'needs_data'
+    headline = 'Preview blocked — needs evidence'
+    summary = `${candidates.length} potential candidate(s) identified, but application is blocked until more training data is logged.`
+  } else {
+    status = 'preview_ready'
+    headline = `${candidates.length} adaptation candidate(s) preview`
+    summary = 'The following changes would be considered if adaptation was enabled. None are applied yet.'
+  }
+  
+  return {
+    status,
+    headline,
+    summary,
+    candidates: candidates.slice(0, 6), // Cap at 6 for display
+    nonMutationNote: 'This is a preview only. No automatic program changes have been applied.',
+  }
+}
+
 function resolveDataQuality(input: AdaptiveFoundationInput): DataQualityLevel {
   let score = 0
 
@@ -970,6 +1153,9 @@ export function buildAdaptiveFoundationModel(
   // [MASTER-5/6] Safeguard intelligence — movement family / tissue stress / tendon-joint visibility
   const safeguardIntelligence = buildSafeguardIntelligence(input, skillStates)
 
+  // [MASTER-7] Guarded adaptation preview — non-mutating preview of what AI would consider
+  const guardedAdaptationPreview = buildGuardedAdaptationPreview(input, sourceStatus, safeguardIntelligence)
+
   return {
     version: 'adaptive-foundation-v1',
     generatedAt: new Date().toISOString(),
@@ -981,6 +1167,7 @@ export function buildAdaptiveFoundationModel(
     allowedActions,
     display,
     safeguardIntelligence,
+    guardedAdaptationPreview,
   }
 }
 

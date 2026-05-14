@@ -1,5 +1,7 @@
 # PROGRAM INTELLIGENCE + COACHING QUALITY CHECKLIST
 
+> **As of May 14th, 2026:** The active roadmap/checklist is `docs/OFFICIAL_CHECKLIST_MAY_14_2026.md`. Older IQ/AB entries in this file remain historical context, but new work should append to the May 14 checklist unless the user explicitly asks for history.
+
 ## Overview
 
 This checklist tracks the Program Intelligence Quality Acceptance Audit — the phase that follows the Program UI Cleanup. The goal is to determine whether the generated program is truly intelligent, coherent, doctrine-aligned, athletic, and useful — not just visually cleaner.

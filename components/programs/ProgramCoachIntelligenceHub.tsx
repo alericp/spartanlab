@@ -60,6 +60,11 @@ import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-
 import type { ProgramIntelligenceContract } from '@/lib/program/program-display-contract'
 import type { ProgramCalibrationInput } from '@/lib/program/program-calibration-recommendation'
 import type { EvidenceCoachRecommendationBundle } from '@/lib/program/evidence-derived-coach-recommendations'
+// [MASTER-3/4.1] Import adaptive foundation model builder for fallback resolution
+import {
+  buildAdaptiveFoundationModel,
+  type AdaptiveFoundationModel,
+} from '@/lib/program/adaptive-foundation-model'
 import { WeeklyMethodDecisionAccordion } from './WeeklyMethodDecisionAccordion'
 import { CalibrationCheckpointCard } from './CalibrationCheckpointCard'
 import { EvidenceCoachRecommendationCard } from './EvidenceCoachRecommendationCard'
@@ -2949,7 +2954,47 @@ export function ProgramCoachIntelligenceHub({
         
         {/* [MASTER-3/4] Adaptive Foundation Status — compact proof line */}
         {(() => {
-          const foundationModel = program.adaptiveFoundationModel
+          // [MASTER-3/4.1] Resolve foundation model with fallback for old programs
+          let foundationModel: AdaptiveFoundationModel | null = program.adaptiveFoundationModel ?? null
+          let isCanonical = !!program.adaptiveFoundationModel
+          
+          // If no canonical model, derive display-only fallback from current program truth
+          if (!foundationModel) {
+            try {
+              foundationModel = buildAdaptiveFoundationModel({
+                experienceLevel: program.experienceLevel ?? null,
+                trainingStyle: program.trainingPathType ?? null,
+                trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
+                equipment: program.equipmentProfile?.available ?? null,
+                primaryGoal: program.primaryGoal ?? null,
+                selectedGoals: program.goalCategories ?? null,
+                selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
+                constraintInsight: program.constraintInsight ?? null,
+                authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
+                hasWorkoutHistory: false, // Safe fallback — can't know from program alone
+                hasSkillLogs: false,
+                hasReadinessData: !!program.weeklyAdvisoryContext?.recoveryAdvice,
+              })
+              
+              // Dev-only diagnostic
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[master-3-4-adaptive-foundation-display-fallback]', {
+                  hasProgramStampedModel: false,
+                  usedFallback: true,
+                  dataQuality: foundationModel.sourceStatus.dataQuality,
+                  skillStateCount: foundationModel.skillStates.length,
+                  constraintCount: foundationModel.constraints.length,
+                })
+              }
+            } catch (err) {
+              // Non-blocking — return null if fallback fails
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[master-3-4-adaptive-foundation-fallback-failed]', err)
+              }
+              return null
+            }
+          }
+          
           if (!foundationModel) return null
           
           const { sourceStatus, display, skillStates, constraints } = foundationModel
@@ -2993,9 +3038,11 @@ export function ProgramCoachIntelligenceHub({
                   {displayText && <span className="text-[#7A7A8A]"> — {displayText}</span>}
                 </span>
               </div>
-              {/* Foundation-only note */}
+              {/* Foundation-only note — distinguish canonical vs derived */}
               <div className="mt-1 text-[8px] text-[#5A5A6A] pl-5">
-                {display.noMutationNote}
+                {isCanonical
+                  ? 'Program-stamped foundation — no automatic program changes applied by this layer.'
+                  : 'Derived from current plan — foundation only, no automatic program changes applied.'}
               </div>
             </div>
           )

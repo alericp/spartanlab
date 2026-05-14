@@ -489,28 +489,32 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
   },
 
   // -------------------------------------------------------------------------
-  // PROGRAM BALANCE (MISSING/NEEDED)
+  // PROGRAM BALANCE — MASTER-8B.3 COMPLETE
   // -------------------------------------------------------------------------
   {
     id: 'program_balance',
     label: 'Program Balance / Skill Distribution',
-    currentStatus: 'missing_needed',
-    currentOwnerFiles: [],
-    currentSourceSummary: 'Currently missing as a formal source',
+    currentStatus: 'read_only_active',
+    currentOwnerFiles: [
+      'lib/program/program-balance-intelligence-contract.ts',
+      'lib/program/program-balance-readonly-analyzer.ts',
+      'lib/program/program-balance-validation.ts',
+    ],
+    currentSourceSummary: 'MASTER-8B.3: Read-only Program Balance analyzer created. Consumes B2 representative knowledge seed (NOT complete database). Detects skill underexpression, pull dominance, push underrepresentation, weighted anchor gaps, tissue stress, future adaptation candidates. Returns honest knowledge coverage gaps. No mutation.',
     futureRole: 'Detect planche under-expression, pull dominance, push/pull imbalance, weighted anchor absence, poor skill spacing, repeated same-family days',
     mutationAuthorityNow: 'none',
     futureMutationStep: 'MASTER_8B_6',
     uiSurfaces: ['adaptive_foundation_sheet', 'plan_logic_sheet', 'program_day_cards'],
-    dependsOnBranches: ['skill_map', 'adaptive_foundation', 'recovery_readiness', 'prehab_rehab_tendon_joint'],
+    dependsOnBranches: ['skill_map', 'adaptive_foundation', 'recovery_readiness', 'prehab_rehab_tendon_joint', 'exercise_skill_knowledge_base'],
     consumedByBranches: [],
     riskIfIgnored: 'The app creates boring or imbalanced programs',
     riskLevel: 'high',
-    safeInsertionPoint: 'MASTER_8B_3',
-    protectedBehaviors: [],
-    forbiddenNow: ['Cannot consume until MASTER-8B.3 creates it'],
-    maxIntentNotes: 'Program Balance is the next major branch to build; critical for quality programming',
-    nextAllowedAction: 'Create read-only detection in MASTER-8B.3',
-    readiness: 'needs_foundation_contract',
+    safeInsertionPoint: 'MASTER_8B_4',
+    protectedBehaviors: ['Analyzer returns mutationAllowedNow: false', 'Knowledge coverage gaps reported honestly'],
+    forbiddenNow: ['Generator mutation', 'Future-session writer', 'Program Card mutation', 'Live runtime consumption', 'Full database completion claim'],
+    maxIntentNotes: 'MASTER-8B.3 COMPLETE: Read-only balance analysis exists. B2 seed is REPRESENTATIVE ONLY (13 exercises, 8 skills). Full database expansion deferred to MASTER-8C/8C+. Next: Hub tile wiring in MASTER-8B.4.',
+    nextAllowedAction: 'Hub tile contract wiring in MASTER-8B.4',
+    readiness: 'needs_ui_contract_wiring',
   },
 
   // -------------------------------------------------------------------------
@@ -528,7 +532,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
       'lib/doctrine/doctrine-materializer-registry.ts',
       'lib/doctrine/method-profile-registry.ts',
     ],
-    currentSourceSummary: 'MASTER-8B.2: Max-intent exercise/skill knowledge contract + seed created. 14 exercises, 8 skills seeded with full profiles (movement families, skill transfer, tissue stress, method compatibility, warm-up/cooldown needs, progression relationships, weighted anchor markers). Planche Lean/Push-Up taxonomy correctly separated. Weighted Pull-Up and Weighted Dip marked as strength anchors.',
+    currentSourceSummary: 'MASTER-8B.2: Max-intent exercise/skill knowledge contract + REPRESENTATIVE seed created. 13 exercises, 8 skills seeded (NOT complete database - full expansion in MASTER-8C). Planche Lean/Push-Up taxonomy correctly separated. Weighted Pull-Up and Weighted Dip marked as strength anchors.',
     futureRole: 'Science-guided programming decisions: movement families, skill transfer, tendon stress, frequency tolerance, intensity/volume/failure cost, warm-up/cooldown needs, method compatibility, progression/regression, equipment, ability gating',
     mutationAuthorityNow: 'none',
     futureMutationStep: 'MASTER_8C',

@@ -2033,10 +2033,12 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
   model: AdaptiveFoundationModel | null
   isCanonical: boolean
 } {
-  // Prefer program-stamped model, but enrich with safeguard intelligence if missing
+  // Prefer program-stamped model, but enrich with safeguard/preview intelligence if missing
   if (program.adaptiveFoundationModel) {
-    // If canonical model exists but lacks safeguardIntelligence, enrich it for display
-    if (!program.adaptiveFoundationModel.safeguardIntelligence) {
+    // If canonical model exists but lacks safeguardIntelligence or guardedAdaptationPreview, enrich it for display
+    const needsEnrichment = !program.adaptiveFoundationModel.safeguardIntelligence || 
+                            !program.adaptiveFoundationModel.guardedAdaptationPreview
+    if (needsEnrichment) {
       try {
         const enrichedModel = buildAdaptiveFoundationModel({
           experienceLevel: program.experienceLevel ?? null,
@@ -2055,11 +2057,12 @@ function resolveVisibleAdaptiveFoundation(program: AdaptiveProgram): {
           programSessions: program.sessions ?? null,
           jointCautions: null, // Future: wire from profile
         })
-        // Return canonical model base with display-enriched safeguard
+        // Return canonical model base with display-enriched safeguard and preview
         return {
           model: {
             ...program.adaptiveFoundationModel,
-            safeguardIntelligence: enrichedModel.safeguardIntelligence,
+            safeguardIntelligence: program.adaptiveFoundationModel.safeguardIntelligence ?? enrichedModel.safeguardIntelligence,
+            guardedAdaptationPreview: program.adaptiveFoundationModel.guardedAdaptationPreview ?? enrichedModel.guardedAdaptationPreview,
           },
           isCanonical: true,
         }
@@ -2134,6 +2137,12 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
         <div className="flex items-center gap-2 mb-2">
           <Brain className="w-5 h-5" />
           <span className="font-medium">{display.confidenceLabel}</span>
+          {/* [MASTER-7] Preview status indicator */}
+          {model.guardedAdaptationPreview && model.guardedAdaptationPreview.candidates.length > 0 && (
+            <span className="ml-auto px-1.5 py-0.5 rounded text-[8px] bg-violet-500/20 text-violet-400">
+              Preview ready
+            </span>
+          )}
         </div>
         <p className="text-sm opacity-80">{display.headline}</p>
         <div className="mt-2 flex items-center gap-2 text-xs opacity-70">
@@ -2310,6 +2319,58 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
               )
             })}
           </div>
+        </div>
+      )}
+      
+      {/* [MASTER-7] Guarded Adaptation Preview */}
+      {model.guardedAdaptationPreview && model.guardedAdaptationPreview.candidates.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#12121A] border border-violet-500/30">
+          <h4 className="text-xs font-medium text-[#E6E9EF] mb-2 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            Guarded Adaptation Preview
+            <span className="ml-auto px-1.5 py-0.5 rounded text-[8px] bg-violet-500/20 text-violet-400 uppercase tracking-wide">
+              Preview only
+            </span>
+          </h4>
+          <p className="text-[10px] text-[#8A8A9A] mb-3">{model.guardedAdaptationPreview.summary}</p>
+          <div className="space-y-3">
+            {model.guardedAdaptationPreview.candidates.slice(0, 5).map((candidate) => {
+              const statusColors: Record<string, string> = {
+                'preview_only': 'bg-violet-500/20 text-violet-400',
+                'blocked_needs_evidence': 'bg-amber-500/20 text-amber-400',
+                'blocked_requires_user_confirmation': 'bg-blue-500/20 text-blue-400',
+                'blocked_no_writer_yet': 'bg-[#2A2A35] text-[#8A8A9A]',
+              }
+              const statusLabels: Record<string, string> = {
+                'preview_only': 'Preview',
+                'blocked_needs_evidence': 'Needs data',
+                'blocked_requires_user_confirmation': 'Needs confirm',
+                'blocked_no_writer_yet': 'Not applied',
+              }
+              const statusClass = statusColors[candidate.applyStatus] || statusColors['blocked_no_writer_yet']
+              const statusLabel = statusLabels[candidate.applyStatus] || 'Blocked'
+              
+              return (
+                <div key={candidate.id} className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-[10px] font-medium text-[#B0B0C0]">{candidate.label}</span>
+                    <span className={cn('px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wide flex-shrink-0', statusClass)}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-[#7A7A8A] space-y-0.5">
+                    <p><span className="text-[#5A5A6A]">Target:</span> {candidate.target}</p>
+                    <p><span className="text-[#5A5A6A]">Trigger:</span> {candidate.trigger}</p>
+                    <p className="text-[#6A6A7A]">{candidate.expectedEffect}</p>
+                  </div>
+                  <p className="mt-1 text-[8px] text-[#5A5A6A]">Blocked: {candidate.blockedReason}</p>
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-3 pt-2 border-t border-[#1A1A22] text-[9px] text-[#5A5A6A]">
+            {model.guardedAdaptationPreview.nonMutationNote}
+          </p>
         </div>
       )}
       
@@ -3375,105 +3436,9 @@ export function ProgramCoachIntelligenceHub({
           )
         })()}
         
-        {/* [MASTER-3/4] Adaptive Foundation Status — compact proof line */}
-        {(() => {
-          // [MASTER-3/4.1] Resolve foundation model with fallback for old programs
-          let foundationModel: AdaptiveFoundationModel | null = program.adaptiveFoundationModel ?? null
-          let isCanonical = !!program.adaptiveFoundationModel
-          
-          // If no canonical model, derive display-only fallback from current program truth
-          if (!foundationModel) {
-            try {
-              foundationModel = buildAdaptiveFoundationModel({
-                experienceLevel: program.experienceLevel ?? null,
-                trainingStyle: program.trainingPathType ?? null,
-                trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
-                equipment: program.equipmentProfile?.available ?? null,
-                primaryGoal: program.primaryGoal ?? null,
-                selectedGoals: program.goalCategories ?? null,
-                selectedSkills: program.selectedSkills ?? program.authoritativeMultiSkillIntentContract?.selectedSkills ?? null,
-                constraintInsight: program.constraintInsight ?? null,
-                authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
-                hasWorkoutHistory: false, // Safe fallback — can't know from program alone
-                hasSkillLogs: false,
-                hasReadinessData: false, // Safe fallback — readiness evidence requires server context
-              })
-              
-              // Dev-only diagnostic
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[master-3-4-adaptive-foundation-display-fallback]', {
-                  hasProgramStampedModel: false,
-                  usedFallback: true,
-                  dataQuality: foundationModel.sourceStatus.dataQuality,
-                  skillStateCount: foundationModel.skillStates.length,
-                  constraintCount: foundationModel.constraints.length,
-                })
-              }
-            } catch (err) {
-              // Non-blocking — return null if fallback fails
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[master-3-4-adaptive-foundation-fallback-failed]', err)
-              }
-              return null
-            }
-          }
-          
-          if (!foundationModel) return null
-          
-          const { sourceStatus, display, skillStates, constraints } = foundationModel
-          
-          // Build compact status line
-          const statusParts: string[] = []
-          
-          // Data quality badge
-          const qualityColors: Record<string, string> = {
-            'insufficient': 'text-amber-400/70',
-            'partial': 'text-blue-400/70',
-            'usable': 'text-emerald-400/70',
-            'strong': 'text-emerald-400',
-          }
-          
-          // Skill summary if available
-          if (display.skillSummary) {
-            statusParts.push(display.skillSummary)
-          } else if (skillStates.length > 0) {
-            statusParts.push(`${skillStates.length} skills mapped`)
-          }
-          
-          // Limiter if available
-          if (constraints.length > 0 && constraints[0].label) {
-            statusParts.push(`limiter: ${constraints[0].label.toLowerCase()}`)
-          }
-          
-          // Actionability
-          statusParts.push(display.actionabilityLabel.toLowerCase())
-          
-          const displayText = statusParts.join(' · ')
-          const iconColor = qualityColors[sourceStatus.dataQuality] || 'text-blue-400/70'
-          
-          return (
-            <button
-              onClick={() => setAdaptiveFoundationOpen(true)}
-              className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50 w-full text-left hover:bg-[#1A1A22]/80 hover:border-[#3A3A45]/60 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <Brain className={cn('w-3 h-3 flex-shrink-0', iconColor)} />
-                <span className="text-[9px] text-[#8A8A9A] leading-relaxed">
-                  <span className="text-[#6A6A7A]">Adaptive foundation:</span>{' '}
-                  <span className={iconColor}>{display.confidenceLabel.toLowerCase()}</span>
-                  {displayText && <span className="text-[#7A7A8A]"> — {displayText}</span>}
-                </span>
-                <ChevronRight className="w-3 h-3 text-[#5A5A6A] ml-auto flex-shrink-0" />
-              </div>
-              {/* Foundation-only note — distinguish canonical vs derived */}
-              <div className="mt-1 text-[8px] text-[#5A5A6A] pl-5">
-                {isCanonical
-                  ? 'Program-stamped foundation — no automatic program changes applied by this layer.'
-                  : 'Derived from current plan — foundation only, no automatic program changes applied.'}
-              </div>
-            </button>
-          )
-        })()}
+        {/* [MASTER-7] Old duplicate inline Adaptive Foundation strip removed — 
+            the first-class Adaptive Foundation tile in the hub grid now owns this corridor.
+            The tile opens the full detail sheet with safeguard intelligence and preview. */}
         
         {/* [P2B] Compact helper line */}
         <p className="text-[9px] text-[#5A5A6A] mt-2 px-1">

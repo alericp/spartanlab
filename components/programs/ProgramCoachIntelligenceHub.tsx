@@ -2920,7 +2920,16 @@ function RequestedMethodsSheetContent({
         )
         return !hasAppliedArtifact // Only count if NOT already applied
       })
-      const appliedOverrideCount = artifacts.filter(a => a.isUserAppliedOverride && a.isRenderable).length
+      
+      // [MASTER-8A.1] FIX: Count unique canonical method keys, NOT raw artifact count
+      // One method can have multiple render artifacts (e.g., supersets on 3 sessions = 3 artifacts, but 1 method)
+      const userAppliedOverrideMethodKeys = new Set<string>()
+      for (const artifact of artifacts) {
+        if (artifact.isUserAppliedOverride && artifact.isRenderable) {
+          userAppliedOverrideMethodKeys.add(artifact.canonicalKey)
+        }
+      }
+      const appliedOverrideCount = userAppliedOverrideMethodKeys.size
       
       if (activePreviewsOnly.length > 0) {
         return (

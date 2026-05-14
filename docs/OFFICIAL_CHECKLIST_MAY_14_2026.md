@@ -134,7 +134,7 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ### MASTER-8B.2 — Max-Intent Exercise + Skill Knowledge Base Seed Schema
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 **Purpose:** Create a structured app-readable knowledge contract for exercise/skill science:
 - Movement families
@@ -149,7 +149,24 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Equipment needs
 - User ability gating
 
-**Constraint:** No generator wiring yet.
+**What This Step Delivered:**
+- Created `lib/program/exercise-skill-knowledge-contract.ts` (568 lines) - typed contract
+- Created `lib/program/exercise-skill-knowledge-seed.ts` (1206 lines) - seed data
+- Created `lib/program/exercise-skill-knowledge-validation.ts` (521 lines) - validation helpers
+- Created `docs/MASTER_8B_2_EXERCISE_SKILL_KNOWLEDGE_SCHEMA_REPORT.md` (288 lines) - report
+- Updated `lib/program/true-source-registry.ts` - knowledge base entry updated to `read_only_active`
+
+**Seeded Coverage:**
+- 14 exercises with full profiles (movement families, skill transfer, tissue stress, method compatibility, warm-up/cooldown, progression paths)
+- 8 skills with balance requirements (planche, FL, BL, HSPU, MU, OAPU, L-sit, V-sit)
+- Weighted Pull-Up and Weighted Dip marked as strength anchors
+- Planche Lean (seconds/hold) vs Tuck Planche Push-Up (reps/dynamic) taxonomy correctly separated
+
+**Files NOT Touched:**
+- Program Page, Workout Session page, Generator, Method Planner, Adaptive Foundation
+- Live workout runtime, database schema, package.json
+
+**Constraint:** No generator wiring yet. Knowledge is read-only foundation.
 
 ---
 

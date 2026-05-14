@@ -25,10 +25,11 @@ This is a **foundation/knowledge schema step** — NOT a generator wiring step, 
 
 2. **`lib/program/exercise-skill-knowledge-seed.ts`** (1206 lines)
    - Initial seed data using ACTUAL exercise IDs from `adaptive-exercise-pool.ts`
-   - 14 exercises seeded with full profiles
+   - **13 representative exercises** seeded with full profiles
    - 8 skills seeded with balance requirements
    - Planche Lean / Push-Up taxonomy correctly separated
    - Weighted Pull-Up and Weighted Dip marked as strength anchors
+   - **Note:** This is a representative schema-validation seed, NOT the complete SpartanLab exercise database. Full expansion deferred to MASTER-8C / MASTER-8C+.
 
 3. **`lib/program/exercise-skill-knowledge-validation.ts`** (521 lines)
    - Deterministic validation helpers

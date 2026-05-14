@@ -157,10 +157,11 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Updated `lib/program/true-source-registry.ts` - knowledge base entry updated to `read_only_active`
 
 **Seeded Coverage:**
-- 14 exercises with full profiles (movement families, skill transfer, tissue stress, method compatibility, warm-up/cooldown, progression paths)
+- **13 representative exercises** with full profiles (movement families, skill transfer, tissue stress, method compatibility, warm-up/cooldown, progression paths)
 - 8 skills with balance requirements (planche, FL, BL, HSPU, MU, OAPU, L-sit, V-sit)
 - Weighted Pull-Up and Weighted Dip marked as strength anchors
 - Planche Lean (seconds/hold) vs Tuck Planche Push-Up (reps/dynamic) taxonomy correctly separated
+- **Note:** This is a representative schema-validation seed, NOT the complete SpartanLab exercise database. Full expansion deferred to MASTER-8C / MASTER-8C+.
 
 **Files NOT Touched:**
 - Program Page, Workout Session page, Generator, Method Planner, Adaptive Foundation

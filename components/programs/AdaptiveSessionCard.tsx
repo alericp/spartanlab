@@ -50,7 +50,7 @@ import {
   type SessionDurationRecommendation,
   type SessionDurationRecommendations,
 } from '@/lib/program/session-length-truth-contract'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell, TrendingUp, ArrowDown, Pause } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -2932,6 +2932,49 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       : `${n} Density Block${n > 1 ? 's' : ''}`
 
   // ==========================================================================
+  // [AB20.4.5.4.8] ROW-LEVEL METHOD CUE TALLY
+  // Counts row-level set-execution methods (Top Set, Drop Set, Rest-Pause) that
+  // are visibly present inside the expanded body as row panels. These are NOT
+  // grouped structures - they're per-row execution methods that deserve collapsed
+  // chip visibility to match expanded body truth.
+  // ==========================================================================
+  const visibleRowMethodCueTally = (() => {
+    const tally = { topSet: 0, dropSet: 0, restPause: 0 }
+    
+    // Count row-level methods from fullVisibleExercises using the same logic
+    // as resolveRowMethodTruth to ensure parity
+    for (const ex of fullVisibleExercises) {
+      const raw = ex as unknown as {
+        method?: string
+        setExecutionMethod?: string
+        blockId?: string
+      }
+      
+      // Skip grouped block members - they use grouped chips, not row-level cue chips
+      if (raw.blockId) continue
+      
+      // setExecutionMethod wins over method (same priority as resolveRowMethodTruth)
+      const methodRaw = (raw.setExecutionMethod || raw.method || '').toLowerCase().trim()
+      
+      // Normalize and count
+      if (methodRaw === 'top_set' || methodRaw === 'top_set_backoff' || methodRaw === 'top set' || methodRaw === 'top set + back-off') {
+        tally.topSet++
+      } else if (methodRaw === 'drop_set' || methodRaw === 'drop set' || methodRaw === 'dropset') {
+        tally.dropSet++
+      } else if (methodRaw === 'rest_pause' || methodRaw === 'rest-pause' || methodRaw === 'restpause') {
+        tally.restPause++
+      }
+    }
+    
+    return tally
+  })()
+  
+  const hasAnyRowMethodCue =
+    visibleRowMethodCueTally.topSet > 0 ||
+    visibleRowMethodCueTally.dropSet > 0 ||
+    visibleRowMethodCueTally.restPause > 0
+
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -4026,6 +4069,32 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
                     <Dumbbell className="w-3 h-3" />
                     {clusterChipLabel(dominantMethodTally.cluster)}
+                  </span>
+                )}
+              </div>
+            )}
+            {/* [AB20.4.5.4.8] ROW-LEVEL METHOD CUE CHIPS
+                These are NOT grouped structures - they're row-level set-execution methods
+                (Top Set, Drop Set, Rest-Pause) that appear as panels in the expanded body.
+                Collapsed card should reflect these to match expanded body truth. */}
+            {hasAnyRowMethodCue && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {visibleRowMethodCueTally.topSet > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-rose-500/15 text-rose-300 border border-rose-500/40">
+                    <TrendingUp className="w-3 h-3" />
+                    Top Set
+                  </span>
+                )}
+                {visibleRowMethodCueTally.dropSet > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-orange-500/15 text-orange-300 border border-orange-500/40">
+                    <ArrowDown className="w-3 h-3" />
+                    Drop Set
+                  </span>
+                )}
+                {visibleRowMethodCueTally.restPause > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-teal-500/15 text-teal-300 border border-teal-500/40">
+                    <Pause className="w-3 h-3" />
+                    Rest-Pause
                   </span>
                 )}
               </div>
@@ -6885,7 +6954,7 @@ function MainExercisesRenderer({
             if (!m.bound || !m.prescriptionComplete) orphanIndexSet.add(i)
           })
         }
-        // Renderable member count after orphan pruning — used for the
+        // Renderable member count after orphan pruning ��� used for the
         // header "· N exercises" label so the count never lies.
         const renderableMemberCount = groupPrescription
           ? groupPrescription.members.length - orphanIndexSet.size

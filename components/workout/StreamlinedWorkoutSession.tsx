@@ -3420,7 +3420,104 @@ export function StreamlinedWorkoutSession({
       // real structure, not the pre-filter intent.
       hasGroupedBlocks = blocks.some(b => b.groupType !== null)
 
-      executionPlan = { blocks, hasGroupedBlocks, totalSets }
+      // [AB20.4.5.4.3] CRITICAL FALLTHROUGH FIX: If styledGroups existed but 
+      // produced ZERO executable grouped blocks (all dropped due to under-minimum
+      // or binding failure), we must NOT just accept the flat result. Instead,
+      // try the methodStructures fallback which may have Circuit/Superset/etc.
+      // that can still bind to these exercises.
+      if (!hasGroupedBlocks) {
+        console.log('[AB20.4.5.4.3] styledGroups produced no grouped blocks, attempting methodStructures fallback', {
+          styledGroupsCount: styledGroups.length,
+          keptBlocksCount: blocks.length,
+          keptGroupedBlocksCount: 0,
+          reason: 'All grouped blocks were dropped (under-minimum or binding failure)',
+        })
+        
+        // Try methodStructures fallback
+        const candidateMethodStructures = Array.isArray(
+          (safeSession as unknown as { methodStructures?: unknown }).methodStructures,
+        )
+          ? ((safeSession as unknown as { methodStructures?: unknown }).methodStructures as
+              Parameters<typeof buildExecutionBlocksFromMethodStructures>[0]['methodStructures'])
+          : []
+        
+        if (candidateMethodStructures.length > 0) {
+          const msBuild = buildExecutionBlocksFromMethodStructures({
+            methodStructures: candidateMethodStructures,
+            exercises,
+          })
+          
+          console.log('[AB20.4.5.4.3] methodStructures fallback result', {
+            methodStructuresCount: candidateMethodStructures.length,
+            methodStructuresFamilies: candidateMethodStructures.map(ms => ms.family),
+            builtGroupedBlocks: msBuild.blocks.length,
+            hasGroupedBlocks: msBuild.hasGroupedBlocks,
+            reasons: msBuild.reasons,
+            consumedIndexes: Array.from(msBuild.consumedExerciseIndexes),
+          })
+          
+          if (msBuild.hasGroupedBlocks) {
+            // methodStructures succeeded! Use it instead of the empty styledGroups result.
+            const flatBlocks: ExecutionBlock[] = []
+            let flatTotalSets = 0
+            for (let i = 0; i < exercises.length; i++) {
+              if (msBuild.consumedExerciseIndexes.has(i)) continue
+              const ex = exercises[i]
+              flatBlocks.push({
+                blockId: `flat-${ex.id || i}`,
+                groupType: null,
+                blockLabel: ex.name,
+                memberExercises: [ex],
+                memberExerciseIndexes: [i],
+                targetRounds: ex.sets || 3,
+                intraBlockRestSeconds: 0,
+                postRoundRestSeconds: ex.restSeconds || 90,
+                postBlockRestSeconds: 90,
+              })
+              flatTotalSets += ex.sets || 3
+            }
+            const mergedBlocks = [...msBuild.blocks, ...flatBlocks]
+            mergedBlocks.sort(
+              (a, b) =>
+                (a.memberExerciseIndexes[0] ?? 0) - (b.memberExerciseIndexes[0] ?? 0),
+            )
+            executionPlan = {
+              blocks: mergedBlocks,
+              hasGroupedBlocks: true,
+              totalSets: msBuild.totalSets + flatTotalSets,
+            }
+            console.log('[AB20.4.5.4.3] FALLTHROUGH SUCCESS: methodStructures built grouped blocks', {
+              source: 'methodStructures-after-styledGroups-failed',
+              groupedBlocks: msBuild.blocks.length,
+              flatBlocks: flatBlocks.length,
+              firstGroupedType: msBuild.blocks[0]?.groupType,
+              blockDetails: msBuild.blocks.map(b => ({
+                blockId: b.blockId,
+                groupType: b.groupType,
+                memberCount: b.memberExercises.length,
+                memberNames: b.memberExercises.map(m => m.name),
+              })),
+            })
+          } else {
+            // methodStructures also failed, use what we have
+            executionPlan = { blocks, hasGroupedBlocks, totalSets }
+            console.log('[AB20.4.5.4.3] FALLTHROUGH FAILED: methodStructures also produced no grouped blocks', {
+              styledGroupsKept: blocks.length,
+              methodStructuresCount: candidateMethodStructures.length,
+              methodStructuresReasons: msBuild.reasons,
+            })
+          }
+        } else {
+          // No methodStructures to try
+          executionPlan = { blocks, hasGroupedBlocks, totalSets }
+          console.log('[AB20.4.5.4.3] No methodStructures available for fallback', {
+            styledGroupsKept: blocks.length,
+          })
+        }
+      } else {
+        // styledGroups produced valid grouped blocks, use them
+        executionPlan = { blocks, hasGroupedBlocks, totalSets }
+      }
     } else {
       // [PHASE 4Y / H.H5] METHOD-STRUCTURES FALLBACK PATH.
       //
@@ -3539,6 +3636,64 @@ export function StreamlinedWorkoutSession({
       session: safeSession as unknown as Parameters<typeof evaluateLiveGroupedExecution>[0]['session'],
       styledGroupsAcceptedAsExecutionSource: styledGroupsAccepted,
     })
+  }, [safeSession, machineSessionContract])
+
+  // [AB20.4.5.4.3] VISIBLE RUNTIME PROOF INFO
+  // Computes the proof strip data from executionPlan and methodStructures.
+  // This is rendered as a visible strip on the live workout screen.
+  const ab20RuntimeProof = useMemo(() => {
+    if (!machineSessionContract) return null
+    
+    const executionPlan = machineSessionContract.executionPlan
+    const blocks = executionPlan?.blocks ?? []
+    const groupedBlocks = blocks.filter(b => b.groupType !== null)
+    const firstGroupedBlock = groupedBlocks[0]
+    
+    // Read methodStructures from safeSession
+    const methodStructures = Array.isArray(
+      (safeSession as unknown as { methodStructures?: unknown }).methodStructures
+    )
+      ? (safeSession as unknown as { methodStructures?: unknown[] }).methodStructures
+      : []
+    
+    // Read styleMetadata
+    const styleMetadata = (safeSession as unknown as { styleMetadata?: { styledGroups?: unknown[] } }).styleMetadata
+    const styledGroups = Array.isArray(styleMetadata?.styledGroups) ? styleMetadata.styledGroups : []
+    const styledGroupsWithGroupType = styledGroups.filter((g: unknown) => 
+      g && typeof g === 'object' && 'groupType' in g && (g as { groupType?: string }).groupType && (g as { groupType?: string }).groupType !== 'straight'
+    )
+    
+    // Determine the source based on block IDs
+    let source: string = 'unknown'
+    if (groupedBlocks.length > 0) {
+      // Check if blocks came from methodStructures (block IDs start with ms- or method-)
+      const firstBlockId = groupedBlocks[0].blockId || ''
+      if (firstBlockId.startsWith('ms-') || firstBlockId.startsWith('method-')) {
+        source = 'methodStructures'
+      } else if (firstBlockId.startsWith('flat-')) {
+        source = 'flatRows'
+      } else {
+        source = 'styledGroups'
+      }
+    } else if (blocks.length > 0) {
+      source = 'flatRows'
+    }
+    
+    return {
+      stamp: 'AB20.4.5.4.3',
+      source,
+      methodStructuresCount: methodStructures?.length ?? 0,
+      methodStructuresFamilies: (methodStructures ?? []).map((ms: unknown) => 
+        (ms && typeof ms === 'object' && 'family' in ms) ? (ms as { family?: string }).family : 'unknown'
+      ),
+      styledGroupsTotal: styledGroups.length,
+      styledGroupsGrouped: styledGroupsWithGroupType.length,
+      groupedBlocksBuilt: groupedBlocks.length,
+      firstGroupedType: firstGroupedBlock?.groupType ?? 'none',
+      firstGroupedLabel: firstGroupedBlock?.blockLabel ?? 'none',
+      firstGroupedMemberCount: firstGroupedBlock?.memberExercises?.length ?? 0,
+      hasGroupedBlocks: executionPlan?.hasGroupedBlocks ?? false,
+    }
   }, [safeSession, machineSessionContract])
 
   // [LIVE-SESSION-LOCK] Generate structure signature for restore validation
@@ -11247,6 +11402,22 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     </div>
   </div>
   )}
+        {/* [AB20.4.5.4.3] VISIBLE RUNTIME PROOF STRIP - Always shown for repair verification */}
+        {ab20RuntimeProof && (
+          <div
+            className="mx-3 mt-2 mb-1 rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-1.5"
+            role="status"
+          >
+            <p className="text-[10px] text-emerald-400/90 font-mono tabular-nums leading-tight">
+              {ab20RuntimeProof.stamp} · src: {ab20RuntimeProof.source} · 
+              ms: {ab20RuntimeProof.methodStructuresCount} ({ab20RuntimeProof.methodStructuresFamilies.join(',') || 'none'}) · 
+              styled: {ab20RuntimeProof.styledGroupsGrouped}/{ab20RuntimeProof.styledGroupsTotal} · 
+              built: {ab20RuntimeProof.groupedBlocksBuilt} · 
+              first: {ab20RuntimeProof.firstGroupedType} · 
+              snap: {blockGroupType || 'none'}
+            </p>
+          </div>
+        )}
         {showGuidanceBanner && (
           <div
             className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"

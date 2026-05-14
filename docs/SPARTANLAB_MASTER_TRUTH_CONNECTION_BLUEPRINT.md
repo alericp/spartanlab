@@ -189,6 +189,35 @@ older than canonical session truth, and driving the program-level
 > the honest state, not a silent flatten. A safe density timer runtime is a
 > future engine-quality task and is not in scope for Phase H.
 
+> **AB20.4.5 Method Display Parity Closeout — `COMPLETE` (AB20.4.5.5)**
+>
+> AB20.4.5 was a nested repair series ensuring Program Day collapsed chips and
+> expanded bodies match, and live workout method UI is acceptable.
+>
+> **Evidence:**
+> - AB20.4.5.4.7: Collapsed grouped-method chips now derive from
+>   `groupedRenderContract` (same source as expanded body), ensuring parity.
+>   Circuit/Superset/Density Block/Cluster chips appear on collapsed cards.
+> - AB20.4.5.4.8: Collapsed row-level method cue chips added for Top Set, Drop
+>   Set, Rest-Pause. These are NOT grouped structures — they're per-row
+>   execution methods with separate `visibleRowMethodCueTally` derivation.
+> - Program Day collapsed cards visually verified: Day 1 Circuit (emerald),
+>   Day 2/3 Superset (blue), Day 4 Drop Set (orange), Day 5 Density Block
+>   (amber), Day 6 Top Set (rose).
+> - Expanded Program Day bodies unchanged and consistent with collapsed chips.
+> - Live workout method UI intentionally left unchanged; debug proof strip
+>   hidden behind `NODE_ENV === 'development'`; generic amber grouped-method
+>   banner replaced with method-specific guidance cards.
+> - Method Override Planner materialized/blocked/not materialized states
+>   preserved.
+> - TypeScript and build pass.
+>
+> **Deferred to day-by-day workout testing:**
+> - Live workout Top Set + Back-Off execution nuance
+> - Live workout Drop Set execution nuance
+> - Live workout Density runtime (remains `guidanceOnly`)
+> - Superset/Circuit execution edge cases
+
 > **Phase I — Numeric Prescription Mutation Lock — completed in Phase 4Z.**
 > See the Phase I section below for the contract location, insertion point,
 > conservative gates, and visible-proof contract.

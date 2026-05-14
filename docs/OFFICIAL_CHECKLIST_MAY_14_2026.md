@@ -213,24 +213,41 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ### MASTER-8B.4 — Coach Intelligence Hub Tile Contract Wiring
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
-**Purpose:** Ensure all hub tiles are accounted for with one of:
-- Active with real source
-- Partial with honest missing evidence
-- Disabled with reason
-- Future-only with required source branch
+**Purpose:** Wire the B3 Program Balance read-only analyzer into the Coach Intelligence Hub as an honest read-only tile/sheet.
 
-**Tiles to Account For:**
-- Skill Map
-- Method Decisions
-- Adaptive Foundation
-- Calibration
-- Coach Recs
-- Method Planner
-- Plan Logic
+**What This Step Delivered:**
+- Program Balance tile added to Coach Intelligence Hub grid
+- Program Balance sheet rendering full B3 read-only result
+- Severity-ranked balance findings with visual chips
+- Selected-skill expression status and counts
+- Movement-family balance summary
+- Weighted-anchor (pull-up/dip) presence status
+- Tissue-stress summary per region
+- Future-session candidates shown as "Not applied" / "Read-only candidate"
+- Coverage summary showing known/unknown exercises
+- Clear "Read-only" and "Representative seed only" messaging
+- No mutation applied — `mutationAllowedNow: false`
+- No generator change
+- No Program Card change
+- No live workout runtime change
 
-**Constraint:** No fake claims.
+**Tiles Preserved:**
+- Skill Map — unchanged
+- Method Decisions — unchanged
+- Adaptive Foundation — unchanged
+- Calibration — unchanged
+- Coach Recs — unchanged
+- Method Planner — unchanged (still green "Applied 6")
+- Plan Logic — unchanged
+
+**Files Changed:**
+- `lib/program/program-balance-ui-adapter.ts` (new — 265 lines)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (added tile, sheet, imports)
+- `docs/MASTER_8B_4_COACH_INTELLIGENCE_HUB_TILE_CONTRACT_WIRING_REPORT.md` (new)
+
+**Constraint:** No fake claims. No mutation. No generator wiring. Read-only only.
 
 ---
 

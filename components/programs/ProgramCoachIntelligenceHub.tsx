@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -55,6 +55,7 @@ import {
   Trash2,
   RefreshCw,
   Activity,
+  Scale,
   Shield,
   Database,
   AlertCircle,
@@ -97,6 +98,24 @@ import {
   type MethodOverrideSeverityAssessment,
   type MethodOverrideArtifact,
 } from '@/lib/program/requested-method-override-planner'
+// [MASTER-8B.4] Program Balance read-only analyzer imports
+import {
+  analyzeProgramBalanceReadOnly,
+  getProgramBalanceReadOnlyUnavailable,
+} from '@/lib/program/program-balance-readonly-analyzer'
+import type {
+  ProgramBalanceReadOnlyResult,
+  ProgramBalanceFinding,
+  ProgramBalanceSkillExpression,
+  ProgramBalanceMovementFamilySummary,
+  ProgramBalanceTissueStressSummary,
+  FutureSessionCandidate,
+  ProgramBalanceSeverity,
+} from '@/lib/program/program-balance-intelligence-contract'
+import {
+  buildProgramBalanceBranchInputFromProgram,
+  extractSelectedSkillIdsFromRepresentations,
+} from '@/lib/program/program-balance-ui-adapter'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -2842,6 +2861,568 @@ function AdaptiveFoundationSheetContent({ program }: { program: AdaptiveProgram 
   )
 }
 
+// =============================================================================
+// [MASTER-8B.4] PROGRAM BALANCE SHEET CONTENT
+// =============================================================================
+
+function getSeverityColor(severity: ProgramBalanceSeverity): string {
+  switch (severity) {
+    case 'high':
+      return 'text-red-400'
+    case 'moderate':
+      return 'text-amber-400'
+    case 'mild':
+    case 'watch':
+      return 'text-blue-400'
+    case 'blocked':
+      return 'text-rose-500'
+    default:
+      return 'text-[#7A7A8A]'
+  }
+}
+
+function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
+  switch (severity) {
+    case 'high':
+      return 'bg-red-500/10 border-red-500/20'
+    case 'moderate':
+      return 'bg-amber-500/10 border-amber-500/20'
+    case 'mild':
+    case 'watch':
+      return 'bg-blue-500/10 border-blue-500/20'
+    case 'blocked':
+      return 'bg-rose-500/10 border-rose-500/20'
+    default:
+      return 'bg-[#2A2A35] border-[#3A3A45]'
+  }
+}
+
+function ProgramBalanceSheetContent({
+  result,
+}: {
+  result: ProgramBalanceReadOnlyResult
+}) {
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(prev => prev === section ? null : section)
+  }
+
+  // Sort findings by severity
+  const sortedFindings = useMemo(() => {
+    const severityOrder: Record<ProgramBalanceSeverity, number> = {
+      high: 0,
+      blocked: 1,
+      moderate: 2,
+      mild: 3,
+      watch: 4,
+      none: 5,
+    }
+    return [...result.findings].sort((a, b) => 
+      (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5)
+    )
+  }, [result.findings])
+
+  const highCount = result.findings.filter(f => f.severity === 'high').length
+  const moderateCount = result.findings.filter(f => f.severity === 'moderate').length
+  const watchCount = result.findings.filter(f => f.severity === 'watch' || f.severity === 'mild').length
+
+  return (
+    <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+      {/* Status Banner */}
+      <div className={cn(
+        'p-3 rounded-lg border',
+        result.status === 'ready' ? 'bg-emerald-500/10 border-emerald-500/20' :
+        result.status === 'partial' ? 'bg-blue-500/10 border-blue-500/20' :
+        'bg-amber-500/10 border-amber-500/20'
+      )}>
+        <div className="flex items-center gap-2 mb-1">
+          <Scale className={cn(
+            'w-4 h-4',
+            result.status === 'ready' ? 'text-emerald-400' :
+            result.status === 'partial' ? 'text-blue-400' :
+            'text-amber-400'
+          )} />
+          <span className="text-sm font-medium text-[#E6E9EF]">
+            {result.status === 'ready' ? 'Analysis Ready' :
+             result.status === 'partial' ? 'Partial Analysis' :
+             'Analysis Unavailable'}
+          </span>
+          <span className={cn(
+            'ml-auto text-[9px] font-medium px-1.5 py-0.5 rounded border',
+            'bg-[#2A2A35] border-[#3A3A45] text-[#9A9AAA]'
+          )}>
+            Read-only
+          </span>
+        </div>
+        <p className="text-xs text-[#7A7A8A]">
+          No program changes applied &mdash; this is a read-only analysis.
+        </p>
+        <p className="text-[10px] text-[#5A5A6A] mt-1">
+          Representative seed only &mdash; full DB deferred to MASTER-8C+
+        </p>
+      </div>
+
+      {/* Proof Strip */}
+      <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+        <div className="flex flex-wrap gap-2 text-[9px] text-[#5A5A6A]">
+          {result.proof.consumedKnowledgeSeed && (
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400/60" />
+              Seed consumed
+            </span>
+          )}
+          {result.proof.consumedRepresentativeSeedOnly && (
+            <span className="flex items-center gap-1">
+              <Info className="w-3 h-3 text-blue-400/60" />
+              Rep. seed only
+            </span>
+          )}
+          {result.proof.noMutationPerformed && (
+            <span className="flex items-center gap-1">
+              <Shield className="w-3 h-3 text-emerald-400/60" />
+              No mutation
+            </span>
+          )}
+          {result.proof.noGeneratorChange && (
+            <span className="flex items-center gap-1">
+              <Shield className="w-3 h-3 text-emerald-400/60" />
+              Generator safe
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Coverage Summary */}
+      <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+        <div className="flex items-center gap-2 mb-2">
+          <Database className="w-3.5 h-3.5 text-[#7A7A8A]" />
+          <span className="text-xs font-medium text-[#E6E9EF]">Coverage Summary</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+            <span className="text-[10px] text-[#5A5A6A]">Sessions</span>
+            <p className="text-sm font-medium text-[#E6E9EF]">{result.analyzedSessionCount}</p>
+          </div>
+          <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+            <span className="text-[10px] text-[#5A5A6A]">Exercises</span>
+            <p className="text-sm font-medium text-[#E6E9EF]">{result.analyzedExerciseCount}</p>
+          </div>
+          <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+            <span className="text-[10px] text-[#5A5A6A]">Known</span>
+            <p className="text-sm font-medium text-emerald-400">{result.knowledgeMatchedExerciseCount}</p>
+          </div>
+          <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+            <span className="text-[10px] text-[#5A5A6A]">Unknown</span>
+            <p className="text-sm font-medium text-amber-400">{result.knowledgeMissingExerciseCount}</p>
+          </div>
+        </div>
+        {result.knowledgeMissingExerciseCount > 0 && (
+          <p className="text-[10px] text-[#5A5A6A] mt-2">
+            Some exercises are outside the 13-entry representative seed. Findings may understate total balance/stress.
+          </p>
+        )}
+      </div>
+
+      {/* Findings Summary */}
+      {sortedFindings.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+          <button
+            onClick={() => toggleSection('findings')}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+              Balance Findings
+            </span>
+            <div className="flex gap-1">
+              {highCount > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
+                  {highCount} high
+                </span>
+              )}
+              {moderateCount > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  {moderateCount} moderate
+                </span>
+              )}
+              {watchCount > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  {watchCount} watch
+                </span>
+              )}
+            </div>
+            <ChevronRight className={cn(
+              'w-3 h-3 text-[#5A5A6A] transition-transform',
+              expandedSection === 'findings' && 'rotate-90'
+            )} />
+          </button>
+          {expandedSection === 'findings' && (
+            <div className="mt-3 space-y-2">
+              {sortedFindings.map((finding, idx) => (
+                <div
+                  key={finding.id || idx}
+                  className={cn(
+                    'p-2 rounded border',
+                    getSeverityBgColor(finding.severity)
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className={cn('w-3 h-3 mt-0.5 shrink-0', getSeverityColor(finding.severity))} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[#E6E9EF]">{finding.title}</p>
+                      <p className="text-[10px] text-[#7A7A8A] mt-0.5">{finding.summary}</p>
+                      {finding.readOnlyRecommendation && (
+                        <p className="text-[10px] text-[#9A9AAA] mt-1 italic">
+                          {finding.readOnlyRecommendation}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className={cn(
+                          'text-[8px] px-1 py-0.5 rounded border',
+                          getSeverityBgColor(finding.severity),
+                          getSeverityColor(finding.severity)
+                        )}>
+                          {finding.severity}
+                        </span>
+                        {finding.futureMutationCandidate && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
+                            Candidate only
+                          </span>
+                        )}
+                        {!finding.mutationAllowedNow && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
+                            Not applied
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Skill Expression */}
+      {result.skillExpression.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+          <button
+            onClick={() => toggleSection('skills')}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <Target className="w-3.5 h-3.5 text-[#E63946]" />
+            <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+              Skill Expression ({result.skillExpression.length} skills)
+            </span>
+            <ChevronRight className={cn(
+              'w-3 h-3 text-[#5A5A6A] transition-transform',
+              expandedSection === 'skills' && 'rotate-90'
+            )} />
+          </button>
+          {expandedSection === 'skills' && (
+            <div className="mt-3 space-y-2">
+              {result.skillExpression.map((skill, idx) => (
+                <div
+                  key={skill.skillId || idx}
+                  className={cn(
+                    'p-2 rounded border',
+                    getSeverityBgColor(skill.severity)
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-[#E6E9EF]">{skill.skillName}</span>
+                    <span className={cn(
+                      'text-[8px] px-1 py-0.5 rounded border',
+                      skill.expressionStatus === 'direct_primary' || skill.expressionStatus === 'direct_secondary'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : skill.expressionStatus === 'support_only' || skill.expressionStatus === 'maintenance_only'
+                        ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    )}>
+                      {skill.expressionStatus.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 text-[10px] text-[#7A7A8A]">
+                    <span>Direct: {skill.directExposureCount}</span>
+                    <span>Support: {skill.supportExposureCount}</span>
+                    <span>Maint: {skill.maintenanceExposureCount}</span>
+                  </div>
+                  {skill.rationale && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-1">{skill.rationale}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Movement Family Balance */}
+      {result.movementFamilySummary.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+          <button
+            onClick={() => toggleSection('movement')}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+              Movement Families ({result.movementFamilySummary.length})
+            </span>
+            <ChevronRight className={cn(
+              'w-3 h-3 text-[#5A5A6A] transition-transform',
+              expandedSection === 'movement' && 'rotate-90'
+            )} />
+          </button>
+          {expandedSection === 'movement' && (
+            <div className="mt-3 space-y-2">
+              {result.movementFamilySummary.map((family, idx) => (
+                <div
+                  key={family.family || idx}
+                  className={cn(
+                    'p-2 rounded border',
+                    getSeverityBgColor(family.severity)
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-[#E6E9EF] capitalize">
+                      {family.family.replace(/_/g, ' ')}
+                    </span>
+                    <span className={cn('text-[8px] px-1 py-0.5 rounded border', getSeverityBgColor(family.severity), getSeverityColor(family.severity))}>
+                      {family.severity}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 text-[10px] text-[#7A7A8A]">
+                    <span>Exposures: {family.exposureCount}</span>
+                    <span>Hard: {family.hardExposureCount}</span>
+                    {family.consecutiveDayStreak > 1 && (
+                      <span>Streak: {family.consecutiveDayStreak}d</span>
+                    )}
+                  </div>
+                  {family.rationale && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-1">{family.rationale}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Weighted Anchor Status */}
+      <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+        <button
+          onClick={() => toggleSection('anchors')}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          <Activity className="w-3.5 h-3.5 text-violet-400" />
+          <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+            Weighted Anchors
+          </span>
+          <ChevronRight className={cn(
+            'w-3 h-3 text-[#5A5A6A] transition-transform',
+            expandedSection === 'anchors' && 'rotate-90'
+          )} />
+        </button>
+        {expandedSection === 'anchors' && (
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className={cn(
+                'p-2 rounded border',
+                result.weightedAnchorSummary.weightedPullUpPresent
+                  ? 'bg-emerald-500/10 border-emerald-500/20'
+                  : 'bg-amber-500/10 border-amber-500/20'
+              )}>
+                <span className="text-[10px] text-[#7A7A8A]">Weighted Pull-up</span>
+                <p className={cn(
+                  'text-xs font-medium',
+                  result.weightedAnchorSummary.weightedPullUpPresent ? 'text-emerald-400' : 'text-amber-400'
+                )}>
+                  {result.weightedAnchorSummary.weightedPullUpPresent ? 'Present' : 'Missing'}
+                </p>
+                <span className="text-[9px] text-[#5A5A6A]">
+                  {result.weightedAnchorSummary.pullAnchorStatus.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div className={cn(
+                'p-2 rounded border',
+                result.weightedAnchorSummary.weightedDipPresent
+                  ? 'bg-emerald-500/10 border-emerald-500/20'
+                  : 'bg-amber-500/10 border-amber-500/20'
+              )}>
+                <span className="text-[10px] text-[#7A7A8A]">Weighted Dip</span>
+                <p className={cn(
+                  'text-xs font-medium',
+                  result.weightedAnchorSummary.weightedDipPresent ? 'text-emerald-400' : 'text-amber-400'
+                )}>
+                  {result.weightedAnchorSummary.weightedDipPresent ? 'Present' : 'Missing'}
+                </p>
+                <span className="text-[9px] text-[#5A5A6A]">
+                  {result.weightedAnchorSummary.dipAnchorStatus.replace(/_/g, ' ')}
+                </span>
+              </div>
+            </div>
+            {result.weightedAnchorSummary.missingReason && (
+              <p className="text-[10px] text-[#5A5A6A]">
+                {result.weightedAnchorSummary.missingReason}
+              </p>
+            )}
+            {result.weightedAnchorSummary.rationale && (
+              <p className="text-[10px] text-[#7A7A8A]">
+                {result.weightedAnchorSummary.rationale}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Tissue Stress Summary */}
+      {result.tissueStressSummary.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+          <button
+            onClick={() => toggleSection('tissue')}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+            <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+              Tissue Stress ({result.tissueStressSummary.length} regions)
+            </span>
+            <ChevronRight className={cn(
+              'w-3 h-3 text-[#5A5A6A] transition-transform',
+              expandedSection === 'tissue' && 'rotate-90'
+            )} />
+          </button>
+          {expandedSection === 'tissue' && (
+            <div className="mt-3 space-y-2">
+              {result.tissueStressSummary.map((tissue, idx) => (
+                <div
+                  key={tissue.region || idx}
+                  className={cn(
+                    'p-2 rounded border',
+                    getSeverityBgColor(tissue.severity)
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-[#E6E9EF] capitalize">
+                      {tissue.region.replace(/_/g, ' ')}
+                    </span>
+                    <span className={cn('text-[8px] px-1 py-0.5 rounded border', getSeverityBgColor(tissue.severity), getSeverityColor(tissue.severity))}>
+                      {tissue.severity}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 text-[10px] text-[#7A7A8A]">
+                    <span>Exposures: {tissue.exposureCount}</span>
+                    <span>High stress: {tissue.highStressExposureCount}</span>
+                    {tissue.consecutiveExposureDays > 1 && (
+                      <span>Consecutive: {tissue.consecutiveExposureDays}d</span>
+                    )}
+                  </div>
+                  {tissue.rationale && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-1">{tissue.rationale}</p>
+                  )}
+                  {tissue.futureSafeguardNeed && (
+                    <p className="text-[10px] text-amber-400/80 mt-1 italic">
+                      {tissue.futureSafeguardNeed}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Future Session Candidates */}
+      {result.futureSessionCandidates.length > 0 && (
+        <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+          <button
+            onClick={() => toggleSection('future')}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+              Future Candidates ({result.futureSessionCandidates.length})
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
+              Not applied
+            </span>
+            <ChevronRight className={cn(
+              'w-3 h-3 text-[#5A5A6A] transition-transform',
+              expandedSection === 'future' && 'rotate-90'
+            )} />
+          </button>
+          {expandedSection === 'future' && (
+            <div className="mt-3 space-y-2">
+              {result.futureSessionCandidates.map((candidate, idx) => (
+                <div
+                  key={idx}
+                  className="p-2 rounded border bg-[#0A0A0D] border-[#1A1A22]"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-[#E6E9EF] capitalize">
+                      {candidate.candidateType.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                      Read-only candidate
+                    </span>
+                  </div>
+                  {candidate.targetDayIndexes.length > 0 && (
+                    <p className="text-[10px] text-[#7A7A8A]">
+                      Target days: {candidate.targetDayIndexes.join(', ')}
+                    </p>
+                  )}
+                  {candidate.rationale && (
+                    <p className="text-[10px] text-[#5A5A6A] mt-1">{candidate.rationale}</p>
+                  )}
+                  <div className="flex gap-1 mt-1">
+                    <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#5A5A6A]">
+                      Not applied in B4
+                    </span>
+                    {candidate.requiresFullKnowledgeBase && (
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#5A5A6A]">
+                        Needs full DB
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Missing Data */}
+      {result.missingData.length > 0 && (
+        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-medium text-[#E6E9EF]">Missing Data</span>
+          </div>
+          <ul className="space-y-1">
+            {result.missingData.slice(0, 5).map((item, idx) => (
+              <li key={idx} className="text-[10px] text-[#7A7A8A] flex items-start gap-1">
+                <span className="text-amber-400/60">•</span>
+                {item}
+              </li>
+            ))}
+            {result.missingData.length > 5 && (
+              <li className="text-[10px] text-[#5A5A6A]">
+                ...and {result.missingData.length - 5} more
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Next Step */}
+      <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
+        Next roadmap step after B4: MASTER-8B.5 Method Planner safe integration.
+      </div>
+    </div>
+  )
+}
+
 function RequestedMethodsSheetContent({
   program,
   plannerSummary,
@@ -3565,6 +4146,8 @@ export function ProgramCoachIntelligenceHub({
   const [planLogicOpen, setPlanLogicOpen] = useState(false)
   // [MASTER-4.2] Adaptive Foundation sheet state
   const [adaptiveFoundationOpen, setAdaptiveFoundationOpen] = useState(false)
+  // [MASTER-8B.4] Program Balance sheet state
+  const [programBalanceOpen, setProgramBalanceOpen] = useState(false)
   // [AB20.4.2] Reset-all state
   const [isResettingAllOverrides, setIsResettingAllOverrides] = useState(false)
   const [showResetAllConfirmation, setShowResetAllConfirmation] = useState(false)
@@ -3589,6 +4172,69 @@ export function ProgramCoachIntelligenceHub({
   // [MASTER-8A.1.1] Build ONE canonical planner summary for all visible counts
   // This replaces the scattered attentionMethodCount, appliedMethodCount, hasActivePreviews logic
   const plannerSummary = buildCanonicalMethodPlannerSummary(program, methodItems, activePreviews)
+  
+  // [MASTER-8B.4] Program Balance read-only analysis
+  const programBalanceResult = useMemo<ProgramBalanceReadOnlyResult>(() => {
+    try {
+      // Extract selected skill IDs from representations
+      const selectedSkillIds = extractSelectedSkillIdsFromRepresentations(selectedSkillRepresentations)
+      
+      // Build input from program
+      const input = buildProgramBalanceBranchInputFromProgram({
+        program,
+        selectedSkillIds,
+        currentWeekNumber,
+      })
+      
+      // Run analyzer
+      return analyzeProgramBalanceReadOnly(input)
+    } catch (error) {
+      // Safe fallback - never crash the hub
+      return getProgramBalanceReadOnlyUnavailable(
+        `Analysis error: ${error instanceof Error ? error.message : 'unknown'}`
+      )
+    }
+  }, [program, selectedSkillRepresentations, currentWeekNumber])
+  
+  // [MASTER-8B.4] Derive tile summary and badge from balance result
+  const programBalanceTileSummary = useMemo(() => {
+    if (programBalanceResult.status === 'unavailable') return 'Needs program'
+    
+    const highCount = programBalanceResult.findings.filter(f => f.severity === 'high').length
+    const moderateCount = programBalanceResult.findings.filter(f => f.severity === 'moderate').length
+    const watchCount = programBalanceResult.findings.filter(f => f.severity === 'watch' || f.severity === 'mild').length
+    
+    if (highCount > 0) return `${highCount} high priority`
+    if (moderateCount > 0) return `${moderateCount} watch items`
+    if (watchCount > 0) return 'Minor notes'
+    if (programBalanceResult.knowledgeMissingExerciseCount > programBalanceResult.knowledgeMatchedExerciseCount) {
+      return 'Limited coverage'
+    }
+    return 'Balanced'
+  }, [programBalanceResult])
+  
+  const programBalanceBadge = useMemo(() => {
+    if (programBalanceResult.status === 'unavailable') return 'Missing'
+    
+    const highCount = programBalanceResult.findings.filter(f => f.severity === 'high').length
+    const moderateCount = programBalanceResult.findings.filter(f => f.severity === 'moderate').length
+    
+    if (highCount > 0) return 'High'
+    if (moderateCount > 0) return 'Moderate'
+    if (programBalanceResult.status === 'partial') return 'Partial'
+    return 'Ready'
+  }, [programBalanceResult])
+  
+  const programBalanceBadgeVariant = useMemo<'warning' | 'success' | 'info' | 'secondary'>(() => {
+    if (programBalanceResult.status === 'unavailable') return 'secondary'
+    
+    const highCount = programBalanceResult.findings.filter(f => f.severity === 'high').length
+    const moderateCount = programBalanceResult.findings.filter(f => f.severity === 'moderate').length
+    
+    if (highCount > 0 || moderateCount > 0) return 'warning'
+    if (programBalanceResult.status === 'partial') return 'info'
+    return 'success'
+  }, [programBalanceResult])
   
   // [AB20.4.3] Reload context state
   const [isReloadingPlanner, setIsReloadingPlanner] = useState(false)
@@ -3806,6 +4452,16 @@ export function ProgramCoachIntelligenceHub({
             summary="View"
             onClick={() => setPlanLogicOpen(true)}
             disabled={!truthExplanation}
+          />
+
+          {/* [MASTER-8B.4] Program Balance — read-only balance analysis */}
+          <HubButton
+            icon={<Scale className="w-3.5 h-3.5 text-teal-400" />}
+            label="Program Balance"
+            summary={programBalanceTileSummary}
+            badge={programBalanceBadge}
+            badgeVariant={programBalanceBadgeVariant}
+            onClick={() => setProgramBalanceOpen(true)}
           />
         </div>
         
@@ -4132,6 +4788,24 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* [MASTER-8B.4] Program Balance Sheet — read-only balance analysis */}
+      <Sheet open={programBalanceOpen} onOpenChange={setProgramBalanceOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md bg-[#0F0F12] border-[#2A2A35]">
+          <SheetHeader>
+            <SheetTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <Scale className="w-4 h-4 text-teal-400" />
+              Program Balance
+            </SheetTitle>
+            <SheetDescription className="text-[#7A7A8A]">
+              Read-only balance, skill expression, anchor, and stress analysis
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <ProgramBalanceSheetContent result={programBalanceResult} />
           </div>
         </SheetContent>
       </Sheet>

@@ -2138,6 +2138,11 @@ export interface AdaptiveProgram {
   // avoid creating a circular dependency between the builder and the
   // shaping helper.
   evidenceCalibrationShapingProof?: import('./program/evidence-calibration-program-shaping').EvidenceCalibrationShapingProof
+  // [MASTER-3/4] Optional adaptive foundation model — synthesizes athlete state,
+  // skill priorities, and constraint detection into a single typed structure that
+  // future adaptive layers can consume. Generated at program creation and
+  // preserved through save/load. Older programs simply omit this field.
+  adaptiveFoundationModel?: import('./program/adaptive-foundation-model').AdaptiveFoundationModel
   primaryGoal: PrimaryGoal
   secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   goalLabel: string

@@ -2947,6 +2947,60 @@ export function ProgramCoachIntelligenceHub({
           )
         })()}
         
+        {/* [MASTER-3/4] Adaptive Foundation Status — compact proof line */}
+        {(() => {
+          const foundationModel = program.adaptiveFoundationModel
+          if (!foundationModel) return null
+          
+          const { sourceStatus, display, skillStates, constraints } = foundationModel
+          
+          // Build compact status line
+          const statusParts: string[] = []
+          
+          // Data quality badge
+          const qualityColors: Record<string, string> = {
+            'insufficient': 'text-amber-400/70',
+            'partial': 'text-blue-400/70',
+            'usable': 'text-emerald-400/70',
+            'strong': 'text-emerald-400',
+          }
+          
+          // Skill summary if available
+          if (display.skillSummary) {
+            statusParts.push(display.skillSummary)
+          } else if (skillStates.length > 0) {
+            statusParts.push(`${skillStates.length} skills mapped`)
+          }
+          
+          // Limiter if available
+          if (constraints.length > 0 && constraints[0].label) {
+            statusParts.push(`limiter: ${constraints[0].label.toLowerCase()}`)
+          }
+          
+          // Actionability
+          statusParts.push(display.actionabilityLabel.toLowerCase())
+          
+          const displayText = statusParts.join(' · ')
+          const iconColor = qualityColors[sourceStatus.dataQuality] || 'text-blue-400/70'
+          
+          return (
+            <div className="mt-2 px-2 py-1.5 rounded bg-[#12121A]/50 border border-[#2A2A35]/50">
+              <div className="flex items-center gap-2">
+                <Brain className={cn('w-3 h-3 flex-shrink-0', iconColor)} />
+                <span className="text-[9px] text-[#8A8A9A] leading-relaxed">
+                  <span className="text-[#6A6A7A]">Adaptive foundation:</span>{' '}
+                  <span className={iconColor}>{display.confidenceLabel.toLowerCase()}</span>
+                  {displayText && <span className="text-[#7A7A8A]"> — {displayText}</span>}
+                </span>
+              </div>
+              {/* Foundation-only note */}
+              <div className="mt-1 text-[8px] text-[#5A5A6A] pl-5">
+                {display.noMutationNote}
+              </div>
+            </div>
+          )
+        })()}
+        
         {/* [P2B] Compact helper line */}
         <p className="text-[9px] text-[#5A5A6A] mt-2 px-1">
           Review method decisions, plan logic, and coach recommendations.

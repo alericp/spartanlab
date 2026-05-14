@@ -174,6 +174,41 @@ const GUIDANCE_ONLY_GROUPED_FAMILIES: ReadonlySet<CanonicalMethodFamily> = new S
 ])
 
 // =============================================================================
+// [AB20.4.5.4.4] STATUS NORMALIZATION
+// =============================================================================
+
+/**
+ * [AB20.4.5.4.4] Normalizes method status variations to a canonical form.
+ * 
+ * The UI/Planner surfaces use different status words: "applied", "materialized",
+ * "user_applied", "override_applied", etc. The live runtime should accept all
+ * variations that mean "this method should execute".
+ */
+export function normalizeMethodStatus(rawStatus: unknown): 'applied' | 'already_applied' | 'blocked' | 'not_needed' | 'unknown' {
+  if (typeof rawStatus !== 'string') return 'unknown'
+  const s = rawStatus.toLowerCase().trim()
+  
+  // Treat these as executable "applied" status
+  if (s === 'applied') return 'applied'
+  if (s === 'already_applied') return 'already_applied'
+  if (s === 'materialized') return 'applied'
+  if (s === 'already_materialized') return 'already_applied'
+  if (s === 'override_applied') return 'applied'
+  if (s === 'user_applied') return 'applied'
+  if (s === 'success') return 'applied' // Some paths return {status: 'success'}
+  
+  // Treat these as blocked/not-executable
+  if (s === 'blocked') return 'blocked'
+  if (s === 'not_needed') return 'not_needed'
+  if (s === 'no_safe_target') return 'blocked'
+  if (s === 'not_connected') return 'blocked'
+  if (s === 'error') return 'blocked'
+  if (s === 'failed') return 'blocked'
+  
+  return 'unknown'
+}
+
+// =============================================================================
 // [AB15.6.2] GROUPED ROUND AUTHORITY RESOLVER
 // =============================================================================
 
@@ -649,15 +684,56 @@ export function buildExecutionBlocksFromMethodStructures(
 
   const exerciseIndexById = new Map<string, number>()
   const exerciseIndexByName = new Map<string, number>()
+  // [AB20.4.5.4.4] Add exerciseId and sourceExerciseId for alternative ID matching
+  const exerciseIndexByExerciseId = new Map<string, number>()
+  const exerciseIndexBySourceExerciseId = new Map<string, number>()
+  // [AB20.4.5.4.4] Add blockId grouping for rescue path
+  const exerciseIndexByBlockId = new Map<string, number[]>()
+  
   exercises.forEach((ex, i) => {
     if (ex.id) exerciseIndexById.set(ex.id, i)
     if (ex.name) exerciseIndexByName.set(normalizeName(ex.name), i)
+    // [AB20.4.5.4.4] Support alternative ID fields for binding
+    const exAny = ex as Record<string, unknown>
+    if (typeof exAny.exerciseId === 'string' && exAny.exerciseId) {
+      exerciseIndexByExerciseId.set(exAny.exerciseId, i)
+    }
+    if (typeof exAny.sourceExerciseId === 'string' && exAny.sourceExerciseId) {
+      exerciseIndexBySourceExerciseId.set(exAny.sourceExerciseId, i)
+    }
+    // [AB20.4.5.4.4] Group by blockId for rescue path
+    if (typeof exAny.blockId === 'string' && exAny.blockId) {
+      const existing = exerciseIndexByBlockId.get(exAny.blockId) || []
+      existing.push(i)
+      exerciseIndexByBlockId.set(exAny.blockId, existing)
+    }
+  })
+  
+  // [AB20.4.5.4.4] Detailed diagnostics for debugging binding failures
+  console.log('[AB20.4.5.4.4] buildExecutionBlocksFromMethodStructures input', {
+    methodStructuresCount: methodStructures.length,
+    methodStructuresFamilies: methodStructures.map(ms => ms?.family),
+    methodStructuresStatuses: methodStructures.map(ms => ms?.status),
+    exerciseCount: exercises.length,
+    exerciseNames: exercises.map(ex => ex.name),
+    exerciseIds: exercises.map(ex => ex.id),
+    exerciseIndexByIdKeys: Array.from(exerciseIndexById.keys()),
+    exerciseIndexByNameKeys: Array.from(exerciseIndexByName.keys()),
+    blockIdGroups: Array.from(exerciseIndexByBlockId.entries()).map(([k, v]) => ({ blockId: k, indexes: v })),
   })
 
   for (const ms of methodStructures) {
     if (!ms || !ms.family) continue
     if (!EXECUTABLE_GROUPED_FAMILIES.has(ms.family)) continue
-    if (ms.status !== 'applied' && ms.status !== 'already_applied') {
+    
+    // [AB20.4.5.4.4] Expanded status acceptance - accept more status variations
+    const normalizedStatus = normalizeMethodStatus(ms.status)
+    if (normalizedStatus !== 'applied' && normalizedStatus !== 'already_applied') {
+      console.log('[AB20.4.5.4.4] Skipping methodStructure due to status', {
+        family: ms.family,
+        rawStatus: ms.status,
+        normalizedStatus,
+      })
       reasons.add('METHOD_STRUCTURE_STATUS_NOT_APPLIED')
       continue
     }
@@ -666,6 +742,7 @@ export function buildExecutionBlocksFromMethodStructures(
     if (ms.family === 'density_block') {
       const hasTimeCap = typeof ms.timeCapMinutes === 'number' && ms.timeCapMinutes > 0
       if (!hasTimeCap) {
+        console.log('[AB20.4.5.4.4] Skipping density_block due to missing timeCap', { family: ms.family, timeCapMinutes: ms.timeCapMinutes })
         reasons.add('DENSITY_TIME_CAP_MISSING')
         continue
       }
@@ -675,26 +752,55 @@ export function buildExecutionBlocksFromMethodStructures(
     const names = safeIsArray<string>(ms.exerciseNames) ? ms.exerciseNames : []
     const memberExercises: MachineExercise[] = []
     const memberExerciseIndexes: number[] = []
+    const unboundRefs: string[] = []
 
     const len = Math.max(ids.length, names.length)
     for (let i = 0; i < len; i++) {
       const refId = typeof ids[i] === 'string' ? ids[i] : ''
       const refName = typeof names[i] === 'string' ? names[i] : ''
       let exIndex = -1
+      let bindSource = 'none'
+      
+      // [AB20.4.5.4.4] Extended binding ladder with multiple ID types and name matching
       if (refId && exerciseIndexById.has(refId)) {
         exIndex = exerciseIndexById.get(refId)!
+        bindSource = 'id'
+      } else if (refId && exerciseIndexByExerciseId.has(refId)) {
+        exIndex = exerciseIndexByExerciseId.get(refId)!
+        bindSource = 'exerciseId'
+      } else if (refId && exerciseIndexBySourceExerciseId.has(refId)) {
+        exIndex = exerciseIndexBySourceExerciseId.get(refId)!
+        bindSource = 'sourceExerciseId'
       } else if (refName && exerciseIndexByName.has(normalizeName(refName))) {
         exIndex = exerciseIndexByName.get(normalizeName(refName))!
+        bindSource = 'name'
       }
+      
       if (exIndex < 0) {
+        unboundRefs.push(refName || refId || `ref-${i}`)
         reasons.add('GROUP_MEMBER_REF_NOT_FOUND')
         continue
       }
       // Skip if this exercise was already consumed by an earlier grouped block.
-      if (consumedExerciseIndexes.has(exIndex)) continue
+      if (consumedExerciseIndexes.has(exIndex)) {
+        console.log('[AB20.4.5.4.4] Skipping already-consumed exercise', { refId, refName, exIndex, bindSource })
+        continue
+      }
       memberExercises.push(exercises[exIndex])
       memberExerciseIndexes.push(exIndex)
     }
+    
+    // [AB20.4.5.4.4] Log binding result for each methodStructure
+    console.log('[AB20.4.5.4.4] methodStructure binding result', {
+      family: ms.family,
+      status: ms.status,
+      normalizedStatus,
+      rawIds: ids,
+      rawNames: names,
+      boundIndexes: memberExerciseIndexes,
+      unboundRefs,
+      memberCount: memberExercises.length,
+    })
 
     const minMembers = ms.family === 'superset' || ms.family === 'circuit' ? 2 : 1
     if (memberExercises.length < minMembers) {

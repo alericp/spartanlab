@@ -2973,7 +2973,7 @@ export function ProgramCoachIntelligenceHub({
                 authoritativeMultiSkillIntentContract: program.authoritativeMultiSkillIntentContract ?? null,
                 hasWorkoutHistory: false, // Safe fallback — can't know from program alone
                 hasSkillLogs: false,
-                hasReadinessData: !!program.weeklyAdvisoryContext?.recoveryAdvice,
+                hasReadinessData: false, // Safe fallback — readiness evidence requires server context
               })
               
               // Dev-only diagnostic

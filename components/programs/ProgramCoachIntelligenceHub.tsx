@@ -44,6 +44,8 @@ import {
   Sparkles,
   ListX,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -141,6 +143,11 @@ import {
   buildMethodPlannerFoundationContext,
   type MethodPlannerFoundationContext,
 } from '@/lib/program/method-planner-foundation-context'
+// [MASTER-8C.7] Method Contract Slot Frequency Inventory
+import {
+  buildMethodContractSlotFrequencyInventory,
+  type MethodContractInventoryRollup,
+} from '@/lib/program/method-contract-slot-frequency-inventory'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3976,6 +3983,118 @@ function ProgramBalanceSheetContent({
     )
 }
 
+// =============================================================================
+// [MASTER-8C.7] METHOD CONTRACT FOUNDATION SECTION
+// =============================================================================
+
+/**
+ * Compact read-only section showing method contract / slot ownership / frequency foundation.
+ * This is informational only — no mutation, no frequency controls enabled.
+ */
+function MethodContractFoundationSection() {
+  const inventory = useMemo<MethodContractInventoryRollup>(() => {
+    return buildMethodContractSlotFrequencyInventory()
+  }, [])
+
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="space-y-2">
+      {/* Header with expand toggle */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-blue-400" />
+          <span className="text-xs font-medium text-[#E6E9EF]">Method Contract Foundation</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-[#6A6A7A]">
+            {inventory.totalMethodsInventoried} methods
+          </span>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-[#6A6A7A]" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[#6A6A7A]" />
+          )}
+        </div>
+      </button>
+
+      {/* Summary badges - always visible */}
+      <div className="flex flex-wrap gap-1.5">
+        <span className="px-2 py-0.5 text-[9px] rounded border border-blue-500/20 bg-blue-500/10 text-blue-400">
+          Read-only
+        </span>
+        <span className="px-2 py-0.5 text-[9px] rounded border border-purple-500/20 bg-purple-500/10 text-purple-400">
+          Mutation locked
+        </span>
+        <span className="px-2 py-0.5 text-[9px] rounded border border-[#3A3A4A] bg-[#2A2A35] text-[#8A8A9A]">
+          {inventory.activeCount} active
+        </span>
+        {inventory.previewOnlyCount > 0 && (
+          <span className="px-2 py-0.5 text-[9px] rounded border border-amber-500/20 bg-amber-500/10 text-amber-400">
+            {inventory.previewOnlyCount} preview-only
+          </span>
+        )}
+        {inventory.blockedCount > 0 && (
+          <span className="px-2 py-0.5 text-[9px] rounded border border-[#3A3A4A] bg-[#2A2A35] text-[#6A6A7A]">
+            {inventory.blockedCount} blocked/future
+          </span>
+        )}
+      </div>
+
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="pt-2 space-y-2 border-t border-[#2A2A35]">
+          {/* Frequency & Slot status */}
+          <div className="space-y-1">
+            <p className="text-[10px] text-[#7A7A8A] leading-relaxed">
+              <span className="text-[#9A9AAA] font-medium">Frequency controls:</span>{' '}
+              Not enabled yet — slot ownership scoring required first.
+            </p>
+            <p className="text-[10px] text-[#7A7A8A] leading-relaxed">
+              <span className="text-[#9A9AAA] font-medium">Slot ownership:</span>{' '}
+              Inventory complete — no mutations in this step.
+            </p>
+          </div>
+
+          {/* Warnings */}
+          {inventory.densityWarning && (
+            <div className="flex items-start gap-2 p-2 rounded bg-amber-500/5 border border-amber-500/20">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-300 leading-relaxed">
+                {inventory.densityWarning}
+              </p>
+            </div>
+          )}
+          {inventory.finisherWarning && (
+            <div className="flex items-start gap-2 p-2 rounded bg-amber-500/5 border border-amber-500/20">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-300 leading-relaxed">
+                {inventory.finisherWarning}
+              </p>
+            </div>
+          )}
+
+          {/* Proof lines */}
+          <div className="text-[9px] text-[#6A6A7A] space-y-0.5">
+            {inventory.proofLines.slice(0, 5).map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+
+          {/* Next step */}
+          <p className="text-[10px] text-[#5A5A6A] italic">
+            Next: {inventory.safeNextStep}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RequestedMethodsSheetContent({
   program,
   plannerSummary,
@@ -4560,7 +4679,12 @@ function RequestedMethodsSheetContent({
           </p>
         )}
       </div>
-    )}
+      )}
+
+      {/* [MASTER-8C.7] Method Contract Foundation Section */}
+      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <MethodContractFoundationSection />
+      </div>
 
       {/* [AB20.4.2] Reset All Overrides Section */}
       {onResetAllMethodOverrides && (

@@ -224,10 +224,21 @@ export function buildProgramBalanceBranchInputFromProgram(
     }
   }
 
-  // Extract optional context
-  const existingMethodSummary = prog.weeklyMethodRepresentation ?? prog.weeklyMethodDecisionSummary
-  const adaptiveFoundationSummary = prog.adaptiveFoundation
-  const recoveryReadinessSummary = prog.recoveryReadiness
+  // Extract optional context - MASTER-8B.5: improved foundation-source parity
+  // Method summary: prefer weeklyMethodRepresentation, then fallbacks
+  const existingMethodSummary = prog.weeklyMethodRepresentation ?? 
+                                 prog.weeklyMethodDecisionSummary ??
+                                 prog.methodMaterializationSummary ??
+                                 undefined
+  // Adaptive Foundation: prefer adaptiveFoundationModel (canonical), then adaptiveFoundation (legacy)
+  const adaptiveFoundationSummary = prog.adaptiveFoundationModel ?? 
+                                     prog.adaptiveFoundation ??
+                                     undefined
+  // Recovery/Stress: prefer recoveryReadiness, then stress distribution plan, then governor adjustments
+  const recoveryReadinessSummary = prog.recoveryReadiness ?? 
+                                    prog.weeklyStressDistributionPlan ??
+                                    prog.weeklyStressGovernorAdjustments ??
+                                    undefined
   const evidenceWorkoutHistorySummary = prog.evidenceHistory ?? prog.workoutHistory
   const currentPhase = isValidString(prog.phase) ? prog.phase :
                        isValidString(prog.currentPhase) ? prog.currentPhase : undefined

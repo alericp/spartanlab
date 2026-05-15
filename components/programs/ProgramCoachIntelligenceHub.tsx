@@ -116,6 +116,11 @@ import {
   buildProgramBalanceBranchInputFromProgram,
   extractSelectedSkillIdsFromRepresentations,
 } from '@/lib/program/program-balance-ui-adapter'
+// [MASTER-8B.5] Method Planner foundation context
+import {
+  buildMethodPlannerFoundationContext,
+  type MethodPlannerFoundationContext,
+} from '@/lib/program/method-planner-foundation-context'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3426,6 +3431,7 @@ function ProgramBalanceSheetContent({
 function RequestedMethodsSheetContent({
   program,
   plannerSummary,
+  foundationContext,
   onApplyMethodOverride,
   onRevertMethodOverride,
   onResetAllMethodOverrides,
@@ -3437,6 +3443,7 @@ function RequestedMethodsSheetContent({
 }: {
   program: AdaptiveProgram
   plannerSummary: CanonicalMethodPlannerSummary
+  foundationContext?: MethodPlannerFoundationContext
   onApplyMethodOverride?: (preview: MethodOverridePreview, options: { allowCautionApply: boolean }) => Promise<MethodOverrideApplyResult>
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
   onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
@@ -3912,6 +3919,67 @@ function RequestedMethodsSheetContent({
       {plannerSummary.proofLine}
     </div>
 
+    {/* [MASTER-8B.5] Foundation Context Panel - read-only Program Balance link */}
+    {foundationContext && (
+      <div className={cn(
+        'p-2.5 rounded-lg border',
+        foundationContext.status === 'linked' ? 'bg-teal-500/5 border-teal-500/20' :
+        foundationContext.status === 'partial' ? 'bg-blue-500/5 border-blue-500/20' :
+        'bg-[#1A1A22] border-[#2A2A35]'
+      )}>
+        <div className="flex items-center gap-2 mb-1.5">
+          <Scale className={cn(
+            'w-3.5 h-3.5',
+            foundationContext.status === 'linked' ? 'text-teal-400' :
+            foundationContext.status === 'partial' ? 'text-blue-400' :
+            'text-[#6A6A7A]'
+          )} />
+          <span className={cn(
+            'text-[10px] font-medium',
+            foundationContext.status === 'linked' ? 'text-teal-300' :
+            foundationContext.status === 'partial' ? 'text-blue-300' :
+            'text-[#8A8A9A]'
+          )}>
+            {foundationContext.headline}
+          </span>
+        </div>
+        {/* Chips */}
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {foundationContext.chips.map((chip, idx) => (
+            <span
+              key={idx}
+              className={cn(
+                'px-1.5 py-0.5 text-[8px] rounded border',
+                chip === 'Program Balance linked' ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' :
+                chip === 'Read-only' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                chip === 'No method changes' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                'bg-[#2A2A35] text-[#8A8A9A] border-[#3A3A4A]'
+              )}
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+        {/* Warnings */}
+        {foundationContext.warnings.length > 0 && (
+          <div className="space-y-0.5 mb-1.5">
+            {foundationContext.warnings.slice(0, 2).map((warning, idx) => (
+              <p key={idx} className="text-[9px] text-amber-400/80 flex items-center gap-1">
+                <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                {warning}
+              </p>
+            ))}
+          </div>
+        )}
+        {/* Proof lines */}
+        <div className="text-[8px] text-[#5A5A6A] space-y-0.5">
+          {foundationContext.proofLines.slice(0, 2).map((line, idx) => (
+            <p key={idx}>{line}</p>
+          ))}
+        </div>
+      </div>
+    )}
+
     {/* [MASTER-8A.1.1] Unified Banner - uses canonical plannerSummary, NOT local IIFE counts */}
     {plannerSummary.bannerHeadline && (
       <div className={cn(
@@ -4235,6 +4303,12 @@ export function ProgramCoachIntelligenceHub({
     if (programBalanceResult.status === 'partial') return 'info'
     return 'success'
   }, [programBalanceResult])
+  
+  // [MASTER-8B.5] Derive Method Planner foundation context from Program Balance
+  const methodPlannerFoundationContext = useMemo(
+    () => buildMethodPlannerFoundationContext(programBalanceResult),
+    [programBalanceResult]
+  )
   
   // [AB20.4.3] Reload context state
   const [isReloadingPlanner, setIsReloadingPlanner] = useState(false)
@@ -4741,6 +4815,7 @@ export function ProgramCoachIntelligenceHub({
 <RequestedMethodsSheetContent
                   program={program}
                   plannerSummary={plannerSummary}
+                  foundationContext={methodPlannerFoundationContext}
                   onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
                   onRevertMethodOverride={onRevertMethodOverride}
                   onResetAllMethodOverrides={onResetAllMethodOverrides}

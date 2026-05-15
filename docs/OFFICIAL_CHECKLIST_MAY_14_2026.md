@@ -464,7 +464,48 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Method Planner Applied 6 unchanged
 - localStorage persistence unchanged
 
-**Next Phase:** MASTER-8B.7.2 — first bounded structural future-session mutation type
+**Next Phase:** MASTER-8B.7.2 — structural eligibility gate
+
+---
+
+### MASTER-8B.7.2 — Structural Mutation Eligibility + Target Resolution Gate
+
+**Status:** COMPLETE
+
+**Purpose:** Create typed eligibility/resolution gate for user-confirmed future-session mutation plans. Determine whether each confirmed plan is structurally eligible, blocked by full DB, blocked by unresolved target, or still marker-only.
+
+**What This Step Delivered:**
+- Added typed eligibility status contracts to `future-session-mutation-apply-contract.ts`:
+  - `FutureSessionMutationEligibilityStatus` union type
+  - `FutureSessionMutationNextGate` union type
+  - `FutureSessionMutationEligibilityResult` interface
+  - `EligibilityResolverOptions` interface
+- Added pure resolver functions:
+  - `resolveFutureSessionMutationEligibility()` — resolves eligibility for a confirmed plan
+  - `getEligibilitySummary()` — computes summary across all confirmed plans
+- Updated Program Balance UI to show eligibility:
+  - Section header shows "{n} queued · 0 structurally eligible · full DB gate pending"
+  - Each confirmed row shows "Structural eligibility: Blocked" with reasons
+  - Shows blocked reasons: "Full exercise DB required (MASTER-8C)", "Target future session not resolved", etc.
+  - Shows next gate: "MASTER 8C FULL EXERCISE DB" or "MASTER 8B 7 3 STRUCTURAL PREVIEW"
+  - Modal shows eligibility line when reviewing confirmed plans
+  - Footer shows eligibility summary
+
+**Files Changed:**
+- `lib/program/future-session-mutation-apply-contract.ts` (eligibility types + resolver functions)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (eligibility display in rows, modal, header, footer)
+
+**Constraints Preserved:**
+- canApplyStructuralMutation ALWAYS false in this gate
+- No structural workout mutation
+- Completed sessions protected
+- Program Cards unchanged
+- Live Workout unchanged
+- Start Workout unchanged
+- Method Planner Applied 6 unchanged
+- Full exercise DB NOT added (deferred to MASTER-8C)
+
+**Next Phase:** MASTER-8C full exercise DB foundation (if DB is main blocker) or MASTER-8B.7.3 structural preview (if safe candidate exists)
 
 ---
 

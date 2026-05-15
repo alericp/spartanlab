@@ -118,9 +118,12 @@ import type {
 import {
   type FutureSessionMutationPlanBundle,
   type ConfirmedFutureSessionMutationPlan,
+  type FutureSessionMutationEligibilityResult,
   loadMutationPlans,
   addConfirmedPlan,
   createConfirmedPlan,
+  resolveFutureSessionMutationEligibility,
+  getEligibilitySummary,
 } from '@/lib/program/future-session-mutation-apply-contract'
 import {
   buildProgramBalanceBranchInputFromProgram,
@@ -3400,7 +3403,16 @@ function ProgramBalanceSheetContent({
       )}
 
       {/* Future Session Candidates - MASTER-8B.6: Enhanced planning display */}
-      {result.futureSessionCandidates.length > 0 && (
+      {result.futureSessionCandidates.length > 0 && (() => {
+        // [MASTER-8B.7.2] Compute eligibility summary for section header
+        const eligibilitySummary = mutationPlanBundle 
+          ? getEligibilitySummary(mutationPlanBundle, {
+              knownExerciseCoverageComplete: false,
+              structuralWriterEnabled: false,
+            })
+          : null
+        
+        return (
         <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
           <button
             onClick={() => toggleSection('future')}
@@ -3412,7 +3424,7 @@ function ProgramBalanceSheetContent({
             </span>
             {mutationPlanBundle?.hasConfirmedPlans ? (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                {mutationPlanBundle.confirmedPlans.length} queued
+                {eligibilitySummary?.summaryText || `${mutationPlanBundle.confirmedPlans.length} queued`}
               </span>
             ) : (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
@@ -3433,6 +3445,12 @@ function ProgramBalanceSheetContent({
                 const isBlockedNeedsFullDb = confirmedPlan?.status === 'blocked_needs_full_db'
                 const isQueuedTargetUnresolved = confirmedPlan?.status === 'queued_target_unresolved'
                 const isConfirmedMarkerOnly = confirmedPlan?.status === 'confirmed_marker_only'
+                
+                // [MASTER-8B.7.2] Resolve structural eligibility for this candidate
+                const eligibility = resolveFutureSessionMutationEligibility(confirmedPlan, {
+                  knownExerciseCoverageComplete: false, // MASTER-8C not yet complete
+                  structuralWriterEnabled: false, // MASTER-8B.7.3+ not yet enabled
+                })
                 
                 return (
                   <div
@@ -3576,6 +3594,42 @@ function ProgramBalanceSheetContent({
                       </div>
                     )}
                     
+                    {/* [MASTER-8B.7.2] Structural Eligibility Block */}
+                    {isUserConfirmed && eligibility && (
+                      <div className="p-2 rounded bg-[#0F0F12] border border-[#2A2A35] space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Database className="w-3 h-3 text-[#5A5A6A]" />
+                          <span className="text-[9px] font-medium text-[#8A8A9A]">Structural eligibility</span>
+                          <span className={cn(
+                            "text-[8px] px-1.5 py-0.5 rounded",
+                            eligibility.canPreviewStructuralMutation
+                              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                              : "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+                          )}>
+                            {eligibility.canPreviewStructuralMutation ? 'Preview eligible' : 'Blocked'}
+                          </span>
+                        </div>
+                        
+                        {eligibility.blockedReasons.length > 0 && (
+                          <ul className="text-[9px] text-[#6A6A7A] pl-4 space-y-0.5">
+                            {eligibility.blockedReasons.map((reason, i) => (
+                              <li key={i} className="flex items-start gap-1">
+                                <span className="text-amber-400/60">-</span>
+                                <span>{reason}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        
+                        <div className="flex items-center gap-1 pt-1 border-t border-[#1A1A22]">
+                          <ArrowRight className="w-2.5 h-2.5 text-[#5A5A6A]" />
+                          <span className="text-[8px] text-[#5A5A6A]">
+                            Next gate: {eligibility.nextRequiredGate.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* MASTER-8B.7 Writer Gate Notice */}
                     <div className="mt-1 p-1.5 rounded bg-[#1A1A22] border border-[#2A2A35]">
                       <p className="text-[8px] text-[#5A5A6A] leading-relaxed">
@@ -3621,7 +3675,8 @@ function ProgramBalanceSheetContent({
             </div>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* Missing Data */}
       {result.missingData.length > 0 && (
@@ -3646,14 +3701,20 @@ function ProgramBalanceSheetContent({
         </div>
       )}
       
-      {/* Next Step — MASTER-8B.7.1 Status */}
+      {/* Next Step — MASTER-8B.7.2 Status */}
       <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
-        {mutationPlanBundle?.hasConfirmedPlans ? (
-          <span className="text-cyan-400">
-            {mutationPlanBundle.confirmedPlans.length} mutation plan{mutationPlanBundle.confirmedPlans.length > 1 ? 's' : ''} queued — marker-only, workout structure unchanged, full DB/target gate pending
-          </span>
-        ) : (
-          <span>Current status: MASTER-8B.7.1 apply gate ready — preview a Future Candidate to stage a marker-only mutation plan</span>
+        {mutationPlanBundle?.hasConfirmedPlans ? (() => {
+          const summary = getEligibilitySummary(mutationPlanBundle, {
+            knownExerciseCoverageComplete: false,
+            structuralWriterEnabled: false,
+          })
+          return (
+            <span className="text-cyan-400">
+              {summary.summaryText} — no workout structure changed
+            </span>
+          )
+        })() : (
+          <span>Current status: MASTER-8B.7.2 eligibility gate — preview a Future Candidate to stage a marker-only mutation plan</span>
         )}
       </div>
       
@@ -3725,6 +3786,28 @@ function ProgramBalanceSheetContent({
                   : 'Target: Future session boundary not resolved — plan will be queued'}
               </p>
             </div>
+            
+            {/* [MASTER-8B.7.2] Structural Eligibility Line */}
+            {confirmationResult?.success && (() => {
+              const candidateId = `candidate_${selectedCandidateForPreview.index}`
+              const plan = mutationPlanBundle?.confirmedPlans?.find(p => p.sourceCandidateId === candidateId)
+              const elig = resolveFutureSessionMutationEligibility(plan, {
+                knownExerciseCoverageComplete: false,
+                structuralWriterEnabled: false,
+              })
+              return (
+                <div className="p-2 rounded bg-[#0F0F12] border border-[#2A2A35]">
+                  <p className="text-[9px] text-[#6A6A7A] flex items-center gap-1.5">
+                    <Database className="w-3 h-3" />
+                    <span>Structural eligibility: </span>
+                    <span className={elig.canPreviewStructuralMutation ? 'text-emerald-400' : 'text-amber-400'}>
+                      {elig.canPreviewStructuralMutation ? 'preview eligible' : 'blocked'}
+                    </span>
+                    <span>— {elig.nextRequiredGate.replace(/_/g, ' ')}</span>
+                  </p>
+                </div>
+              )
+            })()}
             
             {/* Confirmation Result */}
             {confirmationResult && (

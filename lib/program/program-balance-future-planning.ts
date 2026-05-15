@@ -61,8 +61,10 @@ function derivePlanStatus(
   finding: ProgramBalanceFinding,
   knowledgeCoverage: ProgramBalanceKnowledgeCoverageSummary
 ): FutureSessionPlanStatus {
-  // Always blocked_no_writer in MASTER-8B.6 - but add more specific blockers
-  if (finding.seedCoverageLimited || knowledgeCoverage.unknownExerciseCount > knowledgeCoverage.knownExerciseCount) {
+  // MASTER-8C.4.D: Use authoritative identity coverage fields for DB gate
+  // knowledgeCoverage.unknownExerciseCount now comes from identity resolver (authoritativeNeedScience)
+  // knowledgeCoverage.fullScienceCoverageComplete is the authoritative check
+  if (finding.seedCoverageLimited || !knowledgeCoverage.fullScienceCoverageComplete) {
     return 'blocked_needs_full_db'
   }
   if (finding.confidence === 'low') {
@@ -318,7 +320,11 @@ function deriveBlockedReason(
 ): string {
   switch (status) {
     case 'blocked_needs_full_db':
-      return `Mutation blocked: ${knowledgeCoverage.unknownExerciseCount} exercises not in knowledge seed. Full database required (MASTER-8C).`
+      // MASTER-8C.4.D: Use authoritative count which now reflects identity resolver
+      if (knowledgeCoverage.unknownExerciseCount > 0) {
+        return `Mutation blocked: ${knowledgeCoverage.unknownExerciseCount} exercises not in knowledge seed. Full database required (MASTER-8C).`
+      }
+      return 'Mutation blocked: Full science coverage incomplete. Full database required (MASTER-8C).'
     case 'blocked_needs_more_evidence':
       return 'Mutation blocked: Low confidence finding. More workout evidence needed.'
     case 'blocked_needs_user_confirmation':

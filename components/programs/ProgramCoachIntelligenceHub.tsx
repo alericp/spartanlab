@@ -3097,11 +3097,27 @@ function ProgramBalanceSheetContent({
           <div className="text-[10px] text-[#5A5A6A] mt-2 space-y-0.5">
             {/* MASTER-8C.2: Improved coverage messaging */}
             {result.knowledgeCoverageSummary.trulyUnknownCount !== undefined && result.knowledgeCoverageSummary.trulyUnknownCount > 0 ? (
-              <p>{result.knowledgeCoverageSummary.trulyUnknownCount} exercise(s) not found in any app source.</p>
+              <>
+                <p>{result.knowledgeCoverageSummary.trulyUnknownCount} exercise(s) not found in any app source.</p>
+                {/* MASTER-8C.4.E: Show exact unresolved exercise IDs for diagnosis */}
+                {result.knowledgeCoverageSummary.trulyUnknownIds && result.knowledgeCoverageSummary.trulyUnknownIds.length > 0 && (
+                  <p className="text-[9px] text-amber-400/80 mt-1">
+                    Unresolved: {result.knowledgeCoverageSummary.trulyUnknownIds.slice(0, 3).join(', ')}
+                    {result.knowledgeCoverageSummary.trulyUnknownIds.length > 3 && ` (+${result.knowledgeCoverageSummary.trulyUnknownIds.length - 3} more)`}
+                  </p>
+                )}
+              </>
             ) : result.knowledgeCoverageSummary.basicIdentityKnownCount !== undefined && result.knowledgeCoverageSummary.basicIdentityKnownCount > 0 ? (
               <p>{result.knowledgeMissingExerciseCount} exercise(s) in app pool need full coaching science entries.</p>
             ) : (
               <p>{result.knowledgeMissingExerciseCount} exercise(s) need full coaching science entries for safe mutation.</p>
+            )}
+            {/* MASTER-8C.4.E: Show authoritative need-science IDs for any coverage gap */}
+            {result.knowledgeCoverageSummary.unknownExerciseIds && result.knowledgeCoverageSummary.unknownExerciseIds.length > 0 && (
+              <p className="text-[9px] text-amber-400/80 mt-1">
+                Need science: {result.knowledgeCoverageSummary.unknownExerciseIds.slice(0, 3).join(', ')}
+                {result.knowledgeCoverageSummary.unknownExerciseIds.length > 3 && ` (+${result.knowledgeCoverageSummary.unknownExerciseIds.length - 3} more)`}
+              </p>
             )}
           </div>
         )}

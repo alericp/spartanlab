@@ -120,6 +120,111 @@ function upperPullWarmupNeeds(): WarmupNeedProfile {
 }
 
 /**
+ * Standard method compatibility for mobility/flexibility work
+ */
+function mobilityMethodCompatibility(): readonly MethodCompatibilityProfile[] {
+  return [
+    straightSetsAllowed('Mobility work in focused sets'),
+    { methodId: 'supersets', verdict: 'allowed', rationale: 'Can pair with other stretches', blockedWhen: null, saferAlternative: null },
+    { methodId: 'circuits', verdict: 'allowed', rationale: 'Mobility circuits work well', blockedWhen: null, saferAlternative: null },
+    { methodId: 'density_blocks', verdict: 'avoid', rationale: 'Not appropriate for mobility', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'drop_sets', verdict: 'blocked', rationale: 'Not applicable', blockedWhen: null, saferAlternative: null },
+    { methodId: 'rest_pause', verdict: 'avoid', rationale: 'Not appropriate', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'cluster_sets', verdict: 'avoid', rationale: 'Not appropriate', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'top_set_backoff', verdict: 'blocked', rationale: 'Not appropriate', blockedWhen: null, saferAlternative: null },
+    { methodId: 'endurance_conditioning', verdict: 'avoid', rationale: 'Not appropriate', blockedWhen: null, saferAlternative: 'straight_sets' },
+  ]
+}
+
+/**
+ * Standard method compatibility for core/compression work
+ */
+function coreMethodCompatibility(): readonly MethodCompatibilityProfile[] {
+  return [
+    straightSetsAllowed('Core work in focused sets'),
+    { methodId: 'supersets', verdict: 'allowed', rationale: 'Core pairs well with other work', blockedWhen: null, saferAlternative: null },
+    { methodId: 'circuits', verdict: 'preferred', rationale: 'Core works great in circuits', blockedWhen: null, saferAlternative: null },
+    { methodId: 'density_blocks', verdict: 'allowed', rationale: 'Can do volume core work', blockedWhen: null, saferAlternative: null },
+    { methodId: 'drop_sets', verdict: 'blocked', rationale: 'Cannot safely regress core holds', blockedWhen: null, saferAlternative: null },
+    { methodId: 'rest_pause', verdict: 'allowed', rationale: 'Extends volume', blockedWhen: null, saferAlternative: null },
+    { methodId: 'cluster_sets', verdict: 'allowed', rationale: 'Quality reps', blockedWhen: null, saferAlternative: null },
+    { methodId: 'top_set_backoff', verdict: 'avoid', rationale: 'Not intensity-based', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'endurance_conditioning', verdict: 'allowed', rationale: 'Core endurance', blockedWhen: null, saferAlternative: null },
+  ]
+}
+
+/**
+ * Standard method compatibility for prehab/activation work
+ */
+function prehabMethodCompatibility(): readonly MethodCompatibilityProfile[] {
+  return [
+    straightSetsAllowed('Prehab in focused sets'),
+    { methodId: 'supersets', verdict: 'allowed', rationale: 'Good activation filler', blockedWhen: null, saferAlternative: null },
+    { methodId: 'circuits', verdict: 'allowed', rationale: 'Warmup circuits', blockedWhen: null, saferAlternative: null },
+    { methodId: 'density_blocks', verdict: 'avoid', rationale: 'Not designed for density', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'drop_sets', verdict: 'blocked', rationale: 'Not applicable', blockedWhen: null, saferAlternative: null },
+    { methodId: 'rest_pause', verdict: 'allowed', rationale: 'Can work', blockedWhen: null, saferAlternative: null },
+    { methodId: 'cluster_sets', verdict: 'avoid', rationale: 'Not intensity-based', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'top_set_backoff', verdict: 'avoid', rationale: 'Not intensity-based', blockedWhen: null, saferAlternative: 'straight_sets' },
+    { methodId: 'endurance_conditioning', verdict: 'allowed', rationale: 'Can do high reps', blockedWhen: null, saferAlternative: null },
+  ]
+}
+
+/**
+ * Zero-cost mobility/warmup training cost profile
+ */
+function mobilityTrainingCost(): TrainingCostProfile {
+  return {
+    neuralCost: 1,
+    localMuscleCost: 1,
+    systemicFatigueCost: 1,
+    tendonCost: 1,
+    jointCost: 1,
+    failureRisk: 'low',
+    recommendedHardExposureSpacingDays: 0,
+    microdoseAllowed: true,
+    failureAllowed: true,
+    reason: 'Zero-cost mobility/warmup work',
+  }
+}
+
+/**
+ * Low-cost prehab/activation training cost profile
+ */
+function prehabTrainingCost(): TrainingCostProfile {
+  return {
+    neuralCost: 1,
+    localMuscleCost: 2,
+    systemicFatigueCost: 1,
+    tendonCost: 1,
+    jointCost: 1,
+    failureRisk: 'low',
+    recommendedHardExposureSpacingDays: 0,
+    microdoseAllowed: true,
+    failureAllowed: true,
+    reason: 'Low-cost prehab/activation work',
+  }
+}
+
+/**
+ * Moderate core training cost profile
+ */
+function coreTrainingCost(): TrainingCostProfile {
+  return {
+    neuralCost: 2,
+    localMuscleCost: 3,
+    systemicFatigueCost: 2,
+    tendonCost: 1,
+    jointCost: 1,
+    failureRisk: 'low',
+    recommendedHardExposureSpacingDays: 1,
+    microdoseAllowed: true,
+    failureAllowed: true,
+    reason: 'Moderate core demand',
+  }
+}
+
+/**
  * Standard cooldown for upper body
  */
 function upperBodyCooldownNeeds(): CooldownNeedProfile {

@@ -71,6 +71,8 @@ export interface ExerciseMethodSlotOccupancy {
   readonly isRowMethodOwned: boolean
   readonly rowOwnerMethodKey: string | null
   readonly rowOwnerSetExecutionMethod: string | null
+  // [MASTER-8C.10.3] Invalid overlap tracking
+  readonly hasInvalidOverlap: boolean
   
   // Availability
   readonly availability: MethodSlotAvailability
@@ -102,6 +104,8 @@ export interface SessionMethodSlotLedger {
   readonly blockedWarmupCooldownCount: number
   readonly blockedSyntheticCount: number
   readonly blockedPrimarySkillCount: number
+  // [MASTER-8C.10.3] Invalid overlap tracking
+  readonly invalidOverlapCount: number
   
   // Grouped method summary
   readonly hasGroupedMethods: boolean
@@ -124,6 +128,8 @@ export interface MethodSlotOccupancyLedger {
   readonly totalOccupiedByRowMethodCount: number
   readonly totalOccupiedByGroupedMethodCount: number
   readonly totalBlockedCount: number
+  // [MASTER-8C.10.3] Invalid overlap tracking
+  readonly totalInvalidOverlapCount: number
   
   // Per-session ledgers
   readonly sessions: readonly SessionMethodSlotLedger[]
@@ -243,27 +249,62 @@ function buildExerciseSlotOccupancy(
     evidence.push(`Has styledGroupId: ${exercise.styledGroupId}`)
   }
   
-  // Check row-level method ownership
-  const setExecutionMethod = typeof exercise.setExecutionMethod === 'string' && 
-    exercise.setExecutionMethod !== 'standard' && exercise.setExecutionMethod.length > 0
-    ? exercise.setExecutionMethod : null
-  const methodOverrideApplied = exercise.methodOverrideApplied === true
-  const methodOverrideMethodKey = typeof exercise.methodOverrideMethodKey === 'string' && 
-    exercise.methodOverrideMethodKey.length > 0 ? exercise.methodOverrideMethodKey : null
-  const trainingMethod = typeof exercise.trainingMethod === 'string' && 
-    exercise.trainingMethod !== 'standard' && exercise.trainingMethod !== 'straight_sets' &&
-    exercise.trainingMethod.length > 0 ? exercise.trainingMethod : null
-  const methodFamily = typeof exercise.methodFamily === 'string' && 
-    exercise.methodFamily !== 'straight_sets' ? exercise.methodFamily : null
-  const appliedMethod = typeof exercise.appliedMethod === 'string' && 
-    exercise.appliedMethod.length > 0 ? exercise.appliedMethod : null
+  // [MASTER-8C.10.3] STRICT row-level method ownership detection
+  // Only these are authoritative row execution methods:
+  const SUPPORTED_ROW_EXECUTION_METHODS = new Set([
+    'top_set', 'top_sets', 'topset',
+    'drop_set', 'drop_sets', 'dropset',
+    'rest_pause', 'rest-pause', 'restpause',
+    'cluster', 'cluster_set', 'cluster_sets',
+    'backoff_set', 'backoff_sets', 'backoff',
+    'myo_reps', 'myoreps',
+  ])
   
-  const isRowMethodOwned = !!(setExecutionMethod || methodOverrideApplied || methodOverrideMethodKey || trainingMethod || appliedMethod)
-  const rowOwnerMethodKey = methodOverrideMethodKey ?? setExecutionMethod ?? trainingMethod ?? appliedMethod ?? methodFamily
-  const rowOwnerSetExecutionMethod = setExecutionMethod
+  // Normalize a value to check if it's a supported row method
+  const normalizeForMethodCheck = (val: unknown): string | null => {
+    if (typeof val !== 'string' || !val) return null
+    return val.toLowerCase().trim().replace(/[\s-]+/g, '_')
+  }
+  
+  const setExecutionMethod = normalizeForMethodCheck(exercise.setExecutionMethod)
+  const methodOverrideApplied = exercise.methodOverrideApplied === true
+  const methodOverrideMethodKey = normalizeForMethodCheck(exercise.methodOverrideMethodKey)
+  
+  // Check if setExecutionMethod is a SUPPORTED row method (not generic labels)
+  const isSetExecutionMethodSupported = setExecutionMethod !== null && 
+    setExecutionMethod !== 'standard' && 
+    setExecutionMethod !== 'straight_sets' &&
+    SUPPORTED_ROW_EXECUTION_METHODS.has(setExecutionMethod)
+  
+  // Check if methodOverrideMethodKey is a SUPPORTED row method
+  const isMethodOverrideKeySupported = methodOverrideMethodKey !== null &&
+    SUPPORTED_ROW_EXECUTION_METHODS.has(methodOverrideMethodKey)
+  
+  // [MASTER-8C.10.3] A row is ONLY method-owned if there's actual override evidence:
+  // 1. methodOverrideApplied === true, OR
+  // 2. setExecutionMethod is one of the supported row execution methods, OR
+  // 3. methodOverrideMethodKey is one of the supported row method keys
+  // 
+  // Generic training labels like trainingMethod: "max_strength", methodFamily: "push",
+  // appliedMethod without override evidence do NOT count as row-method ownership.
+  const isRowMethodOwned = methodOverrideApplied || isSetExecutionMethodSupported || isMethodOverrideKeySupported
+  
+  // Determine the owning method key
+  let rowOwnerMethodKey: string | null = null
+  let rowOwnerSetExecutionMethod: string | null = null
+  if (isRowMethodOwned) {
+    rowOwnerMethodKey = methodOverrideMethodKey ?? (isSetExecutionMethodSupported ? setExecutionMethod : null)
+    rowOwnerSetExecutionMethod = isSetExecutionMethodSupported ? setExecutionMethod : null
+  }
   
   if (isRowMethodOwned) {
-    evidence.push(`Row method: ${rowOwnerMethodKey}`)
+    evidence.push(`Row method: ${rowOwnerMethodKey ?? 'override_applied'}`)
+  }
+  
+  // [MASTER-8C.10.3] Invalid overlap detection: row-method inside grouped structure
+  const hasInvalidOverlap = isGroupedOwned && (methodOverrideApplied || isSetExecutionMethodSupported || isMethodOverrideKeySupported)
+  if (hasInvalidOverlap) {
+    evidence.push(`INVALID OVERLAP: row-level ${rowOwnerMethodKey ?? 'method'} inside grouped ${groupedOwnerMethodKey}`)
   }
   
   // Determine occupancy kind
@@ -343,6 +384,7 @@ function buildExerciseSlotOccupancy(
     isRowMethodOwned,
     rowOwnerMethodKey,
     rowOwnerSetExecutionMethod,
+    hasInvalidOverlap,
     availability,
     isAvailableForNewRowMethod,
     isAvailableForGroupedMethod,
@@ -470,11 +512,14 @@ export function buildSessionMethodSlotLedger(
   const trainingRowCount = slots.filter(s => s.isTrainingRow).length
   const availableForRowMethodCount = slots.filter(s => s.isAvailableForNewRowMethod).length
   const availableForGroupedMethodCount = slots.filter(s => s.isAvailableForGroupedMethod).length
-  const occupiedByRowMethodCount = slots.filter(s => s.isRowMethodOwned).length
+  // [MASTER-8C.10.3] Only count STRICT row method ownership (not generic labels)
+  const occupiedByRowMethodCount = slots.filter(s => s.isRowMethodOwned && !s.isGroupedOwned).length
   const occupiedByGroupedMethodCount = slots.filter(s => s.isGroupedOwned).length
   const blockedWarmupCooldownCount = slots.filter(s => s.isWarmupOrCooldown).length
   const blockedSyntheticCount = slots.filter(s => s.isSyntheticArtifact).length
   const blockedPrimarySkillCount = slots.filter(s => s.isPrimarySkill && s.availability === 'available_with_caution').length
+  // [MASTER-8C.10.3] Count invalid overlaps
+  const invalidOverlapCount = slots.filter(s => s.hasInvalidOverlap).length
   
   // Build capacity proof
   const capacityProofLines: string[] = []
@@ -506,6 +551,7 @@ export function buildSessionMethodSlotLedger(
     blockedWarmupCooldownCount,
     blockedSyntheticCount,
     blockedPrimarySkillCount,
+    invalidOverlapCount,
     hasGroupedMethods: groupedMethodTypes.length > 0,
     groupedMethodTypes,
     slots,
@@ -546,8 +592,10 @@ export function buildMethodSlotOccupancyLedger(
   const totalAvailableForRowMethodCount = sessionLedgers.reduce((sum, s) => sum + s.availableForRowMethodCount, 0)
   const totalOccupiedByRowMethodCount = sessionLedgers.reduce((sum, s) => sum + s.occupiedByRowMethodCount, 0)
   const totalOccupiedByGroupedMethodCount = sessionLedgers.reduce((sum, s) => sum + s.occupiedByGroupedMethodCount, 0)
-  const totalBlockedCount = sessionLedgers.reduce((sum, s) => 
+  const totalBlockedCount = sessionLedgers.reduce((sum, s) =>
     sum + s.blockedWarmupCooldownCount + s.blockedSyntheticCount, 0)
+  // [MASTER-8C.10.3] Count invalid overlaps across all sessions
+  const totalInvalidOverlapCount = sessionLedgers.reduce((sum, s) => sum + s.invalidOverlapCount, 0)
   
   // Build summary proof
   const capacityProofLines: string[] = []
@@ -559,6 +607,10 @@ export function buildMethodSlotOccupancyLedger(
   if (totalOccupiedByGroupedMethodCount > 0) {
     capacityProofLines.push(`${totalOccupiedByGroupedMethodCount} in grouped methods`)
   }
+  // [MASTER-8C.10.3] Report invalid overlaps in summary
+  if (totalInvalidOverlapCount > 0) {
+    capacityProofLines.push(`${totalInvalidOverlapCount} invalid overlap(s) detected`)
+  }
   
   return {
     sessionCount,
@@ -567,6 +619,7 @@ export function buildMethodSlotOccupancyLedger(
     totalOccupiedByRowMethodCount,
     totalOccupiedByGroupedMethodCount,
     totalBlockedCount,
+    totalInvalidOverlapCount,
     sessions: sessionLedgers,
     capacityProofLines,
   }

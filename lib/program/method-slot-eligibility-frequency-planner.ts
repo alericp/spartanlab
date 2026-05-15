@@ -532,9 +532,121 @@ function isPrimarySkillExercise(exercise: unknown): boolean {
 // =============================================================================
 
 /**
- * Scores a session for circuit eligibility
- * Requires 3-5 compatible real exercise rows
- */
+  * [MASTER-8C.10.4] Derives row-level eligible slots from the authoritative ledger.
+  * This replaces stale local ownership helpers for row-level method eligibility.
+  */
+function deriveRowLevelSlotsFromLedger(
+  ledger: MethodSlotOccupancyLedger,
+  sessions: MinimalSession[],
+  methodKey: CanonicalMethodFamily
+): MethodEligibleSlot[] {
+  const slots: MethodEligibleSlot[] = []
+  const isHighFatigueMethod = ['drop_set', 'rest_pause'].includes(methodKey)
+  
+  for (const sessionLedger of ledger.sessions) {
+    const sessionIndex = sessionLedger.sessionIndex
+    const session = sessions[sessionIndex]
+    if (!session) continue
+    
+    for (const slot of sessionLedger.slots) {
+      // [MASTER-8C.10.4] Only accept slots the ledger says are truly available
+      if (!slot.isTrainingRow) continue
+      if (!slot.isAvailableForNewRowMethod) continue
+      if (slot.isGroupedOwned) continue // Circuit/superset/density rows blocked
+      if (slot.hasInvalidOverlap) continue // Invalid overlaps blocked
+      if (slot.isWarmupOrCooldown) continue
+      if (slot.isSyntheticArtifact) continue
+      if (slot.isRowMethodOwned) continue // Already has a row method
+      
+      // For high-fatigue methods, skip primary skill exercises
+      if (isHighFatigueMethod && slot.isPrimarySkill) continue
+      
+      const cautionReasons: string[] = []
+      if (slot.isPrimarySkill && !isHighFatigueMethod) {
+        cautionReasons.push('Primary skill exercise - use with caution')
+      }
+      
+      slots.push({
+        sessionId: slot.sessionId,
+        sessionIndex,
+        sessionLabel: `Day ${sessionLedger.dayNumber}`,
+        dayTitle: session.title || `Day ${sessionLedger.dayNumber}`,
+        slotKind: 'single_exercise_row',
+        exerciseIds: slot.exerciseId ? [slot.exerciseId] : [],
+        exerciseNames: slot.exerciseName ? [slot.exerciseName] : [],
+        confidence: slot.isPrimarySkill ? 'medium' : 'high',
+        cautionReasons,
+        blockedReasons: [],
+        isAlreadyMethodOwned: false,
+        isPrimarySkillSensitive: slot.isPrimarySkill,
+        isWarmupOrCooldown: false,
+        isSyntheticArtifact: false,
+        isEligible: true,
+      })
+    }
+  }
+  
+  return slots
+}
+
+/**
+  * [MASTER-8C.10.4] Derives circuit eligible slots from the authoritative ledger.
+  * A circuit requires at least 3 available non-owned rows in a session.
+  */
+function deriveCircuitSlotsFromLedger(
+  ledger: MethodSlotOccupancyLedger,
+  sessions: MinimalSession[]
+): MethodEligibleSlot[] {
+  const slots: MethodEligibleSlot[] = []
+  
+  for (const sessionLedger of ledger.sessions) {
+    const sessionIndex = sessionLedger.sessionIndex
+    const session = sessions[sessionIndex]
+    if (!session) continue
+    
+    // Find available non-owned rows in this session
+    const availableRows = sessionLedger.slots.filter(slot => 
+      slot.isTrainingRow &&
+      slot.isAvailableForNewRowMethod &&
+      !slot.isGroupedOwned &&
+      !slot.hasInvalidOverlap &&
+      !slot.isWarmupOrCooldown &&
+      !slot.isSyntheticArtifact &&
+      !slot.isRowMethodOwned
+    )
+    
+    // Need at least 3 exercises for a circuit
+    if (availableRows.length < 3) continue
+    
+    const circuitRows = availableRows.slice(0, 5) // Cap at 5 for circuit
+    const hasPrimarySkill = circuitRows.some(r => r.isPrimarySkill)
+    
+    slots.push({
+      sessionId: sessionLedger.sessionId,
+      sessionIndex,
+      sessionLabel: `Day ${sessionLedger.dayNumber}`,
+      dayTitle: session.title || `Day ${sessionLedger.dayNumber}`,
+      slotKind: 'grouped_rows',
+      exerciseIds: circuitRows.map(r => r.exerciseId).filter(Boolean),
+      exerciseNames: circuitRows.map(r => r.exerciseName).filter(Boolean),
+      confidence: hasPrimarySkill ? 'medium' : 'high',
+      cautionReasons: hasPrimarySkill ? ['Contains primary skill exercises'] : [],
+      blockedReasons: [],
+      isAlreadyMethodOwned: false,
+      isPrimarySkillSensitive: hasPrimarySkill,
+      isWarmupOrCooldown: false,
+      isSyntheticArtifact: false,
+      isEligible: true,
+    })
+  }
+  
+  return slots
+}
+
+/**
+  * Scores a session for circuit eligibility
+  * [MASTER-8C.10.4 DEPRECATED] Use deriveCircuitSlotsFromLedger instead
+  */
 function scoreSessionForCircuit(session: MinimalSession, sessionIndex: number): MethodEligibleSlot | null {
   const exercises = Array.isArray(session.exercises) ? session.exercises : []
   
@@ -683,14 +795,12 @@ function buildMethodFrequencyPreview(
     blockedReason = item.blockedReason || 'Preview only - no structural writer'
     proofLines.push('Status: preview only - no save capability')
   } else {
-    // Method is potentially eligible - score slots
+    // Method is potentially eligible - score slots using authoritative ledger
     switch (item.methodCategory) {
       case 'grouped_structural': {
         if (item.canonicalKey === 'circuit') {
-          for (let i = 0; i < sessions.length; i++) {
-            const slot = scoreSessionForCircuit(sessions[i], i)
-            if (slot) eligibleSlots.push(slot)
-          }
+          // [MASTER-8C.10.4] Use ledger-based circuit slot derivation
+          eligibleSlots = deriveCircuitSlotsFromLedger(ledger, sessions)
         }
         // Density blocks are blocked by timed logging (handled above)
         // Supersets are preview-only (handled above)
@@ -698,10 +808,8 @@ function buildMethodFrequencyPreview(
       }
       case 'row_level': {
         if (item.canonicalKey !== 'straight_sets') {
-          for (let i = 0; i < sessions.length; i++) {
-            const slots = scoreSessionForRowLevelMethod(sessions[i], i, item.canonicalKey)
-            eligibleSlots.push(...slots)
-          }
+          // [MASTER-8C.10.4] Use ledger-based row-level slot derivation
+          eligibleSlots = deriveRowLevelSlotsFromLedger(ledger, sessions, item.canonicalKey)
         }
         break
       }

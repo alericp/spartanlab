@@ -52,6 +52,11 @@ import {
   findKnowledgeByAlias,
 } from './exercise-skill-knowledge-validation'
 
+import {
+  buildFutureSessionPlanningDetail,
+  type FuturePlanningContext,
+} from './program-balance-future-planning'
+
 // =============================================================================
 // UNAVAILABLE RESULT HELPER
 // =============================================================================
@@ -847,6 +852,19 @@ export function analyzeProgramBalanceReadOnly(
   )
 
   // Build future session candidates from high-severity findings
+  // MASTER-8B.6: Now includes detailed planning information
+  const planningContext: FuturePlanningContext = {
+    skillExpression,
+    movementFamilySummary,
+    weightedAnchorSummary,
+    tissueStressSummary,
+    knowledgeCoverage,
+    sessionCount: input.sessions.length,
+    completedDayIndexes: input.sessions
+      .filter(s => s.completed)
+      .map(s => s.dayIndex),
+  }
+  
   const futureSessionCandidates: FutureSessionCandidate[] = findings
     .filter((f) => f.futureMutationCandidate && (f.severity === 'high' || f.severity === 'moderate'))
     .map((f) => ({
@@ -856,6 +874,7 @@ export function analyzeProgramBalanceReadOnly(
       priority: f.severity,
       confidence: f.confidence,
       requiresFullKnowledgeBase: f.seedCoverageLimited,
+      planningDetail: buildFutureSessionPlanningDetail(f, f.futureMutationType, planningContext),
     }))
 
   // Determine result status
@@ -898,7 +917,7 @@ export function analyzeProgramBalanceReadOnly(
   return {
     status,
     mutationAllowedNow: false,
-    sourceStep: 'MASTER_8B_3',
+    sourceStep: 'MASTER_8B_6',
     analyzedSessionCount: input.sessions.length,
     analyzedExerciseCount: allExercises.length,
     knowledgeMatchedExerciseCount: knowledgeCoverage.knownExerciseCount,
@@ -913,6 +932,6 @@ export function analyzeProgramBalanceReadOnly(
     futureSessionCandidates,
     missingData,
     proof,
-    nextAllowedStep: 'MASTER_8B_4',
+    nextAllowedStep: 'MASTER_8B_7',
   }
 }

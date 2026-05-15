@@ -3338,7 +3338,7 @@ function ProgramBalanceSheetContent({
         </div>
       )}
 
-      {/* Future Session Candidates */}
+      {/* Future Session Candidates - MASTER-8B.6: Enhanced planning display */}
       {result.futureSessionCandidates.length > 0 && (
         <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
           <button
@@ -3350,7 +3350,7 @@ function ProgramBalanceSheetContent({
               Future Candidates ({result.futureSessionCandidates.length})
             </span>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
-              Not applied
+              Read-only
             </span>
             <ChevronRight className={cn(
               'w-3 h-3 text-[#5A5A6A] transition-transform',
@@ -3358,40 +3358,101 @@ function ProgramBalanceSheetContent({
             )} />
           </button>
           {expandedSection === 'future' && (
-            <div className="mt-3 space-y-2">
-              {result.futureSessionCandidates.map((candidate, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 rounded border bg-[#0A0A0D] border-[#1A1A22]"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-medium text-[#E6E9EF] capitalize">
-                      {candidate.candidateType.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                      Read-only candidate
-                    </span>
-                  </div>
-                  {candidate.targetDayIndexes.length > 0 && (
-                    <p className="text-[10px] text-[#7A7A8A]">
-                      Target days: {candidate.targetDayIndexes.join(', ')}
-                    </p>
-                  )}
-                  {candidate.rationale && (
-                    <p className="text-[10px] text-[#5A5A6A] mt-1">{candidate.rationale}</p>
-                  )}
-                  <div className="flex gap-1 mt-1">
-                    <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#5A5A6A]">
-                      Not applied in B4
-                    </span>
-                    {candidate.requiresFullKnowledgeBase && (
-                      <span className="text-[8px] px-1 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#5A5A6A]">
-                        Needs full DB
+            <div className="mt-3 space-y-3">
+              {result.futureSessionCandidates.map((candidate, idx) => {
+                const plan = candidate.planningDetail
+                return (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-lg border bg-[#0A0A0D] border-[#1A1A22] space-y-2"
+                  >
+                    {/* Coach Title */}
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs font-medium text-[#E6E9EF] flex-1">
+                        {plan?.coachTitle || candidate.candidateType.replace(/_/g, ' ')}
                       </span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
+                        Read-only
+                      </span>
+                    </div>
+                    
+                    {/* Trigger / Problem */}
+                    {plan?.triggerSummary && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] text-[#6A6A7A] font-medium">Problem detected:</p>
+                        <p className="text-[10px] text-[#9A9AA8]">{plan.triggerSummary}</p>
+                      </div>
                     )}
+                    
+                    {/* Proposed Future Action */}
+                    {plan?.proposedChangeSummary && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] text-[#6A6A7A] font-medium">Proposed future action:</p>
+                        <p className="text-[10px] text-[#8A8A9A]">{plan.proposedChangeSummary}</p>
+                      </div>
+                    )}
+                    
+                    {/* Preserve / Guardrails */}
+                    {plan?.preserveSummary && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] text-emerald-400/80 font-medium">Preservation guardrails:</p>
+                        <p className="text-[10px] text-emerald-300/60">{plan.preserveSummary}</p>
+                      </div>
+                    )}
+                    
+                    {/* Target Scope */}
+                    <div className="text-[10px] text-[#6A6A7A]">
+                      {plan?.affectedFutureDayIndexes && plan.affectedFutureDayIndexes.length > 0 ? (
+                        <span>Target: Day {plan.affectedFutureDayIndexes.join(', Day ')}</span>
+                      ) : (
+                        <span>Target: Future session boundary not resolved yet</span>
+                      )}
+                    </div>
+                    
+                    {/* Blocked Reason */}
+                    {plan?.blockedReason && (
+                      <div className="p-2 rounded bg-amber-500/5 border border-amber-500/15">
+                        <p className="text-[9px] text-amber-400/80 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>{plan.blockedReason}</span>
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Data Needed */}
+                    {plan?.dataNeeded && plan.dataNeeded.length > 0 && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] text-[#5A5A6A] font-medium">Data needed:</p>
+                        <ul className="text-[9px] text-[#5A5A6A] pl-2 space-y-0.5">
+                          {plan.dataNeeded.slice(0, 3).map((item, i) => (
+                            <li key={i}>- {item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Status Chips */}
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                        Not applied
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                        No saved-program change
+                      </span>
+                      {candidate.requiresFullKnowledgeBase && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400/80">
+                          Needs full DB
+                        </span>
+                      )}
+                      {plan?.status === 'blocked_no_writer' && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                          Needs writer
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

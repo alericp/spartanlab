@@ -8563,45 +8563,53 @@ function ExerciseRow({
         //   top_set   -> Dumbbell (one heavy working set)
         //   drop_set  -> Layers   (descending load layers)
         //   rest_pause-> Zap      (short pause then continue)
+        //   finisher  -> Timer    (time-capped conditioning)
         const Icon =
           variant === 'cluster' ? Repeat
           : variant === 'density' ? Timer
           : variant === 'top_set' ? Dumbbell
           : variant === 'drop_set' ? Layers
+          : variant === 'finisher' ? Timer
           : Zap
         // Color palette: existing cluster=purple / density=amber kept; new
         // row-level variants use rose / orange / teal to stay distinguishable
         // from grouped methods (superset=blue, circuit=emerald) without
         // adding new pages of color tokens.
+        // [MASTER-8C.4.G] Finisher uses cyan to distinguish from density/amber
         const railColor =
           variant === 'cluster' ? 'bg-purple-500'
           : variant === 'density' ? 'bg-amber-500'
           : variant === 'top_set' ? 'bg-rose-500'
           : variant === 'drop_set' ? 'bg-orange-500'
+          : variant === 'finisher' ? 'bg-cyan-500'
           : 'bg-teal-500'
         const iconTileBg =
           variant === 'cluster' ? 'bg-purple-500/20'
           : variant === 'density' ? 'bg-amber-500/20'
           : variant === 'top_set' ? 'bg-rose-500/20'
           : variant === 'drop_set' ? 'bg-orange-500/20'
+          : variant === 'finisher' ? 'bg-cyan-500/20'
           : 'bg-teal-500/20'
         const iconColor =
           variant === 'cluster' ? 'text-purple-300'
           : variant === 'density' ? 'text-amber-300'
           : variant === 'top_set' ? 'text-rose-300'
           : variant === 'drop_set' ? 'text-orange-300'
+          : variant === 'finisher' ? 'text-cyan-300'
           : 'text-teal-300'
         const labelColor =
           variant === 'cluster' ? 'text-purple-200'
           : variant === 'density' ? 'text-amber-200'
           : variant === 'top_set' ? 'text-rose-200'
           : variant === 'drop_set' ? 'text-orange-200'
+          : variant === 'finisher' ? 'text-cyan-200'
           : 'text-teal-200'
         const execColor =
           variant === 'cluster' ? 'text-purple-300/90'
           : variant === 'density' ? 'text-amber-300/90'
           : variant === 'top_set' ? 'text-rose-300/90'
           : variant === 'drop_set' ? 'text-orange-300/90'
+          : variant === 'finisher' ? 'text-cyan-300/90'
           : 'text-teal-300/90'
         return (
           <div

@@ -4974,6 +4974,7 @@ export const EXERCISE_SKILL_KNOWLEDGE_SEED: readonly ExerciseSkillKnowledgeEntry
     knownTaxonomyWarnings: [],
     futureResearchSlots: [],
   },
+
 ]
 
 // =============================================================================

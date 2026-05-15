@@ -127,6 +127,7 @@ import {
 } from '@/lib/program/future-session-mutation-apply-contract'
 import {
   buildProgramBalanceBranchInputFromProgram,
+  buildProgramBalanceBranchInputWithFoundation,
   extractSelectedSkillIdsFromRepresentations,
 } from '@/lib/program/program-balance-ui-adapter'
 // [MASTER-8B.5] Method Planner foundation context
@@ -4713,17 +4714,24 @@ export function ProgramCoachIntelligenceHub({
   const plannerSummary = buildCanonicalMethodPlannerSummary(program, methodItems, activePreviews)
   
   // [MASTER-8B.4] Program Balance read-only analysis
+  // [MASTER-8C.4] Now links Adaptive Foundation from resolveVisibleAdaptiveFoundation
   const programBalanceResult = useMemo<ProgramBalanceReadOnlyResult>(() => {
     try {
       // Extract selected skill IDs from representations
       const selectedSkillIds = extractSelectedSkillIdsFromRepresentations(selectedSkillRepresentations)
       
-      // Build input from program
-      const input = buildProgramBalanceBranchInputFromProgram({
+      // [MASTER-8C.4] Resolve the adaptive foundation model to pass to analyzer
+      // This ensures "Adaptive Foundation analyzer input not linked" doesn't appear
+      // when the Adaptive Foundation tile can resolve a model
+      const { model: adaptiveFoundationModel } = resolveVisibleAdaptiveFoundation(program)
+      
+      // Build input from program with explicit Adaptive Foundation override
+      const input = buildProgramBalanceBranchInputWithFoundation(
         program,
         selectedSkillIds,
         currentWeekNumber,
-      })
+        adaptiveFoundationModel ?? undefined,
+      )
       
       // Run analyzer
       return analyzeProgramBalanceReadOnly(input)

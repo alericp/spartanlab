@@ -389,7 +389,49 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Method Planner Applied 6 unchanged
 - User confirmation required before any future mutation
 
-**Next Phase:** MASTER-8B.7 Apply Gate — user-confirmed preview/apply writer implementation
+**Next Phase:** MASTER-8B.7.1 Apply Gate — user-confirmed preview/apply writer implementation
+
+---
+
+### MASTER-8B.7.1 — User-Confirmed Future-Session Mutation Preview/Apply Corridor (Marker Only)
+
+**Status:** COMPLETE
+
+**Purpose:** First official user-confirmed apply corridor for Program Balance Future Candidates. Saves marker-only mutation plans without structural workout changes.
+
+**What This Step Delivered:**
+- Created `lib/program/future-session-mutation-apply-contract.ts` (328 lines) with:
+  - `ConfirmedFutureSessionMutationPlan` type
+  - `FutureSessionMutationPlanBundle` type
+  - `createConfirmedPlan()` helper
+  - `loadMutationPlans()` and `addConfirmedPlan()` storage helpers
+  - Safety invariants enforcing marker-only behavior
+- Added "Preview mutation plan" button to Future Candidates in Program Balance
+- Added confirmation modal with safety guarantees display:
+  - Completed sessions protected
+  - Future sessions only
+  - Program Card marker only — no exercise changes yet
+  - Live Workout bridge pending (8B.8)
+  - Start Workout unchanged
+- Added Program Card mutation markers in `AdaptiveProgramDisplay.tsx`
+- Updated Program Balance status line to reflect apply gate ready state
+
+**Files Changed:**
+- `lib/program/future-session-mutation-apply-contract.ts` (new - 328 lines)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (preview button + confirmation modal + state)
+- `components/programs/AdaptiveProgramDisplay.tsx` (mutation plan marker display)
+
+**Constraints Preserved:**
+- Structural workout mutation NOT applied (marker only)
+- Completed sessions protected
+- Program Card exercise lists unchanged
+- Live Workout unchanged
+- Start Workout unchanged
+- Method Planner Applied 6 unchanged
+- User confirmation required for every plan
+- Legacy Phase 13 remains disabled
+
+**Next Phase:** MASTER-8B.7.2 — first bounded structural future-session mutation type
 
 ---
 

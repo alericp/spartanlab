@@ -917,16 +917,19 @@ export function analyzeProgramBalanceReadOnly(
       planningDetail: buildFutureSessionPlanningDetail(f, f.futureMutationType, planningContext),
     }))
 
-  // Determine result status
-  const status =
-    knowledgeCoverage.unknownExerciseCount > knowledgeCoverage.knownExerciseCount
-      ? 'partial'
-      : 'ready'
+  // MASTER-8C.4.C: Use identity coverage counts for UI-facing full science counts
+  // The old knownExerciseCount/unknownExerciseCount came from resolveProgramBalanceExercise()
+  // which may not match alias-resolved entries. The identity coverage resolver is authoritative.
+  const fullScienceMatched = (knowledgeCoverage.fullScienceKnownCount ?? 0) + (knowledgeCoverage.aliasResolvedCount ?? 0)
+  const needScienceCount = allExercises.length - fullScienceMatched
 
-  // Build missing data - MASTER-8C.1: Distinguish current program vs global DB
+  // Determine result status - MASTER-8C.4.C: Use authoritative counts
+  const status = needScienceCount > fullScienceMatched ? 'partial' : 'ready'
+
+  // Build missing data - MASTER-8C.4.C: Use authoritative needScienceCount
   const missingData: string[] = []
-  if (knowledgeCoverage.unknownExerciseCount > 0) {
-    missingData.push(`${knowledgeCoverage.unknownExerciseCount} exercises not in knowledge seed`)
+  if (needScienceCount > 0) {
+    missingData.push(`${needScienceCount} exercises not in knowledge seed`)
   }
   if (!input.existingMethodSummary) {
     missingData.push('Method summary not provided')
@@ -961,8 +964,9 @@ export function analyzeProgramBalanceReadOnly(
     sourceStep: 'MASTER_8B_6',
     analyzedSessionCount: input.sessions.length,
     analyzedExerciseCount: allExercises.length,
-    knowledgeMatchedExerciseCount: knowledgeCoverage.knownExerciseCount,
-    knowledgeMissingExerciseCount: knowledgeCoverage.unknownExerciseCount,
+    // MASTER-8C.4.C: Authoritative counts from identity coverage resolver
+    knowledgeMatchedExerciseCount: fullScienceMatched,
+    knowledgeMissingExerciseCount: needScienceCount,
     selectedSkillCount: input.selectedSkillIds.length,
     knowledgeCoverageSummary: knowledgeCoverage,
     findings,

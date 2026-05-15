@@ -355,10 +355,48 @@ function applyTargetToProgram(args: {
 
   const targetExercise = exercises[targetExerciseIndex]
 
-  // Check if already applied with same method
+  // [MASTER-8C.10.1] Defense against stale previews - re-check ownership at apply time
+  // Check if already applied with same method (success case)
   if (targetExercise.methodOverrideApplied === true && 
       targetExercise.setExecutionMethod === setExecutionMethod) {
     return { success: false, reason: `${displayLabel} already applied to this exercise` }
+  }
+
+  // [MASTER-8C.10.1] Block if exercise has a DIFFERENT row-level method
+  if (targetExercise.methodOverrideApplied === true && 
+      targetExercise.setExecutionMethod !== setExecutionMethod) {
+    return { success: false, reason: `Exercise already has ${targetExercise.setExecutionMethod} method — cannot stack ${setExecutionMethod}` }
+  }
+  
+  // [MASTER-8C.10.1] Block if exercise is part of a styled group (circuit/superset/density)
+  if (typeof targetExercise.styledGroupId === 'string' && targetExercise.styledGroupId.length > 0) {
+    return { success: false, reason: `Target belongs to grouped method structure — row-level ${displayLabel} blocked` }
+  }
+  
+  // [MASTER-8C.10.1] Block if exercise has another method family
+  if (typeof targetExercise.methodFamily === 'string' && 
+      targetExercise.methodFamily !== 'straight_sets' && 
+      targetExercise.methodFamily !== methodKey) {
+    return { success: false, reason: `Target has method family "${targetExercise.methodFamily}" — ${displayLabel} blocked` }
+  }
+  
+  // [MASTER-8C.10.1] Block if exercise has appliedMethod from grouped structure
+  if (typeof targetExercise.appliedMethod === 'string' && targetExercise.appliedMethod.length > 0) {
+    return { success: false, reason: `Target has appliedMethod "${targetExercise.appliedMethod}" — ${displayLabel} blocked` }
+  }
+  
+  // [MASTER-8C.10.1] Check session-level grouped method ownership
+  const sessionStyledGroups = Array.isArray(session.styleMetadata?.styledGroups) 
+    ? session.styleMetadata.styledGroups as Array<Record<string, unknown>>
+    : []
+  
+  for (const group of sessionStyledGroups) {
+    const memberIds = Array.isArray(group.exerciseIds) ? group.exerciseIds : 
+                      Array.isArray(group.memberIds) ? group.memberIds : []
+    if (memberIds.includes(exerciseId)) {
+      const groupType = group.type ?? group.methodFamily ?? 'grouped_method'
+      return { success: false, reason: `Target is member of ${groupType} group — row-level ${displayLabel} blocked` }
+    }
   }
 
   // Get method instructions

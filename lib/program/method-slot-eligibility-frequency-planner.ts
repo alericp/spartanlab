@@ -151,6 +151,12 @@ interface MinimalExercise {
   methodFamily?: string
   appliedMethod?: string
   styledGroupId?: string
+  // [MASTER-8C.10.1] Additional row-level method fields
+  setExecutionMethod?: string
+  methodOverrideApplied?: boolean
+  methodOverrideMethodKey?: string
+  method?: string
+  trainingMethod?: string
 }
 
 /**
@@ -163,6 +169,234 @@ interface MinimalSession {
   exercises?: unknown[]
   styledGroups?: unknown[]
   methodStructures?: unknown[]
+  // [MASTER-8C.10.1] Additional session-level method structures
+  styleMetadata?: {
+    styledGroups?: unknown[]
+    appliedMethods?: unknown[]
+    methodOverrideRowApplications?: unknown[]
+  }
+}
+
+// =============================================================================
+// [MASTER-8C.10.1] METHOD OWNERSHIP DETECTION
+// =============================================================================
+
+/**
+ * Result of method ownership check
+ */
+interface MethodOwnershipResult {
+  readonly owned: boolean
+  readonly ownerMethodKey: string | null
+  readonly ownerKind: 'row_level' | 'grouped_structure' | 'session_structure' | 'unknown' | null
+  readonly reason: string
+  readonly evidence: readonly string[]
+}
+
+/**
+ * Session-level method occupancy tracking
+ */
+interface SessionMethodOccupancy {
+  readonly sessionId: string
+  readonly hasGroupedMethods: boolean
+  readonly groupedMethodTypes: readonly string[]
+  readonly groupedMemberExerciseIds: ReadonlySet<string>
+  readonly groupedMemberExerciseNames: ReadonlySet<string>
+  readonly rowLevelMethodExerciseIds: ReadonlySet<string>
+  readonly evidence: readonly string[]
+}
+
+/**
+ * Normalizes a method family key to a canonical form
+ */
+function normalizeMethodFamilyKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.toLowerCase().trim().replace(/[\s_-]+/g, '_')
+  if (normalized.length === 0) return null
+  return normalized
+}
+
+/**
+ * Normalizes an exercise identity for comparison
+ */
+function normalizeExerciseIdentity(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.toLowerCase().trim().replace(/[\s_-]+/g, '_')
+  }
+  return ''
+}
+
+/**
+ * Collects method occupancy information from session-level structures
+ */
+function collectSessionMethodOccupancy(session: MinimalSession): SessionMethodOccupancy {
+  const evidence: string[] = []
+  const groupedMethodTypes: string[] = []
+  const groupedMemberExerciseIds = new Set<string>()
+  const groupedMemberExerciseNames = new Set<string>()
+  const rowLevelMethodExerciseIds = new Set<string>()
+  
+  // Check session.styledGroups
+  if (Array.isArray(session.styledGroups)) {
+    for (const group of session.styledGroups) {
+      if (group && typeof group === 'object') {
+        const g = group as Record<string, unknown>
+        const groupType = normalizeMethodFamilyKey(g.type) ?? normalizeMethodFamilyKey(g.methodFamily) ?? normalizeMethodFamilyKey(g.groupType)
+        if (groupType) {
+          groupedMethodTypes.push(groupType)
+          evidence.push(`session.styledGroups contains ${groupType}`)
+        }
+        
+        // Collect member exercise ids/names
+        if (Array.isArray(g.exerciseIds)) {
+          for (const id of g.exerciseIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+        if (Array.isArray(g.memberIds)) {
+          for (const id of g.memberIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+        if (Array.isArray(g.exercises)) {
+          for (const ex of g.exercises) {
+            if (ex && typeof ex === 'object') {
+              const exObj = ex as Record<string, unknown>
+              if (typeof exObj.id === 'string') groupedMemberExerciseIds.add(exObj.id)
+              if (typeof exObj.name === 'string') groupedMemberExerciseNames.add(normalizeExerciseIdentity(exObj.name))
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Check session.methodStructures
+  if (Array.isArray(session.methodStructures)) {
+    for (const struct of session.methodStructures) {
+      if (struct && typeof struct === 'object') {
+        const s = struct as Record<string, unknown>
+        const structType = normalizeMethodFamilyKey(s.type) ?? normalizeMethodFamilyKey(s.methodFamily) ?? normalizeMethodFamilyKey(s.methodKey)
+        if (structType) {
+          groupedMethodTypes.push(structType)
+          evidence.push(`session.methodStructures contains ${structType}`)
+        }
+        
+        // Collect member ids
+        if (Array.isArray(s.memberIds)) {
+          for (const id of s.memberIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+        if (Array.isArray(s.exerciseIds)) {
+          for (const id of s.exerciseIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+      }
+    }
+  }
+  
+  // Check session.styleMetadata.styledGroups
+  if (session.styleMetadata && Array.isArray(session.styleMetadata.styledGroups)) {
+    for (const group of session.styleMetadata.styledGroups) {
+      if (group && typeof group === 'object') {
+        const g = group as Record<string, unknown>
+        const groupType = normalizeMethodFamilyKey(g.type) ?? normalizeMethodFamilyKey(g.methodFamily)
+        if (groupType) {
+          groupedMethodTypes.push(groupType)
+          evidence.push(`styleMetadata.styledGroups contains ${groupType}`)
+        }
+        
+        if (Array.isArray(g.exerciseIds)) {
+          for (const id of g.exerciseIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+        if (Array.isArray(g.memberIds)) {
+          for (const id of g.memberIds) {
+            if (typeof id === 'string') groupedMemberExerciseIds.add(id)
+          }
+        }
+      }
+    }
+  }
+  
+  // Check exercises for row-level method ownership
+  if (Array.isArray(session.exercises)) {
+    for (const ex of session.exercises) {
+      if (ex && typeof ex === 'object') {
+        const e = ex as MinimalExercise
+        const hasRowMethod = (
+          (typeof e.setExecutionMethod === 'string' && e.setExecutionMethod.length > 0 && e.setExecutionMethod !== 'standard') ||
+          e.methodOverrideApplied === true ||
+          (typeof e.methodOverrideMethodKey === 'string' && e.methodOverrideMethodKey.length > 0)
+        )
+        if (hasRowMethod && typeof e.id === 'string') {
+          rowLevelMethodExerciseIds.add(e.id)
+          evidence.push(`exercise ${e.id} has row-level method`)
+        }
+      }
+    }
+  }
+  
+  return {
+    sessionId: session.id ?? 'unknown',
+    hasGroupedMethods: groupedMethodTypes.length > 0,
+    groupedMethodTypes,
+    groupedMemberExerciseIds,
+    groupedMemberExerciseNames,
+    rowLevelMethodExerciseIds,
+    evidence,
+  }
+}
+
+/**
+ * Checks if an exercise is owned by a session-level method structure
+ */
+function isExerciseOwnedBySessionMethod(exercise: unknown, session: MinimalSession): MethodOwnershipResult {
+  if (!exercise || typeof exercise !== 'object') {
+    return { owned: false, ownerMethodKey: null, ownerKind: null, reason: 'invalid exercise', evidence: [] }
+  }
+  
+  const ex = exercise as MinimalExercise
+  const occupancy = collectSessionMethodOccupancy(session)
+  const exerciseId = ex.id ?? ''
+  const exerciseName = normalizeExerciseIdentity(ex.name)
+  
+  // Check if exercise is in a grouped method structure by ID
+  if (exerciseId && occupancy.groupedMemberExerciseIds.has(exerciseId)) {
+    return {
+      owned: true,
+      ownerMethodKey: occupancy.groupedMethodTypes[0] ?? 'grouped_method',
+      ownerKind: 'grouped_structure',
+      reason: `Exercise ${exerciseId} is member of grouped method`,
+      evidence: [...occupancy.evidence],
+    }
+  }
+  
+  // Check if exercise is in a grouped method structure by normalized name
+  if (exerciseName && occupancy.groupedMemberExerciseNames.has(exerciseName)) {
+    return {
+      owned: true,
+      ownerMethodKey: occupancy.groupedMethodTypes[0] ?? 'grouped_method',
+      ownerKind: 'grouped_structure',
+      reason: `Exercise ${exerciseName} is member of grouped method by name`,
+      evidence: [...occupancy.evidence],
+    }
+  }
+  
+  // Check if exercise has row-level method ownership
+  if (exerciseId && occupancy.rowLevelMethodExerciseIds.has(exerciseId)) {
+    return {
+      owned: true,
+      ownerMethodKey: (ex.methodOverrideMethodKey ?? ex.setExecutionMethod ?? 'row_method'),
+      ownerKind: 'row_level',
+      reason: `Exercise ${exerciseId} has row-level method applied`,
+      evidence: [...occupancy.evidence],
+    }
+  }
+  
+  return { owned: false, ownerMethodKey: null, ownerKind: null, reason: '', evidence: [] }
 }
 
 /**
@@ -207,9 +441,10 @@ function isMethodSlotEligibleTrainingExercise(exercise: unknown): boolean {
 }
 
 /**
- * Checks if an exercise is already owned by a method (in a styledGroup or has appliedMethod)
+ * [MASTER-8C.10.1] Enhanced check if an exercise is already owned by a method.
+ * Now checks both exercise-level fields AND session-level grouped structures.
  */
-function isExerciseAlreadyMethodOwned(exercise: unknown): boolean {
+function isExerciseAlreadyMethodOwned(exercise: unknown, session?: MinimalSession): boolean {
   if (!exercise || typeof exercise !== 'object') return false
   
   const ex = exercise as MinimalExercise
@@ -226,6 +461,31 @@ function isExerciseAlreadyMethodOwned(exercise: unknown): boolean {
   
   if (typeof ex.methodFamily === 'string' && ex.methodFamily !== 'straight_sets') {
     return true
+  }
+  
+  // [MASTER-8C.10.1] Check row-level method fields
+  if (typeof ex.setExecutionMethod === 'string' && ex.setExecutionMethod.length > 0 && ex.setExecutionMethod !== 'standard') {
+    return true
+  }
+  
+  if (ex.methodOverrideApplied === true) {
+    return true
+  }
+  
+  if (typeof ex.methodOverrideMethodKey === 'string' && ex.methodOverrideMethodKey.length > 0) {
+    return true
+  }
+  
+  if (typeof ex.trainingMethod === 'string' && ex.trainingMethod.length > 0 && ex.trainingMethod !== 'straight_sets' && ex.trainingMethod !== 'standard') {
+    return true
+  }
+  
+  // [MASTER-8C.10.1] Check session-level grouped method ownership
+  if (session) {
+    const sessionOwnership = isExerciseOwnedBySessionMethod(exercise, session)
+    if (sessionOwnership.owned) {
+      return true
+    }
   }
   
   return false
@@ -264,7 +524,8 @@ function scoreSessionForCircuit(session: MinimalSession, sessionIndex: number): 
   const exercises = Array.isArray(session.exercises) ? session.exercises : []
   
   const eligibleExercises = exercises.filter(isMethodSlotEligibleTrainingExercise)
-  const nonOwnedExercises = eligibleExercises.filter(ex => !isExerciseAlreadyMethodOwned(ex))
+  // [MASTER-8C.10.1] Pass session context for grouped method ownership detection
+  const nonOwnedExercises = eligibleExercises.filter(ex => !isExerciseAlreadyMethodOwned(ex, session))
   
   // Need at least 3 exercises for a circuit
   if (nonOwnedExercises.length < 3) {
@@ -317,7 +578,8 @@ function scoreSessionForRowLevelMethod(
     const exercise = exercises[i]
     
     if (!isMethodSlotEligibleTrainingExercise(exercise)) continue
-    if (isExerciseAlreadyMethodOwned(exercise)) continue
+    // [MASTER-8C.10.1] Pass session context for grouped method ownership detection
+    if (isExerciseAlreadyMethodOwned(exercise, session)) continue
     
     const ex = exercise as MinimalExercise
     const isPrimary = isPrimarySkillExercise(exercise)

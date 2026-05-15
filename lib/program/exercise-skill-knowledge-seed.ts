@@ -237,6 +237,206 @@ function upperBodyCooldownNeeds(): CooldownNeedProfile {
 }
 
 // =============================================================================
+// MASTER-8C.4.B SCHEMA-FIRST ENTRY FACTORIES
+// =============================================================================
+
+/**
+ * Creates a minimal mobility/flexibility entry with all required fields
+ */
+function createMobilityEntry(
+  exerciseId: string,
+  canonicalName: string,
+  aliases: readonly string[],
+  primaryRegion: 'hip_flexor' | 'lower_back' | 'shoulder_general' | 'wrist' | 'ankle' | 'knee',
+): ExerciseSkillKnowledgeEntry {
+  return {
+    exerciseId,
+    canonicalName,
+    aliases,
+    sourceKinds: ['existing_pool', 'coach_authored_seed'],
+    confidence: 'seed',
+    modalities: ['mobility', 'cooldown'],
+    prescriptionUnit: 'seconds',
+    movementFamilies: ['mobility'],
+    trainingPurposes: ['mobility', 'cooldown', 'recovery'],
+    skillTransfers: [],
+    primaryStressRegions: [primaryRegion],
+    tissueStressProfile: [
+      { region: primaryRegion, magnitude: 'low', accumulationRisk: 'low', spacingNeed: 0, notes: 'Flexibility work', safeguardTags: [] },
+    ],
+    frequencyTolerance: 'high_frequency_microdose',
+    trainingCost: mobilityTrainingCost(),
+    methodCompatibility: mobilityMethodCompatibility(),
+    progressionRelationships: [],
+    warmupNeeds: { jointPrep: [], activation: [], rampUpNeeded: false, skillSpecificPrep: null, tissuePrep: [], suggestedTags: [] },
+    cooldownNeeds: { mobilityTargets: [], downregulationNeed: 'low', tissueRecoveryTargets: [], suggestedTags: [] },
+    userAbilityGates: [],
+    equipmentRequired: [],
+    equipmentOptional: [],
+    weightedStrengthAnchor: false,
+    bandAssistanceSupported: false,
+    isIsometric: true,
+    notesForFutureScoring: 'Mobility/flexibility work',
+    forbiddenInterpretations: ['Must use seconds, not reps'],
+    knownTaxonomyWarnings: [],
+    futureResearchSlots: [],
+  }
+}
+
+/**
+ * Creates a prehab/activation entry with all required fields
+ */
+function createPrehabEntry(
+  exerciseId: string,
+  canonicalName: string,
+  aliases: readonly string[],
+  movementFams: readonly MovementBalanceFamily[],
+  primaryRegion: 'shoulder_general' | 'scapular_tendon' | 'hip_flexor' | 'ankle' | 'wrist',
+  isIso: boolean,
+): ExerciseSkillKnowledgeEntry {
+  return {
+    exerciseId,
+    canonicalName,
+    aliases,
+    sourceKinds: ['existing_pool', 'coach_authored_seed'],
+    confidence: 'seed',
+    modalities: isIso ? ['prehab', 'static_hold'] : ['prehab', 'dynamic_reps'],
+    prescriptionUnit: isIso ? 'seconds' : 'reps',
+    movementFamilies: movementFams,
+    trainingPurposes: ['prehab', 'warmup'],
+    skillTransfers: [],
+    primaryStressRegions: [primaryRegion],
+    tissueStressProfile: [
+      { region: primaryRegion, magnitude: 'low', accumulationRisk: 'low', spacingNeed: 0, notes: 'Prehab activation', safeguardTags: [] },
+    ],
+    frequencyTolerance: 'high_frequency_microdose',
+    trainingCost: prehabTrainingCost(),
+    methodCompatibility: prehabMethodCompatibility(),
+    progressionRelationships: [],
+    warmupNeeds: { jointPrep: [], activation: [], rampUpNeeded: false, skillSpecificPrep: null, tissuePrep: [], suggestedTags: [] },
+    cooldownNeeds: { mobilityTargets: [], downregulationNeed: 'low', tissueRecoveryTargets: [], suggestedTags: [] },
+    userAbilityGates: [],
+    equipmentRequired: [],
+    equipmentOptional: [],
+    weightedStrengthAnchor: false,
+    bandAssistanceSupported: false,
+    isIsometric: isIso,
+    notesForFutureScoring: 'Prehab/activation work',
+    forbiddenInterpretations: isIso ? ['Must use seconds, not reps'] : [],
+    knownTaxonomyWarnings: [],
+    futureResearchSlots: [],
+  }
+}
+
+/**
+ * Creates a core/compression entry with all required fields
+ */
+function createCoreEntry(
+  exerciseId: string,
+  canonicalName: string,
+  aliases: readonly string[],
+  movementFamily: 'compression_core' | 'anti_extension_core' | 'anti_rotation_core',
+  isIso: boolean,
+  skillTransfers: readonly SkillTransferProfile[] = [],
+): ExerciseSkillKnowledgeEntry {
+  return {
+    exerciseId,
+    canonicalName,
+    aliases,
+    sourceKinds: ['existing_pool', 'coach_authored_seed'],
+    confidence: 'seed',
+    modalities: isIso ? ['static_hold'] : ['dynamic_reps'],
+    prescriptionUnit: isIso ? 'seconds' : 'reps',
+    movementFamilies: [movementFamily],
+    trainingPurposes: ['compression', 'strength_support'],
+    skillTransfers,
+    primaryStressRegions: ['core_abdominal', 'hip_flexor'],
+    tissueStressProfile: [
+      { region: 'core_abdominal', magnitude: 'moderate', accumulationRisk: 'low', spacingNeed: 1, notes: 'Core compression work', safeguardTags: [] },
+      { region: 'hip_flexor', magnitude: 'moderate', accumulationRisk: 'low', spacingNeed: 1, notes: 'Hip flexor engagement', safeguardTags: ['hip_flexor_prep'] },
+    ],
+    frequencyTolerance: 'frequent_low_intensity',
+    trainingCost: coreTrainingCost(),
+    methodCompatibility: coreMethodCompatibility(),
+    progressionRelationships: [],
+    warmupNeeds: { jointPrep: [], activation: ['core'], rampUpNeeded: false, skillSpecificPrep: null, tissuePrep: [], suggestedTags: [] },
+    cooldownNeeds: { mobilityTargets: ['hip_flexor'], downregulationNeed: 'low', tissueRecoveryTargets: [], suggestedTags: [] },
+    userAbilityGates: [],
+    equipmentRequired: [],
+    equipmentOptional: [],
+    weightedStrengthAnchor: false,
+    bandAssistanceSupported: false,
+    isIsometric: isIso,
+    notesForFutureScoring: 'Core/compression work',
+    forbiddenInterpretations: isIso ? ['Must use seconds, not reps'] : [],
+    knownTaxonomyWarnings: [],
+    futureResearchSlots: [],
+  }
+}
+
+/**
+ * Creates a skill hold entry with all required fields
+ */
+function createSkillHoldEntry(
+  exerciseId: string,
+  canonicalName: string,
+  aliases: readonly string[],
+  movementFams: readonly MovementBalanceFamily[],
+  primaryStress: readonly ('wrist' | 'shoulder_general' | 'shoulder_anterior' | 'biceps_tendon' | 'core_abdominal' | 'hip_flexor')[],
+  skillTransfers: readonly SkillTransferProfile[],
+  equipReq: readonly string[] = [],
+): ExerciseSkillKnowledgeEntry {
+  return {
+    exerciseId,
+    canonicalName,
+    aliases,
+    sourceKinds: ['existing_pool', 'coach_authored_seed'],
+    confidence: 'seed',
+    modalities: ['static_hold', 'skill_drill'],
+    prescriptionUnit: 'seconds',
+    movementFamilies: movementFams,
+    trainingPurposes: ['skill_acquisition', 'max_strength'],
+    skillTransfers,
+    primaryStressRegions: primaryStress,
+    tissueStressProfile: primaryStress.map(region => ({
+      region,
+      magnitude: 'high' as const,
+      accumulationRisk: 'moderate' as const,
+      spacingNeed: 2,
+      notes: 'High skill demand',
+      safeguardTags: [] as readonly import('./exercise-skill-knowledge-contract').SafeguardTag[],
+    })),
+    frequencyTolerance: 'moderate_frequency',
+    trainingCost: {
+      neuralCost: 4,
+      localMuscleCost: 3,
+      systemicFatigueCost: 2,
+      tendonCost: 3,
+      jointCost: 3,
+      failureRisk: 'moderate',
+      recommendedHardExposureSpacingDays: 2,
+      microdoseAllowed: true,
+      failureAllowed: false,
+      reason: 'High skill demand with tendon stress',
+    },
+    methodCompatibility: skillMethodCompatibility(),
+    progressionRelationships: [],
+    warmupNeeds: { jointPrep: ['wrist', 'shoulder_general'], activation: ['shoulders', 'core'], rampUpNeeded: true, skillSpecificPrep: null, tissuePrep: [], suggestedTags: ['wrist_prep', 'shoulder_activation'] },
+    cooldownNeeds: { mobilityTargets: ['shoulder_general', 'wrist'], downregulationNeed: 'moderate', tissueRecoveryTargets: [], suggestedTags: [] },
+    userAbilityGates: [],
+    equipmentRequired: equipReq,
+    equipmentOptional: [],
+    weightedStrengthAnchor: false,
+    bandAssistanceSupported: true,
+    isIsometric: true,
+    notesForFutureScoring: 'Advanced skill hold',
+    forbiddenInterpretations: ['Must use seconds, not reps'],
+    knownTaxonomyWarnings: [],
+    futureResearchSlots: [],
+  }
+}
+
+// =============================================================================
 // EXERCISE KNOWLEDGE SEED DATA
 // =============================================================================
 
@@ -4974,6 +5174,104 @@ export const EXERCISE_SKILL_KNOWLEDGE_SEED: readonly ExerciseSkillKnowledgeEntry
     knownTaxonomyWarnings: [],
     futureResearchSlots: [],
   },
+
+  // ===========================================================================
+  // MASTER-8C.4.B SEGMENT 1: MOBILITY / FLEXIBILITY (26 entries)
+  // ===========================================================================
+  createMobilityEntry('active_pancake_lean', 'Active Pancake Lean', ['Pancake Lean', 'Forward Pancake'], 'hip_flexor'),
+  createMobilityEntry('active_pancake_pulses', 'Active Pancake Pulses', ['Pancake Pulses'], 'hip_flexor'),
+  createMobilityEntry('chest_stretch', 'Chest Stretch', ['Pec Stretch', 'Doorway Stretch'], 'shoulder_general'),
+  createMobilityEntry('cossack_hold', 'Cossack Hold', ['Cossack Squat Hold', 'Side Lunge Hold'], 'hip_flexor'),
+  createMobilityEntry('deep_pike_fold', 'Deep Pike Fold', ['Deep Pike', 'Chest to Knees'], 'lower_back'),
+  createMobilityEntry('deep_squat_hold', 'Deep Squat Hold', ['Asian Squat', 'Third World Squat'], 'hip_flexor'),
+  createMobilityEntry('forward_fold_hold', 'Forward Fold Hold', ['Forward Fold', 'Uttanasana'], 'lower_back'),
+  createMobilityEntry('frog_pose', 'Frog Pose', ['Frog Stretch', 'Mandukasana'], 'hip_flexor'),
+  createMobilityEntry('front_split_prep', 'Front Split Prep', ['Split Prep', 'Half Split'], 'hip_flexor'),
+  createMobilityEntry('full_front_split', 'Full Front Split', ['Front Split', 'Hanumanasana'], 'hip_flexor'),
+  createMobilityEntry('full_side_split', 'Full Side Split', ['Middle Split', 'Side Split'], 'hip_flexor'),
+  createMobilityEntry('half_splits', 'Half Splits', ['Half Split', 'Ardha Hanumanasana'], 'lower_back'),
+  createMobilityEntry('hamstring_fold', 'Hamstring Fold', ['Hamstring Stretch', 'Single Leg Pike'], 'lower_back'),
+  createMobilityEntry('horse_stance_hold', 'Horse Stance Hold', ['Horse Stance', 'Wide Squat Hold'], 'hip_flexor'),
+  createMobilityEntry('lat_stretch', 'Lat Stretch', ['Latissimus Stretch', 'Side Lat Stretch'], 'shoulder_general'),
+  createMobilityEntry('pancake_side_reaches', 'Pancake Side Reaches', ['Side Reaches', 'Straddle Side Reach'], 'hip_flexor'),
+  createMobilityEntry('pigeon_pose', 'Pigeon Pose', ['Pigeon Stretch', 'Eka Pada Rajakapotasana'], 'hip_flexor'),
+  createMobilityEntry('runners_lunge', 'Runners Lunge', ['Low Lunge', 'Hip Flexor Lunge'], 'hip_flexor'),
+  createMobilityEntry('seated_pancake_hold', 'Seated Pancake Hold', ['Pancake Hold', 'Straddle Forward Fold'], 'hip_flexor'),
+  createMobilityEntry('seated_pike_fold', 'Seated Pike Fold', ['Pike Fold', 'Seated Forward Fold'], 'lower_back'),
+  createMobilityEntry('seated_straddle_fold', 'Seated Straddle Fold', ['Straddle Fold', 'Middle Split Fold'], 'hip_flexor'),
+  createMobilityEntry('shoulder_stretch', 'Shoulder Stretch', ['Cross-Body Shoulder Stretch', 'Posterior Shoulder Stretch'], 'shoulder_general'),
+  createMobilityEntry('side_split_prep', 'Side Split Prep', ['Middle Split Prep', 'Straddle Prep'], 'hip_flexor'),
+  createMobilityEntry('standing_forward_fold', 'Standing Forward Fold', ['Forward Fold', 'Standing Pike'], 'lower_back'),
+  createMobilityEntry('standing_toe_touch', 'Standing Toe Touch', ['Toe Touch', 'Standing Hamstring Stretch'], 'lower_back'),
+  createMobilityEntry('wrist_stretches', 'Wrist Stretches', ['Wrist Stretch Routine', 'Wrist Flexibility'], 'wrist'),
+
+  // ===========================================================================
+  // MASTER-8C.4.B SEGMENT 2: PREHAB / ACTIVATION (11 entries)
+  // ===========================================================================
+  createPrehabEntry('arm_circles', 'Arm Circles', ['Shoulder Circles', 'Arm Swings'], ['mobility', 'prehab_joint'], 'shoulder_general', false),
+  createPrehabEntry('band_pull_apart', 'Band Pull Apart', ['Band Pull-Apart', 'Rear Delt Pull'], ['scapular_control', 'horizontal_pull'], 'scapular_tendon', false),
+  createPrehabEntry('face_pull', 'Face Pull', ['Band Face Pull', 'Facepull'], ['scapular_control', 'horizontal_pull'], 'scapular_tendon', false),
+  createPrehabEntry('hanging_shrug', 'Hanging Shrug', ['Scapular Shrug', 'Hang Shrug'], ['scapular_control', 'vertical_pull'], 'scapular_tendon', false),
+  createPrehabEntry('scap_pushup_warmup', 'Scapular Push-Up Warmup', ['Scap Push-Up Warmup', 'Plus Push-Up'], ['scapular_control', 'horizontal_push'], 'scapular_tendon', false),
+  createPrehabEntry('scapular_retraction_hold', 'Scapular Retraction Hold', ['Scap Retraction', 'Retraction Hold'], ['scapular_control'], 'scapular_tendon', true),
+  createPrehabEntry('shoulder_external_rotation', 'Shoulder External Rotation', ['External Rotation', 'Band External Rotation'], ['scapular_control'], 'shoulder_general', false),
+  createPrehabEntry('wall_scapula_shrug', 'Wall Scapula Shrug', ['Wall Scap Shrug', 'HS Shrug'], ['scapular_control', 'vertical_push'], 'scapular_tendon', false),
+  createPrehabEntry('wrist_prep_sequence', 'Wrist Prep Sequence', ['Wrist Warmup', 'Wrist Prep'], ['mobility', 'prehab_joint'], 'wrist', true),
+  createPrehabEntry('calf_raise', 'Calf Raise', ['Calf Raises', 'Heel Raise'], ['lower_body'], 'ankle', false),
+  createPrehabEntry('glute_bridge', 'Glute Bridge', ['Bridge', 'Hip Bridge'], ['posterior_chain', 'lower_body'], 'hip_flexor', false),
+
+  // ===========================================================================
+  // MASTER-8C.4.B SEGMENT 3: CORE / COMPRESSION (13 entries)
+  // ===========================================================================
+  createCoreEntry('advanced_l_sit', 'Advanced L-Sit', ['Advanced L-Sit Hold', 'High L-Sit'], 'compression_core', true, [
+    { skillId: 'v_sit', transferStrength: 'direct_primary', rationale: 'Direct progression to V-sit', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 80 },
+  ]),
+  createCoreEntry('compression_fold_hold', 'Compression Fold Hold', ['Pike Compression', 'Compression Fold'], 'compression_core', true, [
+    { skillId: 'l_sit', transferStrength: 'indirect_support', rationale: 'Pike compression for L-sit', supportedByEvidenceLevel: 'expert_opinion', futureScoringWeight: 50 },
+  ]),
+  createCoreEntry('compression_pancake', 'Compression Pancake', ['Active Pancake Compression'], 'compression_core', true),
+  createCoreEntry('compression_pulse', 'Compression Pulse', ['Pike Compression Pulses'], 'compression_core', false),
+  createCoreEntry('dragon_flag_assisted', 'Dragon Flag Assisted', ['Band Dragon Flag', 'Assisted Dragon Flag'], 'anti_extension_core', false),
+  createCoreEntry('l_sit_core', 'L-Sit Core', ['L-Sit Core Focus', 'Floor L-Sit'], 'compression_core', true, [
+    { skillId: 'l_sit', transferStrength: 'direct_primary', rationale: 'Core-focused L-sit', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 70 },
+  ]),
+  createCoreEntry('manna_progression', 'Manna Progression', ['Manna', 'Manna Hold', 'Reverse V-Sit'], 'compression_core', true, [
+    { skillId: 'v_sit', transferStrength: 'direct_secondary', rationale: 'Advanced compression skill', supportedByEvidenceLevel: 'expert_opinion', futureScoringWeight: 60 },
+  ]),
+  createCoreEntry('reverse_crunch', 'Reverse Crunch', ['Reverse Crunches'], 'anti_extension_core', false),
+  createCoreEntry('reverse_plank_raise', 'Reverse Plank Raise', ['Reverse Plank Leg Raise'], 'anti_extension_core', false),
+  createCoreEntry('seated_leg_lift', 'Seated Leg Lift', ['Leg Lift Seated', 'Hip Flexor Lift'], 'compression_core', false, [
+    { skillId: 'l_sit', transferStrength: 'indirect_support', rationale: 'Hip flexor prep for L-sit', supportedByEvidenceLevel: 'anecdotal', futureScoringWeight: 40 },
+  ]),
+  createCoreEntry('side_hollow_hold', 'Side Hollow Hold', ['Side Hollow', 'Lateral Hollow'], 'anti_rotation_core', true),
+  createCoreEntry('single_leg_l_sit', 'Single Leg L-Sit', ['One Leg L-Sit', 'L-Sit Single Leg'], 'compression_core', true, [
+    { skillId: 'l_sit', transferStrength: 'direct_primary', rationale: 'L-sit progression', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 70 },
+  ]),
+  createCoreEntry('straddle_compression_lift', 'Straddle Compression Lift', ['Straddle Lift', 'Pancake Compression Lift'], 'compression_core', false, [
+    { skillId: 'v_sit', transferStrength: 'indirect_support', rationale: 'Straddle compression strength', supportedByEvidenceLevel: 'expert_opinion', futureScoringWeight: 50 },
+  ]),
+
+  // ===========================================================================
+  // MASTER-8C.4.B SEGMENT 4: ADVANCED SKILL HOLDS / PULL SUPPORT (6 entries)
+  // ===========================================================================
+  createSkillHoldEntry('freestanding_handstand_hold', 'Freestanding Handstand Hold', ['Free Handstand', 'HS Hold', 'Handstand'], ['vertical_push', 'scapular_control'], ['wrist', 'shoulder_general'], [
+    { skillId: 'handstand', transferStrength: 'direct_primary', rationale: 'Core handstand skill', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 95 },
+  ]),
+  createSkillHoldEntry('wall_handstand_hold', 'Wall Handstand Hold', ['Wall HS', 'Wall Handstand'], ['vertical_push', 'scapular_control'], ['wrist', 'shoulder_general'], [
+    { skillId: 'handstand', transferStrength: 'direct_primary', rationale: 'Wall-assisted handstand work', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 80 },
+  ]),
+  createSkillHoldEntry('handstand_shoulder_taps', 'Handstand Shoulder Taps', ['HS Shoulder Taps', 'Wall HS Taps'], ['vertical_push', 'scapular_control'], ['wrist', 'shoulder_general'], [
+    { skillId: 'handstand', transferStrength: 'direct_secondary', rationale: 'Balance and control skill', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 75 },
+  ]),
+  createSkillHoldEntry('straddle_planche', 'Straddle Planche', ['Straddle Planche Hold'], ['straight_arm_push', 'horizontal_push', 'scapular_control'], ['wrist', 'shoulder_anterior', 'biceps_tendon'], [
+    { skillId: 'planche', transferStrength: 'direct_primary', rationale: 'Key planche progression', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 90 },
+  ]),
+  createSkillHoldEntry('muscle_up_negative_skill', 'Muscle-Up Negative', ['MU Negative', 'Muscle Up Eccentric'], ['vertical_pull', 'transition', 'dip_pattern'], ['shoulder_general', 'biceps_tendon'], [
+    { skillId: 'muscle_up', transferStrength: 'direct_primary', rationale: 'MU transition work', supportedByEvidenceLevel: 'established_consensus', futureScoringWeight: 85 },
+  ], ['rings']),
+  createSkillHoldEntry('one_arm_row_progression', 'One Arm Row Progression', ['Single Arm Row', 'One Arm Row'], ['horizontal_pull', 'scapular_control'], ['shoulder_general', 'biceps_tendon'], [
+    { skillId: 'front_lever', transferStrength: 'indirect_support', rationale: 'Unilateral pulling strength', supportedByEvidenceLevel: 'expert_opinion', futureScoringWeight: 50 },
+  ], ['rings']),
 
 ]
 

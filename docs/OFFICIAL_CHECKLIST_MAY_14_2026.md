@@ -356,11 +356,40 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ### MASTER-8B.7 — Guarded User-Confirmed Future-Session Mutation Writer Design
 
-**Status:** NOT STARTED
+**Status:** DESIGN GATE COMPLETE (Apply Gate Pending)
 
-**Purpose:** After workout logging, show visible banner/notice if future sessions changed.
+**Purpose:** Create typed mutation writer contract before enabling any actual mutation. Quarantine legacy auto-mutation.
 
-**Constraint:** Program cards must reflect the changes. No hidden mutation.
+**What This Step Delivered (Design Gate):**
+- Quarantined legacy `lib/active-week-mutation-service.ts` behind `LEGACY_PHASE13_AUTO_MUTATION_ENABLED = false`
+- Created typed `lib/program/future-session-mutation-writer-contract.ts` (215 lines)
+- Created `lib/program/program-balance-mutation-writer-design.ts` adapter (208 lines)
+- Future Candidates now show MASTER-8B.7 design proof chips:
+  - "8B.7 design"
+  - "User-confirmed only"
+  - "Future sessions only"
+  - "No saved change"
+  - "Program cards unchanged · Live workout later (8B.8)"
+- Program Balance status line updated to reflect design gate
+- Legacy stale schedule notices blocked from surfacing
+
+**Files Changed:**
+- `lib/active-week-mutation-service.ts` (quarantine + gate)
+- `lib/program/future-session-mutation-writer-contract.ts` (new - 215 lines)
+- `lib/program/program-balance-mutation-writer-design.ts` (new - 208 lines)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (8B.7 proof chips)
+- `lib/program/true-source-registry.ts` (updated program_balance entry)
+
+**Constraints Preserved:**
+- No actual mutation enabled
+- Completed sessions protected
+- Saved program unchanged
+- Program Cards unchanged
+- Live Workout unchanged
+- Method Planner Applied 6 unchanged
+- User confirmation required before any future mutation
+
+**Next Phase:** MASTER-8B.7 Apply Gate — user-confirmed preview/apply writer implementation
 
 ---
 

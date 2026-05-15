@@ -3460,24 +3460,32 @@ function ProgramBalanceSheetContent({
                       </div>
                     )}
                     
-                    {/* Status Chips */}
+                    {/* Status Chips — MASTER-8B.7 writer design proof */}
                     <div className="flex flex-wrap gap-1 pt-1">
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                        Not applied
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                        8B.7 design
                       </span>
                       <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                        No saved-program change
+                        User-confirmed only
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                        Future sessions only
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                        No saved change
                       </span>
                       {candidate.requiresFullKnowledgeBase && (
                         <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400/80">
                           Needs full DB
                         </span>
                       )}
-                      {plan?.status === 'blocked_no_writer' && (
-                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                          Needs writer
-                        </span>
-                      )}
+                    </div>
+                    
+                    {/* MASTER-8B.7 Writer Gate Notice */}
+                    <div className="mt-1 p-1.5 rounded bg-[#1A1A22] border border-[#2A2A35]">
+                      <p className="text-[8px] text-[#5A5A6A] leading-relaxed">
+                        Program cards unchanged · Live workout later (8B.8)
+                      </p>
                     </div>
                   </div>
                 )
@@ -3510,9 +3518,9 @@ function ProgramBalanceSheetContent({
         </div>
       )}
 
-      {/* Next Step */}
+      {/* Next Step — MASTER-8B.7 Status */}
       <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
-        Current status: read-only planning foundation. Next gated step: MASTER-8B.7 guarded mutation-writer design.
+        Current status: MASTER-8B.7 design gate — writer contract staged, user-confirmed mutation still disabled. Program cards and live workout unchanged.
       </div>
     </div>
   )

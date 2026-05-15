@@ -509,6 +509,60 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
+### MASTER-8C.1 — Current Program Exercise Knowledge Coverage Foundation + Gate Wiring
+
+**Status:** COMPLETE
+
+**Purpose:** Expand the exercise/skill knowledge seed to cover exercises in the current analyzed program, wire eligibility gates to use computed coverage truth instead of hardcoded false, and distinguish current-program coverage from global DB completeness.
+
+**What This Step Delivered:**
+- Added 15 new exercise entries to the knowledge seed covering common program exercises:
+  - pppu (Pseudo Planche Push-Up)
+  - elevated_pppu (Elevated PPPU)
+  - adv_tuck_planche (Advanced Tuck Planche)
+  - adv_tuck_fl (Advanced Tuck Front Lever)
+  - chest_to_bar_pull_up
+  - ring_dip
+  - straight_bar_dip
+  - explosive_pull_up
+  - high_pulls
+  - tuck_front_lever_pull
+  - support_hold
+  - pike_pushup_elevated
+  - chin_up
+  - archer_pull_up
+- Added `currentProgramCoverageComplete` field to `ProgramBalanceKnowledgeCoverageSummary`
+- Added `currentProgramKnowledgeCoverageComplete` field to `ProgramBalanceProof`
+- Updated `summarizeProgramBalanceKnowledgeCoverage()` to compute current-program coverage
+- Replaced all hardcoded `knownExerciseCoverageComplete: false` in ProgramCoachIntelligenceHub with computed coverage truth
+- Eligibility gates now derive from actual Program Balance result instead of hardcoded false
+- Expanded critical exercise concepts in validation to cover new entries
+
+**Files Changed:**
+- `lib/program/exercise-skill-knowledge-seed.ts` (added 15 exercise entries, ~900 lines)
+- `lib/program/program-balance-intelligence-contract.ts` (added coverage fields)
+- `lib/program/program-balance-readonly-analyzer.ts` (compute coverage, update proof)
+- `lib/program/exercise-skill-knowledge-validation.ts` (expanded critical concepts)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (replaced hardcoded false with computed truth)
+- `docs/OFFICIAL_CHECKLIST_MAY_14_2026.md` (this update)
+
+**Constraints Preserved:**
+- canApplyStructuralMutation remains false (MASTER-8B.7.3+ not enabled)
+- No structural workout mutation
+- Completed sessions protected
+- Program Cards structurally unchanged
+- Live Workout unchanged
+- Start Workout unchanged
+- Method Planner Applied 6 unchanged
+- Global full DB still deferred (seedIsRepresentativeOnly: true)
+
+**Next Phase:** 
+- If remaining unknown exercises: MASTER-8C.2 continue knowledge expansion
+- If current program coverage complete and target resolution blocked: MASTER-8B.7.2.1 target resolution
+- If both coverage and target ready: MASTER-8B.7.3 bounded structural preview
+
+---
+
 ### MASTER-8B.8 — Live Workout Runtime Adaptation Bridge
 
 **Status:** NOT STARTED

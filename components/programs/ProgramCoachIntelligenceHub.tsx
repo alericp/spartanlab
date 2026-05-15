@@ -2995,6 +2995,12 @@ function ProgramBalanceSheetContent({
   const highCount = result.findings.filter(f => f.severity === 'high').length
   const moderateCount = result.findings.filter(f => f.severity === 'moderate').length
   const watchCount = result.findings.filter(f => f.severity === 'watch' || f.severity === 'mild').length
+  
+  // [MASTER-8C.1] Compute current-program coverage truth from result
+  // This replaces the hardcoded false and uses actual analyzed program coverage
+  const currentProgramKnowledgeCoverageComplete = useMemo(() => {
+    return result.knowledgeMissingExerciseCount === 0 && result.analyzedExerciseCount > 0
+  }, [result.knowledgeMissingExerciseCount, result.analyzedExerciseCount])
 
   return (
     <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-120px)]">
@@ -3405,9 +3411,10 @@ function ProgramBalanceSheetContent({
       {/* Future Session Candidates - MASTER-8B.6: Enhanced planning display */}
       {result.futureSessionCandidates.length > 0 && (() => {
         // [MASTER-8B.7.2] Compute eligibility summary for section header
+        // [MASTER-8C.1] Use computed coverage truth instead of hardcoded false
         const eligibilitySummary = mutationPlanBundle 
           ? getEligibilitySummary(mutationPlanBundle, {
-              knownExerciseCoverageComplete: false,
+              knownExerciseCoverageComplete: currentProgramKnowledgeCoverageComplete,
               structuralWriterEnabled: false,
             })
           : null
@@ -3447,8 +3454,9 @@ function ProgramBalanceSheetContent({
                 const isConfirmedMarkerOnly = confirmedPlan?.status === 'confirmed_marker_only'
                 
                 // [MASTER-8B.7.2] Resolve structural eligibility for this candidate
+                // [MASTER-8C.1] Use computed coverage truth instead of hardcoded false
                 const eligibility = resolveFutureSessionMutationEligibility(confirmedPlan, {
-                  knownExerciseCoverageComplete: false, // MASTER-8C not yet complete
+                  knownExerciseCoverageComplete: currentProgramKnowledgeCoverageComplete,
                   structuralWriterEnabled: false, // MASTER-8B.7.3+ not yet enabled
                 })
                 
@@ -3702,12 +3710,13 @@ function ProgramBalanceSheetContent({
       )}
       
       {/* Next Step — MASTER-8B.7.2 Status */}
-      <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
-        {mutationPlanBundle?.hasConfirmedPlans ? (() => {
-          const summary = getEligibilitySummary(mutationPlanBundle, {
-            knownExerciseCoverageComplete: false,
-            structuralWriterEnabled: false,
-          })
+<div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
+          {mutationPlanBundle?.hasConfirmedPlans ? (() => {
+            // [MASTER-8C.1] Use computed coverage truth
+            const summary = getEligibilitySummary(mutationPlanBundle, {
+              knownExerciseCoverageComplete: currentProgramKnowledgeCoverageComplete,
+              structuralWriterEnabled: false,
+            })
           return (
             <span className="text-cyan-400">
               {summary.summaryText} — no workout structure changed
@@ -3791,8 +3800,9 @@ function ProgramBalanceSheetContent({
             {confirmationResult?.success && (() => {
               const candidateId = `candidate_${selectedCandidateForPreview.index}`
               const plan = mutationPlanBundle?.confirmedPlans?.find(p => p.sourceCandidateId === candidateId)
+              // [MASTER-8C.1] Use computed coverage truth
               const elig = resolveFutureSessionMutationEligibility(plan, {
-                knownExerciseCoverageComplete: false,
+                knownExerciseCoverageComplete: currentProgramKnowledgeCoverageComplete,
                 structuralWriterEnabled: false,
               })
               return (

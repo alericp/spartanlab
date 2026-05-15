@@ -201,6 +201,7 @@ export interface ProgramBalanceExerciseResolution {
  * Summary of knowledge coverage for the analyzed program
  *
  * CRITICAL: B2 seed is representative only, not complete
+ * MASTER-8C.1: Added currentProgramCoverageComplete for current-program vs global DB distinction
  */
 export interface ProgramBalanceKnowledgeCoverageSummary {
   /** Always true - B2 is a representative seed */
@@ -218,6 +219,8 @@ export interface ProgramBalanceKnowledgeCoverageSummary {
   readonly mayUnderestimateBalanceIssues: boolean
   readonly mayUnderestimateAnchorSupport: boolean
   readonly mayUnderestimateWarmupCooldownNeeds: boolean
+  /** MASTER-8C.1: Whether the current program's exercises are all covered (separate from global DB) */
+  readonly currentProgramCoverageComplete?: boolean
 }
 
 // =============================================================================
@@ -436,9 +439,11 @@ export interface ProgramBalanceProof {
   readonly consumedKnowledgeSeed: boolean
   /** Always true - B2 seed is representative only */
   readonly consumedRepresentativeSeedOnly: true
-  /** Always false until MASTER-8C */
+  /** Always false until MASTER-8C global DB is complete */
   readonly fullKnowledgeBaseComplete: false
   readonly fullKnowledgeBaseDeferredTo: 'MASTER_8C'
+  /** MASTER-8C.1: Current program's exercises all covered (separate from global DB) */
+  readonly currentProgramKnowledgeCoverageComplete?: boolean
   readonly consumedSelectedSkills: boolean
   readonly consumedProgramSessions: boolean
   readonly consumedCompletionState: boolean

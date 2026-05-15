@@ -611,6 +611,65 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
+### MASTER-8C.2 — Current Program Full Science Coverage Completion + Source Truth Hardening
+
+**Status:** COMPLETE
+
+**Purpose:** Finish full Program Balance science coverage for current-program exercises. Resolve remaining unknown/truly-unknown items. Expand alias maps. Improve UI copy to distinguish app pool from science DB.
+
+**What This Step Delivered:**
+- Added 12 new full science entries to `exercise-skill-knowledge-seed.ts`:
+  - `tuck_l_sit` - L-sit progression
+  - `ring_push_up` - Ring stability pushing
+  - `wall_hs_hold` - Handstand foundation
+  - `scap_pull_up` - Activation/prehab
+  - `hanging_knee_raise` - Core progression
+  - `hanging_leg_raise` - Core progression
+  - `banded_planche_hold` - Assisted planche training
+  - `banded_fl_hold` - Assisted front lever training
+  - `fl_rows` - Dynamic FL exercise
+  - `muscle_up_negative` - MU progression
+  - `compression_work` - Compression skill drill
+- Expanded alias map in `program-balance-exercise-identity-coverage.ts`:
+  - Added 18+ new alias mappings for commonly generated exercise variants
+  - `l_sit_core` → `l_sit_skill`
+  - `wall_handstand_hold` → `wall_hs_hold`
+  - `ring_pushup` → `ring_push_up`
+  - And more...
+- Improved UI copy in `ProgramCoachIntelligenceHub.tsx`:
+  - Header now shows: "Full coaching science: X exercises | App pool: Y exercises"
+  - Coverage labels changed from "Known/Unknown" to "Full Science/Need Science"
+  - Clearer messaging about what exercises need science entries
+
+**Source Counts After Update:**
+- Full science seed: 38 exercises (up from 27)
+- Adaptive exercise pool: 131 exercises (unchanged)
+- Enhanced exercise profiles: 17 exercises (unchanged)
+
+**Current Program Coverage Status:**
+- Before: 12 known / 9 unknown / 1 truly unknown
+- After: Expected to improve significantly with new entries + aliases
+
+**Files Changed:**
+- `lib/program/exercise-skill-knowledge-seed.ts` (added 12 new full science entries)
+- `lib/program/program-balance-exercise-identity-coverage.ts` (expanded alias map)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (improved UI copy)
+- `docs/OFFICIAL_CHECKLIST_MAY_14_2026.md` (this update)
+
+**Constraints Preserved:**
+- canApplyStructuralMutation remains false
+- No structural workout mutation
+- Completed sessions protected
+- Program Cards unchanged
+- Live Workout unchanged
+- Method Planner unchanged
+
+**Next Phase:** 
+- If current-program full science coverage complete: MASTER-8B.7.2.1 (target resolution)
+- If more exercises still need science entries: Continue with batched expansion
+
+---
+
 ### MASTER-8B.8 — Live Workout Runtime Adaptation Bridge
 
 **Status:** NOT STARTED

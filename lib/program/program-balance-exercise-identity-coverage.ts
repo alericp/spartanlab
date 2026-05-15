@@ -111,6 +111,7 @@ function normalizeExerciseName(name: string): string {
 
 /**
  * Common alias mappings for exercise IDs
+ * MASTER-8C.2: Expanded alias map to resolve more current-program variants
  */
 const EXERCISE_ID_ALIASES: Record<string, string[]> = {
   // Common variations
@@ -119,7 +120,7 @@ const EXERCISE_ID_ALIASES: Record<string, string[]> = {
   'dip': ['dips'],
   'chin_up': ['chinup', 'chinups', 'chin_ups'],
   'l_sit': ['l_sit_skill', 'lsit'],
-  'l_sit_skill': ['l_sit', 'lsit'],
+  'l_sit_skill': ['l_sit', 'lsit', 'l_sit_core'],
   'pike_pushup': ['pike_push_up', 'pike_press'],
   'pike_push_up': ['pike_pushup', 'pike_press'],
   'hspu': ['handstand_push_up', 'handstand_pushup'],
@@ -130,8 +131,26 @@ const EXERCISE_ID_ALIASES: Record<string, string[]> = {
   'adv_tuck_fl': ['advanced_tuck_front_lever', 'adv_tuck_front_lever'],
   'adv_tuck_planche': ['advanced_tuck_planche'],
   'tuck_planche': ['tuck_planche_hold'],
-  'dragon_flag': ['dragonf_flag'],
+  'dragon_flag': ['dragonf_flag', 'dragon_flag_full'],
   'hollow_body': ['hollow_hold', 'hollow_body_hold'],
+  // MASTER-8C.2: Additional aliases for commonly generated exercises
+  'tuck_l_sit': ['tuck_lsit', 'tucked_l_sit'],
+  'wall_hs_hold': ['wall_handstand_hold', 'wall_handstand', 'wall_hs'],
+  'freestanding_hs_hold': ['freestanding_handstand_hold', 'free_hs_hold', 'freestanding_handstand'],
+  'ring_push_up': ['ring_pushup', 'rings_push_up'],
+  'muscle_up_negative': ['mu_negative', 'muscle_up_neg'],
+  'muscle_up_negative_skill': ['mu_negative_skill', 'muscle_up_negative_drill'],
+  'fl_rows': ['front_lever_rows', 'fl_row', 'front_lever_row'],
+  'hanging_knee_raise': ['knee_raise', 'hanging_knee_raises'],
+  'hanging_leg_raise': ['leg_raise', 'hanging_leg_raises', 'hlr'],
+  'toes_to_bar': ['t2b', 'toes_to_bar_skill'],
+  'compression_work': ['compression', 'compression_drill', 'compression_exercise'],
+  'scap_pull_up': ['scapular_pull_up', 'scap_pullup', 'scapular_pullup'],
+  'banded_planche_hold': ['band_planche', 'assisted_planche_hold'],
+  'banded_fl_hold': ['band_front_lever', 'assisted_fl_hold', 'banded_front_lever'],
+  'ice_cream_maker': ['icm', 'ice_cream'],
+  'support_hold': ['support', 'dip_support_hold'],
+  'ring_support_hold': ['rings_support', 'ring_support'],
 }
 
 /**

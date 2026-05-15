@@ -59,6 +59,8 @@ import {
   Shield,
   Database,
   AlertCircle,
+  X,
+  Check,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -110,6 +112,7 @@ import type {
   ProgramBalanceMovementFamilySummary,
   ProgramBalanceTissueStressSummary,
   FutureSessionCandidate,
+  FutureSessionPlanningDetail,
   ProgramBalanceSeverity,
 } from '@/lib/program/program-balance-intelligence-contract'
 import {
@@ -2944,6 +2947,22 @@ function ProgramBalanceSheetContent({
   result: ProgramBalanceReadOnlyResult
 }) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  
+  // [MASTER-8B.7.1] Mutation preview/confirm state
+  const [selectedCandidateForPreview, setSelectedCandidateForPreview] = useState<{
+    index: number
+    candidate: FutureSessionCandidate
+    plan: FutureSessionPlanningDetail | undefined
+  } | null>(null)
+  const [showMutationPreviewConfirm, setShowMutationPreviewConfirm] = useState(false)
+  const [mutationPlanBundle, setMutationPlanBundle] = useState<FutureSessionMutationPlanBundle | null>(null)
+  const [confirmationResult, setConfirmationResult] = useState<{ success: boolean; message: string } | null>(null)
+  
+  // [MASTER-8B.7.1] Load mutation plans on mount
+  useEffect(() => {
+    const bundle = loadMutationPlans()
+    setMutationPlanBundle(bundle)
+  }, [])
 
   const toggleSection = (section: string) => {
     setExpandedSection(prev => prev === section ? null : section)
@@ -4487,22 +4506,6 @@ export function ProgramCoachIntelligenceHub({
   const [isResettingAllOverrides, setIsResettingAllOverrides] = useState(false)
   const [showResetAllConfirmation, setShowResetAllConfirmation] = useState(false)
   const [resetAllResult, setResetAllResult] = useState<MethodOverrideResetAllResult | null>(null)
-  
-  // [MASTER-8B.7.1] Mutation preview/confirm state
-  const [selectedCandidateForPreview, setSelectedCandidateForPreview] = useState<{
-    index: number
-    candidate: FutureSessionCandidate
-    plan: FutureSessionPlanningDetail | undefined
-  } | null>(null)
-  const [showMutationPreviewConfirm, setShowMutationPreviewConfirm] = useState(false)
-  const [mutationPlanBundle, setMutationPlanBundle] = useState<FutureSessionMutationPlanBundle | null>(null)
-  const [confirmationResult, setConfirmationResult] = useState<{ success: boolean; message: string } | null>(null)
-  
-  // [MASTER-8B.7.1] Load mutation plans on mount
-  useEffect(() => {
-    const bundle = loadMutationPlans()
-    setMutationPlanBundle(bundle)
-  }, [programBalanceOpen])
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(

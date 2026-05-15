@@ -3104,7 +3104,7 @@ export function AdaptiveProgramDisplay({
                   </div>
                 ) : null}
                 {/* [MASTER-8B.7.1] Mutation Plan Marker — shows when a confirmed plan targets this day */}
-                {mutationPlanBundle?.plansByTargetDay?.[session.dayNumber] && !isCompleted && (
+                {mutationPlanBundle?.plansByTargetDay?.[session.dayNumber] && (
                   <div className="mb-2 p-2 rounded-lg bg-cyan-500/5 border border-cyan-500/20">
                     <div className="flex items-center gap-2">
                       <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center">

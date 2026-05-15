@@ -494,7 +494,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
   {
     id: 'program_balance',
     label: 'Program Balance / Skill Distribution',
-    currentStatus: 'read_only_ui_consumed',
+    currentStatus: 'read_only_active',
     currentOwnerFiles: [
       'lib/program/program-balance-intelligence-contract.ts',
       'lib/program/program-balance-readonly-analyzer.ts',
@@ -505,7 +505,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
     futureRole: 'Detect planche under-expression, pull dominance, push/pull imbalance, weighted anchor absence, poor skill spacing, repeated same-family days',
     mutationAuthorityNow: 'none',
     futureMutationStep: 'MASTER_8B_6',
-    uiSurfaces: ['coach_intelligence_hub_tile', 'program_balance_sheet'],
+    uiSurfaces: ['coach_intelligence_hub'],
     dependsOnBranches: ['skill_map', 'adaptive_foundation', 'recovery_readiness', 'prehab_rehab_tendon_joint', 'exercise_skill_knowledge_base'],
     consumedByBranches: [],
     riskIfIgnored: 'The app creates boring or imbalanced programs',
@@ -515,7 +515,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
     forbiddenNow: ['Generator mutation', 'Future-session writer', 'Program Card mutation', 'Live runtime consumption', 'Full database completion claim'],
     maxIntentNotes: 'MASTER-8B.4 COMPLETE: Hub tile and sheet wired. Shows real B3 analysis read-only. B2 seed is REPRESENTATIVE ONLY (13 exercises, 8 skills). Next: MASTER-8B.5 Method Planner safe integration.',
     nextAllowedAction: 'Method Planner safe integration in MASTER-8B.5',
-    readiness: 'ready_for_method_planner_integration',
+    readiness: 'ready_for_read_only_consumption',
   },
 
   // -------------------------------------------------------------------------

@@ -235,6 +235,14 @@ import {
   checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'
 
+// [MASTER-8C.5] Generator knowledge bridge for exercise science enrichment
+import {
+  enrichExerciseForGeneratorSelection,
+  buildGeneratorKnowledgeConsumptionSummary,
+  type GeneratorKnowledgeEnrichedExercise,
+  type GeneratorKnowledgeConsumptionSummary,
+} from './exercise-knowledge-generator-bridge'
+
 // [EXERCISE-SELECTION-MATERIALITY] Import materiality engine for intelligent ranking
 import {
   scoreExerciseMateriality,
@@ -566,6 +574,33 @@ interface NormalizedExerciseCandidate {
   isPullMovement: boolean
   isSkillExercise: boolean
   isStrengthExercise: boolean
+  // [MASTER-8C.5] Knowledge enrichment fields from generator bridge
+  /** Whether knowledge was matched for this exercise */
+  knowledgeMatched: boolean
+  /** Knowledge exercise ID if matched */
+  knowledgeExerciseId: string | null
+  /** Movement balance families from knowledge seed */
+  knowledgeMovementBalanceFamilies: string[]
+  /** Tissue stress regions from knowledge seed */
+  knowledgeTissueStressRegions: string[]
+  /** Training purposes from knowledge seed */
+  knowledgeTrainingPurposes: string[]
+  /** Skill transfer targets from knowledge seed */
+  knowledgeSkillTransferTargets: string[]
+  /** Method compatibility verdicts from knowledge seed */
+  knowledgeMethodCompatibilityVerdicts: { methodId: string; verdict: string; rationale: string }[]
+  /** Prescription unit truth from knowledge seed */
+  knowledgePrescriptionUnitTruth: string | null
+  /** Frequency tolerance from knowledge seed */
+  knowledgeFrequencyTolerance: string | null
+  /** Training cost breakdown from knowledge seed */
+  knowledgeTrainingCost: {
+    neuralCost: number | null
+    tendonCost: number | null
+    systemicFatigueCost: number | null
+    jointCost: number | null
+    localMuscleCost: number | null
+  }
 }
 
 /**
@@ -607,6 +642,9 @@ function normalizeExerciseCandidate(exercise: Exercise): NormalizedExerciseCandi
   const isSkillExercise = category === 'skill' || intensity === 'skill' || tags.includes('skill')
   const isStrengthExercise = category === 'strength' || intensity === 'strength' || tags.includes('strength')
   
+  // [MASTER-8C.5] Enrich with knowledge from generator bridge
+  const knowledgeEnriched = enrichExerciseForGeneratorSelection(exercise)
+  
   return {
     raw: exercise,
     id,
@@ -627,6 +665,21 @@ function normalizeExerciseCandidate(exercise: Exercise): NormalizedExerciseCandi
     isPullMovement,
     isSkillExercise,
     isStrengthExercise,
+    // [MASTER-8C.5] Knowledge enrichment fields
+    knowledgeMatched: knowledgeEnriched.knowledgeMatched,
+    knowledgeExerciseId: knowledgeEnriched.knowledgeExerciseId,
+    knowledgeMovementBalanceFamilies: [...knowledgeEnriched.movementBalanceFamilies],
+    knowledgeTissueStressRegions: [...knowledgeEnriched.tissueStressRegions],
+    knowledgeTrainingPurposes: [...knowledgeEnriched.trainingPurposes],
+    knowledgeSkillTransferTargets: [...knowledgeEnriched.skillTransferTargets],
+    knowledgeMethodCompatibilityVerdicts: knowledgeEnriched.methodCompatibilityVerdicts.map(v => ({
+      methodId: v.methodId,
+      verdict: v.verdict,
+      rationale: v.rationale,
+    })),
+    knowledgePrescriptionUnitTruth: knowledgeEnriched.prescriptionUnitTruth,
+    knowledgeFrequencyTolerance: knowledgeEnriched.frequencyTolerance,
+    knowledgeTrainingCost: { ...knowledgeEnriched.trainingCost },
   }
 }
 
@@ -1136,6 +1189,8 @@ export interface ExerciseSelection {
     materialityVerdict: 'PASS' | 'WARN' | 'FAIL'
     materialityIssues: string[]
   }
+  // [MASTER-8C.5] Knowledge consumption summary for generator proof
+  knowledgeConsumptionSummary?: GeneratorKnowledgeConsumptionSummary
   // [DOCTRINE-RELAXATION-RESCUE] Track if doctrine constraints were relaxed
   doctrineRelaxationApplied?: boolean
   doctrineRelaxationReason?: string
@@ -2327,6 +2382,10 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     // candidate — this is itself a meaningful diagnostic ("no_matching_rules"
     // or "doctrine_cache_empty"), so we do NOT default to {} here.
     doctrineCausalAudit: getSessionDoctrineAudit(),
+    // [MASTER-8C.5] Build and attach knowledge consumption summary for generator proof
+    knowledgeConsumptionSummary: buildGeneratorKnowledgeConsumptionSummary(
+      main.map(m => m.exercise)
+    ),
   }
 }
 

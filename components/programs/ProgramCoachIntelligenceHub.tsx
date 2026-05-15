@@ -3034,7 +3034,7 @@ function ProgramBalanceSheetContent({
           No program changes applied &mdash; this is a read-only analysis.
         </p>
         <p className="text-[10px] text-[#5A5A6A] mt-1">
-          Representative seed only &mdash; full DB deferred to MASTER-8C+
+          Partial science seed ({result.knowledgeCoverageSummary.sourceCounts?.fullScienceSeedTotal ?? result.knowledgeMatchedExerciseCount} entries) &mdash; full DB expansion continues
         </p>
       </div>
 
@@ -3050,7 +3050,7 @@ function ProgramBalanceSheetContent({
           {result.proof.consumedRepresentativeSeedOnly && (
             <span className="flex items-center gap-1">
               <Info className="w-3 h-3 text-blue-400/60" />
-              Rep. seed only
+              Partial seed
             </span>
           )}
           {result.proof.noMutationPerformed && (
@@ -3093,9 +3093,20 @@ function ProgramBalanceSheetContent({
           </div>
         </div>
         {result.knowledgeMissingExerciseCount > 0 && (
-          <p className="text-[10px] text-[#5A5A6A] mt-2">
-            Some exercises are outside the 13-entry representative seed. Findings may understate total balance/stress.
-          </p>
+          <div className="text-[10px] text-[#5A5A6A] mt-2 space-y-0.5">
+            {/* MASTER-8C.1.2: Show identity coverage breakdown instead of stale "13-entry" copy */}
+            {result.knowledgeCoverageSummary.trulyUnknownCount !== undefined && result.knowledgeCoverageSummary.trulyUnknownCount > 0 ? (
+              <p>{result.knowledgeCoverageSummary.trulyUnknownCount} exercise(s) not found in any app source.</p>
+            ) : result.knowledgeCoverageSummary.basicIdentityKnownCount !== undefined && result.knowledgeCoverageSummary.basicIdentityKnownCount > 0 ? (
+              <p>{result.knowledgeCoverageSummary.basicIdentityKnownCount} exercise(s) found in app pool but lack full science coverage.</p>
+            ) : (
+              <p>Some exercises lack full Program Balance science entries. Findings may understate total balance/stress.</p>
+            )}
+            <p className="text-[9px] text-[#4A4A5A]">
+              Full science DB: {result.knowledgeCoverageSummary.sourceCounts?.fullScienceSeedTotal ?? result.knowledgeMatchedExerciseCount} entries | 
+              App pool: {result.knowledgeCoverageSummary.sourceCounts?.adaptivePoolTotal ?? '~130'} exercises
+            </p>
+          </div>
         )}
       </div>
 

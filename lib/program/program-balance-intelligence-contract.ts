@@ -202,6 +202,7 @@ export interface ProgramBalanceExerciseResolution {
  *
  * CRITICAL: B2 seed is representative only, not complete
  * MASTER-8C.1: Added currentProgramCoverageComplete for current-program vs global DB distinction
+ * MASTER-8C.1.2: Added identity coverage breakdown (full science vs basic identity vs truly unknown)
  */
 export interface ProgramBalanceKnowledgeCoverageSummary {
   /** Always true - B2 is a representative seed */
@@ -221,6 +222,31 @@ export interface ProgramBalanceKnowledgeCoverageSummary {
   readonly mayUnderestimateWarmupCooldownNeeds: boolean
   /** MASTER-8C.1: Whether the current program's exercises are all covered (separate from global DB) */
   readonly currentProgramCoverageComplete?: boolean
+  // =========================================================================
+  // MASTER-8C.1.2: Identity Coverage Breakdown
+  // Distinguishes full science coverage from basic app identity coverage
+  // =========================================================================
+  /** Exercises with full Program Balance science entries */
+  readonly fullScienceKnownCount?: number
+  /** Exercises found in adaptive pool but lacking full science */
+  readonly basicIdentityKnownCount?: number
+  /** Exercises matched through alias/normalization */
+  readonly aliasResolvedCount?: number
+  /** Exercises not found in any source */
+  readonly trulyUnknownCount?: number
+  /** IDs of truly unknown exercises (not in pool or science seed) */
+  readonly trulyUnknownIds?: readonly string[]
+  /** Names of truly unknown exercises */
+  readonly trulyUnknownNames?: readonly string[]
+  /** Full science seed has entries for all current-program exercises */
+  readonly fullScienceCoverageComplete?: boolean
+  /** Basic app identity exists for all current-program exercises (no truly unknown) */
+  readonly basicIdentityCoverageComplete?: boolean
+  /** Source counts for UI transparency */
+  readonly sourceCounts?: {
+    readonly fullScienceSeedTotal: number
+    readonly adaptivePoolTotal: number
+  }
 }
 
 // =============================================================================

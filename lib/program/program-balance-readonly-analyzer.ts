@@ -57,6 +57,11 @@ import {
   type FuturePlanningContext,
 } from './program-balance-future-planning'
 
+import {
+  summarizeExerciseIdentityCoverage,
+  getExerciseSourceCounts,
+} from './program-balance-exercise-identity-coverage'
+
 // =============================================================================
 // UNAVAILABLE RESULT HELPER
 // =============================================================================
@@ -208,6 +213,7 @@ export function resolveProgramBalanceExercise(
 /**
  * Summarize knowledge coverage for the analyzed program
  * MASTER-8C.1: Added currentProgramCoverageComplete computation
+ * MASTER-8C.1.2: Added identity coverage breakdown (full science vs basic identity vs truly unknown)
  */
 export function summarizeProgramBalanceKnowledgeCoverage(
   resolutions: readonly ProgramBalanceExerciseResolution[]
@@ -215,18 +221,34 @@ export function summarizeProgramBalanceKnowledgeCoverage(
   const known = resolutions.filter((r) => r.knowledgeFound)
   const unknown = resolutions.filter((r) => !r.knowledgeFound)
 
+  // MASTER-8C.1.2: Compute identity coverage breakdown
+  const exercises = resolutions.map((r) => ({
+    id: r.originalExerciseId,
+    name: r.originalExerciseName,
+  }))
+  const identityCoverage = summarizeExerciseIdentityCoverage(exercises)
+  const sourceCounts = getExerciseSourceCounts()
+
   const warnings: string[] = []
-  if (unknown.length > 0) {
+  // MASTER-8C.1.2: Only warn about truly unknown exercises (not in any source)
+  if (identityCoverage.trulyUnknownCount > 0) {
     warnings.push(
-      `${unknown.length} exercise(s) not in knowledge seed: ${unknown.map((u) => u.originalExerciseName).join(', ')}`
+      `${identityCoverage.trulyUnknownCount} exercise(s) not found in any source: ${identityCoverage.trulyUnknownNames.join(', ')}`
+    )
+  }
+  // Warn if many exercises lack full science coverage
+  if (identityCoverage.basicIdentityKnownCount > 0) {
+    warnings.push(
+      `${identityCoverage.basicIdentityKnownCount} exercise(s) found in app pool but lack full science coverage`
     )
   }
   if (unknown.length > known.length) {
-    warnings.push('Majority of exercises unknown - balance analysis has low confidence')
+    warnings.push('Majority of exercises lack full science coverage - balance analysis has reduced confidence')
   }
 
   // MASTER-8C.1: Compute current-program coverage (distinct from global DB)
-  const currentProgramCoverageComplete = resolutions.length > 0 && unknown.length === 0
+  // MASTER-8C.1.2: Use full science coverage for structural eligibility
+  const currentProgramCoverageComplete = identityCoverage.fullScienceCoverageComplete
 
   return {
     seedIsRepresentativeOnly: true,
@@ -242,6 +264,19 @@ export function summarizeProgramBalanceKnowledgeCoverage(
     mayUnderestimateAnchorSupport: unknown.length > 0,
     mayUnderestimateWarmupCooldownNeeds: unknown.length > 0,
     currentProgramCoverageComplete,
+    // MASTER-8C.1.2: Identity coverage breakdown
+    fullScienceKnownCount: identityCoverage.fullScienceKnownCount,
+    basicIdentityKnownCount: identityCoverage.basicIdentityKnownCount,
+    aliasResolvedCount: identityCoverage.aliasResolvedCount,
+    trulyUnknownCount: identityCoverage.trulyUnknownCount,
+    trulyUnknownIds: identityCoverage.trulyUnknownIds,
+    trulyUnknownNames: identityCoverage.trulyUnknownNames,
+    fullScienceCoverageComplete: identityCoverage.fullScienceCoverageComplete,
+    basicIdentityCoverageComplete: identityCoverage.basicIdentityCoverageComplete,
+    sourceCounts: {
+      fullScienceSeedTotal: sourceCounts.fullScienceSeedCount,
+      adaptivePoolTotal: sourceCounts.adaptivePoolCount,
+    },
   }
 }
 
@@ -636,7 +671,7 @@ export function buildProgramBalanceFindings(
         affectedSkillIds: [skill.skillId],
         affectedExerciseIds: [],
         affectedDayIndexes: [],
-        evidence: ['Skill not in representative seed'],
+        evidence: ['Skill not in full science seed'],
         missingData: ['Full knowledge base deferred to MASTER-8C'],
         readOnlyRecommendation: 'Will be assessable after MASTER-8C knowledge expansion',
         futureMutationCandidate: false,
@@ -784,7 +819,7 @@ export function buildProgramBalanceFindings(
       type: 'knowledge_coverage_gap',
       severity: knowledgeCoverage.unknownExerciseCount > knowledgeCoverage.knownExerciseCount ? 'moderate' : 'watch',
       title: 'Knowledge Coverage Gap',
-      summary: `${knowledgeCoverage.unknownExerciseCount} exercise(s) not in B2 representative seed`,
+      summary: `${knowledgeCoverage.unknownExerciseCount} exercise(s) lack full Program Balance science coverage`,
       affectedSkillIds: [],
       affectedExerciseIds: knowledgeCoverage.unknownExerciseIds.slice(),
       affectedDayIndexes: [],

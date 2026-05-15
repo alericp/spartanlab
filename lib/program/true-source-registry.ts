@@ -539,7 +539,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
       'lib/doctrine/doctrine-materializer-registry.ts',
       'lib/doctrine/method-profile-registry.ts',
     ],
-    currentSourceSummary: 'MASTER-8B.2: Max-intent exercise/skill knowledge contract + REPRESENTATIVE seed created. 13 exercises, 8 skills seeded (NOT complete database - full expansion in MASTER-8C). Planche Lean/Push-Up taxonomy correctly separated. Weighted Pull-Up and Weighted Dip marked as strength anchors.',
+    currentSourceSummary: 'MASTER-8B.2 + MASTER-8C.1: Max-intent exercise/skill knowledge contract + partial seed (27+ exercises, 8 skills). App exercise pool has ~130 exercises. Full science DB expansion continues in MASTER-8C. Planche Lean/Push-Up taxonomy correctly separated. Weighted Pull-Up and Weighted Dip marked as strength anchors.',
     futureRole: 'Science-guided programming decisions: movement families, skill transfer, tendon stress, frequency tolerance, intensity/volume/failure cost, warm-up/cooldown needs, method compatibility, progression/regression, equipment, ability gating',
     mutationAuthorityNow: 'none',
     futureMutationStep: 'MASTER_8C',

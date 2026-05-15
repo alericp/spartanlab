@@ -283,20 +283,45 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
-### MASTER-8B.6 — Controlled Future Session Adaptation Writer
+### MASTER-8B.6 — Controlled Future Session Candidate Planning Foundation
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
-**Purpose:** Allow future uncompleted sessions to mutate from typed readiness contracts.
+**Purpose:** Create a read-only future-session planning foundation that turns Program Balance findings into structured adaptation plans without applying them.
 
-**Constraints:**
-- Completed sessions must never mutate.
-- Mutation must be traceable and reversible/noticeable.
-- No live runtime mutation yet.
+**What This Step Delivered:**
+- Extended `FutureSessionCandidate` contract with `FutureSessionPlanningDetail` interface
+- Added typed planning types: `FutureSessionPlanStatus`, `FutureSessionPlanScope`, `FutureSessionPlanAction`
+- Created pure helper `lib/program/program-balance-future-planning.ts` (410 lines)
+- Future Candidates UI now shows coach-readable planning:
+  - Coach title / problem detected
+  - Proposed future action
+  - Preservation guardrails
+  - Blocked reason
+  - Data needed
+  - Target scope (or honest unknown target wording)
+  - Status chips: "Not applied", "No saved-program change", "Needs full DB", "Needs writer"
+- Removed stale "Not applied in B4" wording
+- Updated `sourceStep` to `MASTER_8B_6` and `nextAllowedStep` to `MASTER_8B_7`
+
+**Files Changed:**
+- `lib/program/program-balance-intelligence-contract.ts` (added planning types)
+- `lib/program/program-balance-readonly-analyzer.ts` (enriched candidate builder)
+- `lib/program/program-balance-future-planning.ts` (new - 410 lines)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (enhanced Future Candidates UI)
+- `lib/program/true-source-registry.ts` (updated program_balance entry)
+
+**Constraints Preserved:**
+- No mutation: `mutationAllowedNow: false`
+- Completed sessions unchanged
+- Program Cards unchanged
+- Start Workout unchanged
+- Live Workout unchanged
+- Method Planner Applied 6 unchanged
 
 ---
 
-### MASTER-8B.7 — Post-Workout Adaptation Notice + Program Card Mutation Proof
+### MASTER-8B.7 — Guarded User-Confirmed Future-Session Mutation Writer Design
 
 **Status:** NOT STARTED
 

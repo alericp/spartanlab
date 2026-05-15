@@ -356,6 +356,62 @@ export interface ProgramBalanceFinding {
 // =============================================================================
 
 /**
+ * MASTER-8B.6: Planning status for future session candidates
+ */
+export type FutureSessionPlanStatus =
+  | 'read_only_candidate'
+  | 'blocked_needs_full_db'
+  | 'blocked_no_writer'
+  | 'blocked_needs_user_confirmation'
+  | 'blocked_needs_more_evidence'
+
+/**
+ * MASTER-8B.6: Scope of the future session plan
+ */
+export type FutureSessionPlanScope =
+  | 'single_future_day'
+  | 'multiple_future_days'
+  | 'remaining_week'
+  | 'next_similar_session'
+  | 'unknown_future_scope'
+
+/**
+ * MASTER-8B.6: Types of actions a future plan might propose
+ */
+export type FutureSessionPlanAction =
+  | 'increase_skill_exposure'
+  | 'restore_missing_skill_support'
+  | 'rebalance_movement_family'
+  | 'protect_tissue_stress'
+  | 'restore_weighted_anchor'
+  | 'reduce_density_or_method_stress'
+  | 'adjust_volume_or_intensity'
+  | 'add_preparation_or_recovery_bias'
+  | 'needs_full_knowledge_review'
+
+/**
+ * MASTER-8B.6: Detailed planning information for a future session candidate
+ * This is a read-only planning contract - NO mutation is allowed
+ */
+export interface FutureSessionPlanningDetail {
+  readonly status: FutureSessionPlanStatus
+  readonly scope: FutureSessionPlanScope
+  readonly proposedAction: FutureSessionPlanAction
+  readonly coachTitle: string
+  readonly triggerSummary: string
+  readonly proposedChangeSummary: string
+  readonly preserveSummary: string
+  readonly blockedReason: string
+  readonly dataNeeded: readonly string[]
+  readonly affectedFutureDayIndexes: readonly number[]
+  readonly beforeIntentSummary: string | null
+  readonly afterIntentSummary: string | null
+  readonly userConfirmationRequired: boolean
+  /** Always false in MASTER-8B.6 - no mutation allowed */
+  readonly mutationAllowedNow: false
+}
+
+/**
  * A future session adaptation candidate (read-only classification)
  */
 export interface FutureSessionCandidate {
@@ -365,6 +421,8 @@ export interface FutureSessionCandidate {
   readonly priority: ProgramBalanceSeverity
   readonly confidence: ProgramBalanceConfidence
   readonly requiresFullKnowledgeBase: boolean
+  /** MASTER-8B.6: Detailed planning information (read-only) */
+  readonly planningDetail?: FutureSessionPlanningDetail
 }
 
 // =============================================================================
@@ -413,9 +471,9 @@ export type ProgramBalanceResultStatus =
  */
 export interface ProgramBalanceReadOnlyResult {
   readonly status: ProgramBalanceResultStatus
-  /** Always false in MASTER-8B.3 */
+  /** Always false in MASTER-8B.6 */
   readonly mutationAllowedNow: false
-  readonly sourceStep: 'MASTER_8B_3'
+  readonly sourceStep: 'MASTER_8B_3' | 'MASTER_8B_6'
   readonly analyzedSessionCount: number
   readonly analyzedExerciseCount: number
   readonly knowledgeMatchedExerciseCount: number
@@ -430,5 +488,5 @@ export interface ProgramBalanceReadOnlyResult {
   readonly futureSessionCandidates: readonly FutureSessionCandidate[]
   readonly missingData: readonly string[]
   readonly proof: ProgramBalanceProof
-  readonly nextAllowedStep: 'MASTER_8B_4'
+  readonly nextAllowedStep: 'MASTER_8B_4' | 'MASTER_8B_7'
 }

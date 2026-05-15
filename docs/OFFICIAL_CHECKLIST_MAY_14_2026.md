@@ -557,9 +557,57 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - Global full DB still deferred (seedIsRepresentativeOnly: true)
 
 **Next Phase:** 
-- If remaining unknown exercises: MASTER-8C.2 continue knowledge expansion
+- If remaining truly unknown exercises: MASTER-8C.2 continue knowledge expansion
 - If current program coverage complete and target resolution blocked: MASTER-8B.7.2.1 target resolution
 - If both coverage and target ready: MASTER-8B.7.3 bounded structural preview
+
+---
+
+### MASTER-8C.1.2 — Program Balance Exercise Source Truth + Stale Copy Repair + Identity Coverage Adapter
+
+**Status:** COMPLETE
+
+**Purpose:** Fix stale "13-entry representative seed" copy after MASTER-8C.1 expanded the seed. Separate "basic exercise exists in app pool" from "full Program Balance science entry exists." Add read-only identity coverage adapter.
+
+**What This Step Delivered:**
+- Created `lib/program/program-balance-exercise-identity-coverage.ts` identity coverage adapter
+- Distinguishes coverage status: full_science_known, basic_identity_known, alias_resolved, truly_unknown
+- Added identity coverage fields to `ProgramBalanceKnowledgeCoverageSummary`:
+  - fullScienceKnownCount, basicIdentityKnownCount, aliasResolvedCount, trulyUnknownCount
+  - trulyUnknownIds, trulyUnknownNames
+  - fullScienceCoverageComplete, basicIdentityCoverageComplete
+  - sourceCounts (fullScienceSeedTotal, adaptivePoolTotal)
+- Updated `summarizeProgramBalanceKnowledgeCoverage()` to compute identity breakdown
+- Removed all stale "13-entry representative seed" copy from UI
+- Updated Program Balance UI to show honest coverage breakdown:
+  - Shows truly unknown vs basic identity vs full science counts
+  - Shows source counts (27 science entries, ~130 pool exercises)
+- Structural eligibility still requires full science coverage (not just basic identity)
+
+**Source Counts Found:**
+- Full science seed: 27 exercises
+- Adaptive exercise pool: 131 exercises
+- Enhanced exercise profiles: 17 exercises
+- Exercise classification registry: 3 exercises (minimal)
+
+**Files Changed:**
+- `lib/program/program-balance-exercise-identity-coverage.ts` (NEW - identity coverage adapter)
+- `lib/program/program-balance-intelligence-contract.ts` (added identity coverage fields)
+- `lib/program/program-balance-readonly-analyzer.ts` (compute identity breakdown, fix copy)
+- `lib/program/true-source-registry.ts` (updated source summary)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (replaced stale copy with honest breakdown)
+- `docs/OFFICIAL_CHECKLIST_MAY_14_2026.md` (this update)
+
+**Constraints Preserved:**
+- canApplyStructuralMutation remains false
+- Structural eligibility requires fullScienceCoverageComplete (not basicIdentityCoverageComplete)
+- No structural workout mutation
+- Completed sessions protected
+- Program Cards unchanged
+- Live Workout unchanged
+- Method Planner Applied 6 unchanged
+
+**Next Phase:** MASTER-8C.2 (if truly unknown exercises remain) or MASTER-8B.7.2.1 (target resolution)
 
 ---
 

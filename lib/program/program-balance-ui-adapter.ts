@@ -47,25 +47,166 @@ function isValidArray(value: unknown): value is unknown[] {
 // =============================================================================
 
 /**
+ * MASTER-8C.4.F: Detects synthetic placeholder exercise IDs
+ * These are generated placeholders that should not be treated as canonical exercise identity
+ */
+function isSyntheticExercisePlaceholderId(value: string): boolean {
+  if (!value) return false
+  const lower = value.toLowerCase()
+  // Match patterns like: exercise-3, exercise_3, unknown_exercise_3, ex-3, etc.
+  return /^(exercise|ex|unknown_exercise|unknown-exercise|item)[-_]?\d+$/i.test(lower)
+}
+
+/**
+ * MASTER-8C.4.F: Source-aware exercise identity extraction
+ * Collects candidate IDs from all possible sources and picks the best one
+ */
+function extractCanonicalExerciseIdentity(
+  exercise: Record<string, unknown>,
+  index: number
+): { id: string; name: string; source: string; syntheticPlaceholderUsed: boolean } {
+  const candidates: { id: string; name: string; source: string }[] = []
+
+  // Helper to safely get string from nested path
+  const getString = (obj: unknown, ...keys: string[]): string | null => {
+    let current: unknown = obj
+    for (const key of keys) {
+      if (!current || typeof current !== 'object') return null
+      current = (current as Record<string, unknown>)[key]
+    }
+    return typeof current === 'string' && current.length > 0 ? current : null
+  }
+
+  // Helper to derive ID from name
+  const nameToId = (name: string): string => name.toLowerCase().replace(/\s+/g, '_')
+
+  // Collect ID candidates in priority order (most specific first)
+
+  // Nested exercise object (highest priority - this is the canonical source)
+  const nestedExId = getString(exercise, 'exercise', 'id')
+  const nestedExExerciseId = getString(exercise, 'exercise', 'exerciseId')
+  const nestedExName = getString(exercise, 'exercise', 'name')
+  if (nestedExId && !isSyntheticExercisePlaceholderId(nestedExId)) {
+    candidates.push({ id: nestedExId, name: nestedExName ?? nestedExId, source: 'exercise.id' })
+  }
+  if (nestedExExerciseId && !isSyntheticExercisePlaceholderId(nestedExExerciseId)) {
+    candidates.push({ id: nestedExExerciseId, name: nestedExName ?? nestedExExerciseId, source: 'exercise.exerciseId' })
+  }
+  if (nestedExName && candidates.length === 0) {
+    candidates.push({ id: nameToId(nestedExName), name: nestedExName, source: 'exercise.name (derived)' })
+  }
+
+  // Source exercise object
+  const srcExId = getString(exercise, 'sourceExercise', 'id')
+  const srcExName = getString(exercise, 'sourceExercise', 'name')
+  if (srcExId && !isSyntheticExercisePlaceholderId(srcExId)) {
+    candidates.push({ id: srcExId, name: srcExName ?? srcExId, source: 'sourceExercise.id' })
+  }
+
+  // Original exercise object
+  const origExId = getString(exercise, 'originalExercise', 'id')
+  const origExName = getString(exercise, 'originalExercise', 'name')
+  if (origExId && !isSyntheticExercisePlaceholderId(origExId)) {
+    candidates.push({ id: origExId, name: origExName ?? origExId, source: 'originalExercise.id' })
+  }
+
+  // Selected exercise nested object
+  const selExId = getString(exercise, 'selectedExercise', 'exercise', 'id')
+  const selExName = getString(exercise, 'selectedExercise', 'exercise', 'name')
+  if (selExId && !isSyntheticExercisePlaceholderId(selExId)) {
+    candidates.push({ id: selExId, name: selExName ?? selExId, source: 'selectedExercise.exercise.id' })
+  }
+  const selId = getString(exercise, 'selectedExercise', 'id')
+  const selName = getString(exercise, 'selectedExercise', 'name')
+  if (selId && !isSyntheticExercisePlaceholderId(selId)) {
+    candidates.push({ id: selId, name: selName ?? selId, source: 'selectedExercise.id' })
+  }
+
+  // Metadata fields
+  const metaExId = getString(exercise, 'metadata', 'exerciseId')
+  const metaCanonId = getString(exercise, 'metadata', 'canonicalExerciseId')
+  const metaSrcId = getString(exercise, 'metadata', 'sourceExerciseId')
+  if (metaCanonId && !isSyntheticExercisePlaceholderId(metaCanonId)) {
+    candidates.push({ id: metaCanonId, name: metaCanonId, source: 'metadata.canonicalExerciseId' })
+  }
+  if (metaExId && !isSyntheticExercisePlaceholderId(metaExId)) {
+    candidates.push({ id: metaExId, name: metaExId, source: 'metadata.exerciseId' })
+  }
+  if (metaSrcId && !isSyntheticExercisePlaceholderId(metaSrcId)) {
+    candidates.push({ id: metaSrcId, name: metaSrcId, source: 'metadata.sourceExerciseId' })
+  }
+
+  // Coaching meta
+  const coachExId = getString(exercise, 'coachingMeta', 'exerciseId')
+  if (coachExId && !isSyntheticExercisePlaceholderId(coachExId)) {
+    candidates.push({ id: coachExId, name: coachExId, source: 'coachingMeta.exerciseId' })
+  }
+
+  // Flat fields (lower priority than nested)
+  const flatExerciseId = getString(exercise, 'exerciseId')
+  const flatCanonId = getString(exercise, 'canonicalExerciseId')
+  const flatDbExId = getString(exercise, 'databaseExerciseId')
+  const flatPoolExId = getString(exercise, 'poolExerciseId')
+  const flatSrcExId = getString(exercise, 'sourceExerciseId')
+  const flatId = getString(exercise, 'id')
+  const flatName = getString(exercise, 'name')
+  const flatExName = getString(exercise, 'exerciseName')
+
+  if (flatCanonId && !isSyntheticExercisePlaceholderId(flatCanonId)) {
+    candidates.push({ id: flatCanonId, name: flatName ?? flatCanonId, source: 'canonicalExerciseId' })
+  }
+  if (flatDbExId && !isSyntheticExercisePlaceholderId(flatDbExId)) {
+    candidates.push({ id: flatDbExId, name: flatName ?? flatDbExId, source: 'databaseExerciseId' })
+  }
+  if (flatPoolExId && !isSyntheticExercisePlaceholderId(flatPoolExId)) {
+    candidates.push({ id: flatPoolExId, name: flatName ?? flatPoolExId, source: 'poolExerciseId' })
+  }
+  if (flatSrcExId && !isSyntheticExercisePlaceholderId(flatSrcExId)) {
+    candidates.push({ id: flatSrcExId, name: flatName ?? flatSrcExId, source: 'sourceExerciseId' })
+  }
+  if (flatExerciseId && !isSyntheticExercisePlaceholderId(flatExerciseId)) {
+    candidates.push({ id: flatExerciseId, name: flatName ?? flatExerciseId, source: 'exerciseId' })
+  }
+  if (flatId && !isSyntheticExercisePlaceholderId(flatId)) {
+    candidates.push({ id: flatId, name: flatName ?? flatId, source: 'id' })
+  }
+  // Derive from name if we have a valid name but no valid IDs yet
+  if (flatName && candidates.length === 0) {
+    candidates.push({ id: nameToId(flatName), name: flatName, source: 'name (derived)' })
+  }
+  if (flatExName && candidates.length === 0) {
+    candidates.push({ id: nameToId(flatExName), name: flatExName, source: 'exerciseName (derived)' })
+  }
+
+  // If we found valid candidates, use the first one (highest priority)
+  if (candidates.length > 0) {
+    return { ...candidates[0], syntheticPlaceholderUsed: false }
+  }
+
+  // Fallback: use placeholder IDs even if synthetic, but flag it
+  const fallbackId = flatId ?? flatExerciseId ?? `unknown_exercise_${index}`
+  const fallbackName = flatName ?? flatExName ?? flatId ?? `Unknown Exercise ${index + 1}`
+  return {
+    id: fallbackId,
+    name: fallbackName,
+    source: isSyntheticExercisePlaceholderId(fallbackId) ? 'synthetic_placeholder' : 'fallback',
+    syntheticPlaceholderUsed: isSyntheticExercisePlaceholderId(fallbackId),
+  }
+}
+
+/**
  * Safely extracts exercise input from an unknown exercise object
+ * MASTER-8C.4.F: Now uses source-aware identity extraction to avoid synthetic placeholders
  */
 function extractExerciseInput(exercise: unknown, index: number): ProgramBalanceExerciseInput | null {
   if (!exercise || typeof exercise !== 'object') return null
 
   const ex = exercise as Record<string, unknown>
 
-  // Extract ID - try multiple possible fields
-  const id = isValidString(ex.id) ? ex.id :
-             isValidString(ex.exerciseId) ? ex.exerciseId :
-             isValidString(ex.name) ? ex.name.toLowerCase().replace(/\s+/g, '_') :
-             `unknown_exercise_${index}`
-
-  // Extract name - try multiple possible fields
-  const name = isValidString(ex.name) ? ex.name :
-               isValidString(ex.exerciseName) ? ex.exerciseName :
-               isValidString(ex.exercise) && typeof ex.exercise === 'string' ? ex.exercise :
-               typeof ex.exercise === 'object' && ex.exercise !== null && isValidString((ex.exercise as Record<string, unknown>).name) ? (ex.exercise as Record<string, unknown>).name as string :
-               id
+  // MASTER-8C.4.F: Use source-aware extraction for canonical identity
+  const identity = extractCanonicalExerciseIdentity(ex, index)
+  const id = identity.id
+  const name = identity.name
 
   // Extract sets
   const sets = isValidNumber(ex.sets) ? ex.sets : undefined

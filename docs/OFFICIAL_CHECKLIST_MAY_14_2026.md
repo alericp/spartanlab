@@ -435,6 +435,39 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
+### MASTER-8B.7.1.1 — Repair: Visible Confirmation Persistence in Future Candidate Rows
+
+**Status:** COMPLETE
+
+**Purpose:** Repair the visible confirmation persistence/display corridor so confirmed/queued mutation plans visibly persist in Future Candidate rows after modal close.
+
+**What This Step Repaired:**
+- Added `getConfirmedPlanForCandidate(idx)` helper to resolve confirmed plans by candidate index
+- Updated Future Candidates section header to show "{n} queued" when plans exist
+- Updated individual row headers to show "Queued" or "Confirmed" instead of "Read-only" when confirmed
+- Updated row background to cyan highlight when confirmed
+- Replaced "No saved change" chips with "8B.7.1 queued" + "User confirmed" + "Marker only" when confirmed
+- Added visible confirmation notice inside row showing honest queued state
+- Changed button from "Preview mutation plan" to "Review queued plan" when confirmed
+- Pre-populated modal with existing confirmation state when reviewing already-confirmed plans
+- Updated footer status to show "{n} mutation plan(s) queued — marker-only, workout structure unchanged"
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (row-level confirmation display + helper + button text + modal pre-populate)
+
+**Constraints Preserved:**
+- No structural workout mutation
+- Completed sessions protected
+- Program Cards unchanged
+- Live Workout unchanged
+- Start Workout unchanged
+- Method Planner Applied 6 unchanged
+- localStorage persistence unchanged
+
+**Next Phase:** MASTER-8B.7.2 — first bounded structural future-session mutation type
+
+---
+
 ### MASTER-8B.8 — Live Workout Runtime Adaptation Bridge
 
 **Status:** NOT STARTED

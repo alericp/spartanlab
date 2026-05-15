@@ -1,7 +1,7 @@
 # MASTER-8C.6 — Method / Program Balance / Generator Consumption Parity Gate
 
 ## Current Official Step
-MASTER-8C.6 (including MASTER-8C.6.1 and MASTER-8C.6.2 repair gates)
+MASTER-8C.6 (including MASTER-8C.6.1, MASTER-8C.6.2, and MASTER-8C.6.3 repair gates)
 
 ## Status
 **COMPLETE**
@@ -35,6 +35,25 @@ Changes:
 - `components/programs/AdaptiveSessionCard.tsx` - Updated to use resolver for session-level proof
 
 Now legacy saved programs show real matched counts from their exercises, while new programs show native proof from the selector.
+
+## MASTER-8C.6.3 Repair Summary
+
+**Problem Found:** After MASTER-8C.6.2, Program Balance Coverage showed 20 exercises while Generator DB Consumption showed 20/21 matched - a count parity mismatch.
+
+**Root Cause:** The backfill resolver in `resolveSessionGeneratorKnowledgeProofFromSession()` was counting ALL exercises from `session.exercises`, but Program Balance UI Adapter filters out synthetic conditioning finisher placeholders before analysis (at line 299 in `program-balance-ui-adapter.ts`).
+
+**Exact Skipped Artifact:** The synthetic "Conditioning Finisher" placeholder row that is a method artifact, not a real exercise.
+
+**Fix Applied:** Added `isGeneratorKnowledgeBackfillAnalyzableExercise()` filter function that mirrors Program Balance's filtering logic:
+1. Imported `isSyntheticConditioningFinisherPlaceholder` from conditioning-finisher-artifact-contract
+2. Created filter that excludes: synthetic finisher placeholders, empty rows, generic group/circuit headers
+3. Applied filter to backfill path before building knowledge summary
+4. Added enhanced diagnostic logging for count parity verification
+
+Changes:
+- `lib/program/generator-knowledge-consumption-proof.ts` - Added artifact filter import and `isGeneratorKnowledgeBackfillAnalyzableExercise()` function, updated `resolveSessionGeneratorKnowledgeProofFromSession()` to filter exercises before analysis
+
+Now Generator DB Consumption matches Program Balance Coverage's exercise population exactly.
 
 ## Summary
 

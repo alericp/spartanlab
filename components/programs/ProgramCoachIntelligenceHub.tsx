@@ -2963,6 +2963,12 @@ function ProgramBalanceSheetContent({
     const bundle = loadMutationPlans()
     setMutationPlanBundle(bundle)
   }, [])
+  
+  // [MASTER-8B.7.1.1] Helper to get confirmed plan for a candidate by index
+  const getConfirmedPlanForCandidate = useCallback((candidateIndex: number) => {
+    const candidateId = `candidate_${candidateIndex}`
+    return mutationPlanBundle?.confirmedPlans?.find(p => p.sourceCandidateId === candidateId) || null
+  }, [mutationPlanBundle])
 
   const toggleSection = (section: string) => {
     setExpandedSection(prev => prev === section ? null : section)
@@ -3404,9 +3410,15 @@ function ProgramBalanceSheetContent({
             <span className="text-xs font-medium text-[#E6E9EF] flex-1">
               Future Candidates ({result.futureSessionCandidates.length})
             </span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
-              Read-only
-            </span>
+            {mutationPlanBundle?.hasConfirmedPlans ? (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                {mutationPlanBundle.confirmedPlans.length} queued
+              </span>
+            ) : (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#7A7A8A]">
+                Read-only
+              </span>
+            )}
             <ChevronRight className={cn(
               'w-3 h-3 text-[#5A5A6A] transition-transform',
               expandedSection === 'future' && 'rotate-90'
@@ -3416,19 +3428,36 @@ function ProgramBalanceSheetContent({
             <div className="mt-3 space-y-3">
               {result.futureSessionCandidates.map((candidate, idx) => {
                 const plan = candidate.planningDetail
+                const confirmedPlan = getConfirmedPlanForCandidate(idx)
+                const isUserConfirmed = !!confirmedPlan?.userConfirmed
+                const isBlockedNeedsFullDb = confirmedPlan?.status === 'blocked_needs_full_db'
+                const isQueuedTargetUnresolved = confirmedPlan?.status === 'queued_target_unresolved'
+                const isConfirmedMarkerOnly = confirmedPlan?.status === 'confirmed_marker_only'
+                
                 return (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg border bg-[#0A0A0D] border-[#1A1A22] space-y-2"
+                    className={cn(
+                      "p-3 rounded-lg border space-y-2",
+                      isUserConfirmed 
+                        ? "bg-cyan-500/5 border-cyan-500/20" 
+                        : "bg-[#0A0A0D] border-[#1A1A22]"
+                    )}
                   >
                     {/* Coach Title */}
                     <div className="flex items-start gap-2">
                       <span className="text-xs font-medium text-[#E6E9EF] flex-1">
                         {plan?.coachTitle || candidate.candidateType.replace(/_/g, ' ')}
                       </span>
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
-                        Read-only
-                      </span>
+                      {isUserConfirmed ? (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 shrink-0">
+                          {isBlockedNeedsFullDb ? 'Queued' : isQueuedTargetUnresolved ? 'Queued' : 'Confirmed'}
+                        </span>
+                      ) : (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
+                          Read-only
+                        </span>
+                      )}
                     </div>
                     
                     {/* Trigger / Problem */}
@@ -3488,24 +3517,64 @@ function ProgramBalanceSheetContent({
                     
                     {/* Status Chips — MASTER-8B.7 writer design proof */}
                     <div className="flex flex-wrap gap-1 pt-1">
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                        8B.7 design
-                      </span>
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                        User-confirmed only
-                      </span>
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                        Future sessions only
-                      </span>
-                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
-                        No saved change
-                      </span>
-                      {candidate.requiresFullKnowledgeBase && (
-                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400/80">
-                          Needs full DB
-                        </span>
+                      {isUserConfirmed ? (
+                        <>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/30 text-cyan-400">
+                            8B.7.1 queued
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                            User confirmed
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                            Future sessions only
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                            Marker only
+                          </span>
+                          {isBlockedNeedsFullDb && (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400/80">
+                              Needs full DB
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                            8B.7 design
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                            User-confirmed only
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                            Future sessions only
+                          </span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#2A2A35] border border-[#3A3A45] text-[#6A6A7A]">
+                            No saved change
+                          </span>
+                          {candidate.requiresFullKnowledgeBase && (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400/80">
+                              Needs full DB
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
+                    
+                    {/* [MASTER-8B.7.1.1] Confirmed/Queued Notice */}
+                    {isUserConfirmed && confirmedPlan && (
+                      <div className="p-2 rounded bg-cyan-500/5 border border-cyan-500/20">
+                        <p className="text-[9px] text-cyan-400 flex items-start gap-1.5">
+                          <Check className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>
+                            {isBlockedNeedsFullDb 
+                              ? 'Plan queued after confirmation — full exercise DB required before structural changes.'
+                              : isQueuedTargetUnresolved
+                                ? 'Plan queued after confirmation — target future session still unresolved.'
+                                : 'Mutation plan confirmed — marker-only proof saved; workout structure unchanged.'}
+                          </span>
+                        </p>
+                      </div>
+                    )}
                     
                     {/* MASTER-8B.7 Writer Gate Notice */}
                     <div className="mt-1 p-1.5 rounded bg-[#1A1A22] border border-[#2A2A35]">
@@ -3519,8 +3588,22 @@ function ProgramBalanceSheetContent({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full h-7 text-[10px] bg-cyan-500/5 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30"
+                        className={cn(
+                          "w-full h-7 text-[10px]",
+                          isUserConfirmed
+                            ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/15 hover:border-cyan-500/40"
+                            : "bg-cyan-500/5 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30"
+                        )}
                         onClick={() => {
+                          // [MASTER-8B.7.1.1] Pre-populate confirmation state if already confirmed
+                          if (confirmedPlan) {
+                            setConfirmationResult({
+                              success: true,
+                              message: confirmedPlan.honestUserLabel,
+                            })
+                          } else {
+                            setConfirmationResult(null)
+                          }
                           setSelectedCandidateForPreview({
                             index: idx,
                             candidate,
@@ -3529,7 +3612,7 @@ function ProgramBalanceSheetContent({
                           setShowMutationPreviewConfirm(true)
                         }}
                       >
-                        Preview mutation plan
+                        {isUserConfirmed ? 'Review queued plan' : 'Preview mutation plan'}
                       </Button>
                     </div>
                   </div>
@@ -3566,7 +3649,9 @@ function ProgramBalanceSheetContent({
       {/* Next Step — MASTER-8B.7.1 Status */}
       <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
         {mutationPlanBundle?.hasConfirmedPlans ? (
-          <span className="text-cyan-400">{mutationPlanBundle.statusSummary} — workout structure unchanged, live workout bridge pending</span>
+          <span className="text-cyan-400">
+            {mutationPlanBundle.confirmedPlans.length} mutation plan{mutationPlanBundle.confirmedPlans.length > 1 ? 's' : ''} queued — marker-only, workout structure unchanged, full DB/target gate pending
+          </span>
         ) : (
           <span>Current status: MASTER-8B.7.1 apply gate ready — preview a Future Candidate to stage a marker-only mutation plan</span>
         )}

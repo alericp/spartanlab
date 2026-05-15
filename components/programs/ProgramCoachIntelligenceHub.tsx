@@ -67,6 +67,12 @@ import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-
 import type { ProgramIntelligenceContract } from '@/lib/program/program-display-contract'
 import type { ProgramCalibrationInput } from '@/lib/program/program-calibration-recommendation'
 import type { EvidenceCoachRecommendationBundle } from '@/lib/program/evidence-derived-coach-recommendations'
+// [MASTER-8C.6] Generator knowledge consumption proof rollup
+import { 
+  rollUpProgramGeneratorKnowledgeProof, 
+  extractSessionProofFromMetadata,
+  type ProgramGeneratorKnowledgeProof 
+} from '@/lib/program/generator-knowledge-consumption-proof'
 // [MASTER-3/4.1] Import adaptive foundation model builder for fallback resolution
 import {
   buildAdaptiveFoundationModel,
@@ -2947,8 +2953,10 @@ function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
 
 function ProgramBalanceSheetContent({
   result,
+  generatorKnowledgeProof,
 }: {
   result: ProgramBalanceReadOnlyResult
+  generatorKnowledgeProof: ProgramGeneratorKnowledgeProof
 }) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   
@@ -3128,6 +3136,51 @@ function ProgramBalanceSheetContent({
             {result.knowledgeCoverageSummary.fullScienceKnownCount ?? '?'}+{result.knowledgeCoverageSummary.aliasResolvedCount ?? '?'} = {result.knowledgeMatchedExerciseCount}/{result.analyzedExerciseCount}
           </span>
         </div>
+      </div>
+
+      {/* [MASTER-8C.6] Generator DB Consumption Proof */}
+      <div className="p-3 rounded-lg bg-[#1A1A22]/60 border border-[#2A2A35]">
+        <div className="flex items-center gap-2 mb-2">
+          <Activity className="w-3.5 h-3.5 text-[#7A7A8A]" />
+          <span className="text-xs font-medium text-[#E6E9EF]">Generator DB Consumption</span>
+          <div className="flex gap-1 ml-auto">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              Read-only
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
+              Selector bridge
+            </span>
+          </div>
+        </div>
+        {generatorKnowledgeProof.verdict === 'unavailable' ? (
+          <div className="text-[10px] text-[#5A5A6A]">
+            Generator proof unavailable — selector bridge not found on saved program
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+                <span className="text-[10px] text-[#5A5A6A]">Sessions</span>
+                <p className="text-sm font-medium text-[#E6E9EF]">
+                  {generatorKnowledgeProof.sessionsWithProof}/{generatorKnowledgeProof.sessionCount}
+                </p>
+              </div>
+              <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+                <span className="text-[10px] text-[#5A5A6A]">Exercises Matched</span>
+                <p className={`text-sm font-medium ${
+                  generatorKnowledgeProof.verdict === 'ready' ? 'text-emerald-400' : 
+                  generatorKnowledgeProof.verdict === 'partial' ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {generatorKnowledgeProof.matchedExercises}/{generatorKnowledgeProof.totalSelectedExercises}
+                </p>
+              </div>
+            </div>
+            <div className="text-[9px] text-[#3A3A4A] mt-2 pt-2 border-t border-[#1A1A22]">
+              <p>Mode: {generatorKnowledgeProof.mode}</p>
+              <p>No workout structure changed</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Findings Summary */}
@@ -4766,6 +4819,15 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, selectedSkillRepresentations, currentWeekNumber])
   
+  // [MASTER-8C.6] Compute generator knowledge consumption proof from sessions
+  const generatorKnowledgeProof = useMemo<ProgramGeneratorKnowledgeProof>(() => {
+    const sessions = program?.sessions || []
+    const sessionProofs = sessions.map((session) => 
+      extractSessionProofFromMetadata(session.styleMetadata)
+    )
+    return rollUpProgramGeneratorKnowledgeProof(sessionProofs)
+  }, [program])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -5386,7 +5448,7 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-            <ProgramBalanceSheetContent result={programBalanceResult} />
+            <ProgramBalanceSheetContent result={programBalanceResult} generatorKnowledgeProof={generatorKnowledgeProof} />
           </div>
         </SheetContent>
       </Sheet>

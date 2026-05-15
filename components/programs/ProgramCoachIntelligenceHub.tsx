@@ -47,6 +47,7 @@ import {
   ChevronUp,
   ChevronDown,
   AlertTriangle,
+  CheckCircle,
   Info,
   CheckCircle2,
   XCircle,
@@ -159,6 +160,12 @@ import {
   buildFrequencySlotPlacementPreview,
   type FrequencySlotPlacementPreview,
 } from '@/lib/program/method-frequency-slot-placement-preview'
+// [MASTER-8C.10] Frequency Placement Apply Contract
+import {
+  applyConfirmedFrequencyPlacementPreview,
+  isMethodSupportedForFrequencyApply,
+  type FrequencyPlacementApplyResult,
+} from '@/lib/program/method-frequency-placement-apply-contract'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -4112,19 +4119,24 @@ function MethodContractFoundationSection() {
 
 interface SlotEligibilityFrequencyPreviewSectionProps {
   program: unknown
+  /** [MASTER-8C.10] Callback to update saved program after confirmed apply */
+  onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
 }
 
 /**
  * Compact read-only section showing slot eligibility and frequency preview.
- * This is preview-only — no mutation, no persistence, no program changes.
+ * [MASTER-8C.10] Now supports confirmed apply for eligible row-level methods.
  */
-function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFrequencyPreviewSectionProps) {
+function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate }: SlotEligibilityFrequencyPreviewSectionProps) {
   const plan = useMemo<MethodSlotEligibilityFrequencyPlan>(() => {
     return buildMethodSlotEligibilityFrequencyPlan(program)
   }, [program])
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [selectedFrequencies, setSelectedFrequencies] = useState<Record<string, number>>({})
+  // [MASTER-8C.10] Track apply results
+  const [applyResults, setApplyResults] = useState<Record<string, FrequencyPlacementApplyResult>>({})
+  const [programChanged, setProgramChanged] = useState(false)
 
   // Filter to only show actionable methods (not straight_sets, not inventory-only prescription modifiers)
   const actionableMethods = useMemo(() => {
@@ -4141,6 +4153,38 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
       ...prev,
       [methodKey]: freq
     }))
+    // Clear any previous apply result for this method when frequency changes
+    setApplyResults(prev => {
+      const { [methodKey]: _, ...rest } = prev
+      return rest
+    })
+  }
+
+  // [MASTER-8C.10] Handle confirmed apply
+  const handleConfirmApply = (methodKey: string, placementPreview: FrequencySlotPlacementPreview, allowCaution: boolean) => {
+    const result = applyConfirmedFrequencyPlacementPreview({
+      program,
+      placementPreview,
+      allowCautionApply: allowCaution,
+    })
+    
+    setApplyResults(prev => ({
+      ...prev,
+      [methodKey]: result,
+    }))
+    
+    if (result.status === 'success' || result.status === 'partial_success') {
+      setProgramChanged(true)
+      // Call the parent update callback with the updated program
+      if (onProgramUpdate && result.updatedProgram) {
+        onProgramUpdate(result.updatedProgram as AdaptiveProgram)
+      }
+      // Reset frequency selection after successful apply
+      setSelectedFrequencies(prev => ({
+        ...prev,
+        [methodKey]: 0,
+      }))
+    }
   }
 
   return (
@@ -4208,6 +4252,8 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
                 program={program}
                 selectedFrequency={selectedFrequencies[method.canonicalKey] ?? 0}
                 onFrequencySelect={(freq) => handleFrequencySelect(method.canonicalKey, freq)}
+                onConfirmApply={(preview, allowCaution) => handleConfirmApply(method.canonicalKey, preview, allowCaution)}
+                applyResult={applyResults[method.canonicalKey]}
               />
             ))}
           </div>
@@ -4226,9 +4272,9 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
 
           {/* Mutation status */}
           <div className="text-[9px] text-[#5A5A6A] space-y-0.5">
-            <p>Mutation ready: 0 methods</p>
+            <p>Mutation ready: {actionableMethods.filter(m => isMethodSupportedForFrequencyApply(m.canonicalKey)).length} methods</p>
             <p>Selections persist: No</p>
-            <p>Program changed: No</p>
+            <p>Program changed: {programChanged ? 'Yes' : 'No'}</p>
           </div>
         </div>
       )}
@@ -4239,21 +4285,30 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
 /**
  * Single method row in frequency preview
  * [MASTER-8C.9] Now shows placement preview when frequency > 0 is selected
+ * [MASTER-8C.10] Now supports confirmed apply for eligible row-level methods
  */
 function MethodFrequencyPreviewRow({
   method,
   program,
   selectedFrequency,
   onFrequencySelect,
+  onConfirmApply,
+  applyResult,
 }: {
   method: MethodFrequencyPreview
   program: unknown
   selectedFrequency: number
   onFrequencySelect: (freq: number) => void
+  onConfirmApply: (preview: FrequencySlotPlacementPreview, allowCaution: boolean) => void
+  applyResult?: FrequencyPlacementApplyResult
 }) {
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  
   const isBlocked = method.frequencyPreviewStatus === 'blocked' || 
                     method.eligibilityStatus.startsWith('blocked_')
   const isSelectable = method.userSelectableNow && !isBlocked
+  // [MASTER-8C.10] Check if this method supports row-level apply
+  const supportsApply = isMethodSupportedForFrequencyApply(method.canonicalKey)
 
   // Generate frequency options
   const frequencyOptions = useMemo(() => {
@@ -4373,10 +4428,131 @@ function MethodFrequencyPreviewRow({
             </div>
           )}
 
-          {/* Explicit no-mutation proof */}
-          <p className="text-[8px] text-[#4A4A5A] italic mt-1">
-            Not saved · No program changes · Existing saved methods are separate
-          </p>
+          {/* [MASTER-8C.10] Confirm button for eligible row-level methods */}
+          {supportsApply && !showConfirmation && !applyResult && (
+            <button
+              type="button"
+              onClick={() => setShowConfirmation(true)}
+              className={cn(
+                'w-full mt-2 px-3 py-1.5 text-[10px] font-medium rounded transition-colors',
+                placementPreview.status === 'preview_ready_with_caution'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+              )}
+            >
+              {placementPreview.status === 'preview_ready_with_caution' 
+                ? 'Review & Apply with caution' 
+                : `Confirm ${placementPreview.targets.length} placement${placementPreview.targets.length !== 1 ? 's' : ''}`}
+            </button>
+          )}
+
+          {/* [MASTER-8C.10] Confirmation panel */}
+          {showConfirmation && !applyResult && (
+            <div className="mt-2 p-2 rounded bg-[#1A1A22] border border-emerald-500/30 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] font-medium text-emerald-400">Confirm Apply</span>
+              </div>
+              
+              <div className="text-[9px] text-[#9A9AAA] space-y-1">
+                <p><strong>Method:</strong> {method.displayLabel}</p>
+                <p><strong>Frequency:</strong> {selectedFrequency}x/week</p>
+                <p><strong>Targets:</strong></p>
+                <ul className="pl-3 space-y-0.5">
+                  {placementPreview.targets.map((t, i) => (
+                    <li key={i} className="text-[8px] text-[#8A8A9A]">
+                      {t.sessionLabel} — {t.exerciseNames[0]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {placementPreview.status === 'preview_ready_with_caution' && (
+                <div className="flex items-start gap-1.5 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[8px] text-amber-300">
+                    This placement has caution flags. Review targets carefully.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[8px] text-[#5A5A6A]">
+                This will update the saved program. Existing saved methods are preserved.
+              </p>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmation(false)}
+                  className="flex-1 px-2 py-1 text-[9px] rounded bg-[#2A2A35] text-[#8A8A9A] border border-[#3A3A4A] hover:border-[#4A4A5A]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onConfirmApply(placementPreview, placementPreview.status === 'preview_ready_with_caution')
+                    setShowConfirmation(false)
+                  }}
+                  className="flex-1 px-2 py-1 text-[9px] font-medium rounded bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/40"
+                >
+                  Confirm Apply
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* [MASTER-8C.10] Apply result display */}
+          {applyResult && (
+            <div className={cn(
+              'mt-2 p-2 rounded border space-y-1',
+              applyResult.status === 'success' || applyResult.status === 'partial_success'
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-red-500/10 border-red-500/30'
+            )}>
+              <div className="flex items-center gap-1.5">
+                {applyResult.status === 'success' || applyResult.status === 'partial_success' ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                )}
+                <span className={cn(
+                  'text-[10px] font-medium',
+                  applyResult.status === 'success' || applyResult.status === 'partial_success'
+                    ? 'text-emerald-400'
+                    : 'text-red-400'
+                )}>
+                  {applyResult.visibleSummary}
+                </span>
+              </div>
+              
+              {applyResult.appliedCount > 0 && (
+                <p className="text-[8px] text-[#7A7A8A]">
+                  Applied to: {applyResult.targetedDays.join(', ')}
+                </p>
+              )}
+              
+              <p className="text-[8px] text-[#5A5A6A]">
+                Program changed: {applyResult.programChanged ? 'Yes' : 'No'} · Existing saved methods preserved
+              </p>
+            </div>
+          )}
+
+          {/* Explicit no-mutation proof (only show if not in confirmation/result state) */}
+          {!showConfirmation && !applyResult && !supportsApply && (
+            <p className="text-[8px] text-[#4A4A5A] italic mt-1">
+              Not saved · No program changes · Existing saved methods are separate
+            </p>
+          )}
+          
+          {/* Show blocked reason for methods that don't support apply */}
+          {!supportsApply && (
+            <p className="text-[8px] text-amber-400/70 mt-1">
+              {method.canonicalKey === 'circuit'
+                ? 'Use existing Method Planner for circuit application'
+                : `${method.displayLabel} does not support frequency apply yet`}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -4395,6 +4571,7 @@ function RequestedMethodsSheetContent({
   isResettingAllOverrides,
   resetAllResult,
   onResetAllOverrides,
+  onProgramUpdate,
 }: {
   program: AdaptiveProgram
   plannerSummary: CanonicalMethodPlannerSummary
@@ -4407,6 +4584,8 @@ function RequestedMethodsSheetContent({
   isResettingAllOverrides: boolean
   resetAllResult: MethodOverrideResetAllResult | null
   onResetAllOverrides: () => void
+  /** [MASTER-8C.10] Callback for frequency placement apply */
+  onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -4976,7 +5155,7 @@ function RequestedMethodsSheetContent({
 
   {/* [MASTER-8C.8] Slot Eligibility & Frequency Preview Section */}
   <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
-  <SlotEligibilityFrequencyPreviewSection program={program} />
+  <SlotEligibilityFrequencyPreviewSection program={program} onProgramUpdate={onProgramUpdate} />
   </div>
   
   {/* [AB20.4.2] Reset All Overrides Section */}
@@ -5799,18 +5978,19 @@ export function ProgramCoachIntelligenceHub({
           </SheetHeader>
           <div className="mt-4">
 <RequestedMethodsSheetContent
-                  program={program}
-                  plannerSummary={plannerSummary}
-                  foundationContext={methodPlannerFoundationContext}
-                  onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
-                  onRevertMethodOverride={onRevertMethodOverride}
-                  onResetAllMethodOverrides={onResetAllMethodOverrides}
-                  showResetAllConfirmation={showResetAllConfirmation}
-                  setShowResetAllConfirmation={setShowResetAllConfirmation}
-                  isResettingAllOverrides={isResettingAllOverrides}
-                  resetAllResult={resetAllResult}
-                  onResetAllOverrides={handleResetAllOverrides}
-                />
+  program={program}
+  plannerSummary={plannerSummary}
+  foundationContext={methodPlannerFoundationContext}
+  onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
+  onRevertMethodOverride={onRevertMethodOverride}
+  onResetAllMethodOverrides={onResetAllMethodOverrides}
+  showResetAllConfirmation={showResetAllConfirmation}
+  setShowResetAllConfirmation={setShowResetAllConfirmation}
+  isResettingAllOverrides={isResettingAllOverrides}
+  resetAllResult={resetAllResult}
+  onResetAllOverrides={handleResetAllOverrides}
+  onProgramUpdate={onProgramUpdate}
+  />
           </div>
         </SheetContent>
       </Sheet>

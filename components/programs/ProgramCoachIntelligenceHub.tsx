@@ -3105,6 +3105,13 @@ function ProgramBalanceSheetContent({
             )}
           </div>
         )}
+        {/* MASTER-8C.4.D: Runtime resolver proof */}
+        <div className="text-[9px] text-[#3A3A4A] mt-2 pt-2 border-t border-[#1A1A22] flex justify-between items-center">
+          <span>Resolver: identity/full-science (8C.4.D)</span>
+          <span>
+            {result.knowledgeCoverageSummary.fullScienceKnownCount ?? '?'}+{result.knowledgeCoverageSummary.aliasResolvedCount ?? '?'} = {result.knowledgeMatchedExerciseCount}/{result.analyzedExerciseCount}
+          </span>
+        </div>
       </div>
 
       {/* Findings Summary */}

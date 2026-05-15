@@ -214,6 +214,7 @@ export function resolveProgramBalanceExercise(
  * Summarize knowledge coverage for the analyzed program
  * MASTER-8C.1: Added currentProgramCoverageComplete computation
  * MASTER-8C.1.2: Added identity coverage breakdown (full science vs basic identity vs truly unknown)
+ * MASTER-8C.4.D: Made identity resolver authoritative for ALL coverage fields
  */
 export function summarizeProgramBalanceKnowledgeCoverage(
   resolutions: readonly ProgramBalanceExerciseResolution[]
@@ -229,6 +230,21 @@ export function summarizeProgramBalanceKnowledgeCoverage(
   const identityCoverage = summarizeExerciseIdentityCoverage(exercises)
   const sourceCounts = getExerciseSourceCounts()
 
+  // MASTER-8C.4.D: Compute AUTHORITATIVE full-science coverage counts
+  // These replace the old known.length / unknown.length which came from resolveProgramBalanceExercise()
+  const authoritativeFullScienceKnown = identityCoverage.fullScienceKnownCount + identityCoverage.aliasResolvedCount
+  const authoritativeNeedScience = exercises.length - authoritativeFullScienceKnown
+
+  // MASTER-8C.4.D: Compute IDs/names that actually need full science
+  // Use identity resolver's lists: basicIdentityKnownIds (app pool only) + trulyUnknownIds
+  const fullScienceCoveredIds = new Set([
+    ...identityCoverage.fullScienceKnownIds,
+    ...identityCoverage.aliasResolvedIds,
+  ])
+  const needScienceExercises = exercises.filter((ex) => !fullScienceCoveredIds.has(ex.id))
+  const needScienceIds = needScienceExercises.map((e) => e.id)
+  const needScienceNames = needScienceExercises.map((e) => e.name)
+
   const warnings: string[] = []
   // MASTER-8C.1.2: Only warn about truly unknown exercises (not in any source)
   if (identityCoverage.trulyUnknownCount > 0) {
@@ -242,7 +258,8 @@ export function summarizeProgramBalanceKnowledgeCoverage(
       `${identityCoverage.basicIdentityKnownCount} exercise(s) found in app pool but lack full science coverage`
     )
   }
-  if (unknown.length > known.length) {
+  // MASTER-8C.4.D: Use authoritative counts for majority check
+  if (authoritativeNeedScience > authoritativeFullScienceKnown) {
     warnings.push('Majority of exercises lack full science coverage - balance analysis has reduced confidence')
   }
 
@@ -252,17 +269,20 @@ export function summarizeProgramBalanceKnowledgeCoverage(
 
   return {
     seedIsRepresentativeOnly: true,
-    knownExerciseCount: known.length,
-    unknownExerciseCount: unknown.length,
-    knownExerciseIds: known.map((k) => k.resolvedKnowledgeId!),
-    unknownExerciseIds: unknown.map((u) => u.originalExerciseId),
-    knownExerciseNames: known.map((k) => k.resolvedCanonicalName!),
-    unknownExerciseNames: unknown.map((u) => u.originalExerciseName),
+    // MASTER-8C.4.D: Use AUTHORITATIVE counts from identity resolver, not old local resolver
+    knownExerciseCount: authoritativeFullScienceKnown,
+    unknownExerciseCount: authoritativeNeedScience,
+    // MASTER-8C.4.D: For detailed IDs/names, use identity resolver's authoritative lists
+    knownExerciseIds: known.map((k) => k.resolvedKnowledgeId!), // Keep hydrated IDs from local resolver
+    unknownExerciseIds: needScienceIds,
+    knownExerciseNames: known.map((k) => k.resolvedCanonicalName!), // Keep hydrated names
+    unknownExerciseNames: needScienceNames,
     missingCoverageWarnings: warnings,
     fullDatabaseDeferredTo: 'MASTER_8C',
-    mayUnderestimateBalanceIssues: unknown.length > 0,
-    mayUnderestimateAnchorSupport: unknown.length > 0,
-    mayUnderestimateWarmupCooldownNeeds: unknown.length > 0,
+    // MASTER-8C.4.D: Use authoritative count for may-underestimate flags
+    mayUnderestimateBalanceIssues: authoritativeNeedScience > 0,
+    mayUnderestimateAnchorSupport: authoritativeNeedScience > 0,
+    mayUnderestimateWarmupCooldownNeeds: authoritativeNeedScience > 0,
     currentProgramCoverageComplete,
     // MASTER-8C.1.2: Identity coverage breakdown
     fullScienceKnownCount: identityCoverage.fullScienceKnownCount,

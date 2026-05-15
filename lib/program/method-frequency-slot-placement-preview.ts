@@ -54,6 +54,13 @@ export type FrequencySlotPlacementReasonCode =
   | 'blocked_finisher_prescription'
   | 'blocked_superset_writer'
   | 'no_program_mutation'
+  // [MASTER-8C.10.1] New reason codes for collision guard and smarter ranking
+  | 'blocked_existing_grouped_method_owner'
+  | 'avoided_adjacent_same_exercise'
+  | 'avoided_adjacent_high_fatigue_method'
+  | 'avoided_duplicate_exercise_frequency'
+  | 'selected_best_non_adjacent_alternative'
+  | 'forced_duplicate_no_alternative'
 
 /**
  * A single proposed placement target
@@ -243,21 +250,23 @@ export function buildFrequencySlotPlacementPreview(
   }
   
   // Build placement targets
-  const { targets, skippedCandidates } = selectPlacementTargets(
+  // [MASTER-8C.10.1] Now returns warnings for adjacent duplicate exercise, etc.
+  const { targets, skippedCandidates, warnings: selectionWarnings } = selectPlacementTargets(
     methodPreview,
     requestedFrequency
   )
   
   // Determine status based on targets
   const hasCaution = targets.some(t => t.cautionReasons.length > 0) ||
-    methodPreview.eligibilityStatus === 'eligible_with_caution'
+    methodPreview.eligibilityStatus === 'eligible_with_caution' ||
+    selectionWarnings.length > 0
   
   const status: FrequencySlotPlacementPreviewStatus = hasCaution
     ? 'preview_ready_with_caution'
     : 'preview_ready'
   
-  const warnings: string[] = []
-  if (hasCaution) {
+  const warnings: string[] = [...selectionWarnings]
+  if (targets.some(t => t.cautionReasons.length > 0)) {
     warnings.push('Some placements have caution flags — review carefully.')
   }
   if (targets.length < requestedFrequency) {
@@ -338,13 +347,14 @@ function buildBlockedPreview(
 }
 
 /**
- * Select up to `requestedFrequency` placement targets from eligible slots.
+ * [MASTER-8C.10.1] Select up to `requestedFrequency` placement targets from eligible slots.
  * 
- * Ranking rules:
+ * Ranking rules (enhanced):
+ * - Hard block already method-owned targets
  * - Prefer high-confidence slots
+ * - Strongly penalize same exercise name on adjacent sessions
  * - Prefer different sessions before repeating
  * - Prefer spacing across the week
- * - Prefer slots not already method-owned
  * - Avoid primary skill rows for high-fatigue methods
  * - Do not select more than requestedFrequency
  */
@@ -354,25 +364,51 @@ function selectPlacementTargets(
 ): {
   targets: FrequencySlotPlacementTarget[]
   skippedCandidates: FrequencySlotSkippedCandidate[]
+  warnings: string[]
 } {
   const eligibleSlots = [...methodPreview.eligibleSlots]
   const selectedTargets: FrequencySlotPlacementTarget[] = []
   const skippedCandidates: FrequencySlotSkippedCandidate[] = []
+  const warnings: string[] = []
   const usedSessionIds = new Set<string>()
+  const usedExerciseNames = new Set<string>()
+  const selectedSessionIndices: number[] = []
   
-  // Sort slots by ranking priority
+  // Helper to normalize exercise name for comparison
+  const normalizeExName = (name: string): string => name.toLowerCase().trim().replace(/[\s_-]+/g, '_')
+  
+  // Helper to check if selecting this slot would create adjacent same-exercise
+  const wouldCreateAdjacentDuplicate = (slot: MethodEligibleSlot): boolean => {
+    const slotExName = normalizeExName(slot.exerciseNames[0] ?? '')
+    if (!slotExName || !usedExerciseNames.has(slotExName)) return false
+    
+    // Check if any selected target with same exercise is adjacent (within 1 session)
+    for (let i = 0; i < selectedTargets.length; i++) {
+      const existingTarget = selectedTargets[i]
+      const existingExName = normalizeExName(existingTarget.exerciseNames[0] ?? '')
+      if (existingExName === slotExName) {
+        const indexDiff = Math.abs(slot.sessionIndex - existingTarget.sessionIndex)
+        if (indexDiff <= 1) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+  
+  // Sort slots by ranking priority (enhanced)
   const rankedSlots = eligibleSlots
     .filter(slot => slot.isEligible && !slot.isSyntheticArtifact)
     .sort((a, b) => {
-      // 1. Prefer high confidence
-      const confOrder = { high: 0, medium: 1, low: 2 }
-      const confDiff = confOrder[a.confidence] - confOrder[b.confidence]
-      if (confDiff !== 0) return confDiff
-      
-      // 2. Prefer not already method-owned
+      // 1. Hard block already method-owned
       if (a.isAlreadyMethodOwned !== b.isAlreadyMethodOwned) {
         return a.isAlreadyMethodOwned ? 1 : -1
       }
+      
+      // 2. Prefer high confidence
+      const confOrder = { high: 0, medium: 1, low: 2 }
+      const confDiff = confOrder[a.confidence] - confOrder[b.confidence]
+      if (confDiff !== 0) return confDiff
       
       // 3. Prefer not primary skill sensitive
       if (a.isPrimarySkillSensitive !== b.isPrimarySkillSensitive) {
@@ -383,19 +419,33 @@ function selectPlacementTargets(
       const cautionDiff = a.cautionReasons.length - b.cautionReasons.length
       if (cautionDiff !== 0) return cautionDiff
       
-      // 5. Preserve session order for spacing
+      // 5. Prefer spreading across sessions (use larger index gaps)
       return a.sessionIndex - b.sessionIndex
     })
   
-  // Select slots with spacing preference
+  // Select slots with enhanced spacing and duplicate avoidance
   for (const slot of rankedSlots) {
     if (selectedTargets.length >= requestedFrequency) break
     
-    // Skip if we already have a target in this session and have unused sessions
+    // Hard block: Skip already method-owned slots
+    if (slot.isAlreadyMethodOwned) {
+      skippedCandidates.push({
+        sessionId: slot.sessionId,
+        sessionIndex: slot.sessionIndex,
+        sessionLabel: slot.sessionLabel,
+        exerciseNames: slot.exerciseNames,
+        reason: 'Already has method ownership — blocked to prevent stacking',
+        reasonCode: 'blocked_existing_grouped_method_owner',
+      })
+      continue
+    }
+    
+    // Spacing check: Skip if we already have a target in this session and have unused sessions
     const hasUnusedSessions = rankedSlots.some(
       s => !usedSessionIds.has(s.sessionId) && 
            s.isEligible && 
            !s.isSyntheticArtifact &&
+           !s.isAlreadyMethodOwned &&
            !selectedTargets.some(t => t.sessionId === s.sessionId)
     )
     
@@ -411,32 +461,45 @@ function selectPlacementTargets(
       continue
     }
     
-    // Skip already method-owned if we have alternatives
-    if (slot.isAlreadyMethodOwned) {
-      const hasNonOwned = rankedSlots.some(
-        s => !s.isAlreadyMethodOwned && 
-             s.isEligible && 
-             !selectedTargets.some(t => t.sessionId === s.sessionId && t.exerciseIds.join() === s.exerciseIds.join())
-      )
-      if (hasNonOwned) {
+    // [MASTER-8C.10.1] Adjacent duplicate check
+    const slotExName = normalizeExName(slot.exerciseNames[0] ?? '')
+    if (wouldCreateAdjacentDuplicate(slot)) {
+      // Check if there are better alternatives (different exercise, not adjacent)
+      const hasBetterAlternative = rankedSlots.some(s => {
+        if (s === slot) return false
+        if (s.isAlreadyMethodOwned || !s.isEligible || s.isSyntheticArtifact) return false
+        if (selectedTargets.some(t => t.sessionId === s.sessionId)) return false
+        const altExName = normalizeExName(s.exerciseNames[0] ?? '')
+        // Better if different exercise OR same exercise but not adjacent
+        if (altExName !== slotExName) return true
+        const wouldBeAdjacent = selectedSessionIndices.some(idx => Math.abs(s.sessionIndex - idx) <= 1)
+        return !wouldBeAdjacent
+      })
+      
+      if (hasBetterAlternative) {
         skippedCandidates.push({
           sessionId: slot.sessionId,
           sessionIndex: slot.sessionIndex,
           sessionLabel: slot.sessionLabel,
           exerciseNames: slot.exerciseNames,
-          reason: 'Already method-owned — prefer unowned slots',
-          reasonCode: 'avoided_existing_method_owner',
+          reason: 'Same exercise on adjacent day — better alternative exists',
+          reasonCode: 'avoided_adjacent_same_exercise',
         })
         continue
+      } else {
+        // No better alternative — allow but add warning
+        warnings.push(`${slot.exerciseNames[0]} selected on adjacent days — no better alternative available`)
       }
     }
     
     // Add this slot as a target
     usedSessionIds.add(slot.sessionId)
+    usedExerciseNames.add(slotExName)
+    selectedSessionIndices.push(slot.sessionIndex)
     selectedTargets.push(buildPlacementTarget(methodPreview, slot, selectedTargets.length + 1))
   }
   
-  return { targets: selectedTargets, skippedCandidates }
+  return { targets: selectedTargets, skippedCandidates, warnings }
 }
 
 /**

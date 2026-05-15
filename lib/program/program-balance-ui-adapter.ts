@@ -259,6 +259,33 @@ export function buildProgramBalanceBranchInputFromProgram(
 }
 
 /**
+ * MASTER-8C.4: Builds input with optional explicit Adaptive Foundation override
+ * 
+ * When the program object doesn't have adaptiveFoundationModel/adaptiveFoundation,
+ * but the caller has resolved one separately (e.g., via resolveVisibleAdaptiveFoundation),
+ * this allows passing it explicitly to avoid the "not linked" message.
+ */
+export function buildProgramBalanceBranchInputWithFoundation(
+  program: unknown,
+  selectedSkillIds: readonly string[],
+  currentWeekNumber?: number,
+  resolvedAdaptiveFoundation?: unknown,
+): ProgramBalanceBranchInput {
+  const base = buildProgramBalanceBranchInputFromProgram({ program, selectedSkillIds, currentWeekNumber })
+  
+  // If base already has adaptiveFoundationSummary, use it
+  // Otherwise, use the explicit override if provided
+  if (!base.adaptiveFoundationSummary && resolvedAdaptiveFoundation) {
+    return {
+      ...base,
+      adaptiveFoundationSummary: resolvedAdaptiveFoundation,
+    }
+  }
+  
+  return base
+}
+
+/**
  * Extracts selected skill IDs from skill representation display objects
  */
 export function extractSelectedSkillIdsFromRepresentations(

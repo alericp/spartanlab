@@ -892,7 +892,7 @@ export function analyzeProgramBalanceReadOnly(
     missingData.push('Method summary not provided')
   }
   if (!input.adaptiveFoundationSummary) {
-    missingData.push('Adaptive Foundation summary not provided')
+    missingData.push('Adaptive Foundation analyzer input not linked (tile may exist separately)')
   }
   if (!input.recoveryReadinessSummary) {
     missingData.push('Recovery/readiness summary not provided')

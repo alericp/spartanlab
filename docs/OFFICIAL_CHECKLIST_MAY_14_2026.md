@@ -253,11 +253,33 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ### MASTER-8B.5 — Method Planner Safe Integration With Foundation Sources
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 **Purpose:** Only after the foundation registry exists, safely decide whether Method Planner should consume new branch context.
 
-**Constraint:** Preserve current Applied 6 / native Supersets / Cluster Sets caution behavior unless a verified source says otherwise.
+**What This Step Delivered:**
+- Foundation context panel added to Method Planner sheet (read-only)
+- Panel shows Program Balance link status and finding counts
+- Panel clearly states "Read-only" and "No method changes"
+- Panel shows representative seed status when applicable
+- Panel shows warnings for high/moderate balance findings
+- Improved foundation-source extraction in `program-balance-ui-adapter.ts`:
+  - Now reads `adaptiveFoundationModel` (preferred) with fallback to `adaptiveFoundation`
+  - Now reads `recoveryReadiness` with fallback to `weeklyStressDistributionPlan` and `weeklyStressGovernorAdjustments`
+  - Now reads `methodMaterializationSummary` as additional method source fallback
+- Created `lib/program/method-planner-foundation-context.ts` pure helper
+- All Method Planner writer behavior unchanged
+- Applied 6 count unchanged
+- Apply/revert/reset behavior unchanged
+- No mutation through foundation context
+
+**Files Changed:**
+- `lib/program/program-balance-ui-adapter.ts` (improved extraction)
+- `lib/program/method-planner-foundation-context.ts` (new - 178 lines)
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (foundation context panel)
+- `lib/program/true-source-registry.ts` (updated method_planner entry)
+
+**Constraint Preserved:** Applied 6 / native Supersets / Cluster Sets caution behavior unchanged.
 
 ---
 

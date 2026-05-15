@@ -97,7 +97,7 @@ export function buildMethodPlannerFoundationContext(
       warnings: [],
       proofLines: [
         'Program Balance status: unavailable',
-        result.unavailableReason ?? 'No program data',
+        result.missingData?.[0] ?? 'No program data',
       ],
       mutationAllowedNow: false,
       source: 'program_balance_readonly',

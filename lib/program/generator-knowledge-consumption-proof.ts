@@ -21,6 +21,7 @@
  */
 
 import type { GeneratorKnowledgeConsumptionSummary } from '@/lib/exercise-knowledge-generator-bridge'
+import { buildGeneratorKnowledgeConsumptionSummary } from '@/lib/exercise-knowledge-generator-bridge'
 
 // =============================================================================
 // SESSION-LEVEL PROOF
@@ -29,9 +30,13 @@ import type { GeneratorKnowledgeConsumptionSummary } from '@/lib/exercise-knowle
 /**
  * Session-level generator knowledge consumption proof
  * Stamped onto session.styleMetadata.generatorKnowledgeProof
+ * 
+ * source can be:
+ * - 'selector_knowledge_bridge': Native proof from generator/selector (preferred)
+ * - 'saved_program_backfill': Read-only backfill for legacy saved programs
  */
 export interface SessionGeneratorKnowledgeProof {
-  readonly source: 'selector_knowledge_bridge'
+  readonly source: 'selector_knowledge_bridge' | 'saved_program_backfill'
   readonly mode: 'read_only_enrichment'
   readonly mutationApplied: false
   readonly selectedExerciseCount: number
@@ -102,7 +107,7 @@ export function buildSessionGeneratorKnowledgeProof(
  * Rolled up from all session proofs
  */
 export interface ProgramGeneratorKnowledgeProof {
-  readonly source: 'selector_knowledge_bridge'
+  readonly source: 'selector_knowledge_bridge' | 'saved_program_backfill' | 'mixed'
   readonly mode: 'read_only_enrichment'
   readonly mutationApplied: false
   readonly sessionCount: number
@@ -166,15 +171,31 @@ export function rollUpProgramGeneratorKnowledgeProof(
     verdict = 'blocked'
   }
 
+  // Determine source (mixed if both native and backfill present)
+  const sources = new Set(validProofs.map(p => p.source))
+  let source: 'selector_knowledge_bridge' | 'saved_program_backfill' | 'mixed'
+  if (sources.size > 1) {
+    source = 'mixed'
+  } else if (sources.has('saved_program_backfill')) {
+    source = 'saved_program_backfill'
+  } else {
+    source = 'selector_knowledge_bridge'
+  }
+
   // Build proof lines
   const proofLines: string[] = []
   proofLines.push(`Sessions analyzed: ${validProofs.length}/${sessionProofs.length}`)
   proofLines.push(`Selected exercises: ${totalMatched}/${totalSelected} matched`)
   proofLines.push(`Mode: read-only enrichment`)
+  if (source === 'saved_program_backfill') {
+    proofLines.push(`Source: Derived from saved program exercises`)
+  } else if (source === 'mixed') {
+    proofLines.push(`Source: Mixed (native + backfill)`)
+  }
   proofLines.push(`No workout structure changed`)
 
   return {
-    source: 'selector_knowledge_bridge',
+    source,
     mode: 'read_only_enrichment',
     mutationApplied: false,
     sessionCount: sessionProofs.length,
@@ -204,10 +225,116 @@ export function extractSessionProofFromMetadata(
   
   const p = proof as Record<string, unknown>
   
-  // Validate required fields
-  if (p.source !== 'selector_knowledge_bridge') return null
+  // Validate required fields - accept either source type
+  if (p.source !== 'selector_knowledge_bridge' && p.source !== 'saved_program_backfill') return null
   if (typeof p.selectedExerciseCount !== 'number') return null
   if (typeof p.matchedExerciseCount !== 'number') return null
   
   return proof as SessionGeneratorKnowledgeProof
+}
+
+// =============================================================================
+// SAVED PROGRAM BACKFILL RESOLVER — MASTER-8C.6.2
+// =============================================================================
+
+/**
+ * Minimal exercise shape needed for knowledge bridge lookup
+ */
+interface MinimalExercise {
+  id: string
+  name: string
+}
+
+/**
+ * Resolve session generator knowledge proof from a session object
+ * 
+ * Priority:
+ * 1. Use existing native metadata proof if present and valid
+ * 2. Fall back to deriving proof from session exercises via knowledge bridge
+ * 
+ * This is read-only and does not mutate the session.
+ */
+export function resolveSessionGeneratorKnowledgeProofFromSession(
+  session: unknown
+): SessionGeneratorKnowledgeProof | null {
+  if (!session || typeof session !== 'object') return null
+  
+  const s = session as Record<string, unknown>
+  
+  // 1. Try native metadata proof first
+  const nativeProof = extractSessionProofFromMetadata(s.styleMetadata)
+  if (nativeProof && nativeProof.verdict !== 'unavailable') {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MASTER-8C.6.2-GENERATOR-PROOF-NATIVE]', {
+        hadNativeMetadataProof: true,
+        verdict: nativeProof.verdict,
+        matchedCount: nativeProof.matchedExerciseCount,
+      })
+    }
+    return nativeProof
+  }
+  
+  // 2. Fall back to deriving from session exercises
+  const exercises = s.exercises
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    return null
+  }
+  
+  // Convert to minimal exercise shape for knowledge bridge
+  const minimalExercises: MinimalExercise[] = exercises
+    .filter((ex): ex is Record<string, unknown> => ex && typeof ex === 'object')
+    .map(ex => ({
+      id: typeof ex.id === 'string' ? ex.id : '',
+      name: typeof ex.name === 'string' ? ex.name : '',
+    }))
+    .filter(ex => ex.id || ex.name) // Must have at least id or name
+  
+  if (minimalExercises.length === 0) {
+    return null
+  }
+  
+  // Use existing knowledge bridge to build summary
+  // Cast to Exercise[] since the bridge only needs id and name
+  const summary = buildGeneratorKnowledgeConsumptionSummary(
+    minimalExercises as unknown as import('@/lib/adaptive-exercise-pool').Exercise[]
+  )
+  
+  // Build backfill proof from summary
+  const proofLines: string[] = []
+  proofLines.push(`Mode: read_only_enrichment`)
+  proofLines.push(`Source: Derived from saved program exercises`)
+  proofLines.push(`Exercises matched: ${summary.matchedCount}/${summary.poolCount}`)
+  if (summary.verdict === 'ready') {
+    proofLines.push('All exercises matched to knowledge foundation')
+  } else if (summary.verdict === 'partial') {
+    proofLines.push(`${summary.missingCount} exercise(s) missing knowledge match`)
+  }
+  proofLines.push('No automatic program changes applied')
+  
+  const backfillProof: SessionGeneratorKnowledgeProof = {
+    source: 'saved_program_backfill',
+    mode: 'read_only_enrichment',
+    mutationApplied: false,
+    selectedExerciseCount: summary.poolCount,
+    matchedExerciseCount: summary.matchedCount,
+    missingExerciseCount: summary.missingCount,
+    verdict: summary.verdict,
+    matchedExerciseIds: [...summary.matchedIds],
+    missingExerciseIds: [...summary.missingIds],
+    proofLines,
+  }
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[MASTER-8C.6.2-GENERATOR-PROOF-BACKFILL]', {
+      hadNativeMetadataProof: false,
+      exerciseCount: minimalExercises.length,
+      matchedExerciseCount: summary.matchedCount,
+      missingExerciseCount: summary.missingCount,
+      verdict: summary.verdict,
+      source: 'saved_program_backfill',
+      mutationApplied: false,
+    })
+  }
+  
+  return backfillProof
 }

@@ -1,7 +1,7 @@
 # MASTER-8C.6 — Method / Program Balance / Generator Consumption Parity Gate
 
 ## Current Official Step
-MASTER-8C.6 (including MASTER-8C.6.1 repair gate)
+MASTER-8C.6 (including MASTER-8C.6.1 and MASTER-8C.6.2 repair gates)
 
 ## Status
 **COMPLETE**
@@ -17,6 +17,24 @@ MASTER-8C.6 (including MASTER-8C.6.1 repair gate)
 2. The successful style path `sessionStyleMetadata` assignment
 
 Now the proof rides on `program.sessions[n].styleMetadata.generatorKnowledgeProof` as expected by the UI.
+
+## MASTER-8C.6.2 Repair Summary
+
+**Problem Found:** After MASTER-8C.6.1 deployed, Program Balance still showed "Generator proof unavailable" because the current saved program in localStorage was generated before the proof metadata existed.
+
+**Root Cause:** The UI was reading a legacy saved program whose sessions did not contain `session.styleMetadata.generatorKnowledgeProof`. The fix in MASTER-8C.6.1 only helps newly generated programs.
+
+**Fix Applied:** Added a read-only backfill resolver that:
+1. First checks for native metadata proof (from MASTER-8C.6.1)
+2. Falls back to deriving proof from saved session exercises via the existing knowledge bridge
+3. Labels backfilled proof with `source: 'saved_program_backfill'` to distinguish from native proof
+
+Changes:
+- `lib/program/generator-knowledge-consumption-proof.ts` - Added `resolveSessionGeneratorKnowledgeProofFromSession()` resolver and extended source type to include `'saved_program_backfill'`
+- `components/programs/ProgramCoachIntelligenceHub.tsx` - Updated to use resolver instead of direct metadata extraction
+- `components/programs/AdaptiveSessionCard.tsx` - Updated to use resolver for session-level proof
+
+Now legacy saved programs show real matched counts from their exercises, while new programs show native proof from the selector.
 
 ## Summary
 

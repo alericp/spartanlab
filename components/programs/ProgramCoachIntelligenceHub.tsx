@@ -70,7 +70,7 @@ import type { EvidenceCoachRecommendationBundle } from '@/lib/program/evidence-d
 // [MASTER-8C.6] Generator knowledge consumption proof rollup
 import { 
   rollUpProgramGeneratorKnowledgeProof, 
-  extractSessionProofFromMetadata,
+  resolveSessionGeneratorKnowledgeProofFromSession,
   type ProgramGeneratorKnowledgeProof 
 } from '@/lib/program/generator-knowledge-consumption-proof'
 // [MASTER-3/4.1] Import adaptive foundation model builder for fallback resolution
@@ -4820,10 +4820,11 @@ export function ProgramCoachIntelligenceHub({
   }, [program, selectedSkillRepresentations, currentWeekNumber])
   
   // [MASTER-8C.6] Compute generator knowledge consumption proof from sessions
+  // [MASTER-8C.6.2] Uses resolver that can backfill from saved program exercises
   const generatorKnowledgeProof = useMemo<ProgramGeneratorKnowledgeProof>(() => {
     const sessions = program?.sessions || []
-    const sessionProofs = sessions.map((session) => 
-      extractSessionProofFromMetadata(session.styleMetadata)
+    const sessionProofs = sessions.map((session) =>
+      resolveSessionGeneratorKnowledgeProofFromSession(session)
     )
     return rollUpProgramGeneratorKnowledgeProof(sessionProofs)
   }, [program])

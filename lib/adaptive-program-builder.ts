@@ -1001,6 +1001,9 @@ import { yieldToMainThread, createGenerationContext, assertNotAborted, type Gene
 // the canonical session-level method verdict. Imported as ESM to avoid the
 // CommonJS require() pattern in this otherwise-ESM module.
 import { deriveMethodMaterializationSummary } from './program/method-materialization-summary'
+// [MASTER-8C.6] Generator knowledge consumption proof builder
+import { buildSessionGeneratorKnowledgeProof } from './program/generator-knowledge-consumption-proof'
+import { buildGeneratorKnowledgeConsumptionSummary } from './exercise-knowledge-generator-bridge'
 // [WEEK-ADAPTATION-CONTRACT] Canonical week-level adaptation decision authority
 import {
   buildWeekAdaptationDecision,
@@ -1745,6 +1748,10 @@ export interface AdaptiveSession {
   // FIRST and only fall back to scattered-field derivation when absent.
   // See lib/program/method-materialization-summary.ts for the contract.
   methodMaterializationSummary?: import('./program/method-materialization-summary').MethodMaterializationSummary
+  // [MASTER-8C.6] Generator knowledge consumption proof
+  // Proves the generator/selector consumed the exercise knowledge foundation
+  // This is read-only proof, not mutation
+  generatorKnowledgeProof?: import('./program/generator-knowledge-consumption-proof').SessionGeneratorKnowledgeProof
   }
   // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
   // This makes the ACTUAL skill materiality visible in each session
@@ -15998,6 +16005,17 @@ const existingStyleMeta = (session.styleMetadata ?? {}) as NonNullable<typeof se
         structureDecisions: methodMaterializationResult.structureDecisions,
         timestamp: new Date().toISOString(),
       },
+      // [MASTER-8C.6] Generator knowledge consumption proof
+      // Proves the selector consumed the exercise knowledge foundation
+      // Computed from final session exercises for accurate proof
+      generatorKnowledgeProof: buildSessionGeneratorKnowledgeProof(
+        buildGeneratorKnowledgeConsumptionSummary(
+          (session.exercises || []).map((ex) => ({
+            id: (ex as { id?: string }).id || '',
+            name: (ex as { name?: string }).name || '',
+          })) as import('./adaptive-exercise-pool').Exercise[]
+        )
+      ),
     }
     
     // [BUILDER-STYLE-METADATA-NON-NULL-LOCAL] `session.styleMetadata` is
@@ -27258,6 +27276,34 @@ function generateAdaptiveSession(
   // ==========================================================================
   const doctrineRelaxationApplied = !!(selection as any).doctrineRelaxationApplied
   const doctrineRelaxationReason = (selection as any).doctrineRelaxationReason || ''
+
+  // ==========================================================================
+  // [MASTER-8C.6 — GENERATOR KNOWLEDGE CONSUMPTION PROOF HARVEST]
+  //
+  // Harvest the knowledge consumption summary from the selector. This proves
+  // the generator consumed the exercise knowledge foundation. The proof is
+  // stamped onto session.styleMetadata.generatorKnowledgeProof later.
+  //
+  // This is read-only proof — no workout structure changes are applied.
+  // ==========================================================================
+  const harvestedKnowledgeConsumptionSummary = (selection as { 
+    knowledgeConsumptionSummary?: import('./exercise-knowledge-generator-bridge').GeneratorKnowledgeConsumptionSummary | null 
+  }).knowledgeConsumptionSummary ?? null
+  const sessionGeneratorKnowledgeProof = buildSessionGeneratorKnowledgeProof(harvestedKnowledgeConsumptionSummary)
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[MASTER-8C.6-GENERATOR-KNOWLEDGE-PROOF]', {
+      sessionIndex,
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      summaryPresent: !!harvestedKnowledgeConsumptionSummary,
+      selectedExercises: sessionGeneratorKnowledgeProof.selectedExerciseCount,
+      matchedExercises: sessionGeneratorKnowledgeProof.matchedExerciseCount,
+      missingExercises: sessionGeneratorKnowledgeProof.missingExerciseCount,
+      verdict: sessionGeneratorKnowledgeProof.verdict,
+      mutationApplied: sessionGeneratorKnowledgeProof.mutationApplied,
+    })
+  }
 
   // ==========================================================================
   // [PHASE 4E — DOCTRINE CAUSAL AUDIT HARVEST]

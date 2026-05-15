@@ -54,6 +54,7 @@ import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle,
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { isSyntheticConditioningFinisherPlaceholder } from '@/lib/program/conditioning-finisher-artifact-contract'
+import { extractSessionProofFromMetadata } from '@/lib/program/generator-knowledge-consumption-proof'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
 import {
   SessionHeader,
@@ -3397,6 +3398,36 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                           </div>
                         </div>
                       )}
+
+                      {/* [MASTER-8C.6] Generator DB Knowledge Proof */}
+                      {(() => {
+                        const sessionProof = extractSessionProofFromMetadata(session.styleMetadata)
+                        if (!sessionProof || sessionProof.verdict === 'unavailable') return null
+                        return (
+                          <div data-master-8c6-proof="true">
+                            <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                              DB-informed selection
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                                sessionProof.verdict === 'ready' 
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : sessionProof.verdict === 'partial'
+                                    ? 'bg-amber-500/10 text-amber-400'
+                                    : 'bg-red-500/10 text-red-400'
+                              }`}>
+                                {sessionProof.matchedExerciseCount}/{sessionProof.selectedExerciseCount} matched
+                              </span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">
+                                Read-only
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-[#6A6A6A] mt-1">
+                              Knowledge used: movement family, tissue stress, skill transfer
+                            </p>
+                          </div>
+                        )
+                      })()}
 
                       {/* [IQ2] Role truth verification — compact display when labels differ from content */}
                       {cardSurface?.roleTruthVerification?.shouldShowInDetails && cardSurface.roleTruthVerification.displayExplanation && (

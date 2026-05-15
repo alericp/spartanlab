@@ -207,6 +207,7 @@ export function resolveProgramBalanceExercise(
 
 /**
  * Summarize knowledge coverage for the analyzed program
+ * MASTER-8C.1: Added currentProgramCoverageComplete computation
  */
 export function summarizeProgramBalanceKnowledgeCoverage(
   resolutions: readonly ProgramBalanceExerciseResolution[]
@@ -217,12 +218,15 @@ export function summarizeProgramBalanceKnowledgeCoverage(
   const warnings: string[] = []
   if (unknown.length > 0) {
     warnings.push(
-      `${unknown.length} exercise(s) not in B2 seed: ${unknown.map((u) => u.originalExerciseName).join(', ')}`
+      `${unknown.length} exercise(s) not in knowledge seed: ${unknown.map((u) => u.originalExerciseName).join(', ')}`
     )
   }
   if (unknown.length > known.length) {
     warnings.push('Majority of exercises unknown - balance analysis has low confidence')
   }
+
+  // MASTER-8C.1: Compute current-program coverage (distinct from global DB)
+  const currentProgramCoverageComplete = resolutions.length > 0 && unknown.length === 0
 
   return {
     seedIsRepresentativeOnly: true,
@@ -237,6 +241,7 @@ export function summarizeProgramBalanceKnowledgeCoverage(
     mayUnderestimateBalanceIssues: unknown.length > 0,
     mayUnderestimateAnchorSupport: unknown.length > 0,
     mayUnderestimateWarmupCooldownNeeds: unknown.length > 0,
+    currentProgramCoverageComplete,
   }
 }
 
@@ -883,10 +888,10 @@ export function analyzeProgramBalanceReadOnly(
       ? 'partial'
       : 'ready'
 
-  // Build missing data
+  // Build missing data - MASTER-8C.1: Distinguish current program vs global DB
   const missingData: string[] = []
   if (knowledgeCoverage.unknownExerciseCount > 0) {
-    missingData.push(`${knowledgeCoverage.unknownExerciseCount} exercises not in B2 seed`)
+    missingData.push(`${knowledgeCoverage.unknownExerciseCount} exercises not in knowledge seed`)
   }
   if (!input.existingMethodSummary) {
     missingData.push('Method summary not provided')
@@ -898,12 +903,13 @@ export function analyzeProgramBalanceReadOnly(
     missingData.push('Recovery/readiness summary not provided')
   }
 
-  // Build proof
+  // Build proof - MASTER-8C.1: Added currentProgramKnowledgeCoverageComplete
   const proof: ProgramBalanceProof = {
     consumedKnowledgeSeed: true,
     consumedRepresentativeSeedOnly: true,
     fullKnowledgeBaseComplete: false,
     fullKnowledgeBaseDeferredTo: 'MASTER_8C',
+    currentProgramKnowledgeCoverageComplete: knowledgeCoverage.currentProgramCoverageComplete,
     consumedSelectedSkills: true,
     consumedProgramSessions: true,
     consumedCompletionState: input.sessions.some((s) => s.completed !== undefined),

@@ -39,6 +39,7 @@ import {
 
 /**
  * Critical exercise concepts that should be covered in the seed
+ * MASTER-8C.1: Expanded to cover common program exercises
  */
 const CRITICAL_EXERCISE_CONCEPTS = [
   'weighted_pull_up',
@@ -53,6 +54,22 @@ const CRITICAL_EXERCISE_CONCEPTS = [
   'hollow_body',
   'wall_hspu',
   'pike_pushup',
+  // MASTER-8C.1: Common program exercises
+  'pppu',
+  'elevated_pppu',
+  'adv_tuck_planche',
+  'adv_tuck_fl',
+  'chest_to_bar_pull_up',
+  'ring_dip',
+  'straight_bar_dip',
+  'explosive_pull_up',
+  'high_pulls',
+  'tuck_front_lever_pull',
+  'support_hold',
+  'pike_pushup_elevated',
+  'chin_up',
+  'archer_pull_up',
+  'tuck_planche_pushup',
 ] as const
 
 /**

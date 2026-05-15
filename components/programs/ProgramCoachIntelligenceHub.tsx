@@ -154,6 +154,11 @@ import {
   type MethodSlotEligibilityFrequencyPlan,
   type MethodFrequencyPreview,
 } from '@/lib/program/method-slot-eligibility-frequency-planner'
+// [MASTER-8C.9] Frequency-to-Slot Placement Preview
+import {
+  buildFrequencySlotPlacementPreview,
+  type FrequencySlotPlacementPreview,
+} from '@/lib/program/method-frequency-slot-placement-preview'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -4200,6 +4205,7 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
               <MethodFrequencyPreviewRow
                 key={method.canonicalKey}
                 method={method}
+                program={program}
                 selectedFrequency={selectedFrequencies[method.canonicalKey] ?? 0}
                 onFrequencySelect={(freq) => handleFrequencySelect(method.canonicalKey, freq)}
               />
@@ -4232,13 +4238,16 @@ function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFreq
 
 /**
  * Single method row in frequency preview
+ * [MASTER-8C.9] Now shows placement preview when frequency > 0 is selected
  */
 function MethodFrequencyPreviewRow({
   method,
+  program,
   selectedFrequency,
   onFrequencySelect,
 }: {
   method: MethodFrequencyPreview
+  program: unknown
   selectedFrequency: number
   onFrequencySelect: (freq: number) => void
 }) {
@@ -4255,6 +4264,20 @@ function MethodFrequencyPreviewRow({
     }
     return options
   }, [isSelectable, method.safeMaxFrequency])
+
+  // [MASTER-8C.9] Build placement preview when frequency > 0 is selected
+  const placementPreview = useMemo<FrequencySlotPlacementPreview | null>(() => {
+    if (selectedFrequency === 0 || !isSelectable) return null
+    return buildFrequencySlotPlacementPreview({
+      program,
+      methodKey: method.canonicalKey,
+      requestedFrequency: selectedFrequency,
+    })
+  }, [program, method.canonicalKey, selectedFrequency, isSelectable])
+
+  const showPlacementPreview = placementPreview && 
+    selectedFrequency > 0 && 
+    (placementPreview.status === 'preview_ready' || placementPreview.status === 'preview_ready_with_caution')
 
   return (
     <div className="p-2 rounded bg-[#1A1A22]/50 border border-[#2A2A35]/50">
@@ -4310,10 +4333,51 @@ function MethodFrequencyPreviewRow({
           {method.blockedReason}
         </p>
       )}
-      {!isBlocked && method.eligibleSlotCount > 0 && (
+      {!isBlocked && !showPlacementPreview && method.eligibleSlotCount > 0 && (
         <p className="text-[9px] text-[#5A5A6A] mt-1">
           {method.eligibleSessionCount} sessions · max {method.safeMaxFrequency}x/week
         </p>
+      )}
+
+      {/* [MASTER-8C.9] Placement preview when frequency > 0 selected */}
+      {showPlacementPreview && placementPreview && (
+        <div className="mt-2 pt-2 border-t border-[#2A2A35]/50 space-y-1.5">
+          {/* Preview header */}
+          <div className="flex items-center gap-1.5">
+            <Eye className="w-3 h-3 text-emerald-400" />
+            <span className="text-[9px] text-emerald-400 font-medium">
+              {placementPreview.targets.length} placement{placementPreview.targets.length !== 1 ? 's' : ''} proposed
+            </span>
+            <span className="text-[8px] text-[#5A5A6A]">· Preview only</span>
+          </div>
+
+          {/* Placement targets */}
+          {placementPreview.targets.map((target, i) => (
+            <div key={`${target.sessionId}-${i}`} className="pl-4 text-[9px]">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#9A9AAA] font-medium">{target.sessionLabel}</span>
+                <span className="text-[#6A6A7A]">—</span>
+                <span className="text-[#8A8A9A] truncate">{target.exerciseNames[0] ?? 'Unknown'}</span>
+              </div>
+              <p className="text-[8px] text-[#5A5A6A] mt-0.5">
+                {target.previewBefore} → {target.previewAfter}
+              </p>
+            </div>
+          ))}
+
+          {/* Caution warnings if any */}
+          {placementPreview.status === 'preview_ready_with_caution' && placementPreview.warnings.length > 0 && (
+            <div className="flex items-start gap-1.5 mt-1">
+              <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[8px] text-amber-300">{placementPreview.warnings[0]}</p>
+            </div>
+          )}
+
+          {/* Explicit no-mutation proof */}
+          <p className="text-[8px] text-[#4A4A5A] italic mt-1">
+            Not saved · No program changes · Existing saved methods are separate
+          </p>
+        </div>
       )}
     </div>
   )

@@ -492,7 +492,7 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
   },
 
   // -------------------------------------------------------------------------
-  // PROGRAM BALANCE — MASTER-8B.3 COMPLETE
+  // PROGRAM BALANCE — MASTER-8B.6 COMPLETE
   // -------------------------------------------------------------------------
   {
     id: 'program_balance',
@@ -503,21 +503,22 @@ const TRUE_SOURCE_REGISTRY: readonly TrueSourceRegistryEntry[] = [
       'lib/program/program-balance-readonly-analyzer.ts',
       'lib/program/program-balance-validation.ts',
       'lib/program/program-balance-ui-adapter.ts',
+      'lib/program/program-balance-future-planning.ts',
     ],
-    currentSourceSummary: 'MASTER-8B.4: Program Balance tile/sheet wired into Coach Intelligence Hub. Read-only analysis displayed. Consumes B2 representative seed (NOT complete database). Shows skill expression, movement family balance, weighted anchor status, tissue stress, future candidates (not applied). No mutation.',
+    currentSourceSummary: 'MASTER-8B.6: Future-session planning foundation added. Future Candidates now show detailed coach-readable plans: trigger/problem, proposed action, preservation guardrails, blocked reason, and data needed. Still read-only with no mutation.',
     futureRole: 'Detect planche under-expression, pull dominance, push/pull imbalance, weighted anchor absence, poor skill spacing, repeated same-family days',
     mutationAuthorityNow: 'none',
-    futureMutationStep: 'MASTER_8B_6',
+    futureMutationStep: 'MASTER_8B_7',
     uiSurfaces: ['coach_intelligence_hub'],
     dependsOnBranches: ['skill_map', 'adaptive_foundation', 'recovery_readiness', 'prehab_rehab_tendon_joint', 'exercise_skill_knowledge_base'],
-    consumedByBranches: [],
+    consumedByBranches: ['method_planner'],
     riskIfIgnored: 'The app creates boring or imbalanced programs',
     riskLevel: 'high',
-    safeInsertionPoint: 'MASTER_8B_5',
-    protectedBehaviors: ['Analyzer returns mutationAllowedNow: false', 'Knowledge coverage gaps reported honestly', 'UI shows read-only clearly'],
-    forbiddenNow: ['Generator mutation', 'Future-session writer', 'Program Card mutation', 'Live runtime consumption', 'Full database completion claim'],
-    maxIntentNotes: 'MASTER-8B.4 COMPLETE: Hub tile and sheet wired. Shows real B3 analysis read-only. B2 seed is REPRESENTATIVE ONLY (13 exercises, 8 skills). Next: MASTER-8B.5 Method Planner safe integration.',
-    nextAllowedAction: 'Method Planner safe integration in MASTER-8B.5',
+    safeInsertionPoint: 'MASTER_8B_7',
+    protectedBehaviors: ['Analyzer returns mutationAllowedNow: false', 'Knowledge coverage gaps reported honestly', 'UI shows read-only clearly', 'Future candidates show detailed planning but no apply button'],
+    forbiddenNow: ['Generator mutation', 'Future-session writer', 'Program Card mutation', 'Live runtime consumption', 'Full database completion claim', 'Apply Candidate button'],
+    maxIntentNotes: 'MASTER-8B.6 COMPLETE: Future-session planning foundation added. Candidates now show coach-readable plans with trigger, proposed action, preservation, blocked reason. Next: MASTER-8B.7 guarded user-confirmed future-session mutation writer design.',
+    nextAllowedAction: 'User-confirmed future-session mutation writer design in MASTER-8B.7',
     readiness: 'ready_for_read_only_consumption',
   },
 

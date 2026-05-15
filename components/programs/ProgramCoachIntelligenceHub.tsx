@@ -1000,6 +1000,28 @@ function getApplyButtonText(eligibility: MethodOverrideApplyEligibility): string
   }
   }
 
+// =============================================================================
+// [MASTER-8B.6.1] COACH INTELLIGENCE HUB — 8-TILE CONTRACT INVENTORY
+// =============================================================================
+// 
+// FROZEN TILE COUNT: 8 top-level tiles (do not add more without architecture review)
+//
+// 1. Skill Map — selected skills, direct/support/maintenance exposure, skill gaps
+// 2. Method Decisions — generated method logic and method decision truth
+// 3. Adaptive Foundation — readiness, constraints, tissue/joint/safeguard intelligence
+// 4. Calibration — benchmark/calibration evidence and test recommendations
+// 5. Coach Recs — evidence-derived coach recommendations
+// 6. Method Planner — protected method override planner and applied/native method state
+// 7. Plan Logic — truth explanation / rule population / goal family balance proof
+// 8. Program Balance — read-only skill/movement/anchor/tissue balance and future planning
+//
+// OUTSIDE SURFACE INVENTORY (for later consolidation):
+// - Keep near action path: Start Workout, Today Guidance, injury/substitution warnings
+// - Later consolidate into hub: FeedbackLoopProofCard, EvidenceCoachRecommendationCard,
+//   standalone CalibrationCheckpointCard, large proof/debug boxes, "why this plan" content
+//
+// =============================================================================
+
 interface ProgramCoachIntelligenceHubProps {
   program: AdaptiveProgram
   /** Selected skill representations for the skill map surface */
@@ -1043,6 +1065,8 @@ interface HubButtonProps {
   badgeVariant?: 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'info'
   onClick: () => void
   disabled?: boolean
+  /** [MASTER-8B.6.1] Shows muted styling but allows click to open empty-state sheet */
+  sourceUnavailable?: boolean
 }
 
 function HubButton({
@@ -1053,6 +1077,7 @@ function HubButton({
   badgeVariant = 'secondary',
   onClick,
   disabled = false,
+  sourceUnavailable = false,
 }: HubButtonProps) {
   const badgeClasses: Record<string, string> = {
     default: 'bg-[#E63946]/10 text-[#E63946] border-[#E63946]/20',
@@ -1062,6 +1087,9 @@ function HubButton({
     warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     info: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   }
+
+  // [MASTER-8B.6.1] sourceUnavailable shows muted styling but is still clickable
+  const isMuted = sourceUnavailable && !disabled
 
   return (
     <Button
@@ -1074,6 +1102,7 @@ function HubButton({
         'transition-all duration-200',
         'min-w-[140px] flex-1',
         disabled && 'opacity-50 cursor-not-allowed',
+        isMuted && 'opacity-60',
       )}
     >
       <div className="flex items-center gap-2 w-full">
@@ -3483,7 +3512,7 @@ function ProgramBalanceSheetContent({
 
       {/* Next Step */}
       <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
-        Next roadmap step after B4: MASTER-8B.5 Method Planner safe integration.
+        Current status: read-only planning foundation. Next gated step: MASTER-8B.7 guarded mutation-writer design.
       </div>
     </div>
   )
@@ -4554,20 +4583,24 @@ export function ProgramCoachIntelligenceHub({
             )
           })()}
 
+          {/* [MASTER-8B.6.1] Calibration — tappable with honest empty state when source unavailable */}
           <HubButton
             icon={<ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />}
             label="Calibration"
+            summary={calibrationInput ? undefined : 'View'}
             onClick={() => setCalibrationOpen(true)}
-            disabled={!calibrationInput}
+            sourceUnavailable={!calibrationInput}
           />
 
+          {/* [MASTER-8B.6.1] Coach Recs — tappable with honest empty state when no recommendations */}
           <HubButton
             icon={<Sparkles className="w-3.5 h-3.5 text-amber-400" />}
             label="Coach Recs"
             badge={hasCoachRecs ? 'Active' : undefined}
             badgeVariant={hasCoachRecs ? 'success' : 'secondary'}
+            summary={hasCoachRecs ? undefined : 'View'}
             onClick={() => setCoachRecsOpen(true)}
-            disabled={!hasCoachRecs}
+            sourceUnavailable={!hasCoachRecs}
           />
 
           {/* [P2B] Method Planner — clearer entry point, always visible */}
@@ -4580,13 +4613,13 @@ export function ProgramCoachIntelligenceHub({
             onClick={() => setRequestedMethodsOpen(true)}
           />
 
-          {/* [P2F-3] Plan Logic — surfaces ProgramTruthSummary content */}
+          {/* [MASTER-8B.6.1] Plan Logic — tappable with honest empty state when source unavailable */}
           <HubButton
             icon={<Info className="w-3.5 h-3.5 text-cyan-400" />}
             label="Plan Logic"
             summary="View"
             onClick={() => setPlanLogicOpen(true)}
-            disabled={!truthExplanation}
+            sourceUnavailable={!truthExplanation}
           />
 
           {/* [MASTER-8B.4] Program Balance — read-only balance analysis */}

@@ -321,6 +321,39 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
+### MASTER-8B.6.1 — Coach Intelligence Hub Contract Inventory + Disabled Tile Empty-State Stabilization
+
+**Status:** COMPLETE
+
+**Purpose:** Stabilize the 8-tile Coach Intelligence Hub architecture before mutation writer design.
+
+**What This Step Delivered:**
+- Froze hub at exactly 8 top-level tiles (no additions/removals)
+- Added tile contract inventory comment documenting each tile's responsibility
+- Made Calibration, Coach Recs, and Plan Logic tiles tappable with honest empty states
+- Added `sourceUnavailable` prop to HubButton for muted-but-clickable styling
+- Fixed stale Program Balance roadmap copy referencing B4/B5
+- Clarified Adaptive Foundation missing-data wording in analyzer
+- Documented outside surface inventory (keep near action path vs later consolidate)
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx` (tile contract, HubButton prop, stale copy fix)
+- `lib/program/program-balance-readonly-analyzer.ts` (Adaptive Foundation wording)
+
+**Constraints Preserved:**
+- Hub still has exactly 8 tiles
+- No mutation
+- Method Planner Applied 6 unchanged
+- Program Cards unchanged
+- Start Workout unchanged
+- Outside proof/action cards not deleted
+
+**Outside Surface Inventory:**
+- Keep near action path: Start Workout, Today Guidance, injury/substitution warnings
+- Later consolidate into hub: FeedbackLoopProofCard, EvidenceCoachRecommendationCard, CalibrationCheckpointCard, large proof boxes
+
+---
+
 ### MASTER-8B.7 — Guarded User-Confirmed Future-Session Mutation Writer Design
 
 **Status:** NOT STARTED

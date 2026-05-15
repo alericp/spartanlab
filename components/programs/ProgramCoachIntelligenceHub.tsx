@@ -47,12 +47,12 @@ import {
   ChevronUp,
   ChevronDown,
   AlertTriangle,
+  Info,
   CheckCircle2,
   XCircle,
   HelpCircle,
   ArrowRight,
   Eye,
-  Info,
   Loader2,
   Trash2,
   RefreshCw,
@@ -148,6 +148,12 @@ import {
   buildMethodContractSlotFrequencyInventory,
   type MethodContractInventoryRollup,
 } from '@/lib/program/method-contract-slot-frequency-inventory'
+// [MASTER-8C.8] Slot Eligibility & Frequency Preview
+import {
+  buildMethodSlotEligibilityFrequencyPlan,
+  type MethodSlotEligibilityFrequencyPlan,
+  type MethodFrequencyPreview,
+} from '@/lib/program/method-slot-eligibility-frequency-planner'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -4090,6 +4096,224 @@ function MethodContractFoundationSection() {
             Next: {inventory.safeNextStep}
           </p>
         </div>
+  )}
+  </div>
+  )
+}
+
+// =============================================================================
+// [MASTER-8C.8] SLOT ELIGIBILITY & FREQUENCY PREVIEW SECTION
+// =============================================================================
+
+interface SlotEligibilityFrequencyPreviewSectionProps {
+  program: unknown
+}
+
+/**
+ * Compact read-only section showing slot eligibility and frequency preview.
+ * This is preview-only — no mutation, no persistence, no program changes.
+ */
+function SlotEligibilityFrequencyPreviewSection({ program }: SlotEligibilityFrequencyPreviewSectionProps) {
+  const plan = useMemo<MethodSlotEligibilityFrequencyPlan>(() => {
+    return buildMethodSlotEligibilityFrequencyPlan(program)
+  }, [program])
+
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [selectedFrequencies, setSelectedFrequencies] = useState<Record<string, number>>({})
+
+  // Filter to only show actionable methods (not straight_sets, not inventory-only prescription modifiers)
+  const actionableMethods = useMemo(() => {
+    return plan.methods.filter(m => 
+      m.canonicalKey !== 'straight_sets' &&
+      m.canonicalKey !== 'prescription_rest' &&
+      m.canonicalKey !== 'prescription_rpe'
+    )
+  }, [plan.methods])
+
+  const handleFrequencySelect = (methodKey: string, freq: number) => {
+    // Local state only - does NOT persist or apply anything
+    setSelectedFrequencies(prev => ({
+      ...prev,
+      [methodKey]: freq
+    }))
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Header with expand toggle */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-emerald-400" />
+          <span className="text-xs font-medium text-[#E6E9EF]">Slot Eligibility & Frequency Preview</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-[#6A6A7A]">
+            {plan.previewSelectableMethodCount} selectable
+          </span>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-[#6A6A7A]" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[#6A6A7A]" />
+          )}
+        </div>
+      </button>
+
+      {/* Summary badges - always visible */}
+      <div className="flex flex-wrap gap-1.5">
+        <span className="px-2 py-0.5 text-[9px] rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+          Preview only
+        </span>
+        <span className="px-2 py-0.5 text-[9px] rounded border border-blue-500/20 bg-blue-500/10 text-blue-400">
+          Not saved
+        </span>
+        <span className="px-2 py-0.5 text-[9px] rounded border border-[#3A3A4A] bg-[#2A2A35] text-[#8A8A9A]">
+          {plan.eligibleMethodCount} eligible
+        </span>
+        {plan.blockedMethodCount > 0 && (
+          <span className="px-2 py-0.5 text-[9px] rounded border border-amber-500/20 bg-amber-500/10 text-amber-400">
+            {plan.blockedMethodCount} blocked
+          </span>
+        )}
+      </div>
+
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="pt-2 space-y-3 border-t border-[#2A2A35]">
+          {/* No program changes disclaimer */}
+          <div className="flex items-start gap-2 p-2 rounded bg-blue-500/5 border border-blue-500/20">
+            <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-blue-300 leading-relaxed">
+              <p className="font-medium">Preview only — no program changes applied</p>
+              <p className="text-blue-400/70 mt-0.5">
+                Frequency selections are local preview only. Nothing is saved or applied to your program.
+              </p>
+            </div>
+          </div>
+
+          {/* Method list */}
+          <div className="space-y-2">
+            {actionableMethods.map((method) => (
+              <MethodFrequencyPreviewRow
+                key={method.canonicalKey}
+                method={method}
+                selectedFrequency={selectedFrequencies[method.canonicalKey] ?? 0}
+                onFrequencySelect={(freq) => handleFrequencySelect(method.canonicalKey, freq)}
+              />
+            ))}
+          </div>
+
+          {/* Warnings */}
+          {plan.warnings.length > 0 && (
+            <div className="space-y-1.5">
+              {plan.warnings.slice(0, 3).map((warning, i) => (
+                <div key={i} className="flex items-start gap-2 p-1.5 rounded bg-amber-500/5 border border-amber-500/20">
+                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[9px] text-amber-300 leading-relaxed">{warning}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Mutation status */}
+          <div className="text-[9px] text-[#5A5A6A] space-y-0.5">
+            <p>Mutation ready: 0 methods</p>
+            <p>Selections persist: No</p>
+            <p>Program changed: No</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Single method row in frequency preview
+ */
+function MethodFrequencyPreviewRow({
+  method,
+  selectedFrequency,
+  onFrequencySelect,
+}: {
+  method: MethodFrequencyPreview
+  selectedFrequency: number
+  onFrequencySelect: (freq: number) => void
+}) {
+  const isBlocked = method.frequencyPreviewStatus === 'blocked' || 
+                    method.eligibilityStatus.startsWith('blocked_')
+  const isSelectable = method.userSelectableNow && !isBlocked
+
+  // Generate frequency options
+  const frequencyOptions = useMemo(() => {
+    if (!isSelectable) return []
+    const options: number[] = [0]
+    for (let i = 1; i <= method.safeMaxFrequency; i++) {
+      options.push(i)
+    }
+    return options
+  }, [isSelectable, method.safeMaxFrequency])
+
+  return (
+    <div className="p-2 rounded bg-[#1A1A22]/50 border border-[#2A2A35]/50">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] font-medium text-[#D6D9DF] truncate">
+            {method.displayLabel}
+          </span>
+          {isBlocked ? (
+            <span className="px-1.5 py-0.5 text-[8px] rounded border border-red-500/20 bg-red-500/10 text-red-400 shrink-0">
+              Blocked
+            </span>
+          ) : method.eligibilityStatus === 'eligible_with_caution' ? (
+            <span className="px-1.5 py-0.5 text-[8px] rounded border border-amber-500/20 bg-amber-500/10 text-amber-400 shrink-0">
+              Caution
+            </span>
+          ) : method.eligibilityStatus === 'eligible' ? (
+            <span className="px-1.5 py-0.5 text-[8px] rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shrink-0">
+              Eligible
+            </span>
+          ) : null}
+        </div>
+
+        {/* Frequency chips or blocked reason */}
+        {isSelectable ? (
+          <div className="flex items-center gap-1 shrink-0">
+            {frequencyOptions.map((freq) => (
+              <button
+                key={freq}
+                type="button"
+                onClick={() => onFrequencySelect(freq)}
+                className={cn(
+                  'px-2 py-0.5 text-[9px] rounded transition-colors',
+                  selectedFrequency === freq
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    : 'bg-[#2A2A35] text-[#8A8A9A] border border-[#3A3A4A] hover:border-[#4A4A5A]'
+                )}
+              >
+                {freq}x
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-[9px] text-[#6A6A7A] shrink-0">
+            {method.eligibleSessionCount}/{method.eligibleSlotCount > 0 ? method.eligibleSlotCount : '-'} slots
+          </span>
+        )}
+      </div>
+
+      {/* Blocked reason or stats */}
+      {isBlocked && method.blockedReason && (
+        <p className="text-[9px] text-[#6A6A7A] mt-1 truncate">
+          {method.blockedReason}
+        </p>
+      )}
+      {!isBlocked && method.eligibleSlotCount > 0 && (
+        <p className="text-[9px] text-[#5A5A6A] mt-1">
+          {method.eligibleSessionCount} sessions · max {method.safeMaxFrequency}x/week
+        </p>
       )}
     </div>
   )
@@ -4681,12 +4905,17 @@ function RequestedMethodsSheetContent({
       </div>
       )}
 
-      {/* [MASTER-8C.7] Method Contract Foundation Section */}
-      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
-        <MethodContractFoundationSection />
-      </div>
+{/* [MASTER-8C.7] Method Contract Foundation Section */}
+  <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+  <MethodContractFoundationSection />
+  </div>
 
-      {/* [AB20.4.2] Reset All Overrides Section */}
+  {/* [MASTER-8C.8] Slot Eligibility & Frequency Preview Section */}
+  <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+  <SlotEligibilityFrequencyPreviewSection program={program} />
+  </div>
+  
+  {/* [AB20.4.2] Reset All Overrides Section */}
       {onResetAllMethodOverrides && (
         <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
           {/* Reset All Result Banner */}

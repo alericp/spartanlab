@@ -25,6 +25,7 @@ import type {
   ProgramBalanceSessionInput,
   ProgramBalanceExerciseInput,
 } from './program-balance-intelligence-contract'
+import { isSyntheticConditioningFinisherPlaceholder } from './conditioning-finisher-artifact-contract'
 
 // =============================================================================
 // SAFE TYPE GUARDS
@@ -293,6 +294,11 @@ function extractSessionInput(session: unknown, index: number): ProgramBalanceSes
   const exercisesRaw = isValidArray(sess.exercises) ? sess.exercises : []
   const exercises: ProgramBalanceExerciseInput[] = []
   for (let i = 0; i < exercisesRaw.length; i++) {
+    // [MASTER-8C.4.G.1] Skip synthetic conditioning finisher placeholders
+    // These are method artifacts, not real exercises, and should not be analyzed
+    if (isSyntheticConditioningFinisherPlaceholder(exercisesRaw[i])) {
+      continue
+    }
     const extracted = extractExerciseInput(exercisesRaw[i], i)
     if (extracted) {
       exercises.push(extracted)

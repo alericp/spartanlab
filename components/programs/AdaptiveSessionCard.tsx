@@ -54,7 +54,7 @@ import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle,
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { isSyntheticConditioningFinisherPlaceholder } from '@/lib/program/conditioning-finisher-artifact-contract'
-import { extractSessionProofFromMetadata } from '@/lib/program/generator-knowledge-consumption-proof'
+import { resolveSessionGeneratorKnowledgeProofFromSession } from '@/lib/program/generator-knowledge-consumption-proof'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
 import {
   SessionHeader,
@@ -3400,8 +3400,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       )}
 
                       {/* [MASTER-8C.6] Generator DB Knowledge Proof */}
+                      {/* [MASTER-8C.6.2] Uses resolver that can backfill from saved exercises */}
                       {(() => {
-                        const sessionProof = extractSessionProofFromMetadata(session.styleMetadata)
+                        const sessionProof = resolveSessionGeneratorKnowledgeProofFromSession(session)
                         if (!sessionProof || sessionProof.verdict === 'unavailable') return null
                         return (
                           <div data-master-8c6-proof="true">

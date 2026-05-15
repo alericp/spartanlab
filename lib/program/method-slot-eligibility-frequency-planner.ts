@@ -20,6 +20,14 @@ import {
   type MethodSupportStatus,
 } from './method-contract-slot-frequency-inventory'
 import { isSyntheticConditioningFinisherPlaceholder } from './conditioning-finisher-artifact-contract'
+// [MASTER-8C.10.2] Import occupancy ledger for capacity tracking
+import {
+  buildMethodSlotOccupancyLedger,
+  buildCapacitySummary,
+  buildMethodBlockedReason,
+  countSessionsWithAvailableRowMethodSlots,
+  type MethodSlotOccupancyLedger,
+} from './method-slot-occupancy-ledger'
 
 // =============================================================================
 // TYPES
@@ -98,6 +106,13 @@ export interface MethodFrequencyPreview {
   readonly frequencyPreviewStatus: MethodFrequencyPreviewStatus
   readonly eligibleSlotCount: number
   readonly eligibleSessionCount: number
+  // [MASTER-8C.10.2] Capacity tracking fields
+  readonly totalTrainingRowCount: number
+  readonly availableRowCount: number
+  readonly occupiedByRowMethodCount: number
+  readonly occupiedByGroupedMethodCount: number
+  readonly sessionsWithAvailableSlots: number
+  readonly capacitySummary: string
   readonly safeMinFrequency: number
   readonly safeDefaultFrequency: number
   readonly safeMaxFrequency: number
@@ -621,10 +636,12 @@ function scoreSessionForRowLevelMethod(
 
 /**
  * Builds frequency preview for a single method
+ * [MASTER-8C.10.2] Now uses occupancy ledger for accurate capacity tracking
  */
 function buildMethodFrequencyPreview(
   item: MethodContractInventoryItem,
-  sessions: MinimalSession[]
+  sessions: MinimalSession[],
+  ledger: MethodSlotOccupancyLedger
 ): MethodFrequencyPreview {
   const proofLines: string[] = []
   const cautionReasons: string[] = []
@@ -636,6 +653,10 @@ function buildMethodFrequencyPreview(
   let safeDefaultFrequency = 0
   let safeMaxFrequency = 0
   let userSelectableNow = false
+  
+  // [MASTER-8C.10.2] Get capacity from ledger
+  const capacitySummary = buildCapacitySummary(ledger)
+  const sessionsWithAvailableSlots = countSessionsWithAvailableRowMethodSlots(ledger)
   
   // Check contract readiness first
   if (item.currentSupportStatus === 'blocked_until_materialized_prescription') {
@@ -730,8 +751,10 @@ function buildMethodFrequencyPreview(
     } else if (eligibilityStatus !== 'inventory_only') {
       eligibilityStatus = 'blocked_no_safe_slot'
       frequencyPreviewStatus = 'blocked'
-      blockedReason = 'No safe slots found in current program'
+      // [MASTER-8C.10.2] Use ledger for detailed blocked reason
+      blockedReason = buildMethodBlockedReason(ledger, item.canonicalKey)
       proofLines.push('No eligible slots found')
+      proofLines.push(capacitySummary)
     }
   }
   
@@ -753,6 +776,13 @@ function buildMethodFrequencyPreview(
     frequencyPreviewStatus,
     eligibleSlotCount: eligibleSlots.length,
     eligibleSessionCount,
+    // [MASTER-8C.10.2] Capacity tracking fields
+    totalTrainingRowCount: ledger.totalTrainingRowCount,
+    availableRowCount: ledger.totalAvailableForRowMethodCount,
+    occupiedByRowMethodCount: ledger.totalOccupiedByRowMethodCount,
+    occupiedByGroupedMethodCount: ledger.totalOccupiedByGroupedMethodCount,
+    sessionsWithAvailableSlots,
+    capacitySummary,
     safeMinFrequency,
     safeDefaultFrequency,
     safeMaxFrequency,
@@ -796,10 +826,13 @@ export function buildMethodSlotEligibilityFrequencyPlan(
     }
   }
   
+  // [MASTER-8C.10.2] Build occupancy ledger for capacity tracking
+  const ledger = buildMethodSlotOccupancyLedger(program)
+  
   // Build frequency preview for each method
   const methods: MethodFrequencyPreview[] = []
   for (const item of inventory.items) {
-    const preview = buildMethodFrequencyPreview(item, sessions)
+    const preview = buildMethodFrequencyPreview(item, sessions, ledger)
     methods.push(preview)
   }
   

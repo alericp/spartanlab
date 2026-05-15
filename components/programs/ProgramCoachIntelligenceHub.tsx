@@ -4384,13 +4384,21 @@ function MethodFrequencyPreviewRow({
 
       {/* Blocked reason or stats */}
       {isBlocked && method.blockedReason && (
-        <p className="text-[9px] text-[#6A6A7A] mt-1 truncate">
-          {method.blockedReason}
-        </p>
+        <div className="mt-1 space-y-0.5">
+          <p className="text-[9px] text-[#6A6A7A] truncate">
+            {method.blockedReason}
+          </p>
+          {/* [MASTER-8C.10.2] Show capacity summary for context */}
+          {method.capacitySummary && (
+            <p className="text-[8px] text-[#5A5A6A]">
+              {method.capacitySummary}
+            </p>
+          )}
+        </div>
       )}
       {!isBlocked && !showPlacementPreview && method.eligibleSlotCount > 0 && (
         <p className="text-[9px] text-[#5A5A6A] mt-1">
-          {method.eligibleSessionCount} sessions · max {method.safeMaxFrequency}x/week
+          {method.capacitySummary || `${method.eligibleSessionCount} sessions · max ${method.safeMaxFrequency}x/week`}
         </p>
       )}
 

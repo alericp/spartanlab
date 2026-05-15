@@ -2,9 +2,29 @@
  * Active Week Mutation Service
  * 
  * =============================================================================
- * PHASE 13: ACTIVE WEEK MUTATION LAYER
+ * LEGACY PHASE 13: ACTIVE WEEK MUTATION LAYER
  * =============================================================================
  * 
+ * ⚠️ MASTER-8B.7 QUARANTINE NOTICE ⚠️
+ * 
+ * This is the LEGACY Phase 13 frequency/schedule mutation service.
+ * It is NOT the official MASTER-8B.7 guarded user-confirmed mutation writer.
+ * 
+ * IMPORTANT DISTINCTIONS:
+ * - This service auto-evaluates after workout logging (unguarded)
+ * - MASTER-8B.7 requires user confirmation before any mutation
+ * - This service is frequency/schedule level, not Program Balance candidate level
+ * - MASTER-8B.7 will use typed FutureSessionMutationDesignPreview contracts
+ * - This service can persist directly to localStorage (side-effect)
+ * - MASTER-8B.7 writer will be gated and require explicit apply action
+ * 
+ * QUARANTINE STATUS: DISABLED
+ * The auto-mutation path is gated behind LEGACY_PHASE13_AUTO_MUTATION_ENABLED.
+ * While disabled, workout logging still works but no automatic session removal
+ * or frequency changes occur. The official MASTER-8B.7 writer contract will
+ * provide the safe, user-confirmed mutation path.
+ * 
+ * Original Purpose:
  * This service provides safe mid-week mutation of the active program's
  * remaining sessions based on workout feedback, without requiring a full
  * program regeneration.
@@ -16,6 +36,13 @@
  * - All changes are traceable
  * - No silent schedule changes
  */
+
+/**
+ * [MASTER-8B.7] Legacy auto-mutation gate.
+ * When false, evaluateActiveWeekMutation() will not persist changes or remove sessions.
+ * The official MASTER-8B.7 writer contract will provide the guarded mutation path.
+ */
+export const LEGACY_PHASE13_AUTO_MUTATION_ENABLED = false
 
 import { buildTrainingFeedbackSummary, hasEnoughDataForAdaptation, type TrainingFeedbackSummary } from './training-feedback-loop'
 import { getWorkoutLogs } from './workout-log-service'
@@ -120,6 +147,43 @@ export function evaluateActiveWeekMutation(
   completedSessionDayNumbers: number[]
 ): ActiveWeekMutationResult {
   const mutationTimestamp = new Date().toISOString()
+  
+  // [MASTER-8B.7] Legacy auto-mutation is quarantined
+  // Return early with no mutation while MASTER-8B.7 writer is being designed
+  if (!LEGACY_PHASE13_AUTO_MUTATION_ENABLED) {
+    console.log('[phase13-quarantine] Legacy auto-mutation disabled in MASTER-8B.7 design gate')
+    
+    const sessions = program.sessions || []
+    const futureSessions = sessions.filter(s => 
+      !completedSessionDayNumbers.includes(s.dayNumber)
+    )
+    
+    return {
+      applied: false,
+      reasonCategory: 'no_mutation_needed',
+      mutationType: 'none',
+      previousWeekFrequency: program.currentWeekFrequency || sessions.length,
+      nextWeekFrequency: program.currentWeekFrequency || sessions.length,
+      previousFutureSessionCount: futureSessions.length,
+      nextFutureSessionCount: futureSessions.length,
+      previousFutureSessionOrder: futureSessions.map(s => ({
+        sessionId: `session_${s.dayNumber}`,
+        dayNumber: s.dayNumber,
+        focus: s.focus,
+        isCompleted: false,
+      })),
+      nextFutureSessionOrder: futureSessions.map(s => ({
+        sessionId: `session_${s.dayNumber}`,
+        dayNumber: s.dayNumber,
+        focus: s.focus,
+        isCompleted: false,
+      })),
+      noticePayload: null,
+      skippedReason: 'Legacy auto-mutation quarantined in MASTER-8B.7 design gate',
+      persisted: false,
+      mutationTimestamp,
+    }
+  }
   
   console.log('[phase13-post-workout-chain-audit]', {
     workoutCompletionTriggerSource: 'quickLogWorkout',
@@ -622,8 +686,15 @@ function savePendingNotice(notice: ScheduleChangeNotice): void {
 /**
  * Get pending schedule change notice (if any) and clear it.
  * Called by the program display to show one-time notices.
+ * 
+ * [MASTER-8B.7] Returns null while legacy auto-mutation is quarantined.
+ * Stale notices from previous sessions should not surface as current truth.
  */
 export function consumePendingScheduleNotice(): ScheduleChangeNotice | null {
+  // [MASTER-8B.7] Don't surface stale legacy notices while writer is disabled
+  if (!LEGACY_PHASE13_AUTO_MUTATION_ENABLED) {
+    return null
+  }
   if (typeof window === 'undefined') return null
   
   try {

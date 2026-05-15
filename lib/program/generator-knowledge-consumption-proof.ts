@@ -22,6 +22,7 @@
 
 import type { GeneratorKnowledgeConsumptionSummary } from '@/lib/exercise-knowledge-generator-bridge'
 import { buildGeneratorKnowledgeConsumptionSummary } from '@/lib/exercise-knowledge-generator-bridge'
+import { isSyntheticConditioningFinisherPlaceholder } from './conditioning-finisher-artifact-contract'
 
 // =============================================================================
 // SESSION-LEVEL PROOF
@@ -234,7 +235,7 @@ export function extractSessionProofFromMetadata(
 }
 
 // =============================================================================
-// SAVED PROGRAM BACKFILL RESOLVER — MASTER-8C.6.2
+// SAVED PROGRAM BACKFILL RESOLVER — MASTER-8C.6.2 + MASTER-8C.6.3
 // =============================================================================
 
 /**
@@ -246,11 +247,57 @@ interface MinimalExercise {
 }
 
 /**
+ * MASTER-8C.6.3: Determines if an exercise row is a real analyzable exercise
+ * for Generator DB Consumption backfill purposes.
+ * 
+ * This mirrors the filtering logic used by Program Balance UI Adapter to ensure
+ * count parity between Coverage Summary and Generator DB Consumption.
+ * 
+ * Excludes:
+ * - Synthetic conditioning finisher placeholders
+ * - Group/circuit headers (no real exercise identity)
+ * - Empty/invalid exercise rows
+ */
+function isGeneratorKnowledgeBackfillAnalyzableExercise(ex: unknown): boolean {
+  if (!ex || typeof ex !== 'object') return false
+  
+  const exercise = ex as Record<string, unknown>
+  
+  // [MASTER-8C.6.3.1] Skip synthetic conditioning finisher placeholders
+  // These are method artifacts, not real exercises
+  if (isSyntheticConditioningFinisherPlaceholder(exercise)) {
+    return false
+  }
+  
+  // Must have at least an id or name to be analyzable
+  const id = exercise.id
+  const name = exercise.name
+  const hasId = typeof id === 'string' && id.trim().length > 0
+  const hasName = typeof name === 'string' && name.trim().length > 0
+  
+  if (!hasId && !hasName) {
+    return false
+  }
+  
+  // Skip generic group/circuit container rows without real exercise identity
+  const nameStr = typeof name === 'string' ? name.toLowerCase().trim() : ''
+  if (nameStr === 'circuit' || nameStr === 'group' || nameStr === 'superset') {
+    return false
+  }
+  
+  // Passed all checks - this is a real analyzable exercise
+  return true
+}
+
+/**
  * Resolve session generator knowledge proof from a session object
  * 
  * Priority:
  * 1. Use existing native metadata proof if present and valid
  * 2. Fall back to deriving proof from session exercises via knowledge bridge
+ * 
+ * MASTER-8C.6.3: Backfill now filters to real analyzable exercises only,
+ * matching Program Balance Coverage's filtering logic for count parity.
  * 
  * This is read-only and does not mutate the session.
  */
@@ -280,8 +327,14 @@ export function resolveSessionGeneratorKnowledgeProofFromSession(
     return null
   }
   
+  // [MASTER-8C.6.3] Filter to real analyzable exercises only
+  // This mirrors Program Balance UI Adapter's filtering for count parity
+  const rawCount = exercises.length
+  const analyzableExercises = exercises.filter(isGeneratorKnowledgeBackfillAnalyzableExercise)
+  const skippedCount = rawCount - analyzableExercises.length
+  
   // Convert to minimal exercise shape for knowledge bridge
-  const minimalExercises: MinimalExercise[] = exercises
+  const minimalExercises: MinimalExercise[] = analyzableExercises
     .filter((ex): ex is Record<string, unknown> => ex && typeof ex === 'object')
     .map(ex => ({
       id: typeof ex.id === 'string' ? ex.id : '',
@@ -325,9 +378,16 @@ export function resolveSessionGeneratorKnowledgeProofFromSession(
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('[MASTER-8C.6.2-GENERATOR-PROOF-BACKFILL]', {
-      hadNativeMetadataProof: false,
-      exerciseCount: minimalExercises.length,
+    // [MASTER-8C.6.3] Enhanced diagnostic with artifact filtering info
+    const skippedExercises = exercises.filter(ex => !isGeneratorKnowledgeBackfillAnalyzableExercise(ex))
+    console.log('[MASTER-8C.6.3-GENERATOR-PROOF-COUNT-PARITY]', {
+      rawExerciseCount: rawCount,
+      keptExerciseCount: analyzableExercises.length,
+      skippedExerciseCount: skippedCount,
+      skippedExerciseNames: skippedExercises
+        .filter((ex): ex is Record<string, unknown> => ex && typeof ex === 'object')
+        .map(ex => ex.name)
+        .filter(Boolean),
       matchedExerciseCount: summary.matchedCount,
       missingExerciseCount: summary.missingCount,
       verdict: summary.verdict,

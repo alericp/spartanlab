@@ -3034,7 +3034,7 @@ function ProgramBalanceSheetContent({
           No program changes applied &mdash; this is a read-only analysis.
         </p>
         <p className="text-[10px] text-[#5A5A6A] mt-1">
-          Partial science seed ({result.knowledgeCoverageSummary.sourceCounts?.fullScienceSeedTotal ?? result.knowledgeMatchedExerciseCount} entries) &mdash; full DB expansion continues
+          Full coaching science: {result.knowledgeCoverageSummary.sourceCounts?.fullScienceSeedTotal ?? result.knowledgeMatchedExerciseCount} exercises | App pool: {result.knowledgeCoverageSummary.sourceCounts?.adaptivePoolTotal ?? '~130'} exercises
         </p>
       </div>
 
@@ -3084,28 +3084,24 @@ function ProgramBalanceSheetContent({
             <p className="text-sm font-medium text-[#E6E9EF]">{result.analyzedExerciseCount}</p>
           </div>
           <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
-            <span className="text-[10px] text-[#5A5A6A]">Known</span>
+            <span className="text-[10px] text-[#5A5A6A]">Full Science</span>
             <p className="text-sm font-medium text-emerald-400">{result.knowledgeMatchedExerciseCount}</p>
           </div>
           <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
-            <span className="text-[10px] text-[#5A5A6A]">Unknown</span>
+            <span className="text-[10px] text-[#5A5A6A]">Need Science</span>
             <p className="text-sm font-medium text-amber-400">{result.knowledgeMissingExerciseCount}</p>
           </div>
         </div>
         {result.knowledgeMissingExerciseCount > 0 && (
           <div className="text-[10px] text-[#5A5A6A] mt-2 space-y-0.5">
-            {/* MASTER-8C.1.2: Show identity coverage breakdown instead of stale "13-entry" copy */}
+            {/* MASTER-8C.2: Improved coverage messaging */}
             {result.knowledgeCoverageSummary.trulyUnknownCount !== undefined && result.knowledgeCoverageSummary.trulyUnknownCount > 0 ? (
               <p>{result.knowledgeCoverageSummary.trulyUnknownCount} exercise(s) not found in any app source.</p>
             ) : result.knowledgeCoverageSummary.basicIdentityKnownCount !== undefined && result.knowledgeCoverageSummary.basicIdentityKnownCount > 0 ? (
-              <p>{result.knowledgeCoverageSummary.basicIdentityKnownCount} exercise(s) found in app pool but lack full science coverage.</p>
+              <p>{result.knowledgeMissingExerciseCount} exercise(s) in app pool need full coaching science entries.</p>
             ) : (
-              <p>Some exercises lack full Program Balance science entries. Findings may understate total balance/stress.</p>
+              <p>{result.knowledgeMissingExerciseCount} exercise(s) need full coaching science entries for safe mutation.</p>
             )}
-            <p className="text-[9px] text-[#4A4A5A]">
-              Full science DB: {result.knowledgeCoverageSummary.sourceCounts?.fullScienceSeedTotal ?? result.knowledgeMatchedExerciseCount} entries | 
-              App pool: {result.knowledgeCoverageSummary.sourceCounts?.adaptivePoolTotal ?? '~130'} exercises
-            </p>
           </div>
         )}
       </div>

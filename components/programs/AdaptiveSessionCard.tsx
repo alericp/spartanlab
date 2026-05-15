@@ -53,6 +53,7 @@ import {
 import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell, TrendingUp, ArrowDown, Pause } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
+import { isSyntheticConditioningFinisherPlaceholder } from '@/lib/program/conditioning-finisher-artifact-contract'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
 import {
   SessionHeader,
@@ -730,9 +731,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     reset: resetSession,
     save: saveSession,
   } = workoutSession
-
+  
   // Count RPE-enabled exercises - [PHASE 10] Safe access with fallback
-  const safeExercises = Array.isArray(session.exercises) ? session.exercises : []
+  // [MASTER-8C.4.G.1] Filter out synthetic conditioning finisher placeholders from display
+  const rawExercises = Array.isArray(session.exercises) ? session.exercises : []
+  const safeExercises = rawExercises.filter((e) => !isSyntheticConditioningFinisherPlaceholder(e))
   const rpeExerciseCount = safeExercises.filter((e) => exerciseSupportsRPE(e.name)).length
 
   // ==========================================================================

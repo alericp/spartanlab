@@ -25,6 +25,7 @@
 
 import type { RequestedMethodDisplayItem, RequestedMethodState } from '@/components/programs/ProgramCoachIntelligenceHub'
 import type { AdaptiveProgram, AdaptiveSession } from '@/lib/adaptive-program-builder'
+import { isSyntheticConditioningFinisherPlaceholder } from './conditioning-finisher-artifact-contract'
 
 // =============================================================================
 // TYPES
@@ -3655,6 +3656,10 @@ export function collectMethodOverrideArtifacts(program: AdaptiveProgram | null):
         isFinisher?: boolean
       }
       
+      // [MASTER-8C.4.G.1] Skip synthetic conditioning finisher placeholders
+      // These are method artifacts, not real applied methods, and should not be counted
+      if (isSyntheticConditioningFinisherPlaceholder(exercise)) continue
+      
       // Only count as artifact if methodOverrideApplied is true
       if (!exercise.methodOverrideApplied) continue
       
@@ -3869,53 +3874,40 @@ function applyEnduranceConditioningFinisher(args: {
   isForceOverride?: boolean
   severityLevel?: string
 }): MethodOverrideApplyResult {
-  const { updatedProgram, targetSession, primaryTarget, capability, isForceOverride, severityLevel } = args
+  const { updatedProgram, targetSession, capability } = args
 
-  // [AB20.4.5.2] FIX: Add method field for renderability check in collectMethodOverrideArtifacts
-  // The artifact collector checks for setExecutionMethod OR method - finishers use method
-  const finisherExercise = {
-    name: 'Conditioning Finisher',
-    sets: 1, // NUMERIC, not '1' string - required by saveAdaptiveProgram validation
-    reps: '5-8 min',
-    notes: 'Low-moderate intensity sustained work. Choose: row, bike, jump rope, or bodyweight circuit.',
-    trainingMethod: 'endurance_density',
-    // [AB20.4.5.2] CRITICAL: method field enables artifact renderability detection
-    method: 'endurance_density',
-    methodLabel: 'Endurance/Conditioning Finisher',
-    methodOverrideApplied: true,
-    methodOverrideMethodKey: 'endurance_density',
-    methodOverrideAppliedAt: new Date().toISOString(),
-    methodOverrideCanRevert: true,
-    methodRationale: 'Conditioning finisher added via Method Override Planner',
-    methodInstructions: METHOD_INSTRUCTIONS.endurance_density.instruction,
-    methodRiskNote: METHOD_INSTRUCTIONS.endurance_density.riskNote,
-    // [AB20.4.4] Severity tracking
-    methodOverrideApplyMode: isForceOverride ? 'force_override' : 'normal',
-    methodOverrideSeverityLevel: severityLevel || 'recommended',
-    methodOverrideUserForced: isForceOverride || false,
-    // [AB20.4.5.2] Finisher-specific fields for Program UI and artifact detection
-    isFinisher: true,
-    category: 'conditioning',
-  }
+  // [MASTER-8C.4.G.1] BLOCKED: Conditioning finisher is a method, not an exercise.
+  // Do NOT create a fake exercise row. The full finisher decision engine is deferred.
+  // Instead, store the intent in styleMetadata for future implementation.
+  
+  const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${args.primaryTarget.sessionIndex + 1}`
 
-  if (!targetSession.exercises) targetSession.exercises = []
-  // Cast finisher exercise to match the array type via unknown
-  targetSession.exercises.push(finisherExercise as unknown as typeof targetSession.exercises[number])
-
-  // Use type assertion for dynamic styleMetadata properties
+  // Store finisher intent in styleMetadata only (not as a fake exercise row)
   const styleMetadata = (targetSession.styleMetadata || {}) as Record<string, unknown>
-  styleMetadata.hasFinisher = true
-  if (!styleMetadata.appliedMethods) styleMetadata.appliedMethods = []
-  const appliedMethods = styleMetadata.appliedMethods as string[]
-  if (!appliedMethods.includes('endurance_density')) appliedMethods.push('endurance_density')
-  if (!styleMetadata.methodOverrideRowApplications) styleMetadata.methodOverrideRowApplications = []
-  const rowApplications = styleMetadata.methodOverrideRowApplications as Array<{ methodKey: string; exerciseIndex: number; exerciseName: string; appliedAt: string; userForced?: boolean; severityLevel?: string }>
-  rowApplications.push({ methodKey: 'endurance_density', exerciseIndex: targetSession.exercises.length - 1, exerciseName: 'Conditioning Finisher', appliedAt: new Date().toISOString(), userForced: isForceOverride, severityLevel })
+  styleMetadata.conditioningFinisherIntent = {
+    methodKey: 'endurance_density',
+    status: 'blocked_no_real_prescription',
+    reason: 'Conditioning finisher requires a real selected modality/exercise prescription before rendering.',
+    requestedAt: new Date().toISOString(),
+    mutationApplied: false,
+    exerciseRowCreated: false,
+  }
   ;(targetSession as unknown as Record<string, unknown>).styleMetadata = styleMetadata
 
-  const dayLabel = targetSession.focusLabel || targetSession.focus || `Day ${primaryTarget.sessionIndex + 1}`
-  const forceSuffix = isForceOverride ? ' (forced override)' : ''
-  return { status: 'success', updatedProgram, visibleSummary: `${capability.displayLabel} finisher added to ${dayLabel}${forceSuffix}`, evidence: [`Method: ${capability.displayLabel}`, `Session: ${dayLabel}`, `Added: Conditioning Finisher (5-8 min)`, `Position: End of session`, `Apply mode: ${isForceOverride ? 'force_override' : 'normal'}`], reasonCode: 'applied_row_level_override' }
+  // Return blocked status - no fake exercise row was added
+  return {
+    status: 'blocked',
+    updatedProgram,
+    visibleSummary: `Conditioning finisher not applied to ${dayLabel} — no real finisher prescription exists yet`,
+    evidence: [
+      'Conditioning finisher is a method, not an exercise.',
+      'No real modality/exercise prescription was selected.',
+      'No fake exercise row was added.',
+      'Future finisher decision engine is deferred.',
+      'Program exercises were not changed.',
+    ],
+    reasonCode: 'no_candidate',
+  }
 }
 
 // =============================================================================

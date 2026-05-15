@@ -119,6 +119,11 @@ import {
   hasActionableInjuryAdvisory,
   getRecommendationsForSession,
 } from '@/lib/program/injury-substitution-advisory'
+// [MASTER-8B.7.1] Future session mutation plan markers
+import {
+  type FutureSessionMutationPlanBundle,
+  loadMutationPlans,
+} from '@/lib/program/future-session-mutation-apply-contract'
 // [W.W9] Unified recovery/injury/substitution coaching integration
 import {
   deriveRecoveryInjurySubstitutionCoaching,
@@ -480,6 +485,13 @@ export function AdaptiveProgramDisplay({
   
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
+  
+  // [MASTER-8B.7.1] Mutation plan bundle for Program Card markers
+  const [mutationPlanBundle, setMutationPlanBundle] = useState<FutureSessionMutationPlanBundle | null>(null)
+  useEffect(() => {
+    const bundle = loadMutationPlans()
+    setMutationPlanBundle(bundle)
+  }, [])
   
   // [WEEK-ADVANCEMENT] Week progression state for advancing to next week
   // [AUTHORITATIVE-WEEK-FIX] Initialize synchronously from persisted state to avoid hydration flash
@@ -3091,6 +3103,24 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 ) : null}
+                {/* [MASTER-8B.7.1] Mutation Plan Marker — shows when a confirmed plan targets this day */}
+                {mutationPlanBundle?.plansByTargetDay?.[session.dayNumber] && !isCompleted && (
+                  <div className="mb-2 p-2 rounded-lg bg-cyan-500/5 border border-cyan-500/20">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                        <CheckCircle2 className="w-3 h-3 text-cyan-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-medium text-cyan-400 truncate">
+                          Mutation plan confirmed
+                        </p>
+                        <p className="text-[9px] text-[#6A6A7A]">
+                          {mutationPlanBundle.plansByTargetDay[session.dayNumber]?.sourceCandidateHeadline} — marker only, workout structure unchanged
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 <AdaptiveSessionCard
   session={session}
   programId={program.id}

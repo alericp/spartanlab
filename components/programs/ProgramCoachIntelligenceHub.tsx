@@ -113,6 +113,13 @@ import type {
   ProgramBalanceSeverity,
 } from '@/lib/program/program-balance-intelligence-contract'
 import {
+  type FutureSessionMutationPlanBundle,
+  type ConfirmedFutureSessionMutationPlan,
+  loadMutationPlans,
+  addConfirmedPlan,
+  createConfirmedPlan,
+} from '@/lib/program/future-session-mutation-apply-contract'
+import {
   buildProgramBalanceBranchInputFromProgram,
   extractSelectedSkillIdsFromRepresentations,
 } from '@/lib/program/program-balance-ui-adapter'
@@ -3487,6 +3494,25 @@ function ProgramBalanceSheetContent({
                         Program cards unchanged · Live workout later (8B.8)
                       </p>
                     </div>
+                    
+                    {/* [MASTER-8B.7.1] Preview Mutation Plan Button */}
+                    <div className="pt-2 border-t border-[#1A1A22]">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-7 text-[10px] bg-cyan-500/5 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30"
+                        onClick={() => {
+                          setSelectedCandidateForPreview({
+                            index: idx,
+                            candidate,
+                            plan,
+                          })
+                          setShowMutationPreviewConfirm(true)
+                        }}
+                      >
+                        Preview mutation plan
+                      </Button>
+                    </div>
                   </div>
                 )
               })}
@@ -3517,13 +3543,156 @@ function ProgramBalanceSheetContent({
           </ul>
         </div>
       )}
-
-      {/* Next Step — MASTER-8B.7 Status */}
+      
+      {/* Next Step — MASTER-8B.7.1 Status */}
       <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22] text-[9px] text-[#5A5A6A]">
-        Current status: MASTER-8B.7 design gate — writer contract staged, user-confirmed mutation still disabled. Program cards and live workout unchanged.
+        {mutationPlanBundle?.hasConfirmedPlans ? (
+          <span className="text-cyan-400">{mutationPlanBundle.statusSummary} — workout structure unchanged, live workout bridge pending</span>
+        ) : (
+          <span>Current status: MASTER-8B.7.1 apply gate ready — preview a Future Candidate to stage a marker-only mutation plan</span>
+        )}
       </div>
-    </div>
-  )
+      
+      {/* [MASTER-8B.7.1] Mutation Preview Confirmation Modal */}
+      {showMutationPreviewConfirm && selectedCandidateForPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-[#0F0F12] border border-[#2A2A35] rounded-lg max-w-md w-full p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-[#E6E9EF]">Confirm Mutation Plan</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => {
+                  setShowMutationPreviewConfirm(false)
+                  setSelectedCandidateForPreview(null)
+                  setConfirmationResult(null)
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Candidate Summary */}
+            <div className="space-y-2 p-3 rounded bg-[#1A1A22] border border-[#2A2A35]">
+              <p className="text-xs font-medium text-[#E6E9EF]">
+                {selectedCandidateForPreview.plan?.coachTitle || selectedCandidateForPreview.candidate.candidateType.replace(/_/g, ' ')}
+              </p>
+              {selectedCandidateForPreview.plan?.triggerSummary && (
+                <p className="text-[10px] text-[#9A9AA8]">{selectedCandidateForPreview.plan.triggerSummary}</p>
+              )}
+              {selectedCandidateForPreview.plan?.proposedChangeSummary && (
+                <p className="text-[10px] text-[#7A7A8A]">{selectedCandidateForPreview.plan.proposedChangeSummary}</p>
+              )}
+            </div>
+            
+            {/* Safety Guarantees */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-medium text-emerald-400">Safety guarantees:</p>
+              <ul className="text-[9px] text-[#8A8A9A] space-y-1 pl-2">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span>Completed sessions protected</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span>Future sessions only</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3 h-3 text-cyan-400" />
+                  <span>Program Card marker only — no exercise changes yet</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3 h-3 text-cyan-400" />
+                  <span>Live Workout bridge pending (8B.8)</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3 h-3 text-cyan-400" />
+                  <span>Start Workout unchanged</span>
+                </li>
+              </ul>
+            </div>
+            
+            {/* Target Info */}
+            <div className="p-2 rounded bg-[#0A0A0D] border border-[#1A1A22]">
+              <p className="text-[9px] text-[#6A6A7A]">
+                {selectedCandidateForPreview.plan?.affectedFutureDayIndexes && selectedCandidateForPreview.plan.affectedFutureDayIndexes.length > 0 
+                  ? `Target: Day ${selectedCandidateForPreview.plan.affectedFutureDayIndexes.join(', Day ')} (future session)`
+                  : 'Target: Future session boundary not resolved — plan will be queued'}
+              </p>
+            </div>
+            
+            {/* Confirmation Result */}
+            {confirmationResult && (
+              <div className={cn(
+                'p-2 rounded text-[10px]',
+                confirmationResult.success 
+                  ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                  : 'bg-red-500/10 border border-red-500/20 text-red-400'
+              )}>
+                {confirmationResult.message}
+              </div>
+            )}
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-8 text-xs"
+                onClick={() => {
+                  setShowMutationPreviewConfirm(false)
+                  setSelectedCandidateForPreview(null)
+                  setConfirmationResult(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 h-8 text-xs bg-cyan-600 hover:bg-cyan-700 text-white"
+                disabled={!!confirmationResult?.success}
+                onClick={() => {
+                  const candidate = selectedCandidateForPreview.candidate
+                  const plan = selectedCandidateForPreview.plan
+                  const targetDays = plan?.affectedFutureDayIndexes || []
+                  const targetResolved = targetDays.length > 0
+                  
+                  const confirmedPlan = createConfirmedPlan(
+                    `candidate_${selectedCandidateForPreview.index}`,
+                    plan?.coachTitle || candidate.candidateType.replace(/_/g, ' '),
+                    candidate.candidateType,
+                    plan?.triggerSummary || candidate.rationale || 'Balance finding detected',
+                    plan?.proposedChangeSummary || 'Future adjustment proposed',
+                    targetDays,
+                    targetResolved,
+                    candidate.requiresFullKnowledgeBase || false
+                  )
+                  
+                  const result = addConfirmedPlan(confirmedPlan)
+                  
+                  if (result.success) {
+                    setMutationPlanBundle(result.bundle)
+                    setConfirmationResult({
+                      success: true,
+                      message: confirmedPlan.honestUserLabel,
+                    })
+                  } else {
+                    setConfirmationResult({
+                      success: false,
+                      message: 'Failed to save mutation plan',
+                    })
+                  }
+                }}
+              >
+                {confirmationResult?.success ? 'Confirmed' : 'Confirm Plan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+    )
 }
 
 function RequestedMethodsSheetContent({
@@ -4318,6 +4487,22 @@ export function ProgramCoachIntelligenceHub({
   const [isResettingAllOverrides, setIsResettingAllOverrides] = useState(false)
   const [showResetAllConfirmation, setShowResetAllConfirmation] = useState(false)
   const [resetAllResult, setResetAllResult] = useState<MethodOverrideResetAllResult | null>(null)
+  
+  // [MASTER-8B.7.1] Mutation preview/confirm state
+  const [selectedCandidateForPreview, setSelectedCandidateForPreview] = useState<{
+    index: number
+    candidate: FutureSessionCandidate
+    plan: FutureSessionPlanningDetail | undefined
+  } | null>(null)
+  const [showMutationPreviewConfirm, setShowMutationPreviewConfirm] = useState(false)
+  const [mutationPlanBundle, setMutationPlanBundle] = useState<FutureSessionMutationPlanBundle | null>(null)
+  const [confirmationResult, setConfirmationResult] = useState<{ success: boolean; message: string } | null>(null)
+  
+  // [MASTER-8B.7.1] Load mutation plans on mount
+  useEffect(() => {
+    const bundle = loadMutationPlans()
+    setMutationPlanBundle(bundle)
+  }, [programBalanceOpen])
 
   // Compute summary data for button badges
   const trainedSkillCount = selectedSkillRepresentations.filter(

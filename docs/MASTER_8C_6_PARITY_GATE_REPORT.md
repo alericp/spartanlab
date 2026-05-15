@@ -1,10 +1,22 @@
 # MASTER-8C.6 — Method / Program Balance / Generator Consumption Parity Gate
 
 ## Current Official Step
-MASTER-8C.6
+MASTER-8C.6 (including MASTER-8C.6.1 repair gate)
 
 ## Status
 **COMPLETE**
+
+## MASTER-8C.6.1 Repair Summary
+
+**Problem Found:** After MASTER-8C.6, Program Balance showed "Generator proof unavailable — selector bridge not found on saved program". The proof was computed but not attached to the final `sessionStyleMetadata` object that gets saved and rendered.
+
+**Root Cause:** `sessionGeneratorKnowledgeProof` was computed at line ~27292 but `sessionStyleMetadata` was built later at lines ~30661 (fallback) and ~30857 (success) without including the proof.
+
+**Fix Applied:** Added `generatorKnowledgeProof: sessionGeneratorKnowledgeProof` to both:
+1. The initial fallback `sessionStyleMetadata` definition
+2. The successful style path `sessionStyleMetadata` assignment
+
+Now the proof rides on `program.sessions[n].styleMetadata.generatorKnowledgeProof` as expected by the UI.
 
 ## Summary
 

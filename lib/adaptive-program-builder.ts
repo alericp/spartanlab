@@ -30678,12 +30678,15 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           blockers: ['style_corridor_fallback'],
           evidenceConfidence: 'none' as const,
           bundleSignalsConsumed: [],
-        })),
-        bundleMateriallyChangedOutcome: false,
-      },
-      stylePhaseFellBack: false,
-      stylePhaseFallbackReason: null as string | null,
-    }
+    })),
+    bundleMateriallyChangedOutcome: false,
+  },
+  stylePhaseFellBack: false,
+  stylePhaseFallbackReason: null as string | null,
+  // [MASTER-8C.6.1] Generator knowledge consumption proof
+  // Attached from the already-computed sessionGeneratorKnowledgeProof
+  generatorKnowledgeProof: sessionGeneratorKnowledgeProof,
+  }
     try {
 
     // [PHASE 3G] Synthesise the BundleMethodSignals from the bundle.
@@ -30867,11 +30870,14 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       // [STYLE-PHASE DEGRADE CARD ROOT FIX] Surface the fallback flag
       // onto session metadata so downstream audit/observability can
       // count style-fallback rates without reparsing logs.
-      stylePhaseFellBack,
-      stylePhaseFallbackReason: stylePhaseFellBack
-        ? (stylePhaseErrorMessage?.slice(0, 200) ?? 'unknown_style_fallback')
-        : null,
-    }
+  stylePhaseFellBack,
+  stylePhaseFallbackReason: stylePhaseFellBack
+  ? (stylePhaseErrorMessage?.slice(0, 200) ?? 'unknown_style_fallback')
+  : null,
+  // [MASTER-8C.6.1] Generator knowledge consumption proof
+  // Attached from the already-computed sessionGeneratorKnowledgeProof
+  generatorKnowledgeProof: sessionGeneratorKnowledgeProof,
+  }
 
     // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Builder-side audit log
     // proving the bundle was consulted for method decisions and reporting
@@ -31006,6 +31012,20 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     }
 
     sessionStep = 'returning_validated_session'
+    
+    // [MASTER-8C.6.1] Dev-only diagnostic: confirm proof is attached to final metadata
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[MASTER-8C.6.1-GENERATOR-PROOF-ATTACHED]', {
+        dayNumber: day.dayNumber,
+        selectedExerciseCount: sessionStyleMetadata.generatorKnowledgeProof?.selectedExerciseCount ?? 0,
+        matchedExerciseCount: sessionStyleMetadata.generatorKnowledgeProof?.matchedExerciseCount ?? 0,
+        missingExerciseCount: sessionStyleMetadata.generatorKnowledgeProof?.missingExerciseCount ?? 0,
+        verdict: sessionStyleMetadata.generatorKnowledgeProof?.verdict ?? 'unavailable',
+        attachedToStyleMetadata: !!sessionStyleMetadata.generatorKnowledgeProof,
+        mutationApplied: sessionStyleMetadata.generatorKnowledgeProof?.mutationApplied ?? false,
+      })
+    }
+    
     console.log('[session-lifecycle-success]', {
       dayNumber: day.dayNumber,
       dayFocus: day.focus,

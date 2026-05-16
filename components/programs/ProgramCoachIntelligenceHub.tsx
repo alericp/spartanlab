@@ -192,6 +192,12 @@ import {
   type PrehabRehabTendonSafeguardReadonlyModel,
   type PrehabRehabTendonSafeguardReadonlyInput,
 } from '@/lib/program/prehab-rehab-tendon-safeguard-readonly-analyzer'
+// [MASTER-8C.19] Recovery / Readiness Read-Only Analyzer
+import {
+  resolveRecoveryReadinessReadonly,
+  type RecoveryReadinessReadonlyModel,
+  type RecoveryReadinessSessionInput,
+} from '@/lib/program/recovery-readiness-readonly-analyzer'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3042,8 +3048,10 @@ function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
  */
 function AIIntelligenceFoundationMap({
   safeguardModel,
+  recoveryReadinessModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
+  recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3203,6 +3211,65 @@ function AIIntelligenceFoundationMap({
                 ) : (
                   <div className="text-[9px] text-[#6A6A7A] italic">
                     Read-only scan unavailable from current program props; branch remains mutation locked.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* [MASTER-8C.19] Dynamic recovery/readiness proof for recovery_readiness */}
+            {branch.id === 'recovery_readiness' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                {recoveryReadinessModel ? (
+                  <div className="space-y-1.5">
+                    {/* Readiness/Confidence summary */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        recoveryReadinessModel.readinessLevel === 'protected' || recoveryReadinessModel.readinessLevel === 'reduced'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : recoveryReadinessModel.readinessLevel === 'watch'
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : recoveryReadinessModel.readinessLevel === 'ready'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-[#2A2A35] text-[#6A6A7A] border-[#3A3A45]'
+                      )}>
+                        {recoveryReadinessModel.headline}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A45]">
+                        {recoveryReadinessModel.confidence} confidence
+                      </span>
+                    </div>
+                    
+                    {/* Top signals */}
+                    {recoveryReadinessModel.signals.length > 0 && (
+                      <div className="text-[9px] text-[#8A8A9A]">
+                        <span className="text-[#6A6A7A]">Signals: </span>
+                        {recoveryReadinessModel.signals.slice(0, 3).map(s => s.label).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Source basis */}
+                    {recoveryReadinessModel.sourceBasis.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        Sources: {recoveryReadinessModel.sourceBasis.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Missing sources */}
+                    {recoveryReadinessModel.missingSources.length > 0 && (
+                      <div className="text-[9px] text-[#5A5A6A]">
+                        Missing: {recoveryReadinessModel.missingSources.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Mutation lock */}
+                    <div className="text-[9px] text-cyan-400/60">
+                      No future sessions changed.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    Read-only scan unavailable from current program props; recovery mutation remains locked.
                   </div>
                 )}
               </div>
@@ -6924,6 +6991,114 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, selectedSkillRepresentations])
   
+  // [MASTER-8C.19] Recovery / Readiness Read-Only Analysis
+  // Builds input from program sessions, adaptive foundation, and program balance
+  const recoveryReadinessResult = useMemo<RecoveryReadinessReadonlyModel | null>(() => {
+    try {
+      if (!program?.sessions?.length) return null
+      
+      // Resolve adaptive foundation model for recovery signals
+      const { model: adaptiveFoundationModel } = resolveVisibleAdaptiveFoundation(program)
+      
+      // Build session inputs with recovery-relevant metrics
+      const sessionInputs: RecoveryReadinessSessionInput[] = program.sessions.map(session => {
+        const exercises = session.exercises || []
+        const totalSets = exercises.reduce((sum: number, ex) => sum + (ex.sets || 0), 0)
+        
+        const hasHighSkill = exercises.some(ex => {
+          const name = (ex.name || '').toLowerCase()
+          return ['planche', 'lever', 'handstand', 'muscle up', 'muscle-up',
+            'iron cross', 'maltese', 'victorian', 'one arm', 'one-arm',
+            'flag', 'l-sit', 'v-sit', 'manna'].some(kw => name.includes(kw))
+        })
+        
+        const hasTendonHeavy = exercises.some(ex => {
+          const name = (ex.name || '').toLowerCase()
+          return ['planche', 'lever', 'maltese', 'iron cross', 'victorian',
+            'straight arm', 'cross pull', 'pelican', 'ring'].some(kw => name.includes(kw))
+        })
+        
+        // Collect method strings, filtering out undefined and standard
+        const methodStrings: string[] = []
+        for (const ex of exercises) {
+          if (ex.method) {
+            const methodStr = String(ex.method)
+            if (methodStr !== 'standard') {
+              methodStrings.push(methodStr)
+            }
+          }
+        }
+        
+        return {
+          dayLabel: session.dayLabel || `Day ${session.dayNumber}`,
+          dayNumber: session.dayNumber,
+          dayRole: session.focus || session.focusLabel,
+          exerciseCount: exercises.length,
+          totalSets,
+          hasHighSkillExercises: hasHighSkill,
+          hasTendonHeavyExercises: hasTendonHeavy,
+          methodsApplied: methodStrings,
+        }
+      })
+      
+      // Build adaptive foundation source status from boolean flags
+      const sourceStatusArray = adaptiveFoundationModel?.sourceStatus
+        ? [
+            { key: 'profile_truth', label: 'Profile truth', status: adaptiveFoundationModel.sourceStatus.hasProfileTruth ? 'active' : 'missing', detail: '' },
+            { key: 'selected_skills', label: 'Selected skills', status: adaptiveFoundationModel.sourceStatus.hasSelectedSkills ? 'active' : 'missing', detail: '' },
+            { key: 'workout_evidence', label: 'Workout evidence', status: adaptiveFoundationModel.sourceStatus.hasWorkoutEvidence ? 'active' : 'missing', detail: '' },
+            { key: 'readiness_recovery', label: 'Readiness/recovery', status: adaptiveFoundationModel.sourceStatus.hasReadinessEvidence ? 'active' : 'missing', detail: '' },
+            { key: 'constraint_evidence', label: 'Constraint evidence', status: adaptiveFoundationModel.sourceStatus.hasConstraintEvidence ? 'active' : 'missing', detail: '' },
+          ]
+        : undefined
+      
+      // Extract constraint data (AdaptiveConstraintSummary uses explanation, not detail)
+      const constraints = adaptiveFoundationModel?.constraints?.map(c => ({
+        code: c.code || '',
+        label: c.label || '',
+        severity: String(c.severity || 'unknown'),
+        category: String(c.category || ''),
+        detail: c.explanation || '',
+      }))
+      
+      // Get safeguard risk level from the safeguard analysis
+      const safeguardRisk = safeguardAnalysisResult?.riskLevel
+      
+      // Get tissue signals from program balance findings (ProgramBalanceFinding has title/type, not area/category)
+      const tissueSignals = programBalanceResult?.findings
+        ?.filter(f => f.title)
+        .slice(0, 5)
+        .map(f => ({
+          area: f.title || f.type || 'unknown',
+          riskLevel: f.severity === 'high' ? 'high' : f.severity === 'moderate' ? 'elevated' : 'low',
+        }))
+      
+      // Check if completed workout evidence exists in evidence snapshot
+      const hasCompletedEvidence = !!(
+        adaptiveFoundationModel?.evidenceSnapshot?.completedWorkoutEvidence?.completedSessionCount &&
+        adaptiveFoundationModel.evidenceSnapshot.completedWorkoutEvidence.completedSessionCount > 0
+      )
+      
+      return resolveRecoveryReadinessReadonly({
+        programId: program.id,
+        programName: program.goalLabel,
+        sessions: sessionInputs,
+        adaptiveFoundationSourceStatus: sourceStatusArray,
+        constraints,
+        dominantLimiters: adaptiveFoundationModel?.dominantLimiters,
+        readinessStatus: null,
+        programBalanceTissueSignals: tissueSignals,
+        hasCompletedWorkoutEvidence: hasCompletedEvidence,
+        hasWorkoutHistory: adaptiveFoundationModel?.sourceStatus?.hasWorkoutEvidence ?? false,
+        hasReadinessCheckIn: adaptiveFoundationModel?.sourceStatus?.hasReadinessEvidence ?? false,
+        safeguardRiskLevel: safeguardRisk,
+      })
+    } catch (error) {
+      console.error('[v0] Recovery readiness analysis error:', error)
+      return null
+    }
+  }, [program, safeguardAnalysisResult, programBalanceResult, selectedSkillRepresentations])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -7533,7 +7708,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} />
           </div>
         </SheetContent>
       </Sheet>

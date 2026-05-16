@@ -795,7 +795,8 @@ function buildMethodFrequencyPreview(
     frequencyPreviewStatus = 'blocked'
     // [MASTER-8C.12.1E] Clearer messaging - distinguish between structural methods needing writer
     if (item.canonicalKey === 'superset') {
-      blockedReason = 'Superset needs structural pair writer before frequency placement'
+      // [MASTER-8C.13] Superset now has structural writer - this blocked reason is for row-level only
+      blockedReason = 'Superset uses structural pair preview — see controls above'
     } else {
       blockedReason = item.blockedReason || 'Structural apply needed — not row-level frequency'
     }
@@ -1014,4 +1015,494 @@ export function getMethodFrequencyPreview(
 ): MethodFrequencyPreview | null {
   const plan = buildMethodSlotEligibilityFrequencyPlan(program)
   return plan.methods.find(m => m.canonicalKey === canonicalKey) ?? null
+}
+
+// =============================================================================
+// [MASTER-8C.13] SUPERSET STRUCTURAL CANDIDATE SCANNER
+// =============================================================================
+
+/**
+ * Superset candidate status
+ */
+export type SupersetCandidateStatus =
+  | 'safe_apply'
+  | 'caution_apply_requires_confirmation'
+  | 'blocked_no_safe_pair'
+  | 'blocked_existing_group_conflict'
+  | 'blocked_primary_skill_risk'
+  | 'blocked_same_pattern_risk'
+  | 'blocked_missing_prescription'
+  | 'blocked_set_count_mismatch'
+
+/**
+ * A single superset pair candidate
+ */
+export interface SupersetCandidate {
+  readonly id: string
+  readonly dayIndex: number
+  readonly dayNumber: number
+  readonly sessionId: string
+  readonly sessionLabel: string
+  readonly exerciseA: {
+    readonly id: string
+    readonly name: string
+    readonly index: number
+    readonly setCount: number | null
+    readonly isSkillSensitive: boolean
+    readonly existingMethod: string | null
+  }
+  readonly exerciseB: {
+    readonly id: string
+    readonly name: string
+    readonly index: number
+    readonly setCount: number | null
+    readonly isSkillSensitive: boolean
+    readonly existingMethod: string | null
+  }
+  readonly orderedDayRows: readonly {
+    readonly exerciseId: string
+    readonly exerciseName: string
+    readonly position: number
+    readonly isPartOfPair: boolean
+    readonly existingMethod: string | null
+  }[]
+  readonly status: SupersetCandidateStatus
+  readonly confidence: SlotConfidence
+  readonly pairRationale: string
+  readonly riskReasons: readonly string[]
+  readonly compatibilityReasons: readonly string[]
+  readonly pairedRounds: number | null
+  readonly restProtocol: string
+  readonly insertionSummary: string
+  readonly workoutEffectSummary: string
+  readonly source: 'method_override_planner'
+  readonly targetGroupType: 'superset'
+}
+
+/**
+ * Superset structural preview result
+ */
+export interface SupersetStructuralPreview {
+  readonly status: 'has_candidates' | 'no_candidates' | 'all_blocked'
+  readonly candidates: readonly SupersetCandidate[]
+  readonly safeCandidateCount: number
+  readonly cautionCandidateCount: number
+  readonly blockedCandidateCount: number
+  readonly summary: string
+  readonly proofLines: readonly string[]
+}
+
+/**
+ * Superset apply result
+ */
+export interface SupersetApplyResult {
+  readonly status: 'success' | 'blocked' | 'already_applied' | 'error'
+  readonly visibleSummary: string
+  readonly appliedCount: number
+  readonly blockedReasons: readonly string[]
+  readonly targetedDays: readonly number[]
+  readonly targetedExercises: readonly string[]
+  readonly evidence: readonly string[]
+  readonly programChanged: boolean
+  readonly persistRequired: boolean
+  readonly updatedProgram: unknown | null
+}
+
+// Minimal session/exercise shape for scanning
+interface MinimalExerciseForSuperset {
+  id?: string
+  name?: string
+  exerciseName?: string
+  sets?: number | string
+  setCount?: number
+  method?: string
+  methodLabel?: string
+  blockId?: string
+  structuralMethodApplied?: boolean
+  methodOverrideApplied?: boolean
+  category?: string
+  movementType?: string
+  isWarmUp?: boolean
+  isCoolDown?: boolean
+  isPrimarySkill?: boolean
+  tendonSensitive?: boolean
+}
+
+interface MinimalSessionForSuperset {
+  id?: string
+  dayNumber?: number
+  sessionFocus?: string
+  name?: string
+  label?: string
+  exercises?: MinimalExerciseForSuperset[]
+  styleMetadata?: {
+    styledGroups?: Array<{
+      id?: string
+      groupType?: string
+      exercises?: Array<{ id?: string; name?: string }>
+    }>
+    hasSupersetsApplied?: boolean
+  }
+}
+
+/**
+ * [MASTER-8C.13] Build superset structural candidates from program
+ */
+export function buildSupersetStructuralCandidates(
+  program: unknown
+): SupersetStructuralPreview {
+  const proofLines: string[] = [
+    '[MASTER-8C.13] Superset Structural Candidate Scanner',
+    'Mutation: NO — preview only',
+  ]
+  
+  const prog = program as { sessions?: MinimalSessionForSuperset[] } | null
+  const sessions = prog?.sessions ?? []
+  
+  if (sessions.length === 0) {
+    return {
+      status: 'no_candidates',
+      candidates: [],
+      safeCandidateCount: 0,
+      cautionCandidateCount: 0,
+      blockedCandidateCount: 0,
+      summary: 'No sessions available for superset pairing.',
+      proofLines: [...proofLines, 'No sessions found'],
+    }
+  }
+  
+  const candidates: SupersetCandidate[] = []
+  
+  for (let dayIndex = 0; dayIndex < sessions.length; dayIndex++) {
+    const session = sessions[dayIndex]
+    if (!session) continue
+    
+    const exercises = session.exercises ?? []
+    if (exercises.length < 2) continue
+    
+    const dayNumber = session.dayNumber ?? dayIndex + 1
+    const sessionLabel = session.sessionFocus ?? session.name ?? session.label ?? `Day ${dayNumber}`
+    const sessionId = session.id ?? `session-${dayIndex}`
+    
+    // Check if session already has a superset
+    const existingGroups = session.styleMetadata?.styledGroups ?? []
+    const hasExistingSuperset = existingGroups.some(g => g.groupType === 'superset')
+    
+    // Build ordered day rows for context
+    const orderedDayRows = exercises.map((ex, idx) => ({
+      exerciseId: ex.id ?? `ex-${idx}`,
+      exerciseName: ex.name ?? ex.exerciseName ?? 'Unknown',
+      position: idx + 1,
+      isPartOfPair: false,
+      existingMethod: ex.method ?? ex.methodLabel ?? null,
+    }))
+    
+    // Find eligible exercise pairs (late-position, non-skill, non-grouped)
+    const eligibleExercises = exercises.map((ex, idx) => ({
+      ex,
+      idx,
+      id: ex.id ?? `ex-${idx}`,
+      name: ex.name ?? ex.exerciseName ?? 'Unknown',
+      setCount: typeof ex.sets === 'number' ? ex.sets : (typeof ex.setCount === 'number' ? ex.setCount : null),
+      isSkillSensitive: ex.isPrimarySkill === true || ex.category === 'skill',
+      isWarmupCooldown: ex.isWarmUp === true || ex.isCoolDown === true,
+      isTendonSensitive: ex.tendonSensitive === true,
+      hasExistingGroup: !!ex.blockId || ex.structuralMethodApplied === true,
+      existingMethod: ex.method ?? ex.methodLabel ?? null,
+      movementType: ex.movementType ?? ex.category ?? 'unknown',
+    }))
+    
+    // Filter to late-position accessory/support exercises
+    const latePositionStart = Math.max(2, Math.floor(exercises.length / 2))
+    const pairableExercises = eligibleExercises.filter((e, idx) => 
+      idx >= latePositionStart &&
+      !e.isWarmupCooldown &&
+      !e.hasExistingGroup &&
+      !e.isSkillSensitive
+    )
+    
+    // Try to find one safe pair per session
+    if (pairableExercises.length >= 2) {
+      // Pick first two that have compatible set counts
+      let bestPair: [typeof pairableExercises[0], typeof pairableExercises[0]] | null = null
+      let pairStatus: SupersetCandidateStatus = 'blocked_no_safe_pair'
+      let pairRationale = ''
+      let riskReasons: string[] = []
+      let compatibilityReasons: string[] = []
+      let pairedRounds: number | null = null
+      
+      for (let i = 0; i < pairableExercises.length - 1; i++) {
+        for (let j = i + 1; j < pairableExercises.length; j++) {
+          const a = pairableExercises[i]!
+          const b = pairableExercises[j]!
+          
+          // Reset for this pair evaluation
+          riskReasons = []
+          compatibilityReasons = []
+          pairStatus = 'safe_apply'
+          
+          // Check set count compatibility
+          if (a.setCount !== null && b.setCount !== null) {
+            if (a.setCount === b.setCount) {
+              pairedRounds = a.setCount
+              compatibilityReasons.push(`Matched set count: ${pairedRounds}`)
+            } else {
+              pairStatus = 'blocked_set_count_mismatch'
+              riskReasons.push(`Set count mismatch: ${a.setCount} vs ${b.setCount}`)
+              continue // Skip this pair
+            }
+          } else {
+            // Default to 3 rounds if unknown
+            pairedRounds = 3
+            compatibilityReasons.push('Default paired rounds: 3')
+          }
+          
+          // Check for same movement pattern (redundant pairing)
+          if (a.movementType === b.movementType && a.movementType !== 'unknown') {
+            pairStatus = 'caution_apply_requires_confirmation'
+            riskReasons.push(`Same movement type: ${a.movementType}`)
+          }
+          
+          // Check for tendon sensitivity
+          if (a.isTendonSensitive && b.isTendonSensitive) {
+            pairStatus = 'blocked_same_pattern_risk'
+            riskReasons.push('Both exercises are tendon-sensitive')
+            continue
+          }
+          
+          // Check for existing structural group conflict
+          if (hasExistingSuperset) {
+            pairStatus = 'blocked_existing_group_conflict'
+            riskReasons.push('Session already has a superset')
+          }
+          
+          // If we found a safe or caution pair, use it
+          if (pairStatus === 'safe_apply' || pairStatus === 'caution_apply_requires_confirmation') {
+            bestPair = [a, b]
+            pairRationale = buildPairRationale(a, b)
+            compatibilityReasons.push('Non-conflicting movement patterns')
+            compatibilityReasons.push('Late-position accessory work')
+            break
+          }
+        }
+        if (bestPair) break
+      }
+      
+      if (bestPair) {
+        const [a, b] = bestPair
+        const insertionSummary = `Superset A1/A2 at positions ${a.idx + 1} and ${b.idx + 1}`
+        const workoutEffectSummary = pairedRounds !== null
+          ? `${pairedRounds} paired rounds with minimal rest between, full rest after pair.`
+          : 'Paired rounds with minimal rest between, full rest after pair.'
+        
+        // Update orderedDayRows to mark paired exercises
+        const updatedRows = orderedDayRows.map(row => ({
+          ...row,
+          isPartOfPair: row.exerciseId === a.id || row.exerciseId === b.id,
+        }))
+        
+        candidates.push({
+          id: `superset-candidate-${dayIndex}-${a.idx}-${b.idx}`,
+          dayIndex,
+          dayNumber,
+          sessionId,
+          sessionLabel,
+          exerciseA: {
+            id: a.id,
+            name: a.name,
+            index: a.idx,
+            setCount: a.setCount,
+            isSkillSensitive: a.isSkillSensitive,
+            existingMethod: a.existingMethod,
+          },
+          exerciseB: {
+            id: b.id,
+            name: b.name,
+            index: b.idx,
+            setCount: b.setCount,
+            isSkillSensitive: b.isSkillSensitive,
+            existingMethod: b.existingMethod,
+          },
+          orderedDayRows: updatedRows,
+          status: pairStatus,
+          confidence: pairStatus === 'safe_apply' ? 'high' : 'medium',
+          pairRationale,
+          riskReasons,
+          compatibilityReasons,
+          pairedRounds,
+          restProtocol: '0-15s between exercises, 90-120s after pair',
+          insertionSummary,
+          workoutEffectSummary,
+          source: 'method_override_planner',
+          targetGroupType: 'superset',
+        })
+      }
+    }
+  }
+  
+  const safeCandidateCount = candidates.filter(c => c.status === 'safe_apply').length
+  const cautionCandidateCount = candidates.filter(c => c.status === 'caution_apply_requires_confirmation').length
+  const blockedCandidateCount = candidates.filter(c => 
+    c.status !== 'safe_apply' && c.status !== 'caution_apply_requires_confirmation'
+  ).length
+  
+  proofLines.push(`Sessions scanned: ${sessions.length}`)
+  proofLines.push(`Candidates found: ${candidates.length}`)
+  proofLines.push(`Safe: ${safeCandidateCount}, Caution: ${cautionCandidateCount}, Blocked: ${blockedCandidateCount}`)
+  
+  const status = candidates.length === 0 
+    ? 'no_candidates'
+    : safeCandidateCount + cautionCandidateCount > 0 
+      ? 'has_candidates' 
+      : 'all_blocked'
+  
+  const summary = status === 'no_candidates'
+    ? 'No eligible superset pairs found in program.'
+    : status === 'all_blocked'
+      ? 'All potential superset pairs are blocked by safety gates.'
+      : `${safeCandidateCount + cautionCandidateCount} superset pair${safeCandidateCount + cautionCandidateCount > 1 ? 's' : ''} available for apply.`
+  
+  return {
+    status,
+    candidates,
+    safeCandidateCount,
+    cautionCandidateCount,
+    blockedCandidateCount,
+    summary,
+    proofLines,
+  }
+}
+
+function buildPairRationale(
+  a: { name: string; movementType: string },
+  b: { name: string; movementType: string }
+): string {
+  if (a.movementType !== b.movementType && a.movementType !== 'unknown' && b.movementType !== 'unknown') {
+    return `Non-competing pair: ${a.movementType} + ${b.movementType}`
+  }
+  return `Safe accessory pair: ${a.name} + ${b.name}`
+}
+
+/**
+ * [MASTER-8C.13] Apply a superset candidate to the program
+ */
+export function applySupersetStructuralCandidate(
+  program: unknown,
+  candidate: SupersetCandidate
+): SupersetApplyResult {
+  if (candidate.status !== 'safe_apply' && candidate.status !== 'caution_apply_requires_confirmation') {
+    return {
+      status: 'blocked',
+      visibleSummary: `Cannot apply superset: ${candidate.riskReasons.join(', ')}`,
+      appliedCount: 0,
+      blockedReasons: candidate.riskReasons,
+      targetedDays: [],
+      targetedExercises: [],
+      evidence: ['Candidate status is blocked'],
+      programChanged: false,
+      persistRequired: false,
+      updatedProgram: null,
+    }
+  }
+  
+  // Deep clone the program
+  const prog = JSON.parse(JSON.stringify(program)) as {
+    sessions?: MinimalSessionForSuperset[]
+  }
+  
+  const sessions = prog.sessions ?? []
+  const targetSession = sessions[candidate.dayIndex]
+  
+  if (!targetSession) {
+    return {
+      status: 'error',
+      visibleSummary: `Session at day index ${candidate.dayIndex} not found.`,
+      appliedCount: 0,
+      blockedReasons: ['Session not found'],
+      targetedDays: [],
+      targetedExercises: [],
+      evidence: [],
+      programChanged: false,
+      persistRequired: false,
+      updatedProgram: null,
+    }
+  }
+  
+  const exercises = targetSession.exercises ?? []
+  const exerciseA = exercises[candidate.exerciseA.index]
+  const exerciseB = exercises[candidate.exerciseB.index]
+  
+  if (!exerciseA || !exerciseB) {
+    return {
+      status: 'error',
+      visibleSummary: 'Target exercises not found in session.',
+      appliedCount: 0,
+      blockedReasons: ['Exercises not found'],
+      targetedDays: [],
+      targetedExercises: [],
+      evidence: [],
+      programChanged: false,
+      persistRequired: false,
+      updatedProgram: null,
+    }
+  }
+  
+  // Generate block ID
+  const blockId = `method-superset-day${candidate.dayNumber}-user-${Date.now()}`
+  
+  // Stamp exercises
+  exerciseA.blockId = blockId
+  exerciseA.method = 'superset'
+  exerciseA.methodLabel = 'Superset'
+  exerciseA.structuralMethodApplied = true
+  exerciseA.methodOverrideApplied = true
+  
+  exerciseB.blockId = blockId
+  exerciseB.method = 'superset'
+  exerciseB.methodLabel = 'Superset'
+  exerciseB.structuralMethodApplied = true
+  exerciseB.methodOverrideApplied = true
+  
+  // Ensure styleMetadata exists
+  if (!targetSession.styleMetadata) {
+    targetSession.styleMetadata = { styledGroups: [] }
+  }
+  if (!Array.isArray(targetSession.styleMetadata.styledGroups)) {
+    targetSession.styleMetadata.styledGroups = []
+  }
+  
+  // Add styledGroups entry
+  targetSession.styleMetadata.styledGroups.push({
+    id: blockId,
+    groupType: 'superset',
+    exercises: [
+      { 
+        id: candidate.exerciseA.id, 
+        name: candidate.exerciseA.name,
+      },
+      { 
+        id: candidate.exerciseB.id, 
+        name: candidate.exerciseB.name,
+      },
+    ],
+  } as unknown as (typeof targetSession.styleMetadata.styledGroups)[0])
+  
+  targetSession.styleMetadata.hasSupersetsApplied = true
+  
+  return {
+    status: 'success',
+    visibleSummary: `Applied Superset to Day ${candidate.dayNumber}: ${candidate.exerciseA.name} + ${candidate.exerciseB.name}`,
+    appliedCount: 1,
+    blockedReasons: [],
+    targetedDays: [candidate.dayNumber],
+    targetedExercises: [candidate.exerciseA.name, candidate.exerciseB.name],
+    evidence: [
+      `Block ID: ${blockId}`,
+      `Session: ${candidate.sessionLabel}`,
+      `Paired rounds: ${candidate.pairedRounds ?? 'default'}`,
+    ],
+    programChanged: true,
+    persistRequired: true,
+    updatedProgram: prog,
+  }
 }

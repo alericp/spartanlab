@@ -154,8 +154,13 @@ import {
 // [MASTER-8C.8] Slot Eligibility & Frequency Preview
 import {
   buildMethodSlotEligibilityFrequencyPlan,
+  buildSupersetStructuralCandidates,
+  applySupersetStructuralCandidate,
   type MethodSlotEligibilityFrequencyPlan,
   type MethodFrequencyPreview,
+  type SupersetCandidate,
+  type SupersetStructuralPreview,
+  type SupersetApplyResult,
 } from '@/lib/program/method-slot-eligibility-frequency-planner'
 import {
   buildFrequencySlotPlacementPreview,
@@ -4033,6 +4038,357 @@ function ProgramBalanceSheetContent({
 // =============================================================================
 
 // =============================================================================
+// [MASTER-8C.13] SUPERSET STRUCTURAL CONTROLS
+// =============================================================================
+
+/**
+ * [MASTER-8C.13] Superset structural preview and apply controls.
+ * Shows candidate pairs, full day context, and allows applying safe pairs.
+ */
+function SupersetStructuralControls({
+  program,
+  onApplyFrequencyPlacement,
+}: {
+  program: unknown
+  onApplyFrequencyPlacement: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
+}) {
+  const [supersetPreview, setSupersetPreview] = useState<SupersetStructuralPreview | null>(null)
+  const [selectedCandidate, setSelectedCandidate] = useState<SupersetCandidate | null>(null)
+  const [isApplying, setIsApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<SupersetApplyResult | null>(null)
+  
+  // Build superset candidates on mount
+  useEffect(() => {
+    if (program) {
+      const preview = buildSupersetStructuralCandidates(program)
+      setSupersetPreview(preview)
+      // Auto-select first safe candidate
+      const firstSafe = preview.candidates.find(c => 
+        c.status === 'safe_apply' || c.status === 'caution_apply_requires_confirmation'
+      )
+      if (firstSafe) {
+        setSelectedCandidate(firstSafe)
+      }
+    }
+  }, [program])
+  
+  const handleApply = async () => {
+    if (!selectedCandidate || !program) return
+    
+    setIsApplying(true)
+    try {
+      const result = applySupersetStructuralCandidate(program, selectedCandidate)
+      setApplyResult(result)
+      
+      if (result.status === 'success' && result.updatedProgram) {
+        // Use the frequency placement callback to persist
+        // We create a minimal preview to pass through
+        await onApplyFrequencyPlacement({
+          methodKey: 'superset' as CanonicalMethodFamily,
+          displayLabel: 'Superset',
+          requestedFrequency: 1,
+          actualPlacementCount: 1,
+          targets: [],
+          status: 'ready_to_apply',
+          warnings: [],
+          blockedReasons: [],
+          proofLines: result.evidence as string[],
+          // Pass the updated program through evidence for the parent to use
+          _supersetApplyResult: result,
+        } as unknown as FrequencySlotPlacementPreview)
+      }
+    } finally {
+      setIsApplying(false)
+    }
+  }
+  
+  if (!supersetPreview) {
+    return (
+      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 text-[#6A6A7A] animate-spin" />
+          <span className="text-[10px] text-[#8A8A9A]">Scanning for superset pairs...</span>
+        </div>
+      </div>
+    )
+  }
+  
+  const hasCandidates = supersetPreview.status === 'has_candidates'
+  const safeCandidates = supersetPreview.candidates.filter(c => 
+    c.status === 'safe_apply' || c.status === 'caution_apply_requires_confirmation'
+  )
+  
+  return (
+    <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+      <div className="flex items-center gap-2 mb-3">
+        <Layers className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="text-[10px] font-medium text-[#E6E9EF]">Superset Pair Preview</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          Structural
+        </span>
+      </div>
+      
+      {/* Apply result banner */}
+      {applyResult && (
+        <div className={cn(
+          'mb-3 p-2 rounded text-[10px]',
+          applyResult.status === 'success' 
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        )}>
+          {applyResult.visibleSummary}
+        </div>
+      )}
+      
+      {/* Status summary */}
+      <p className="text-[10px] text-[#8A8A9A] mb-3">
+        {supersetPreview.summary}
+      </p>
+      
+      {!hasCandidates ? (
+        <p className="text-[10px] text-amber-400/80">
+          {supersetPreview.status === 'all_blocked' 
+            ? 'All potential pairs blocked by safety gates.'
+            : 'No eligible exercise pairs found for superset.'}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {/* Candidate selector */}
+          {safeCandidates.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {safeCandidates.map((candidate, idx) => (
+                <button
+                  key={candidate.id}
+                  onClick={() => { setSelectedCandidate(candidate); setApplyResult(null); }}
+                  className={cn(
+                    'px-2.5 py-1 text-[10px] rounded border transition-colors',
+                    selectedCandidate?.id === candidate.id
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                      : 'bg-[#2A2A35] text-[#8A8A9A] border-[#3A3A4A] hover:border-[#4A4A5A]'
+                  )}
+                >
+                  Day {candidate.dayNumber}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {/* Selected candidate preview */}
+          {selectedCandidate && (
+            <SupersetCandidateCard 
+              candidate={selectedCandidate}
+              isExpanded={true}
+            />
+          )}
+          
+          {/* Apply button */}
+          {selectedCandidate && (selectedCandidate.status === 'safe_apply' || selectedCandidate.status === 'caution_apply_requires_confirmation') && (
+            <Button
+              size="sm"
+              onClick={handleApply}
+              disabled={isApplying || applyResult?.status === 'success'}
+              className="w-full mt-2 h-8 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isApplying ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                  Applying...
+                </>
+              ) : applyResult?.status === 'success' ? (
+                <>
+                  <Check className="w-3 h-3 mr-1.5" />
+                  Applied
+                </>
+              ) : (
+                <>
+                  <Check className="w-3 h-3 mr-1.5" />
+                  Apply Superset to Day {selectedCandidate.dayNumber}
+                </>
+              )}
+            </Button>
+          )}
+          
+          {/* Caution warning */}
+          {selectedCandidate?.status === 'caution_apply_requires_confirmation' && (
+            <p className="text-[9px] text-amber-400/80 flex items-start gap-1">
+              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+              Caution: {selectedCandidate.riskReasons.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * [MASTER-8C.13] Superset candidate preview card with full day context
+ */
+function SupersetCandidateCard({
+  candidate,
+  isExpanded: defaultExpanded = false,
+}: {
+  candidate: SupersetCandidate
+  isExpanded?: boolean
+}) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  
+  return (
+    <div className="rounded-lg bg-[#0F0F12] border border-[#2A2A35] overflow-hidden">
+      {/* Compact header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2 p-2 text-left hover:bg-[#1A1A22]/50 transition-colors"
+      >
+        <span className="text-[9px] font-medium text-emerald-400 shrink-0 min-w-[40px]">
+          Day {candidate.dayNumber}
+        </span>
+        <span className="text-[10px] text-[#E6E9EF] truncate flex-1">
+          {candidate.exerciseA.name} + {candidate.exerciseB.name}
+        </span>
+        <span className={cn(
+          'text-[9px] px-1.5 py-0.5 rounded shrink-0',
+          candidate.status === 'safe_apply'
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : candidate.status === 'caution_apply_requires_confirmation'
+              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        )}>
+          {candidate.status === 'safe_apply' ? 'Safe' : 
+           candidate.status === 'caution_apply_requires_confirmation' ? 'Caution' : 'Blocked'}
+        </span>
+        {isExpanded ? (
+          <ChevronUp className="w-3 h-3 text-[#6A6A7A] shrink-0" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-[#6A6A7A] shrink-0" />
+        )}
+      </button>
+      
+      {/* Expanded preview */}
+      {isExpanded && (
+        <div className="px-2 pb-2 space-y-3 border-t border-[#2A2A35]/50">
+          {/* Session label */}
+          <div className="pt-2 flex items-center gap-2">
+            <Target className="w-3 h-3 text-[#6A6A7A]" />
+            <span className="text-[9px] text-[#8A8A9A]">{candidate.sessionLabel}</span>
+          </div>
+          
+          {/* Superset pair highlight - A1/A2 */}
+          <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-medium text-emerald-400">Superset Pair</span>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-emerald-400 font-medium w-5">A1</span>
+                <span className="text-[#E6E9EF]">{candidate.exerciseA.name}</span>
+                {candidate.exerciseA.setCount && (
+                  <span className="text-[#6A6A7A]">({candidate.exerciseA.setCount} sets)</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-emerald-400 font-medium w-5">A2</span>
+                <span className="text-[#E6E9EF]">{candidate.exerciseB.name}</span>
+                {candidate.exerciseB.setCount && (
+                  <span className="text-[#6A6A7A]">({candidate.exerciseB.setCount} sets)</span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Ordered day context */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Layers className="w-3 h-3 text-[#6A6A7A]" />
+              <span className="text-[9px] font-medium text-[#8A8A9A]">Workout order</span>
+            </div>
+            <div className="space-y-0.5 pl-1 border-l border-[#2A2A35]">
+              {candidate.orderedDayRows.map((row, idx) => (
+                <div
+                  key={row.exerciseId || idx}
+                  className={cn(
+                    'flex items-center gap-2 py-1 px-2 rounded text-[9px]',
+                    row.isPartOfPair 
+                      ? 'bg-emerald-500/10 border border-emerald-500/20' 
+                      : 'bg-transparent'
+                  )}
+                >
+                  <span className="text-[#5A5A6A] shrink-0 w-4">{row.position}.</span>
+                  <span className={cn(
+                    'truncate flex-1',
+                    row.isPartOfPair ? 'text-emerald-400 font-medium' : 'text-[#8A8A9A]'
+                  )}>
+                    {row.exerciseName}
+                  </span>
+                  {row.isPartOfPair && (
+                    <span className="text-emerald-400 shrink-0">
+                      {row.exerciseId === candidate.exerciseA.id ? 'A1' : 'A2'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Workout effect */}
+          <div className="p-2 rounded bg-[#1A1A22] border border-[#2A2A35]/50">
+            <p className="text-[9px] text-[#9A9AAA] leading-relaxed">
+              {candidate.workoutEffectSummary}
+            </p>
+            <p className="text-[9px] text-[#6A6A7A] mt-1">
+              Rest: {candidate.restProtocol}
+            </p>
+          </div>
+          
+          {/* Compatibility reasons */}
+          {candidate.compatibilityReasons.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {candidate.compatibilityReasons.map((reason, i) => (
+                <span 
+                  key={i}
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20"
+                >
+                  {reason}
+                </span>
+              ))}
+            </div>
+          )}
+          
+          {/* Risk reasons if any */}
+          {candidate.riskReasons.length > 0 && (
+            <div className="space-y-0.5">
+              {candidate.riskReasons.map((reason, i) => (
+                <p key={i} className="text-[9px] text-amber-400/70 flex items-start gap-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  {reason}
+                </p>
+              ))}
+            </div>
+          )}
+          
+          {/* Confidence and paired rounds */}
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              'text-[9px] px-1.5 py-0.5 rounded',
+              candidate.confidence === 'high' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+            )}>
+              {candidate.confidence} confidence
+            </span>
+            {candidate.pairedRounds && (
+              <span className="text-[9px] text-[#6A6A7A]">
+                {candidate.pairedRounds} paired rounds
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
 // [MASTER-8C.12.2] AFFECTED DAY PREVIEW CARD
 // =============================================================================
 
@@ -4293,17 +4649,24 @@ function MethodDetailFrequencyControls({
   // Don't render if callback not available
   if (!onApplyFrequencyPlacement) return null
   
+  // [MASTER-8C.13] Superset uses structural preview, not row-level frequency
+  if (methodKey === 'superset') {
+    return (
+      <SupersetStructuralControls
+        program={program}
+        onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+      />
+    )
+  }
+  
   // If method is blocked, show compact message
   if (isBlocked) {
-    const isStructuralMethod = ['superset', 'circuit', 'density_block'].includes(methodKey)
+    const isStructuralMethod = ['circuit', 'density_block'].includes(methodKey)
     
     // [MASTER-8C.12.1E] Method-specific messaging for structural methods
     const getStructuralMessage = () => {
       if (methodKey === 'circuit') {
         return `Circuits use the structural Method Planner apply flow above, not row-level frequency placement.`
-      }
-      if (methodKey === 'superset') {
-        return `Superset needs structural pair writer before frequency placement.`
       }
       if (methodKey === 'density_block') {
         return `Density Block needs timed/sequence runtime, logging, and save/reload support.`

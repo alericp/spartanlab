@@ -2800,6 +2800,7 @@ function ProgramDisplayWrapper({
   // [MASTER-8C.12A] Frequency Placement Apply Callback
   // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
   // This is the authoritative save corridor for frequency placement apply actions.
+  // [MASTER-8C.13] Also handles superset structural apply via _supersetApplyResult
   // ==========================================================================
   const handleApplyFrequencyPlacement = useCallback(
     async (preview: FrequencySlotPlacementPreview): Promise<FrequencyPlacementApplyResult> => {
@@ -2822,6 +2823,72 @@ function ProgramDisplayWrapper({
           liveWorkoutChanged: false,
           completedSessionsProtected: true,
           existingSavedArtifactsPreserved: true,
+        }
+      }
+      
+      // [MASTER-8C.13] Check for superset structural apply result
+      // Superset apply passes its result via _supersetApplyResult property
+      const supersetResult = (preview as unknown as { _supersetApplyResult?: { status: string; updatedProgram: unknown; visibleSummary: string; appliedCount: number; targetedDays: number[]; targetedExercises: string[]; evidence: string[] } })._supersetApplyResult
+      if (supersetResult && supersetResult.updatedProgram) {
+        console.log('[MASTER-8C.13-superset-apply] Handling superset structural apply', {
+          status: supersetResult.status,
+          visibleSummary: supersetResult.visibleSummary,
+        })
+        
+        if (supersetResult.status === 'success') {
+          try {
+            const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+            const savedProgram = saveAdaptiveProgram(supersetResult.updatedProgram as AdaptiveProgram)
+            
+            if (onProgramUpdate) {
+              onProgramUpdate(savedProgram)
+            }
+            
+            console.log('[MASTER-8C.13-superset-apply] Superset saved successfully', {
+              programId: savedProgram.id,
+              appliedCount: supersetResult.appliedCount,
+            })
+            
+            return {
+              status: 'success',
+              visibleSummary: supersetResult.visibleSummary,
+              methodKey: 'superset',
+              displayLabel: 'Superset',
+              requestedFrequency: 1,
+              appliedCount: supersetResult.appliedCount,
+              blockedCount: 0,
+              targetedDays: supersetResult.targetedDays.map(String),
+              targetedExercises: supersetResult.targetedExercises,
+              evidence: [...supersetResult.evidence, 'Program saved via saveAdaptiveProgram'],
+              blockedReasons: [],
+              programChanged: true,
+              persistRequired: false, // Already saved
+              liveWorkoutChanged: false,
+              completedSessionsProtected: true,
+              existingSavedArtifactsPreserved: true,
+              updatedProgram: savedProgram,
+            }
+          } catch (saveError) {
+            console.error('[MASTER-8C.13-superset-apply] Save failed', saveError)
+            return {
+              status: 'blocked',
+              visibleSummary: `Save failed: ${saveError instanceof Error ? saveError.message : 'unknown'}`,
+              methodKey: 'superset',
+              displayLabel: 'Superset',
+              requestedFrequency: 1,
+              appliedCount: 0,
+              blockedCount: 1,
+              targetedDays: [],
+              targetedExercises: [],
+              evidence: [`Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+              blockedReasons: ['Save failed'],
+              programChanged: false,
+              persistRequired: false,
+              liveWorkoutChanged: false,
+              completedSessionsProtected: true,
+              existingSavedArtifactsPreserved: true,
+            }
+          }
         }
       }
       

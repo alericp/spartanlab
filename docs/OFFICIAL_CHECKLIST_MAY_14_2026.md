@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.18.1)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.19)
 
-**Current active completed step:** MASTER-8C.18.1 / AB20.4.11.1  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards (all read-only, now dynamically wired)  
-**Current active step:** MASTER-8C.19 / AB20.4.12 — Next intelligence branch (Exercise Knowledge or Recovery/Readiness)  
+**Current active completed step:** MASTER-8C.19 / AB20.4.12  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness (all read-only, dynamically wired)  
+**Current active step:** MASTER-8C.20 / AB20.4.13 — Next intelligence branch (Exercise Knowledge or Coach Recs or Progression)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Recovery / Readiness (MASTER-8C.19)
+- Read-only analyzer: CREATED (541 lines)
+- Sources consumed: program structure, adaptive foundation, program balance, safeguard intelligence
+- Detection: protected week, intensity capped, volume reduced, high recovery demand, tendon stress escalation
+- Honest missing-source reporting: YES
+- Deterministic IDs: YES (no Date.now)
+- Dynamic UI proof: YES (readiness headline, confidence, signals, sources, missing sources)
+- Branch status: read_only (mutation_locked)
+- Future sessions changed: NO
+- Plan Logic updated: YES (dynamic row content)
 
 ### Prehab/Rehab/Tendon Safeguards (MASTER-8C.18 + 8C.18.1 Repair)
 - Read-only analyzer: CREATED (695 lines)

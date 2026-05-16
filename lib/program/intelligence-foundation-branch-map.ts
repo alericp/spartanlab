@@ -265,22 +265,23 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // COACH RECS
+  // COACH RECS (MASTER-8C.22 - Read-only candidate bridge active)
   // -------------------------------------------------------------------------
   {
     id: 'coach_recs',
     label: 'Coach Recs',
-    uiStatus: 'partial',
-    mutationStatus: 'display_only',
-    currentRole: 'Actionable recommendations, partially dependent on evidence',
-    nextSafeAction: 'Wire evidence-backed recommendations',
-    riskIfIgnored: 'Dead tile or cosmetic recommendations',
+    uiStatus: 'read_only',
+    mutationStatus: 'mutation_locked',
+    currentRole: 'Generates source-backed read-only recommendation candidates from Recovery, Prehab/Tendon, Balance, Progression, Exercise Knowledge, and evidence status',
+    nextSafeAction: 'Refine candidate priority; applied recommendations require logged evidence',
+    riskIfIgnored: 'Dead tile or cosmetic recommendations disconnected from source branches',
     sourceFiles: [
-      'components/programs/EvidenceCoachRecommendationCard.tsx',
+      'lib/program/coach-recommendation-candidate-readonly-analyzer.ts',
       'lib/program/evidence-derived-coach-recommendations.ts',
+      'components/programs/EvidenceCoachRecommendationCard.tsx',
     ],
-    consumedBy: [],
-    currentUISurface: 'Coach Recs tile',
+    consumedBy: ['Coach Intelligence Hub'],
+    currentUISurface: 'Coach Recs tile + sheet + Plan Logic map',
     order: 9,
   },
 

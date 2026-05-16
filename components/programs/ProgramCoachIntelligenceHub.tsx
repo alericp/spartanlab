@@ -208,6 +208,11 @@ import {
   resolveProgressionPeriodization,
   type ProgressionPeriodizationReadonlyModel,
 } from '@/lib/program/progression-periodization-readonly-analyzer'
+// [MASTER-8C.22] Coach Recommendation Candidate Read-Only Analyzer
+import {
+  resolveCoachRecommendationCandidates,
+  type CoachRecommendationCandidateReadonlyModel,
+} from '@/lib/program/coach-recommendation-candidate-readonly-analyzer'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3061,11 +3066,13 @@ function AIIntelligenceFoundationMap({
   recoveryReadinessModel,
   exerciseKnowledgeCoverageModel,
   progressionPeriodizationModel,
+  coachRecommendationCandidateModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
   exerciseKnowledgeCoverageModel?: ExerciseKnowledgeCoverageReadonlyModel | null
   progressionPeriodizationModel?: ProgressionPeriodizationReadonlyModel | null
+  coachRecommendationCandidateModel?: CoachRecommendationCandidateReadonlyModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3406,6 +3413,64 @@ function AIIntelligenceFoundationMap({
                 ) : (
                   <div className="text-[9px] text-[#6A6A7A] italic">
                     Progression scan unavailable from current program props; branch remains read-only.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* [MASTER-8C.22] Dynamic coach recommendation candidate proof */}
+            {branch.id === 'coach_recs' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                {coachRecommendationCandidateModel && coachRecommendationCandidateModel.topCandidate ? (
+                  <div className="space-y-1.5">
+                    {/* Status + confidence chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        coachRecommendationCandidateModel.status === 'read_only_active'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : coachRecommendationCandidateModel.status === 'waiting_for_evidence'
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      )}>
+                        {coachRecommendationCandidateModel.headline}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        {coachRecommendationCandidateModel.confidence} confidence
+                      </span>
+                    </div>
+                    
+                    {/* Top candidate title */}
+                    <div className="text-[9px] text-[#8A8A9A]">
+                      Top: {coachRecommendationCandidateModel.topCandidate.title}
+                    </div>
+                    
+                    {/* Sources */}
+                    {coachRecommendationCandidateModel.sourceBasis.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        Sources: {coachRecommendationCandidateModel.sourceBasis.slice(0, 4).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Missing sources */}
+                    {coachRecommendationCandidateModel.missingSources.length > 0 && (
+                      <div className="text-[9px] text-amber-400/60">
+                        Missing: {coachRecommendationCandidateModel.missingSources.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Mutation lock */}
+                    <div className="text-[9px] text-cyan-400/60">
+                      Not applied. No future sessions changed.
+                    </div>
+                  </div>
+                ) : coachRecommendationCandidateModel ? (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    No actionable candidates from current source branches. Awaiting evidence or stronger signals.
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    Coach recommendation scan unavailable; branch remains read-only.
                   </div>
                 )}
               </div>
@@ -7322,6 +7387,56 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, programBalanceResult])
   
+  // [MASTER-8C.22] Coach Recommendation Candidate Read-Only Analysis
+  // Combines all existing source branch results into recommendation candidates
+  const coachRecommendationCandidateResult = useMemo<CoachRecommendationCandidateReadonlyModel | null>(() => {
+    try {
+      if (!program?.sessions?.length) return null
+      
+      const { model: adaptiveFoundationModel } = resolveVisibleAdaptiveFoundation(program)
+      
+      const hasCompletedEvidence = !!(
+        adaptiveFoundationModel?.evidenceSnapshot?.completedWorkoutEvidence?.completedSessionCount &&
+        adaptiveFoundationModel.evidenceSnapshot.completedWorkoutEvidence.completedSessionCount > 0
+      )
+      
+      return resolveCoachRecommendationCandidates({
+        recoveryModel: recoveryReadinessResult ? {
+          readinessLevel: recoveryReadinessResult.readinessLevel,
+          confidence: recoveryReadinessResult.confidence,
+          signals: recoveryReadinessResult.signals,
+        } : null,
+        safeguardModel: safeguardAnalysisResult ? {
+          riskLevel: safeguardAnalysisResult.riskLevel,
+          confidence: safeguardAnalysisResult.confidence,
+          signals: safeguardAnalysisResult.detectedSignals,
+        } : null,
+        exerciseKnowledgeModel: exerciseKnowledgeCoverageResult ? {
+          coverageRatio: exerciseKnowledgeCoverageResult.coverageRatio,
+          totalExerciseCount: exerciseKnowledgeCoverageResult.totalExerciseCount,
+          fullScienceKnownCount: exerciseKnowledgeCoverageResult.fullScienceKnownCount,
+          trulyUnknownCount: exerciseKnowledgeCoverageResult.trulyUnknownCount,
+        } : null,
+        progressionModel: progressionPeriodizationResult ? {
+          posture: progressionPeriodizationResult.posture,
+          progressionDirection: progressionPeriodizationResult.progressionDirection,
+          confidence: progressionPeriodizationResult.confidence,
+          signals: progressionPeriodizationResult.signals,
+        } : null,
+        balanceModel: programBalanceResult ? {
+          status: programBalanceResult.status,
+          findings: programBalanceResult.findings,
+        } : null,
+        hasCompletedWorkoutEvidence: hasCompletedEvidence,
+        hasWorkoutHistory: adaptiveFoundationModel?.sourceStatus?.hasWorkoutEvidence ?? false,
+        sessionCount: program.sessions.length,
+      })
+    } catch (error) {
+      console.error('[v0] Coach recommendation candidate error:', error)
+      return null
+    }
+  }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, progressionPeriodizationResult, programBalanceResult])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -7480,6 +7595,8 @@ export function ProgramCoachIntelligenceHub({
   
   // [P2F-3] Fixed: check that bundle exists AND primary is not null/undefined
   const hasCoachRecs = Boolean(coachRecommendationBundle?.primary)
+  // [MASTER-8C.22] Check for read-only candidates from source branches
+  const hasReadOnlyCoachCandidates = Boolean(coachRecommendationCandidateResult?.topCandidate)
 
   return (
     <>
@@ -7561,14 +7678,15 @@ export function ProgramCoachIntelligenceHub({
           />
 
           {/* [MASTER-8B.6.1] Coach Recs — tappable with honest empty state when no recommendations */}
+          {/* [MASTER-8C.22] Shows Preview badge when read-only candidates exist */}
           <HubButton
             icon={<Sparkles className="w-3.5 h-3.5 text-amber-400" />}
             label="Coach Recs"
-            badge={hasCoachRecs ? 'Active' : undefined}
-            badgeVariant={hasCoachRecs ? 'success' : 'secondary'}
-            summary={hasCoachRecs ? undefined : 'View'}
+            badge={hasCoachRecs ? 'Active' : hasReadOnlyCoachCandidates ? 'Preview' : undefined}
+            badgeVariant={hasCoachRecs ? 'success' : hasReadOnlyCoachCandidates ? 'info' : 'secondary'}
+            summary={hasCoachRecs ? undefined : hasReadOnlyCoachCandidates ? 'Read-only' : 'View'}
             onClick={() => setCoachRecsOpen(true)}
-            sourceUnavailable={!hasCoachRecs}
+            sourceUnavailable={!hasCoachRecs && !hasReadOnlyCoachCandidates}
           />
 
           {/* [P2B] Method Planner — clearer entry point, always visible */}
@@ -7818,6 +7936,74 @@ export function ProgramCoachIntelligenceHub({
           <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
             {coachRecommendationBundle?.primary ? (
               <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
+            ) : coachRecommendationCandidateResult?.topCandidate ? (
+              /* [MASTER-8C.22] Read-only recommendation candidates from source branches */
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      Read-only preview
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                      {coachRecommendationCandidateResult.confidence} confidence
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#9A9AAA]">
+                    {coachRecommendationCandidateResult.candidates.length} source-backed candidate{coachRecommendationCandidateResult.candidates.length > 1 ? 's' : ''} from {coachRecommendationCandidateResult.sourceBasis.length} branch{coachRecommendationCandidateResult.sourceBasis.length > 1 ? 'es' : ''}
+                  </p>
+                </div>
+                
+                {/* Candidates */}
+                {coachRecommendationCandidateResult.candidates.slice(0, 4).map((candidate) => (
+                  <div 
+                    key={candidate.id}
+                    className="rounded-lg border border-[#2A2A35] bg-[#1A1A1F] p-3"
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        candidate.priority === 'high'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : candidate.priority === 'medium'
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : 'bg-[#1A1A2E] text-[#7A7A8A] border-[#2A2A35]'
+                      )}>
+                        {candidate.priority}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#6A6A7A] border border-[#2A2A35]">
+                        {candidate.category.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">{candidate.title}</h4>
+                    <p className="text-xs text-[#8A8A9A] mb-2 leading-relaxed">{candidate.recommendation}</p>
+                    {candidate.why.length > 0 && (
+                      <div className="text-[10px] text-[#6A6A7A] mb-1">
+                        {candidate.why.join(' | ')}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-[#5A5A6A]">
+                      Sources: {candidate.sourceBasis.join(', ')}
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Missing sources */}
+                {coachRecommendationCandidateResult.missingSources.length > 0 && (
+                  <div className="rounded-lg border border-amber-500/10 bg-amber-500/5 p-2.5">
+                    <div className="text-[10px] text-amber-400/70">
+                      Missing for applied recs: {coachRecommendationCandidateResult.missingSources.join(', ')}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Mutation lock footer */}
+                <div className="text-center py-2">
+                  <p className="text-[10px] text-cyan-400/60">
+                    Not applied to program. No future sessions changed.
+                  </p>
+                </div>
+              </div>
             ) : (
               /* [P2F-3] Clean empty state when no coach recommendations exist */
               <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] p-6 text-center">
@@ -7828,7 +8014,7 @@ export function ProgramCoachIntelligenceHub({
                   No coach recommendations yet
                 </h3>
                 <p className="text-sm text-[#7A7A8A] leading-relaxed">
-                  Coach recommendations appear after logged workouts, calibration results, or enough performance evidence.
+                  Coach recommendations appear after source branches or logged workout evidence produce a safe candidate.
                 </p>
               </div>
             )}
@@ -7931,7 +8117,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} />
           </div>
         </SheetContent>
       </Sheet>

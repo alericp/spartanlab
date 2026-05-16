@@ -178,6 +178,14 @@ import {
   type SelectiveRemovalResult,
   type AppliedMethodPlacement,
 } from '@/lib/program/method-frequency-placement-apply-contract'
+// [MASTER-8C.16] Intelligence Foundation Branch Map
+import {
+  INTELLIGENCE_FOUNDATION_BRANCH_MAP,
+  getFoundationMapSummary,
+  getUIStatusLabel,
+  getMutationStatusLabel,
+  type IntelligenceFoundationBranchEntry,
+} from '@/lib/program/intelligence-foundation-branch-map'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3013,6 +3021,160 @@ function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
     default:
       return 'bg-[#2A2A35] border-[#3A3A45]'
   }
+}
+
+// =============================================================================
+// [MASTER-8C.16] AI INTELLIGENCE FOUNDATION MAP COMPONENT
+// =============================================================================
+
+/**
+ * AI Intelligence Foundation Map - displays all intelligence branches with
+ * their status, mutation capability, and next safe actions.
+ * 
+ * This is a read-only component that does not change any workouts.
+ */
+function AIIntelligenceFoundationMap() {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const summary = getFoundationMapSummary()
+  
+  // Helper to get status chip styling
+  const getStatusChipStyle = (status: IntelligenceFoundationBranchEntry['uiStatus']) => {
+    switch (status) {
+      case 'active':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      case 'partial':
+        return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+      case 'read_only':
+        return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+      case 'mutation_locked':
+        return 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+      case 'protected_runtime':
+        return 'bg-violet-500/10 text-violet-400 border-violet-500/20'
+      case 'missing_foundation':
+        return 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+      case 'future_needed':
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+      default:
+        return 'bg-[#2A2A35] text-[#8A8A9A] border-[#3A3A45]'
+    }
+  }
+  
+  // Filter to show key branches in collapsed view
+  const keyBranches = INTELLIGENCE_FOUNDATION_BRANCH_MAP.filter(b => 
+    ['exercise_skill_knowledge_base', 'program_balance', 'prehab_rehab_tendon_joint', 
+     'set_volume_prescription_rationale', 'live_workout_runtime'].includes(b.id)
+  )
+  
+  const branchesToShow = isExpanded ? INTELLIGENCE_FOUNDATION_BRANCH_MAP : keyBranches
+  
+  return (
+    <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#1F1F27] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Brain className="w-4 h-4 text-cyan-400" />
+          <span className="text-sm font-medium text-[#E6E9EF]">AI Intelligence Foundation Map</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            {summary.total} branches
+          </span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-[#6A6A7A]" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#6A6A7A]" />
+        )}
+      </button>
+      
+      {/* Notice */}
+      <div className="px-4 pb-2">
+        <p className="text-[9px] text-[#6A6A7A] leading-relaxed">
+          This map shows which intelligence branches are source-backed, which are read-only, 
+          and which are locked before future workout mutation. No workout changes from this panel.
+        </p>
+      </div>
+      
+      {/* Summary chips */}
+      <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          {summary.active} Active
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+          {summary.readOnly} Read-only
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          {summary.partial} Partial
+        </span>
+        {summary.missingFoundation > 0 && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">
+            {summary.missingFoundation} Foundation needed
+          </span>
+        )}
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
+          {summary.protectedRuntime} Protected
+        </span>
+      </div>
+      
+      {/* Branch rows */}
+      <div className="border-t border-[#2A2A35]">
+        {branchesToShow.map((branch) => (
+          <div 
+            key={branch.id}
+            className="px-4 py-2.5 border-b border-[#2A2A35]/50 last:border-b-0"
+          >
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <span className="text-[11px] font-medium text-[#E6E9EF]">{branch.label}</span>
+              <span className={cn(
+                "text-[9px] px-1.5 py-0.5 rounded border whitespace-nowrap",
+                getStatusChipStyle(branch.uiStatus)
+              )}>
+                {getUIStatusLabel(branch.uiStatus)}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#8A8A9A] leading-relaxed mb-1.5">
+              {branch.currentRole}
+            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A45]">
+                {getMutationStatusLabel(branch.mutationStatus)}
+              </span>
+              {branch.currentUISurface && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A45]">
+                  {branch.currentUISurface}
+                </span>
+              )}
+            </div>
+            <p className="text-[9px] text-cyan-400/70 mt-1.5">
+              Next: {branch.nextSafeAction}
+            </p>
+          </div>
+        ))}
+      </div>
+      
+      {/* Set/Volume rationale note */}
+      <div className="px-4 py-3 bg-[#0F0F12] border-t border-[#2A2A35]">
+        <div className="flex items-start gap-2">
+          <Info className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" />
+          <p className="text-[9px] text-[#8A8A9A] leading-relaxed">
+            <span className="text-amber-400">Set/Volume Prescription Rationale</span> is tracked as a future 
+            intelligence branch. This step does not change current set counts or volume prescriptions.
+          </p>
+        </div>
+      </div>
+      
+      {/* Expand/collapse toggle */}
+      {!isExpanded && (
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="w-full px-4 py-2 text-[10px] text-cyan-400 hover:bg-[#1F1F27] transition-colors border-t border-[#2A2A35]"
+        >
+          Show all {summary.total} branches
+        </button>
+      )}
+    </div>
+  )
 }
 
 function ProgramBalanceSheetContent({
@@ -7231,7 +7393,7 @@ export function ProgramCoachIntelligenceHub({
               How your program was constructed and why
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+          <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)] space-y-4">
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -7253,6 +7415,9 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            
+            {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
+            <AIIntelligenceFoundationMap />
           </div>
         </SheetContent>
       </Sheet>

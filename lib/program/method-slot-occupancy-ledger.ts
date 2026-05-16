@@ -208,6 +208,7 @@ function isPrimarySkillRow(exercise: Record<string, unknown>): boolean {
 
 /**
  * Builds a slot occupancy entry for a single exercise
+ * [MASTER-8C.10.5] Now accepts separate row-level method ownership from methodStructures
  */
 function buildExerciseSlotOccupancy(
   exercise: Record<string, unknown>,
@@ -217,7 +218,10 @@ function buildExerciseSlotOccupancy(
   dayNumber: number,
   groupedMemberIds: Set<string>,
   groupedMemberNames: Set<string>,
-  groupedMethodTypes: string[]
+  groupedMethodTypes: string[],
+  rowMethodOwnedIds: Set<string>,
+  rowMethodOwnedNames: Set<string>,
+  rowMethodOwnerByIdOrName: Map<string, string>
 ): ExerciseMethodSlotOccupancy {
   const exerciseId = typeof exercise.id === 'string' ? exercise.id : `row-${rowIndex}`
   const exerciseName = typeof exercise.name === 'string' ? exercise.name : 'Unknown Exercise'
@@ -280,20 +284,28 @@ function buildExerciseSlotOccupancy(
   const isMethodOverrideKeySupported = methodOverrideMethodKey !== null &&
     SUPPORTED_ROW_EXECUTION_METHODS.has(methodOverrideMethodKey)
   
-  // [MASTER-8C.10.3] A row is ONLY method-owned if there's actual override evidence:
+  // [MASTER-8C.10.5] Check if this row is owned by a row-level method from methodStructures
+  const isOwnedByMethodStructure = rowMethodOwnedIds.has(exerciseId) || 
+    (normalizedName.length > 0 && rowMethodOwnedNames.has(normalizedName))
+  const methodStructureOwnerKey = isOwnedByMethodStructure 
+    ? (rowMethodOwnerByIdOrName.get(exerciseId) ?? rowMethodOwnerByIdOrName.get(normalizedName) ?? null)
+    : null
+  
+  // [MASTER-8C.10.3 + 8C.10.5] A row is method-owned if:
   // 1. methodOverrideApplied === true, OR
   // 2. setExecutionMethod is one of the supported row execution methods, OR
-  // 3. methodOverrideMethodKey is one of the supported row method keys
+  // 3. methodOverrideMethodKey is one of the supported row method keys, OR
+  // 4. [8C.10.5] Row is owned by an applied row-level methodStructure
   // 
   // Generic training labels like trainingMethod: "max_strength", methodFamily: "push",
   // appliedMethod without override evidence do NOT count as row-method ownership.
-  const isRowMethodOwned = methodOverrideApplied || isSetExecutionMethodSupported || isMethodOverrideKeySupported
+  const isRowMethodOwned = methodOverrideApplied || isSetExecutionMethodSupported || isMethodOverrideKeySupported || isOwnedByMethodStructure
   
   // Determine the owning method key
   let rowOwnerMethodKey: string | null = null
   let rowOwnerSetExecutionMethod: string | null = null
   if (isRowMethodOwned) {
-    rowOwnerMethodKey = methodOverrideMethodKey ?? (isSetExecutionMethodSupported ? setExecutionMethod : null)
+    rowOwnerMethodKey = methodOverrideMethodKey ?? (isSetExecutionMethodSupported ? setExecutionMethod : null) ?? methodStructureOwnerKey
     rowOwnerSetExecutionMethod = isSetExecutionMethodSupported ? setExecutionMethod : null
   }
   
@@ -301,8 +313,8 @@ function buildExerciseSlotOccupancy(
     evidence.push(`Row method: ${rowOwnerMethodKey ?? 'override_applied'}`)
   }
   
-  // [MASTER-8C.10.3] Invalid overlap detection: row-method inside grouped structure
-  const hasInvalidOverlap = isGroupedOwned && (methodOverrideApplied || isSetExecutionMethodSupported || isMethodOverrideKeySupported)
+  // [MASTER-8C.10.3 + 8C.10.5] Invalid overlap detection: row-method inside grouped structure
+  const hasInvalidOverlap = isGroupedOwned && isRowMethodOwned
   if (hasInvalidOverlap) {
     evidence.push(`INVALID OVERLAP: row-level ${rowOwnerMethodKey ?? 'method'} inside grouped ${groupedOwnerMethodKey}`)
   }
@@ -394,26 +406,79 @@ function buildExerciseSlotOccupancy(
   }
 }
 
+// [MASTER-8C.10.5] Method family classification constants
+const GROUPED_STRUCTURE_METHOD_FAMILIES = new Set([
+  'circuit',
+  'superset',
+  'density_block',
+])
+
+const ROW_LEVEL_METHOD_FAMILIES = new Set([
+  'top_set',
+  'top_sets',
+  'topset',
+  'backoff_set',
+  'backoff_sets',
+  'backoff',
+  'drop_set',
+  'drop_sets',
+  'dropset',
+  'rest_pause',
+  'rest-pause',
+  'restpause',
+  'cluster',
+  'cluster_set',
+  'cluster_sets',
+  'myo_reps',
+  'myoreps',
+])
+
+const OCCUPYING_METHOD_STATUSES = new Set([
+  'applied',
+  'already_applied',
+])
+
 /**
- * Collects grouped method member information from session structures
+ * [MASTER-8C.10.5] Collects grouped method member information from session structures.
+ * ONLY grouped structural methods (circuit/superset/density_block) with applied status populate grouped ownership.
+ * Row-level methods (top_set/drop_set/rest_pause/cluster/backoff) do NOT populate grouped ownership.
  */
 function collectGroupedMethodMembers(session: Record<string, unknown>): {
   groupedMemberIds: Set<string>
   groupedMemberNames: Set<string>
   groupedMethodTypes: string[]
+  rowMethodOwnedIds: Set<string>
+  rowMethodOwnedNames: Set<string>
+  rowMethodOwnerByIdOrName: Map<string, string>
 } {
   const groupedMemberIds = new Set<string>()
   const groupedMemberNames = new Set<string>()
   const groupedMethodTypes: string[] = []
+  const rowMethodOwnedIds = new Set<string>()
+  const rowMethodOwnedNames = new Set<string>()
+  const rowMethodOwnerByIdOrName = new Map<string, string>()
   
-  // Helper to process a group object
-  const processGroup = (group: Record<string, unknown>) => {
-    const groupType = normalizeMethodKey(group.type) ?? 
-                      normalizeMethodKey(group.methodFamily) ?? 
-                      normalizeMethodKey(group.groupType)
-    if (groupType) {
-      groupedMethodTypes.push(groupType)
-    }
+  // Helper to check if a method family is a grouped structure
+  const isGroupedStructureFamily = (family: string | null): boolean => {
+    if (!family) return false
+    return GROUPED_STRUCTURE_METHOD_FAMILIES.has(family.toLowerCase().replace(/[\s-]+/g, '_'))
+  }
+  
+  // Helper to check if a method family is row-level
+  const isRowLevelFamily = (family: string | null): boolean => {
+    if (!family) return false
+    return ROW_LEVEL_METHOD_FAMILIES.has(family.toLowerCase().replace(/[\s-]+/g, '_'))
+  }
+  
+  // Helper to check if status indicates the method is applied/occupying
+  const isOccupyingStatus = (status: unknown): boolean => {
+    if (typeof status !== 'string') return false
+    return OCCUPYING_METHOD_STATUSES.has(status.toLowerCase().replace(/[\s-]+/g, '_'))
+  }
+  
+  // Helper to process a grouped structure (circuit/superset/density_block)
+  const processGroupedStructure = (group: Record<string, unknown>, groupType: string) => {
+    groupedMethodTypes.push(groupType)
     
     // Collect member IDs
     const idSources = ['exerciseIds', 'memberIds', 'members']
@@ -443,20 +508,64 @@ function collectGroupedMethodMembers(session: Record<string, unknown>): {
     }
   }
   
-  // Check session.styledGroups
+  // Helper to process a row-level method structure
+  const processRowLevelMethod = (struct: Record<string, unknown>, methodFamily: string) => {
+    // Get target exercise from various possible fields
+    const targetId = struct.targetExerciseId ?? struct.exerciseId ?? 
+                     (Array.isArray(struct.exerciseIds) ? struct.exerciseIds[0] : null)
+    const targetName = struct.targetExerciseName ?? struct.exerciseName ??
+                       (Array.isArray(struct.exerciseNames) ? struct.exerciseNames[0] : null)
+    
+    if (typeof targetId === 'string' && targetId) {
+      rowMethodOwnedIds.add(targetId)
+      rowMethodOwnerByIdOrName.set(targetId, methodFamily)
+    }
+    if (typeof targetName === 'string' && targetName) {
+      const normalized = normalizeExerciseName(targetName)
+      rowMethodOwnedNames.add(normalized)
+      rowMethodOwnerByIdOrName.set(normalized, methodFamily)
+    }
+  }
+  
+  // Check session.styledGroups - these are typically grouped structures
   if (Array.isArray(session.styledGroups)) {
     for (const group of session.styledGroups) {
       if (group && typeof group === 'object') {
-        processGroup(group as Record<string, unknown>)
+        const g = group as Record<string, unknown>
+        const groupType = normalizeMethodKey(g.type) ?? 
+                          normalizeMethodKey(g.methodFamily) ?? 
+                          normalizeMethodKey(g.groupType)
+        // styledGroups are typically circuits/supersets - process if grouped family
+        if (groupType && isGroupedStructureFamily(groupType)) {
+          processGroupedStructure(g, groupType)
+        }
       }
     }
   }
   
-  // Check session.methodStructures
+  // [MASTER-8C.10.5] Check session.methodStructures with proper family/status filtering
   if (Array.isArray(session.methodStructures)) {
     for (const struct of session.methodStructures) {
       if (struct && typeof struct === 'object') {
-        processGroup(struct as Record<string, unknown>)
+        const s = struct as Record<string, unknown>
+        const methodFamily = normalizeMethodKey(s.type) ?? 
+                             normalizeMethodKey(s.methodFamily) ?? 
+                             normalizeMethodKey(s.family) ??
+                             normalizeMethodKey(s.groupType)
+        const status = s.status
+        
+        // Only process if status indicates the method is applied/occupying
+        if (!isOccupyingStatus(status)) {
+          continue // Skip blocked/not_needed/no_safe_target/error entries
+        }
+        
+        // Separate grouped structures from row-level methods
+        if (methodFamily && isGroupedStructureFamily(methodFamily)) {
+          processGroupedStructure(s, methodFamily)
+        } else if (methodFamily && isRowLevelFamily(methodFamily)) {
+          processRowLevelMethod(s, methodFamily)
+        }
+        // Non-grouped, non-row-level methods (prescription modifiers, etc.) don't occupy slots
       }
     }
   }
@@ -466,12 +575,25 @@ function collectGroupedMethodMembers(session: Record<string, unknown>): {
   if (styleMetadata && Array.isArray(styleMetadata.styledGroups)) {
     for (const group of styleMetadata.styledGroups) {
       if (group && typeof group === 'object') {
-        processGroup(group as Record<string, unknown>)
+        const g = group as Record<string, unknown>
+        const groupType = normalizeMethodKey(g.type) ?? 
+                          normalizeMethodKey(g.methodFamily) ?? 
+                          normalizeMethodKey(g.groupType)
+        if (groupType && isGroupedStructureFamily(groupType)) {
+          processGroupedStructure(g, groupType)
+        }
       }
     }
   }
   
-  return { groupedMemberIds, groupedMemberNames, groupedMethodTypes }
+  return { 
+    groupedMemberIds, 
+    groupedMemberNames, 
+    groupedMethodTypes,
+    rowMethodOwnedIds,
+    rowMethodOwnedNames,
+    rowMethodOwnerByIdOrName,
+  }
 }
 
 /**
@@ -486,7 +608,15 @@ export function buildSessionMethodSlotLedger(
   const sessionLabel = `Day ${dayNumber}`
   
   const exercises = Array.isArray(session.exercises) ? session.exercises : []
-  const { groupedMemberIds, groupedMemberNames, groupedMethodTypes } = collectGroupedMethodMembers(session)
+  // [MASTER-8C.10.5] Get both grouped and row-level ownership from collector
+  const { 
+    groupedMemberIds, 
+    groupedMemberNames, 
+    groupedMethodTypes,
+    rowMethodOwnedIds,
+    rowMethodOwnedNames,
+    rowMethodOwnerByIdOrName,
+  } = collectGroupedMethodMembers(session)
   
   const slots: ExerciseMethodSlotOccupancy[] = []
   
@@ -502,7 +632,10 @@ export function buildSessionMethodSlotLedger(
       dayNumber,
       groupedMemberIds,
       groupedMemberNames,
-      groupedMethodTypes
+      groupedMethodTypes,
+      rowMethodOwnedIds,
+      rowMethodOwnedNames,
+      rowMethodOwnerByIdOrName
     )
     slots.push(slot)
   }

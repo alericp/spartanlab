@@ -6,20 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.18)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.18.1)
 
-**Current active completed step:** MASTER-8C.18 / AB20.4.11  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards (all read-only)  
+**Current active completed step:** MASTER-8C.18.1 / AB20.4.11.1  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards (all read-only, now dynamically wired)  
 **Current active step:** MASTER-8C.19 / AB20.4.12 — Next intelligence branch (Exercise Knowledge or Recovery/Readiness)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
 
-### Prehab/Rehab/Tendon Safeguards (MASTER-8C.18)
+### Prehab/Rehab/Tendon Safeguards (MASTER-8C.18 + 8C.18.1 Repair)
 - Read-only analyzer: CREATED (695 lines)
+- Date.now() removed: YES (deterministic IDs now)
+- Analyzer wired to UI: YES (useMemo + prop passing)
+- Dynamic UI proof: YES (risk/confidence/signals rendered)
 - Detection: wrist, elbow/biceps tendon, shoulder, grip/forearm, core/hip flexor
 - Branch status: read_only (mutation_locked)
 - Substitutions changed: NO
 - Exercises changed: NO
-- Plan Logic updated: YES
+- Plan Logic updated: YES (dynamic row content)
 
 ### Set/Volume Prescription Rationale (MASTER-8C.17)
 - Read-only analyzer: CREATED

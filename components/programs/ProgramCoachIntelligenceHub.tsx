@@ -160,6 +160,7 @@ import {
 import {
   buildFrequencySlotPlacementPreview,
   type FrequencySlotPlacementPreview,
+  type FrequencySlotPlacementTarget,
 } from '@/lib/program/method-frequency-slot-placement-preview'
 import type { CanonicalMethodFamily } from '@/lib/program/method-structure-contract'
 // [MASTER-8C.10] Frequency Placement Apply Contract
@@ -4031,12 +4032,139 @@ function ProgramBalanceSheetContent({
 // =============================================================================
 
 // =============================================================================
-// [MASTER-8C.12.1A] METHOD DETAIL FREQUENCY CONTROLS
+// [MASTER-8C.12.2] AFFECTED DAY PREVIEW CARD
 // =============================================================================
 
 /**
- * Props for method-specific frequency controls inside method detail view
+ * [MASTER-8C.12.2] Compact card showing how a method will blend into a workout day.
+ * Shows the target exercise, surrounding exercises, before/after state, and why chosen.
  */
+function AffectedDayPreviewCard({
+  target,
+  methodLabel,
+  isExpanded: defaultExpanded = false,
+}: {
+  target: FrequencySlotPlacementTarget
+  methodLabel: string
+  isExpanded?: boolean
+}) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  
+  return (
+    <div className="rounded-lg bg-[#0F0F12] border border-[#2A2A35] overflow-hidden">
+      {/* Compact header - always visible */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2 p-2 text-left hover:bg-[#1A1A22]/50 transition-colors"
+      >
+        <span className="text-[9px] font-medium text-emerald-400 shrink-0 min-w-[40px]">
+          {target.dayTitle}
+        </span>
+        <span className="text-[10px] text-[#E6E9EF] truncate flex-1">
+          {target.exerciseNames[0]}
+        </span>
+        <span className="text-[9px] text-[#6A6A7A] shrink-0 max-w-[120px] truncate">
+          {target.whyChosen}
+        </span>
+        {isExpanded ? (
+          <ChevronUp className="w-3 h-3 text-[#6A6A7A] shrink-0" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-[#6A6A7A] shrink-0" />
+        )}
+      </button>
+      
+      {/* Expanded affected-day preview */}
+      {isExpanded && (
+        <div className="px-2 pb-2 space-y-2 border-t border-[#2A2A35]/50">
+          {/* Session focus */}
+          {target.sessionFocus && (
+            <div className="pt-2 flex items-center gap-1.5">
+              <Target className="w-3 h-3 text-[#6A6A7A]" />
+              <span className="text-[9px] text-[#8A8A9A]">{target.sessionFocus}</span>
+            </div>
+          )}
+          
+          {/* Before → After transformation */}
+          <div className="flex items-center gap-2 text-[9px]">
+            <span className="text-[#6A6A7A]">Before:</span>
+            <span className="text-[#8A8A9A]">{target.previewBefore}</span>
+            <ArrowRight className="w-3 h-3 text-emerald-400/60" />
+            <span className="text-[#6A6A7A]">After:</span>
+            <span className="text-emerald-400 font-medium">{methodLabel}</span>
+          </div>
+          
+          {/* Nearby exercises context */}
+          {target.nearbyExercises.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-[9px] text-[#6A6A7A]">Surrounding exercises:</span>
+              <div className="flex flex-wrap gap-1">
+                {target.nearbyExercises.map((ex, i) => (
+                  <span 
+                    key={i}
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A22] text-[#8A8A9A] border border-[#2A2A35]"
+                  >
+                    {ex}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Day method load status */}
+          <div className="flex items-center gap-3 text-[9px]">
+            {target.isFirstPlacementOnDay ? (
+              <span className="flex items-center gap-1 text-emerald-400/80">
+                <Check className="w-3 h-3" />
+                First method on this day
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-amber-400/80">
+                <AlertTriangle className="w-3 h-3" />
+                Stacked placement
+              </span>
+            )}
+            {target.dayMethodLoad > 0 && (
+              <span className="text-[#6A6A7A]">
+                {target.dayMethodLoad} existing method{target.dayMethodLoad > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          
+          {/* Caution reasons if any */}
+          {target.cautionReasons.length > 0 && (
+            <div className="space-y-0.5">
+              {target.cautionReasons.map((reason, i) => (
+                <p key={i} className="text-[9px] text-amber-400/70 flex items-start gap-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  {reason}
+                </p>
+              ))}
+            </div>
+          )}
+          
+          {/* Confidence badge */}
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              'text-[9px] px-1.5 py-0.5 rounded',
+              target.confidence === 'high' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : target.confidence === 'medium'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  : 'bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A4A]'
+            )}>
+              {target.confidence} confidence
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// [MASTER-8C.12.1A] METHOD DETAIL FREQUENCY CONTROLS
+// =============================================================================
+
 interface MethodDetailFrequencyControlsProps {
   program: AdaptiveProgram | null
   methodKey: string
@@ -4223,22 +4351,15 @@ function MethodDetailFrequencyControls({
               <p className="text-[10px] text-[#8A8A9A]">
                 Proposed targets for {methodLabel}:
               </p>
-              <div className="space-y-1.5">
+              {/* [MASTER-8C.12.2] Enhanced affected-day preview cards */}
+              <div className="space-y-2">
                 {placementPreview.targets.map((target, idx) => (
-                  <div
+                  <AffectedDayPreviewCard
                     key={idx}
-                    className="flex items-center gap-2 p-2 rounded bg-[#0F0F12] border border-[#2A2A35]"
-                  >
-                    <span className="text-[9px] font-medium text-emerald-400 shrink-0">
-                      {target.dayTitle}
-                    </span>
-                    <span className="text-[10px] text-[#9A9AAA] truncate">
-                      {target.exerciseNames[0]}
-                    </span>
-                    <span className="text-[9px] text-[#6A6A7A] ml-auto shrink-0">
-                      {target.whyChosen}
-                    </span>
-                  </div>
+                    target={target}
+                    methodLabel={methodLabel}
+                    isExpanded={idx === 0}  // First target expanded by default
+                  />
                 ))}
               </div>
               
@@ -5767,17 +5888,9 @@ function RequestedMethodsSheetContent({
   <MethodContractFoundationSection />
   </div>
 
-  {/* [MASTER-8C.8] Slot Eligibility & Frequency Preview Section */}
-  {/* [MASTER-8C.12.1B] Demoted to "Advanced Diagnostics" - collapsed by default */}
+  {/* [MASTER-8C.12.2] Old Slot Eligibility & Frequency Preview Section REMOVED from normal view */}
   {/* Users should use method-detail frequency controls as the primary apply path */}
-  <div className="p-3 rounded-lg bg-[#1A1A22]/50 border border-[#2A2A35]/50">
-    <SlotEligibilityFrequencyPreviewSection 
-      program={program} 
-      onProgramUpdate={onProgramUpdate} 
-      onApplyFrequencyPlacement={onApplyFrequencyPlacement}
-      isDiagnosticMode={true}
-    />
-  </div>
+  {/* The SlotEligibilityFrequencyPreviewSection component is kept for potential debug use but not rendered */}
   
   {/* [MASTER-8C.12.1C] Manage Applied Additions Section */}
   {onRemoveSelectedPlacements && (

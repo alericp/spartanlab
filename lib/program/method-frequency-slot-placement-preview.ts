@@ -84,6 +84,12 @@ export interface FrequencySlotPlacementTarget {
   readonly previewAfter: string
   readonly wouldMutateIfAppliedLater: false
   readonly appliedNow: false
+  // [MASTER-8C.12.2] Affected-day preview fields
+  readonly nearbyExercises: readonly string[]  // 2-4 surrounding exercises for context
+  readonly existingMethodsOnDay: readonly string[]  // Other methods already on this day
+  readonly isFirstPlacementOnDay: boolean  // Whether this is first method placement on day
+  readonly dayMethodLoad: number  // Total method load on this day
+  readonly sessionFocus?: string  // Session focus/title if available
 }
 
 /**
@@ -407,7 +413,44 @@ function selectPlacementTargets(
     }
   })
   
-  // Sort slots by ranking priority (enhanced with method load scoring)
+  // [MASTER-8C.12.2] Score days for better day-aware selection
+  // Group slots by session for day-level scoring
+  const slotsBySession = new Map<string, MethodEligibleSlot[]>()
+  eligibleSlots.forEach(slot => {
+    if (!slotsBySession.has(slot.sessionId)) {
+      slotsBySession.set(slot.sessionId, [])
+    }
+    slotsBySession.get(slot.sessionId)!.push(slot)
+  })
+  
+  // Calculate day scores (lower = better)
+  const dayScores = new Map<string, number>()
+  const allSessionIndices = [...new Set(eligibleSlots.map(s => s.sessionIndex))]
+  const maxSessionIndex = Math.max(...allSessionIndices, 0)
+  
+  slotsBySession.forEach((slots, sessionId) => {
+    const sessionIndex = slots[0]?.sessionIndex ?? 0
+    const methodLoad = sessionMethodLoad.get(sessionIndex) || 0
+    const hasEligibleSlots = slots.some(s => s.isEligible && !s.isSyntheticArtifact && !s.isAlreadyMethodOwned)
+    const bestSlotConfidence = slots.reduce((best, s) => {
+      if (!s.isEligible || s.isSyntheticArtifact || s.isAlreadyMethodOwned) return best
+      const confScore = s.confidence === 'high' ? 0 : s.confidence === 'medium' ? 1 : 2
+      return Math.min(best, confScore)
+    }, 3)
+    
+    // Score components (lower = better):
+    // - Method load is primary (0-10 scale per method)
+    // - Confidence is secondary  
+    // - Later days are NOT penalized (don't bias toward early days)
+    let score = methodLoad * 10 + bestSlotConfidence
+    
+    // If no eligible slots, heavily penalize
+    if (!hasEligibleSlots) score += 1000
+    
+    dayScores.set(sessionId, score)
+  })
+  
+  // Sort slots by ranking priority (enhanced with day-aware scoring)
   const rankedSlots = eligibleSlots
     .filter(slot => slot.isEligible && !slot.isSyntheticArtifact)
     .sort((a, b) => {
@@ -416,35 +459,28 @@ function selectPlacementTargets(
         return a.isAlreadyMethodOwned ? 1 : -1
       }
       
-      // 2. Prefer high confidence
+      // 2. [MASTER-8C.12.2] Prefer days with lower scores (less method load)
+      const dayScoreA = dayScores.get(a.sessionId) ?? 999
+      const dayScoreB = dayScores.get(b.sessionId) ?? 999
+      if (dayScoreA !== dayScoreB) return dayScoreA - dayScoreB
+      
+      // 3. Prefer high confidence
       const confOrder = { high: 0, medium: 1, low: 2 }
       const confDiff = confOrder[a.confidence] - confOrder[b.confidence]
       if (confDiff !== 0) return confDiff
       
-      // 3. Prefer not primary skill sensitive
+      // 4. Prefer not primary skill sensitive
       if (a.isPrimarySkillSensitive !== b.isPrimarySkillSensitive) {
         return a.isPrimarySkillSensitive ? 1 : -1
       }
       
-      // 4. Prefer fewer caution reasons
+      // 5. Prefer fewer caution reasons
       const cautionDiff = a.cautionReasons.length - b.cautionReasons.length
       if (cautionDiff !== 0) return cautionDiff
       
-      // 5. [MASTER-8C.12.1D] Prefer sessions with lower method load (fewer applied methods)
-      // This prevents stacking all new methods on early days
-      const loadA = sessionMethodLoad.get(a.sessionIndex) || 0
-      const loadB = sessionMethodLoad.get(b.sessionIndex) || 0
-      if (loadA !== loadB) return loadA - loadB
-      
-      // 6. Spread across sessions - prefer spacing from middle rather than early-first
-      // Use distance from median session for better distribution
-      const maxIndex = Math.max(...eligibleSlots.map(s => s.sessionIndex))
-      const midpoint = maxIndex / 2
-      const distA = Math.abs(a.sessionIndex - midpoint)
-      const distB = Math.abs(b.sessionIndex - midpoint)
-      // Smaller distance to midpoint = better spread, but also consider diversity
-      // For first placement, prefer slightly earlier; subsequent placements should vary
-      return distA - distB
+      // 6. [MASTER-8C.12.2] Do NOT bias toward early days
+      // Instead, use a deterministic but neutral order (by session index for stability)
+      return a.sessionIndex - b.sessionIndex
     })
   
   // Select slots with enhanced spacing and duplicate avoidance
@@ -521,7 +557,15 @@ function selectPlacementTargets(
     usedExerciseNames.add(slotExName)
     selectedSessionIndices.push(slot.sessionIndex)
     const methodLoad = sessionMethodLoad.get(slot.sessionIndex) || 0
-    selectedTargets.push(buildPlacementTarget(methodPreview, slot, selectedTargets.length + 1, methodLoad))
+    const isFirstOnDay = !selectedTargets.some(t => t.sessionId === slot.sessionId)
+    selectedTargets.push(buildPlacementTarget(
+      methodPreview, 
+      slot, 
+      selectedTargets.length + 1, 
+      methodLoad,
+      isFirstOnDay,
+      eligibleSlots
+    ))
   }
   
   return { targets: selectedTargets, skippedCandidates, warnings }
@@ -530,14 +574,41 @@ function selectPlacementTargets(
 /**
  * Build a single placement target from a slot
  * [MASTER-8C.12.1D] Now accepts method load for whyChosen reasoning
+ * [MASTER-8C.12.2] Now includes affected-day preview context
  */
 function buildPlacementTarget(
   methodPreview: MethodFrequencyPreview,
   slot: MethodEligibleSlot,
   placementNumber: number,
-  methodLoad?: number
+  methodLoad: number,
+  isFirstOnDay: boolean,
+  allSlots: MethodEligibleSlot[]
 ): FrequencySlotPlacementTarget {
   const exerciseName = slot.exerciseNames[0] ?? 'Unknown Exercise'
+  
+  // [MASTER-8C.12.2] Build nearby exercises for affected-day preview
+  const sameSessionSlots = allSlots
+    .filter(s => s.sessionId === slot.sessionId)
+    .sort((a, b) => a.slotKind.localeCompare(b.slotKind))
+  
+  const slotIndex = sameSessionSlots.findIndex(s => 
+    s.exerciseIds[0] === slot.exerciseIds[0]
+  )
+  
+  // Get 2 exercises before and 2 after for context (up to 4 total)
+  const nearbyStart = Math.max(0, slotIndex - 2)
+  const nearbyEnd = Math.min(sameSessionSlots.length, slotIndex + 3)
+  const nearbyExercises = sameSessionSlots
+    .slice(nearbyStart, nearbyEnd)
+    .filter(s => s.exerciseIds[0] !== slot.exerciseIds[0])
+    .map(s => s.exerciseNames[0] ?? 'Unknown')
+    .slice(0, 4)
+  
+  // Find existing methods on this day (count of method-owned slots)
+  const existingMethodsOnDay = sameSessionSlots
+    .filter(s => s.isAlreadyMethodOwned)
+    .map(s => 'Method override')  // Generic label since we don't have specific method names
+    .filter((v, i, a) => a.indexOf(v) === i) // Unique
   
   return {
     methodKey: methodPreview.canonicalKey,
@@ -551,46 +622,60 @@ function buildPlacementTarget(
     exerciseNames: slot.exerciseNames,
     placementLabel: `Placement #${placementNumber}`,
     placementSummary: `${slot.sessionLabel} — ${exerciseName}`,
-    whyChosen: buildWhyChosen(slot, methodLoad),
+    whyChosen: buildWhyChosen(slot, methodLoad, isFirstOnDay),
     confidence: slot.confidence,
     cautionReasons: slot.cautionReasons,
     previewBefore: 'Standard sets',
     previewAfter: `${methodPreview.displayLabel} preview`,
     wouldMutateIfAppliedLater: false,
     appliedNow: false,
+    // [MASTER-8C.12.2] New affected-day preview fields
+    nearbyExercises,
+    existingMethodsOnDay,
+    isFirstPlacementOnDay: isFirstOnDay,
+    dayMethodLoad: methodLoad,
+    sessionFocus: slot.sessionLabel,
   }
 }
 
 /**
  * Build human-readable "why chosen" explanation
  * [MASTER-8C.12.1D] Now includes method load reasoning
+ * [MASTER-8C.12.2] Enhanced with day spread and first-on-day explanations
  */
-function buildWhyChosen(slot: MethodEligibleSlot, methodLoad?: number): string {
+function buildWhyChosen(slot: MethodEligibleSlot, methodLoad: number, isFirstOnDay: boolean): string {
   const reasons: string[] = []
   
-  if (methodLoad !== undefined && methodLoad === 0) {
-    reasons.push('Lower method load')
+  // [MASTER-8C.12.2] Lead with spread/stacking context
+  if (isFirstOnDay && methodLoad === 0) {
+    reasons.push('Best spread: open day')
+  } else if (isFirstOnDay) {
+    reasons.push('Chosen before stacking')
+  } else {
+    reasons.push('Stacked: all distinct days used')
   }
   
+  // Add confidence
   if (slot.confidence === 'high') {
-    reasons.push('High confidence')
+    reasons.push('high-confidence row')
   } else if (slot.confidence === 'medium') {
-    reasons.push('Medium confidence')
+    reasons.push('medium-confidence row')
   }
   
-  if (!slot.isAlreadyMethodOwned) {
-    reasons.push('Free slot')
+  // Add method load context if relevant
+  if (methodLoad === 0) {
+    reasons.push('no existing methods')
+  } else if (methodLoad === 1) {
+    reasons.push('1 existing method')
   }
   
+  // Add skill sensitivity
   if (!slot.isPrimarySkillSensitive) {
-    reasons.push('Not skill-sensitive')
+    reasons.push('not skill-sensitive')
   }
   
-  if (slot.cautionReasons.length === 0) {
-    reasons.push('No caution')
-  }
-  
-  return reasons.length > 0 ? reasons.slice(0, 2).join(', ') : 'Eligible slot'
+  // Build final explanation (keep concise: 2-3 key reasons)
+  return reasons.slice(0, 3).join(', ') || 'Eligible slot'
 }
 
 // =============================================================================

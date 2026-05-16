@@ -245,6 +245,15 @@ import {
   getGateStatusColor,
   type MutationPathwayReadinessMapModel,
 } from '@/lib/program/mutation-pathway-readiness-map'
+// [MASTER-8C.31] Target session resolution preview
+import {
+  resolveMutationTargetSessionResolutionPreview,
+  buildTargetResolutionProgramInput,
+  getTargetResolutionStatusLabel,
+  getTargetCandidateStatusLabel,
+  getTargetCandidateStatusColor,
+  type MutationTargetSessionResolutionPreviewModel,
+} from '@/lib/program/mutation-target-session-resolution-preview'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3103,6 +3112,7 @@ function AIIntelligenceFoundationMap({
   planEvidenceTrendReadinessModel,
   mutationReadinessReviewGateModel,
   mutationPathwayReadinessMapModel,
+  mutationTargetSessionResolutionPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3113,6 +3123,7 @@ function AIIntelligenceFoundationMap({
   planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
   mutationReadinessReviewGateModel?: MutationReadinessReviewGateModel | null
   mutationPathwayReadinessMapModel?: MutationPathwayReadinessMapModel | null
+  mutationTargetSessionResolutionPreviewModel?: MutationTargetSessionResolutionPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3634,6 +3645,25 @@ function AIIntelligenceFoundationMap({
                   </div>
                   <div className="text-[9px] text-indigo-400/60">
                     Controlled mutation locked.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [MASTER-8C.31] Dynamic target session resolution preview proof */}
+            {branch.id === 'plan_logic' && mutationTargetSessionResolutionPreviewModel && mutationTargetSessionResolutionPreviewModel.status !== 'unavailable' && (
+              <div className="mt-1.5 pt-1.5 border-t border-[#2A2A35]/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400 border-teal-500/20">
+                      {getTargetResolutionStatusLabel(mutationTargetSessionResolutionPreviewModel.status)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {mutationTargetSessionResolutionPreviewModel.futureSessionCount} future sessions
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-teal-400/60">
+                    Read-only target mapping. No mutation.
                   </div>
                 </div>
               </div>
@@ -7648,6 +7678,26 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [mutationReadinessReviewGateModel])
   
+  // [MASTER-8C.31] Target Session Resolution Preview
+  const targetSessionResolutionInput = useMemo(() => {
+    if (!program?.sessions) return null
+    // Build completed day numbers from workoutEvidenceSummary — we use the
+    // completedSessionCount as a proxy. Since we don't have per-day completion
+    // data in the summary, we conservatively mark no sessions as completed
+    // (all sessions remain as future candidates for transparency).
+    // Actual per-day completion tracking is a future-step concern.
+    const completedDays = new Set<number>()
+    return buildTargetResolutionProgramInput(program.sessions, completedDays)
+  }, [program])
+  
+  const mutationTargetSessionResolutionPreviewModel = useMemo<MutationTargetSessionResolutionPreviewModel>(() => {
+    return resolveMutationTargetSessionResolutionPreview({
+      programSessions: targetSessionResolutionInput,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+    })
+  }, [targetSessionResolutionInput, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8569,6 +8619,85 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.31] Target Session Resolution Preview compact proof */}
+            {mutationTargetSessionResolutionPreviewModel.status !== 'unavailable' && (
+              <div className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                    Target resolution preview: read-only
+                  </span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    mutationTargetSessionResolutionPreviewModel.status === 'blocked_by_caution'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : mutationTargetSessionResolutionPreviewModel.status === 'no_future_targets'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : mutationTargetSessionResolutionPreviewModel.status === 'targets_resolved_read_only'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : 'bg-[#1A1A2E] text-[#8A8A9A] border-[#2A2A35]'
+                  )}>
+                    {getTargetResolutionStatusLabel(mutationTargetSessionResolutionPreviewModel.status)}
+                  </span>
+                </div>
+                <p className="text-xs text-[#9A9AAA] mb-1 leading-relaxed">{mutationTargetSessionResolutionPreviewModel.headline}</p>
+                <p className="text-[10px] text-[#7A7A8A] mb-1.5 leading-relaxed">{mutationTargetSessionResolutionPreviewModel.summary}</p>
+                {/* Session counts */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                    {mutationTargetSessionResolutionPreviewModel.completedSessionCount} completed
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                    {mutationTargetSessionResolutionPreviewModel.futureSessionCount} future
+                  </span>
+                  {mutationTargetSessionResolutionPreviewModel.blockedCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                      {mutationTargetSessionResolutionPreviewModel.blockedCandidateCount} blocked
+                    </span>
+                  )}
+                  {mutationTargetSessionResolutionPreviewModel.unresolvedCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {mutationTargetSessionResolutionPreviewModel.unresolvedCandidateCount} unresolved
+                    </span>
+                  )}
+                </div>
+                {/* Compact candidate target rows (max 4) */}
+                {mutationTargetSessionResolutionPreviewModel.candidateResolutions.length > 0 && (
+                  <div className="space-y-0.5 mb-1.5">
+                    {mutationTargetSessionResolutionPreviewModel.candidateResolutions.slice(0, 4).map((cr) => {
+                      const color = getTargetCandidateStatusColor(cr.status)
+                      return (
+                        <div key={cr.sourceCandidateId} className="flex items-center gap-1.5">
+                          <span className={cn("text-[9px] w-[56px] shrink-0 text-center px-1 py-0.5 rounded border", color.bg, color.text, color.border)}>
+                            {getTargetCandidateStatusLabel(cr.status)}
+                          </span>
+                          <span className="text-[9px] text-[#8A8A9A] truncate">{cr.title}</span>
+                          {cr.targetDayNumbers.length > 0 && (
+                            <span className="text-[9px] text-[#5A5A6A] shrink-0">
+                              D{cr.targetDayNumbers.slice(0, 3).join(',')}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {mutationTargetSessionResolutionPreviewModel.candidateResolutions.length > 4 && (
+                      <div className="text-[9px] text-[#5A5A6A] pl-[62px]">
+                        +{mutationTargetSessionResolutionPreviewModel.candidateResolutions.length - 4} more candidate(s)
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Missing proof */}
+                {mutationTargetSessionResolutionPreviewModel.missingProof.length > 0 && (
+                  <div className="text-[9px] text-[#6A6A7A] mb-1">
+                    Missing: {mutationTargetSessionResolutionPreviewModel.missingProof.slice(0, 3).join(' · ')}
+                    {mutationTargetSessionResolutionPreviewModel.missingProof.length > 3 && ` (+${mutationTargetSessionResolutionPreviewModel.missingProof.length - 3})`}
+                  </div>
+                )}
+                <p className="text-[10px] text-cyan-400/60">
+                  No confirmed plan created. No marker saved. No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8593,7 +8722,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

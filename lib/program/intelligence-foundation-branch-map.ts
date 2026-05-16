@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.30 - Mutation pathway readiness map)
+  // PLAN LOGIC (MASTER-8C.31 - Target session resolution preview)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, and mutation pathway readiness map; maps all gates required before controlled mutation can be considered',
-    nextSafeAction: 'Resolve target/session mapping in a future read-only or user-confirmed gate; structural mutation remains locked',
-    riskIfIgnored: 'Plan Logic cannot show which pathway gates are ready, blocked, or future-locked before controlled mutation',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, and target-session resolution preview; maps candidates to possible future session targets without mutation',
+    nextSafeAction: 'Confirm/preview contract remains future-locked; no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Plan Logic cannot show which candidates map to which future sessions or what proof is missing',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -262,6 +262,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/plan-evidence-trend-readiness.ts',
       'lib/program/mutation-readiness-review-gate.ts',
       'lib/program/mutation-pathway-readiness-map.ts',
+      'lib/program/mutation-target-session-resolution-preview.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

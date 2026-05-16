@@ -4153,7 +4153,7 @@ function SupersetStructuralControls({
         </span>
       </div>
       
-      {/* [MASTER-8C.14F] Native superset info */}
+      {/* [MASTER-8C.14F / MASTER-8C.15.1C] Native superset info */}
       {nativeSupersets.length > 0 && (
         <div className="mb-3 p-2 rounded bg-[#0F0F12] border border-[#2A2A35]/50">
           <div className="flex items-center gap-2 mb-1.5">
@@ -4161,7 +4161,7 @@ function SupersetStructuralControls({
             <span className="text-[10px] font-medium text-emerald-400">Native Generated</span>
           </div>
           <p className="text-[9px] text-[#8A8A9A] mb-2">
-            Already included from generated program. No override needed.
+            Already included from generated program. Native method is protected.
           </p>
           <div className="space-y-1">
             {nativeSupersets.map((ns, i) => (
@@ -4170,6 +4170,10 @@ function SupersetStructuralControls({
               </div>
             ))}
           </div>
+          {/* [MASTER-8C.15.1C] Additive note */}
+          <p className="text-[9px] text-cyan-400/70 mt-2 pt-2 border-t border-[#2A2A35]/50">
+            You can add extra superset pairs below. Extra additions are removable; the native method will remain.
+          </p>
         </div>
       )}
       
@@ -4190,11 +4194,14 @@ function SupersetStructuralControls({
         {supersetPreview.summary}
       </p>
       
+      {/* [MASTER-8C.15.1C] Updated messaging for native additive context */}
       {!hasCandidates ? (
         <p className="text-[10px] text-amber-400/80">
           {supersetPreview.status === 'all_blocked' 
             ? 'All potential pairs blocked by safety gates.'
-            : 'No eligible exercise pairs found for superset.'}
+            : nativeSupersets.length > 0
+              ? 'No additional safe superset pairs available. Native method remains active.'
+              : 'No eligible exercise pairs found for superset.'}
         </p>
       ) : (
         <div className="space-y-3">
@@ -4599,18 +4606,22 @@ interface MethodDetailFrequencyControlsProps {
   methodKey: string
   methodLabel: string
   onApplyFrequencyPlacement?: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
+  /** [MASTER-8C.15.1B] Whether this method is native/generated (affects UI labeling) */
+  isNativeMaterialized?: boolean
 }
 
 /**
- * [MASTER-8C.12.1A] Method-specific frequency controls inside method detail view.
+ * [MASTER-8C.12.1A / MASTER-8C.15.1B] Method-specific frequency controls inside method detail view.
  * This allows users to select frequency and preview targets for a single selected method.
  * Replaces the need to use the standalone frequency list for row-level methods.
+ * [MASTER-8C.15.1B] Now supports native methods - shows additive controls with proper labeling.
  */
 function MethodDetailFrequencyControls({
   program,
   methodKey,
   methodLabel,
   onApplyFrequencyPlacement,
+  isNativeMaterialized = false,
 }: MethodDetailFrequencyControlsProps) {
   const [selectedFrequency, setSelectedFrequency] = useState(0)
   const [isApplying, setIsApplying] = useState(false)
@@ -4741,11 +4752,20 @@ function MethodDetailFrequencyControls({
     <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
       <div className="flex items-center gap-2 mb-3">
         <Layers className="w-3.5 h-3.5 text-emerald-400" />
-        <span className="text-[10px] font-medium text-[#E6E9EF]">Add Weekly Frequency</span>
+        <span className="text-[10px] font-medium text-[#E6E9EF]">
+          {isNativeMaterialized ? 'Add Extra Frequency' : 'Add Weekly Frequency'}
+        </span>
         <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          Row-level
+          {isNativeMaterialized ? 'Additive' : 'Row-level'}
         </span>
       </div>
+      
+      {/* [MASTER-8C.15.1B] Native method note */}
+      {isNativeMaterialized && (
+        <p className="text-[9px] text-[#6A6A7A] mb-3 leading-relaxed">
+          Native method is protected. Extra additions are removable; the base method will remain.
+        </p>
+      )}
       
       {/* Apply result banner */}
       {applyResult && (

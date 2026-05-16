@@ -265,16 +265,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // COACH RECS (MASTER-8C.22 - Read-only candidate bridge active)
+  // COACH RECS (MASTER-8C.23 - Source-quality + evidence-tier refinement)
   // -------------------------------------------------------------------------
   {
     id: 'coach_recs',
     label: 'Coach Recs',
     uiStatus: 'read_only',
     mutationStatus: 'mutation_locked',
-    currentRole: 'Generates source-backed read-only recommendation candidates from Recovery, Prehab/Tendon, Balance, Progression, Exercise Knowledge, and evidence status',
-    nextSafeAction: 'Refine candidate priority; applied recommendations require logged evidence',
-    riskIfIgnored: 'Dead tile or cosmetic recommendations disconnected from source branches',
+    currentRole: 'Generates source-quality-aware read-only recommendation candidates from Recovery, Prehab/Tendon, Balance, Progression, Exercise Knowledge; each candidate includes evidence tier, action readiness, and source-quality explanation',
+    nextSafeAction: 'Log workouts to unlock applied recommendations; evidence/workout history bridge needed next',
+    riskIfIgnored: 'Recommendations appear blunt or scary without evidence-tier context',
     sourceFiles: [
       'lib/program/coach-recommendation-candidate-readonly-analyzer.ts',
       'lib/program/evidence-derived-coach-recommendations.ts',

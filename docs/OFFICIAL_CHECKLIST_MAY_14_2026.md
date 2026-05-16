@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.22)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.23)
 
-**Current active completed step:** MASTER-8C.22 / AB20.4.15  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, dynamically wired)  
-**Current active step:** MASTER-8C.23 / AB20.4.16 — Coach Recommendation Priority/Source Quality Refinement OR Evidence/Workout History Bridge  
+**Current active completed step:** MASTER-8C.23 / AB20.4.16  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, source-quality-aware, dynamically wired)  
+**Current active step:** MASTER-8C.24 / AB20.4.17 — Evidence / Workout History Read-Only Bridge  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Coach Recs Priority + Source Quality Refinement (MASTER-8C.23)
+- Analyzer rewritten: 453 -> 609 lines with source-quality layer
+- New types: CoachRecommendationEvidenceTier, CoachRecommendationActionReadiness
+- Per-candidate fields: evidenceTier, actionReadiness, sourceQualityLabel, sourceQualityExplanation, shouldAvoidScaryLanguage
+- Model-level fields: evidenceTierSummary, sourceQualitySummary, appliedRecommendationReadiness
+- Priority refinement: "high" shows as "structural caution" in UI; confidence downgraded without logged evidence
+- Wording refinement: Plan-structure inference vs logged evidence clearly separated; no scary language from inference alone
+- UI: Evidence-tier chips on cards, source-quality explanations, Foundation Map evidence-tier line
+- Old evidence path preserved: YES
+- Programs/exercises/sets changed: NO
 
 ### Coach Recs Evidence Bridge (MASTER-8C.22)
 - Read-only candidate analyzer: CREATED (453 lines)

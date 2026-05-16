@@ -3419,11 +3419,12 @@ function AIIntelligenceFoundationMap({
             )}
             
             {/* [MASTER-8C.22] Dynamic coach recommendation candidate proof */}
+            {/* [MASTER-8C.23] Refined with source-quality / evidence-tier proof */}
             {branch.id === 'coach_recs' && (
               <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
                 {coachRecommendationCandidateModel && coachRecommendationCandidateModel.topCandidate ? (
                   <div className="space-y-1.5">
-                    {/* Status + confidence chips */}
+                    {/* Status + confidence + evidence tier chips */}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={cn(
                         "text-[9px] px-1.5 py-0.5 rounded border",
@@ -3443,6 +3444,11 @@ function AIIntelligenceFoundationMap({
                     {/* Top candidate title */}
                     <div className="text-[9px] text-[#8A8A9A]">
                       Top: {coachRecommendationCandidateModel.topCandidate.title}
+                    </div>
+                    
+                    {/* [MASTER-8C.23] Source quality summary */}
+                    <div className="text-[9px] text-[#6A6A7A] italic">
+                      {coachRecommendationCandidateModel.evidenceTierSummary}
                     </div>
                     
                     {/* Sources */}
@@ -7938,19 +7944,28 @@ export function ProgramCoachIntelligenceHub({
               <EvidenceCoachRecommendationCard bundle={coachRecommendationBundle} />
             ) : coachRecommendationCandidateResult?.topCandidate ? (
               /* [MASTER-8C.22] Read-only recommendation candidates from source branches */
+              /* [MASTER-8C.23] Refined with source-quality / evidence-tier proof */
               <div className="space-y-3">
                 {/* Header */}
                 <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                       Read-only preview
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
                       {coachRecommendationCandidateResult.confidence} confidence
                     </span>
+                    {coachRecommendationCandidateResult.appliedRecommendationReadiness === 'needs_logged_evidence' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/8 text-amber-400/80 border border-amber-500/15">
+                        Needs logged evidence
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[#9A9AAA]">
                     {coachRecommendationCandidateResult.candidates.length} source-backed candidate{coachRecommendationCandidateResult.candidates.length > 1 ? 's' : ''} from {coachRecommendationCandidateResult.sourceBasis.length} branch{coachRecommendationCandidateResult.sourceBasis.length > 1 ? 'es' : ''}
+                  </p>
+                  <p className="text-[10px] text-[#7A7A8A] mt-1">
+                    {coachRecommendationCandidateResult.sourceQualitySummary}
                   </p>
                 </div>
                 
@@ -7969,10 +7984,21 @@ export function ProgramCoachIntelligenceHub({
                           ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                           : 'bg-[#1A1A2E] text-[#7A7A8A] border-[#2A2A35]'
                       )}>
-                        {candidate.priority}
+                        {candidate.priority === 'high' ? 'structural caution' : candidate.priority}
                       </span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#6A6A7A] border border-[#2A2A35]">
                         {candidate.category.replace(/_/g, ' ')}
+                      </span>
+                      {/* [MASTER-8C.23] Evidence-tier chip */}
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        candidate.evidenceTier === 'logged_user_evidence' || candidate.evidenceTier === 'mixed'
+                          ? 'bg-emerald-500/8 text-emerald-400/80 border-emerald-500/15'
+                          : candidate.evidenceTier === 'missing_evidence'
+                          ? 'bg-amber-500/8 text-amber-400/70 border-amber-500/15'
+                          : 'bg-[#1A1A2E] text-[#5A5A6A] border-[#2A2A35]'
+                      )}>
+                        {candidate.sourceQualityLabel}
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-[#E6E9EF] mb-1">{candidate.title}</h4>
@@ -7982,6 +8008,10 @@ export function ProgramCoachIntelligenceHub({
                         {candidate.why.join(' | ')}
                       </div>
                     )}
+                    {/* [MASTER-8C.23] Source-quality explanation */}
+                    <div className="text-[10px] text-[#5A5A6A] mb-1 italic">
+                      {candidate.sourceQualityExplanation}
+                    </div>
                     <div className="text-[10px] text-[#5A5A6A]">
                       Sources: {candidate.sourceBasis.join(', ')}
                     </div>

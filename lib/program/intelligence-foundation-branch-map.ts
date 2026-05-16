@@ -124,22 +124,22 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PREHAB / REHAB / TENDON / JOINT SAFEGUARDS
+  // PREHAB / REHAB / TENDON / JOINT SAFEGUARDS (MASTER-8C.18 - Read-only analyzer active)
   // -------------------------------------------------------------------------
   {
     id: 'prehab_rehab_tendon_joint',
     label: 'Prehab / Rehab / Tendon Safeguards',
     uiStatus: 'read_only',
     mutationStatus: 'mutation_locked',
-    currentRole: 'Constraint and safeguard interfaces for injury prevention',
-    nextSafeAction: 'Read-only scoring; exercise gating mutation deferred',
+    currentRole: 'Scores joint/tendon/prehab stress from visible session structure and exercise knowledge',
+    nextSafeAction: 'Expand evidence inputs; mutation deferred until read-only scoring is stronger',
     riskIfIgnored: 'Safeguards are decorative instead of protective',
     sourceFiles: [
       'lib/program/adaptive-foundation-model.ts',
-      'lib/injury-risk-engine.ts',
+      'lib/program/prehab-rehab-tendon-safeguard-readonly-analyzer.ts',
     ],
-    consumedBy: ['Adaptive Foundation', 'Program Balance'],
-    currentUISurface: 'Adaptive Foundation sheet',
+    consumedBy: ['Adaptive Foundation', 'Program Balance', 'Plan Logic'],
+    currentUISurface: 'Adaptive Foundation sheet, Plan Logic map',
     order: 3,
   },
 

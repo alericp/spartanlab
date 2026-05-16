@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.21)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.22)
 
-**Current active completed step:** MASTER-8C.21 / AB20.4.14  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization (all read-only, dynamically wired)  
-**Current active step:** MASTER-8C.22 / AB20.4.15 — Next intelligence branch (Coach Recs evidence bridge or deeper source scoring)  
+**Current active completed step:** MASTER-8C.22 / AB20.4.15  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, dynamically wired)  
+**Current active step:** MASTER-8C.23 / AB20.4.16 — Coach Recommendation Priority/Source Quality Refinement OR Evidence/Workout History Bridge  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Coach Recs Evidence Bridge (MASTER-8C.22)
+- Read-only candidate analyzer: CREATED (453 lines)
+- Old evidence path preserved: YES (EvidenceCoachRecommendationBundle untouched)
+- Inputs consumed: Recovery/Readiness, Prehab/Tendon, Progression/Periodization, Program Balance, Exercise Knowledge, Adaptive Foundation
+- Categories: prehab_tendon, recovery, progression_periodization, program_balance, exercise_knowledge, evidence_collection, set_volume
+- Every candidate: appliedToProgram: false, mutationStatus: read_only_not_applied
+- UI surfaces: Coach Recs tile (Preview badge), sheet (candidate cards), Foundation Map (dynamic row)
+- Branch status: read_only (mutation_locked)
+- Programs/exercises/sets changed: NO
+- Plan Logic updated: YES (dynamic coach_recs row + candidate sheet)
 
 ### Progression / Periodization (MASTER-8C.21)
 - Read-only analyzer: CREATED (664 lines)

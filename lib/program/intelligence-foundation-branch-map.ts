@@ -168,6 +168,25 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
+  // PROGRESSION / PERIODIZATION (MASTER-8C.21 - Read-only analyzer active)
+  // -------------------------------------------------------------------------
+  {
+    id: 'progression_periodization',
+    label: 'Progression / Periodization',
+    uiStatus: 'read_only',
+    mutationStatus: 'mutation_locked',
+    currentRole: 'Classifies current program posture, progression direction, and phase coherence from all available source branches',
+    nextSafeAction: 'Continue read-only observation; generator mutation deferred until stronger evidence',
+    riskIfIgnored: 'Progression decisions made without visible posture classification or source proof',
+    sourceFiles: [
+      'lib/program/progression-periodization-readonly-analyzer.ts',
+    ],
+    consumedBy: ['Plan Logic', 'Coach Recs'],
+    currentUISurface: 'Plan Logic map',
+    order: 5,
+  },
+
+  // -------------------------------------------------------------------------
   // SET / VOLUME PRESCRIPTION RATIONALE (MASTER-8C.17 - Read-only analyzer active)
   // -------------------------------------------------------------------------
   {
@@ -183,7 +202,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
     ],
     consumedBy: ['Plan Logic', 'Program Cards'],
     currentUISurface: 'Plan Logic (foundation map)',
-    order: 5,
+    order: 6,
   },
 
   // -------------------------------------------------------------------------

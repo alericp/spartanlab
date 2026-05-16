@@ -6,14 +6,26 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.12.1)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.15.2)
 
-**Current active completed step:** MASTER-8C.12.1  
-**Current protected corridor:** Method Planner UX unified — frequency controls inside method detail, selective removal visible  
-**Next implementation candidate:** MASTER-8C.13 — Superset Structural Writer Apply  
+**Current active completed step:** MASTER-8C.15.2 / AB20.4.8.2  
+**Current protected corridor:** Method Planner + Superset structural apply/remove/reset + Native vs user-applied provenance  
+**Current active step:** MASTER-8C.16 / AB20.4.9 — Cross-Branch Intelligence Foundation Map + Plan Logic UI Proof  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
 
-### Protected Method Planner State (MASTER-8C.12.1 Verified)
+### Superset Structural Corridor Accepted (MASTER-8C.13 through MASTER-8C.15.2)
+- Superset structural apply: WORKING
+- Superset persistence via saveAdaptiveProgram: WORKING
+- Program Card grouped render (Day 4 A/B pairs): WORKING
+- Manage Applied Additions for Superset: WORKING
+- Native vs user-applied provenance detection: WORKING
+- Native Superset protected from removal: WORKING
+- User-applied Superset removable/resettable: WORKING
+- Reset preserves native, removes user-applied: WORKING
+- Native additive frequency controls unlocked: WORKING
+- Live Workout Superset runtime: VISUALLY ACCEPTED
+
+### Protected Method Planner State (MASTER-8C.12.1 through 8C.15.2 Verified)
 - Row-level frequency placement is working and protected
 - **UX UNIFIED:** Frequency controls now inside method detail view (8C.12.1A)
 - **Standalone frequency section DEMOTED:** Collapsed under "Advanced Placement Diagnostics" (8C.12.1B)

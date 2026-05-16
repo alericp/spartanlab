@@ -144,21 +144,24 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // RECOVERY / READINESS
+  // RECOVERY / READINESS (MASTER-8C.19 - Read-only analyzer active)
   // -------------------------------------------------------------------------
   {
     id: 'recovery_readiness',
     label: 'Recovery / Readiness',
-    uiStatus: 'partial',
-    mutationStatus: 'future_writer_pending',
-    currentRole: 'Workout feedback, readiness indicators, recovery state',
-    nextSafeAction: 'Contribute to Program Balance; mutation writer pending',
+    uiStatus: 'read_only',
+    mutationStatus: 'mutation_locked',
+    currentRole: 'Scores recovery demand and readiness from session structure, adaptive foundation, and balance signals',
+    nextSafeAction: 'Continue readiness source expansion; mutation writer pending stronger evidence',
     riskIfIgnored: 'Recovery data displayed but not used in adaptation',
     sourceFiles: [
+      'lib/program/recovery-readiness-readonly-analyzer.ts',
+      'lib/program/recovery-adaptation-snapshot-contract.ts',
+      'lib/program/recovery-program-awareness-bridge.ts',
       'lib/training-feedback-loop.ts',
     ],
-    consumedBy: ['Adaptive Foundation', 'Program Balance'],
-    currentUISurface: 'Adaptive Foundation sheet',
+    consumedBy: ['Adaptive Foundation', 'Program Balance', 'Plan Logic'],
+    currentUISurface: 'Adaptive Foundation sheet, Plan Logic map',
     order: 4,
   },
 

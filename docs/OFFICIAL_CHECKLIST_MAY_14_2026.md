@@ -6,26 +6,30 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.11)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.12)
 
-**Current active completed step:** MASTER-8C.11  
-**Current protected corridor:** Method Planner row-level frequency placement  
-**Next implementation candidate:** Superset Structural Override Apply Readiness (MASTER-8C.12 or equivalent)  
+**Current active completed step:** MASTER-8C.12 (partial — 8C.12A, 8C.12B, 8C.12D complete; 8C.12C deferred)  
+**Current protected corridor:** Method Planner row-level frequency placement with persistence and selective removal  
+**Next implementation candidate:** Superset Structural Override Apply Implementation (MASTER-8C.13 or equivalent)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
 
-### Protected Method Planner State (MASTER-8C.11 Verified)
+### Protected Method Planner State (MASTER-8C.12 Verified)
 - Row-level frequency placement is working and protected
+- **Persistence FIXED:** Applied methods now survive page refresh via `saveAdaptiveProgram`
+- **Selective removal IMPLEMENTED:** Users can remove specific applied methods without reset-all
 - Top Set, Backoff Sets, Drop Sets, Rest-Pause, Cluster Sets are eligible/applyable
 - Multi-apply no stacking: PASSED
 - Capacity count reduction: PASSED
 - Program Day render: PASSED
-- Refresh/local persistence honesty: PASSED
+- Refresh/local persistence: **FIXED AND PASSED** (was failing, now uses canonical save path)
 - Reset/revert parity: PASSED
+- Selective removal: **NEW — PASSED**
 - Live workout render: PASSED
 
 ### Currently Blocked Methods (Honest Reasons)
-- **Supersets:** Structural override writer not enabled yet (native materialization exists)
-- **Density Blocks:** Timed-window logging/runtime model not implemented
+- **Supersets:** Structural override writer not enabled yet (needs grouped method infrastructure)
+- **Density Blocks:** Timed-window logging/runtime model not implemented (doctrine documented)
+- **AMRAP:** Needs doctrine definition — may be separate method family (doctrine documented)
 - **Endurance/Conditioning:** Real modality/exercise prescription not implemented
 
 ---
@@ -869,21 +873,63 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
-### MASTER-8C.12 — Superset Structural Override Apply Readiness (NEXT CANDIDATE)
+### MASTER-8C.12 — Method Planner Persistence Repair + Selective Removal + Superset Readiness
+
+**Status:** PARTIAL COMPLETE (8C.12A + 8C.12B + 8C.12D complete, 8C.12C deferred)
+
+**Purpose:** Fix row-level frequency placement persistence bug, add selective removal, prepare Superset infrastructure.
+
+**Subtasks Completed:**
+- **8C.12A — Persistence Repair:** COMPLETE
+  - Root cause: frequency placement used state-only callback instead of `saveAdaptiveProgram`
+  - Fix: Added `onApplyFrequencyPlacement` callback that saves through canonical persistence path
+  - Applied methods now survive page refresh
+  
+- **8C.12B — Selective Removal:** COMPLETE
+  - Added `extractAppliedMethodPlacements` and `removeSelectedMethodPlacements` helpers
+  - Added `SelectiveMethodRemovalSection` UI component
+  - Users can now remove specific applied methods without reset-all
+  
+- **8C.12D — Density/AMRAP Doctrine:** COMPLETE
+  - Documented that Density Block should not require pre-existing timed window
+  - Documented AMRAP may need its own method family with subtypes
+  - Documented future work required for timed/sequence runtime
+
+**Subtask Deferred:**
+- **8C.12C — Superset Structural Apply:** DEFERRED
+  - Needs grouped method writer infrastructure
+  - Needs superset candidate scoring logic
+  - Needs safe pairing validation
+  - Should be its own dedicated step
+
+**Files Changed:**
+- `app/(app)/program/page.tsx` — added frequency apply and selective removal callbacks
+- `components/programs/AdaptiveProgramDisplay.tsx` — wired new callbacks
+- `components/programs/ProgramCoachIntelligenceHub.tsx` — added SelectiveMethodRemovalSection, wired callbacks
+- `lib/program/method-frequency-placement-apply-contract.ts` — added selective removal helpers
+
+**Report:** See `docs/MASTER_8C_12_METHOD_PLANNER_PERSISTENCE_SELECTIVE_REMOVAL_SUPERSET_READINESS_REPORT.md`
+
+---
+
+### MASTER-8C.13 — Superset Structural Override Apply Implementation (NEXT CANDIDATE)
 
 **Status:** NOT STARTED
 
-**Purpose:** Enable requested override apply for Supersets.
+**Purpose:** Enable requested override apply for Supersets through real grouped structural writer.
 
 **Prerequisites:**
-- Native superset structural materialization already exists
+- MASTER-8C.12A persistence verified
+- MASTER-8C.12B selective removal verified
+- Native superset structural materialization exists
 - Grouped live workout runtime already supports supersets
-- Requested override apply currently marks Superset as preview-only
 
 **Blockers to Address:**
-- Enable structural writer for superset override apply
-- Verify grouped structure ownership correctly includes new superset placements
-- Verify live workout consumes applied superset structure
+- Define superset candidate scoring logic (compatible exercise pairs)
+- Define safe pairing validation rules
+- Enable structural writer that matches native materialization shape
+- Extend selective removal for grouped structures
+- Verify Program Day cards and live workout consume the grouped truth
 
 ---
 

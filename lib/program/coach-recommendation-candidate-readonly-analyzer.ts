@@ -2,6 +2,7 @@
  * ============================================================================
  * MASTER-8C.22 / AB20.4.15 — COACH RECOMMENDATION CANDIDATE READ-ONLY ANALYZER
  * MASTER-8C.23 / AB20.4.16 — SOURCE QUALITY + EVIDENCE TIER REFINEMENT
+ * MASTER-8C.24 / AB20.4.17 — WORKOUT EVIDENCE READ-ONLY BRIDGE
  * ============================================================================
  *
  * Pure, deterministic, read-only bridge that turns existing source branch
@@ -26,6 +27,9 @@
  *   6. Every candidate says appliedToProgram: false.
  *   7. Model always says noProgramChangesApplied: true.
  */
+
+// [MASTER-8C.24] Import evidence summary type
+import type { CoachRecsWorkoutEvidenceSummary } from './coach-recommendation-workout-evidence-readonly-bridge'
 
 // ─── Output types ────────────────────────────────────────────────────────────
 
@@ -110,6 +114,8 @@ export interface CoachRecommendationCandidateReadonlyModel {
   readonly evidenceTierSummary: string
   readonly sourceQualitySummary: string
   readonly appliedRecommendationReadiness: 'not_ready' | 'needs_logged_evidence' | 'ready_for_review'
+  // [MASTER-8C.24] Compact workout evidence proof label
+  readonly workoutEvidenceLabel: string | null
 }
 
 // ─── Minimal local input types (avoid circular deps) ─────────────────────────
@@ -154,6 +160,8 @@ export interface CoachRecommendationCandidateInput {
   readonly hasCompletedWorkoutEvidence?: boolean
   readonly hasWorkoutHistory?: boolean
   readonly sessionCount?: number
+  // [MASTER-8C.24] Structured workout evidence summary
+  readonly workoutEvidenceSummary?: CoachRecsWorkoutEvidenceSummary | null
 }
 
 // ─── Priority order values (lower = higher priority) ─────────────────────────
@@ -187,9 +195,19 @@ export function resolveCoachRecommendationCandidates(
   const allSourceBasis: string[] = []
   const allMissingSources: string[] = []
 
-  const hasLoggedEvidence = !!(input.hasCompletedWorkoutEvidence || input.hasWorkoutHistory)
+  // [MASTER-8C.24] Use structured evidence summary when available, fall back to booleans
+  const evSummary = input.workoutEvidenceSummary ?? null
+  const hasLoggedEvidence = evSummary
+    ? evSummary.quality !== 'none'
+    : !!(input.hasCompletedWorkoutEvidence || input.hasWorkoutHistory)
+  const hasDetailedEvidence = evSummary
+    ? (evSummary.hasRpeEvidence || evSummary.hasPainOrTensionEvidence || evSummary.hasUnderTargetPerformanceEvidence || evSummary.hasHighEffortEvidence)
+    : false
+  const hasPainEvidence = evSummary?.hasPainOrTensionEvidence ?? false
+  const hasRpeEvidence = evSummary?.hasRpeEvidence ?? false
+  const hasReadinessEvidence = evSummary?.hasReadinessOrFatigueEvidence ?? false
 
-  // ── 1. Prehab / Tendon safeguard candidate ──────────────────────────────
+  // ── 1. Prehab / Tendon safeguard candidate ─────────────────────────────���
   if (input.safeguardModel) {
     allSourceBasis.push('Prehab/Rehab/Tendon Safeguards')
     const risk = input.safeguardModel.riskLevel || ''
@@ -199,8 +217,12 @@ export function resolveCoachRecommendationCandidates(
       .map(s => s.label || 'tendon risk signal')
 
     // [MASTER-8C.23] Without logged pain/RPE, this is plan-structure inference only
-    const tier = resolveEvidenceTier(hasLoggedEvidence, true)
-    const noUserPainEvidence = !hasLoggedEvidence
+    // [MASTER-8C.24] Use specific pain/RPE evidence from workout bridge
+    const hasTendonRelevantEvidence = hasPainEvidence || hasRpeEvidence
+    const tier = hasTendonRelevantEvidence ? 'mixed' as const
+      : hasLoggedEvidence ? 'mixed' as const
+      : resolveEvidenceTier(false, true)
+    const noUserPainEvidence = !hasTendonRelevantEvidence
 
     if (risk === 'elevated' || risk === 'high') {
       candidates.push({
@@ -270,8 +292,12 @@ export function resolveCoachRecommendationCandidates(
       .map(s => s.label || 'recovery signal')
 
     // [MASTER-8C.23] Without logged readiness check-ins, this is plan-demand inference
-    const tier = resolveEvidenceTier(hasLoggedEvidence, true)
-    const noReadinessLogs = !hasLoggedEvidence
+    // [MASTER-8C.24] Use specific readiness/fatigue evidence from workout bridge
+    const hasRecoveryRelevantEvidence = hasReadinessEvidence || hasRpeEvidence || (evSummary?.hasHighEffortEvidence ?? false)
+    const tier = hasRecoveryRelevantEvidence ? 'mixed' as const
+      : hasLoggedEvidence ? 'mixed' as const
+      : resolveEvidenceTier(false, true)
+    const noReadinessLogs = !hasRecoveryRelevantEvidence
 
     if (readiness === 'reduced' || readiness === 'protected' || readiness === 'low') {
       candidates.push({
@@ -451,7 +477,8 @@ export function resolveCoachRecommendationCandidates(
   }
 
   // ── 6. Evidence collection candidate ────────────────────────────────────
-  if (!input.hasCompletedWorkoutEvidence && !input.hasWorkoutHistory) {
+  // [MASTER-8C.24] Show different messaging based on evidence quality
+  if (!hasLoggedEvidence) {
     candidates.push({
       id: 'candidate_evidence_collection',
       category: 'evidence_collection',
@@ -462,13 +489,40 @@ export function resolveCoachRecommendationCandidates(
       recommendation: 'Complete and log workouts with RPE and readiness feedback to build real evidence. Applied coach recommendations, progression decisions, and future-session mutation all depend on logged performance data. Until then, all recommendations remain read-only previews.',
       why: ['No completed workout history found', 'All recommendations are plan-structure inference only'],
       sourceBasis: ['Adaptive Foundation'],
-      missingSources: ['Completed workouts', 'Per-exercise RPE', 'Readiness check-ins', 'Session completion rate'],
+      missingSources: evSummary?.missingEvidenceLabels
+        ? [...evSummary.missingEvidenceLabels]
+        : ['Completed workouts', 'Per-exercise RPE', 'Readiness check-ins', 'Session completion rate'],
       appliedToProgram: false,
       mutationStatus: 'read_only_not_applied',
       evidenceTier: 'missing_evidence',
       actionReadiness: 'collect_evidence',
       sourceQualityLabel: 'Needs logged evidence',
       sourceQualityExplanation: 'No completed workout evidence exists. All current recommendations are inferred from program design, not confirmed by user performance.',
+      shouldAvoidScaryLanguage: true,
+    })
+  } else if (evSummary && evSummary.quality === 'weak') {
+    // Evidence exists but is limited
+    candidates.push({
+      id: 'candidate_evidence_collection_weak',
+      category: 'evidence_collection',
+      priority: 'low',
+      confidence: 'medium',
+      title: 'Strengthen evidence with RPE and feedback',
+      summary: `${evSummary.trustedWorkoutCount} trusted workout${evSummary.trustedWorkoutCount > 1 ? 's' : ''} logged, but limited detail. Adding RPE, pain notes, and readiness feedback will strengthen recommendation quality.`,
+      recommendation: 'Log per-exercise RPE during workouts and note any pain, tension, or fatigue. This will upgrade recommendations from weak completion evidence to usable performance evidence.',
+      why: evSummary.missingEvidenceLabels.length > 0
+        ? [...evSummary.missingEvidenceLabels.slice(0, 2)]
+        : ['Limited evidence detail'],
+      sourceBasis: ['Workout Evidence', 'Adaptive Foundation'],
+      missingSources: evSummary.missingEvidenceLabels.length > 0
+        ? [...evSummary.missingEvidenceLabels]
+        : [],
+      appliedToProgram: false,
+      mutationStatus: 'read_only_not_applied',
+      evidenceTier: 'mixed',
+      actionReadiness: 'collect_evidence',
+      sourceQualityLabel: 'Workout completion evidence',
+      sourceQualityExplanation: evSummary.evidenceExplanation,
       shouldAvoidScaryLanguage: true,
     })
   }
@@ -520,6 +574,7 @@ export function resolveCoachRecommendationCandidates(
       evidenceTierSummary: 'No evidence tier available',
       sourceQualitySummary: 'No source branches contributed recommendations',
       appliedRecommendationReadiness: 'not_ready',
+      workoutEvidenceLabel: null,
     }
   }
 
@@ -558,6 +613,7 @@ export function resolveCoachRecommendationCandidates(
     `${uniqueSources.length} source branch${uniqueSources.length > 1 ? 'es' : ''} contributing.`
 
   // [MASTER-8C.23] Evidence tier summary
+  // [MASTER-8C.24] Enhanced with structured workout evidence bridge
   const tierCounts = {
     logged: candidates.filter(c => c.evidenceTier === 'logged_user_evidence' || c.evidenceTier === 'mixed').length,
     branch: candidates.filter(c => c.evidenceTier === 'source_branch_inference').length,
@@ -566,7 +622,16 @@ export function resolveCoachRecommendationCandidates(
   }
 
   let evidenceTierSummary: string
-  if (tierCounts.logged > 0 && tierCounts.plan === 0 && tierCounts.missing === 0) {
+  if (evSummary && evSummary.quality !== 'none') {
+    // Real evidence exists — use structured summary
+    if (evSummary.quality === 'strong') {
+      evidenceTierSummary = `Strong workout evidence (${evSummary.trustedWorkoutCount} sessions, RPE + feedback); branch inference supported by logs`
+    } else if (evSummary.quality === 'usable') {
+      evidenceTierSummary = `Usable workout evidence (${evSummary.trustedWorkoutCount} sessions); some signal types present`
+    } else {
+      evidenceTierSummary = `Weak workout evidence (${evSummary.trustedWorkoutCount} sessions); limited detail available`
+    }
+  } else if (tierCounts.logged > 0 && tierCounts.plan === 0 && tierCounts.missing === 0) {
     evidenceTierSummary = 'All candidates supported by logged evidence'
   } else if (tierCounts.logged === 0 && tierCounts.missing === 0) {
     evidenceTierSummary = 'All candidates from branch/plan inference only'
@@ -576,9 +641,17 @@ export function resolveCoachRecommendationCandidates(
     evidenceTierSummary = 'Mixed evidence tiers'
   }
 
-  const sourceQualitySummary = hasLoggedEvidence
+  // [MASTER-8C.24] Enhanced source quality summary with evidence bridge
+  const sourceQualitySummary = evSummary && evSummary.quality !== 'none'
+    ? `Source quality: branch inference + ${evSummary.quality} workout evidence (${evSummary.trustedWorkoutCount} session${evSummary.trustedWorkoutCount > 1 ? 's' : ''})`
+    : hasLoggedEvidence
     ? `Source quality: branch inference + logged evidence from ${uniqueSources.length} branches`
     : `Source quality: branch/plan inference only; needs logged workout evidence`
+
+  // [MASTER-8C.24] Compact workout evidence label for UI
+  const workoutEvidenceLabel = evSummary && evSummary.quality !== 'none'
+    ? evSummary.evidenceSummaryLabel
+    : null
 
   const appliedRecommendationReadiness = hasLoggedEvidence
     ? 'ready_for_review' as const
@@ -604,5 +677,6 @@ export function resolveCoachRecommendationCandidates(
     evidenceTierSummary,
     sourceQualitySummary,
     appliedRecommendationReadiness,
+    workoutEvidenceLabel,
   }
 }

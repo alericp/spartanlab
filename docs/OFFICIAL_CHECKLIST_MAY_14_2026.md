@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.23)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.24)
 
-**Current active completed step:** MASTER-8C.23 / AB20.4.16  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, source-quality-aware, dynamically wired)  
-**Current active step:** MASTER-8C.24 / AB20.4.17 — Evidence / Workout History Read-Only Bridge  
+**Current active completed step:** MASTER-8C.24 / AB20.4.17  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, source-quality-aware, workout evidence bridge connected)  
+**Current active step:** MASTER-8C.25 / AB20.4.18 — Coach Recs Evidence Trend Classification / Read-Only Pattern Detection  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Workout Evidence Read-Only Bridge (MASTER-8C.24)
+- New pure helper: coach-recommendation-workout-evidence-readonly-bridge.ts (299 lines)
+- New types: CoachRecsWorkoutEvidenceAvailability, CoachRecsWorkoutEvidenceQuality, CoachRecsWorkoutEvidenceSummary
+- Analyzer extended: workoutEvidenceSummary input, structured evidence-tier decisions, evidence-aware quality summaries
+- Local trusted logs consumed via getRecentWorkoutLogsForGenerationRequest() (client-safe, returns [] on server)
+- Evidence signals: RPE, pain/tension, readiness/fatigue, under-target performance, high-effort
+- Evidence collection candidate splits: no-evidence vs weak-evidence messaging
+- UI: Compact emerald evidence proof line when evidence exists; Foundation Map evidence label
+- Server evidence reader touched: NO
+- Programs/exercises/sets changed: NO
 
 ### Coach Recs Priority + Source Quality Refinement (MASTER-8C.23)
 - Analyzer rewritten: 453 -> 609 lines with source-quality layer

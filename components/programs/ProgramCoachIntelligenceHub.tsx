@@ -213,6 +213,11 @@ import {
   resolveCoachRecommendationCandidates,
   type CoachRecommendationCandidateReadonlyModel,
 } from '@/lib/program/coach-recommendation-candidate-readonly-analyzer'
+// [MASTER-8C.24] Workout evidence bridge for Coach Recs
+import {
+  resolveCoachRecsWorkoutEvidenceSummary,
+} from '@/lib/program/coach-recommendation-workout-evidence-readonly-bridge'
+import { getRecentWorkoutLogsForGenerationRequest } from '@/lib/program/performance-feedback-integration'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3447,9 +3452,17 @@ function AIIntelligenceFoundationMap({
                     </div>
                     
                     {/* [MASTER-8C.23] Source quality summary */}
+                    {/* [MASTER-8C.24] Enhanced with workout evidence bridge proof */}
                     <div className="text-[9px] text-[#6A6A7A] italic">
                       {coachRecommendationCandidateModel.evidenceTierSummary}
                     </div>
+                    
+                    {/* [MASTER-8C.24] Compact workout evidence label */}
+                    {coachRecommendationCandidateModel.workoutEvidenceLabel && (
+                      <div className="text-[9px] text-emerald-400/60">
+                        {coachRecommendationCandidateModel.workoutEvidenceLabel}
+                      </div>
+                    )}
                     
                     {/* Sources */}
                     {coachRecommendationCandidateModel.sourceBasis.length > 0 && (
@@ -7394,7 +7407,8 @@ export function ProgramCoachIntelligenceHub({
   }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, programBalanceResult])
   
   // [MASTER-8C.22] Coach Recommendation Candidate Read-Only Analysis
-  // Combines all existing source branch results into recommendation candidates
+  // [MASTER-8C.24] Enhanced with structured workout evidence bridge
+  // Combines all existing source branch results + local workout evidence into recommendation candidates
   const coachRecommendationCandidateResult = useMemo<CoachRecommendationCandidateReadonlyModel | null>(() => {
     try {
       if (!program?.sessions?.length) return null
@@ -7405,6 +7419,11 @@ export function ProgramCoachIntelligenceHub({
         adaptiveFoundationModel?.evidenceSnapshot?.completedWorkoutEvidence?.completedSessionCount &&
         adaptiveFoundationModel.evidenceSnapshot.completedWorkoutEvidence.completedSessionCount > 0
       )
+      
+      // [MASTER-8C.24] Build structured evidence summary from local trusted workout logs
+      // getRecentWorkoutLogsForGenerationRequest() is client-safe (returns [] on server)
+      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
+      const workoutEvidenceSummary = resolveCoachRecsWorkoutEvidenceSummary(recentLogs)
       
       return resolveCoachRecommendationCandidates({
         recoveryModel: recoveryReadinessResult ? {
@@ -7436,6 +7455,7 @@ export function ProgramCoachIntelligenceHub({
         hasCompletedWorkoutEvidence: hasCompletedEvidence,
         hasWorkoutHistory: adaptiveFoundationModel?.sourceStatus?.hasWorkoutEvidence ?? false,
         sessionCount: program.sessions.length,
+        workoutEvidenceSummary,
       })
     } catch (error) {
       console.error('[v0] Coach recommendation candidate error:', error)
@@ -7967,6 +7987,12 @@ export function ProgramCoachIntelligenceHub({
                   <p className="text-[10px] text-[#7A7A8A] mt-1">
                     {coachRecommendationCandidateResult.sourceQualitySummary}
                   </p>
+                  {/* [MASTER-8C.24] Compact workout evidence proof line */}
+                  {coachRecommendationCandidateResult.workoutEvidenceLabel && (
+                    <p className="text-[10px] text-emerald-400/70 mt-0.5">
+                      {coachRecommendationCandidateResult.workoutEvidenceLabel}
+                    </p>
+                  )}
                 </div>
                 
                 {/* Candidates */}

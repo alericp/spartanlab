@@ -203,6 +203,11 @@ import {
   resolveExerciseKnowledgeCoverage,
   type ExerciseKnowledgeCoverageReadonlyModel,
 } from '@/lib/program/exercise-knowledge-coverage-readonly-analyzer'
+// [MASTER-8C.21] Progression / Periodization Read-Only Analyzer
+import {
+  resolveProgressionPeriodization,
+  type ProgressionPeriodizationReadonlyModel,
+} from '@/lib/program/progression-periodization-readonly-analyzer'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3055,10 +3060,12 @@ function AIIntelligenceFoundationMap({
   safeguardModel,
   recoveryReadinessModel,
   exerciseKnowledgeCoverageModel,
+  progressionPeriodizationModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
   exerciseKnowledgeCoverageModel?: ExerciseKnowledgeCoverageReadonlyModel | null
+  progressionPeriodizationModel?: ProgressionPeriodizationReadonlyModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3337,6 +3344,68 @@ function AIIntelligenceFoundationMap({
                 ) : (
                   <div className="text-[9px] text-[#6A6A7A] italic">
                     Coverage scan unavailable from current program props; knowledge branch remains read-only.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* [MASTER-8C.21] Dynamic progression/periodization proof */}
+            {branch.id === 'progression_periodization' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                {progressionPeriodizationModel ? (
+                  <div className="space-y-1.5">
+                    {/* Status + posture + direction chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        progressionPeriodizationModel.status === 'read_only_active'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : progressionPeriodizationModel.status === 'partial'
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      )}>
+                        {progressionPeriodizationModel.headline}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        {progressionPeriodizationModel.confidence} confidence
+                      </span>
+                    </div>
+                    
+                    {/* Summary */}
+                    <div className="text-[9px] text-[#8A8A9A]">
+                      {progressionPeriodizationModel.summary}
+                    </div>
+                    
+                    {/* Top signals */}
+                    {progressionPeriodizationModel.signals.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        <span className="text-[#5A5A6A]">Signals: </span>
+                        {progressionPeriodizationModel.signals.slice(0, 3).map(s => s.label).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Sources */}
+                    {progressionPeriodizationModel.sourceBasis.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        Sources: {progressionPeriodizationModel.sourceBasis.slice(0, 4).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Missing sources */}
+                    {progressionPeriodizationModel.missingSources.length > 0 && (
+                      <div className="text-[9px] text-amber-400/60">
+                        Missing: {progressionPeriodizationModel.missingSources.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Mutation lock */}
+                    <div className="text-[9px] text-cyan-400/60">
+                      No future sessions changed.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    Progression scan unavailable from current program props; branch remains read-only.
                   </div>
                 )}
               </div>
@@ -7195,6 +7264,64 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program])
   
+  // [MASTER-8C.21] Progression / Periodization Read-Only Analysis
+  // Combines all existing branch results into a progression posture assessment
+  const progressionPeriodizationResult = useMemo<ProgressionPeriodizationReadonlyModel | null>(() => {
+    try {
+      if (!program?.sessions?.length) return null
+      
+      const { model: adaptiveFoundationModel } = resolveVisibleAdaptiveFoundation(program)
+      
+      const hasCompletedEvidence = !!(
+        adaptiveFoundationModel?.evidenceSnapshot?.completedWorkoutEvidence?.completedSessionCount &&
+        adaptiveFoundationModel.evidenceSnapshot.completedWorkoutEvidence.completedSessionCount > 0
+      )
+      
+      return resolveProgressionPeriodization({
+        sessions: program.sessions.map(s => ({
+          dayNumber: s.dayNumber,
+          dayLabel: s.dayLabel,
+          focus: s.focus,
+          focusLabel: s.focusLabel,
+          isProtectedRecoveryWeek: s.recoveryCost === 'VERY_HIGH' || s.stressLevel === 'LOW',
+          exercises: (s.exercises || []).map(ex => ({
+            name: ex.name,
+            id: ex.id,
+            sets: ex.sets,
+            method: ex.method,
+            prescriptionUnit: ex.repsOrTime?.includes('s') ? 'seconds' : 'reps',
+          })),
+        })),
+        weekNumber: program.weekNumber,
+        goalLabel: program.goalLabel,
+        recoveryModel: recoveryReadinessResult ? {
+          readinessLevel: recoveryReadinessResult.readinessLevel,
+          confidence: recoveryReadinessResult.confidence,
+          signals: recoveryReadinessResult.signals,
+        } : null,
+        safeguardModel: safeguardAnalysisResult ? {
+          riskLevel: safeguardAnalysisResult.riskLevel,
+          confidence: safeguardAnalysisResult.confidence,
+        } : null,
+        exerciseKnowledgeModel: exerciseKnowledgeCoverageResult ? {
+          coverageRatio: exerciseKnowledgeCoverageResult.coverageRatio,
+          totalExerciseCount: exerciseKnowledgeCoverageResult.totalExerciseCount,
+          fullScienceKnownCount: exerciseKnowledgeCoverageResult.fullScienceKnownCount,
+          trulyUnknownCount: exerciseKnowledgeCoverageResult.trulyUnknownCount,
+        } : null,
+        balanceModel: programBalanceResult ? {
+          status: programBalanceResult.status,
+          findings: programBalanceResult.findings,
+        } : null,
+        hasCompletedWorkoutEvidence: hasCompletedEvidence,
+        hasWorkoutHistory: adaptiveFoundationModel?.sourceStatus?.hasWorkoutEvidence ?? false,
+      })
+    } catch (error) {
+      console.error('[v0] Progression periodization analysis error:', error)
+      return null
+    }
+  }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, programBalanceResult])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -7804,7 +7931,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} />
           </div>
         </SheetContent>
       </Sheet>

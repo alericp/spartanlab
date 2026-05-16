@@ -6,12 +6,24 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.20)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.21)
 
-**Current active completed step:** MASTER-8C.20 / AB20.4.13  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage (all read-only, dynamically wired)  
-**Current active step:** MASTER-8C.21 / AB20.4.14 — Next intelligence branch (Coach Recs evidence bridge or Progression/Periodization)  
+**Current active completed step:** MASTER-8C.21 / AB20.4.14  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization (all read-only, dynamically wired)  
+**Current active step:** MASTER-8C.22 / AB20.4.15 — Next intelligence branch (Coach Recs evidence bridge or deeper source scoring)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Progression / Periodization (MASTER-8C.21)
+- Read-only analyzer: CREATED (664 lines)
+- Inputs consumed: program structure, recovery/readiness, safeguards, exercise knowledge, program balance, workout evidence
+- Classifies: posture (acclimation/buildup/accumulation/intensification/skill_practice/recovery_protective/maintenance/mixed/unclear)
+- Classifies: direction (conservative/normal/aggressive/blocked/unknown)
+- Classifies: confidence (high/medium/low/insufficient)
+- Dynamic UI proof: YES (headline, posture, direction, confidence, signals, sources, missing, mutation lock)
+- Branch map: Added progression_periodization branch (order 5, 14 total branches)
+- Branch status: read_only (mutation_locked)
+- Future sessions changed: NO
+- Plan Logic updated: YES (dynamic row content)
 
 ### Exercise Knowledge Coverage (MASTER-8C.20)
 - Coverage analyzer: CREATED (257 lines, thin adapter wrapping existing resolver)

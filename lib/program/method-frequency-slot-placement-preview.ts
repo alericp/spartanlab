@@ -65,6 +65,36 @@ export type FrequencySlotPlacementReasonCode =
 /**
  * A single proposed placement target
  */
+/**
+ * [MASTER-8C.12.3] A row in the day insertion preview showing exercise order
+ */
+export interface DayInsertionRow {
+  readonly exerciseId: string
+  readonly exerciseName: string
+  readonly position: number
+  readonly isTarget: boolean  // This is the row being changed
+  readonly beforeMethodLabel: string
+  readonly afterMethodLabel: string
+  readonly existingMethodLabel: string | null
+  readonly prescriptionSummary: string | null
+  readonly isSkillSensitive: boolean
+  readonly cautionFlags: readonly string[]
+}
+
+/**
+ * [MASTER-8C.12.3] Full-day insertion preview showing how method fits into workout
+ */
+export interface DayInsertionPreview {
+  readonly dayTitle: string
+  readonly sessionLabel: string
+  readonly sessionRoleLabel: string | null
+  readonly orderedRows: readonly DayInsertionRow[]
+  readonly insertionSummary: string  // e.g., "Cluster Sets inserted at position 2 of 4"
+  readonly workoutBlendSummary: string  // e.g., "Fatigue-management method in mid-session"
+  readonly dayFitReasons: readonly string[]
+  readonly dayCautionReasons: readonly string[]
+}
+
 export interface FrequencySlotPlacementTarget {
   readonly methodKey: CanonicalMethodFamily
   readonly displayLabel: string
@@ -90,6 +120,8 @@ export interface FrequencySlotPlacementTarget {
   readonly isFirstPlacementOnDay: boolean  // Whether this is first method placement on day
   readonly dayMethodLoad: number  // Total method load on this day
   readonly sessionFocus?: string  // Session focus/title if available
+  // [MASTER-8C.12.3] Full-day insertion preview
+  readonly dayInsertionPreview: DayInsertionPreview
 }
 
 /**
@@ -450,38 +482,97 @@ function selectPlacementTargets(
     dayScores.set(sessionId, score)
   })
   
-  // Sort slots by ranking priority (enhanced with day-aware scoring)
+  // [MASTER-8C.12.3] Calculate row-level fit scores based on method type
+  const methodKey = methodPreview.canonicalKey
+  const getRowFitScore = (slot: MethodEligibleSlot): number => {
+    // Lower = better
+    let score = 0
+    
+    // Base confidence scoring
+    score += slot.confidence === 'high' ? 0 : slot.confidence === 'medium' ? 10 : 20
+    
+    // Skill sensitivity penalty
+    if (slot.isPrimarySkillSensitive) score += 15
+    
+    // Caution penalty
+    score += slot.cautionReasons.length * 5
+    
+    // [MASTER-8C.12.3] Method-specific position preferences
+    // Get approximate position from slot kind comparison
+    const sessionSlots = slotsBySession.get(slot.sessionId) || []
+    const sortedSlots = [...sessionSlots].sort((a, b) => a.slotKind.localeCompare(b.slotKind))
+    const slotPosition = sortedSlots.findIndex(s => s.exerciseIds[0] === slot.exerciseIds[0])
+    const totalSlots = sortedSlots.length
+    const isEarly = slotPosition <= 1
+    const isLate = slotPosition >= totalSlots - 2
+    const isMid = !isEarly && !isLate
+    
+    switch (methodKey) {
+      case 'cluster':
+        // Prefer mid-late positions for cluster sets (fatigue-management)
+        if (isEarly) score += 8
+        if (isMid) score -= 5
+        if (isLate) score -= 3
+        break
+      case 'top_set':
+        // Prefer early positions for top set (peak strength)
+        if (isEarly) score -= 5
+        if (isLate) score += 8
+        break
+      case 'backoff_sets':
+        // Prefer mid positions after primary work
+        if (isMid) score -= 3
+        break
+      case 'drop_set':
+      case 'rest_pause':
+        // Prefer late positions for high-fatigue methods
+        if (isEarly) score += 10
+        if (isLate) score -= 5
+        break
+    }
+    
+    return score
+  }
+  
+  // [MASTER-8C.12.3] Sort slots by optimal fit first, not chronologically
   const rankedSlots = eligibleSlots
     .filter(slot => slot.isEligible && !slot.isSyntheticArtifact)
+    .map(slot => ({ slot, fitScore: getRowFitScore(slot) }))
     .sort((a, b) => {
       // 1. Hard block already method-owned
-      if (a.isAlreadyMethodOwned !== b.isAlreadyMethodOwned) {
-        return a.isAlreadyMethodOwned ? 1 : -1
+      if (a.slot.isAlreadyMethodOwned !== b.slot.isAlreadyMethodOwned) {
+        return a.slot.isAlreadyMethodOwned ? 1 : -1
       }
       
-      // 2. [MASTER-8C.12.2] Prefer days with lower scores (less method load)
-      const dayScoreA = dayScores.get(a.sessionId) ?? 999
-      const dayScoreB = dayScores.get(b.sessionId) ?? 999
-      if (dayScoreA !== dayScoreB) return dayScoreA - dayScoreB
+      // 2. [MASTER-8C.12.3] Prefer better overall fit (day score + row fit combined)
+      const dayScoreA = dayScores.get(a.slot.sessionId) ?? 999
+      const dayScoreB = dayScores.get(b.slot.sessionId) ?? 999
+      const totalScoreA = dayScoreA + a.fitScore
+      const totalScoreB = dayScoreB + b.fitScore
+      if (totalScoreA !== totalScoreB) return totalScoreA - totalScoreB
       
-      // 3. Prefer high confidence
+      // 3. Within tied scores, prefer high confidence
       const confOrder = { high: 0, medium: 1, low: 2 }
-      const confDiff = confOrder[a.confidence] - confOrder[b.confidence]
+      const confDiff = confOrder[a.slot.confidence] - confOrder[b.slot.confidence]
       if (confDiff !== 0) return confDiff
       
       // 4. Prefer not primary skill sensitive
-      if (a.isPrimarySkillSensitive !== b.isPrimarySkillSensitive) {
-        return a.isPrimarySkillSensitive ? 1 : -1
+      if (a.slot.isPrimarySkillSensitive !== b.slot.isPrimarySkillSensitive) {
+        return a.slot.isPrimarySkillSensitive ? 1 : -1
       }
       
       // 5. Prefer fewer caution reasons
-      const cautionDiff = a.cautionReasons.length - b.cautionReasons.length
+      const cautionDiff = a.slot.cautionReasons.length - b.slot.cautionReasons.length
       if (cautionDiff !== 0) return cautionDiff
       
-      // 6. [MASTER-8C.12.2] Do NOT bias toward early days
-      // Instead, use a deterministic but neutral order (by session index for stability)
-      return a.sessionIndex - b.sessionIndex
+      // 6. [MASTER-8C.12.3] Final tie-break: use row fit score differential
+      // NOT session index, to avoid chronological bias
+      if (a.fitScore !== b.fitScore) return a.fitScore - b.fitScore
+      
+      // 7. Only as absolute last resort, use session index for stability
+      return a.slot.sessionIndex - b.slot.sessionIndex
     })
+    .map(x => x.slot)
   
   // Select slots with enhanced spacing and duplicate avoidance
   for (const slot of rankedSlots) {
@@ -564,7 +655,8 @@ function selectPlacementTargets(
       selectedTargets.length + 1, 
       methodLoad,
       isFirstOnDay,
-      eligibleSlots
+      eligibleSlots,
+      methodPreview.canonicalKey
     ))
   }
   
@@ -575,6 +667,7 @@ function selectPlacementTargets(
  * Build a single placement target from a slot
  * [MASTER-8C.12.1D] Now accepts method load for whyChosen reasoning
  * [MASTER-8C.12.2] Now includes affected-day preview context
+ * [MASTER-8C.12.3] Now includes full-day insertion preview
  */
 function buildPlacementTarget(
   methodPreview: MethodFrequencyPreview,
@@ -582,7 +675,8 @@ function buildPlacementTarget(
   placementNumber: number,
   methodLoad: number,
   isFirstOnDay: boolean,
-  allSlots: MethodEligibleSlot[]
+  allSlots: MethodEligibleSlot[],
+  methodKey: CanonicalMethodFamily
 ): FrequencySlotPlacementTarget {
   const exerciseName = slot.exerciseNames[0] ?? 'Unknown Exercise'
   
@@ -610,6 +704,15 @@ function buildPlacementTarget(
     .map(s => 'Method override')  // Generic label since we don't have specific method names
     .filter((v, i, a) => a.indexOf(v) === i) // Unique
   
+  // [MASTER-8C.12.3] Build full-day insertion preview with ordered rows
+  const dayInsertionPreview = buildDayInsertionPreview(
+    slot,
+    sameSessionSlots,
+    methodPreview.displayLabel,
+    methodKey,
+    methodLoad
+  )
+
   return {
     methodKey: methodPreview.canonicalKey,
     displayLabel: methodPreview.displayLabel,
@@ -622,7 +725,7 @@ function buildPlacementTarget(
     exerciseNames: slot.exerciseNames,
     placementLabel: `Placement #${placementNumber}`,
     placementSummary: `${slot.sessionLabel} — ${exerciseName}`,
-    whyChosen: buildWhyChosen(slot, methodLoad, isFirstOnDay),
+    whyChosen: buildWhyChosen(slot, methodLoad, isFirstOnDay, methodKey),
     confidence: slot.confidence,
     cautionReasons: slot.cautionReasons,
     previewBefore: 'Standard sets',
@@ -635,24 +738,201 @@ function buildPlacementTarget(
     isFirstPlacementOnDay: isFirstOnDay,
     dayMethodLoad: methodLoad,
     sessionFocus: slot.sessionLabel,
+    // [MASTER-8C.12.3] Full-day insertion preview
+    dayInsertionPreview,
   }
+}
+
+/**
+ * [MASTER-8C.12.3] Build the full-day insertion preview showing ordered workout rows
+ */
+function buildDayInsertionPreview(
+  targetSlot: MethodEligibleSlot,
+  sessionSlots: MethodEligibleSlot[],
+  methodLabel: string,
+  methodKey: CanonicalMethodFamily,
+  methodLoad: number
+): DayInsertionPreview {
+  // Build ordered rows from all slots in this session
+  const orderedRows: DayInsertionRow[] = sessionSlots.map((slot, idx) => {
+    const isTarget = slot.exerciseIds[0] === targetSlot.exerciseIds[0]
+    return {
+      exerciseId: slot.exerciseIds[0] ?? `slot-${idx}`,
+      exerciseName: slot.exerciseNames[0] ?? 'Unknown Exercise',
+      position: idx + 1,
+      isTarget,
+      beforeMethodLabel: slot.isAlreadyMethodOwned ? 'Existing method' : 'Standard sets',
+      afterMethodLabel: isTarget ? methodLabel : (slot.isAlreadyMethodOwned ? 'Existing method' : 'Standard sets'),
+      existingMethodLabel: slot.isAlreadyMethodOwned ? 'Method override' : null,
+      prescriptionSummary: null, // Not available from slot data
+      isSkillSensitive: slot.isPrimarySkillSensitive,
+      cautionFlags: slot.cautionReasons,
+    }
+  })
+  
+  // Find target position
+  const targetPosition = orderedRows.findIndex(r => r.isTarget) + 1
+  const totalRows = orderedRows.length
+  
+  // Build insertion summary
+  const insertionSummary = `${methodLabel} inserted at position ${targetPosition} of ${totalRows}`
+  
+  // Build workout blend summary based on method type and position
+  const workoutBlendSummary = buildWorkoutBlendSummary(methodKey, targetPosition, totalRows, methodLoad)
+  
+  // Build day fit reasons
+  const dayFitReasons = buildDayFitReasons(targetSlot, methodKey, targetPosition, totalRows, methodLoad)
+  
+  // Build caution reasons
+  const dayCautionReasons = buildDayCautionReasons(targetSlot, methodKey, targetPosition, totalRows)
+  
+  return {
+    dayTitle: targetSlot.dayTitle,
+    sessionLabel: targetSlot.sessionLabel,
+    sessionRoleLabel: null, // Not available from current slot data
+    orderedRows,
+    insertionSummary,
+    workoutBlendSummary,
+    dayFitReasons,
+    dayCautionReasons,
+  }
+}
+
+/**
+ * [MASTER-8C.12.3] Build workout blend summary explaining how method changes the day
+ */
+function buildWorkoutBlendSummary(
+  methodKey: CanonicalMethodFamily,
+  targetPosition: number,
+  totalRows: number,
+  methodLoad: number
+): string {
+  const positionDesc = targetPosition <= 1 ? 'opening' : 
+    targetPosition >= totalRows ? 'closing' :
+    targetPosition <= totalRows / 2 ? 'early-mid' : 'mid-late'
+  
+  const methodDescriptions: Record<string, string> = {
+    cluster: 'fatigue-management clusters for quality reps',
+    top_set: 'heavy single top set for peak strength',
+    backoff_sets: 'volume backoff work after primary effort',
+    drop_set: 'high-fatigue drop sequence for hypertrophy',
+    rest_pause: 'rest-pause intensifier for additional reps',
+  }
+  
+  const methodDesc = methodDescriptions[methodKey] || `${methodKey} method override`
+  const loadContext = methodLoad === 0 ? 'First method on this day' : 
+    methodLoad === 1 ? 'Second method on this day' : `${methodLoad + 1} methods on this day`
+  
+  return `${positionDesc.charAt(0).toUpperCase() + positionDesc.slice(1)} position: ${methodDesc}. ${loadContext}.`
+}
+
+/**
+ * [MASTER-8C.12.3] Build day fit reasons explaining why this day/row was chosen
+ */
+function buildDayFitReasons(
+  slot: MethodEligibleSlot,
+  methodKey: CanonicalMethodFamily,
+  targetPosition: number,
+  totalRows: number,
+  methodLoad: number
+): string[] {
+  const reasons: string[] = []
+  
+  // Confidence-based reason
+  if (slot.confidence === 'high') {
+    reasons.push('High-confidence row with clear prescription')
+  } else if (slot.confidence === 'medium') {
+    reasons.push('Medium-confidence row')
+  }
+  
+  // Method load reason
+  if (methodLoad === 0) {
+    reasons.push('Open day with no existing method load')
+  } else if (methodLoad === 1) {
+    reasons.push('Low method load (1 existing)')
+  }
+  
+  // Skill sensitivity reason
+  if (!slot.isPrimarySkillSensitive) {
+    reasons.push('Not primary skill-sensitive')
+  }
+  
+  // Position-based reasons for specific methods
+  if (methodKey === 'cluster') {
+    if (targetPosition > 1 && targetPosition < totalRows) {
+      reasons.push('Mid-session position suitable for cluster quality work')
+    }
+  } else if (methodKey === 'top_set') {
+    if (targetPosition <= 2) {
+      reasons.push('Early position suitable for peak strength effort')
+    }
+  } else if (methodKey === 'drop_set' || methodKey === 'rest_pause') {
+    if (targetPosition >= totalRows - 1) {
+      reasons.push('Later position suitable for high-fatigue method')
+    }
+  }
+  
+  // No caution reasons
+  if (slot.cautionReasons.length === 0) {
+    reasons.push('No caution flags')
+  }
+  
+  return reasons.slice(0, 4) // Limit to 4 reasons
+}
+
+/**
+ * [MASTER-8C.12.3] Build day caution reasons if any
+ */
+function buildDayCautionReasons(
+  slot: MethodEligibleSlot,
+  methodKey: CanonicalMethodFamily,
+  targetPosition: number,
+  totalRows: number
+): string[] {
+  const cautions: string[] = []
+  
+  // Skill sensitivity caution
+  if (slot.isPrimarySkillSensitive) {
+    cautions.push('Primary skill row — method may affect technique focus')
+  }
+  
+  // Position cautions for specific methods
+  if (methodKey === 'cluster' && targetPosition === 1) {
+    cautions.push('Opening position — cluster sets typically better mid-session')
+  }
+  if ((methodKey === 'drop_set' || methodKey === 'rest_pause') && targetPosition <= 2) {
+    cautions.push('Early position for high-fatigue method — may affect later work')
+  }
+  
+  // Add slot caution reasons
+  cautions.push(...slot.cautionReasons)
+  
+  return cautions.slice(0, 3) // Limit to 3 cautions
 }
 
 /**
  * Build human-readable "why chosen" explanation
  * [MASTER-8C.12.1D] Now includes method load reasoning
  * [MASTER-8C.12.2] Enhanced with day spread and first-on-day explanations
+ * [MASTER-8C.12.3] Now includes method-specific fit explanations
  */
-function buildWhyChosen(slot: MethodEligibleSlot, methodLoad: number, isFirstOnDay: boolean): string {
+function buildWhyChosen(
+  slot: MethodEligibleSlot, 
+  methodLoad: number, 
+  isFirstOnDay: boolean,
+  methodKey: CanonicalMethodFamily
+): string {
   const reasons: string[] = []
   
-  // [MASTER-8C.12.2] Lead with spread/stacking context
-  if (isFirstOnDay && methodLoad === 0) {
-    reasons.push('Best spread: open day')
+  // [MASTER-8C.12.3] Lead with best-fit reasoning, not just spread
+  if (slot.confidence === 'high' && methodLoad === 0) {
+    reasons.push('Best fit first')
+  } else if (isFirstOnDay && methodLoad === 0) {
+    reasons.push('Open day')
   } else if (isFirstOnDay) {
-    reasons.push('Chosen before stacking')
+    reasons.push('Spread pick')
   } else {
-    reasons.push('Stacked: all distinct days used')
+    reasons.push('Stacked')
   }
   
   // Add confidence
@@ -662,20 +942,41 @@ function buildWhyChosen(slot: MethodEligibleSlot, methodLoad: number, isFirstOnD
     reasons.push('medium-confidence row')
   }
   
+  // [MASTER-8C.12.3] Add method-specific fit note
+  const methodFit = getMethodFitNote(methodKey, slot)
+  if (methodFit) {
+    reasons.push(methodFit)
+  }
+  
   // Add method load context if relevant
   if (methodLoad === 0) {
     reasons.push('no existing methods')
-  } else if (methodLoad === 1) {
-    reasons.push('1 existing method')
-  }
-  
-  // Add skill sensitivity
-  if (!slot.isPrimarySkillSensitive) {
-    reasons.push('not skill-sensitive')
   }
   
   // Build final explanation (keep concise: 2-3 key reasons)
   return reasons.slice(0, 3).join(', ') || 'Eligible slot'
+}
+
+/**
+ * [MASTER-8C.12.3] Get method-specific fit note based on slot characteristics
+ */
+function getMethodFitNote(methodKey: CanonicalMethodFamily, slot: MethodEligibleSlot): string | null {
+  if (!slot.isPrimarySkillSensitive) {
+    switch (methodKey) {
+      case 'cluster':
+        return 'quality-rep suitable'
+      case 'drop_set':
+      case 'rest_pause':
+        return 'fatigue-tolerant row'
+      case 'top_set':
+        return 'strength-focused row'
+      case 'backoff_sets':
+        return 'volume-suitable row'
+      default:
+        return null
+    }
+  }
+  return null
 }
 
 // =============================================================================

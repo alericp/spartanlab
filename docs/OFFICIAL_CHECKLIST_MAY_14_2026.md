@@ -6,12 +6,24 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.30)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.31)
 
-**Current active completed step:** MASTER-8C.30 / AB20.4.23  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active)  
-**Current active step:** MASTER-8C.31 / AB20.4.24 — to be verified from checklist (likely controlled preview/confirmation contract step, still read-only unless explicitly approved)  
+**Current active completed step:** MASTER-8C.31 / AB20.4.24  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active)  
+**Current active step:** MASTER-8C.32 / AB20.4.25 — to be verified from checklist (likely user-confirmation/preview contract gate, still read-only unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Target Session Resolution Preview (MASTER-8C.31)
+- New pure helper: mutation-target-session-resolution-preview.ts (622 lines)
+- 6 target-resolution statuses: unavailable, blocked_by_caution, no_future_targets, targets_unresolved, targets_resolved_read_only, future_locked
+- 5 candidate target statuses: blocked, unresolved, review_only, future_locked, resolved_read_only
+- Local session adapter (TargetResolutionSessionInput) avoids importing AdaptiveProgram
+- Consumes MutationReadinessReviewGateModel + MutationPathwayReadinessMapModel + program sessions
+- canMutateNow always false, mutationAllowed always false, no confirmed plan, no marker
+- Plan Logic sheet: compact teal-bordered target resolution card with session counts + candidate target rows
+- AI Foundation Map: plan_logic row shows target resolution status + future session count
+- No writer/apply/confirm functions called, no storage writes, no apply/approve/confirm UI
+- Programs/exercises/sets changed: NO
 
 ### Mutation Pathway Readiness Map (MASTER-8C.30)
 - New pure helper: mutation-pathway-readiness-map.ts (547 lines)

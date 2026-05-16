@@ -3165,6 +3165,18 @@ function AIIntelligenceFoundationMap() {
         </div>
       </div>
       
+      {/* [MASTER-8C.18] Prehab/Rehab/Tendon Safeguard note */}
+      <div className="px-4 py-3 bg-[#0F0F12] border-t border-[#2A2A35]">
+        <div className="flex items-start gap-2">
+          <Shield className="w-3 h-3 text-cyan-400 mt-0.5 flex-shrink-0" />
+          <p className="text-[9px] text-[#8A8A9A] leading-relaxed">
+            <span className="text-cyan-400">Prehab/Rehab/Tendon Safeguards</span> now scores joint/tendon stress 
+            from visible session structure and exercise patterns. No substitutions or exercise changes applied - 
+            mutation remains locked until evidence inputs are stronger.
+          </p>
+        </div>
+      </div>
+      
       {/* Expand/collapse toggle */}
       {!isExpanded && (
         <button

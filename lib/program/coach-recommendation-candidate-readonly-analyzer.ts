@@ -1,10 +1,16 @@
 /**
  * ============================================================================
  * MASTER-8C.22 / AB20.4.15 — COACH RECOMMENDATION CANDIDATE READ-ONLY ANALYZER
+ * MASTER-8C.23 / AB20.4.16 — SOURCE QUALITY + EVIDENCE TIER REFINEMENT
  * ============================================================================
  *
  * Pure, deterministic, read-only bridge that turns existing source branch
  * analyzer outputs into honest recommendation candidates for Coach Recs.
+ *
+ * AB20.4.16 adds a source-quality layer so each candidate clearly explains:
+ *   - What evidence tier it is based on (logged user evidence vs plan inference)
+ *   - Whether the recommendation is ready for action or needs more data
+ *   - Whether scary language should be avoided (no confirmed user harm from inference alone)
  *
  * This does NOT replace or weaken the existing AB11/AB12 evidence-derived
  * recommendation path (EvidenceCoachRecommendationBundle). It is a FALLBACK
@@ -52,6 +58,20 @@ export type CoachRecommendationCandidateCategory =
   | 'method_planning'
   | 'general'
 
+// [MASTER-8C.23] Source-quality / evidence-tier types
+export type CoachRecommendationEvidenceTier =
+  | 'logged_user_evidence'
+  | 'source_branch_inference'
+  | 'plan_structure_inference'
+  | 'missing_evidence'
+  | 'mixed'
+
+export type CoachRecommendationActionReadiness =
+  | 'observe_only'
+  | 'collect_evidence'
+  | 'ready_for_review'
+  | 'blocked_until_evidence'
+
 export interface CoachRecommendationCandidate {
   readonly id: string
   readonly category: CoachRecommendationCandidateCategory
@@ -65,6 +85,12 @@ export interface CoachRecommendationCandidate {
   readonly missingSources: readonly string[]
   readonly appliedToProgram: false
   readonly mutationStatus: 'read_only_not_applied'
+  // [MASTER-8C.23] Source-quality fields
+  readonly evidenceTier: CoachRecommendationEvidenceTier
+  readonly actionReadiness: CoachRecommendationActionReadiness
+  readonly sourceQualityLabel: string
+  readonly sourceQualityExplanation: string
+  readonly shouldAvoidScaryLanguage: boolean
 }
 
 export interface CoachRecommendationCandidateReadonlyModel {
@@ -80,6 +106,10 @@ export interface CoachRecommendationCandidateReadonlyModel {
   readonly noFutureSessionChangesApplied: true
   readonly mutationStatus: 'mutation_locked'
   readonly nextSafeAction: string
+  // [MASTER-8C.23] Model-level source-quality fields
+  readonly evidenceTierSummary: string
+  readonly sourceQualitySummary: string
+  readonly appliedRecommendationReadiness: 'not_ready' | 'needs_logged_evidence' | 'ready_for_review'
 }
 
 // ─── Minimal local input types (avoid circular deps) ─────────────────────────
@@ -135,6 +165,19 @@ const PRIORITY_ORDER: Record<CoachRecommendationCandidatePriority, number> = {
   info: 3,
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Determine evidence tier based on whether real user evidence exists */
+function resolveEvidenceTier(
+  hasLoggedEvidence: boolean,
+  isFromSourceBranch: boolean
+): CoachRecommendationEvidenceTier {
+  if (hasLoggedEvidence && isFromSourceBranch) return 'mixed'
+  if (hasLoggedEvidence) return 'logged_user_evidence'
+  if (isFromSourceBranch) return 'source_branch_inference'
+  return 'plan_structure_inference'
+}
+
 // ─── Main resolver ───────────────────────────────────────────────────────────
 
 export function resolveCoachRecommendationCandidates(
@@ -143,6 +186,8 @@ export function resolveCoachRecommendationCandidates(
   const candidates: CoachRecommendationCandidate[] = []
   const allSourceBasis: string[] = []
   const allMissingSources: string[] = []
+
+  const hasLoggedEvidence = !!(input.hasCompletedWorkoutEvidence || input.hasWorkoutHistory)
 
   // ── 1. Prehab / Tendon safeguard candidate ──────────────────────────────
   if (input.safeguardModel) {
@@ -153,22 +198,40 @@ export function resolveCoachRecommendationCandidates(
       .slice(0, 2)
       .map(s => s.label || 'tendon risk signal')
 
+    // [MASTER-8C.23] Without logged pain/RPE, this is plan-structure inference only
+    const tier = resolveEvidenceTier(hasLoggedEvidence, true)
+    const noUserPainEvidence = !hasLoggedEvidence
+
     if (risk === 'elevated' || risk === 'high') {
       candidates.push({
         id: 'candidate_prehab_tendon_risk',
         category: 'prehab_tendon',
+        // [MASTER-8C.23] Keep high for structural caution but clarify it is not confirmed harm
         priority: 'high',
-        confidence: risk === 'high' ? 'high' : 'medium',
-        title: 'Watch tendon-heavy work',
-        summary: `Safeguard analysis found ${risk} tendon/joint risk in this program.`,
-        recommendation: 'Keep high-stress skill work (straight-arm, planche, front lever) controlled. Collect pain/RPE feedback before allowing mutation. Consider reducing volume on overlapping tendon-intensive exercises.',
+        confidence: risk === 'high' ? 'medium' : 'medium',
+        title: noUserPainEvidence
+          ? 'High structural caution on tendon-heavy work'
+          : 'Watch tendon-heavy work',
+        summary: noUserPainEvidence
+          ? `Safeguard analysis found ${risk} tendon/joint stress patterns in program structure. Not confirmed by logged pain or RPE data.`
+          : `Safeguard analysis found ${risk} tendon/joint risk confirmed by workout evidence.`,
+        recommendation: noUserPainEvidence
+          ? 'Program contains tendon-heavy exercise patterns (straight-arm, planche, front lever). Keep high-stress skill work controlled. Log pain/RPE feedback to confirm or rule out actual risk before allowing applied changes.'
+          : 'Keep high-stress skill work controlled. Collect ongoing pain/RPE feedback before allowing mutation.',
         why: riskSignals.length > 0
           ? riskSignals
           : [`Safeguard risk level: ${risk}`],
         sourceBasis: ['Prehab/Rehab/Tendon Safeguards'],
-        missingSources: [],
+        missingSources: noUserPainEvidence ? ['Logged pain notes', 'Per-exercise RPE'] : [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: tier,
+        actionReadiness: noUserPainEvidence ? 'collect_evidence' : 'observe_only',
+        sourceQualityLabel: noUserPainEvidence ? 'Plan-structure signal' : 'Source-branch + evidence',
+        sourceQualityExplanation: noUserPainEvidence
+          ? 'Based on tendon-heavy exercise patterns in program structure, not confirmed by logged pain or RPE data.'
+          : 'Supported by safeguard branch analysis and logged workout evidence.',
+        shouldAvoidScaryLanguage: noUserPainEvidence,
       })
     } else if (risk === 'moderate') {
       candidates.push({
@@ -176,16 +239,21 @@ export function resolveCoachRecommendationCandidates(
         category: 'prehab_tendon',
         priority: 'medium',
         confidence: 'medium',
-        title: 'Monitor tendon stress',
-        summary: 'Moderate tendon/joint stress detected; monitor but not blocking.',
-        recommendation: 'Continue current program but track pain/discomfort in tendon-heavy exercises. Mutation is deferred until safeguard risk stabilizes.',
+        title: 'Monitor tendon stress patterns',
+        summary: 'Moderate tendon/joint stress detected from program structure; monitoring recommended.',
+        recommendation: 'Continue current program but track pain/discomfort in tendon-heavy exercises. Log per-exercise RPE to build evidence. Mutation is deferred until safeguard risk is better understood.',
         why: riskSignals.length > 0
           ? riskSignals
           : ['Moderate safeguard risk level'],
         sourceBasis: ['Prehab/Rehab/Tendon Safeguards'],
-        missingSources: [],
+        missingSources: noUserPainEvidence ? ['Logged pain notes'] : [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: tier,
+        actionReadiness: 'observe_only',
+        sourceQualityLabel: 'Plan-structure signal',
+        sourceQualityExplanation: 'Based on exercise stress patterns in program design, not confirmed by user-reported pain.',
+        shouldAvoidScaryLanguage: true,
       })
     }
   } else {
@@ -201,22 +269,40 @@ export function resolveCoachRecommendationCandidates(
       .slice(0, 2)
       .map(s => s.label || 'recovery signal')
 
+    // [MASTER-8C.23] Without logged readiness check-ins, this is plan-demand inference
+    const tier = resolveEvidenceTier(hasLoggedEvidence, true)
+    const noReadinessLogs = !hasLoggedEvidence
+
     if (readiness === 'reduced' || readiness === 'protected' || readiness === 'low') {
       candidates.push({
         id: 'candidate_recovery_reduced',
         category: 'recovery',
+        // [MASTER-8C.23] High structural caution, but clarify it is not confirmed overtraining
         priority: 'high',
-        confidence: input.recoveryModel.confidence === 'high' ? 'high' : 'medium',
-        title: 'Monitor recovery before progressing',
-        summary: `Recovery/readiness is ${readiness}; progression should stay conservative.`,
-        recommendation: 'Stay conservative on volume and intensity. Log readiness and recovery state before increasing training demands. Do not advance progression until recovery improves.',
+        confidence: noReadinessLogs ? 'low' : (input.recoveryModel.confidence === 'high' ? 'medium' : 'low'),
+        title: noReadinessLogs
+          ? 'Program structure suggests recovery should be monitored'
+          : 'Monitor recovery before progressing',
+        summary: noReadinessLogs
+          ? `Recovery/readiness appears ${readiness} based on session demand patterns. Not confirmed by readiness check-ins or fatigue logs.`
+          : `Recovery/readiness is ${readiness}; progression should stay conservative.`,
+        recommendation: noReadinessLogs
+          ? 'Program demand patterns suggest recovery monitoring is needed. Log readiness check-ins and per-session RPE to confirm whether recovery is actually limited. Do not assume overtraining from structure alone.'
+          : 'Stay conservative on volume and intensity. Continue logging readiness and recovery state before increasing training demands.',
         why: recSignals.length > 0
           ? recSignals
           : [`Readiness level: ${readiness}`],
         sourceBasis: ['Recovery/Readiness'],
-        missingSources: [],
+        missingSources: noReadinessLogs ? ['Readiness check-ins', 'Fatigue/sleep logs'] : [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: tier,
+        actionReadiness: noReadinessLogs ? 'collect_evidence' : 'observe_only',
+        sourceQualityLabel: noReadinessLogs ? 'Plan-demand signal' : 'Source-branch + evidence',
+        sourceQualityExplanation: noReadinessLogs
+          ? 'Inferred from session demand and exercise patterns. Not confirmed by logged readiness or fatigue data.'
+          : 'Based on recovery/readiness branch analysis and logged training data.',
+        shouldAvoidScaryLanguage: noReadinessLogs,
       })
     } else if (readiness === 'moderate') {
       candidates.push({
@@ -225,15 +311,20 @@ export function resolveCoachRecommendationCandidates(
         priority: 'medium',
         confidence: 'medium',
         title: 'Keep progression conservative until readiness improves',
-        summary: 'Recovery state is moderate; some caution advised.',
+        summary: 'Recovery state is moderate based on program structure; some caution advised.',
         recommendation: 'Continue current training but avoid aggressive increases. Monitor readiness signals and collect logged workout feedback.',
         why: recSignals.length > 0
           ? recSignals
           : ['Moderate readiness level'],
         sourceBasis: ['Recovery/Readiness'],
-        missingSources: [],
+        missingSources: noReadinessLogs ? ['Readiness check-ins'] : [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: tier,
+        actionReadiness: 'observe_only',
+        sourceQualityLabel: 'Source-branch inference',
+        sourceQualityExplanation: 'Based on recovery/readiness branch analysis of program demand.',
+        shouldAvoidScaryLanguage: true,
       })
     }
   } else {
@@ -247,6 +338,8 @@ export function resolveCoachRecommendationCandidates(
     const direction = input.progressionModel.progressionDirection || ''
     const progConfidence = input.progressionModel.confidence || ''
 
+    const tier = resolveEvidenceTier(hasLoggedEvidence, true)
+
     if (
       posture === 'recovery_protective' ||
       posture === 'mixed' ||
@@ -258,23 +351,31 @@ export function resolveCoachRecommendationCandidates(
       candidates.push({
         id: 'candidate_progression_conservative',
         category: 'progression_periodization',
-        priority: isBlocking ? 'high' : 'medium',
-        confidence: progConfidence === 'high' ? 'high'
-          : progConfidence === 'medium' ? 'medium' : 'low',
+        // [MASTER-8C.23] Blocking is medium, not high, unless confirmed by evidence
+        priority: isBlocking && hasLoggedEvidence ? 'high' : 'medium',
+        confidence: progConfidence === 'high' ? 'medium'
+          : progConfidence === 'medium' ? 'low' : 'low',
         title: isBlocking
-          ? 'Progression is blocked or recovery-protective'
+          ? 'Progression not ready for applied changes'
           : 'Keep progression conservative for now',
-        summary: `Progression posture: ${posture || 'unknown'}. Direction: ${direction || 'unknown'}.`,
+        summary: `Progression posture: ${posture || 'unknown'}. Direction: ${direction || 'unknown'}. ${hasLoggedEvidence ? 'Supported by workout evidence.' : 'Based on program structure and source branches.'}`,
         recommendation: isBlocking
-          ? 'Program appears in a protective or blocked phase. Do not increase intensity, volume, or complexity until the blocking constraint resolves (recovery, evidence, or source quality).'
+          ? 'Progression appears constrained by recovery, missing evidence, or source quality. Do not increase intensity, volume, or complexity until the constraint resolves. Log workouts to build evidence.'
           : 'Progression should remain conservative. Multiple source signals suggest caution before advancing phase or increasing training demands.',
         why: (input.progressionModel.signals || [])
           .slice(0, 2)
           .map(s => s.label || 'progression signal'),
         sourceBasis: ['Progression/Periodization'],
-        missingSources: [],
+        missingSources: hasLoggedEvidence ? [] : ['Logged performance trend'],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: tier,
+        actionReadiness: isBlocking ? 'blocked_until_evidence' : 'observe_only',
+        sourceQualityLabel: hasLoggedEvidence ? 'Source-branch + evidence' : 'Source-branch inference',
+        sourceQualityExplanation: hasLoggedEvidence
+          ? 'Based on progression branch analysis and logged workout evidence.'
+          : 'Inferred from program structure, source branches, and missing performance data. Not confirmed by completed workout trends.',
+        shouldAvoidScaryLanguage: !hasLoggedEvidence,
       })
     }
   } else {
@@ -296,8 +397,8 @@ export function resolveCoachRecommendationCandidates(
         priority: balanceStatus === 'imbalanced' ? 'medium' : 'low',
         confidence: 'medium',
         title: 'Review balance before future adaptation',
-        summary: 'Program balance analysis found areas to monitor before mutation.',
-        recommendation: 'Current program has balance considerations. Review movement family distribution and push/pull ratio before allowing automated changes.',
+        summary: 'Program balance analysis found structural patterns to monitor before mutation.',
+        recommendation: 'Current program has balance considerations in movement family distribution. Review push/pull ratio and movement coverage before allowing automated changes. This is a structural observation, not a confirmed issue.',
         why: balanceFindings.length > 0
           ? balanceFindings.map(f => f.label || 'balance finding')
           : [`Balance status: ${balanceStatus}`],
@@ -305,6 +406,11 @@ export function resolveCoachRecommendationCandidates(
         missingSources: [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: 'plan_structure_inference',
+        actionReadiness: 'observe_only',
+        sourceQualityLabel: 'Plan-structure signal',
+        sourceQualityExplanation: 'Based on movement family and push/pull analysis of program design. Balance findings are structural observations.',
+        shouldAvoidScaryLanguage: true,
       })
     }
   } else {
@@ -323,9 +429,9 @@ export function resolveCoachRecommendationCandidates(
         category: 'exercise_knowledge',
         priority: unknowns > 2 ? 'medium' : 'low',
         confidence: 'medium',
-        title: 'Improve exercise knowledge before deeper automation',
+        title: 'Expand exercise knowledge before deeper automation',
         summary: `Exercise knowledge covers ${Math.round(coverage * 100)}% of program exercises${unknowns > 0 ? `; ${unknowns} truly unknown` : ''}.`,
-        recommendation: 'Expand exercise science coverage for current program exercises before allowing mutation to rely on exercise knowledge. Unknown exercises may receive generic or incorrect prescriptions.',
+        recommendation: 'Some exercises lack full science knowledge entries. Expand coverage for current program exercises before allowing mutation to rely on exercise knowledge. Unknown exercises may receive generic prescriptions.',
         why: unknowns > 0
           ? [`${unknowns} exercises have no science knowledge`]
           : [`Coverage ratio: ${Math.round(coverage * 100)}%`],
@@ -333,6 +439,11 @@ export function resolveCoachRecommendationCandidates(
         missingSources: [],
         appliedToProgram: false,
         mutationStatus: 'read_only_not_applied',
+        evidenceTier: 'source_branch_inference',
+        actionReadiness: 'observe_only',
+        sourceQualityLabel: 'Source-branch inference',
+        sourceQualityExplanation: 'Based on exercise knowledge seed coverage analysis. Coverage gaps are factual, not inferred.',
+        shouldAvoidScaryLanguage: true,
       })
     }
   } else {
@@ -347,18 +458,22 @@ export function resolveCoachRecommendationCandidates(
       priority: 'medium',
       confidence: 'high',
       title: 'Log workouts to unlock applied recommendations',
-      summary: 'No completed workout evidence detected. Applied recommendations require logged sessions.',
-      recommendation: 'Complete and log workouts with RPE and readiness feedback to build evidence. Applied coach recommendations, progression decisions, and future-session mutation all depend on real performance data.',
-      why: ['No completed workout history found', 'Applied recommendations require evidence'],
+      summary: 'No completed workout evidence detected. All current recommendations are based on program structure and source branch inference only.',
+      recommendation: 'Complete and log workouts with RPE and readiness feedback to build real evidence. Applied coach recommendations, progression decisions, and future-session mutation all depend on logged performance data. Until then, all recommendations remain read-only previews.',
+      why: ['No completed workout history found', 'All recommendations are plan-structure inference only'],
       sourceBasis: ['Adaptive Foundation'],
-      missingSources: ['Logged performance', 'Recent RPE', 'Completed workout trend'],
+      missingSources: ['Completed workouts', 'Per-exercise RPE', 'Readiness check-ins', 'Session completion rate'],
       appliedToProgram: false,
       mutationStatus: 'read_only_not_applied',
+      evidenceTier: 'missing_evidence',
+      actionReadiness: 'collect_evidence',
+      sourceQualityLabel: 'Needs logged evidence',
+      sourceQualityExplanation: 'No completed workout evidence exists. All current recommendations are inferred from program design, not confirmed by user performance.',
+      shouldAvoidScaryLanguage: true,
     })
   }
 
   // ── 7. Set / Volume rationale info candidate ────────────────────────────
-  // Always include as low-priority info when we have session data
   if ((input.sessionCount ?? 0) > 0) {
     candidates.push({
       id: 'candidate_set_volume_info',
@@ -373,6 +488,11 @@ export function resolveCoachRecommendationCandidates(
       missingSources: ['Logged RPE per exercise', 'Volume response trend'],
       appliedToProgram: false,
       mutationStatus: 'read_only_not_applied',
+      evidenceTier: 'plan_structure_inference',
+      actionReadiness: 'observe_only',
+      sourceQualityLabel: 'Plan-structure signal',
+      sourceQualityExplanation: 'Set counts are from generator defaults. No logged RPE or volume response data available to refine.',
+      shouldAvoidScaryLanguage: true,
     })
   }
 
@@ -397,24 +517,28 @@ export function resolveCoachRecommendationCandidates(
       noFutureSessionChangesApplied: true,
       mutationStatus: 'mutation_locked',
       nextSafeAction: 'Build source branch coverage; log workouts to unlock applied recommendations',
+      evidenceTierSummary: 'No evidence tier available',
+      sourceQualitySummary: 'No source branches contributed recommendations',
+      appliedRecommendationReadiness: 'not_ready',
     }
   }
 
   const topCandidate = candidates[0]
 
-  // Determine overall confidence from top candidate + source count
+  // [MASTER-8C.23] Determine overall confidence — downgrade if no logged evidence
   let overallConfidence: CoachRecommendationCandidateConfidence = 'low'
-  if (uniqueSources.length >= 3 && topCandidate.confidence !== 'insufficient') {
+  if (hasLoggedEvidence && uniqueSources.length >= 3) {
     overallConfidence = topCandidate.confidence === 'high' ? 'high' : 'medium'
+  } else if (uniqueSources.length >= 3) {
+    overallConfidence = 'medium'
   } else if (uniqueSources.length >= 2) {
-    overallConfidence = topCandidate.confidence === 'high' ? 'medium' : 'low'
+    overallConfidence = 'low'
   } else {
     overallConfidence = 'low'
   }
 
   // Determine status
-  const hasEvidence = input.hasCompletedWorkoutEvidence || input.hasWorkoutHistory
-  const status: CoachRecommendationCandidateStatus = hasEvidence
+  const status: CoachRecommendationCandidateStatus = hasLoggedEvidence
     ? 'read_only_active'
     : candidates.some(c => c.priority === 'high' || c.priority === 'medium')
     ? 'waiting_for_evidence'
@@ -424,7 +548,7 @@ export function resolveCoachRecommendationCandidates(
   const medCount = candidates.filter(c => c.priority === 'medium').length
 
   const headline = highCount > 0
-    ? `${highCount} high-priority recommendation${highCount > 1 ? 's' : ''}`
+    ? `${highCount} structural caution${highCount > 1 ? 's' : ''} to review`
     : medCount > 0
     ? `${medCount} recommendation${medCount > 1 ? 's' : ''} to review`
     : `${candidates.length} recommendation candidate${candidates.length > 1 ? 's' : ''}`
@@ -432,6 +556,35 @@ export function resolveCoachRecommendationCandidates(
   const summaryText = `${candidates.length} source-backed candidate${candidates.length > 1 ? 's' : ''}. ` +
     `Top: ${topCandidate.title}. ` +
     `${uniqueSources.length} source branch${uniqueSources.length > 1 ? 'es' : ''} contributing.`
+
+  // [MASTER-8C.23] Evidence tier summary
+  const tierCounts = {
+    logged: candidates.filter(c => c.evidenceTier === 'logged_user_evidence' || c.evidenceTier === 'mixed').length,
+    branch: candidates.filter(c => c.evidenceTier === 'source_branch_inference').length,
+    plan: candidates.filter(c => c.evidenceTier === 'plan_structure_inference').length,
+    missing: candidates.filter(c => c.evidenceTier === 'missing_evidence').length,
+  }
+
+  let evidenceTierSummary: string
+  if (tierCounts.logged > 0 && tierCounts.plan === 0 && tierCounts.missing === 0) {
+    evidenceTierSummary = 'All candidates supported by logged evidence'
+  } else if (tierCounts.logged === 0 && tierCounts.missing === 0) {
+    evidenceTierSummary = 'All candidates from branch/plan inference only'
+  } else if (tierCounts.missing > 0 && tierCounts.logged === 0) {
+    evidenceTierSummary = 'Branch inference + missing evidence; no logged workout data'
+  } else {
+    evidenceTierSummary = 'Mixed evidence tiers'
+  }
+
+  const sourceQualitySummary = hasLoggedEvidence
+    ? `Source quality: branch inference + logged evidence from ${uniqueSources.length} branches`
+    : `Source quality: branch/plan inference only; needs logged workout evidence`
+
+  const appliedRecommendationReadiness = hasLoggedEvidence
+    ? 'ready_for_review' as const
+    : candidates.some(c => c.actionReadiness === 'blocked_until_evidence')
+    ? 'not_ready' as const
+    : 'needs_logged_evidence' as const
 
   return {
     status,
@@ -445,8 +598,11 @@ export function resolveCoachRecommendationCandidates(
     noProgramChangesApplied: true,
     noFutureSessionChangesApplied: true,
     mutationStatus: 'mutation_locked',
-    nextSafeAction: hasEvidence
+    nextSafeAction: hasLoggedEvidence
       ? 'Refine candidate priority scoring; mutation still deferred'
       : 'Log workouts to unlock applied recommendations; mutation deferred',
+    evidenceTierSummary,
+    sourceQualitySummary,
+    appliedRecommendationReadiness,
   }
 }

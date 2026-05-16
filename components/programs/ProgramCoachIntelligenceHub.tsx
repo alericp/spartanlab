@@ -223,6 +223,13 @@ import {
   resolvePlanEvidenceReadonlyHook,
   type PlanEvidenceReadonlyHookModel,
 } from '@/lib/program/plan-evidence-readonly-hook'
+// [MASTER-8C.28] Evidence trend classification / plan-level readiness scoring
+import {
+  resolvePlanEvidenceTrendReadiness,
+  getClassificationLabel,
+  getPostureLabel,
+  type PlanEvidenceTrendReadinessModel,
+} from '@/lib/program/plan-evidence-trend-readiness'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3078,6 +3085,7 @@ function AIIntelligenceFoundationMap({
   progressionPeriodizationModel,
   coachRecommendationCandidateModel,
   planEvidenceHookModel,
+  planEvidenceTrendReadinessModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3085,6 +3093,7 @@ function AIIntelligenceFoundationMap({
   progressionPeriodizationModel?: ProgressionPeriodizationReadonlyModel | null
   coachRecommendationCandidateModel?: CoachRecommendationCandidateReadonlyModel | null
   planEvidenceHookModel?: PlanEvidenceReadonlyHookModel | null
+  planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3543,6 +3552,28 @@ function AIIntelligenceFoundationMap({
                   {/* Mutation lock */}
                   <div className="text-[9px] text-cyan-400/60">
                     No program or future sessions changed.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [MASTER-8C.28] Dynamic plan evidence trend/readiness proof */}
+            {branch.id === 'plan_logic' && planEvidenceTrendReadinessModel && planEvidenceTrendReadinessModel.status !== 'unavailable' && (
+              <div className="mt-1.5 pt-1.5 border-t border-[#2A2A35]/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                      {getClassificationLabel(planEvidenceTrendReadinessModel.classification)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {getPostureLabel(planEvidenceTrendReadinessModel.readinessPosture)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {planEvidenceTrendReadinessModel.confidence} confidence
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-violet-400/60">
+                    Read-only scoring. No future-session mutation.
                   </div>
                 </div>
               </div>
@@ -7461,7 +7492,19 @@ export function ProgramCoachIntelligenceHub({
   
   // [MASTER-8C.22] Coach Recommendation Candidate Read-Only Analysis
   // [MASTER-8C.24] Enhanced with structured workout evidence bridge
+  // [MASTER-8C.28] Evidence summary lifted to separate memo for trend readiness reuse
   // Combines all existing source branch results + local workout evidence into recommendation candidates
+  
+  // [MASTER-8C.28] Lift workout evidence summary so trend readiness can reuse it without duplicate reads
+  const workoutEvidenceSummary = useMemo(() => {
+    try {
+      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
+      return resolveCoachRecsWorkoutEvidenceSummary(recentLogs)
+    } catch {
+      return null
+    }
+  }, [program])
+  
   const coachRecommendationCandidateResult = useMemo<CoachRecommendationCandidateReadonlyModel | null>(() => {
     try {
       if (!program?.sessions?.length) return null
@@ -7474,9 +7517,7 @@ export function ProgramCoachIntelligenceHub({
       )
       
       // [MASTER-8C.24] Build structured evidence summary from local trusted workout logs
-      // getRecentWorkoutLogsForGenerationRequest() is client-safe (returns [] on server)
-      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
-      const workoutEvidenceSummary = resolveCoachRecsWorkoutEvidenceSummary(recentLogs)
+      // [MASTER-8C.28] Now uses lifted workoutEvidenceSummary memo (no duplicate reads)
       
       return resolveCoachRecommendationCandidates({
         recoveryModel: recoveryReadinessResult ? {
@@ -7514,7 +7555,7 @@ export function ProgramCoachIntelligenceHub({
       console.error('[v0] Coach recommendation candidate error:', error)
       return null
     }
-  }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, progressionPeriodizationResult, programBalanceResult])
+  }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, progressionPeriodizationResult, programBalanceResult, workoutEvidenceSummary])
   
   // [MASTER-8C.27] Plan Evidence Read-Only Hook — translates Coach Recs evidence into Plan Logic-visible proof
   const planEvidenceHookModel = useMemo<PlanEvidenceReadonlyHookModel>(() => {
@@ -7522,6 +7563,14 @@ export function ProgramCoachIntelligenceHub({
       coachRecommendationCandidateModel: coachRecommendationCandidateResult,
     })
   }, [coachRecommendationCandidateResult])
+  
+  // [MASTER-8C.28] Evidence Trend Classification / Plan-Level Readiness Scoring
+  const planEvidenceTrendReadinessModel = useMemo<PlanEvidenceTrendReadinessModel>(() => {
+    return resolvePlanEvidenceTrendReadiness({
+      planEvidenceHookModel,
+      workoutEvidenceSummary,
+    })
+  }, [planEvidenceHookModel, workoutEvidenceSummary])
   
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
@@ -8243,6 +8292,57 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.28] Evidence Trend Classification / Readiness Scoring compact proof */}
+            {planEvidenceTrendReadinessModel.status !== 'unavailable' && (
+              <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                    Evidence trend: read-only
+                  </span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    planEvidenceTrendReadinessModel.classification === 'caution_pattern_detected'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : planEvidenceTrendReadinessModel.classification === 'recovery_pressure_detected'
+                      ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                      : planEvidenceTrendReadinessModel.classification === 'progression_signal_detected'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : planEvidenceTrendReadinessModel.classification === 'ready_for_review_not_mutation'
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                      : planEvidenceTrendReadinessModel.classification === 'monitoring_pattern'
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : 'bg-[#1A1A2E] text-[#8A8A9A] border-[#2A2A35]'
+                  )}>
+                    {getClassificationLabel(planEvidenceTrendReadinessModel.classification)}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                    {planEvidenceTrendReadinessModel.confidence} confidence
+                  </span>
+                </div>
+                <p className="text-xs text-[#9A9AAA] mb-1 leading-relaxed">{planEvidenceTrendReadinessModel.headline}</p>
+                <p className="text-[10px] text-[#7A7A8A] mb-1.5 leading-relaxed">{planEvidenceTrendReadinessModel.summary}</p>
+                {planEvidenceTrendReadinessModel.evidenceLabel && (
+                  <p className="text-[10px] text-emerald-400/70 mb-1">{planEvidenceTrendReadinessModel.evidenceLabel}</p>
+                )}
+                {planEvidenceTrendReadinessModel.trendSignals.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {planEvidenceTrendReadinessModel.trendSignals.slice(0, 4).map((signal, idx) => (
+                      <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E]/60 text-[#8A8A9A] border border-[#2A2A35]/40">
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {planEvidenceTrendReadinessModel.readinessReasons.length > 0 && (
+                  <p className="text-[10px] text-violet-400/60 mb-1">
+                    Posture: {getPostureLabel(planEvidenceTrendReadinessModel.readinessPosture)} — {planEvidenceTrendReadinessModel.readinessReasons[0]}
+                  </p>
+                )}
+                <p className="text-[10px] text-cyan-400/60">
+                  No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8267,7 +8367,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} />
           </div>
         </SheetContent>
       </Sheet>

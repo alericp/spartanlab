@@ -6,12 +6,22 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.27)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.28)
 
-**Current active completed step:** MASTER-8C.27 / AB20.4.20  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, plan evidence hook active)  
-**Current active step:** MASTER-8C.28 / AB20.4.21 — Evidence Trend Classification / Plan-Level Readiness Scoring (read-only)  
+**Current active completed step:** MASTER-8C.28 / AB20.4.21  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active)  
+**Current active step:** MASTER-8C.29 / AB20.4.22 — Mutation-Readiness Review Gate / Candidate Resolution (read-only unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Evidence Trend Classification / Readiness Scoring (MASTER-8C.28)
+- New pure helper: plan-evidence-trend-readiness.ts (390 lines)
+- 7 trend classifications: insufficient_evidence, evidence_connected, monitoring_pattern, caution_pattern_detected, recovery_pressure_detected, progression_signal_detected, ready_for_review_not_mutation
+- 5 readiness postures: collect_more_evidence, monitor_only, review_recommended, caution_review, future_mutation_blocked_readonly
+- Consumes PlanEvidenceReadonlyHookModel + CoachRecsWorkoutEvidenceSummary (no duplicate reads)
+- Lifted workoutEvidenceSummary to separate useMemo to avoid duplicate localStorage access
+- Plan Logic sheet: compact violet trend/readiness card with classification, confidence, signals, posture
+- AI Foundation Map: plan_logic row shows trend classification + readiness posture + mutation lock
+- Programs/exercises/sets changed: NO
 
 ### Plan Evidence Read-Only Hook (MASTER-8C.27)
 - New pure helper: plan-evidence-readonly-hook.ts (162 lines)

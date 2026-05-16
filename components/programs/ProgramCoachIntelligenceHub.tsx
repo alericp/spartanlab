@@ -1096,7 +1096,11 @@ interface ProgramCoachIntelligenceHubProps {
   onRevertMethodOverride?: (methodKey: string) => Promise<MethodOverrideRevertResult>
   /** [AB20.4.2] Callback to reset all user-applied method overrides at once */
   onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
-  }
+  /** [MASTER-8C.12A] Dedicated callback for frequency placement apply that saves via saveAdaptiveProgram */
+  onApplyFrequencyPlacement?: (
+    preview: FrequencySlotPlacementPreview
+  ) => Promise<FrequencyPlacementApplyResult>
+}
 
 // =============================================================================
 // HUB BUTTON COMPONENT
@@ -4121,13 +4125,18 @@ interface SlotEligibilityFrequencyPreviewSectionProps {
   program: unknown
   /** [MASTER-8C.10] Callback to update saved program after confirmed apply */
   onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
+  /** [MASTER-8C.12A] Dedicated callback for frequency placement apply that saves via saveAdaptiveProgram */
+  onApplyFrequencyPlacement?: (
+    preview: FrequencySlotPlacementPreview
+  ) => Promise<FrequencyPlacementApplyResult>
 }
 
 /**
  * Compact read-only section showing slot eligibility and frequency preview.
  * [MASTER-8C.10] Now supports confirmed apply for eligible row-level methods.
+ * [MASTER-8C.12A] Now uses dedicated save callback for persistence.
  */
-function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate }: SlotEligibilityFrequencyPreviewSectionProps) {
+function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate, onApplyFrequencyPlacement }: SlotEligibilityFrequencyPreviewSectionProps) {
   const plan = useMemo<MethodSlotEligibilityFrequencyPlan>(() => {
     return buildMethodSlotEligibilityFrequencyPlan(program)
   }, [program])
@@ -4160,22 +4169,49 @@ function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate }: Sl
     })
   }
 
-  // [MASTER-8C.10] Handle confirmed apply
-  const handleConfirmApply = (methodKey: string, placementPreview: FrequencySlotPlacementPreview, allowCaution: boolean) => {
+  // [MASTER-8C.10 + 8C.12A] Handle confirmed apply with persistence
+  const handleConfirmApply = async (methodKey: string, placementPreview: FrequencySlotPlacementPreview, allowCaution: boolean) => {
+    // [MASTER-8C.12A] Use dedicated save callback if available (persists to localStorage)
+    if (onApplyFrequencyPlacement) {
+      const result = await onApplyFrequencyPlacement(placementPreview)
+      
+      setApplyResults(prev => ({
+        ...prev,
+        [methodKey]: result,
+      }))
+      
+      if (result.status === 'success' || result.status === 'partial_success') {
+        setProgramChanged(true)
+        // Reset frequency selection after successful apply
+        setSelectedFrequencies(prev => ({
+          ...prev,
+          [methodKey]: 0,
+        }))
+      }
+      return
+    }
+    
+    // Fallback: Local state only - does NOT persist (shows warning in result)
     const result = applyConfirmedFrequencyPlacementPreview({
       program,
       placementPreview,
       allowCautionApply: allowCaution,
     })
     
+    // Add warning about non-persistence to evidence
+    const resultWithWarning: FrequencyPlacementApplyResult = {
+      ...result,
+      evidence: [...result.evidence, 'WARNING: State-only update - not persisted via saveAdaptiveProgram. Will be lost on refresh.'],
+    }
+    
     setApplyResults(prev => ({
       ...prev,
-      [methodKey]: result,
+      [methodKey]: resultWithWarning,
     }))
     
     if (result.status === 'success' || result.status === 'partial_success') {
       setProgramChanged(true)
-      // Call the parent update callback with the updated program
+      // Call the parent update callback with the updated program (state-only, not persisted)
       if (onProgramUpdate && result.updatedProgram) {
         onProgramUpdate(result.updatedProgram as AdaptiveProgram)
       }
@@ -4580,6 +4616,7 @@ function RequestedMethodsSheetContent({
   resetAllResult,
   onResetAllOverrides,
   onProgramUpdate,
+  onApplyFrequencyPlacement,
 }: {
   program: AdaptiveProgram
   plannerSummary: CanonicalMethodPlannerSummary
@@ -4594,6 +4631,8 @@ function RequestedMethodsSheetContent({
   onResetAllOverrides: () => void
   /** [MASTER-8C.10] Callback for frequency placement apply */
   onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
+  /** [MASTER-8C.12A] Dedicated callback for frequency placement with save */
+  onApplyFrequencyPlacement?: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -5163,7 +5202,11 @@ function RequestedMethodsSheetContent({
 
   {/* [MASTER-8C.8] Slot Eligibility & Frequency Preview Section */}
   <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
-  <SlotEligibilityFrequencyPreviewSection program={program} onProgramUpdate={onProgramUpdate} />
+    <SlotEligibilityFrequencyPreviewSection 
+      program={program} 
+      onProgramUpdate={onProgramUpdate} 
+      onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+    />
   </div>
   
   {/* [AB20.4.2] Reset All Overrides Section */}
@@ -5356,6 +5399,7 @@ export function ProgramCoachIntelligenceHub({
   onApplyMethodOverridePreview, // [AB20.1D] Dedicated callback for apply with save
   onRevertMethodOverride, // [AB20.2] Dedicated callback for revert with save
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
+  onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -5985,19 +6029,20 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-<RequestedMethodsSheetContent
-  program={program}
-  plannerSummary={plannerSummary}
-  foundationContext={methodPlannerFoundationContext}
-  onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
-  onRevertMethodOverride={onRevertMethodOverride}
-  onResetAllMethodOverrides={onResetAllMethodOverrides}
-  showResetAllConfirmation={showResetAllConfirmation}
-  setShowResetAllConfirmation={setShowResetAllConfirmation}
-  isResettingAllOverrides={isResettingAllOverrides}
-  resetAllResult={resetAllResult}
-  onResetAllOverrides={handleResetAllOverrides}
-  onProgramUpdate={onProgramUpdate}
+  <RequestedMethodsSheetContent
+    program={program}
+    plannerSummary={plannerSummary}
+    foundationContext={methodPlannerFoundationContext}
+    onApplyMethodOverride={onApplyMethodOverridePreview ? handleApplyMethodOverride : undefined}
+    onRevertMethodOverride={onRevertMethodOverride}
+    onResetAllMethodOverrides={onResetAllMethodOverrides}
+    showResetAllConfirmation={showResetAllConfirmation}
+    setShowResetAllConfirmation={setShowResetAllConfirmation}
+    isResettingAllOverrides={isResettingAllOverrides}
+    resetAllResult={resetAllResult}
+    onResetAllOverrides={handleResetAllOverrides}
+    onProgramUpdate={onProgramUpdate}
+    onApplyFrequencyPlacement={onApplyFrequencyPlacement}
   />
           </div>
         </SheetContent>

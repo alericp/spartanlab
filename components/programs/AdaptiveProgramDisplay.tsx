@@ -10,6 +10,9 @@ import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
 // [AB20.1D] Types for method override apply callback
 import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRevertResult, MethodOverrideResetAllResult } from '@/lib/program/requested-method-override-planner'
+// [MASTER-8C.12A] Types for frequency placement apply callback
+import type { FrequencyPlacementApplyResult } from '@/lib/program/method-frequency-placement-apply-contract'
+import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -309,6 +312,11 @@ interface AdaptiveProgramDisplayProps {
   // [AB20.4.2] Callback to reset all user-applied method overrides at once.
   // Removes override artifacts, preserves native AI-generated methods, saves through canonical path.
   onResetAllMethodOverrides?: () => Promise<MethodOverrideResetAllResult>
+  // [MASTER-8C.12A] Dedicated callback for frequency placement apply that saves via saveAdaptiveProgram.
+  // Program Page owns the save path. Hub requests, Page persists.
+  onApplyFrequencyPlacement?: (
+    preview: FrequencySlotPlacementPreview
+  ) => Promise<FrequencyPlacementApplyResult>
 }
 
 // =============================================================================
@@ -473,6 +481,8 @@ export function AdaptiveProgramDisplay({
   onRevertMethodOverride,
   // [AB20.4.2] Reset all method overrides callback with save persistence
   onResetAllMethodOverrides,
+  // [MASTER-8C.12A] Dedicated frequency placement apply callback with save persistence
+  onApplyFrequencyPlacement,
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1355,17 +1365,18 @@ export function AdaptiveProgramDisplay({
         )}
       </Card>
 
-      {/* [SPARTANLAB-P2B] Coach Intelligence Hub — Method Override Planner corridor */}
-      <ProgramCoachIntelligenceHub
-        program={program}
-        selectedSkillRepresentations={selectedSkillRepresentations}
-        intelligenceContract={intelligenceContract}
-        currentWeekNumber={currentWeekNumber}
-        onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
-        onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
-        onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
-        onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
-      />
+  {/* [SPARTANLAB-P2B] Coach Intelligence Hub — Method Override Planner corridor */}
+  <ProgramCoachIntelligenceHub
+    program={program}
+    selectedSkillRepresentations={selectedSkillRepresentations}
+    intelligenceContract={intelligenceContract}
+    currentWeekNumber={currentWeekNumber}
+    onProgramUpdate={onProgramUpdate} // [AB20 / IQ10] Wire through for state update
+    onApplyMethodOverridePreview={onApplyMethodOverridePreview} // [AB20.1D] Wire through for save
+    onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
+    onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
+    onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
+  />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}
       {todayGuidance && todayGuidance.available && (

@@ -153,6 +153,12 @@ import {
   type MethodOverrideRevertResult,
   type MethodOverrideResetAllResult,
 } from '@/lib/program/requested-method-override-planner'
+// [MASTER-8C.12A] Frequency Placement Apply — Program Page owns save persistence
+import {
+  applyConfirmedFrequencyPlacementPreview,
+  type FrequencyPlacementApplyResult,
+} from '@/lib/program/method-frequency-placement-apply-contract'
+import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -2789,6 +2795,96 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [MASTER-8C.12A] Frequency Placement Apply Callback
+  // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
+  // This is the authoritative save corridor for frequency placement apply actions.
+  // ==========================================================================
+  const handleApplyFrequencyPlacement = useCallback(
+    async (preview: FrequencySlotPlacementPreview): Promise<FrequencyPlacementApplyResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          methodKey: preview.methodKey,
+          displayLabel: preview.displayLabel,
+          requestedFrequency: preview.requestedFrequency,
+          appliedCount: 0,
+          blockedCount: 0,
+          targetedDays: [],
+          targetedExercises: [],
+          evidence: ['program is null or undefined'],
+          blockedReasons: ['No program available'],
+          programChanged: false,
+          persistRequired: false,
+          liveWorkoutChanged: false,
+          completedSessionsProtected: true,
+          existingSavedArtifactsPreserved: true,
+        }
+      }
+      
+      console.log('[MASTER-8C.12A-frequency-apply] Starting apply', {
+        methodKey: preview.methodKey,
+        targetCount: preview.targets.length,
+        programId: program.id,
+        sessionCount: program.sessions?.length,
+      })
+      
+      // Call the pure helper
+      const result = applyConfirmedFrequencyPlacementPreview({
+        program,
+        placementPreview: preview,
+        allowCautionApply: true, // Allow caution applies for frequency placement
+      })
+      
+      console.log('[MASTER-8C.12A-frequency-apply] Helper result', {
+        status: result.status,
+        appliedCount: result.appliedCount,
+        blockedCount: result.blockedCount,
+        evidence: result.evidence,
+      })
+      
+      // If blocked or no updated program, return early — do not save
+      if ((result.status !== 'success' && result.status !== 'partial_success') || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        // [MASTER-8C.12A] Dynamic import to access canonical save function
+        // This preserves Program Page's dynamic-module isolation pattern
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram as AdaptiveProgram)
+        
+        // [MASTER-8C.12A] Update Program Page state via parent callback
+        // onProgramUpdate is passed from parent, which owns setProgram
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[MASTER-8C.12A-frequency-apply] Program saved successfully', {
+          programId: savedProgram.id,
+          sessionCount: savedProgram.sessions?.length,
+          appliedCount: result.appliedCount,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+        }
+      } catch (saveError) {
+        console.error('[MASTER-8C.12A-frequency-apply] Save failed', saveError)
+        return {
+          ...result,
+          status: 'blocked',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
   // [AB20.2] Method Override Revert Callback
   // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
   // This is the authoritative save corridor for method override revert actions.
@@ -3617,9 +3713,12 @@ function ProgramDisplayWrapper({
   Program Page owns the save path. Hub requests, Page persists. */
   onRevertMethodOverride={handleRevertMethodOverride}
   /* [AB20.4.2] Reset all method overrides callback with saveAdaptiveProgram.
-  Removes all user-applied overrides while preserving native AI methods. */
+    Removes all user-applied overrides while preserving native AI methods. */
   onResetAllMethodOverrides={handleResetAllMethodOverrides}
-  />
+  /* [MASTER-8C.12A] Frequency placement apply callback with saveAdaptiveProgram.
+    Program Page owns the save path. Hub requests, Page persists. */
+  onApplyFrequencyPlacement={handleApplyFrequencyPlacement}
+/>
       </ErrorBoundary>
     </div>
   )

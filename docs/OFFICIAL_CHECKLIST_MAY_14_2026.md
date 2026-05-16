@@ -6,12 +6,22 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.24)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.27)
 
-**Current active completed step:** MASTER-8C.24 / AB20.4.17  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs (all read-only, source-quality-aware, workout evidence bridge connected)  
-**Current active step:** MASTER-8C.25 / AB20.4.18 — Coach Recs Evidence Trend Classification / Read-Only Pattern Detection  
+**Current active completed step:** MASTER-8C.27 / AB20.4.20  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, plan evidence hook active)  
+**Current active step:** MASTER-8C.28 / AB20.4.21 — Evidence Trend Classification / Plan-Level Readiness Scoring (read-only)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Plan Evidence Read-Only Hook (MASTER-8C.27)
+- New pure helper: plan-evidence-readonly-hook.ts (162 lines)
+- New types: PlanEvidenceHookStatus, PlanEvidenceHookConfidence, PlanEvidenceReadonlyHookModel
+- Derives from Coach Recs candidate model (no duplicate localStorage reads)
+- Three states: read_only_connected, waiting_for_evidence, unavailable
+- Plan Logic sheet: compact evidence hook card above ProgramTruthSummary
+- AI Foundation Map: plan_logic row now shows dynamic evidence proof
+- Branch map: plan_logic upgraded from partial to read_only
+- Programs/exercises/sets changed: NO
 
 ### Workout Evidence Read-Only Bridge (MASTER-8C.24)
 - New pure helper: coach-recommendation-workout-evidence-readonly-bridge.ts (299 lines)

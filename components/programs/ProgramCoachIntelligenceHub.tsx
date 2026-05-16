@@ -218,6 +218,11 @@ import {
   resolveCoachRecsWorkoutEvidenceSummary,
 } from '@/lib/program/coach-recommendation-workout-evidence-readonly-bridge'
 import { getRecentWorkoutLogsForGenerationRequest } from '@/lib/program/performance-feedback-integration'
+// [MASTER-8C.27] Plan evidence read-only hook for Plan Logic
+import {
+  resolvePlanEvidenceReadonlyHook,
+  type PlanEvidenceReadonlyHookModel,
+} from '@/lib/program/plan-evidence-readonly-hook'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3072,12 +3077,14 @@ function AIIntelligenceFoundationMap({
   exerciseKnowledgeCoverageModel,
   progressionPeriodizationModel,
   coachRecommendationCandidateModel,
+  planEvidenceHookModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
   exerciseKnowledgeCoverageModel?: ExerciseKnowledgeCoverageReadonlyModel | null
   progressionPeriodizationModel?: ProgressionPeriodizationReadonlyModel | null
   coachRecommendationCandidateModel?: CoachRecommendationCandidateReadonlyModel | null
+  planEvidenceHookModel?: PlanEvidenceReadonlyHookModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3492,6 +3499,52 @@ function AIIntelligenceFoundationMap({
                     Coach recommendation scan unavailable; branch remains read-only.
                   </div>
                 )}
+              </div>
+            )}
+            
+            {/* [MASTER-8C.27] Dynamic plan evidence hook proof */}
+            {branch.id === 'plan_logic' && planEvidenceHookModel && planEvidenceHookModel.status !== 'unavailable' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                <div className="space-y-1.5">
+                  {/* Status + confidence chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={cn(
+                      "text-[9px] px-1.5 py-0.5 rounded border",
+                      planEvidenceHookModel.status === 'read_only_connected'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    )}>
+                      {planEvidenceHookModel.status === 'read_only_connected' ? 'Plan evidence hook connected' : 'Waiting for logged evidence'}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {planEvidenceHookModel.confidence} confidence
+                    </span>
+                  </div>
+                  
+                  {/* Evidence label */}
+                  {planEvidenceHookModel.evidenceLabel && (
+                    <div className="text-[9px] text-emerald-400/70">
+                      {planEvidenceHookModel.evidenceLabel}
+                    </div>
+                  )}
+                  
+                  {/* Source quality */}
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    {planEvidenceHookModel.sourceQualityLabel}
+                  </div>
+                  
+                  {/* Missing evidence */}
+                  {planEvidenceHookModel.missingEvidence.length > 0 && (
+                    <div className="text-[9px] text-amber-400/60">
+                      Missing: {planEvidenceHookModel.missingEvidence.slice(0, 3).join(', ')}
+                    </div>
+                  )}
+                  
+                  {/* Mutation lock */}
+                  <div className="text-[9px] text-cyan-400/60">
+                    No program or future sessions changed.
+                  </div>
+                </div>
               </div>
             )}
             
@@ -7463,6 +7516,13 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, progressionPeriodizationResult, programBalanceResult])
   
+  // [MASTER-8C.27] Plan Evidence Read-Only Hook — translates Coach Recs evidence into Plan Logic-visible proof
+  const planEvidenceHookModel = useMemo<PlanEvidenceReadonlyHookModel>(() => {
+    return resolvePlanEvidenceReadonlyHook({
+      coachRecommendationCandidateModel: coachRecommendationCandidateResult,
+    })
+  }, [coachRecommendationCandidateResult])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8149,6 +8209,40 @@ export function ProgramCoachIntelligenceHub({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 overflow-y-auto max-h-[calc(100vh-120px)] space-y-4">
+            {/* [MASTER-8C.27] Plan Evidence Read-Only Hook compact proof */}
+            {planEvidenceHookModel.status !== 'unavailable' && (
+              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    planEvidenceHookModel.status === 'read_only_connected'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  )}>
+                    {planEvidenceHookModel.status === 'read_only_connected' ? 'Evidence connected' : 'Waiting for evidence'}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                    Read-only evidence hook
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                    {planEvidenceHookModel.confidence} confidence
+                  </span>
+                </div>
+                <p className="text-xs text-[#9A9AAA] mb-1 leading-relaxed">{planEvidenceHookModel.headline}</p>
+                {planEvidenceHookModel.evidenceLabel && (
+                  <p className="text-[10px] text-emerald-400/70 mb-1">{planEvidenceHookModel.evidenceLabel}</p>
+                )}
+                <p className="text-[10px] text-[#7A7A8A] mb-1">{planEvidenceHookModel.sourceQualityLabel}</p>
+                {planEvidenceHookModel.missingEvidence.length > 0 && (
+                  <p className="text-[10px] text-amber-400/60 mb-1">
+                    Missing: {planEvidenceHookModel.missingEvidence.slice(0, 3).join(', ')}
+                  </p>
+                )}
+                <p className="text-[10px] text-cyan-400/60">
+                  No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8173,7 +8267,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} />
           </div>
         </SheetContent>
       </Sheet>

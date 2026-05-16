@@ -41,6 +41,9 @@ interface ExtendedSessionExercise {
   styledGroupId?: string
   methodFamily?: string
   appliedMethod?: string
+  // [MASTER-8C.14D] Grouped method fields
+  blockId?: string
+  structuralMethodApplied?: boolean
 }
 
 // Extended session type for styleMetadata fields
@@ -612,6 +615,12 @@ export interface AppliedMethodPlacement {
   isRowLevel: boolean
   /** Whether this is a grouped/structural method */
   isGrouped: boolean
+  /** [MASTER-8C.14C] Group ID for grouped methods like supersets */
+  groupId?: string
+  /** [MASTER-8C.14C] Exercise names in the group (for display) */
+  groupExerciseNames?: string[]
+  /** [MASTER-8C.14C] Provenance: 'native_generated' | 'user_applied_method_planner' | 'unknown_legacy' */
+  provenance?: 'native_generated' | 'user_applied_method_planner' | 'preview_only' | 'blocked' | 'unknown_legacy'
 }
 
 /**
@@ -639,8 +648,38 @@ export interface SelectiveRemovalResult {
 }
 
 /**
- * [MASTER-8C.12B] Extract all user-applied method placements from a program.
+ * [MASTER-8C.14C] Check if a styledGroup was applied by Method Override Planner.
+ * Used by extractAppliedMethodPlacements to determine removable groups.
+ */
+function isMethodOverridePlannerGroup(group: {
+  id?: string
+  source?: string
+  methodOverrideApplied?: boolean
+  exercises?: Array<{ methodRationale?: string }>
+}): boolean {
+  // Check explicit markers
+  if (group.methodOverrideApplied === true) return true
+  if (group.source === 'method_override_planner') return true
+  
+  // Check ID prefix patterns
+  if (group.id?.startsWith('method-override-circuit-')) return true
+  if (group.id?.startsWith('method-override-density-block-')) return true
+  if (group.id?.startsWith('method-override-superset-')) return true
+  
+  // Check exercise rationale
+  if (group.exercises?.some(ex => 
+    ex.methodRationale?.includes('Method Override Planner')
+  )) {
+    return true
+  }
+  
+  return false
+}
+
+/**
+ * [MASTER-8C.12B / MASTER-8C.14C] Extract all user-applied method placements from a program.
  * This provides the list of placements that can be selectively removed.
+ * [MASTER-8C.14C] Now also extracts grouped placements (supersets, circuits, density blocks).
  */
 export function extractAppliedMethodPlacements(
   program: AdaptiveProgram | null
@@ -654,16 +693,70 @@ export function extractAppliedMethodPlacements(
   program.sessions.forEach((session: ExtendedAdaptiveSession, sessionIndex: number) => {
     const dayNumber = session.dayNumber ?? sessionIndex + 1
     
+    // [MASTER-8C.14C] Extract grouped placements from styledGroups FIRST
+    // This ensures we don't double-count exercises that are part of groups
+    const groupedExerciseIds = new Set<string>()
+    const styledGroups = (session.styleMetadata?.styledGroups || []) as Array<{
+      id?: string
+      groupType?: string
+      source?: string
+      methodOverrideApplied?: boolean
+      methodOverrideMethodKey?: string
+      methodOverrideAppliedAt?: string
+      methodOverrideExerciseNames?: string[]
+      exercises?: Array<{ id?: string; name?: string; methodRationale?: string }>
+    }>
+    
+    styledGroups.forEach((group) => {
+      // Determine provenance
+      const isUserApplied = isMethodOverridePlannerGroup(group)
+      
+      // Only include user-applied groups in the removable list
+      if (isUserApplied) {
+        const groupExerciseNames = group.exercises?.map(e => e.name || 'Unknown') || 
+                                   group.methodOverrideExerciseNames || []
+        const exerciseName = groupExerciseNames.join(' + ')
+        
+        // Track exercise IDs to avoid double-counting
+        group.exercises?.forEach(e => {
+          if (e.id) groupedExerciseIds.add(e.id)
+        })
+        
+        placements.push({
+          id: group.id || `group-${sessionIndex}-${group.groupType}`,
+          sessionIndex,
+          dayNumber,
+          exerciseIndex: -1, // -1 indicates grouped
+          exerciseName,
+          methodKey: group.methodOverrideMethodKey || group.groupType || 'unknown',
+          methodLabel: getMethodDisplayLabel(group.groupType || 'unknown'),
+          appliedAt: group.methodOverrideAppliedAt || new Date().toISOString(),
+          source: group.source || 'method_override_planner',
+          isRowLevel: false,
+          isGrouped: true,
+          groupId: group.id,
+          groupExerciseNames,
+          provenance: 'user_applied_method_planner',
+        })
+      }
+    })
+    
     // Extract row-level placements from methodOverrideRowApplications
+    // [MASTER-8C.14C] Skip exercises that are part of grouped placements
     const rowApplications = (session.styleMetadata?.methodOverrideRowApplications || []) as Array<{
       methodKey: string
       exerciseName: string
       exerciseIndex: number
       appliedAt: string
       source: string
+      exerciseId?: string
     }>
     
     rowApplications.forEach((app) => {
+      // Skip if this exercise is part of a grouped placement
+      if (app.exerciseId && groupedExerciseIds.has(app.exerciseId)) {
+        return
+      }
       const id = `${sessionIndex}-${app.exerciseIndex}-${app.methodKey}`
       placements.push({
         id,
@@ -677,12 +770,22 @@ export function extractAppliedMethodPlacements(
         source: app.source,
         isRowLevel: true,
         isGrouped: false,
+        provenance: 'user_applied_method_planner',
       })
     })
     
     // Also check exercises for methodOverrideApplied flag in case row applications list is incomplete
+    // [MASTER-8C.14C] Skip exercises that are part of grouped placements
     const exercises = session.exercises || []
     exercises.forEach((exercise: ExtendedSessionExercise, exerciseIndex: number) => {
+      // Skip if this exercise is part of a grouped placement
+      if (exercise.id && groupedExerciseIds.has(exercise.id)) {
+        return
+      }
+      // Skip if this exercise has a blockId (part of a structural group)
+      if (exercise.blockId) {
+        return
+      }
       if (exercise.methodOverrideApplied && exercise.methodOverrideMethodKey) {
         const id = `${sessionIndex}-${exerciseIndex}-${exercise.methodOverrideMethodKey}`
         // Only add if not already in list from rowApplications
@@ -699,6 +802,7 @@ export function extractAppliedMethodPlacements(
             source: exercise.frequencyPlacementSource || 'method_override',
             isRowLevel: true,
             isGrouped: false,
+            provenance: 'user_applied_method_planner',
           })
         }
       }
@@ -734,11 +838,14 @@ function getMethodDisplayLabel(methodKey: string): string {
 }
 
 /**
- * [MASTER-8C.12B] Remove selected user-applied method placements from a program.
+ * [MASTER-8C.12B / MASTER-8C.14D] Remove selected user-applied method placements from a program.
  * This allows users to remove specific placements without resetting everything.
+ * [MASTER-8C.14D] Now handles both row-level and grouped placements.
  * 
  * @param program - The current program
- * @param placementIds - IDs of placements to remove (format: `${sessionIndex}-${exerciseIndex}-${methodKey}`)
+ * @param placementIds - IDs of placements to remove
+ *   - Row-level format: `${sessionIndex}-${exerciseIndex}-${methodKey}`
+ *   - Grouped format: group ID (e.g., 'method-override-superset-...')
  * @returns Result with updated program and evidence
  */
 export function removeSelectedMethodPlacements(args: {
@@ -780,8 +887,106 @@ export function removeSelectedMethodPlacements(args: {
   const failedIds: string[] = []
   const evidence: string[] = []
   
-  // Process each placement ID
-  placementIds.forEach((id) => {
+  // [MASTER-8C.14D] Separate grouped and row-level IDs
+  const groupedIds = placementIds.filter(id => 
+    id.startsWith('method-override-') || id.startsWith('group-')
+  )
+  const rowLevelIds = placementIds.filter(id => 
+    !id.startsWith('method-override-') && !id.startsWith('group-')
+  )
+  
+  // [MASTER-8C.14D] Process grouped placements first
+  groupedIds.forEach((groupId) => {
+    let found = false
+    
+    // Search all sessions for this group
+    for (let sessionIndex = 0; sessionIndex < (updatedProgram.sessions?.length || 0); sessionIndex++) {
+      const session = updatedProgram.sessions?.[sessionIndex] as ExtendedAdaptiveSession | undefined
+      if (!session) continue
+      
+      // Skip completed sessions
+      if (session.completed || session.status === 'completed') {
+        continue
+      }
+      
+      const styledGroups = (session.styleMetadata?.styledGroups || []) as Array<{
+        id?: string
+        groupType?: string
+        exercises?: Array<{ id?: string; name?: string }>
+      }>
+      
+      const groupIndex = styledGroups.findIndex(g => g.id === groupId)
+      if (groupIndex !== -1) {
+        const group = styledGroups[groupIndex]
+        found = true
+        
+        // Remove the group from styledGroups
+        styledGroups.splice(groupIndex, 1)
+        session.styleMetadata!.styledGroups = styledGroups
+        
+        // Clear metadata from exercises that were part of this group
+        const exerciseIds = new Set(group?.exercises?.map(e => e.id).filter(Boolean) || [])
+        const exercises = session.exercises || []
+        
+        exercises.forEach((exercise: ExtendedSessionExercise) => {
+          if (exercise.blockId === groupId || (exercise.id && exerciseIds.has(exercise.id))) {
+            // Clear grouped method metadata
+            delete exercise.blockId
+            delete exercise.method
+            delete exercise.methodLabel
+            delete exercise.structuralMethodApplied
+            delete exercise.methodOverrideApplied
+            delete exercise.methodOverrideMethodKey
+            delete exercise.methodOverrideAppliedAt
+            delete exercise.methodOverrideCanRevert
+            delete exercise.frequencyPlacementSource
+          }
+        })
+        
+        // Update session flags
+        const hasRemainingSupersets = styledGroups.some((g: { groupType?: string }) => g.groupType === 'superset')
+        const hasRemainingCircuits = styledGroups.some((g: { groupType?: string }) => g.groupType === 'circuit')
+        const hasRemainingDensity = styledGroups.some((g: { groupType?: string }) => g.groupType === 'density_block')
+        
+        if (session.styleMetadata) {
+          session.styleMetadata.hasSupersetsApplied = hasRemainingSupersets
+          session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
+          session.styleMetadata.hasDensityApplied = hasRemainingDensity
+          
+          // Update appliedMethods
+          if (Array.isArray(session.styleMetadata.appliedMethods)) {
+            if (!hasRemainingSupersets) {
+              session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+                (m: string) => m !== 'supersets' && m !== 'superset'
+              )
+            }
+            if (!hasRemainingCircuits) {
+              session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+                (m: string) => m !== 'circuits' && m !== 'circuit'
+              )
+            }
+            if (!hasRemainingDensity) {
+              session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+                (m: string) => m !== 'density_blocks' && m !== 'density_block' && m !== 'density'
+              )
+            }
+          }
+        }
+        
+        removedIds.push(groupId)
+        evidence.push(`Removed grouped method ${group?.groupType || 'unknown'} (${groupId}) from session ${sessionIndex}`)
+        break
+      }
+    }
+    
+    if (!found) {
+      failedIds.push(groupId)
+      evidence.push(`Grouped placement not found: ${groupId}`)
+    }
+  })
+  
+  // Process row-level placements
+  rowLevelIds.forEach((id) => {
     const parts = id.split('-')
     if (parts.length < 3) {
       failedIds.push(id)

@@ -64,6 +64,8 @@ import {
   AlertCircle,
   X,
   Check,
+  Settings2,
+  Minus,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -155,11 +157,11 @@ import {
   type MethodSlotEligibilityFrequencyPlan,
   type MethodFrequencyPreview,
 } from '@/lib/program/method-slot-eligibility-frequency-planner'
-// [MASTER-8C.9] Frequency-to-Slot Placement Preview
 import {
   buildFrequencySlotPlacementPreview,
   type FrequencySlotPlacementPreview,
 } from '@/lib/program/method-frequency-slot-placement-preview'
+import type { CanonicalMethodFamily } from '@/lib/program/method-structure-contract'
 // [MASTER-8C.10] Frequency Placement Apply Contract
 import {
   applyConfirmedFrequencyPlacementPreview,
@@ -1453,6 +1455,8 @@ function MethodDetailModalContent({
   showRevertConfirmation,
   onCancelRevert,
   onConfirmRevert,
+  // [MASTER-8C.12.1A] Frequency placement props
+  onApplyFrequencyPlacement,
 }: {
   item: RequestedMethodDisplayItem
   plan: RequestedMethodOverridePlan
@@ -1476,6 +1480,8 @@ function MethodDetailModalContent({
   showRevertConfirmation?: boolean
   onCancelRevert?: () => void
   onConfirmRevert?: () => void
+  // [MASTER-8C.12.1A] Frequency placement props
+  onApplyFrequencyPlacement?: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
 }) {
   // [AB17.2.2] Circuit-specific safety override
   // If circuit preview exists but is not a safe candidate, override the safety display
@@ -2114,6 +2120,16 @@ function MethodDetailModalContent({
             Created: {new Date(preview.generatedAt).toLocaleString()}
           </p>
         </div>
+      )}
+      
+      {/* [MASTER-8C.12.1A] Method-specific frequency controls for row-level methods */}
+      {!isAlreadyApplied && (
+        <MethodDetailFrequencyControls
+          program={program}
+          methodKey={plan.methodKey}
+          methodLabel={item.label}
+          onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+        />
       )}
       </div>
 
@@ -4014,6 +4030,272 @@ function ProgramBalanceSheetContent({
 // [MASTER-8C.7] METHOD CONTRACT FOUNDATION SECTION
 // =============================================================================
 
+// =============================================================================
+// [MASTER-8C.12.1A] METHOD DETAIL FREQUENCY CONTROLS
+// =============================================================================
+
+/**
+ * Props for method-specific frequency controls inside method detail view
+ */
+interface MethodDetailFrequencyControlsProps {
+  program: AdaptiveProgram | null
+  methodKey: string
+  methodLabel: string
+  onApplyFrequencyPlacement?: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
+}
+
+/**
+ * [MASTER-8C.12.1A] Method-specific frequency controls inside method detail view.
+ * This allows users to select frequency and preview targets for a single selected method.
+ * Replaces the need to use the standalone frequency list for row-level methods.
+ */
+function MethodDetailFrequencyControls({
+  program,
+  methodKey,
+  methodLabel,
+  onApplyFrequencyPlacement,
+}: MethodDetailFrequencyControlsProps) {
+  const [selectedFrequency, setSelectedFrequency] = useState(0)
+  const [isApplying, setIsApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<FrequencyPlacementApplyResult | null>(null)
+  
+  // Build the slot eligibility plan to check if this method supports frequency placement
+  const frequencyPlan = useMemo(() => {
+    if (!program) return null
+    return buildMethodSlotEligibilityFrequencyPlan(program)
+  }, [program])
+  
+  // Find this method in the plan
+  const methodFrequencyPreview = useMemo(() => {
+    if (!frequencyPlan) return null
+    return frequencyPlan.methods.find(m => m.canonicalKey === methodKey) ?? null
+  }, [frequencyPlan, methodKey])
+  
+  // Check if this method supports frequency placement
+  const isSupported = isMethodSupportedForFrequencyApply(methodKey)
+  const safeMax = methodFrequencyPreview?.safeMaxFrequency ?? 0
+  const isBlocked = !isSupported || safeMax === 0 || 
+    methodFrequencyPreview?.frequencyPreviewStatus === 'blocked'
+  
+  // Get blocked reason for display
+  const blockedReason = useMemo(() => {
+    if (!methodFrequencyPreview) return 'Method not found in frequency plan'
+    if (methodFrequencyPreview.blockedReason) return methodFrequencyPreview.blockedReason
+    if (!isSupported) return 'This method uses structural apply, not row-level frequency'
+    if (safeMax === 0) return 'No eligible slots available'
+    return null
+  }, [methodFrequencyPreview, isSupported, safeMax])
+  
+  // Build placement preview when frequency is selected
+  const placementPreview = useMemo(() => {
+    if (!program || selectedFrequency === 0) return null
+    return buildFrequencySlotPlacementPreview({
+      program,
+      methodKey: methodKey as CanonicalMethodFamily,
+      requestedFrequency: selectedFrequency,
+      existingPlan: frequencyPlan ?? undefined,
+    })
+  }, [program, methodKey, selectedFrequency, frequencyPlan])
+  
+  // Handle apply
+  const handleApply = async () => {
+    if (!placementPreview || !onApplyFrequencyPlacement) return
+    setIsApplying(true)
+    setApplyResult(null)
+    
+    try {
+      const result = await onApplyFrequencyPlacement(placementPreview)
+      setApplyResult(result)
+      
+      if (result.status === 'success' || result.status === 'partial_success') {
+        setSelectedFrequency(0)
+      }
+    } catch (error) {
+      setApplyResult({
+        status: 'blocked',
+        visibleSummary: error instanceof Error ? error.message : 'Apply failed',
+        evidence: ['Exception during apply'],
+        appliedCount: 0,
+        blockedCount: selectedFrequency,
+        methodKey: methodKey,
+        displayLabel: methodLabel,
+        requestedFrequency: selectedFrequency,
+        targetedDays: [],
+        targetedExercises: [],
+        blockedReasons: ['Exception during apply'],
+        programChanged: false,
+        persistRequired: false,
+        liveWorkoutChanged: false as const,
+        completedSessionsProtected: true as const,
+        existingSavedArtifactsPreserved: true as const,
+      })
+    } finally {
+      setIsApplying(false)
+    }
+  }
+  
+  // Don't render if callback not available
+  if (!onApplyFrequencyPlacement) return null
+  
+  // If method is blocked, show compact message
+  if (isBlocked) {
+    const isStructuralMethod = ['superset', 'circuit', 'density_block'].includes(methodKey)
+    
+    // [MASTER-8C.12.1E] Method-specific messaging for structural methods
+    const getStructuralMessage = () => {
+      if (methodKey === 'circuit') {
+        return `Circuits use the structural Method Planner apply flow above, not row-level frequency placement.`
+      }
+      if (methodKey === 'superset') {
+        return `Superset needs structural pair writer before frequency placement.`
+      }
+      if (methodKey === 'density_block') {
+        return `Density Block needs timed/sequence runtime, logging, and save/reload support.`
+      }
+      return `${methodLabel} uses the structural apply flow above, not row-level frequency.`
+    }
+    
+    return (
+      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers className="w-3.5 h-3.5 text-[#6A6A7A]" />
+          <span className="text-[10px] font-medium text-[#8A8A9A]">
+            {isStructuralMethod ? 'Structural Apply' : 'Frequency Placement'}
+          </span>
+        </div>
+        <p className="text-[10px] text-[#6A6A7A] leading-relaxed">
+          {isStructuralMethod 
+            ? getStructuralMessage()
+            : blockedReason ?? 'Not available for frequency placement.'
+          }
+        </p>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+      <div className="flex items-center gap-2 mb-3">
+        <Layers className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="text-[10px] font-medium text-[#E6E9EF]">Add Weekly Frequency</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          Row-level
+        </span>
+      </div>
+      
+      {/* Apply result banner */}
+      {applyResult && (
+        <div className={cn(
+          'mb-3 p-2 rounded text-[10px]',
+          applyResult.status === 'success' 
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : applyResult.status === 'partial_success'
+              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        )}>
+          {applyResult.visibleSummary}
+        </div>
+      )}
+      
+      {/* Frequency chips */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {Array.from({ length: safeMax + 1 }, (_, i) => (
+          <button
+            key={i}
+            onClick={() => { setSelectedFrequency(i); setApplyResult(null); }}
+            className={cn(
+              'px-2.5 py-1 text-[10px] rounded border transition-colors',
+              selectedFrequency === i
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                : 'bg-[#2A2A35] text-[#8A8A9A] border-[#3A3A4A] hover:border-[#4A4A5A]'
+            )}
+          >
+            {i}x
+          </button>
+        ))}
+      </div>
+      
+      {/* Preview targets */}
+      {placementPreview && selectedFrequency > 0 && (
+        <div className="space-y-2">
+          {placementPreview.targets.length > 0 ? (
+            <>
+              <p className="text-[10px] text-[#8A8A9A]">
+                Proposed targets for {methodLabel}:
+              </p>
+              <div className="space-y-1.5">
+                {placementPreview.targets.map((target, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 p-2 rounded bg-[#0F0F12] border border-[#2A2A35]"
+                  >
+                    <span className="text-[9px] font-medium text-emerald-400 shrink-0">
+                      {target.dayTitle}
+                    </span>
+                    <span className="text-[10px] text-[#9A9AAA] truncate">
+                      {target.exerciseNames[0]}
+                    </span>
+                    <span className="text-[9px] text-[#6A6A7A] ml-auto shrink-0">
+                      {target.whyChosen}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Warnings */}
+              {placementPreview.warnings.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {placementPreview.warnings.map((w, i) => (
+                    <p key={i} className="text-[9px] text-amber-400/80 flex items-start gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                      {w}
+                    </p>
+                  ))}
+                </div>
+              )}
+              
+              {/* Apply button */}
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={isApplying || placementPreview.status === 'blocked_method_not_selectable'}
+                className="w-full mt-2 h-8 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3 mr-1.5" />
+                    Apply {selectedFrequency}x {methodLabel}
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <p className="text-[10px] text-amber-400/80">
+              No eligible targets found for {selectedFrequency}x placement.
+            </p>
+          )}
+        </div>
+      )}
+      
+      {/* Empty state hint */}
+      {selectedFrequency === 0 && (
+        <p className="text-[10px] text-[#6A6A7A]">
+          Select a frequency to preview where {methodLabel} would be placed.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// [MASTER-8C.7] METHOD CONTRACT FOUNDATION SECTION
+// =============================================================================
+
 /**
  * Compact read-only section showing method contract / slot ownership / frequency foundation.
  * This is informational only — no mutation, no frequency controls enabled.
@@ -4134,6 +4416,8 @@ interface SlotEligibilityFrequencyPreviewSectionProps {
   onApplyFrequencyPlacement?: (
     preview: FrequencySlotPlacementPreview
   ) => Promise<FrequencyPlacementApplyResult>
+  /** [MASTER-8C.12.1B] When true, section is collapsed by default and labeled as diagnostic */
+  isDiagnosticMode?: boolean
 }
 
 /**
@@ -4141,12 +4425,13 @@ interface SlotEligibilityFrequencyPreviewSectionProps {
  * [MASTER-8C.10] Now supports confirmed apply for eligible row-level methods.
  * [MASTER-8C.12A] Now uses dedicated save callback for persistence.
  */
-function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate, onApplyFrequencyPlacement }: SlotEligibilityFrequencyPreviewSectionProps) {
+function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate, onApplyFrequencyPlacement, isDiagnosticMode = false }: SlotEligibilityFrequencyPreviewSectionProps) {
   const plan = useMemo<MethodSlotEligibilityFrequencyPlan>(() => {
     return buildMethodSlotEligibilityFrequencyPlan(program)
   }, [program])
 
-  const [isExpanded, setIsExpanded] = useState(false)
+  // [MASTER-8C.12.1B] Default to collapsed in diagnostic mode
+  const [isExpanded, setIsExpanded] = useState(!isDiagnosticMode)
   const [selectedFrequencies, setSelectedFrequencies] = useState<Record<string, number>>({})
   // [MASTER-8C.10] Track apply results
   const [applyResults, setApplyResults] = useState<Record<string, FrequencyPlacementApplyResult>>({})
@@ -4237,8 +4522,15 @@ function SlotEligibilityFrequencyPreviewSection({ program, onProgramUpdate, onAp
         className="w-full flex items-center justify-between text-left"
       >
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-medium text-[#E6E9EF]">Slot Eligibility & Frequency Preview</span>
+          <Layers className={cn("w-4 h-4", isDiagnosticMode ? "text-[#6A6A7A]" : "text-emerald-400")} />
+          <span className={cn("text-xs font-medium", isDiagnosticMode ? "text-[#8A8A9A]" : "text-[#E6E9EF]")}>
+            {isDiagnosticMode ? 'Advanced Placement Diagnostics' : 'Slot Eligibility & Frequency Preview'}
+          </span>
+          {isDiagnosticMode && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A4A]">
+              Optional
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[#6A6A7A]">
@@ -4601,6 +4893,271 @@ function MethodFrequencyPreviewRow({
                 ? 'Use existing Method Planner for circuit application'
                 : `${method.displayLabel} does not support frequency apply yet`}
             </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// [MASTER-8C.12.1C] MANAGE APPLIED ADDITIONS SECTION
+// =============================================================================
+
+interface ManageAppliedAdditionsSectionProps {
+  program: AdaptiveProgram | null
+  onRemoveSelectedPlacements: (placementIds: string[]) => Promise<SelectiveRemovalResult>
+}
+
+/**
+ * [MASTER-8C.12.1C] Section for managing and selectively removing user-applied method placements.
+ * Shows all user-applied methods (not native AI methods) with checkboxes for selective removal.
+ */
+function ManageAppliedAdditionsSection({
+  program,
+  onRemoveSelectedPlacements,
+}: ManageAppliedAdditionsSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isRemoving, setIsRemoving] = useState(false)
+  const [removalResult, setRemovalResult] = useState<SelectiveRemovalResult | null>(null)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  
+  // Extract applied placements from program
+  const { placements, totalCount } = useMemo(() => {
+    return extractAppliedMethodPlacements(program)
+  }, [program])
+  
+  // Toggle selection
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+    setRemovalResult(null)
+  }
+  
+  // Select/deselect all
+  const handleSelectAll = () => {
+    if (selectedIds.size === placements.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(placements.map(p => p.id)))
+    }
+    setRemovalResult(null)
+  }
+  
+  // Remove selected placements
+  const handleRemoveSelected = async () => {
+    if (selectedIds.size === 0) return
+    
+    setIsRemoving(true)
+    setRemovalResult(null)
+    
+    try {
+      const result = await onRemoveSelectedPlacements(Array.from(selectedIds))
+      setRemovalResult(result)
+      
+      if (result.status === 'success' || result.status === 'partial_success') {
+        // Clear selection for successfully removed items
+        setSelectedIds(prev => {
+          const next = new Set(prev)
+          result.removedIds.forEach(id => next.delete(id))
+          return next
+        })
+      }
+    } catch (error) {
+      setRemovalResult({
+        status: 'blocked',
+        visibleSummary: error instanceof Error ? error.message : 'Removal failed',
+        removedCount: 0,
+        failedCount: selectedIds.size,
+        removedIds: [],
+        failedIds: Array.from(selectedIds),
+        evidence: [error instanceof Error ? error.message : 'Unknown error'],
+      })
+    } finally {
+      setIsRemoving(false)
+      setShowConfirmation(false)
+    }
+  }
+  
+  const allSelected = placements.length > 0 && selectedIds.size === placements.length
+  const someSelected = selectedIds.size > 0
+  
+  // Don't render if no placements
+  if (totalCount === 0) {
+    return (
+      <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+        <div className="flex items-center gap-2">
+          <Settings2 className="w-3.5 h-3.5 text-[#6A6A7A]" />
+          <span className="text-xs font-medium text-[#8A8A9A]">Manage Applied Additions</span>
+        </div>
+        <p className="text-[10px] text-[#6A6A7A] mt-2">
+          No user-added method placements to manage. Apply methods through the method detail view above.
+        </p>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+      {/* Header with expand toggle */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Settings2 className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-xs font-medium text-[#E6E9EF]">
+            Manage Applied Additions
+          </span>
+          <span className="text-[9px] text-[#6A6A7A] bg-[#2A2A35] px-1.5 py-0.5 rounded">
+            {totalCount}
+          </span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-[#6A6A7A]" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#6A6A7A]" />
+        )}
+      </button>
+      
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="mt-3 space-y-3">
+          {/* Result banner */}
+          {removalResult && (
+            <div className={cn(
+              'p-2 rounded-md text-[10px]',
+              removalResult.status === 'success' 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : removalResult.status === 'partial_success'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            )}>
+              {removalResult.visibleSummary}
+            </div>
+          )}
+          
+          {/* Select all / controls */}
+          <div className="flex items-center justify-between pb-2 border-b border-[#2A2A35]">
+            <button
+              onClick={handleSelectAll}
+              className="flex items-center gap-1.5 text-[10px] text-[#9A9AAA] hover:text-[#E6E9EF]"
+            >
+              <div className={cn(
+                'w-3.5 h-3.5 rounded border flex items-center justify-center',
+                allSelected 
+                  ? 'bg-cyan-500/20 border-cyan-500/50'
+                  : someSelected
+                    ? 'bg-cyan-500/10 border-cyan-500/30'
+                    : 'border-[#3A3A4A]'
+              )}>
+                {allSelected && <Check className="w-2.5 h-2.5 text-cyan-400" />}
+                {!allSelected && someSelected && <Minus className="w-2.5 h-2.5 text-cyan-400" />}
+              </div>
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <span className="text-[10px] text-[#6A6A7A]">
+              {selectedIds.size} selected
+            </span>
+          </div>
+          
+          {/* Placements list */}
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {placements.map((placement) => (
+              <button
+                key={placement.id}
+                onClick={() => handleToggleSelection(placement.id)}
+                className={cn(
+                  'w-full flex items-center gap-2 p-2 rounded text-left transition-colors',
+                  selectedIds.has(placement.id)
+                    ? 'bg-cyan-500/10 border border-cyan-500/30'
+                    : 'bg-[#0F0F12] border border-transparent hover:border-[#3A3A4A]'
+                )}
+              >
+                <div className={cn(
+                  'w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0',
+                  selectedIds.has(placement.id)
+                    ? 'bg-cyan-500/20 border-cyan-500/50'
+                    : 'border-[#3A3A4A]'
+                )}>
+                  {selectedIds.has(placement.id) && (
+                    <Check className="w-2.5 h-2.5 text-cyan-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-cyan-400 shrink-0">
+                      Day {placement.dayNumber}
+                    </span>
+                    <span className="text-[10px] text-[#E6E9EF] truncate">
+                      {placement.exerciseName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#9A9AAA]">
+                      {placement.methodLabel}
+                    </span>
+                    <span className="text-[9px] text-[#6A6A7A]">Added by you</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          
+          {/* Remove button / confirmation */}
+          {showConfirmation ? (
+            <div className="space-y-2 pt-2 border-t border-[#2A2A35]">
+              <p className="text-[10px] text-[#9A9AAA]">
+                Remove {selectedIds.size} selected placement{selectedIds.size === 1 ? '' : 's'}?
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowConfirmation(false)}
+                  disabled={isRemoving}
+                  className="flex-1 h-7 text-[10px] border-[#3A3A4A] text-[#9A9AAA] hover:bg-[#2A2A35]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleRemoveSelected}
+                  disabled={isRemoving}
+                  className="flex-1 h-7 text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                >
+                  {isRemoving ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Removing...
+                    </>
+                  ) : (
+                    'Confirm Remove'
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            someSelected && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowConfirmation(true)}
+                className="w-full h-7 text-[10px] border-red-500/30 text-red-400 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3 h-3 mr-1.5" />
+                Remove {selectedIds.size} Selected
+              </Button>
+            )
           )}
         </div>
       )}
@@ -5052,6 +5609,8 @@ function RequestedMethodsSheetContent({
           showRevertConfirmation={showRevertConfirmation}
           onCancelRevert={handleCancelRevert}
           onConfirmRevert={handleConfirmRevert}
+          // [MASTER-8C.12.1A] Frequency placement props
+          onApplyFrequencyPlacement={onApplyFrequencyPlacement}
         />
       </div>
     )
@@ -5209,13 +5768,24 @@ function RequestedMethodsSheetContent({
   </div>
 
   {/* [MASTER-8C.8] Slot Eligibility & Frequency Preview Section */}
-  <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
+  {/* [MASTER-8C.12.1B] Demoted to "Advanced Diagnostics" - collapsed by default */}
+  {/* Users should use method-detail frequency controls as the primary apply path */}
+  <div className="p-3 rounded-lg bg-[#1A1A22]/50 border border-[#2A2A35]/50">
     <SlotEligibilityFrequencyPreviewSection 
       program={program} 
       onProgramUpdate={onProgramUpdate} 
       onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+      isDiagnosticMode={true}
     />
   </div>
+  
+  {/* [MASTER-8C.12.1C] Manage Applied Additions Section */}
+  {onRemoveSelectedPlacements && (
+    <ManageAppliedAdditionsSection
+      program={program}
+      onRemoveSelectedPlacements={onRemoveSelectedPlacements}
+    />
+  )}
   
   {/* [AB20.4.2] Reset All Overrides Section */}
       {onResetAllMethodOverrides && (

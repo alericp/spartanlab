@@ -225,7 +225,7 @@ export function buildFrequencySlotPlacementPreview(
         'No program changes applied.',
         'Existing saved Method Planner artifacts are separate.',
       ],
-      safeNextStep: `Select frequency ≤ ${methodPreview.safeMaxFrequency}x.`,
+      safeNextStep: `Select frequency ��� ${methodPreview.safeMaxFrequency}x.`,
     }
   }
   
@@ -396,7 +396,18 @@ function selectPlacementTargets(
     return false
   }
   
-  // Sort slots by ranking priority (enhanced)
+  // [MASTER-8C.12.1D] Calculate session method load for smarter ranking
+  // Count existing user-applied methods per session to prefer less-loaded days
+  const sessionMethodLoad = new Map<number, number>()
+  eligibleSlots.forEach(slot => {
+    const currentLoad = sessionMethodLoad.get(slot.sessionIndex) || 0
+    // Count owned methods as load
+    if (slot.isAlreadyMethodOwned) {
+      sessionMethodLoad.set(slot.sessionIndex, currentLoad + 1)
+    }
+  })
+  
+  // Sort slots by ranking priority (enhanced with method load scoring)
   const rankedSlots = eligibleSlots
     .filter(slot => slot.isEligible && !slot.isSyntheticArtifact)
     .sort((a, b) => {
@@ -419,8 +430,21 @@ function selectPlacementTargets(
       const cautionDiff = a.cautionReasons.length - b.cautionReasons.length
       if (cautionDiff !== 0) return cautionDiff
       
-      // 5. Prefer spreading across sessions (use larger index gaps)
-      return a.sessionIndex - b.sessionIndex
+      // 5. [MASTER-8C.12.1D] Prefer sessions with lower method load (fewer applied methods)
+      // This prevents stacking all new methods on early days
+      const loadA = sessionMethodLoad.get(a.sessionIndex) || 0
+      const loadB = sessionMethodLoad.get(b.sessionIndex) || 0
+      if (loadA !== loadB) return loadA - loadB
+      
+      // 6. Spread across sessions - prefer spacing from middle rather than early-first
+      // Use distance from median session for better distribution
+      const maxIndex = Math.max(...eligibleSlots.map(s => s.sessionIndex))
+      const midpoint = maxIndex / 2
+      const distA = Math.abs(a.sessionIndex - midpoint)
+      const distB = Math.abs(b.sessionIndex - midpoint)
+      // Smaller distance to midpoint = better spread, but also consider diversity
+      // For first placement, prefer slightly earlier; subsequent placements should vary
+      return distA - distB
     })
   
   // Select slots with enhanced spacing and duplicate avoidance
@@ -496,7 +520,8 @@ function selectPlacementTargets(
     usedSessionIds.add(slot.sessionId)
     usedExerciseNames.add(slotExName)
     selectedSessionIndices.push(slot.sessionIndex)
-    selectedTargets.push(buildPlacementTarget(methodPreview, slot, selectedTargets.length + 1))
+    const methodLoad = sessionMethodLoad.get(slot.sessionIndex) || 0
+    selectedTargets.push(buildPlacementTarget(methodPreview, slot, selectedTargets.length + 1, methodLoad))
   }
   
   return { targets: selectedTargets, skippedCandidates, warnings }
@@ -504,11 +529,13 @@ function selectPlacementTargets(
 
 /**
  * Build a single placement target from a slot
+ * [MASTER-8C.12.1D] Now accepts method load for whyChosen reasoning
  */
 function buildPlacementTarget(
   methodPreview: MethodFrequencyPreview,
   slot: MethodEligibleSlot,
-  placementNumber: number
+  placementNumber: number,
+  methodLoad?: number
 ): FrequencySlotPlacementTarget {
   const exerciseName = slot.exerciseNames[0] ?? 'Unknown Exercise'
   
@@ -524,7 +551,7 @@ function buildPlacementTarget(
     exerciseNames: slot.exerciseNames,
     placementLabel: `Placement #${placementNumber}`,
     placementSummary: `${slot.sessionLabel} — ${exerciseName}`,
-    whyChosen: buildWhyChosen(slot),
+    whyChosen: buildWhyChosen(slot, methodLoad),
     confidence: slot.confidence,
     cautionReasons: slot.cautionReasons,
     previewBefore: 'Standard sets',
@@ -536,29 +563,34 @@ function buildPlacementTarget(
 
 /**
  * Build human-readable "why chosen" explanation
+ * [MASTER-8C.12.1D] Now includes method load reasoning
  */
-function buildWhyChosen(slot: MethodEligibleSlot): string {
+function buildWhyChosen(slot: MethodEligibleSlot, methodLoad?: number): string {
   const reasons: string[] = []
   
+  if (methodLoad !== undefined && methodLoad === 0) {
+    reasons.push('Lower method load')
+  }
+  
   if (slot.confidence === 'high') {
-    reasons.push('High-confidence slot')
+    reasons.push('High confidence')
   } else if (slot.confidence === 'medium') {
-    reasons.push('Medium-confidence slot')
+    reasons.push('Medium confidence')
   }
   
   if (!slot.isAlreadyMethodOwned) {
-    reasons.push('Not already method-owned')
+    reasons.push('Free slot')
   }
   
   if (!slot.isPrimarySkillSensitive) {
-    reasons.push('Not primary skill sensitive')
+    reasons.push('Not skill-sensitive')
   }
   
   if (slot.cautionReasons.length === 0) {
-    reasons.push('No caution flags')
+    reasons.push('No caution')
   }
   
-  return reasons.length > 0 ? reasons.join(', ') : 'Eligible slot'
+  return reasons.length > 0 ? reasons.slice(0, 2).join(', ') : 'Eligible slot'
 }
 
 // =============================================================================

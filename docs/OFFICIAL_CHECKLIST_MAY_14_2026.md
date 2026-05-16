@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.28)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.29)
 
-**Current active completed step:** MASTER-8C.28 / AB20.4.21  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active)  
-**Current active step:** MASTER-8C.29 / AB20.4.22 — Mutation-Readiness Review Gate / Candidate Resolution (read-only unless explicitly approved)  
+**Current active completed step:** MASTER-8C.29 / AB20.4.22  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active)  
+**Current active step:** MASTER-8C.30 / AB20.4.23 — to be verified from checklist (likely controlled writer prep or review summary consolidation, still read-only unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Mutation-Readiness Review Gate (MASTER-8C.29)
+- New pure helper: mutation-readiness-review-gate.ts (552 lines)
+- 4 gate statuses: collect_evidence, review_candidates_read_only, blocked_by_caution, monitor_only
+- 5 candidate resolutions: blocked_caution, review_candidate, collect_more_evidence, monitor, not_ready
+- Consumes CoachRecommendationCandidateReadonlyModel + PlanEvidenceReadonlyHookModel + PlanEvidenceTrendReadinessModel
+- No new storage reads, no mutation writer, mutationAllowed always false
+- Plan Logic sheet: compact rose-bordered review gate card with status, counts, top review/blocker
+- Coach Recs footer: review gate summary line
+- AI Foundation Map: plan_logic row shows gate status + readiness label + mutation lock
+- Programs/exercises/sets changed: NO
 
 ### Evidence Trend Classification / Readiness Scoring (MASTER-8C.28)
 - New pure helper: plan-evidence-trend-readiness.ts (390 lines)

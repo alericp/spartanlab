@@ -4042,8 +4042,9 @@ function ProgramBalanceSheetContent({
 // =============================================================================
 
 /**
- * [MASTER-8C.13] Superset structural preview and apply controls.
+ * [MASTER-8C.13 / MASTER-8C.14F] Superset structural preview and apply controls.
  * Shows candidate pairs, full day context, and allows applying safe pairs.
+ * [MASTER-8C.14F] Now shows native/generated superset status.
  */
 function SupersetStructuralControls({
   program,
@@ -4056,6 +4057,30 @@ function SupersetStructuralControls({
   const [selectedCandidate, setSelectedCandidate] = useState<SupersetCandidate | null>(null)
   const [isApplying, setIsApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<SupersetApplyResult | null>(null)
+  
+  // [MASTER-8C.14F] Check for existing native supersets in program
+  const nativeSupersets = useMemo(() => {
+    const prog = program as { sessions?: Array<{ styleMetadata?: { styledGroups?: Array<{ groupType?: string; source?: string; methodOverrideApplied?: boolean; id?: string; exercises?: Array<{ name?: string }> }> } }> } | null
+    const results: Array<{ dayNumber: number; exerciseNames: string[] }> = []
+    
+    prog?.sessions?.forEach((session, idx) => {
+      const groups = session?.styleMetadata?.styledGroups ?? []
+      groups.forEach(group => {
+        // Native = superset type but NOT method override planner applied
+        if (group.groupType === 'superset' && 
+            group.source !== 'method_override_planner' && 
+            group.methodOverrideApplied !== true &&
+            !group.id?.startsWith('method-override-superset-')) {
+          results.push({
+            dayNumber: idx + 1,
+            exerciseNames: group.exercises?.map(e => e.name || 'Unknown') || [],
+          })
+        }
+      })
+    })
+    
+    return results
+  }, [program])
   
   // Build superset candidates on mount
   useEffect(() => {
@@ -4127,6 +4152,26 @@ function SupersetStructuralControls({
           Structural
         </span>
       </div>
+      
+      {/* [MASTER-8C.14F] Native superset info */}
+      {nativeSupersets.length > 0 && (
+        <div className="mb-3 p-2 rounded bg-[#0F0F12] border border-[#2A2A35]/50">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Check className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] font-medium text-emerald-400">Native Generated</span>
+          </div>
+          <p className="text-[9px] text-[#8A8A9A] mb-2">
+            Already included from generated program. No override needed.
+          </p>
+          <div className="space-y-1">
+            {nativeSupersets.map((ns, i) => (
+              <div key={i} className="text-[9px] text-[#6A6A7A]">
+                Day {ns.dayNumber}: {ns.exerciseNames.join(' + ')}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Apply result banner */}
       {applyResult && (
@@ -5543,6 +5588,11 @@ function ManageAppliedAdditionsSection({
       {/* Expanded content */}
       {isExpanded && (
         <div className="mt-3 space-y-3">
+          {/* [MASTER-8C.14F] User-applied only note */}
+          <p className="text-[9px] text-[#6A6A7A] px-2 py-1 rounded bg-[#0F0F12] border border-[#2A2A35]/50">
+            User-applied additions only. Native generated methods are preserved and not listed here.
+          </p>
+          
           {/* Result banner */}
           {removalResult && (
             <div className={cn(
@@ -5617,7 +5667,17 @@ function ManageAppliedAdditionsSection({
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#9A9AAA]">
                       {placement.methodLabel}
                     </span>
-                    <span className="text-[9px] text-[#6A6A7A]">Added by you</span>
+                    {/* [MASTER-8C.14F] Provenance label */}
+                    {placement.isGrouped ? (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Grouped
+                      </span>
+                    ) : (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        Row
+                      </span>
+                    )}
+                    <span className="text-[9px] text-[#6A6A7A]">User Applied</span>
                   </div>
                 </div>
               </button>

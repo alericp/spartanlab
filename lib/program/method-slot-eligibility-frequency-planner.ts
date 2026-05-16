@@ -1120,6 +1120,10 @@ interface MinimalExerciseForSuperset {
   blockId?: string
   structuralMethodApplied?: boolean
   methodOverrideApplied?: boolean
+  methodOverrideMethodKey?: string
+  methodOverrideAppliedAt?: string
+  methodOverrideCanRevert?: boolean
+  frequencyPlacementSource?: string
   category?: string
   movementType?: string
   isWarmUp?: boolean
@@ -1447,21 +1451,30 @@ export function applySupersetStructuralCandidate(
     }
   }
   
-  // Generate block ID
-  const blockId = `method-superset-day${candidate.dayNumber}-user-${Date.now()}`
+  // Generate block ID with method-override-superset- prefix for provenance detection
+  const blockId = `method-override-superset-day${candidate.dayNumber}-user-${Date.now()}`
+  const appliedAt = new Date().toISOString()
   
-  // Stamp exercises
+  // Stamp exercises with full provenance markers
   exerciseA.blockId = blockId
   exerciseA.method = 'superset'
   exerciseA.methodLabel = 'Superset'
   exerciseA.structuralMethodApplied = true
   exerciseA.methodOverrideApplied = true
+  exerciseA.methodOverrideMethodKey = 'superset'
+  exerciseA.methodOverrideAppliedAt = appliedAt
+  exerciseA.methodOverrideCanRevert = true
+  exerciseA.frequencyPlacementSource = 'method_override_planner'
   
   exerciseB.blockId = blockId
   exerciseB.method = 'superset'
   exerciseB.methodLabel = 'Superset'
   exerciseB.structuralMethodApplied = true
   exerciseB.methodOverrideApplied = true
+  exerciseB.methodOverrideMethodKey = 'superset'
+  exerciseB.methodOverrideAppliedAt = appliedAt
+  exerciseB.methodOverrideCanRevert = true
+  exerciseB.frequencyPlacementSource = 'method_override_planner'
   
   // Ensure styleMetadata exists
   if (!targetSession.styleMetadata) {
@@ -1471,20 +1484,36 @@ export function applySupersetStructuralCandidate(
     targetSession.styleMetadata.styledGroups = []
   }
   
-  // Add styledGroups entry
+  // Add styledGroups entry with FULL provenance markers for detection by reset/removal
   targetSession.styleMetadata.styledGroups.push({
     id: blockId,
     groupType: 'superset',
+    // [MASTER-8C.14A] Full provenance markers for isMethodOverridePlannerAppliedGroup detection
+    source: 'method_override_planner',
+    methodOverrideApplied: true,
+    methodOverrideMethodKey: 'superset',
+    methodOverrideAppliedAt: appliedAt,
+    methodOverrideCanRevert: true,
+    methodOverrideTargetDayIndex: candidate.dayIndex,
+    methodOverrideExerciseNames: [candidate.exerciseA.name, candidate.exerciseB.name],
     exercises: [
       { 
         id: candidate.exerciseA.id, 
         name: candidate.exerciseA.name,
+        prefix: 'A1',
+        trainingMethod: 'supersets',
+        methodRationale: 'Applied via Method Override Planner',
       },
       { 
         id: candidate.exerciseB.id, 
         name: candidate.exerciseB.name,
+        prefix: 'A2',
+        trainingMethod: 'supersets',
+        methodRationale: 'Applied via Method Override Planner',
       },
     ],
+    instruction: `Superset: ${candidate.exerciseA.name} + ${candidate.exerciseB.name}`,
+    restProtocol: '0-15s between exercises, 90-120s after pair',
   } as unknown as (typeof targetSession.styleMetadata.styledGroups)[0])
   
   targetSession.styleMetadata.hasSupersetsApplied = true

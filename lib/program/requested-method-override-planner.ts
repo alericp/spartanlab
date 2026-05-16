@@ -3227,8 +3227,9 @@ export function applyMethodOverridePreviewToProgram(args: {
 // =============================================================================
 
 /**
- * [AB20.2 / AB20.3] Checks if a styledGroup was applied by the Method Override Planner.
+ * [AB20.2 / AB20.3 / MASTER-8C.14B] Checks if a styledGroup was applied by the Method Override Planner.
  * Uses multiple detection methods for backward compatibility with AB20.1 circuits.
+ * [MASTER-8C.14B] Added superset detection for user-applied supersets.
  */
 function isMethodOverridePlannerAppliedGroup(group: {
   id?: string
@@ -3240,9 +3241,10 @@ function isMethodOverridePlannerAppliedGroup(group: {
   if (group.methodOverrideApplied === true) return true
   if (group.source === 'method_override_planner') return true
   
-  // [AB20.2C / AB20.3] Fallback detection for AB20.1 circuits and AB20.3 density blocks
+  // [AB20.2C / AB20.3 / MASTER-8C.14B] Fallback detection by ID prefix
   if (group.id?.startsWith('method-override-circuit-')) return true
   if (group.id?.startsWith('method-override-density-block-')) return true
+  if (group.id?.startsWith('method-override-superset-')) return true // [MASTER-8C.14B]
   
   // Check if any exercise mentions Method Override Planner in rationale
   if (group.exercises?.some(ex => 
@@ -4020,8 +4022,12 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
         if (group.groupType === 'density_block' && !removedMethodKeys.includes('density_block')) {
           removedMethodKeys.push('density_block')
         }
+        // [MASTER-8C.14E] Track superset removals
+        if (group.groupType === 'superset' && !removedMethodKeys.includes('superset')) {
+          removedMethodKeys.push('superset')
+        }
       } else {
-        // Keep all other groups (supersets, native circuits/density, etc.)
+        // Keep all other groups (native supersets, native circuits/density, etc.)
         remainingGroups.push(group)
       }
     }
@@ -4036,8 +4042,11 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
       // Recalculate flags based on remaining groups
       const hasRemainingCircuits = remainingGroups.some(g => g.groupType === 'circuit')
       const hasRemainingDensity = remainingGroups.some(g => g.groupType === 'density_block')
+      // [MASTER-8C.14E] Check for remaining supersets (native or user-applied)
+      const hasRemainingSupersets = remainingGroups.some(g => g.groupType === 'superset')
       session.styleMetadata.hasCircuitsApplied = hasRemainingCircuits
       session.styleMetadata.hasDensityApplied = hasRemainingDensity
+      session.styleMetadata.hasSupersetsApplied = hasRemainingSupersets
 
       // Remove method from appliedMethods only if no groups of that type remain
       if (Array.isArray(session.styleMetadata.appliedMethods)) {
@@ -4049,6 +4058,12 @@ export function resetAllMethodOverridePlannerOverridesFromProgram(
         if (!hasRemainingDensity) {
           session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
             (m: string) => m !== 'density_blocks' && m !== 'density_block' && m !== 'density'
+          )
+        }
+        // [MASTER-8C.14E] Remove superset from appliedMethods if no supersets remain
+        if (!hasRemainingSupersets) {
+          session.styleMetadata.appliedMethods = session.styleMetadata.appliedMethods.filter(
+            (m: string) => m !== 'supersets' && m !== 'superset'
           )
         }
       }

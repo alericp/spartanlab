@@ -186,6 +186,12 @@ import {
   getMutationStatusLabel,
   type IntelligenceFoundationBranchEntry,
 } from '@/lib/program/intelligence-foundation-branch-map'
+// [MASTER-8C.18.1] Prehab/Rehab/Tendon Safeguard Read-Only Analyzer
+import {
+  resolvePrehabRehabTendonSafeguardReadonly,
+  type PrehabRehabTendonSafeguardReadonlyModel,
+  type PrehabRehabTendonSafeguardReadonlyInput,
+} from '@/lib/program/prehab-rehab-tendon-safeguard-readonly-analyzer'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3032,8 +3038,13 @@ function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
  * their status, mutation capability, and next safe actions.
  * 
  * This is a read-only component that does not change any workouts.
+ * [MASTER-8C.18.1] Now accepts optional safeguard model for dynamic proof.
  */
-function AIIntelligenceFoundationMap() {
+function AIIntelligenceFoundationMap({
+  safeguardModel,
+}: {
+  safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
+}) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
   
@@ -3146,6 +3157,57 @@ function AIIntelligenceFoundationMap() {
                 </span>
               )}
             </div>
+            
+            {/* [MASTER-8C.18.1] Dynamic safeguard proof for prehab_rehab_tendon_joint */}
+            {branch.id === 'prehab_rehab_tendon_joint' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                {safeguardModel ? (
+                  <div className="space-y-1.5">
+                    {/* Risk/Confidence summary */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        safeguardModel.riskLevel === 'elevated' || safeguardModel.riskLevel === 'high'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : safeguardModel.riskLevel === 'moderate'
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      )}>
+                        Risk: {safeguardModel.riskLevel}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A35] text-[#6A6A7A] border border-[#3A3A45]">
+                        Confidence: {safeguardModel.confidence}
+                      </span>
+                    </div>
+                    
+                    {/* Top signals */}
+                    {safeguardModel.detectedSignals.length > 0 && (
+                      <div className="text-[9px] text-[#8A8A9A]">
+                        <span className="text-[#6A6A7A]">Top signals: </span>
+                        {safeguardModel.detectedSignals.slice(0, 3).map(s => s.label).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Source basis */}
+                    {safeguardModel.sourceBasis.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        Sources: {safeguardModel.sourceBasis.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Mutation lock reminder */}
+                    <div className="text-[9px] text-cyan-400/60">
+                      No substitutions or exercise changes applied.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    Read-only scan unavailable from current program props; branch remains mutation locked.
+                  </div>
+                )}
+              </div>
+            )}
+            
             <p className="text-[9px] text-cyan-400/70 mt-1.5">
               Next: {branch.nextSafeAction}
             </p>
@@ -3165,14 +3227,12 @@ function AIIntelligenceFoundationMap() {
         </div>
       </div>
       
-      {/* [MASTER-8C.18] Prehab/Rehab/Tendon Safeguard note */}
-      <div className="px-4 py-3 bg-[#0F0F12] border-t border-[#2A2A35]">
-        <div className="flex items-start gap-2">
-          <Shield className="w-3 h-3 text-cyan-400 mt-0.5 flex-shrink-0" />
-          <p className="text-[9px] text-[#8A8A9A] leading-relaxed">
-            <span className="text-cyan-400">Prehab/Rehab/Tendon Safeguards</span> now scores joint/tendon stress 
-            from visible session structure and exercise patterns. No substitutions or exercise changes applied - 
-            mutation remains locked until evidence inputs are stronger.
+      {/* [MASTER-8C.18.1] Prehab/Rehab/Tendon Safeguard note - shortened since dynamic proof is in row */}
+      <div className="px-4 py-2 bg-[#0F0F12] border-t border-[#2A2A35]">
+        <div className="flex items-center gap-2">
+          <Shield className="w-3 h-3 text-cyan-400 flex-shrink-0" />
+          <p className="text-[9px] text-[#6A6A7A]">
+            Prehab/Rehab/Tendon Safeguards is read-only. Substitutions and workout changes remain locked.
           </p>
         </div>
       </div>
@@ -6822,6 +6882,48 @@ export function ProgramCoachIntelligenceHub({
     return rollUpProgramGeneratorKnowledgeProof(sessionProofs)
   }, [program])
   
+  // [MASTER-8C.18.1] Prehab/Rehab/Tendon Safeguard Read-Only Analysis
+  // Builds input from program sessions and calls the deterministic analyzer
+  const safeguardAnalysisResult = useMemo<PrehabRehabTendonSafeguardReadonlyModel | null>(() => {
+    try {
+      if (!program?.sessions?.length) return null
+      
+      // Resolve adaptive foundation model to get existing safeguard intelligence
+      const { model: adaptiveFoundationModel } = resolveVisibleAdaptiveFoundation(program)
+      
+      // Build analyzer input from current program sessions
+      const analyzerInput: PrehabRehabTendonSafeguardReadonlyInput = {
+        programId: program.id,
+        programName: program.goalLabel, // AdaptiveProgram uses goalLabel, not name
+        sessions: program.sessions.map(session => ({
+          dayLabel: session.dayLabel || `Day ${session.dayNumber}`,
+          dayNumber: session.dayNumber,
+          dayRole: session.focus || session.focusLabel, // AdaptiveSession uses focus/focusLabel
+          exercises: session.exercises?.map(ex => ({
+            id: ex.id,
+            name: ex.name,
+            sets: ex.sets,
+            reps: ex.repsOrTime, // AdaptiveExercise uses repsOrTime, not reps
+            hold: undefined, // Hold is included in repsOrTime for isometric exercises
+            targetRPE: ex.targetRPE,
+            restSeconds: ex.restSeconds,
+            role: ex.category,
+            category: ex.category,
+            methodContext: ex.method, // AdaptiveExercise uses method, not methodGrouping
+          })) || [],
+        })),
+        selectedSkills: selectedSkillRepresentations.map(r => r.skill), // Uses skill, not skillId
+        existingSafeguardIntelligence: adaptiveFoundationModel?.safeguardIntelligence,
+      }
+      
+      return resolvePrehabRehabTendonSafeguardReadonly(analyzerInput)
+    } catch (error) {
+      // Safe fallback - never crash the hub
+      console.error('[v0] Safeguard analysis error:', error)
+      return null
+    }
+  }, [program, selectedSkillRepresentations])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -7430,7 +7532,8 @@ export function ProgramCoachIntelligenceHub({
             )}
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
-            <AIIntelligenceFoundationMap />
+            {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} />
           </div>
         </SheetContent>
       </Sheet>

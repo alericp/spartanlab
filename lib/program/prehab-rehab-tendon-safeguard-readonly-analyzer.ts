@@ -215,6 +215,19 @@ const TENDON_HEAVY_PATTERNS = [
 // HELPER FUNCTIONS
 // =============================================================================
 
+/**
+ * Creates a stable, deterministic slug for signal IDs.
+ * Used to replace non-deterministic Date.now() in signal ID generation.
+ */
+function slugifySafeguardIdPart(value: string | undefined | null): string {
+  if (!value) return 'unknown'
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'unknown'
+}
+
 function normalizeForMatching(str: string): string {
   return str.toLowerCase().replace(/[-_]/g, ' ')
 }
@@ -415,6 +428,7 @@ export function resolvePrehabRehabTendonSafeguardReadonly(
   }
   
   // Generate signals from aggregated exposure
+  let signalIndex = 0
   for (const [tissue, exp] of Object.entries(tissueExposure)) {
     const jointOrTissue = tissue as JointOrTissueKey
     const hasHighSkill = exp.highSkillCount > 0
@@ -435,7 +449,7 @@ export function resolvePrehabRehabTendonSafeguardReadonly(
     if (riskLevel === 'low' && !hasHighSkill && !hasTendonHeavy) continue
     
     const signal: PrehabRehabTendonSignal = {
-      id: `safeguard-${jointOrTissue}-${Date.now()}`,
+      id: `safeguard-${jointOrTissue}-${stressType}-${slugifySafeguardIdPart(Array.from(exp.days).join('-'))}-${signalIndex++}`,
       label: getTissueLabel(jointOrTissue),
       jointOrTissue,
       stressType,
@@ -453,6 +467,7 @@ export function resolvePrehabRehabTendonSafeguardReadonly(
   }
   
   // Integrate existing safeguard intelligence if available
+  let existingIndex = 0
   if (input.existingSafeguardIntelligence?.tissueSignals) {
     for (const existing of input.existingSafeguardIntelligence.tissueSignals) {
       const alreadyDetected = detectedSignals.some(s => 
@@ -462,7 +477,7 @@ export function resolvePrehabRehabTendonSafeguardReadonly(
       
       if (!alreadyDetected && existing.riskLevel && existing.riskLevel !== 'low') {
         detectedSignals.push({
-          id: `existing-${existing.area}-${Date.now()}`,
+          id: `existing-${slugifySafeguardIdPart(existing.area)}-${existingIndex++}`,
           label: existing.area,
           jointOrTissue: mapExistingAreaToKey(existing.area),
           stressType: 'unknown',

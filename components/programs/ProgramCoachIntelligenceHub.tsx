@@ -161,6 +161,7 @@ import {
   buildFrequencySlotPlacementPreview,
   type FrequencySlotPlacementPreview,
   type FrequencySlotPlacementTarget,
+  type DayInsertionPreview,
 } from '@/lib/program/method-frequency-slot-placement-preview'
 import type { CanonicalMethodFamily } from '@/lib/program/method-structure-contract'
 // [MASTER-8C.10] Frequency Placement Apply Contract
@@ -4049,6 +4050,7 @@ function AffectedDayPreviewCard({
   isExpanded?: boolean
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const { dayInsertionPreview } = target
   
   return (
     <div className="rounded-lg bg-[#0F0F12] border border-[#2A2A35] overflow-hidden">
@@ -4073,67 +4075,83 @@ function AffectedDayPreviewCard({
         )}
       </button>
       
-      {/* Expanded affected-day preview */}
+      {/* Expanded full-day insertion preview */}
       {isExpanded && (
-        <div className="px-2 pb-2 space-y-2 border-t border-[#2A2A35]/50">
-          {/* Session focus */}
-          {target.sessionFocus && (
-            <div className="pt-2 flex items-center gap-1.5">
-              <Target className="w-3 h-3 text-[#6A6A7A]" />
-              <span className="text-[9px] text-[#8A8A9A]">{target.sessionFocus}</span>
-            </div>
-          )}
-          
-          {/* Before → After transformation */}
-          <div className="flex items-center gap-2 text-[9px]">
-            <span className="text-[#6A6A7A]">Before:</span>
-            <span className="text-[#8A8A9A]">{target.previewBefore}</span>
-            <ArrowRight className="w-3 h-3 text-emerald-400/60" />
-            <span className="text-[#6A6A7A]">After:</span>
-            <span className="text-emerald-400 font-medium">{methodLabel}</span>
+        <div className="px-2 pb-2 space-y-3 border-t border-[#2A2A35]/50">
+          {/* Session focus header */}
+          <div className="pt-2 flex items-center gap-2">
+            <Target className="w-3 h-3 text-[#6A6A7A]" />
+            <span className="text-[9px] text-[#8A8A9A]">{dayInsertionPreview.sessionLabel}</span>
           </div>
           
-          {/* Nearby exercises context */}
-          {target.nearbyExercises.length > 0 && (
+          {/* [MASTER-8C.12.3] Inserted into workout - ordered rows */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Layers className="w-3 h-3 text-[#6A6A7A]" />
+              <span className="text-[9px] font-medium text-[#8A8A9A]">Inserted into workout</span>
+            </div>
+            <div className="space-y-0.5 pl-1 border-l border-[#2A2A35]">
+              {dayInsertionPreview.orderedRows.map((row, idx) => (
+                <div
+                  key={row.exerciseId || idx}
+                  className={cn(
+                    'flex items-center gap-2 py-1 px-2 rounded text-[9px]',
+                    row.isTarget 
+                      ? 'bg-emerald-500/10 border border-emerald-500/20' 
+                      : 'bg-transparent'
+                  )}
+                >
+                  <span className="text-[#5A5A6A] shrink-0 w-4">{row.position}.</span>
+                  <span className={cn(
+                    'truncate flex-1',
+                    row.isTarget ? 'text-emerald-400 font-medium' : 'text-[#8A8A9A]'
+                  )}>
+                    {row.exerciseName}
+                  </span>
+                  {row.isTarget ? (
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className="text-[#6A6A7A]">{row.beforeMethodLabel}</span>
+                      <ArrowRight className="w-2.5 h-2.5 text-emerald-400" />
+                      <span className="text-emerald-400 font-medium">{methodLabel}</span>
+                    </span>
+                  ) : row.existingMethodLabel ? (
+                    <span className="text-amber-400/70 shrink-0">{row.existingMethodLabel}</span>
+                  ) : (
+                    <span className="text-[#5A5A6A] shrink-0">{row.beforeMethodLabel}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Workout effect summary */}
+          <div className="p-2 rounded bg-[#1A1A22] border border-[#2A2A35]/50">
+            <p className="text-[9px] text-[#9A9AAA] leading-relaxed">
+              {dayInsertionPreview.workoutBlendSummary}
+            </p>
+          </div>
+          
+          {/* Day fit reasons */}
+          {dayInsertionPreview.dayFitReasons.length > 0 && (
             <div className="space-y-1">
-              <span className="text-[9px] text-[#6A6A7A]">Surrounding exercises:</span>
+              <span className="text-[9px] text-[#6A6A7A]">Why this day/row:</span>
               <div className="flex flex-wrap gap-1">
-                {target.nearbyExercises.map((ex, i) => (
+                {dayInsertionPreview.dayFitReasons.map((reason, i) => (
                   <span 
                     key={i}
-                    className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A22] text-[#8A8A9A] border border-[#2A2A35]"
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20"
                   >
-                    {ex}
+                    {reason}
                   </span>
                 ))}
               </div>
             </div>
           )}
           
-          {/* Day method load status */}
-          <div className="flex items-center gap-3 text-[9px]">
-            {target.isFirstPlacementOnDay ? (
-              <span className="flex items-center gap-1 text-emerald-400/80">
-                <Check className="w-3 h-3" />
-                First method on this day
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-amber-400/80">
-                <AlertTriangle className="w-3 h-3" />
-                Stacked placement
-              </span>
-            )}
-            {target.dayMethodLoad > 0 && (
-              <span className="text-[#6A6A7A]">
-                {target.dayMethodLoad} existing method{target.dayMethodLoad > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          
           {/* Caution reasons if any */}
-          {target.cautionReasons.length > 0 && (
+          {dayInsertionPreview.dayCautionReasons.length > 0 && (
             <div className="space-y-0.5">
-              {target.cautionReasons.map((reason, i) => (
+              {dayInsertionPreview.dayCautionReasons.map((reason, i) => (
                 <p key={i} className="text-[9px] text-amber-400/70 flex items-start gap-1">
                   <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                   {reason}
@@ -4142,8 +4160,8 @@ function AffectedDayPreviewCard({
             </div>
           )}
           
-          {/* Confidence badge */}
-          <div className="flex items-center gap-1.5">
+          {/* Confidence badge and method load */}
+          <div className="flex items-center gap-2">
             <span className={cn(
               'text-[9px] px-1.5 py-0.5 rounded',
               target.confidence === 'high' 
@@ -4154,6 +4172,16 @@ function AffectedDayPreviewCard({
             )}>
               {target.confidence} confidence
             </span>
+            {target.isFirstPlacementOnDay ? (
+              <span className="text-[9px] text-emerald-400/70 flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                First method on day
+              </span>
+            ) : (
+              <span className="text-[9px] text-amber-400/70">
+                Stacked ({target.dayMethodLoad} existing)
+              </span>
+            )}
           </div>
         </div>
       )}

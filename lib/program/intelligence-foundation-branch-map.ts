@@ -245,22 +245,23 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.29 - Mutation-readiness review gate)
+  // PLAN LOGIC (MASTER-8C.30 - Mutation pathway readiness map)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, and mutation-readiness review gate from Coach Recs/workout evidence bridge; resolves candidates into review buckets without mutation',
-    nextSafeAction: 'Controlled writer remains future/locked — review gate is read-only proof only',
-    riskIfIgnored: 'Plan Logic cannot surface which candidates are review-ready vs caution-blocked vs collecting evidence',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, and mutation pathway readiness map; maps all gates required before controlled mutation can be considered',
+    nextSafeAction: 'Resolve target/session mapping in a future read-only or user-confirmed gate; structural mutation remains locked',
+    riskIfIgnored: 'Plan Logic cannot show which pathway gates are ready, blocked, or future-locked before controlled mutation',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
       'lib/program/plan-evidence-readonly-hook.ts',
       'lib/program/plan-evidence-trend-readiness.ts',
       'lib/program/mutation-readiness-review-gate.ts',
+      'lib/program/mutation-pathway-readiness-map.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

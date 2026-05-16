@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.29)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.30)
 
-**Current active completed step:** MASTER-8C.29 / AB20.4.22  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active)  
-**Current active step:** MASTER-8C.30 / AB20.4.23 — to be verified from checklist (likely controlled writer prep or review summary consolidation, still read-only unless explicitly approved)  
+**Current active completed step:** MASTER-8C.30 / AB20.4.23  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active)  
+**Current active step:** MASTER-8C.31 / AB20.4.24 — to be verified from checklist (likely controlled preview/confirmation contract step, still read-only unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Mutation Pathway Readiness Map (MASTER-8C.30)
+- New pure helper: mutation-pathway-readiness-map.ts (547 lines)
+- 10 pathway gates: 4 active (evidence_connected, trend_classified, candidate_resolution, caution_cleared) + 6 future_locked
+- 6 gate statuses: ready, blocked, collect_evidence, review_required, future_locked, not_started
+- Consumes MutationReadinessReviewGateModel only (no new storage reads)
+- canMutateNow always false, mutationAllowed always false
+- Plan Logic sheet: compact indigo-bordered pathway map card with gate counts + gate rows
+- AI Foundation Map: plan_logic row shows pathway status + next safe gate + controlled mutation locked
+- No writer/apply functions called, no storage writes, no apply/approve/confirm UI
+- Programs/exercises/sets changed: NO
 
 ### Mutation-Readiness Review Gate (MASTER-8C.29)
 - New pure helper: mutation-readiness-review-gate.ts (552 lines)

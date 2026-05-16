@@ -237,6 +237,14 @@ import {
   getResolutionLabel,
   type MutationReadinessReviewGateModel,
 } from '@/lib/program/mutation-readiness-review-gate'
+// [MASTER-8C.30] Mutation pathway readiness map
+import {
+  resolveMutationPathwayReadinessMap,
+  getPathwayMapStatusLabel,
+  getGateStatusLabel as getPathwayGateStatusLabel,
+  getGateStatusColor,
+  type MutationPathwayReadinessMapModel,
+} from '@/lib/program/mutation-pathway-readiness-map'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3094,6 +3102,7 @@ function AIIntelligenceFoundationMap({
   planEvidenceHookModel,
   planEvidenceTrendReadinessModel,
   mutationReadinessReviewGateModel,
+  mutationPathwayReadinessMapModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3103,6 +3112,7 @@ function AIIntelligenceFoundationMap({
   planEvidenceHookModel?: PlanEvidenceReadonlyHookModel | null
   planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
   mutationReadinessReviewGateModel?: MutationReadinessReviewGateModel | null
+  mutationPathwayReadinessMapModel?: MutationPathwayReadinessMapModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3605,6 +3615,25 @@ function AIIntelligenceFoundationMap({
                   </div>
                   <div className="text-[9px] text-rose-400/60">
                     Read-only gate. Mutation locked.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [MASTER-8C.30] Dynamic mutation pathway readiness map proof */}
+            {branch.id === 'plan_logic' && mutationPathwayReadinessMapModel && mutationPathwayReadinessMapModel.status !== 'unavailable' && (
+              <div className="mt-1.5 pt-1.5 border-t border-[#2A2A35]/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+                      {getPathwayMapStatusLabel(mutationPathwayReadinessMapModel.status)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      Next: {mutationPathwayReadinessMapModel.nextSafeGate}
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-indigo-400/60">
+                    Controlled mutation locked.
                   </div>
                 </div>
               </div>
@@ -7612,6 +7641,13 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [coachRecommendationCandidateResult, planEvidenceHookModel, planEvidenceTrendReadinessModel])
   
+  // [MASTER-8C.30] Mutation Pathway Readiness Map
+  const mutationPathwayReadinessMapModel = useMemo<MutationPathwayReadinessMapModel>(() => {
+    return resolveMutationPathwayReadinessMap({
+      mutationReadinessReviewGateModel,
+    })
+  }, [mutationReadinessReviewGateModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8456,6 +8492,83 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.30] Mutation Pathway Readiness Map compact proof */}
+            {mutationPathwayReadinessMapModel.status !== 'unavailable' && (
+              <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    Mutation pathway map: read-only
+                  </span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    mutationPathwayReadinessMapModel.status === 'blocked_by_caution'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : mutationPathwayReadinessMapModel.status === 'collect_more_evidence'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : mutationPathwayReadinessMapModel.status === 'future_writer_locked'
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  )}>
+                    {getPathwayMapStatusLabel(mutationPathwayReadinessMapModel.status)}
+                  </span>
+                </div>
+                <p className="text-xs text-[#9A9AAA] mb-1 leading-relaxed">{mutationPathwayReadinessMapModel.headline}</p>
+                <p className="text-[10px] text-[#7A7A8A] mb-1.5 leading-relaxed">{mutationPathwayReadinessMapModel.summary}</p>
+                {/* Gate counts */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {mutationPathwayReadinessMapModel.readyGateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      {mutationPathwayReadinessMapModel.readyGateCount} ready
+                    </span>
+                  )}
+                  {mutationPathwayReadinessMapModel.blockedGateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                      {mutationPathwayReadinessMapModel.blockedGateCount} blocked
+                    </span>
+                  )}
+                  {mutationPathwayReadinessMapModel.reviewRequiredGateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      {mutationPathwayReadinessMapModel.reviewRequiredGateCount} review
+                    </span>
+                  )}
+                  {mutationPathwayReadinessMapModel.collectEvidenceGateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {mutationPathwayReadinessMapModel.collectEvidenceGateCount} collect
+                    </span>
+                  )}
+                  {mutationPathwayReadinessMapModel.futureLockedGateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#6A6A7A] border border-[#2A2A35]">
+                      {mutationPathwayReadinessMapModel.futureLockedGateCount} future locked
+                    </span>
+                  )}
+                </div>
+                {/* Compact gate rows — first 5 active gates */}
+                <div className="space-y-0.5 mb-1.5">
+                  {mutationPathwayReadinessMapModel.gates.slice(0, 5).map((gate) => {
+                    const color = getGateStatusColor(gate.status)
+                    return (
+                      <div key={gate.id} className="flex items-center gap-1.5">
+                        <span className={cn("text-[9px] w-[52px] shrink-0 text-center px-1 py-0.5 rounded border", color.bg, color.text, color.border)}>
+                          {getPathwayGateStatusLabel(gate.status)}
+                        </span>
+                        <span className="text-[9px] text-[#8A8A9A] truncate">{gate.label}</span>
+                      </div>
+                    )
+                  })}
+                  {mutationPathwayReadinessMapModel.gates.length > 5 && (
+                    <div className="text-[9px] text-[#5A5A6A] pl-[58px]">
+                      +{mutationPathwayReadinessMapModel.gates.length - 5} future gates locked
+                    </div>
+                  )}
+                </div>
+                <div className="text-[10px] text-[#7A7A8A] mb-1">
+                  Next: {mutationPathwayReadinessMapModel.nextSafeGate}
+                </div>
+                <p className="text-[10px] text-cyan-400/60">
+                  Controlled mutation remains locked. No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8480,7 +8593,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} />
           </div>
         </SheetContent>
       </Sheet>

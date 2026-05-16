@@ -163,19 +163,21 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // SET / VOLUME PRESCRIPTION RATIONALE (NEW - MASTER-8C.16)
+  // SET / VOLUME PRESCRIPTION RATIONALE (MASTER-8C.17 - Read-only analyzer active)
   // -------------------------------------------------------------------------
   {
     id: 'set_volume_prescription_rationale',
     label: 'Set / Volume Prescription Rationale',
-    uiStatus: 'missing_foundation',
-    mutationStatus: 'none',
-    currentRole: 'Future: Justify why rows get 5 sets vs 4 vs 3 based on difficulty, progression, intent, recovery cost',
-    nextSafeAction: 'Read-only prescription rationale analyzer needed; no set-count changes yet',
+    uiStatus: 'partial',
+    mutationStatus: 'read_only',
+    currentRole: 'Read-only analyzer explaining why rows get 3/4/5+ sets based on role, progression, method context, RPE/rest',
+    nextSafeAction: 'Expand source coverage; consider bounded set-count mutation only after read-only is proven',
     riskIfIgnored: 'Rows show volume choices without coach-readable rationale',
-    sourceFiles: [],
+    sourceFiles: [
+      'lib/program/set-volume-prescription-rationale.ts',
+    ],
     consumedBy: ['Plan Logic', 'Program Cards'],
-    currentUISurface: null,
+    currentUISurface: 'Plan Logic (foundation map)',
     order: 5,
   },
 

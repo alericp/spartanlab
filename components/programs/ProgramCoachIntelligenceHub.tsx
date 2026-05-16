@@ -3153,13 +3153,14 @@ function AIIntelligenceFoundationMap() {
         ))}
       </div>
       
-      {/* Set/Volume rationale note */}
+      {/* Set/Volume rationale note - MASTER-8C.17 updated */}
       <div className="px-4 py-3 bg-[#0F0F12] border-t border-[#2A2A35]">
         <div className="flex items-start gap-2">
-          <Info className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" />
+          <Info className="w-3 h-3 text-emerald-400 mt-0.5 flex-shrink-0" />
           <p className="text-[9px] text-[#8A8A9A] leading-relaxed">
-            <span className="text-amber-400">Set/Volume Prescription Rationale</span> is tracked as a future 
-            intelligence branch. This step does not change current set counts or volume prescriptions.
+            <span className="text-emerald-400">Set/Volume Prescription Rationale</span> now has a read-only analyzer 
+            that explains why rows get 3/4/5+ sets based on role, progression, method context, and RPE/rest. 
+            Current set counts are unchanged - this is explanation only.
           </p>
         </div>
       </div>

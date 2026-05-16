@@ -6,12 +6,19 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.15.2)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.17)
 
-**Current active completed step:** MASTER-8C.15.2 / AB20.4.8.2  
-**Current protected corridor:** Method Planner + Superset structural apply/remove/reset + Native vs user-applied provenance  
-**Current active step:** MASTER-8C.16 / AB20.4.9 — Cross-Branch Intelligence Foundation Map + Plan Logic UI Proof  
+**Current active completed step:** MASTER-8C.17 / AB20.4.10  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume read-only analyzer  
+**Current active step:** MASTER-8C.18 / AB20.4.11 — Next intelligence branch (Prehab/Rehab or Exercise Knowledge expansion)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Set/Volume Prescription Rationale (MASTER-8C.17)
+- Read-only analyzer: CREATED
+- Verdict logic: well_justified, reasonable_but_watch, weakly_justified, missing_source_context
+- Branch status: partial (was missing_foundation)
+- Set counts changed: NO
+- Plan Logic updated: YES
 
 ### Superset Structural Corridor Accepted (MASTER-8C.13 through MASTER-8C.15.2)
 - Superset structural apply: WORKING

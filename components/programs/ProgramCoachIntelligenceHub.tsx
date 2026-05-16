@@ -223,6 +223,13 @@ import {
   resolvePlanEvidenceReadonlyHook,
   type PlanEvidenceReadonlyHookModel,
 } from '@/lib/program/plan-evidence-readonly-hook'
+// [MASTER-8C.28] Evidence trend classification / plan-level readiness scoring
+import {
+  resolvePlanEvidenceTrendReadiness,
+  getClassificationLabel,
+  getPostureLabel,
+  type PlanEvidenceTrendReadinessModel,
+} from '@/lib/program/plan-evidence-trend-readiness'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3085,6 +3092,7 @@ function AIIntelligenceFoundationMap({
   progressionPeriodizationModel?: ProgressionPeriodizationReadonlyModel | null
   coachRecommendationCandidateModel?: CoachRecommendationCandidateReadonlyModel | null
   planEvidenceHookModel?: PlanEvidenceReadonlyHookModel | null
+  planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3543,6 +3551,28 @@ function AIIntelligenceFoundationMap({
                   {/* Mutation lock */}
                   <div className="text-[9px] text-cyan-400/60">
                     No program or future sessions changed.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [MASTER-8C.28] Dynamic plan evidence trend/readiness proof */}
+            {branch.id === 'plan_logic' && planEvidenceTrendReadinessModel && planEvidenceTrendReadinessModel.status !== 'unavailable' && (
+              <div className="mt-1.5 pt-1.5 border-t border-[#2A2A35]/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                      {getClassificationLabel(planEvidenceTrendReadinessModel.classification)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {getPostureLabel(planEvidenceTrendReadinessModel.readinessPosture)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {planEvidenceTrendReadinessModel.confidence} confidence
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-violet-400/60">
+                    Read-only scoring. No future-session mutation.
                   </div>
                 </div>
               </div>
@@ -7461,7 +7491,19 @@ export function ProgramCoachIntelligenceHub({
   
   // [MASTER-8C.22] Coach Recommendation Candidate Read-Only Analysis
   // [MASTER-8C.24] Enhanced with structured workout evidence bridge
+  // [MASTER-8C.28] Evidence summary lifted to separate memo for trend readiness reuse
   // Combines all existing source branch results + local workout evidence into recommendation candidates
+  
+  // [MASTER-8C.28] Lift workout evidence summary so trend readiness can reuse it without duplicate reads
+  const workoutEvidenceSummary = useMemo(() => {
+    try {
+      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
+      return resolveCoachRecsWorkoutEvidenceSummary(recentLogs)
+    } catch {
+      return null
+    }
+  }, [program])
+  
   const coachRecommendationCandidateResult = useMemo<CoachRecommendationCandidateReadonlyModel | null>(() => {
     try {
       if (!program?.sessions?.length) return null
@@ -7474,9 +7516,7 @@ export function ProgramCoachIntelligenceHub({
       )
       
       // [MASTER-8C.24] Build structured evidence summary from local trusted workout logs
-      // getRecentWorkoutLogsForGenerationRequest() is client-safe (returns [] on server)
-      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
-      const workoutEvidenceSummary = resolveCoachRecsWorkoutEvidenceSummary(recentLogs)
+      // [MASTER-8C.28] Now uses lifted workoutEvidenceSummary memo (no duplicate reads)
       
       return resolveCoachRecommendationCandidates({
         recoveryModel: recoveryReadinessResult ? {

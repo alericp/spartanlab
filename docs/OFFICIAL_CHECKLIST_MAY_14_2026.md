@@ -6,12 +6,22 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.19)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.20)
 
-**Current active completed step:** MASTER-8C.19 / AB20.4.12  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness (all read-only, dynamically wired)  
-**Current active step:** MASTER-8C.20 / AB20.4.13 — Next intelligence branch (Exercise Knowledge or Coach Recs or Progression)  
+**Current active completed step:** MASTER-8C.20 / AB20.4.13  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage (all read-only, dynamically wired)  
+**Current active step:** MASTER-8C.21 / AB20.4.14 — Next intelligence branch (Coach Recs evidence bridge or Progression/Periodization)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Exercise Knowledge Coverage (MASTER-8C.20)
+- Coverage analyzer: CREATED (257 lines, thin adapter wrapping existing resolver)
+- Existing resolver reused: summarizeExerciseIdentityCoverage() from program-balance-exercise-identity-coverage.ts
+- Seed entries added: NO (existing 80+ entries already cover priority exercises)
+- Categories: full_science_known, alias_resolved, basic_identity_known, enhanced_partial_known, truly_unknown
+- Dynamic UI proof: YES (headline, summary counts, basic/partial exercises, unknown exercises, sources)
+- Branch status: read_only (mutation_locked)
+- Exercises changed: NO
+- Plan Logic updated: YES (dynamic row content)
 
 ### Recovery / Readiness (MASTER-8C.19)
 - Read-only analyzer: CREATED (541 lines)

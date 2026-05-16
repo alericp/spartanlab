@@ -84,22 +84,24 @@ export interface IntelligenceFoundationBranchEntry {
  */
 export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundationBranchEntry[] = [
   // -------------------------------------------------------------------------
-  // EXERCISE KNOWLEDGE BASE
+  // EXERCISE KNOWLEDGE BASE (MASTER-8C.20 - Coverage analyzer active)
   // -------------------------------------------------------------------------
   {
     id: 'exercise_skill_knowledge_base',
     label: 'Exercise Knowledge Base',
-    uiStatus: 'partial',
+    uiStatus: 'read_only',
     mutationStatus: 'read_only',
-    currentRole: 'Movement families, skill transfer, tendon stress, method compatibility, progression paths',
-    nextSafeAction: 'Continue science coverage expansion for uncovered exercises',
+    currentRole: 'Scans current-program exercises against science seed, adaptive pool, and alias resolver for coverage proof',
+    nextSafeAction: 'Expand current-program science coverage; generator mutation deferred',
     riskIfIgnored: 'Generic decisions without exercise science backing',
     sourceFiles: [
+      'lib/program/exercise-knowledge-coverage-readonly-analyzer.ts',
+      'lib/program/program-balance-exercise-identity-coverage.ts',
       'lib/program/exercise-skill-knowledge-contract.ts',
       'lib/program/exercise-skill-knowledge-seed.ts',
     ],
-    consumedBy: ['Program Balance', 'Plan Logic'],
-    currentUISurface: 'Plan Logic sheet',
+    consumedBy: ['Program Balance', 'Plan Logic', 'Prehab/Rehab Safeguards'],
+    currentUISurface: 'Plan Logic map',
     order: 1,
   },
 

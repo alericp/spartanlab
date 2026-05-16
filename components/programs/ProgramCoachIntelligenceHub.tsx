@@ -198,6 +198,11 @@ import {
   type RecoveryReadinessReadonlyModel,
   type RecoveryReadinessSessionInput,
 } from '@/lib/program/recovery-readiness-readonly-analyzer'
+// [MASTER-8C.20] Exercise Knowledge Coverage Read-Only Analyzer
+import {
+  resolveExerciseKnowledgeCoverage,
+  type ExerciseKnowledgeCoverageReadonlyModel,
+} from '@/lib/program/exercise-knowledge-coverage-readonly-analyzer'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3049,9 +3054,11 @@ function getSeverityBgColor(severity: ProgramBalanceSeverity): string {
 function AIIntelligenceFoundationMap({
   safeguardModel,
   recoveryReadinessModel,
+  exerciseKnowledgeCoverageModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
+  exerciseKnowledgeCoverageModel?: ExerciseKnowledgeCoverageReadonlyModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3270,6 +3277,66 @@ function AIIntelligenceFoundationMap({
                 ) : (
                   <div className="text-[9px] text-[#6A6A7A] italic">
                     Read-only scan unavailable from current program props; recovery mutation remains locked.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* [MASTER-8C.20] Dynamic exercise knowledge coverage proof */}
+            {branch.id === 'exercise_skill_knowledge_base' && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A35]/30">
+                {exerciseKnowledgeCoverageModel ? (
+                  <div className="space-y-1.5">
+                    {/* Coverage headline */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        exerciseKnowledgeCoverageModel.coverageRatio >= 0.9
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : exerciseKnowledgeCoverageModel.coverageRatio >= 0.6
+                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      )}>
+                        {exerciseKnowledgeCoverageModel.headline}
+                      </span>
+                    </div>
+                    
+                    {/* Breakdown counts */}
+                    <div className="text-[9px] text-[#8A8A9A]">
+                      {exerciseKnowledgeCoverageModel.summary}
+                    </div>
+                    
+                    {/* Top partial/basic exercises */}
+                    {exerciseKnowledgeCoverageModel.topPartialOrBasicExercises.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        <span className="text-[#5A5A6A]">Basic/partial: </span>
+                        {exerciseKnowledgeCoverageModel.topPartialOrBasicExercises.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Top unknown exercises */}
+                    {exerciseKnowledgeCoverageModel.topUnknownExercises.length > 0 && (
+                      <div className="text-[9px] text-amber-400/70">
+                        <span className="text-[#5A5A6A]">Unknown: </span>
+                        {exerciseKnowledgeCoverageModel.topUnknownExercises.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Source basis */}
+                    {exerciseKnowledgeCoverageModel.sourceBasis.length > 0 && (
+                      <div className="text-[9px] text-[#6A6A7A]">
+                        Sources: {exerciseKnowledgeCoverageModel.sourceBasis.join(', ')}
+                      </div>
+                    )}
+                    
+                    {/* Mutation lock */}
+                    <div className="text-[9px] text-cyan-400/60">
+                      No exercise selection changed.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-[#6A6A7A] italic">
+                    Coverage scan unavailable from current program props; knowledge branch remains read-only.
                   </div>
                 )}
               </div>
@@ -7099,6 +7166,35 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, safeguardAnalysisResult, programBalanceResult, selectedSkillRepresentations])
   
+  // [MASTER-8C.20] Exercise Knowledge Coverage Read-Only Analysis
+  // Builds deduplicated exercise list from program sessions and resolves coverage
+  const exerciseKnowledgeCoverageResult = useMemo<ExerciseKnowledgeCoverageReadonlyModel | null>(() => {
+    try {
+      if (!program?.sessions?.length) return null
+      
+      // Extract and deduplicate exercises from all sessions
+      const seenIds = new Set<string>()
+      const uniqueExercises: { id: string; name: string }[] = []
+      
+      for (const session of program.sessions) {
+        for (const exercise of (session.exercises || [])) {
+          const exId = exercise.id || exercise.name?.toLowerCase().replace(/[^a-z0-9]+/g, '_') || ''
+          if (exId && !seenIds.has(exId)) {
+            seenIds.add(exId)
+            uniqueExercises.push({ id: exId, name: exercise.name || exId })
+          }
+        }
+      }
+      
+      if (uniqueExercises.length === 0) return null
+      
+      return resolveExerciseKnowledgeCoverage({ exercises: uniqueExercises })
+    } catch (error) {
+      console.error('[v0] Exercise knowledge coverage error:', error)
+      return null
+    }
+  }, [program])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -7708,7 +7804,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} />
           </div>
         </SheetContent>
       </Sheet>

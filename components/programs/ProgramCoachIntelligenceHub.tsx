@@ -1532,7 +1532,12 @@ function MethodDetailModalContent({
   const safetyStyle = SAFETY_COLORS[effectiveSafety] || SAFETY_COLORS.not_enough_truth
   const SafetyIcon = safetyStyle.icon
   
+  // [MASTER-8C.15.1.1A] Split state model for proper provenance-aware rendering
   const isAlreadyApplied = item.state === 'applied' || item.state === 'materialized'
+  const isUserAppliedOverride = Boolean(isOverrideApplied)
+  const isNativeMaterialized = isAlreadyApplied && !isUserAppliedOverride
+  // [MASTER-8C.15.1.1B] Native methods can still show additive controls
+  const canShowAdditiveControls = !isAlreadyApplied || isNativeMaterialized
   const canCreatePreview = plan.canPreview && !isAlreadyApplied && !preview
   
   return (
@@ -2129,13 +2134,15 @@ function MethodDetailModalContent({
         </div>
       )}
       
-      {/* [MASTER-8C.12.1A] Method-specific frequency controls for row-level methods */}
-      {!isAlreadyApplied && (
+      {/* [MASTER-8C.12.1A / MASTER-8C.15.1.1B] Method-specific frequency controls for row-level methods */}
+      {/* [MASTER-8C.15.1.1B] Show for native methods too - they can add extra placements */}
+      {canShowAdditiveControls && (
         <MethodDetailFrequencyControls
           program={program}
           methodKey={plan.methodKey}
           methodLabel={item.label}
           onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+          isNativeMaterialized={isNativeMaterialized}
         />
       )}
       </div>

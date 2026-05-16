@@ -245,21 +245,22 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.28 - Evidence trend classification + readiness scoring)
+  // PLAN LOGIC (MASTER-8C.29 - Mutation-readiness review gate)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook and evidence trend classification/readiness scoring from Coach Recs/workout evidence bridge; classifies evidence patterns without mutation',
-    nextSafeAction: 'Mutation-readiness review gate before controlled future-session mutation',
-    riskIfIgnored: 'Plan Logic cannot distinguish caution patterns from progression signals in workout evidence',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, and mutation-readiness review gate from Coach Recs/workout evidence bridge; resolves candidates into review buckets without mutation',
+    nextSafeAction: 'Controlled writer remains future/locked — review gate is read-only proof only',
+    riskIfIgnored: 'Plan Logic cannot surface which candidates are review-ready vs caution-blocked vs collecting evidence',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
       'lib/program/plan-evidence-readonly-hook.ts',
       'lib/program/plan-evidence-trend-readiness.ts',
+      'lib/program/mutation-readiness-review-gate.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

@@ -230,6 +230,13 @@ import {
   getPostureLabel,
   type PlanEvidenceTrendReadinessModel,
 } from '@/lib/program/plan-evidence-trend-readiness'
+// [MASTER-8C.29] Mutation-readiness review gate
+import {
+  resolveMutationReadinessReviewGate,
+  getGateStatusLabel,
+  getResolutionLabel,
+  type MutationReadinessReviewGateModel,
+} from '@/lib/program/mutation-readiness-review-gate'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3086,6 +3093,7 @@ function AIIntelligenceFoundationMap({
   coachRecommendationCandidateModel,
   planEvidenceHookModel,
   planEvidenceTrendReadinessModel,
+  mutationReadinessReviewGateModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3094,6 +3102,7 @@ function AIIntelligenceFoundationMap({
   coachRecommendationCandidateModel?: CoachRecommendationCandidateReadonlyModel | null
   planEvidenceHookModel?: PlanEvidenceReadonlyHookModel | null
   planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
+  mutationReadinessReviewGateModel?: MutationReadinessReviewGateModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3574,6 +3583,28 @@ function AIIntelligenceFoundationMap({
                   </div>
                   <div className="text-[9px] text-violet-400/60">
                     Read-only scoring. No future-session mutation.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [MASTER-8C.29] Dynamic mutation-readiness review gate proof */}
+            {branch.id === 'plan_logic' && mutationReadinessReviewGateModel && mutationReadinessReviewGateModel.status !== 'unavailable' && (
+              <div className="mt-1.5 pt-1.5 border-t border-[#2A2A35]/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400 border-rose-500/20">
+                      {getGateStatusLabel(mutationReadinessReviewGateModel.status)}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {mutationReadinessReviewGateModel.readinessLabel}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {mutationReadinessReviewGateModel.confidence} confidence
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-rose-400/60">
+                    Read-only gate. Mutation locked.
                   </div>
                 </div>
               </div>
@@ -7572,6 +7603,15 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [planEvidenceHookModel, workoutEvidenceSummary])
   
+  // [MASTER-8C.29] Mutation-Readiness Review Gate
+  const mutationReadinessReviewGateModel = useMemo<MutationReadinessReviewGateModel>(() => {
+    return resolveMutationReadinessReviewGate({
+      coachRecommendationCandidateModel: coachRecommendationCandidateResult,
+      planEvidenceHookModel,
+      planEvidenceTrendReadinessModel,
+    })
+  }, [coachRecommendationCandidateResult, planEvidenceHookModel, planEvidenceTrendReadinessModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8167,6 +8207,12 @@ export function ProgramCoachIntelligenceHub({
                   <p className="text-[10px] text-cyan-400/60">
                     Not applied to program. No future sessions changed.
                   </p>
+                  {/* [MASTER-8C.29] Review gate summary line */}
+                  {mutationReadinessReviewGateModel.status !== 'unavailable' && (
+                    <p className="text-[9px] text-rose-400/50 mt-1">
+                      {mutationReadinessReviewGateModel.readinessLabel}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -8343,6 +8389,73 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.29] Mutation-Readiness Review Gate compact proof */}
+            {mutationReadinessReviewGateModel.status !== 'unavailable' && (
+              <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    Mutation-readiness review: read-only
+                  </span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    mutationReadinessReviewGateModel.status === 'blocked_by_caution'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : mutationReadinessReviewGateModel.status === 'review_candidates_read_only'
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                      : mutationReadinessReviewGateModel.status === 'collect_evidence'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : 'bg-[#1A1A2E] text-[#8A8A9A] border-[#2A2A35]'
+                  )}>
+                    {getGateStatusLabel(mutationReadinessReviewGateModel.status)}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                    {mutationReadinessReviewGateModel.confidence} confidence
+                  </span>
+                </div>
+                <p className="text-xs text-[#9A9AAA] mb-1 leading-relaxed">{mutationReadinessReviewGateModel.headline}</p>
+                <p className="text-[10px] text-[#7A7A8A] mb-1.5 leading-relaxed">{mutationReadinessReviewGateModel.summary}</p>
+                {/* Candidate resolution counts */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {mutationReadinessReviewGateModel.reviewCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      {mutationReadinessReviewGateModel.reviewCandidateCount} review
+                    </span>
+                  )}
+                  {mutationReadinessReviewGateModel.blockedCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                      {mutationReadinessReviewGateModel.blockedCandidateCount} caution-blocked
+                    </span>
+                  )}
+                  {mutationReadinessReviewGateModel.collectEvidenceCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {mutationReadinessReviewGateModel.collectEvidenceCandidateCount} collect evidence
+                    </span>
+                  )}
+                  {mutationReadinessReviewGateModel.monitorCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A1A2E] text-[#8A8A9A] border border-[#2A2A35]">
+                      {mutationReadinessReviewGateModel.monitorCandidateCount} monitor
+                    </span>
+                  )}
+                </div>
+                {/* Top review candidate or top blocker */}
+                {mutationReadinessReviewGateModel.topReviewCandidate && (
+                  <div className="text-[10px] text-cyan-400/70 mb-1">
+                    Top review: {mutationReadinessReviewGateModel.topReviewCandidate.title}
+                    {mutationReadinessReviewGateModel.topReviewCandidate.reviewReasons.length > 0 && (
+                      <span className="text-[#7A7A8A]"> — {mutationReadinessReviewGateModel.topReviewCandidate.reviewReasons[0]}</span>
+                    )}
+                  </div>
+                )}
+                {mutationReadinessReviewGateModel.globalBlockers.length > 0 && (
+                  <div className="text-[10px] text-red-400/60 mb-1">
+                    {mutationReadinessReviewGateModel.globalBlockers[0]}
+                  </div>
+                )}
+                <p className="text-[10px] text-cyan-400/60">
+                  Mutation locked. No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8367,7 +8480,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} />
           </div>
         </SheetContent>
       </Sheet>

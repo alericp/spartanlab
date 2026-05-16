@@ -156,7 +156,9 @@ import {
 // [MASTER-8C.12A] Frequency Placement Apply — Program Page owns save persistence
 import {
   applyConfirmedFrequencyPlacementPreview,
+  removeSelectedMethodPlacements,
   type FrequencyPlacementApplyResult,
+  type SelectiveRemovalResult,
 } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 
@@ -2885,6 +2887,79 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [MASTER-8C.12B] Selective Method Placement Removal Callback
+  // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
+  // This allows users to remove specific applied methods without resetting all.
+  // ==========================================================================
+  const handleRemoveSelectedPlacements = useCallback(
+    async (placementIds: string[]): Promise<SelectiveRemovalResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          visibleSummary: 'No program available.',
+          removedCount: 0,
+          failedCount: 0,
+          removedIds: [],
+          failedIds: placementIds,
+          evidence: ['program is null or undefined'],
+        }
+      }
+      
+      console.log('[MASTER-8C.12B-selective-removal] Starting removal', {
+        placementIds,
+        programId: program.id,
+      })
+      
+      // Call the pure helper
+      const result = removeSelectedMethodPlacements({
+        program,
+        placementIds,
+      })
+      
+      console.log('[MASTER-8C.12B-selective-removal] Helper result', {
+        status: result.status,
+        removedCount: result.removedCount,
+        failedCount: result.failedCount,
+        evidence: result.evidence,
+      })
+      
+      // If blocked or no updated program, return early — do not save
+      if (result.status === 'blocked' || !result.updatedProgram) {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram as AdaptiveProgram)
+        
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[MASTER-8C.12B-selective-removal] Program saved successfully', {
+          programId: savedProgram.id,
+          removedCount: result.removedCount,
+        })
+        
+        return {
+          ...result,
+          evidence: [...result.evidence, 'Program saved via saveAdaptiveProgram', 'Program Page state updated'],
+        }
+      } catch (saveError) {
+        console.error('[MASTER-8C.12B-selective-removal] Save failed', saveError)
+        return {
+          ...result,
+          status: 'blocked',
+          evidence: [...result.evidence, `Save error: ${saveError instanceof Error ? saveError.message : 'unknown'}`],
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
   // [AB20.2] Method Override Revert Callback
   // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
   // This is the authoritative save corridor for method override revert actions.
@@ -3716,9 +3791,12 @@ function ProgramDisplayWrapper({
     Removes all user-applied overrides while preserving native AI methods. */
   onResetAllMethodOverrides={handleResetAllMethodOverrides}
   /* [MASTER-8C.12A] Frequency placement apply callback with saveAdaptiveProgram.
-    Program Page owns the save path. Hub requests, Page persists. */
+  Program Page owns the save path. Hub requests, Page persists. */
   onApplyFrequencyPlacement={handleApplyFrequencyPlacement}
-/>
+  /* [MASTER-8C.12B] Selective removal callback with saveAdaptiveProgram.
+  Allows removing specific applied methods without resetting all. */
+  onRemoveSelectedPlacements={handleRemoveSelectedPlacements}
+  />
       </ErrorBoundary>
     </div>
   )

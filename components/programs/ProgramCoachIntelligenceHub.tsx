@@ -164,7 +164,10 @@ import {
 import {
   applyConfirmedFrequencyPlacementPreview,
   isMethodSupportedForFrequencyApply,
+  extractAppliedMethodPlacements,
   type FrequencyPlacementApplyResult,
+  type SelectiveRemovalResult,
+  type AppliedMethodPlacement,
 } from '@/lib/program/method-frequency-placement-apply-contract'
 
 // =============================================================================
@@ -1100,6 +1103,8 @@ interface ProgramCoachIntelligenceHubProps {
   onApplyFrequencyPlacement?: (
     preview: FrequencySlotPlacementPreview
   ) => Promise<FrequencyPlacementApplyResult>
+  /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
+  onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
 }
 
 // =============================================================================
@@ -4617,6 +4622,7 @@ function RequestedMethodsSheetContent({
   onResetAllOverrides,
   onProgramUpdate,
   onApplyFrequencyPlacement,
+  onRemoveSelectedPlacements,
 }: {
   program: AdaptiveProgram
   plannerSummary: CanonicalMethodPlannerSummary
@@ -4633,6 +4639,8 @@ function RequestedMethodsSheetContent({
   onProgramUpdate?: (updatedProgram: AdaptiveProgram) => void
   /** [MASTER-8C.12A] Dedicated callback for frequency placement with save */
   onApplyFrequencyPlacement?: (preview: FrequencySlotPlacementPreview) => Promise<FrequencyPlacementApplyResult>
+  /** [MASTER-8C.12B] Selective removal callback */
+  onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
 }) {
   const methodItems = extractRequestedMethodDecisions(program)
   const [selectedItem, setSelectedItem] = useState<RequestedMethodDisplayItem | null>(null)
@@ -5400,6 +5408,7 @@ export function ProgramCoachIntelligenceHub({
   onRevertMethodOverride, // [AB20.2] Dedicated callback for revert with save
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
+  onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -6043,6 +6052,7 @@ export function ProgramCoachIntelligenceHub({
     onResetAllOverrides={handleResetAllOverrides}
     onProgramUpdate={onProgramUpdate}
     onApplyFrequencyPlacement={onApplyFrequencyPlacement}
+    onRemoveSelectedPlacements={onRemoveSelectedPlacements}
   />
           </div>
         </SheetContent>

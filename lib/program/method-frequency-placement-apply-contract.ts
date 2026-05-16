@@ -16,6 +16,52 @@
  */
 
 import type { FrequencySlotPlacementPreview, FrequencySlotPlacementTarget } from './method-frequency-slot-placement-preview'
+import type { AdaptiveProgram, AdaptiveSession } from '@/lib/adaptive-program-builder'
+
+// Extended exercise type for method override fields not in base AdaptiveExercise
+interface ExtendedSessionExercise {
+  id?: string
+  name?: string
+  exerciseName?: string
+  method?: string
+  trainingMethod?: string
+  setExecutionMethod?: string
+  methodLabel?: string
+  methodOverrideApplied?: boolean
+  methodOverrideMethodKey?: string
+  methodOverrideAppliedAt?: string
+  methodOverrideCanRevert?: boolean
+  frequencyPlacementApplied?: boolean
+  frequencyPlacementSource?: string
+  frequencyPlacementRequestedFrequency?: number
+  frequencyPlacementTargetIndex?: number
+  methodRationale?: string
+  methodInstructions?: string
+  methodRiskNote?: string
+  styledGroupId?: string
+  methodFamily?: string
+  appliedMethod?: string
+}
+
+// Extended session type for styleMetadata fields
+interface ExtendedStyleMetadata {
+  methodOverrideRowApplications?: Array<{
+    methodKey: string
+    exerciseName: string
+    exerciseIndex: number
+    appliedAt: string
+    source: string
+  }>
+  appliedMethods?: string[]
+  [key: string]: unknown
+}
+
+interface ExtendedAdaptiveSession extends Omit<AdaptiveSession, 'styleMetadata' | 'exercises'> {
+  completed?: boolean
+  status?: string
+  styleMetadata?: ExtendedStyleMetadata
+  exercises?: ExtendedSessionExercise[]
+}
 
 // =============================================================================
 // TYPE CONTRACTS
@@ -533,4 +579,327 @@ export function isMethodBlockedForFrequencyApply(methodKey: string): { blocked: 
     return { blocked: true, reason: 'No row-level render support' }
   }
   return { blocked: false, reason: '' }
+}
+
+// ==========================================================================
+// [MASTER-8C.12B] Selective Removal Types and Helpers
+// ==========================================================================
+
+/**
+ * Represents a single user-applied method placement that can be selectively removed.
+ * Each placement is uniquely identified by session + exercise + method combination.
+ */
+export interface AppliedMethodPlacement {
+  /** Unique identifier for this placement: `${sessionIndex}-${exerciseIndex}-${methodKey}` */
+  id: string
+  /** Session index in the program */
+  sessionIndex: number
+  /** Session day number for display */
+  dayNumber: number
+  /** Exercise index in the session */
+  exerciseIndex: number
+  /** Exercise name for display */
+  exerciseName: string
+  /** Method key (e.g., 'top_set', 'drop_sets') */
+  methodKey: string
+  /** Display label for the method */
+  methodLabel: string
+  /** When this placement was applied */
+  appliedAt: string
+  /** Source of the placement (e.g., 'frequency_placement_8C.10') */
+  source: string
+  /** Whether this is a row-level method */
+  isRowLevel: boolean
+  /** Whether this is a grouped/structural method */
+  isGrouped: boolean
+}
+
+/**
+ * Result of extracting all user-applied method placements from a program.
+ */
+export interface ExtractAppliedPlacementsResult {
+  placements: AppliedMethodPlacement[]
+  totalCount: number
+  rowLevelCount: number
+  groupedCount: number
+}
+
+/**
+ * Result of removing selected method placements.
+ */
+export interface SelectiveRemovalResult {
+  status: 'success' | 'partial_success' | 'blocked'
+  visibleSummary: string
+  removedCount: number
+  failedCount: number
+  removedIds: string[]
+  failedIds: string[]
+  evidence: string[]
+  updatedProgram?: AdaptiveProgram
+}
+
+/**
+ * [MASTER-8C.12B] Extract all user-applied method placements from a program.
+ * This provides the list of placements that can be selectively removed.
+ */
+export function extractAppliedMethodPlacements(
+  program: AdaptiveProgram | null
+): ExtractAppliedPlacementsResult {
+  const placements: AppliedMethodPlacement[] = []
+  
+  if (!program?.sessions) {
+    return { placements, totalCount: 0, rowLevelCount: 0, groupedCount: 0 }
+  }
+  
+  program.sessions.forEach((session: ExtendedAdaptiveSession, sessionIndex: number) => {
+    const dayNumber = session.dayNumber ?? sessionIndex + 1
+    
+    // Extract row-level placements from methodOverrideRowApplications
+    const rowApplications = (session.styleMetadata?.methodOverrideRowApplications || []) as Array<{
+      methodKey: string
+      exerciseName: string
+      exerciseIndex: number
+      appliedAt: string
+      source: string
+    }>
+    
+    rowApplications.forEach((app) => {
+      const id = `${sessionIndex}-${app.exerciseIndex}-${app.methodKey}`
+      placements.push({
+        id,
+        sessionIndex,
+        dayNumber,
+        exerciseIndex: app.exerciseIndex,
+        exerciseName: app.exerciseName,
+        methodKey: app.methodKey,
+        methodLabel: getMethodDisplayLabel(app.methodKey),
+        appliedAt: app.appliedAt,
+        source: app.source,
+        isRowLevel: true,
+        isGrouped: false,
+      })
+    })
+    
+    // Also check exercises for methodOverrideApplied flag in case row applications list is incomplete
+    const exercises = session.exercises || []
+    exercises.forEach((exercise: ExtendedSessionExercise, exerciseIndex: number) => {
+      if (exercise.methodOverrideApplied && exercise.methodOverrideMethodKey) {
+        const id = `${sessionIndex}-${exerciseIndex}-${exercise.methodOverrideMethodKey}`
+        // Only add if not already in list from rowApplications
+        if (!placements.some(p => p.id === id)) {
+          placements.push({
+            id,
+            sessionIndex,
+            dayNumber,
+            exerciseIndex,
+            exerciseName: exercise.name || exercise.exerciseName || 'Unknown Exercise',
+            methodKey: exercise.methodOverrideMethodKey,
+            methodLabel: getMethodDisplayLabel(exercise.methodOverrideMethodKey),
+            appliedAt: exercise.methodOverrideAppliedAt || new Date().toISOString(),
+            source: exercise.frequencyPlacementSource || 'method_override',
+            isRowLevel: true,
+            isGrouped: false,
+          })
+        }
+      }
+    })
+  })
+  
+  const rowLevelCount = placements.filter(p => p.isRowLevel).length
+  const groupedCount = placements.filter(p => p.isGrouped).length
+  
+  return {
+    placements,
+    totalCount: placements.length,
+    rowLevelCount,
+    groupedCount,
+  }
+}
+
+/**
+ * Get a display label for a method key.
+ */
+function getMethodDisplayLabel(methodKey: string): string {
+  const labels: Record<string, string> = {
+    top_set: 'Top Set',
+    backoff_sets: 'Backoff Sets',
+    drop_sets: 'Drop Sets',
+    rest_pause: 'Rest-Pause',
+    cluster_sets: 'Cluster Sets',
+    superset: 'Superset',
+    circuit: 'Circuit',
+    density_block: 'Density Block',
+  }
+  return labels[methodKey] || methodKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/**
+ * [MASTER-8C.12B] Remove selected user-applied method placements from a program.
+ * This allows users to remove specific placements without resetting everything.
+ * 
+ * @param program - The current program
+ * @param placementIds - IDs of placements to remove (format: `${sessionIndex}-${exerciseIndex}-${methodKey}`)
+ * @returns Result with updated program and evidence
+ */
+export function removeSelectedMethodPlacements(args: {
+  program: AdaptiveProgram
+  placementIds: string[]
+}): SelectiveRemovalResult {
+  const { program, placementIds } = args
+  
+  // Guard: Must have program
+  if (!program) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No program available.',
+      removedCount: 0,
+      failedCount: 0,
+      removedIds: [],
+      failedIds: placementIds,
+      evidence: ['program is null or undefined'],
+    }
+  }
+  
+  // Guard: Must have placements to remove
+  if (!placementIds || placementIds.length === 0) {
+    return {
+      status: 'blocked',
+      visibleSummary: 'No placements selected for removal.',
+      removedCount: 0,
+      failedCount: 0,
+      removedIds: [],
+      failedIds: [],
+      evidence: ['placementIds is empty'],
+    }
+  }
+  
+  // Deep clone the program to avoid mutation
+  const updatedProgram: AdaptiveProgram = JSON.parse(JSON.stringify(program))
+  
+  const removedIds: string[] = []
+  const failedIds: string[] = []
+  const evidence: string[] = []
+  
+  // Process each placement ID
+  placementIds.forEach((id) => {
+    const parts = id.split('-')
+    if (parts.length < 3) {
+      failedIds.push(id)
+      evidence.push(`Invalid placement ID format: ${id}`)
+      return
+    }
+    
+    const sessionIndex = parseInt(parts[0], 10)
+    const exerciseIndex = parseInt(parts[1], 10)
+    const methodKey = parts.slice(2).join('-') // Handle method keys with dashes
+    
+    if (isNaN(sessionIndex) || isNaN(exerciseIndex)) {
+      failedIds.push(id)
+      evidence.push(`Invalid indices in placement ID: ${id}`)
+      return
+    }
+    
+    const session = updatedProgram.sessions?.[sessionIndex] as ExtendedAdaptiveSession | undefined
+    if (!session) {
+      failedIds.push(id)
+      evidence.push(`Session ${sessionIndex} not found`)
+      return
+    }
+    
+    // Skip completed sessions
+    if (session.completed || session.status === 'completed') {
+      failedIds.push(id)
+      evidence.push(`Cannot remove from completed session ${sessionIndex}`)
+      return
+    }
+    
+    const exercise = session.exercises?.[exerciseIndex] as ExtendedSessionExercise | undefined
+    if (!exercise) {
+      failedIds.push(id)
+      evidence.push(`Exercise ${exerciseIndex} not found in session ${sessionIndex}`)
+      return
+    }
+    
+    // Clear row-level method override metadata from the exercise
+    if (exercise.methodOverrideMethodKey === methodKey || 
+        exercise.setExecutionMethod === toRowSetExecutionMethod(methodKey)) {
+      
+      // Clear the user-applied method metadata
+      delete exercise.methodOverrideApplied
+      delete exercise.methodOverrideMethodKey
+      delete exercise.methodOverrideAppliedAt
+      delete exercise.methodOverrideCanRevert
+      delete exercise.frequencyPlacementApplied
+      delete exercise.frequencyPlacementSource
+      delete exercise.frequencyPlacementRequestedFrequency
+      delete exercise.frequencyPlacementTargetIndex
+      delete exercise.methodRationale
+      delete exercise.methodInstructions
+      delete exercise.methodRiskNote
+      
+      // Reset row-level method fields only if they were user-applied
+      // Check if this was a frequency placement by looking at source
+      if (exercise.setExecutionMethod === toRowSetExecutionMethod(methodKey)) {
+        delete exercise.setExecutionMethod
+        delete exercise.methodLabel
+        // Only delete method/trainingMethod if they match the removed method
+        if (exercise.method === methodKey || exercise.trainingMethod === methodKey) {
+          delete exercise.method
+          delete exercise.trainingMethod
+        }
+      }
+      
+      evidence.push(`Cleared method override from exercise ${exerciseIndex} in session ${sessionIndex}`)
+    }
+    
+    // Remove from methodOverrideRowApplications array
+    if (session.styleMetadata?.methodOverrideRowApplications) {
+      const rowApps = session.styleMetadata.methodOverrideRowApplications
+      session.styleMetadata.methodOverrideRowApplications = rowApps.filter(
+        app => !(app.exerciseIndex === exerciseIndex && app.methodKey === methodKey)
+      )
+    }
+    
+    // Remove from appliedMethods array if present
+    if (session.styleMetadata?.appliedMethods) {
+      const appliedMethods = session.styleMetadata.appliedMethods as string[]
+      // Only remove if no other exercises in this session have this method
+      const otherExercisesWithMethod = (session.exercises || []).filter((ex: ExtendedSessionExercise, idx: number) => 
+        idx !== exerciseIndex && ex.methodOverrideMethodKey === methodKey
+      )
+      if (!otherExercisesWithMethod || otherExercisesWithMethod.length === 0) {
+        session.styleMetadata.appliedMethods = appliedMethods.filter(m => m !== methodKey)
+      }
+    }
+    
+    removedIds.push(id)
+  })
+  
+  // Determine overall status
+  let status: 'success' | 'partial_success' | 'blocked'
+  let visibleSummary: string
+  
+  if (removedIds.length === 0) {
+    status = 'blocked'
+    visibleSummary = `Failed to remove any placements.`
+  } else if (failedIds.length === 0) {
+    status = 'success'
+    visibleSummary = `Removed ${removedIds.length} method placement${removedIds.length === 1 ? '' : 's'}.`
+  } else {
+    status = 'partial_success'
+    visibleSummary = `Removed ${removedIds.length} placement${removedIds.length === 1 ? '' : 's'}, ${failedIds.length} failed.`
+  }
+  
+  evidence.push(`Final: ${removedIds.length} removed, ${failedIds.length} failed`)
+  
+  return {
+    status,
+    visibleSummary,
+    removedCount: removedIds.length,
+    failedCount: failedIds.length,
+    removedIds,
+    failedIds,
+    evidence,
+    updatedProgram,
+  }
 }

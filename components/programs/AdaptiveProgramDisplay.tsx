@@ -11,7 +11,7 @@ import { ProgramCoachIntelligenceHub } from './ProgramCoachIntelligenceHub'
 // [AB20.1D] Types for method override apply callback
 import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRevertResult, MethodOverrideResetAllResult } from '@/lib/program/requested-method-override-planner'
 // [MASTER-8C.12A] Types for frequency placement apply callback
-import type { FrequencyPlacementApplyResult } from '@/lib/program/method-frequency-placement-apply-contract'
+import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
@@ -317,6 +317,9 @@ interface AdaptiveProgramDisplayProps {
   onApplyFrequencyPlacement?: (
     preview: FrequencySlotPlacementPreview
   ) => Promise<FrequencyPlacementApplyResult>
+  // [MASTER-8C.12B] Selective removal callback for removing specific applied methods.
+  // Program Page owns the save path. Hub requests, Page persists.
+  onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
 }
 
 // =============================================================================
@@ -483,6 +486,8 @@ export function AdaptiveProgramDisplay({
   onResetAllMethodOverrides,
   // [MASTER-8C.12A] Dedicated frequency placement apply callback with save persistence
   onApplyFrequencyPlacement,
+  // [MASTER-8C.12B] Selective removal callback with save persistence
+  onRemoveSelectedPlacements,
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1376,6 +1381,7 @@ export function AdaptiveProgramDisplay({
     onRevertMethodOverride={onRevertMethodOverride} // [AB20.2] Wire through for revert
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
+    onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

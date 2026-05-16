@@ -6,6 +6,30 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.11)
+
+**Current active completed step:** MASTER-8C.11  
+**Current protected corridor:** Method Planner row-level frequency placement  
+**Next implementation candidate:** Superset Structural Override Apply Readiness (MASTER-8C.12 or equivalent)  
+**Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Protected Method Planner State (MASTER-8C.11 Verified)
+- Row-level frequency placement is working and protected
+- Top Set, Backoff Sets, Drop Sets, Rest-Pause, Cluster Sets are eligible/applyable
+- Multi-apply no stacking: PASSED
+- Capacity count reduction: PASSED
+- Program Day render: PASSED
+- Refresh/local persistence honesty: PASSED
+- Reset/revert parity: PASSED
+- Live workout render: PASSED
+
+### Currently Blocked Methods (Honest Reasons)
+- **Supersets:** Structural override writer not enabled yet (native materialization exists)
+- **Density Blocks:** Timed-window logging/runtime model not implemented
+- **Endurance/Conditioning:** Real modality/exercise prescription not implemented
+
+---
+
 ## Max-Intent Build Bracket — Required Under Every Future Step
 
 Every future step in this roadmap must satisfy these checks before claiming PASS:
@@ -680,13 +704,186 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 
 ---
 
-### MASTER-8C — Doctrine DB / Knowledge Base Generator Wiring
+### MASTER-8C.3 — Method Contract Slot Frequency Inventory
+
+**Status:** COMPLETE
+
+**Purpose:** Build typed inventory of method families with slot frequency semantics.
+
+**What This Step Delivered:**
+- Created `lib/program/method-structure-contract.ts` with canonical method families
+- Defined slot frequency semantics for each method category
+- Established row-level vs grouped-structural method classification
+
+---
+
+### MASTER-8C.4 — Method Planner Foundation Repair
+
+**Status:** COMPLETE
+
+**Purpose:** Repair Method Planner foundation for frequency-aware planning.
+
+---
+
+### MASTER-8C.5 — Generator Restart DB Consumption Gate
+
+**Status:** COMPLETE
+
+**Purpose:** Ensure generator properly consumes exercise knowledge base.
+
+---
+
+### MASTER-8C.6 — Parity Gate
+
+**Status:** COMPLETE
+
+**Purpose:** Verify parity between generator output and runtime consumption.
+
+---
+
+### MASTER-8C.7 — Method Contract Slot Frequency Inventory
+
+**Status:** COMPLETE
+
+**Purpose:** Establish method contract inventory with slot frequency semantics.
+
+---
+
+### MASTER-8C.8 — Slot Eligibility Frequency Preview
+
+**Status:** COMPLETE
+
+**Purpose:** Build slot eligibility and frequency preview system.
+
+---
+
+### MASTER-8C.9 — Frequency Slot Placement Preview
+
+**Status:** COMPLETE
+
+**Purpose:** Create frequency slot placement preview for method targeting.
+
+---
+
+### MASTER-8C.10 — Controlled Frequency Placement Confirmation
+
+**Status:** COMPLETE
+
+**Purpose:** Build controlled frequency placement confirmation flow.
+
+---
+
+### MASTER-8C.10.1 — Method Collision and Placement Ranking Repair
+
+**Status:** COMPLETE
+
+**Purpose:** Repair method collision detection and placement ranking logic.
+
+---
+
+### MASTER-8C.10.2 — Method Capacity Slot Ledger Repair
+
+**Status:** COMPLETE
+
+**Purpose:** Repair method capacity slot ledger accuracy.
+
+---
+
+### MASTER-8C.10.3 — Method Ledger Semantics Repair
+
+**Status:** COMPLETE
+
+**Purpose:** Fix false row-method ownership detection in method slot occupancy ledger.
+
+**What This Step Delivered:**
+- Created strict row-level method ownership predicate
+- Only `methodOverrideApplied`, supported `setExecutionMethod`, or `methodOverrideMethodKey` count as row ownership
+- Generic `trainingMethod`, `methodFamily`, `appliedMethod` no longer falsely occupy rows
+- Added invalid overlap detection for row-method inside grouped structure
+
+---
+
+### MASTER-8C.10.4 — Eligibility Scorer Must Consume Authoritative Ledger
+
+**Status:** COMPLETE
+
+**Purpose:** Make eligibility scoring consume the authoritative method slot occupancy ledger.
+
+**What This Step Delivered:**
+- Created `deriveRowLevelSlotsFromLedger()` for ledger-based row-level targeting
+- Created `deriveCircuitSlotsFromLedger()` for ledger-based circuit targeting
+- Replaced stale local ownership helpers with ledger-based scoring
+- Day 1 circuit rows no longer falsely targeted by row-level methods
+
+---
+
+### MASTER-8C.10.5 — Repair Ledger Ownership Classification
+
+**Status:** COMPLETE
+
+**Purpose:** Separate grouped structure ownership from row-level method ownership.
+
+**What This Step Delivered:**
+- Added method family classification constants (GROUPED_STRUCTURE_METHOD_FAMILIES, ROW_LEVEL_METHOD_FAMILIES)
+- Added status filtering (OCCUPYING_METHOD_STATUSES: applied, already_applied)
+- Only circuit/superset/density_block with applied status populate grouped ownership
+- Row-level methods (top_set, drop_set, rest_pause, cluster, backoff_sets) populate separate row ownership
+- Blocked/not_needed/no_safe_target/error methodStructures no longer occupy slots
+- Fixed false "20 in grouped structures" overblocking
+
+---
+
+### MASTER-8C.11 — Controlled Multi-Placement Audit / Revert Parity / Live Workout Render Verification
+
+**Status:** COMPLETE
+
+**Purpose:** Verification gate for end-to-end method placement corridor.
+
+**Verification Results:**
+- Multi-apply no stacking: PASS
+- Capacity count reduction: PASS
+- Program Day render: PASS
+- Refresh persistence/honesty: PASS
+- Reset/revert parity: PASS
+- Live workout render: PASS
+- Unsupported methods still blocked: PASS
+
+**Files Changed:** None - verification passed without requiring code changes.
+
+**TypeScript/Build:** PASS
+
+---
+
+### MASTER-8C.11.1 — Checklist Source-of-Truth Reconciliation + Next-Step Lock Gate
+
+**Status:** COMPLETE
+
+**Purpose:** Reconcile official checklist with actual completed MASTER-8C sequence.
+
+**What This Step Delivered:**
+- Updated OFFICIAL_CHECKLIST_MAY_14_2026.md with complete MASTER-8C.3 through MASTER-8C.11 sequence
+- Added Current Active Position section
+- Added Protected Method Planner State documentation
+- Added Currently Blocked Methods with honest reasons
+- Identified next implementation candidate: Superset Structural Override Apply Readiness
+
+---
+
+### MASTER-8C.12 — Superset Structural Override Apply Readiness (NEXT CANDIDATE)
 
 **Status:** NOT STARTED
 
-**Purpose:** Wire structured knowledge contracts into program generation and regeneration paths.
+**Purpose:** Enable requested override apply for Supersets.
 
-**Requirement:** Fresh build, regenerate, modify, saved reload, and live runtime must agree.
+**Prerequisites:**
+- Native superset structural materialization already exists
+- Grouped live workout runtime already supports supersets
+- Requested override apply currently marks Superset as preview-only
+
+**Blockers to Address:**
+- Enable structural writer for superset override apply
+- Verify grouped structure ownership correctly includes new superset placements
+- Verify live workout consumes applied superset structure
 
 ---
 

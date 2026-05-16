@@ -4140,15 +4140,32 @@ function MethodDetailFrequencyControls({
   // If method is blocked, show compact message
   if (isBlocked) {
     const isStructuralMethod = ['superset', 'circuit', 'density_block'].includes(methodKey)
+    
+    // [MASTER-8C.12.1E] Method-specific messaging for structural methods
+    const getStructuralMessage = () => {
+      if (methodKey === 'circuit') {
+        return `Circuits use the structural Method Planner apply flow above, not row-level frequency placement.`
+      }
+      if (methodKey === 'superset') {
+        return `Superset needs structural pair writer before frequency placement.`
+      }
+      if (methodKey === 'density_block') {
+        return `Density Block needs timed/sequence runtime, logging, and save/reload support.`
+      }
+      return `${methodLabel} uses the structural apply flow above, not row-level frequency.`
+    }
+    
     return (
       <div className="p-3 rounded-lg bg-[#1A1A22] border border-[#2A2A35]">
         <div className="flex items-center gap-2 mb-2">
           <Layers className="w-3.5 h-3.5 text-[#6A6A7A]" />
-          <span className="text-[10px] font-medium text-[#8A8A9A]">Frequency Placement</span>
+          <span className="text-[10px] font-medium text-[#8A8A9A]">
+            {isStructuralMethod ? 'Structural Apply' : 'Frequency Placement'}
+          </span>
         </div>
         <p className="text-[10px] text-[#6A6A7A] leading-relaxed">
           {isStructuralMethod 
-            ? `${methodLabel} uses the structural apply flow above, not row-level frequency.`
+            ? getStructuralMessage()
             : blockedReason ?? 'Not available for frequency placement.'
           }
         </p>

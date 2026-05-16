@@ -6,25 +6,26 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.12)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.12.1)
 
-**Current active completed step:** MASTER-8C.12 (partial — 8C.12A, 8C.12B, 8C.12D complete; 8C.12C deferred)  
-**Current protected corridor:** Method Planner row-level frequency placement with persistence and selective removal  
-**Next implementation candidate:** Superset Structural Override Apply Implementation (MASTER-8C.13 or equivalent)  
+**Current active completed step:** MASTER-8C.12.1  
+**Current protected corridor:** Method Planner UX unified — frequency controls inside method detail, selective removal visible  
+**Next implementation candidate:** MASTER-8C.13 — Superset Structural Writer Apply  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
 
-### Protected Method Planner State (MASTER-8C.12 Verified)
+### Protected Method Planner State (MASTER-8C.12.1 Verified)
 - Row-level frequency placement is working and protected
-- **Persistence FIXED:** Applied methods now survive page refresh via `saveAdaptiveProgram`
-- **Selective removal IMPLEMENTED:** Users can remove specific applied methods without reset-all
-- Top Set, Backoff Sets, Drop Sets, Rest-Pause, Cluster Sets are eligible/applyable
-- Multi-apply no stacking: PASSED
-- Capacity count reduction: PASSED
-- Program Day render: PASSED
-- Refresh/local persistence: **FIXED AND PASSED** (was failing, now uses canonical save path)
-- Reset/revert parity: PASSED
-- Selective removal: **NEW — PASSED**
+- **UX UNIFIED:** Frequency controls now inside method detail view (8C.12.1A)
+- **Standalone frequency section DEMOTED:** Collapsed under "Advanced Placement Diagnostics" (8C.12.1B)
+- **Selective removal UI VISIBLE:** ManageAppliedAdditionsSection with checkboxes (8C.12.1C)
+- **Target ranking IMPROVED:** Score-based with method load preference (8C.12.1D)
+- **Blocked messaging FIXED:** Clear reasons for structural methods (8C.12.1E)
+- Persistence: PASSED (via saveAdaptiveProgram)
+- Selective removal: PASSED
 - Live workout render: PASSED
+- Circuits: Route through structural apply flow (messaging updated)
+- Supersets: Blocked with clear "needs structural pair writer" message
+- Density Blocks: Blocked with clear "needs timed/sequence runtime" message
 
 ### Currently Blocked Methods (Honest Reasons)
 - **Supersets:** Structural override writer not enabled yet (needs grouped method infrastructure)
@@ -909,6 +910,47 @@ Use this exact sequence unless a build gate or repair gate blocks it.
 - `lib/program/method-frequency-placement-apply-contract.ts` — added selective removal helpers
 
 **Report:** See `docs/MASTER_8C_12_METHOD_PLANNER_PERSISTENCE_SELECTIVE_REMOVAL_SUPERSET_READINESS_REPORT.md`
+
+---
+
+### MASTER-8C.12.1 — Method Planner UX Unification
+
+**Status:** COMPLETE
+
+**Purpose:** Unify Method Planner UX — move frequency controls into method detail, demote standalone frequency section, make selective removal visible, improve target ranking, fix blocked method messaging.
+
+**Subtasks Completed:**
+- **8C.12.1A — Method-Detail Frequency Controls:** COMPLETE
+  - Added `MethodDetailFrequencyControls` component inside method detail view
+  - Row-level methods show frequency chips and preview targets
+  - Structural methods show appropriate "Structural Apply" messaging
+  
+- **8C.12.1B — Demote Standalone Frequency Section:** COMPLETE
+  - `SlotEligibilityFrequencyPreviewSection` now accepts `isDiagnosticMode` prop
+  - Collapsed by default, labeled "Advanced Placement Diagnostics"
+  - Method list is now the primary user workflow
+  
+- **8C.12.1C — Visible Selective Removal UI:** COMPLETE
+  - Added `ManageAppliedAdditionsSection` component
+  - Checkboxes for each user-applied placement
+  - Select all, remove selected with confirmation
+  
+- **8C.12.1D — Target Ranking Improvement:** COMPLETE
+  - Score-based ranking prefers sessions with lower method load
+  - Spreads placements across week instead of earliest-day-first
+  - "whyChosen" now includes "Lower method load" reasoning
+  
+- **8C.12.1E — Fix Blocked Method Messaging:** COMPLETE
+  - Circuit: "uses structural Method Planner apply flow"
+  - Superset: "needs structural pair writer before frequency placement"
+  - Density Block: "needs timed/sequence runtime, logging, and save/reload support"
+
+**Files Changed:**
+- `components/programs/ProgramCoachIntelligenceHub.tsx`
+- `lib/program/method-frequency-slot-placement-preview.ts`
+- `lib/program/method-slot-eligibility-frequency-planner.ts`
+
+**Report:** See `docs/MASTER_8C_12_1_METHOD_PLANNER_UX_UNIFICATION_REPORT.md`
 
 ---
 

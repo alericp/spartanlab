@@ -783,7 +783,8 @@ function buildMethodFrequencyPreview(
   } else if (item.loggingReadiness === 'timed_window_missing') {
     eligibilityStatus = 'blocked_density_timed_logging_missing'
     frequencyPreviewStatus = 'blocked'
-    blockedReason = 'Timed-window logging model required'
+    // [MASTER-8C.12.1E] Clearer messaging for Density Block
+    blockedReason = 'Density Block needs timed/sequence runtime, logging, and save/reload support'
     proofLines.push('BLOCKED: Timed-window logging not implemented')
   } else if (item.currentSupportStatus === 'read_only_inventory') {
     eligibilityStatus = 'inventory_only'
@@ -792,7 +793,12 @@ function buildMethodFrequencyPreview(
   } else if (item.currentSupportStatus === 'preview_only') {
     eligibilityStatus = 'blocked_contract_not_ready'
     frequencyPreviewStatus = 'blocked'
-    blockedReason = item.blockedReason || 'Preview only - no structural writer'
+    // [MASTER-8C.12.1E] Clearer messaging - distinguish between structural methods needing writer
+    if (item.canonicalKey === 'superset') {
+      blockedReason = 'Superset needs structural pair writer before frequency placement'
+    } else {
+      blockedReason = item.blockedReason || 'Structural apply needed — not row-level frequency'
+    }
     proofLines.push('Status: preview only - no save capability')
   } else {
     // Method is potentially eligible - score slots using authoritative ledger

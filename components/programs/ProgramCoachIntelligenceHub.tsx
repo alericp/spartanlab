@@ -254,6 +254,12 @@ import {
   getTargetCandidateStatusColor,
   type MutationTargetSessionResolutionPreviewModel,
 } from '@/lib/program/mutation-target-session-resolution-preview'
+// [MASTER-8C.32] Workout log session identity bridge
+import {
+  resolveWorkoutLogSessionIdentity,
+  getSessionIdentityStatusLabel,
+  getSessionIdentityStatusColor,
+} from '@/lib/program/workout-log-session-identity-readonly-bridge'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3661,6 +3667,16 @@ function AIIntelligenceFoundationMap({
                     <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
                       {mutationTargetSessionResolutionPreviewModel.futureSessionCount} future sessions
                     </span>
+                    {(() => {
+                      const idColor = getSessionIdentityStatusColor(
+                        mutationTargetSessionResolutionPreviewModel.completedSessionIdentityStatus
+                      )
+                      return (
+                        <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", idColor.bg, idColor.text, idColor.border)}>
+                          Identity: {getSessionIdentityStatusLabel(mutationTargetSessionResolutionPreviewModel.completedSessionIdentityStatus)}
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
                     Read-only target mapping. No mutation.
@@ -7678,25 +7694,42 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [mutationReadinessReviewGateModel])
   
-  // [MASTER-8C.31] Target Session Resolution Preview
+  // [MASTER-8C.32] Workout Log Session Identity Resolution
+  // Reuses the same recentLogs already loaded for workoutEvidenceSummary
+  // (no duplicate localStorage read). Resolves completed day numbers from
+  // generatedWorkoutId field in trusted workout logs.
+  const sessionIdentityModel = useMemo(() => {
+    try {
+      const recentLogs = getRecentWorkoutLogsForGenerationRequest()
+      const programSessions = program?.sessions ?? []
+      return resolveWorkoutLogSessionIdentity({
+        logs: recentLogs,
+        programSessions,
+      })
+    } catch {
+      return null
+    }
+  }, [program])
+  
+  // [MASTER-8C.31/32] Target Session Resolution Preview
   const targetSessionResolutionInput = useMemo(() => {
     if (!program?.sessions) return null
-    // Build completed day numbers from workoutEvidenceSummary — we use the
-    // completedSessionCount as a proxy. Since we don't have per-day completion
-    // data in the summary, we conservatively mark no sessions as completed
-    // (all sessions remain as future candidates for transparency).
-    // Actual per-day completion tracking is a future-step concern.
-    const completedDays = new Set<number>()
+    // [MASTER-8C.32] Use resolved completed day numbers from identity bridge
+    // instead of hardcoded empty set. Falls back to empty if identity unavailable.
+    const completedDays = new Set<number>(
+      sessionIdentityModel?.completedDayNumbers ?? []
+    )
     return buildTargetResolutionProgramInput(program.sessions, completedDays)
-  }, [program])
+  }, [program, sessionIdentityModel])
   
   const mutationTargetSessionResolutionPreviewModel = useMemo<MutationTargetSessionResolutionPreviewModel>(() => {
     return resolveMutationTargetSessionResolutionPreview({
       programSessions: targetSessionResolutionInput,
       mutationReadinessReviewGateModel,
       mutationPathwayReadinessMapModel,
+      sessionIdentityModel,
     })
-  }, [targetSessionResolutionInput, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel])
+  }, [targetSessionResolutionInput, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, sessionIdentityModel])
   
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
@@ -8657,6 +8690,29 @@ export function ProgramCoachIntelligenceHub({
                   {mutationTargetSessionResolutionPreviewModel.unresolvedCandidateCount > 0 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                       {mutationTargetSessionResolutionPreviewModel.unresolvedCandidateCount} unresolved
+                    </span>
+                  )}
+                </div>
+                {/* [MASTER-8C.32] Session identity proof line */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const identityColor = getSessionIdentityStatusColor(
+                      mutationTargetSessionResolutionPreviewModel.completedSessionIdentityStatus
+                    )
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", identityColor.bg, identityColor.text, identityColor.border)}>
+                        Session identity: {getSessionIdentityStatusLabel(mutationTargetSessionResolutionPreviewModel.completedSessionIdentityStatus)}
+                      </span>
+                    )
+                  })()}
+                  {mutationTargetSessionResolutionPreviewModel.completedSessionCount > 0 && (
+                    <span className="text-[9px] text-emerald-400/70">
+                      Completed sessions protected
+                    </span>
+                  )}
+                  {mutationTargetSessionResolutionPreviewModel.unresolvedCompletedEvidenceCount > 0 && (
+                    <span className="text-[9px] text-amber-400/70">
+                      {mutationTargetSessionResolutionPreviewModel.unresolvedCompletedEvidenceCount} unmapped log(s)
                     </span>
                   )}
                 </div>

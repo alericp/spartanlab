@@ -43,6 +43,14 @@ export interface MarkerSaveAuthorizationPreflightBoundaryModel {
   readonly targetSessionCount: number
   readonly completedProtectedCount: number
   readonly markerCandidateCount: number
+  
+  // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
+  readonly rootCandidateBlockingCount: number
+  readonly rootCandidateWaitingCount: number
+  readonly rootCandidateNeedsEvidenceCount: number
+  readonly cascadeEchoCount: number
+  readonly rawCautionCount: number
+  
   readonly blockedReasons: readonly string[]
   readonly safetyNotes: readonly string[]
   readonly nextSafeGate: string
@@ -124,6 +132,12 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       targetSessionCount: 0,
       completedProtectedCount: 0,
       markerCandidateCount: 0,
+      // [MASTER-8C.47] Root/candidate clearance metrics
+      rootCandidateBlockingCount: 0,
+      rootCandidateWaitingCount: 0,
+      rootCandidateNeedsEvidenceCount: 0,
+      cascadeEchoCount: 0,
+      rawCautionCount: 0,
       blockedReasons: ['Missing marker-only confirmation boundary model'],
       safetyNotes: [
         'No marker saved',
@@ -144,23 +158,40 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
   const targetSessionCount = markerOnlyConfirmationBoundaryModel.targetSessionCount
   const completedProtectedCount = markerOnlyConfirmationBoundaryModel.completedProtectedCount
   const markerCandidateCount = markerOnlyConfirmationBoundaryModel.markerCandidateCount
+  
+  // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
+  const rootCandidateBlockingCount = markerOnlyConfirmationBoundaryModel.rootCandidateBlockingCount ?? 0
+  const rootCandidateWaitingCount = markerOnlyConfirmationBoundaryModel.rootCandidateWaitingCount ?? 0
+  const rootCandidateNeedsEvidenceCount = rootCandidateBlockingCount + rootCandidateWaitingCount
+  const cascadeEchoCount = markerOnlyConfirmationBoundaryModel.cascadeEchoCount ?? 0
+  const rawCautionCount = markerOnlyConfirmationBoundaryModel.rawCautionCount ?? activeCautionCount
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Active cautions
+  // PRIORITY 2: Active cautions — now uses root/candidate clearance (8C47)
+  // Cascade echoes are diagnostic only and do not block marker-save auth
   // -------------------------------------------------------------------------
-  if (activeCautionCount > 0) {
+  if (rootCandidateNeedsEvidenceCount > 0) {
+    const blockerLabel = rootCandidateBlockingCount > 0 
+      ? `${rootCandidateBlockingCount} blocking root/candidate caution(s)`
+      : `${rootCandidateWaitingCount} root/candidate caution(s) waiting for evidence`
+    
     return {
       status: 'blocked_active_caution',
-      headline: 'Marker-Save Authorization Blocked by Active Cautions',
-      summary: `${activeCautionCount} active caution(s) must be cleared before marker-save authorization can proceed. All mutation pathways remain locked.`,
+      headline: 'Marker-Save Authorization Blocked — Root/Candidate Evidence Required',
+      summary: `${rootCandidateNeedsEvidenceCount} root/candidate clearance item(s) need resolution. ${cascadeEchoCount} cascade echo(es) are diagnostic only and do not independently block.`,
       activeCautionCount,
       targetSessionCount,
       completedProtectedCount,
       markerCandidateCount,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
-        `${activeCautionCount} active caution(s) blocking marker-save authorization`,
-        'Cautions must be cleared via evidence trend confirmation',
-        'No marker save or write permitted while cautions exist',
+        blockerLabel,
+        `${cascadeEchoCount} cascade echo(es) diagnostic only`,
+        'Root/candidate evidence must resolve before marker-save authorization',
       ],
       safetyNotes: [
         'No marker saved',
@@ -169,9 +200,9 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         'No Start Workout changed',
         'No Live Workout changed',
         `${completedProtectedCount} completed session(s) protected`,
-        'Authorization controls disabled',
+        'Cascade echoes do not multiply the root blocker',
       ],
-      nextSafeGate: 'Clear all cautions via evidence trend confirmation, then re-evaluate',
+      nextSafeGate: 'Clear root/candidate evidence, then re-evaluate marker-save authorization',
       ...lockedFlags,
       ...safetyInvariants,
     }
@@ -189,6 +220,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerCandidateCount,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         'No future target sessions available',
         'Marker-save authorization requires future targets',
@@ -224,6 +260,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerCandidateCount,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         `Marker boundary status: ${markerOnlyConfirmationBoundaryModel.status}`,
         'Upstream boundary must reach preview-ready state',
@@ -255,6 +296,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerCandidateCount,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         'Explicit user authorization not yet granted',
         'User must confirm intention to save marker',
@@ -288,6 +334,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
     targetSessionCount,
     completedProtectedCount,
     markerCandidateCount,
+    rootCandidateBlockingCount,
+    rootCandidateWaitingCount,
+    rootCandidateNeedsEvidenceCount,
+    cascadeEchoCount,
+    rawCautionCount,
     blockedReasons: [
       'Marker-save mechanism not yet implemented',
       'This step is preflight only',

@@ -56,6 +56,13 @@ export interface MarkerOnlyConfirmationBoundaryModel {
   readonly eligibleOperationCount: number
   readonly markerCandidateCount: number
   
+  // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
+  readonly rootCandidateBlockingCount: number
+  readonly rootCandidateWaitingCount: number
+  readonly rootCandidateNeedsEvidenceCount: number
+  readonly cascadeEchoCount: number
+  readonly rawCautionCount: number
+  
   // Blockers and notes
   readonly blockedReasons: readonly string[]
   readonly safetyNotes: readonly string[]
@@ -156,6 +163,12 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       dryRunOperationCount: 0,
       eligibleOperationCount: 0,
       markerCandidateCount: 0,
+      // [MASTER-8C.47] Root/candidate clearance metrics
+      rootCandidateBlockingCount: 0,
+      rootCandidateWaitingCount: 0,
+      rootCandidateNeedsEvidenceCount: 0,
+      cascadeEchoCount: 0,
+      rawCautionCount: 0,
       blockedReasons: ['Missing required upstream gate models'],
       safetyNotes: ['No marker confirmation possible without upstream gates'],
       nextSafeGate: 'Resolve upstream gate availability',
@@ -178,39 +191,65 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
   const eligibleOperationCount = 
     boundedMutationApplyEligibilityGateModel.eligibleOperationCount ?? 0
   
+  // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
+  const rootCandidateBlockingCount = 
+    mutationCautionClearanceGateModel.blockingRootCandidateCount ?? 0
+  const rootCandidateWaitingCount = 
+    mutationCautionClearanceGateModel.waitingRootCandidateCount ?? 0
+  const rootCandidateNeedsEvidenceCount = rootCandidateBlockingCount + rootCandidateWaitingCount
+  const cascadeEchoCount = 
+    mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  const rawCautionCount = 
+    mutationCautionClearanceGateModel.allRawCautionSignalCount ?? activeCautionCount
+  const rootCandidateClearanceReady = 
+    mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  
   // Marker candidates = future targets with dry-run operations available
   const markerCandidateCount = 
     futureTargetCount > 0 && dryRunOperationCount > 0 ? dryRunOperationCount : 0
   
   // -------------------------------------------------------------------------
-  // PRIORITY B: Active caution
+  // PRIORITY B: Active caution — now uses root/candidate clearance (8C47)
+  // Cascade echoes are diagnostic only and do not block marker preview
   // -------------------------------------------------------------------------
   if (
-    activeCautionCount > 0 ||
+    rootCandidateNeedsEvidenceCount > 0 ||
+    !rootCandidateClearanceReady ||
     mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
     mutationCautionClearanceGateModel.status === 'clearance_waiting_for_evidence'
   ) {
+    const blockerLabel = rootCandidateBlockingCount > 0 
+      ? `${rootCandidateBlockingCount} blocking root/candidate caution(s)`
+      : `${rootCandidateWaitingCount} root/candidate caution(s) waiting for evidence`
+    
     return {
       status: 'blocked_active_caution',
-      headline: 'Marker Boundary Blocked — Active Caution',
-      summary: `${activeCautionCount} active caution(s) prevent marker confirmation boundary from becoming ready. All cautions must be resolved before marker confirmation can proceed.`,
+      headline: 'Marker Boundary Blocked — Root/Candidate Evidence Required',
+      summary: `${rootCandidateNeedsEvidenceCount} root/candidate clearance item(s) need resolution. ${cascadeEchoCount} cascade echo(es) are diagnostic only and do not independently block.`,
       targetSessionCount: futureTargetCount,
       completedProtectedCount,
       activeCautionCount,
       dryRunOperationCount,
       eligibleOperationCount,
       markerCandidateCount: 0,
+      // [MASTER-8C.47] Root/candidate clearance metrics
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
-        `${activeCautionCount} active caution(s) must be cleared`,
-        'Marker confirmation blocked until cautions resolved',
-        'Coach Intelligence caution flags require attention',
+        blockerLabel,
+        `${cascadeEchoCount} cascade echo(es) diagnostic only`,
+        'Root/candidate evidence must resolve before marker preview',
       ],
       safetyNotes: [
         'Completed sessions remain protected',
         'No marker save attempted',
         'No program changes applied',
+        'Cascade echoes do not multiply the root blocker',
       ],
-      nextSafeGate: 'Clear all active cautions, then re-check marker boundary',
+      nextSafeGate: 'Clear root/candidate evidence, then re-check marker boundary',
       canRenderMarkerConfirmationPreview: false,
       ...LOCKED_FLAGS,
     }
@@ -233,6 +272,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       dryRunOperationCount,
       eligibleOperationCount,
       markerCandidateCount: 0,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         'No future target sessions available',
         'Marker confirmation requires future sessions',
@@ -267,6 +311,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       dryRunOperationCount,
       eligibleOperationCount,
       markerCandidateCount: 0,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         `Apply gate status: ${boundedMutationApplyEligibilityGateModel.status}`,
         'Apply gate must reach eligible state',
@@ -297,6 +346,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       dryRunOperationCount,
       eligibleOperationCount,
       markerCandidateCount: 0,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         `Dry-run status: ${controlledFutureSessionMutationWriterDryRunModel.status}`,
         'Dry-run must reach preview-ready state',
@@ -331,6 +385,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       dryRunOperationCount,
       eligibleOperationCount,
       markerCandidateCount: 0,
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
       blockedReasons: [
         `Permission gate status: ${userConfirmationMarkerPermissionPreviewGateModel.status}`,
         'Permission gate must reach preview-ready state',
@@ -360,6 +419,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
     dryRunOperationCount,
     eligibleOperationCount,
     markerCandidateCount,
+    rootCandidateBlockingCount,
+    rootCandidateWaitingCount,
+    rootCandidateNeedsEvidenceCount,
+    cascadeEchoCount,
+    rawCautionCount,
     blockedReasons: [],
     safetyNotes: [
       `${completedProtectedCount} completed session(s) protected`,

@@ -281,6 +281,13 @@ import {
   getStructuralPreviewContractStatusColor,
   type StructuralMutationPreviewContractModel,
 } from '@/lib/program/structural-mutation-preview-contract'
+// [MASTER-8C.36] User confirmation / marker permission preview gate
+import {
+  resolveUserConfirmationMarkerPermissionPreviewGate,
+  getUserConfirmationMarkerPermissionStatusLabel,
+  getUserConfirmationMarkerPermissionStatusColor,
+  type UserConfirmationMarkerPermissionPreviewGateModel,
+} from '@/lib/program/user-confirmation-marker-permission-preview-gate'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -2172,7 +2179,7 @@ function MethodDetailModalContent({
               {/* Preview Limitations */}
               {!preview.workoutPreview.isConcretePreview && (
                 <div className="text-[8px] text-[#5A5A6A] mt-2 italic">
-                  Preview structure only — exact exercises determined at apply time
+                  Preview structure only �� exact exercises determined at apply time
                 </div>
               )}
             </div>
@@ -3143,6 +3150,7 @@ function AIIntelligenceFoundationMap({
   mutationConfirmationContractPreviewModel,
   mutationCautionClearanceGateModel,
   structuralMutationPreviewContractModel,
+  userConfirmationMarkerPermissionPreviewGateModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3157,6 +3165,7 @@ function AIIntelligenceFoundationMap({
   mutationConfirmationContractPreviewModel?: MutationConfirmationContractPreviewModel | null
   mutationCautionClearanceGateModel?: MutationCautionClearanceGateModel | null
   structuralMutationPreviewContractModel?: StructuralMutationPreviewContractModel | null
+  userConfirmationMarkerPermissionPreviewGateModel?: UserConfirmationMarkerPermissionPreviewGateModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3743,9 +3752,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.36] User confirmation/marker permission status chip */}
+                    {userConfirmationMarkerPermissionPreviewGateModel && (
+                      (() => {
+                        const permColor = getUserConfirmationMarkerPermissionStatusColor(
+                          userConfirmationMarkerPermissionPreviewGateModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", permColor.bg, permColor.text, permColor.border)}>
+                            Confirm: {getUserConfirmationMarkerPermissionStatusLabel(userConfirmationMarkerPermissionPreviewGateModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {structuralMutationPreviewContractModel?.noMarkerSaved && 'Structural locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {userConfirmationMarkerPermissionPreviewGateModel?.noMarkerSaved && 'Permission locked.'}
                   </div>
                 </div>
               </div>
@@ -7829,6 +7851,19 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel])
   
+  // [MASTER-8C.36] User Confirmation / Marker Permission Preview Gate
+  const userConfirmationMarkerPermissionPreviewGateModel = useMemo<UserConfirmationMarkerPermissionPreviewGateModel>(() => {
+    return resolveUserConfirmationMarkerPermissionPreviewGate({
+      planEvidenceTrendReadinessModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationConfirmationContractPreviewModel,
+      mutationCautionClearanceGateModel,
+      structuralMutationPreviewContractModel,
+    })
+  }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel, structuralMutationPreviewContractModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9072,6 +9107,83 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.36] User Confirmation / Marker Permission Preview Gate card */}
+            {userConfirmationMarkerPermissionPreviewGateModel && (
+              <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-indigo-300">
+                    User Confirmation / Marker Permission Preview Gate
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    marker locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no confirmation UI
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const permColor = getUserConfirmationMarkerPermissionStatusColor(userConfirmationMarkerPermissionPreviewGateModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", permColor.bg, permColor.text, permColor.border)}>
+                        {getUserConfirmationMarkerPermissionStatusLabel(userConfirmationMarkerPermissionPreviewGateModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {userConfirmationMarkerPermissionPreviewGateModel.structuralPreviewCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {userConfirmationMarkerPermissionPreviewGateModel.structuralPreviewCandidateCount} structural candidate(s)
+                    </span>
+                  )}
+                  {userConfirmationMarkerPermissionPreviewGateModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {userConfirmationMarkerPermissionPreviewGateModel.activeCautionCount} caution
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {userConfirmationMarkerPermissionPreviewGateModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {userConfirmationMarkerPermissionPreviewGateModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {userConfirmationMarkerPermissionPreviewGateModel.completedProtectedCount} completed
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {userConfirmationMarkerPermissionPreviewGateModel.futureTargetCount} future
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {userConfirmationMarkerPermissionPreviewGateModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {userConfirmationMarkerPermissionPreviewGateModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {userConfirmationMarkerPermissionPreviewGateModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-indigo-400/60">
+                  No confirmation UI rendered. No marker saved. No program changes applied. No Program Cards changed. No Start Workout or Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -9096,7 +9208,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} />
           </div>
         </SheetContent>
       </Sheet>

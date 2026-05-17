@@ -6,12 +6,22 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.35)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.36)
 
-**Current active completed step:** MASTER-8C.35 / AB20.4.28  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active, structural mutation preview contract active)  
-**Current active step:** MASTER-8C.36 / AB20.4.29 — User Confirmation / Marker Permission Preview Gate, still no structural writer unless explicitly authorized  
+**Current active completed step:** MASTER-8C.36 / AB20.4.29  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active, structural mutation preview contract active, user confirmation/marker permission preview gate active)  
+**Current active step:** MASTER-8C.37 / AB20.4.30 — Future-session mutation writer readiness boundary, still no actual mutation unless explicitly authorized  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### User Confirmation / Marker Permission Preview Gate (MASTER-8C.36)
+- MASTER-8C.36 added a read-only user confirmation/marker permission preview gate determining permission-readiness
+- New pure helper: user-confirmation-marker-permission-preview-gate.ts (488 lines)
+- 10 statuses: unavailable_missing_upstream, blocked_active_caution, blocked_no_future_targets, blocked_completed_only, blocked_structural_preview_unavailable, blocked_structural_preview_not_ready, blocked_confirmation_contract_unavailable, marker_permission_preview_locked, permission_preview_ready_read_only, future_locked
+- All permission flags locked: canShowConfirmationUi, canSaveMarker, canWriteMarker, canApplyMutation, canChangeProgramCards, canBridgeStartWorkout, canBridgeLiveWorkout
+- All safety flags true: noConfirmationUiRendered, noMarkerSaved, noMarkerWriteAttempted, noProgramChangesApplied, noProgramCardChangesApplied, noStartWorkoutChangesApplied, noLiveWorkoutChangesApplied
+- Plan Logic card: "User Confirmation / Marker Permission Preview Gate" (indigo border)
+- AI Foundation Map: Plan Logic row shows "Confirm: [status]" chip
+- Programs/exercises/sets changed: NO
 
 ### Structural Mutation Preview Contract (MASTER-8C.35)
 - MASTER-8C.35 added a read-only structural mutation preview contract determining preview-readiness

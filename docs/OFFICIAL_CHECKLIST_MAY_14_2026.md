@@ -6,12 +6,24 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.33)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.34)
 
-**Current active completed step:** MASTER-8C.33 / AB20.4.26  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active)  
-**Current active step:** MASTER-8C.34 / AB20.4.27 — to be verified from checklist (likely marker-only user confirmation UI gate or marker persistence preview gate, still no structural mutation unless explicitly approved)  
+**Current active completed step:** MASTER-8C.34 / AB20.4.27  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active)  
+**Current active step:** MASTER-8C.35 / AB20.4.28 — to be verified from checklist (likely structural mutation preview contract, still read-only, no writer yet)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Caution Clearance Gate (MASTER-8C.34)
+- MASTER-8C.34 added a read-only caution clearance gate consolidating all mutation unlock preconditions
+- New pure helper: mutation-caution-clearance-gate.ts (531 lines)
+- 8 clearance statuses: unavailable, blocked_active_caution, blocked_no_future_targets, blocked_completed_only, clearance_waiting_for_evidence, clearance_review_only, clearance_preview_ready, future_locked
+- Extracts caution signals from upstream: evidence trend, review gate, pathway map, target resolution, confirmation contract
+- Derives: activeCautionCount, clearedConditionCount, missingProofCount, completedSessionCount, futureSessionCount
+- All permission flags locked: canProceedToPreview, canShowConfirmationUi, canWriteMarker, canApplyStructuralMutation, canChangeProgramCards, canBridgeLiveWorkout
+- All safety flags true: noProgramChangesApplied, noMarkerSaved, noFutureSessionChangesApplied, noProgramCardChangesApplied, noLiveWorkoutChangesApplied
+- Plan Logic card: "Caution Clearance Gate" (amber border) with status chip, caution count, session counts, next safe gate
+- AI Foundation Map: Plan Logic row shows "Caution: [status]" chip
+- Programs/exercises/sets changed: NO
 
 ### Confirmation Contract Preview (MASTER-8C.33)
 - MASTER-8C.33 added a read-only confirmation contract preview layer between target resolution and future confirmation UI

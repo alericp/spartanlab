@@ -57,6 +57,41 @@ export type MutationCautionClearanceMode =
   | 'no_future_targets'
   | 'future_locked'
 
+// [MASTER-8C.46] Clearance readiness status for individual root/candidate cautions
+export type MutationCautionClearanceReadinessStatus =
+  | 'blocking'
+  | 'clearable_by_current_evidence'
+  | 'waiting_for_more_evidence'
+  | 'monitor_only'
+  | 'stale_or_misclassified'
+  | 'unknown'
+
+// [MASTER-8C.46] Clearance requirement type
+export type MutationCautionClearanceRequirement =
+  | 'pain_tension_must_resolve'
+  | 'injury_signal_must_resolve'
+  | 'performance_trend_must_stabilize'
+  | 'readiness_evidence_required'
+  | 'progression_readiness_required'
+  | 'target_candidate_must_resolve'
+  | 'manual_review_required'
+  | 'not_action_blocking'
+
+// [MASTER-8C.46] Individual clearance item for root/candidate cautions
+export interface MutationRootCandidateClearanceItem {
+  readonly source: string
+  readonly label: string
+  readonly reason: string
+  readonly provenance: MutationCautionProvenance
+  readonly severity: MutationCautionSignalSeverity
+  readonly dedupeKey: string
+  readonly status: MutationCautionClearanceReadinessStatus
+  readonly requirement: MutationCautionClearanceRequirement
+  readonly clearanceExplanation: string
+  readonly visibleEvidence: string
+  readonly blocksMarkerReadiness: boolean
+}
+
 export interface MutationCautionClearanceSignal {
   readonly source: string
   readonly label: string
@@ -92,6 +127,16 @@ export interface MutationCautionClearanceGateModel {
   readonly allRawCautionSignalCount: number
   readonly cautionProvenanceSummary: string
   readonly cautionClearanceMode: MutationCautionClearanceMode
+
+  // [MASTER-8C.46] Root/Candidate clearance readiness fields
+  readonly rootCandidateClearanceItems: readonly MutationRootCandidateClearanceItem[]
+  readonly blockingRootCandidateCount: number
+  readonly clearableRootCandidateCount: number
+  readonly waitingRootCandidateCount: number
+  readonly monitorOnlyRootCandidateCount: number
+  readonly staleOrMisclassifiedCount: number
+  readonly rootCandidateClearanceSummary: string
+  readonly rootCandidateClearanceReady: boolean
 
   // Permission flags — ALL LOCKED
   readonly canProceedToPreview: false
@@ -520,6 +565,142 @@ function generateProvenanceSummary(
   return summary
 }
 
+/**
+ * [MASTER-8C.46] Evaluate clearance readiness for a root/candidate caution signal.
+ */
+function evaluateRootCandidateClearanceItem(
+  signal: MutationCautionClearanceSignal,
+  context: {
+    planEvidenceTrendReadinessModel?: PlanEvidenceTrendReadinessModel | null
+  }
+): MutationRootCandidateClearanceItem {
+  const { planEvidenceTrendReadinessModel } = context
+  const labelLower = signal.label.toLowerCase()
+  const reasonLower = signal.reason.toLowerCase()
+  
+  const hasPainIndicator = labelLower.includes('pain') || reasonLower.includes('pain')
+  const hasInjuryIndicator = labelLower.includes('injury') || reasonLower.includes('injury')
+  const hasTensionIndicator = labelLower.includes('tension') || reasonLower.includes('tension')
+  const hasTendonIndicator = labelLower.includes('tendon') || reasonLower.includes('tendon')
+  const hasJointIndicator = labelLower.includes('joint') || reasonLower.includes('joint')
+  const hasProgressionIndicator = reasonLower.includes('progression') || reasonLower.includes('not ready')
+  
+  let status: MutationCautionClearanceReadinessStatus
+  let requirement: MutationCautionClearanceRequirement
+  let clearanceExplanation: string
+  let visibleEvidence: string
+  let blocksMarkerReadiness: boolean
+  
+  if (signal.source === 'plan_evidence_trend') {
+    if (hasPainIndicator || hasTensionIndicator) {
+      status = 'blocking'
+      requirement = 'pain_tension_must_resolve'
+      clearanceExplanation = 'Pain or tension signals detected. Must resolve before proceeding.'
+      visibleEvidence = 'Workout evidence shows pain/tension patterns'
+      blocksMarkerReadiness = true
+    } else if (hasInjuryIndicator || hasTendonIndicator || hasJointIndicator) {
+      status = 'blocking'
+      requirement = 'injury_signal_must_resolve'
+      clearanceExplanation = 'Injury or joint/tendon risk signals detected.'
+      visibleEvidence = 'Workout evidence indicates injury/joint/tendon concern'
+      blocksMarkerReadiness = true
+    } else if (planEvidenceTrendReadinessModel?.readinessPosture === 'caution_review') {
+      if (planEvidenceTrendReadinessModel.classification === 'monitoring_pattern' ||
+          planEvidenceTrendReadinessModel.classification === 'evidence_connected') {
+        status = 'stale_or_misclassified'
+        requirement = 'manual_review_required'
+        clearanceExplanation = 'Evidence shows stable pattern, but caution signal remains.'
+        visibleEvidence = 'Evidence model shows stable status'
+        blocksMarkerReadiness = false
+      } else {
+        status = 'waiting_for_more_evidence'
+        requirement = 'readiness_evidence_required'
+        clearanceExplanation = 'Caution posture exists. More workout evidence needed.'
+        visibleEvidence = 'Current evidence is insufficient for clearance'
+        blocksMarkerReadiness = true
+      }
+    } else {
+      status = 'waiting_for_more_evidence'
+      requirement = 'readiness_evidence_required'
+      clearanceExplanation = 'Caution pattern detected. Additional evidence required.'
+      visibleEvidence = 'Caution classification from workout analysis'
+      blocksMarkerReadiness = true
+    }
+  } else if (signal.provenance === 'candidate_specific') {
+    if (hasPainIndicator || hasInjuryIndicator || hasTendonIndicator || hasJointIndicator) {
+      status = 'blocking'
+      requirement = signal.source === 'review_candidate' 
+        ? 'pain_tension_must_resolve' 
+        : 'target_candidate_must_resolve'
+      clearanceExplanation = 'Candidate has safety concern related to pain/injury risk.'
+      visibleEvidence = `${signal.label}: ${signal.reason.slice(0, 80)}`
+      blocksMarkerReadiness = true
+    } else if (hasProgressionIndicator) {
+      status = 'waiting_for_more_evidence'
+      requirement = 'progression_readiness_required'
+      clearanceExplanation = 'Progression readiness not confirmed.'
+      visibleEvidence = `Progression status: ${signal.reason.slice(0, 60)}`
+      blocksMarkerReadiness = true
+    } else {
+      const isGenericCaution = reasonLower.includes('caution') && 
+        !hasPainIndicator && !hasInjuryIndicator && !hasTendonIndicator
+      if (isGenericCaution) {
+        status = 'monitor_only'
+        requirement = 'not_action_blocking'
+        clearanceExplanation = 'Candidate has generic caution flag but no direct safety concern.'
+        visibleEvidence = `Review candidate: ${signal.label}`
+        blocksMarkerReadiness = false
+      } else {
+        status = 'waiting_for_more_evidence'
+        requirement = 'target_candidate_must_resolve'
+        clearanceExplanation = 'Candidate requires additional review before clearance.'
+        visibleEvidence = `${signal.source}: ${signal.label}`
+        blocksMarkerReadiness = true
+      }
+    }
+  } else {
+    status = 'unknown'
+    requirement = 'manual_review_required'
+    clearanceExplanation = 'Signal source unrecognized. Manual review recommended.'
+    visibleEvidence = `Unknown: ${signal.label}`
+    blocksMarkerReadiness = true
+  }
+  
+  return {
+    source: signal.source,
+    label: signal.label,
+    reason: signal.reason,
+    provenance: signal.provenance,
+    severity: signal.severity,
+    dedupeKey: signal.dedupeKey,
+    status,
+    requirement,
+    clearanceExplanation,
+    visibleEvidence,
+    blocksMarkerReadiness,
+  }
+}
+
+/**
+ * [MASTER-8C.46] Generate clearance summary text.
+ */
+function generateRootCandidateClearanceSummary(
+  blockingCount: number,
+  clearableCount: number,
+  waitingCount: number,
+  monitorOnlyCount: number,
+  staleCount: number
+): string {
+  const parts: string[] = []
+  if (blockingCount > 0) parts.push(`${blockingCount} blocking`)
+  if (clearableCount > 0) parts.push(`${clearableCount} clearable`)
+  if (waitingCount > 0) parts.push(`${waitingCount} waiting`)
+  if (monitorOnlyCount > 0) parts.push(`${monitorOnlyCount} monitor-only`)
+  if (staleCount > 0) parts.push(`${staleCount} stale/misclassified`)
+  if (parts.length === 0) return 'No root/candidate cautions to evaluate'
+  return parts.join(', ')
+}
+
 // ─── Main Resolver ──────────────────────────────────────────────────────────
 
 export function resolveMutationCautionClearanceGate(input: {
@@ -560,6 +741,15 @@ export function resolveMutationCautionClearanceGate(input: {
       allRawCautionSignalCount: 0,
       cautionProvenanceSummary: 'No models available',
       cautionClearanceMode: 'waiting_for_evidence',
+      // [MASTER-8C.46] Clearance readiness fields
+      rootCandidateClearanceItems: [],
+      blockingRootCandidateCount: 0,
+      clearableRootCandidateCount: 0,
+      waitingRootCandidateCount: 0,
+      monitorOnlyRootCandidateCount: 0,
+      staleOrMisclassifiedCount: 0,
+      rootCandidateClearanceSummary: 'No models available',
+      rootCandidateClearanceReady: false,
       cautionSignals: [],
       clearedSignals: [],
       missingProof: ['Evidence trend model required', 'Mutation readiness review required'],
@@ -599,6 +789,29 @@ export function resolveMutationCautionClearanceGate(input: {
     derivedCascadeCautionCount,
     allRawCautionSignalCount
   )
+
+  // [MASTER-8C.46] Evaluate clearance readiness for each root/candidate caution
+  const clearanceContext = { planEvidenceTrendReadinessModel }
+  const rootCandidateClearanceItems = dedupedActiveCautionSignals.map(signal =>
+    evaluateRootCandidateClearanceItem(signal, clearanceContext)
+  )
+  
+  const blockingRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'blocking').length
+  const clearableRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'clearable_by_current_evidence').length
+  const waitingRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'waiting_for_more_evidence').length
+  const monitorOnlyRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'monitor_only').length
+  const staleOrMisclassifiedCount = rootCandidateClearanceItems.filter(i => i.status === 'stale_or_misclassified').length
+  
+  const rootCandidateClearanceSummary = generateRootCandidateClearanceSummary(
+    blockingRootCandidateCount,
+    clearableRootCandidateCount,
+    waitingRootCandidateCount,
+    monitorOnlyRootCandidateCount,
+    staleOrMisclassifiedCount
+  )
+  
+  // Clearance is ready only if no blocking/waiting items remain
+  const rootCandidateClearanceReady = blockingRootCandidateCount === 0 && waitingRootCandidateCount === 0
 
   // ── Extract session counts ────────────────────────────────────────────────
   const completedSessionCount = mutationTargetSessionResolutionPreviewModel?.completedSessionCount ?? 0
@@ -757,6 +970,15 @@ export function resolveMutationCautionClearanceGate(input: {
     allRawCautionSignalCount,
     cautionProvenanceSummary,
     cautionClearanceMode,
+    // [MASTER-8C.46] Clearance readiness fields
+    rootCandidateClearanceItems,
+    blockingRootCandidateCount,
+    clearableRootCandidateCount,
+    waitingRootCandidateCount,
+    monitorOnlyRootCandidateCount,
+    staleOrMisclassifiedCount,
+    rootCandidateClearanceSummary,
+    rootCandidateClearanceReady,
     // Visible caution signals = deduped active + cascade for diagnostics
     cautionSignals: [...dedupedActiveCautionSignals, ...dedupeCautionSignals(derivedCascadeCautionSignals)],
     clearedSignals,

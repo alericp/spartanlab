@@ -10228,6 +10228,95 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.46] Root/Candidate Clearance card */}
+            {mutationCautionClearanceGateModel && mutationCautionClearanceGateModel.rootCandidateClearanceItems.length > 0 && (
+              <div className="rounded-lg border border-orange-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-orange-300">
+                    Root/Candidate Clearance
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    clearance
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    {mutationCautionClearanceGateModel.futureSessionCount} future target(s)
+                  </span>
+                </div>
+                {/* Clearance status counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {mutationCautionClearanceGateModel.blockingRootCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                      {mutationCautionClearanceGateModel.blockingRootCandidateCount} blocking
+                    </span>
+                  )}
+                  {mutationCautionClearanceGateModel.clearableRootCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                      {mutationCautionClearanceGateModel.clearableRootCandidateCount} clearable
+                    </span>
+                  )}
+                  {mutationCautionClearanceGateModel.waitingRootCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                      {mutationCautionClearanceGateModel.waitingRootCandidateCount} waiting
+                    </span>
+                  )}
+                  {mutationCautionClearanceGateModel.monitorOnlyRootCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {mutationCautionClearanceGateModel.monitorOnlyRootCandidateCount} monitor-only
+                    </span>
+                  )}
+                  {mutationCautionClearanceGateModel.staleOrMisclassifiedCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                      {mutationCautionClearanceGateModel.staleOrMisclassifiedCount} stale
+                    </span>
+                  )}
+                </div>
+                {/* Clearance summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {mutationCautionClearanceGateModel.rootCandidateClearanceSummary}
+                </p>
+                {/* Top clearance items (max 3) */}
+                <div className="mb-1.5">
+                  <div className="text-[9px] text-orange-400/60 mb-0.5">Clearance items:</div>
+                  {mutationCautionClearanceGateModel.rootCandidateClearanceItems.slice(0, 3).map((item, i) => (
+                    <div key={i} className="text-[9px] text-[#8A8A9A] mb-1 pl-2">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className={cn(
+                          "px-1 py-0.5 rounded text-[8px]",
+                          item.status === 'blocking' ? "bg-rose-500/20 text-rose-400" :
+                          item.status === 'waiting_for_more_evidence' ? "bg-sky-500/20 text-sky-400" :
+                          item.status === 'monitor_only' ? "bg-slate-500/20 text-slate-400" :
+                          item.status === 'clearable_by_current_evidence' ? "bg-emerald-500/20 text-emerald-400" :
+                          "bg-[#2A2A35] text-[#8A8A9A]"
+                        )}>
+                          {item.status.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-[#8A8A9A] truncate max-w-[160px]">{item.label}</span>
+                      </div>
+                      <div className="text-[8px] text-[#6A6A7A] mt-0.5 pl-1">
+                        {item.requirement.replace(/_/g, ' ')}: {item.clearanceExplanation.slice(0, 80)}
+                      </div>
+                    </div>
+                  ))}
+                  {mutationCautionClearanceGateModel.rootCandidateClearanceItems.length > 3 && (
+                    <div className="text-[9px] text-[#8A8A9A] pl-2">
+                      +{mutationCautionClearanceGateModel.rootCandidateClearanceItems.length - 3} more
+                    </div>
+                  )}
+                </div>
+                {/* Next gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {mutationCautionClearanceGateModel.blockingRootCandidateCount > 0 
+                    ? 'Clear blocking root/candidate evidence before marker preview'
+                    : mutationCautionClearanceGateModel.waitingRootCandidateCount > 0
+                    ? 'Collect/confirm evidence before marker preview'
+                    : 'Marker-only preview/authorization readiness'}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-orange-400/60">
+                  Read-only clearance proof. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}

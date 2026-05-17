@@ -3708,9 +3708,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.34] Caution clearance status chip */}
+                    {mutationCautionClearanceGateModel && (
+                      (() => {
+                        const cautionColor = getMutationCautionClearanceStatusColor(
+                          mutationCautionClearanceGateModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", cautionColor.bg, cautionColor.text, cautionColor.border)}>
+                            Caution: {getMutationCautionClearanceStatusLabel(mutationCautionClearanceGateModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {mutationCautionClearanceGateModel?.noMarkerSaved && 'Caution gate locked.'}
                   </div>
                 </div>
               </div>
@@ -8864,6 +8877,85 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.34] Caution Clearance Gate card */}
+            {mutationCautionClearanceGateModel && (
+              <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-medium text-amber-300">
+                    Caution Clearance Gate
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    mutation locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const ccColor = getMutationCautionClearanceStatusColor(mutationCautionClearanceGateModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", ccColor.bg, ccColor.text, ccColor.border)}>
+                        {getMutationCautionClearanceStatusLabel(mutationCautionClearanceGateModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {mutationCautionClearanceGateModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {mutationCautionClearanceGateModel.activeCautionCount} caution signal{mutationCautionClearanceGateModel.activeCautionCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {mutationCautionClearanceGateModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {mutationCautionClearanceGateModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {mutationCautionClearanceGateModel.completedSessionCount} completed
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {mutationCautionClearanceGateModel.futureSessionCount} future
+                  </span>
+                  {mutationCautionClearanceGateModel.clearedConditionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                      {mutationCautionClearanceGateModel.clearedConditionCount} cleared
+                    </span>
+                  )}
+                </div>
+                {/* Top caution signals (max 3) */}
+                {mutationCautionClearanceGateModel.cautionSignals.length > 0 && (
+                  <div className="mb-1.5">
+                    {mutationCautionClearanceGateModel.cautionSignals.slice(0, 3).map((sig, i) => (
+                      <div key={i} className="text-[9px] text-amber-400/60 mb-0.5">
+                        {sig.severity === 'blocked' ? '⊘' : sig.severity === 'caution' ? '⚠' : '◉'} {sig.label}
+                      </div>
+                    ))}
+                    {mutationCautionClearanceGateModel.cautionSignals.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A]">
+                        +{mutationCautionClearanceGateModel.cautionSignals.length - 3} more signal(s)
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {mutationCautionClearanceGateModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-amber-400/60">
+                  No marker saved. No program changes applied. No future sessions changed.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8888,7 +8980,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} />
           </div>
         </SheetContent>
       </Sheet>

@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.34 - Caution clearance gate + mutation unlock preconditions)
+  // PLAN LOGIC (MASTER-8C.35 - Structural mutation preview contract)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, and caution clearance gate consolidating all mutation unlock preconditions',
-    nextSafeAction: 'Structural mutation preview gate remains future-locked; no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Caution clearance layer skipped, allowing next step to assume mutation can proceed without explicit unlock precondition verification',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, and structural mutation preview contract determining preview-readiness',
+    nextSafeAction: 'User confirmation / marker permission preview gate remains future-locked; no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Structural preview contract skipped, allowing next step to assume structural preview can proceed without explicit readiness verification',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -266,6 +266,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/workout-log-session-identity-readonly-bridge.ts',
       'lib/program/mutation-confirmation-contract-preview.ts',
       'lib/program/mutation-caution-clearance-gate.ts',
+      'lib/program/structural-mutation-preview-contract.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

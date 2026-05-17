@@ -316,6 +316,13 @@ import {
   getBoundedMutationApplyEligibilityStatusColor,
   type BoundedMutationApplyEligibilityGateModel,
 } from '@/lib/program/bounded-mutation-apply-eligibility-gate'
+// [MASTER-8C.41] Marker-only confirmation boundary preview
+import {
+  resolveMarkerOnlyConfirmationBoundaryPreview,
+  getMarkerOnlyConfirmationBoundaryStatusLabel,
+  getMarkerOnlyConfirmationBoundaryStatusColor,
+  type MarkerOnlyConfirmationBoundaryModel,
+} from '@/lib/program/marker-only-confirmation-boundary-preview'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -8004,6 +8011,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [controlledFutureSessionMutationWriterDryRunModel, userConfirmationMarkerPermissionPreviewGateModel, preMutationLockBundleClosureModel, mutationCautionClearanceGateModel, mutationTargetSessionResolutionPreviewModel])
   
+  // [MASTER-8C.41] Marker-Only Confirmation Boundary Preview
+  const markerOnlyConfirmationBoundaryModel = useMemo<MarkerOnlyConfirmationBoundaryModel>(() => {
+    return resolveMarkerOnlyConfirmationBoundaryPreview({
+      boundedMutationApplyEligibilityGateModel,
+      controlledFutureSessionMutationWriterDryRunModel,
+      userConfirmationMarkerPermissionPreviewGateModel,
+      preMutationLockBundleClosureModel,
+      mutationCautionClearanceGateModel,
+      mutationTargetSessionResolutionPreviewModel,
+    })
+  }, [boundedMutationApplyEligibilityGateModel, controlledFutureSessionMutationWriterDryRunModel, userConfirmationMarkerPermissionPreviewGateModel, preMutationLockBundleClosureModel, mutationCautionClearanceGateModel, mutationTargetSessionResolutionPreviewModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9712,6 +9731,110 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-violet-400/60">
                   Apply gate only. No confirmation UI rendered. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [MASTER-8C.41] Marker-Only Confirmation Boundary card */}
+            {markerOnlyConfirmationBoundaryModel && (
+              <div className="rounded-lg border border-orange-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-orange-300">
+                    Marker-Only Confirmation Boundary
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    marker preview
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    confirmation locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no marker saved
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no writes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const markerColor = getMarkerOnlyConfirmationBoundaryStatusColor(markerOnlyConfirmationBoundaryModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", markerColor.bg, markerColor.text, markerColor.border)}>
+                        {getMarkerOnlyConfirmationBoundaryStatusLabel(markerOnlyConfirmationBoundaryModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {markerOnlyConfirmationBoundaryModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {markerOnlyConfirmationBoundaryModel.activeCautionCount} caution
+                    </span>
+                  )}
+                  {markerOnlyConfirmationBoundaryModel.dryRunOperationCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {markerOnlyConfirmationBoundaryModel.dryRunOperationCount} dry-run op(s)
+                    </span>
+                  )}
+                  {markerOnlyConfirmationBoundaryModel.markerCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                      {markerOnlyConfirmationBoundaryModel.markerCandidateCount} marker candidate(s)
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {markerOnlyConfirmationBoundaryModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {markerOnlyConfirmationBoundaryModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {markerOnlyConfirmationBoundaryModel.completedProtectedCount} completed (protected)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {markerOnlyConfirmationBoundaryModel.targetSessionCount} target session(s)
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {markerOnlyConfirmationBoundaryModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {markerOnlyConfirmationBoundaryModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety notes (max 3) */}
+                {markerOnlyConfirmationBoundaryModel.safetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-emerald-400/60 mb-0.5">Safety notes:</div>
+                    {markerOnlyConfirmationBoundaryModel.safetyNotes.slice(0, 3).map((note, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        ✓ {note}
+                      </div>
+                    ))}
+                    {markerOnlyConfirmationBoundaryModel.safetyNotes.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{markerOnlyConfirmationBoundaryModel.safetyNotes.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Locked marker save pill */}
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-[9px] px-2 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20 cursor-not-allowed">
+                    marker save locked
+                  </span>
+                </div>
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {markerOnlyConfirmationBoundaryModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-orange-400/60">
+                  Marker boundary only. No confirmation control enabled. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
                 </p>
               </div>
             )}

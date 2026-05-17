@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.38 - Pre-mutation lock / bundle closure)
+  // PLAN LOGIC (MASTER-8C.39 - Controlled future-session mutation writer dry-run)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, user confirmation/marker permission preview gate, future-session mutation writer readiness boundary, and pre-mutation lock / bundle closure finalizing mutation-readiness corridor',
-    nextSafeAction: 'MASTER-8C.39 controlled future-session mutation writer (only if explicitly authorized); no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Pre-mutation lock / bundle closure skipped, allowing next step to assume mutation can proceed without explicit bundle closure verification',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, user confirmation/marker permission preview gate, future-session mutation writer readiness boundary, pre-mutation lock / bundle closure, and controlled future-session mutation writer dry-run envelope',
+    nextSafeAction: 'MASTER-8C.40 user confirmation or bounded mutation apply gate (only if explicitly authorized); no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Controlled dry-run writer skipped, allowing next step to assume real mutation can proceed without explicit dry-run verification',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -270,6 +270,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/user-confirmation-marker-permission-preview-gate.ts',
       'lib/program/future-session-mutation-writer-readiness-boundary.ts',
       'lib/program/pre-mutation-lock-bundle-closure.ts',
+      'lib/program/controlled-future-session-mutation-writer-dry-run.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

@@ -295,6 +295,13 @@ import {
   getFutureSessionMutationWriterReadinessStatusColor,
   type FutureSessionMutationWriterReadinessBoundaryModel,
 } from '@/lib/program/future-session-mutation-writer-readiness-boundary'
+// [MASTER-8C.38] Pre-mutation lock / bundle closure
+import {
+  resolvePreMutationLockBundleClosure,
+  getPreMutationLockBundleClosureStatusLabel,
+  getPreMutationLockBundleClosureStatusColor,
+  type PreMutationLockBundleClosureModel,
+} from '@/lib/program/pre-mutation-lock-bundle-closure'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3159,6 +3166,7 @@ function AIIntelligenceFoundationMap({
   structuralMutationPreviewContractModel,
   userConfirmationMarkerPermissionPreviewGateModel,
   futureSessionMutationWriterReadinessBoundaryModel,
+  preMutationLockBundleClosureModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3175,6 +3183,7 @@ function AIIntelligenceFoundationMap({
   structuralMutationPreviewContractModel?: StructuralMutationPreviewContractModel | null
   userConfirmationMarkerPermissionPreviewGateModel?: UserConfirmationMarkerPermissionPreviewGateModel | null
   futureSessionMutationWriterReadinessBoundaryModel?: FutureSessionMutationWriterReadinessBoundaryModel | null
+  preMutationLockBundleClosureModel?: PreMutationLockBundleClosureModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3787,9 +3796,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.38] Pre-mutation lock / bundle closure status chip */}
+                    {preMutationLockBundleClosureModel && (
+                      (() => {
+                        const closureColor = getPreMutationLockBundleClosureStatusColor(
+                          preMutationLockBundleClosureModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", closureColor.bg, closureColor.text, closureColor.border)}>
+                            Bundle: {getPreMutationLockBundleClosureStatusLabel(preMutationLockBundleClosureModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {futureSessionMutationWriterReadinessBoundaryModel?.noMarkerSaved && 'Writer locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {preMutationLockBundleClosureModel?.markerLocked && 'Bundle locked.'}
                   </div>
                 </div>
               </div>
@@ -7900,6 +7922,21 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel, structuralMutationPreviewContractModel, userConfirmationMarkerPermissionPreviewGateModel])
   
+  // [MASTER-8C.38] Pre-Mutation Lock / Bundle Closure
+  const preMutationLockBundleClosureModel = useMemo<PreMutationLockBundleClosureModel>(() => {
+    return resolvePreMutationLockBundleClosure({
+      planEvidenceTrendReadinessModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationConfirmationContractPreviewModel,
+      mutationCautionClearanceGateModel,
+      structuralMutationPreviewContractModel,
+      userConfirmationMarkerPermissionPreviewGateModel,
+      futureSessionMutationWriterReadinessBoundaryModel,
+    })
+  }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel, structuralMutationPreviewContractModel, userConfirmationMarkerPermissionPreviewGateModel, futureSessionMutationWriterReadinessBoundaryModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9316,6 +9353,94 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.38] Pre-Mutation Lock / Bundle Closure card */}
+            {preMutationLockBundleClosureModel && (
+              <div className="rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-fuchsia-300">
+                    Pre-Mutation Lock / Bundle Closure
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-fuchsia-500/10 text-fuchsia-400/70 border-fuchsia-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    pre-mutation lock
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no marker saved
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const closureColor = getPreMutationLockBundleClosureStatusColor(preMutationLockBundleClosureModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", closureColor.bg, closureColor.text, closureColor.border)}>
+                        {getPreMutationLockBundleClosureStatusLabel(preMutationLockBundleClosureModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {preMutationLockBundleClosureModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {preMutationLockBundleClosureModel.activeCautionCount} caution
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {preMutationLockBundleClosureModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {preMutationLockBundleClosureModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {preMutationLockBundleClosureModel.completedProtectedCount} completed (protected)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {preMutationLockBundleClosureModel.futureTargetCount} future (locked)
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {preMutationLockBundleClosureModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {preMutationLockBundleClosureModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Gate summary (max 4) */}
+                {preMutationLockBundleClosureModel.gateSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-fuchsia-400/60 mb-0.5">Gate summary:</div>
+                    {preMutationLockBundleClosureModel.gateSummary.slice(0, 4).map((gate, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        {gate.locked ? '⊘' : '✓'} {gate.gate}: {gate.reason}
+                      </div>
+                    ))}
+                    {preMutationLockBundleClosureModel.gateSummary.length > 4 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{preMutationLockBundleClosureModel.gateSummary.length - 4} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {preMutationLockBundleClosureModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-fuchsia-400/60">
+                  No mutation executed. No marker saved. No Program Cards changed. No Start Workout or Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -9340,7 +9465,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} />
           </div>
         </SheetContent>
       </Sheet>

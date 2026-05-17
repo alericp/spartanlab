@@ -6,12 +6,25 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.40)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.41)
 
-**Current active completed step:** MASTER-8C.40 / AB20.4.33  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (mutation-readiness corridor complete, controlled dry-run writer active, bounded apply eligibility gate active)  
-**Current active step:** MASTER-8C.41 / AB20.4.34 — Marker-only confirmation/apply UI or controlled apply writer (only if explicitly authorized)  
+**Current active completed step:** MASTER-8C.41 / AB20.4.34  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (mutation-readiness corridor complete, controlled dry-run writer active, bounded apply eligibility gate active, marker-only confirmation boundary preview active)  
+**Current active step:** MASTER-8C.42 / AB20.4.35 — Marker-only saved permission artifact or first controlled marker save (only if explicitly authorized and future targets exist with cautions cleared)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Marker-Only Confirmation Boundary Preview (MASTER-8C.41)
+- MASTER-8C.41 continues controlled future-session mutation writer corridor (Step 3 of 5)
+- New pure helper: marker-only-confirmation-boundary-preview.ts (478 lines)
+- 9 statuses: unavailable_missing_upstream, blocked_active_caution, blocked_no_future_targets, blocked_apply_gate_locked, blocked_dry_run_not_ready, blocked_permission_gate_locked, marker_preview_locked, marker_preview_ready_future_step, future_marker_save_step_locked
+- All marker control/action flags locked false: canEnableMarkerConfirmationControl, canSaveMarker, canWriteMarker, canApplyMutation, canWriteSessions, canPersistProgram, canChangeProgramCards, canChangeStartWorkout, canChangeLiveWorkout
+- All safety flags true: noMarkerSaved, noMarkerWriteAttempted, noProgramChangesApplied, noWorkoutChangesApplied, completedSessionsProtected, futureTargetsRequired
+- canRenderMarkerConfirmationPreview may be true when ready, but controls remain locked
+- Priority order: missing upstream > active caution > no future targets > apply gate locked > dry-run not ready > permission gate locked
+- Plan Logic card: "Marker-Only Confirmation Boundary" (orange border)
+- AI Foundation Map: Plan Logic row shows "Marker: [status]" chip
+- Non-interactive "marker save locked" pill visible
+- Programs/exercises/sets changed: NO
 
 ### Bounded Mutation Apply Eligibility Gate (MASTER-8C.40)
 - MASTER-8C.40 continues controlled future-session mutation writer corridor (Step 2 of 5)

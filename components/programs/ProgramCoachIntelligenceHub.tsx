@@ -7895,13 +7895,19 @@ export function ProgramCoachIntelligenceHub({
   // Reuses the same recentLogs already loaded for workoutEvidenceSummary
   // (no duplicate localStorage read). Resolves completed day numbers from
   // generatedWorkoutId field in trusted workout logs.
+  // [MASTER-8C.44] Now scoped to current program id to prevent stale/foreign logs
+  // from falsely marking current program's days completed.
   const sessionIdentityModel = useMemo(() => {
     try {
       const recentLogs = getRecentWorkoutLogsForGenerationRequest()
       const programSessions = program?.sessions ?? []
+      // [MASTER-8C.44] Pass current program id for scoping
+      const currentProgramId = typeof program?.id === 'string' ? program.id : null
       return resolveWorkoutLogSessionIdentity({
         logs: recentLogs,
         programSessions,
+        currentProgramId,
+        requireProgramScope: true,
       })
     } catch {
       return null
@@ -10072,6 +10078,70 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-rose-400/60">
                   Marker action boundary only. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [MASTER-8C.44] Current Program Target Scope proof card */}
+            {sessionIdentityModel && (
+              <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-indigo-300">
+                    Current Program Target Scope
+                  </span>
+                  <span className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded border",
+                    sessionIdentityModel.programScopeAvailable
+                      ? "bg-violet-500/10 text-violet-400/70 border-violet-500/20"
+                      : "bg-amber-500/10 text-amber-400/70 border-amber-500/20"
+                  )}>
+                    {sessionIdentityModel.programScopeAvailable ? 'scoped' : 'legacy/unscoped'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    identity proof
+                  </span>
+                </div>
+                {/* Counts row */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {sessionIdentityModel.programScopedCompletedDayNumbers.length} current-program completed
+                  </span>
+                  {sessionIdentityModel.ignoredLogCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {sessionIdentityModel.ignoredLogCount} stale logs ignored
+                    </span>
+                  )}
+                  {mutationTargetSessionResolutionPreviewModel && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {mutationTargetSessionResolutionPreviewModel.futureSessionCount} future target(s)
+                    </span>
+                  )}
+                </div>
+                {/* Scope details */}
+                {sessionIdentityModel.programScopeAvailable && sessionIdentityModel.currentProgramId && (
+                  <p className="text-[9px] text-[#8A8A9A] mb-1 truncate">
+                    Program: {sessionIdentityModel.currentProgramId.slice(0, 24)}...
+                  </p>
+                )}
+                {sessionIdentityModel.programScopedCompletedDayNumbers.length > 0 && (
+                  <p className="text-[9px] text-[#8A8A9A] mb-1">
+                    Completed days: {sessionIdentityModel.programScopedCompletedDayNumbers.join(', ')}
+                  </p>
+                )}
+                {/* Scope safety notes */}
+                {sessionIdentityModel.scopeSafetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    {sessionIdentityModel.scopeSafetyNotes.slice(0, 3).map((note, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5">
+                        {sessionIdentityModel.programScopeAvailable ? '✓' : '⚠'} {note}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety line */}
+                <p className="text-[10px] text-indigo-400/60">
+                  {sessionIdentityModel.programScopeAvailable
+                    ? 'Only logs matching this program can mark days completed. Stale logs are ignored.'
+                    : 'Program identity unavailable. Legacy day-number matching is in use. No mutation allowed from unscoped proof.'}
                 </p>
               </div>
             )}

@@ -1,10 +1,13 @@
 /**
  * ============================================================================
- * MASTER-8C.32 / AB20.4.25 — WORKOUT LOG SESSION IDENTITY READ-ONLY BRIDGE
+ * MASTER-8C.32/8C.44 — WORKOUT LOG SESSION IDENTITY READ-ONLY BRIDGE
  * ============================================================================
  *
  * Pure, deterministic, read-only bridge that resolves completed-day/session
  * identity from trusted workout logs already loaded by the component.
+ *
+ * [MASTER-8C.44] Extended to support current-program scoping to prevent
+ * stale/foreign logs from falsely marking days completed.
  *
  * Contract:
  *   1. Pure function — no I/O, no DB, no React, no fetch, no localStorage.
@@ -49,6 +52,7 @@ export type WorkoutLogSessionIdentityStatus =
   | 'identity_unavailable'
   | 'partially_resolved'
   | 'resolved'
+  | 'program_scoped_resolved' // [MASTER-8C.44] All logs scoped to current program
 
 export interface WorkoutLogSessionIdentityModel {
   readonly status: WorkoutLogSessionIdentityStatus
@@ -61,11 +65,31 @@ export interface WorkoutLogSessionIdentityModel {
   readonly sourceLabels: readonly string[]
   readonly missingProof: readonly string[]
   readonly safetyNotes: readonly string[]
+  // [MASTER-8C.44] Current-program scoping fields
+  readonly currentProgramId: string | null
+  readonly programScopeAvailable: boolean
+  readonly programScopedCompletedDayNumbers: readonly number[]
+  readonly staleOrForeignLogCount: number
+  readonly unscopedLegacyLogCount: number
+  readonly ignoredLogCount: number
+  readonly scopeSafetyNotes: readonly string[]
+  // Locked safety flags
   readonly noProgramChangesApplied: true
   readonly noFutureSessionChangesApplied: true
   readonly noLiveWorkoutChangesApplied: true
   readonly mutationAllowed: false
   readonly canMutateNow: false
+}
+
+// ─── Input type ────────────────────────────────────────────────────────────
+
+export interface WorkoutLogSessionIdentityInput {
+  readonly logs: readonly MinimalWorkoutLogForSessionIdentity[]
+  readonly programSessions: readonly MinimalSessionForIdentity[]
+  // [MASTER-8C.44] Optional current program scoping
+  readonly currentProgramId?: string | null
+  readonly currentProgramCreatedAt?: string | null
+  readonly requireProgramScope?: boolean
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -89,6 +113,14 @@ const EMPTY_MODEL: WorkoutLogSessionIdentityModel = {
   sourceLabels: [],
   missingProof: ['Completed workout logs required'],
   safetyNotes: ['No trusted workout logs available for session identity resolution'],
+  // [MASTER-8C.44] Program scope fields
+  currentProgramId: null,
+  programScopeAvailable: false,
+  programScopedCompletedDayNumbers: [],
+  staleOrForeignLogCount: 0,
+  unscopedLegacyLogCount: 0,
+  ignoredLogCount: 0,
+  scopeSafetyNotes: ['No logs available for program scoping'],
   ...LOCKED_FLAGS,
 }
 
@@ -102,9 +134,6 @@ const EMPTY_MODEL: WorkoutLogSessionIdentityModel = {
  *   - "...Day 1..." / "...DAY-1..."
  * 
  * Returns null if no day number can be safely extracted.
- * 
- * This regex is intentionally conservative: it only matches
- * explicit day markers, never infers from array indices.
  */
 function extractDayNumberFromGeneratedWorkoutId(
   generatedWorkoutId: string,
@@ -114,6 +143,27 @@ function extractDayNumberFromGeneratedWorkoutId(
   const dayNum = Number.parseInt(match[1], 10)
   if (!Number.isFinite(dayNum) || dayNum < 0) return null
   return dayNum
+}
+
+/**
+ * [MASTER-8C.44] Extracts program identity from generatedWorkoutId.
+ * 
+ * Uses the observed convention from workout-log-service.ts:
+ *   generatedWorkoutId?.split('_session_')[0] → programId
+ * 
+ * Returns null if _session_ is absent or the id cannot be extracted.
+ */
+export function extractProgramIdentityFromGeneratedWorkoutId(
+  generatedWorkoutId: string | null | undefined,
+): string | null {
+  if (!generatedWorkoutId || typeof generatedWorkoutId !== 'string') {
+    return null
+  }
+  const parts = generatedWorkoutId.split('_session_')
+  if (parts.length < 2 || !parts[0]) {
+    return null
+  }
+  return parts[0]
 }
 
 // ─── Label helpers ─────────────────────────────────────────────────────────
@@ -126,6 +176,7 @@ export function getSessionIdentityStatusLabel(
     case 'identity_unavailable': return 'Identity unavailable'
     case 'partially_resolved': return 'Partial'
     case 'resolved': return 'Resolved'
+    case 'program_scoped_resolved': return 'Program Scoped'
     default: return 'Unknown'
   }
 }
@@ -142,6 +193,8 @@ export function getSessionIdentityStatusColor(
       return { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20' }
     case 'resolved':
       return { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' }
+    case 'program_scoped_resolved':
+      return { bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/20' }
     default:
       return { bg: 'bg-[#1A1A2E]', text: 'text-[#8A8A9A]', border: 'border-[#2A2A35]' }
   }
@@ -152,22 +205,27 @@ export function getSessionIdentityStatusColor(
 /**
  * Resolves completed-day/session identity from trusted workout logs.
  * 
- * This is a pure, read-only function that:
- * 1. Accepts logs already loaded by the component (never reads storage).
- * 2. Extracts day numbers from generatedWorkoutId using a conservative regex.
- * 3. Validates extracted days against program session day numbers.
- * 4. Reports resolved, unresolved, and duplicate counts honestly.
- * 5. Never mutates anything.
+ * [MASTER-8C.44] Extended to support current-program scoping:
+ * - If currentProgramId is provided, only logs matching that program count
+ * - Stale/foreign logs are tracked but ignored for completion
+ * - Legacy unscoped mode is reported honestly
  */
-export function resolveWorkoutLogSessionIdentity(input: {
-  readonly logs: readonly MinimalWorkoutLogForSessionIdentity[]
-  readonly programSessions: readonly MinimalSessionForIdentity[]
-}): WorkoutLogSessionIdentityModel {
-  const { logs, programSessions } = input
+export function resolveWorkoutLogSessionIdentity(
+  input: WorkoutLogSessionIdentityInput,
+): WorkoutLogSessionIdentityModel {
+  const { logs, programSessions, currentProgramId, requireProgramScope } = input
+  const programScopeAvailable = typeof currentProgramId === 'string' && currentProgramId.length > 0
 
   // ── No logs at all ─────────────────────────────────────────────────────
   if (!logs || logs.length === 0) {
-    return EMPTY_MODEL
+    return {
+      ...EMPTY_MODEL,
+      currentProgramId: currentProgramId ?? null,
+      programScopeAvailable,
+      scopeSafetyNotes: programScopeAvailable
+        ? ['Program scope available but no logs to evaluate']
+        : ['Program scope unavailable — legacy mode'],
+    }
   }
 
   // Build a set of valid program day numbers for validation
@@ -192,23 +250,32 @@ export function resolveWorkoutLogSessionIdentity(input: {
       unresolvedWorkoutCount: logs.length,
       missingProof: ['Trusted workout logs required (all logs are untrusted)'],
       safetyNotes: ['All available workout logs are untrusted — cannot resolve session identity'],
+      currentProgramId: currentProgramId ?? null,
+      programScopeAvailable,
+      scopeSafetyNotes: ['No trusted logs for program scoping evaluation'],
     }
   }
 
-  // Extract day numbers from trusted logs
+  // Extract day numbers from trusted logs with program scoping
   const resolvedDays = new Set<number>()
+  const programScopedDays = new Set<number>()
   const allExtractedDays: number[] = []
   let resolvedCount = 0
   let unresolvedCount = 0
   let duplicateDayCount = 0
+  let staleOrForeignLogCount = 0
+  let unscopedLegacyLogCount = 0
   const sourceLabels: string[] = []
+  const scopeSafetyNotes: string[] = []
 
   for (const log of trustedLogs) {
     const gid = log.generatedWorkoutId
     let extracted: number | null = null
+    let logProgramId: string | null = null
 
     if (typeof gid === 'string' && gid.length > 0) {
       extracted = extractDayNumberFromGeneratedWorkoutId(gid)
+      logProgramId = extractProgramIdentityFromGeneratedWorkoutId(gid)
     }
 
     if (extracted !== null && validDayNumbers.has(extracted)) {
@@ -219,6 +286,24 @@ export function resolveWorkoutLogSessionIdentity(input: {
       resolvedDays.add(extracted)
       allExtractedDays.push(extracted)
       resolvedCount++
+
+      // [MASTER-8C.44] Program scope check
+      if (programScopeAvailable) {
+        if (logProgramId === currentProgramId) {
+          // Log belongs to current program - count as completed
+          programScopedDays.add(extracted)
+        } else if (logProgramId !== null) {
+          // Log has a program id but it doesn't match - stale/foreign
+          staleOrForeignLogCount++
+        } else {
+          // Log has no program id - legacy unscoped
+          unscopedLegacyLogCount++
+        }
+      } else {
+        // No program scope available - all resolved logs count in legacy mode
+        programScopedDays.add(extracted)
+        unscopedLegacyLogCount++
+      }
 
       const sessionLabel = log.sessionName ?? `Day ${extracted}`
       if (!sourceLabels.includes(sessionLabel)) {
@@ -231,6 +316,8 @@ export function resolveWorkoutLogSessionIdentity(input: {
 
   // Sort completed day numbers for deterministic output
   const completedDayNumbers = Array.from(resolvedDays).sort((a, b) => a - b)
+  const programScopedCompletedDayNumbers = Array.from(programScopedDays).sort((a, b) => a - b)
+  const ignoredLogCount = staleOrForeignLogCount
 
   // Determine status
   let status: WorkoutLogSessionIdentityStatus
@@ -245,16 +332,31 @@ export function resolveWorkoutLogSessionIdentity(input: {
       `${trustedLogs.length} trusted log(s) exist but none have parseable day identifiers`
     )
     safetyNotes.push('Future targeting remains locked until completed-session identity is proven')
-  } else if (unresolvedCount > 0) {
+  } else if (programScopeAvailable && programScopedCompletedDayNumbers.length === resolvedCount && staleOrForeignLogCount === 0) {
+    // [MASTER-8C.44] All logs are program-scoped
+    status = 'program_scoped_resolved'
+    safetyNotes.push(
+      `All ${resolvedCount} trusted log(s) resolved and scoped to current program`
+    )
+    safetyNotes.push(`Completed day(s): ${programScopedCompletedDayNumbers.join(', ')}`)
+    if (duplicateDayCount > 0) {
+      safetyNotes.push(`${duplicateDayCount} duplicate day mapping(s) detected`)
+    }
+    safetyNotes.push('Completed sessions are permanently protected')
+  } else if (unresolvedCount > 0 || staleOrForeignLogCount > 0) {
     status = 'partially_resolved'
-    missingProof.push(
-      `${unresolvedCount} trusted log(s) could not be mapped to program sessions`
-    )
+    if (unresolvedCount > 0) {
+      missingProof.push(
+        `${unresolvedCount} trusted log(s) could not be mapped to program sessions`
+      )
+    }
+    if (staleOrForeignLogCount > 0) {
+      missingProof.push(
+        `${staleOrForeignLogCount} log(s) belong to different program(s) — ignored`
+      )
+    }
     safetyNotes.push(
-      `${resolvedCount} log(s) resolved to day(s): ${completedDayNumbers.join(', ')}`
-    )
-    safetyNotes.push(
-      `${unresolvedCount} log(s) have missing/unparseable generatedWorkoutId — ignored for targeting`
+      `${programScopedCompletedDayNumbers.length} log(s) scoped to current program: ${programScopedCompletedDayNumbers.join(', ') || 'none'}`
     )
     if (duplicateDayCount > 0) {
       safetyNotes.push(`${duplicateDayCount} duplicate day mapping(s) detected`)
@@ -271,6 +373,25 @@ export function resolveWorkoutLogSessionIdentity(input: {
     safetyNotes.push('Completed sessions are permanently protected')
   }
 
+  // [MASTER-8C.44] Build scope safety notes
+  if (programScopeAvailable) {
+    scopeSafetyNotes.push(`Current program: ${currentProgramId}`)
+    scopeSafetyNotes.push(`Program-scoped completed: ${programScopedCompletedDayNumbers.length}`)
+    if (staleOrForeignLogCount > 0) {
+      scopeSafetyNotes.push(`Stale/foreign logs ignored: ${staleOrForeignLogCount}`)
+    }
+    if (unscopedLegacyLogCount > 0) {
+      scopeSafetyNotes.push(`Legacy unscoped logs: ${unscopedLegacyLogCount}`)
+    }
+    scopeSafetyNotes.push('Only logs matching this program can mark days completed')
+  } else {
+    scopeSafetyNotes.push('Program identity unavailable')
+    scopeSafetyNotes.push('Legacy day-number matching is in use')
+    if (requireProgramScope) {
+      scopeSafetyNotes.push('No mutation allowed from unscoped proof')
+    }
+  }
+
   // Latest identity label
   const latestIdentityLabel = sourceLabels.length > 0
     ? sourceLabels[sourceLabels.length - 1]
@@ -278,7 +399,8 @@ export function resolveWorkoutLogSessionIdentity(input: {
 
   return {
     status,
-    completedDayNumbers,
+    // [MASTER-8C.44] completedDayNumbers now means program-scoped completed days
+    completedDayNumbers: programScopeAvailable ? programScopedCompletedDayNumbers : completedDayNumbers,
     trustedWorkoutCount: trustedLogs.length,
     resolvedWorkoutCount: resolvedCount,
     unresolvedWorkoutCount: unresolvedCount,
@@ -287,6 +409,14 @@ export function resolveWorkoutLogSessionIdentity(input: {
     sourceLabels,
     missingProof,
     safetyNotes,
+    // [MASTER-8C.44] Program scope fields
+    currentProgramId: currentProgramId ?? null,
+    programScopeAvailable,
+    programScopedCompletedDayNumbers,
+    staleOrForeignLogCount,
+    unscopedLegacyLogCount,
+    ignoredLogCount,
+    scopeSafetyNotes,
     ...LOCKED_FLAGS,
   }
 }

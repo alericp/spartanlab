@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.39 - Controlled future-session mutation writer dry-run)
+  // PLAN LOGIC (MASTER-8C.40 - Bounded mutation apply eligibility gate)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, user confirmation/marker permission preview gate, future-session mutation writer readiness boundary, pre-mutation lock / bundle closure, and controlled future-session mutation writer dry-run envelope',
-    nextSafeAction: 'MASTER-8C.40 user confirmation or bounded mutation apply gate (only if explicitly authorized); no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Controlled dry-run writer skipped, allowing next step to assume real mutation can proceed without explicit dry-run verification',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, user confirmation/marker permission preview gate, future-session mutation writer readiness boundary, pre-mutation lock / bundle closure, controlled future-session mutation writer dry-run envelope, and bounded mutation apply eligibility gate',
+    nextSafeAction: 'MASTER-8C.41 marker-only confirmation/apply UI or controlled apply writer (only if explicitly authorized); no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Bounded apply eligibility gate skipped, allowing next step to assume apply controls can be rendered without explicit eligibility verification',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -271,6 +271,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/future-session-mutation-writer-readiness-boundary.ts',
       'lib/program/pre-mutation-lock-bundle-closure.ts',
       'lib/program/controlled-future-session-mutation-writer-dry-run.ts',
+      'lib/program/bounded-mutation-apply-eligibility-gate.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

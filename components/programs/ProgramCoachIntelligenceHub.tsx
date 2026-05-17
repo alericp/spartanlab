@@ -260,6 +260,13 @@ import {
   getSessionIdentityStatusLabel,
   getSessionIdentityStatusColor,
 } from '@/lib/program/workout-log-session-identity-readonly-bridge'
+// [MASTER-8C.33] Confirmation contract preview
+import {
+  resolveMutationConfirmationContractPreview,
+  getConfirmationContractStatusLabel,
+  getConfirmationContractStatusColor,
+  type MutationConfirmationContractPreviewModel,
+} from '@/lib/program/mutation-confirmation-contract-preview'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3119,6 +3126,7 @@ function AIIntelligenceFoundationMap({
   mutationReadinessReviewGateModel,
   mutationPathwayReadinessMapModel,
   mutationTargetSessionResolutionPreviewModel,
+  mutationConfirmationContractPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3130,6 +3138,7 @@ function AIIntelligenceFoundationMap({
   mutationReadinessReviewGateModel?: MutationReadinessReviewGateModel | null
   mutationPathwayReadinessMapModel?: MutationPathwayReadinessMapModel | null
   mutationTargetSessionResolutionPreviewModel?: MutationTargetSessionResolutionPreviewModel | null
+  mutationConfirmationContractPreviewModel?: MutationConfirmationContractPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3677,9 +3686,22 @@ function AIIntelligenceFoundationMap({
                         </span>
                       )
                     })()}
+                    {/* [MASTER-8C.33] Confirmation contract status chip */}
+                    {mutationConfirmationContractPreviewModel && (
+                      (() => {
+                        const ccColor = getConfirmationContractStatusColor(
+                          mutationConfirmationContractPreviewModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", ccColor.bg, ccColor.text, ccColor.border)}>
+                            Confirm: {getConfirmationContractStatusLabel(mutationConfirmationContractPreviewModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation.
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'}
                   </div>
                 </div>
               </div>
@@ -7731,6 +7753,15 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [targetSessionResolutionInput, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, sessionIdentityModel])
   
+  // [MASTER-8C.33] Confirmation Contract Preview
+  const mutationConfirmationContractPreviewModel = useMemo<MutationConfirmationContractPreviewModel>(() => {
+    return resolveMutationConfirmationContractPreview({
+      mutationTargetSessionResolutionPreviewModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+    })
+  }, [mutationTargetSessionResolutionPreviewModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8754,6 +8785,65 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.33] Confirmation Contract Preview card */}
+            {mutationConfirmationContractPreviewModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-medium text-violet-300">
+                    Confirmation Contract Preview
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    marker locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status and headline */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const ccColor = getConfirmationContractStatusColor(mutationConfirmationContractPreviewModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", ccColor.bg, ccColor.text, ccColor.border)}>
+                        {getConfirmationContractStatusLabel(mutationConfirmationContractPreviewModel.status)}
+                      </span>
+                    )
+                  })()}
+                </div>
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {mutationConfirmationContractPreviewModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {mutationConfirmationContractPreviewModel.summary}
+                </p>
+                {/* Counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {mutationConfirmationContractPreviewModel.completedProtectedCount} completed
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {mutationConfirmationContractPreviewModel.futureTargetCount} future
+                  </span>
+                  {mutationConfirmationContractPreviewModel.eligibleMarkerPreviewCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {mutationConfirmationContractPreviewModel.eligibleMarkerPreviewCount} preview eligible
+                    </span>
+                  )}
+                </div>
+                {/* Safety notes */}
+                {mutationConfirmationContractPreviewModel.completedProtectedCount > 0 && (
+                  <p className="text-[9px] text-emerald-400/60 mb-1">
+                    Completed sessions protected
+                  </p>
+                )}
+                <p className="text-[10px] text-violet-400/60">
+                  No marker saved. No program changes applied. No confirmation UI yet.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8778,7 +8868,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

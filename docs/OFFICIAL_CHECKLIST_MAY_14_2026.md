@@ -6,12 +6,22 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.37)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.38)
 
-**Current active completed step:** MASTER-8C.37 / AB20.4.30  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active, structural mutation preview contract active, user confirmation/marker permission preview gate active, future-session mutation writer readiness boundary active)  
-**Current active step:** MASTER-8C.38 / AB20.4.31 — Pre-mutation lock / bundle closure, final step in mutation-readiness corridor  
+**Current active completed step:** MASTER-8C.38 / AB20.4.31  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, mutation-readiness corridor complete with pre-mutation lock / bundle closure)  
+**Current active step:** MASTER-8C.39 / AB20.4.32 — First controlled future-session mutation writer step (only if explicitly authorized)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Pre-Mutation Lock / Bundle Closure (MASTER-8C.38)
+- MASTER-8C.38 closes the mutation-readiness corridor (Step 7 of 7)
+- New pure helper: pre-mutation-lock-bundle-closure.ts (545 lines)
+- 8 statuses: unavailable_missing_upstream, locked_active_caution, locked_no_future_targets, locked_permission, locked_structural_preview, locked_writer_boundary, bundle_closed_future_locked, bundle_closed_preview_ready_read_only
+- All action flags locked false: canMutateFutureSessions, canSaveMarker, canInstantiateWriter, canApplyProgramChanges, canChangeProgramCards, canChangeStartWorkout, canChangeLiveWorkout, canPersistMutation
+- All safety flags true: completedSessionsProtected, futureSessionsLocked, markerLocked, programCardsUnchanged, startWorkoutUnchanged, liveWorkoutUnchanged, persistenceUnchanged
+- Plan Logic card: "Pre-Mutation Lock / Bundle Closure" (fuchsia border) with gate summary and protected invariants
+- AI Foundation Map: Plan Logic row shows "Bundle: [status]" chip
+- Programs/exercises/sets changed: NO
 
 ### Future-session Mutation Writer Readiness Boundary (MASTER-8C.37)
 - MASTER-8C.37 added a read-only future-session mutation writer readiness boundary determining writer-readiness

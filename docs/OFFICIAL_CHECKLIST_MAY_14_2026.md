@@ -6,10 +6,24 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.34)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.35)
 
-**Current active completed step:** MASTER-8C.34 / AB20.4.27  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active)  
+**Current active completed step:** MASTER-8C.35 / AB20.4.28  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active, caution clearance gate active, structural mutation preview contract active)  
+**Current active step:** MASTER-8C.36 / AB20.4.29 — User Confirmation / Marker Permission Preview Gate, still no structural writer unless explicitly authorized  
+**Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Structural Mutation Preview Contract (MASTER-8C.35)
+- MASTER-8C.35 added a read-only structural mutation preview contract determining preview-readiness
+- New pure helper: structural-mutation-preview-contract.ts (594 lines)
+- 8 statuses: unavailable, blocked_active_caution, blocked_no_future_targets, blocked_completed_only, blocked_target_unresolved, waiting_for_confirmation_contract, preview_contract_ready_read_only, future_locked
+- All permission flags locked: canBuildStructuralPreview, canShowConfirmationUi, canWriteMarker, canApplyStructuralMutation, canChangeProgramCards, canBridgeLiveWorkout
+- All safety flags true: noProgramChangesApplied, noMarkerSaved, noFutureSessionChangesApplied, noProgramCardChangesApplied, noLiveWorkoutChangesApplied
+- Plan Logic card: "Structural Mutation Preview Contract" (cyan border) with status chip, preview counts, safety notes
+- AI Foundation Map: Plan Logic row shows "Struct: [status]" chip
+- Programs/exercises/sets changed: NO
+
+### Caution Clearance Gate (MASTER-8C.34)
 **Current active step:** MASTER-8C.35 / AB20.4.28 — to be verified from checklist (likely structural mutation preview contract, still read-only, no writer yet)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
 

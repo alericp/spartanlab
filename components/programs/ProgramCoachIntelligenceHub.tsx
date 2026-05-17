@@ -274,6 +274,13 @@ import {
   getMutationCautionClearanceStatusColor,
   type MutationCautionClearanceGateModel,
 } from '@/lib/program/mutation-caution-clearance-gate'
+// [MASTER-8C.35] Structural mutation preview contract
+import {
+  resolveStructuralMutationPreviewContract,
+  getStructuralPreviewContractStatusLabel,
+  getStructuralPreviewContractStatusColor,
+  type StructuralMutationPreviewContractModel,
+} from '@/lib/program/structural-mutation-preview-contract'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3135,6 +3142,7 @@ function AIIntelligenceFoundationMap({
   mutationTargetSessionResolutionPreviewModel,
   mutationConfirmationContractPreviewModel,
   mutationCautionClearanceGateModel,
+  structuralMutationPreviewContractModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3148,6 +3156,7 @@ function AIIntelligenceFoundationMap({
   mutationTargetSessionResolutionPreviewModel?: MutationTargetSessionResolutionPreviewModel | null
   mutationConfirmationContractPreviewModel?: MutationConfirmationContractPreviewModel | null
   mutationCautionClearanceGateModel?: MutationCautionClearanceGateModel | null
+  structuralMutationPreviewContractModel?: StructuralMutationPreviewContractModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3721,9 +3730,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.35] Structural preview contract status chip */}
+                    {structuralMutationPreviewContractModel && (
+                      (() => {
+                        const structColor = getStructuralPreviewContractStatusColor(
+                          structuralMutationPreviewContractModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", structColor.bg, structColor.text, structColor.border)}>
+                            Struct: {getStructuralPreviewContractStatusLabel(structuralMutationPreviewContractModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {mutationCautionClearanceGateModel?.noMarkerSaved && 'Caution gate locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {structuralMutationPreviewContractModel?.noMarkerSaved && 'Structural locked.'}
                   </div>
                 </div>
               </div>
@@ -7795,6 +7817,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel])
   
+  // [MASTER-8C.35] Structural Mutation Preview Contract
+  const structuralMutationPreviewContractModel = useMemo<StructuralMutationPreviewContractModel>(() => {
+    return resolveStructuralMutationPreviewContract({
+      planEvidenceTrendReadinessModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationConfirmationContractPreviewModel,
+      mutationCautionClearanceGateModel,
+    })
+  }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -8956,6 +8990,88 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.35] Structural Mutation Preview Contract card */}
+            {structuralMutationPreviewContractModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-medium text-cyan-300">
+                    Structural Mutation Preview Contract
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    preview contract
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    mutation locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const scColor = getStructuralPreviewContractStatusColor(structuralMutationPreviewContractModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", scColor.bg, scColor.text, scColor.border)}>
+                        {getStructuralPreviewContractStatusLabel(structuralMutationPreviewContractModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {structuralMutationPreviewContractModel.candidatePreviewCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {structuralMutationPreviewContractModel.candidatePreviewCount} preview candidate(s)
+                    </span>
+                  )}
+                  {structuralMutationPreviewContractModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {structuralMutationPreviewContractModel.activeCautionCount} caution
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {structuralMutationPreviewContractModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {structuralMutationPreviewContractModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {structuralMutationPreviewContractModel.completedProtectedCount} completed
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {structuralMutationPreviewContractModel.futureTargetCount} future
+                  </span>
+                  {structuralMutationPreviewContractModel.blockedPreviewCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                      {structuralMutationPreviewContractModel.blockedPreviewCount} blocked
+                    </span>
+                  )}
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {structuralMutationPreviewContractModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {structuralMutationPreviewContractModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {structuralMutationPreviewContractModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  No marker saved. No program changes applied. No Program Cards changed. No Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -8980,7 +9096,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} />
           </div>
         </SheetContent>
       </Sheet>

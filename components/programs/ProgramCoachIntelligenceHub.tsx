@@ -288,6 +288,13 @@ import {
   getUserConfirmationMarkerPermissionStatusColor,
   type UserConfirmationMarkerPermissionPreviewGateModel,
 } from '@/lib/program/user-confirmation-marker-permission-preview-gate'
+// [MASTER-8C.37] Future-session mutation writer readiness boundary
+import {
+  resolveFutureSessionMutationWriterReadinessBoundary,
+  getFutureSessionMutationWriterReadinessStatusLabel,
+  getFutureSessionMutationWriterReadinessStatusColor,
+  type FutureSessionMutationWriterReadinessBoundaryModel,
+} from '@/lib/program/future-session-mutation-writer-readiness-boundary'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3151,6 +3158,7 @@ function AIIntelligenceFoundationMap({
   mutationCautionClearanceGateModel,
   structuralMutationPreviewContractModel,
   userConfirmationMarkerPermissionPreviewGateModel,
+  futureSessionMutationWriterReadinessBoundaryModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3166,6 +3174,7 @@ function AIIntelligenceFoundationMap({
   mutationCautionClearanceGateModel?: MutationCautionClearanceGateModel | null
   structuralMutationPreviewContractModel?: StructuralMutationPreviewContractModel | null
   userConfirmationMarkerPermissionPreviewGateModel?: UserConfirmationMarkerPermissionPreviewGateModel | null
+  futureSessionMutationWriterReadinessBoundaryModel?: FutureSessionMutationWriterReadinessBoundaryModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3765,9 +3774,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.37] Writer readiness boundary status chip */}
+                    {futureSessionMutationWriterReadinessBoundaryModel && (
+                      (() => {
+                        const writerColor = getFutureSessionMutationWriterReadinessStatusColor(
+                          futureSessionMutationWriterReadinessBoundaryModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerColor.bg, writerColor.text, writerColor.border)}>
+                            Writer: {getFutureSessionMutationWriterReadinessStatusLabel(futureSessionMutationWriterReadinessBoundaryModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {userConfirmationMarkerPermissionPreviewGateModel?.noMarkerSaved && 'Permission locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {futureSessionMutationWriterReadinessBoundaryModel?.noMarkerSaved && 'Writer locked.'}
                   </div>
                 </div>
               </div>
@@ -7864,6 +7886,20 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel, structuralMutationPreviewContractModel])
   
+  // [MASTER-8C.37] Future-session Mutation Writer Readiness Boundary
+  const futureSessionMutationWriterReadinessBoundaryModel = useMemo<FutureSessionMutationWriterReadinessBoundaryModel>(() => {
+    return resolveFutureSessionMutationWriterReadinessBoundary({
+      planEvidenceTrendReadinessModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationConfirmationContractPreviewModel,
+      mutationCautionClearanceGateModel,
+      structuralMutationPreviewContractModel,
+      userConfirmationMarkerPermissionPreviewGateModel,
+    })
+  }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel, mutationCautionClearanceGateModel, structuralMutationPreviewContractModel, userConfirmationMarkerPermissionPreviewGateModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9184,6 +9220,102 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.37] Future-session Mutation Writer Readiness Boundary card */}
+            {futureSessionMutationWriterReadinessBoundaryModel && (
+              <div className="rounded-lg border border-rose-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-rose-300">
+                    Future-session Mutation Writer Readiness Boundary
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    read-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    writer locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no session writes
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no workout changes
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const writerColor = getFutureSessionMutationWriterReadinessStatusColor(futureSessionMutationWriterReadinessBoundaryModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerColor.bg, writerColor.text, writerColor.border)}>
+                        {getFutureSessionMutationWriterReadinessStatusLabel(futureSessionMutationWriterReadinessBoundaryModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {futureSessionMutationWriterReadinessBoundaryModel.structuralPreviewCandidateCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {futureSessionMutationWriterReadinessBoundaryModel.structuralPreviewCandidateCount} structural candidate(s)
+                    </span>
+                  )}
+                  {futureSessionMutationWriterReadinessBoundaryModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {futureSessionMutationWriterReadinessBoundaryModel.activeCautionCount} caution
+                    </span>
+                  )}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    permission: {futureSessionMutationWriterReadinessBoundaryModel.confirmationPermissionState}
+                  </span>
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {futureSessionMutationWriterReadinessBoundaryModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {futureSessionMutationWriterReadinessBoundaryModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {futureSessionMutationWriterReadinessBoundaryModel.completedProtectedCount} completed (protected)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {futureSessionMutationWriterReadinessBoundaryModel.futureTargetCount} future
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {futureSessionMutationWriterReadinessBoundaryModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {futureSessionMutationWriterReadinessBoundaryModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Protected invariants (show first 3) */}
+                {futureSessionMutationWriterReadinessBoundaryModel.protectedInvariants.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-emerald-400/60 mb-0.5">Protected invariants:</div>
+                    {futureSessionMutationWriterReadinessBoundaryModel.protectedInvariants.slice(0, 3).map((inv, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        {inv.protected ? '✓' : '✗'} {inv.invariant}
+                      </div>
+                    ))}
+                    {futureSessionMutationWriterReadinessBoundaryModel.protectedInvariants.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{futureSessionMutationWriterReadinessBoundaryModel.protectedInvariants.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {futureSessionMutationWriterReadinessBoundaryModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-rose-400/60">
+                  No writer instantiated. No future sessions written. No marker saved. No Program Cards changed. No Start Workout or Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -9208,7 +9340,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} />
           </div>
         </SheetContent>
       </Sheet>

@@ -56,6 +56,13 @@ export type WorkoutLogSessionIdentityStatus =
 
 export interface WorkoutLogSessionIdentityModel {
   readonly status: WorkoutLogSessionIdentityStatus
+  /**
+   * [MASTER-8C.44.1] Accepted completed days for current program ONLY.
+   * When programScopeAvailable && requireProgramScope, this contains ONLY
+   * logs whose extracted program id exactly matches currentProgramId.
+   * Legacy/stale/foreign logs are EXCLUDED from this field.
+   * Target resolution MUST consume this field, not rawResolvedDayNumbers.
+   */
   readonly completedDayNumbers: readonly number[]
   readonly trustedWorkoutCount: number
   readonly resolvedWorkoutCount: number
@@ -68,7 +75,16 @@ export interface WorkoutLogSessionIdentityModel {
   // [MASTER-8C.44] Current-program scoping fields
   readonly currentProgramId: string | null
   readonly programScopeAvailable: boolean
+  /**
+   * [MASTER-8C.44.1] Same as completedDayNumbers in scoped mode.
+   * Explicit alias for UI proof display.
+   */
   readonly programScopedCompletedDayNumbers: readonly number[]
+  /**
+   * [MASTER-8C.44.1] All parseable day numbers from trusted logs, including
+   * legacy/stale/foreign. For DIAGNOSTICS ONLY - never use for target resolution.
+   */
+  readonly rawResolvedDayNumbers: readonly number[]
   readonly staleOrForeignLogCount: number
   readonly unscopedLegacyLogCount: number
   readonly ignoredLogCount: number
@@ -117,6 +133,7 @@ const EMPTY_MODEL: WorkoutLogSessionIdentityModel = {
   currentProgramId: null,
   programScopeAvailable: false,
   programScopedCompletedDayNumbers: [],
+  rawResolvedDayNumbers: [], // [MASTER-8C.44.1] Diagnostics only
   staleOrForeignLogCount: 0,
   unscopedLegacyLogCount: 0,
   ignoredLogCount: 0,
@@ -397,10 +414,27 @@ export function resolveWorkoutLogSessionIdentity(
     ? sourceLabels[sourceLabels.length - 1]
     : null
 
+  // [MASTER-8C.44.1] Determine accepted completed days based on scope requirements
+  // If programScopeAvailable: use ONLY program-scoped completed days
+  // If !programScopeAvailable && requireProgramScope: NO completed days allowed (conservative)
+  // If !programScopeAvailable && !requireProgramScope: legacy mode, all resolved days
+  let acceptedCompletedDays: readonly number[]
+  if (programScopeAvailable) {
+    // Only logs matching current program count as completed
+    acceptedCompletedDays = programScopedCompletedDayNumbers
+  } else if (requireProgramScope) {
+    // Scope required but unavailable - NO mutation allowed, no completed days
+    acceptedCompletedDays = []
+  } else {
+    // Legacy mode - all resolved days count (backwards compatibility)
+    acceptedCompletedDays = completedDayNumbers
+  }
+
   return {
     status,
-    // [MASTER-8C.44] completedDayNumbers now means program-scoped completed days
-    completedDayNumbers: programScopeAvailable ? programScopedCompletedDayNumbers : completedDayNumbers,
+    // [MASTER-8C.44.1] completedDayNumbers = accepted current-program completed days ONLY
+    // Target resolution MUST use this field. Legacy/stale/foreign logs are EXCLUDED.
+    completedDayNumbers: acceptedCompletedDays,
     trustedWorkoutCount: trustedLogs.length,
     resolvedWorkoutCount: resolvedCount,
     unresolvedWorkoutCount: unresolvedCount,
@@ -412,7 +446,10 @@ export function resolveWorkoutLogSessionIdentity(
     // [MASTER-8C.44] Program scope fields
     currentProgramId: currentProgramId ?? null,
     programScopeAvailable,
-    programScopedCompletedDayNumbers,
+    // [MASTER-8C.44.1] Same as completedDayNumbers in scoped mode
+    programScopedCompletedDayNumbers: acceptedCompletedDays,
+    // [MASTER-8C.44.1] ALL parseable day numbers - DIAGNOSTICS ONLY
+    rawResolvedDayNumbers: completedDayNumbers,
     staleOrForeignLogCount,
     unscopedLegacyLogCount,
     ignoredLogCount,

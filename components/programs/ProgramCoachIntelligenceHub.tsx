@@ -7917,8 +7917,11 @@ export function ProgramCoachIntelligenceHub({
   // [MASTER-8C.31/32] Target Session Resolution Preview
   const targetSessionResolutionInput = useMemo(() => {
     if (!program?.sessions) return null
-    // [MASTER-8C.32] Use resolved completed day numbers from identity bridge
-    // instead of hardcoded empty set. Falls back to empty if identity unavailable.
+    // [MASTER-8C.44.1] Target resolution MUST consume accepted current-program completed
+    // days only. completedDayNumbers now represents ONLY program-scoped accepted days.
+    // Raw/legacy log matches are diagnostic and must NOT protect current sessions.
+    // The identity bridge ensures completedDayNumbers excludes stale/foreign logs
+    // when programScopeAvailable && requireProgramScope.
     const completedDays = new Set<number>(
       sessionIdentityModel?.completedDayNumbers ?? []
     )

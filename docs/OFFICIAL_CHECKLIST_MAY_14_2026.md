@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.32)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.33)
 
-**Current active completed step:** MASTER-8C.32 / AB20.4.25  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution)  
-**Current active step:** MASTER-8C.33 / AB20.4.26 — to be verified from checklist (likely user-confirmation/marker-preview contract gate, still no structural mutation unless explicitly approved)  
+**Current active completed step:** MASTER-8C.33 / AB20.4.26  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution, confirmation contract preview active)  
+**Current active step:** MASTER-8C.34 / AB20.4.27 — to be verified from checklist (likely marker-only user confirmation UI gate or marker persistence preview gate, still no structural mutation unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Confirmation Contract Preview (MASTER-8C.33)
+- MASTER-8C.33 added a read-only confirmation contract preview layer between target resolution and future confirmation UI
+- New pure helper: mutation-confirmation-contract-preview.ts (431 lines)
+- 8 confirmation contract statuses: unavailable, blocked_no_future_targets, blocked_completed_only, blocked_by_caution, blocked_target_unresolved, waiting_for_review_candidate, preview_eligible_marker_only, future_locked
+- 6 candidate statuses: blocked, target_unresolved, completed_protected, no_future_target, review_only, marker_preview_eligible
+- Always-false: canShowConfirmationUi, canWriteMarker, canApplyStructuralMutation, canChangeProgramCards, canBridgeLiveWorkout
+- Always-true: noMarkerSaved, noProgramChangesApplied, noFutureSessionChangesApplied
+- Plan Logic card: "Confirmation Contract Preview" with status chip, counts, safety notes
+- AI Foundation Map: Plan Logic row shows "Confirm: [status]" chip + "No marker saved."
+- Programs/exercises/sets changed: NO
 
 ### Completed/Future Session Identity Resolution (MASTER-8C.32)
 - MASTER-8C.32 repaired the target-resolution fragility where completedDays was hardcoded empty

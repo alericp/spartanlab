@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.32 - Completed/future session identity resolution)
+  // PLAN LOGIC (MASTER-8C.33 - Confirmation contract preview)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution from trusted workout logs',
-    nextSafeAction: 'Confirm/preview contract remains future-locked; no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Plan Logic cannot prove completed-vs-future session identity honestly, risking false completed/future counts in target resolution',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, and confirmation contract preview analyzing marker-only confirmation eligibility',
+    nextSafeAction: 'User confirmation UI gate remains future-locked; no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Confirmation contract layer skipped, allowing next step to jump directly from target resolution into write/apply path',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -264,6 +264,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/mutation-pathway-readiness-map.ts',
       'lib/program/mutation-target-session-resolution-preview.ts',
       'lib/program/workout-log-session-identity-readonly-bridge.ts',
+      'lib/program/mutation-confirmation-contract-preview.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

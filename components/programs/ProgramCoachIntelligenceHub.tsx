@@ -330,6 +330,13 @@ import {
   getMarkerSaveAuthorizationPreflightStatusColor,
   type MarkerSaveAuthorizationPreflightBoundaryModel,
 } from '@/lib/program/marker-save-authorization-preflight-boundary'
+// [MASTER-8C.43] Controlled marker-save action boundary
+import {
+  resolveControlledMarkerSaveActionBoundary,
+  getControlledMarkerSaveActionStatusLabel,
+  getControlledMarkerSaveActionStatusColor,
+  type ControlledMarkerSaveActionBoundaryModel,
+} from '@/lib/program/controlled-marker-save-action-boundary'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -8038,6 +8045,15 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerOnlyConfirmationBoundaryModel])
   
+  // [MASTER-8C.43] Controlled Marker-Save Action Boundary
+  const controlledMarkerSaveActionBoundaryModel = useMemo<ControlledMarkerSaveActionBoundaryModel>(() => {
+    return resolveControlledMarkerSaveActionBoundary({
+      markerSaveAuthorizationPreflightBoundaryModel,
+      explicitUserAuthorization: false, // hardcoded false - no UI control in this step
+      markerSavedCount: 0, // no markers saved yet
+    })
+  }, [markerSaveAuthorizationPreflightBoundaryModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9952,6 +9968,110 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-pink-400/60">
                   Marker-save preflight only. No authorization control enabled. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [MASTER-8C.43] Controlled Marker Save Action Boundary card
+                This is the FINAL action boundary before marker-only save.
+                It intentionally remains locked while active cautions or no future targets exist.
+                Structural workout mutation is NOT enabled in this step. */}
+            {controlledMarkerSaveActionBoundaryModel && (
+              <div className="rounded-lg border border-rose-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-rose-300">
+                    Controlled Marker Save Action Boundary
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    action boundary
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    marker-only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no structural mutation
+                  </span>
+                  {!controlledMarkerSaveActionBoundaryModel.canWriteMarker && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      no writes
+                    </span>
+                  )}
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const actionColor = getControlledMarkerSaveActionStatusColor(controlledMarkerSaveActionBoundaryModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", actionColor.bg, actionColor.text, actionColor.border)}>
+                        {getControlledMarkerSaveActionStatusLabel(controlledMarkerSaveActionBoundaryModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {controlledMarkerSaveActionBoundaryModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {controlledMarkerSaveActionBoundaryModel.activeCautionCount} caution
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {controlledMarkerSaveActionBoundaryModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {controlledMarkerSaveActionBoundaryModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {controlledMarkerSaveActionBoundaryModel.completedProtectedCount} completed (protected)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {controlledMarkerSaveActionBoundaryModel.targetSessionCount} target session(s)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {controlledMarkerSaveActionBoundaryModel.markerSavedCount} marker saved
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {controlledMarkerSaveActionBoundaryModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {controlledMarkerSaveActionBoundaryModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety notes (max 3) */}
+                {controlledMarkerSaveActionBoundaryModel.safetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-emerald-400/60 mb-0.5">Safety notes:</div>
+                    {controlledMarkerSaveActionBoundaryModel.safetyNotes.slice(0, 3).map((note, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        ✓ {note}
+                      </div>
+                    ))}
+                    {controlledMarkerSaveActionBoundaryModel.safetyNotes.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{controlledMarkerSaveActionBoundaryModel.safetyNotes.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Locked marker action pill - non-interactive */}
+                {!controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && (
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-[9px] px-2 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20 cursor-not-allowed">
+                      marker action locked
+                    </span>
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {controlledMarkerSaveActionBoundaryModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-rose-400/60">
+                  Marker action boundary only. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
                 </p>
               </div>
             )}

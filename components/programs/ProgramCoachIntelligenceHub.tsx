@@ -309,6 +309,13 @@ import {
   getControlledFutureSessionMutationWriterDryRunStatusColor,
   type ControlledFutureSessionMutationDryRunEnvelope,
 } from '@/lib/program/controlled-future-session-mutation-writer-dry-run'
+// [MASTER-8C.40] Bounded mutation apply eligibility gate
+import {
+  resolveBoundedMutationApplyEligibilityGate,
+  getBoundedMutationApplyEligibilityStatusLabel,
+  getBoundedMutationApplyEligibilityStatusColor,
+  type BoundedMutationApplyEligibilityGateModel,
+} from '@/lib/program/bounded-mutation-apply-eligibility-gate'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3175,6 +3182,7 @@ function AIIntelligenceFoundationMap({
   futureSessionMutationWriterReadinessBoundaryModel,
   preMutationLockBundleClosureModel,
   controlledFutureSessionMutationWriterDryRunModel,
+  boundedMutationApplyEligibilityGateModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3193,6 +3201,7 @@ function AIIntelligenceFoundationMap({
   futureSessionMutationWriterReadinessBoundaryModel?: FutureSessionMutationWriterReadinessBoundaryModel | null
   preMutationLockBundleClosureModel?: PreMutationLockBundleClosureModel | null
   controlledFutureSessionMutationWriterDryRunModel?: ControlledFutureSessionMutationDryRunEnvelope | null
+  boundedMutationApplyEligibilityGateModel?: BoundedMutationApplyEligibilityGateModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3831,9 +3840,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.40] Bounded apply eligibility gate status chip */}
+                    {boundedMutationApplyEligibilityGateModel && (
+                      (() => {
+                        const applyGateColor = getBoundedMutationApplyEligibilityStatusColor(
+                          boundedMutationApplyEligibilityGateModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", applyGateColor.bg, applyGateColor.text, applyGateColor.border)}>
+                            Apply: {getBoundedMutationApplyEligibilityStatusLabel(boundedMutationApplyEligibilityGateModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {controlledFutureSessionMutationWriterDryRunModel?.dryRunOnly && 'Dry-run only.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {boundedMutationApplyEligibilityGateModel?.applyButtonDisabled && 'Apply locked.'}
                   </div>
                 </div>
               </div>
@@ -7971,6 +7993,17 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [preMutationLockBundleClosureModel, futureSessionMutationWriterReadinessBoundaryModel, structuralMutationPreviewContractModel, mutationTargetSessionResolutionPreviewModel, mutationCautionClearanceGateModel, userConfirmationMarkerPermissionPreviewGateModel])
   
+  // [MASTER-8C.40] Bounded Mutation Apply Eligibility Gate
+  const boundedMutationApplyEligibilityGateModel = useMemo<BoundedMutationApplyEligibilityGateModel>(() => {
+    return resolveBoundedMutationApplyEligibilityGate({
+      controlledFutureSessionMutationWriterDryRunModel,
+      userConfirmationMarkerPermissionPreviewGateModel,
+      preMutationLockBundleClosureModel,
+      mutationCautionClearanceGateModel,
+      mutationTargetSessionResolutionPreviewModel,
+    })
+  }, [controlledFutureSessionMutationWriterDryRunModel, userConfirmationMarkerPermissionPreviewGateModel, preMutationLockBundleClosureModel, mutationCautionClearanceGateModel, mutationTargetSessionResolutionPreviewModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -9584,6 +9617,104 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.40] Bounded Mutation Apply Gate card */}
+            {boundedMutationApplyEligibilityGateModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-violet-300">
+                    Bounded Mutation Apply Gate
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    confirmation locked
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    apply disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    no writes
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    future targets required
+                  </span>
+                </div>
+                {/* Status chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  {(() => {
+                    const applyGateColor = getBoundedMutationApplyEligibilityStatusColor(boundedMutationApplyEligibilityGateModel.status)
+                    return (
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", applyGateColor.bg, applyGateColor.text, applyGateColor.border)}>
+                        {getBoundedMutationApplyEligibilityStatusLabel(boundedMutationApplyEligibilityGateModel.status)}
+                      </span>
+                    )
+                  })()}
+                  {boundedMutationApplyEligibilityGateModel.activeCautionCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      {boundedMutationApplyEligibilityGateModel.activeCautionCount} caution
+                    </span>
+                  )}
+                  {boundedMutationApplyEligibilityGateModel.dryRunOperationCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {boundedMutationApplyEligibilityGateModel.dryRunOperationCount} dry-run op(s)
+                    </span>
+                  )}
+                  {boundedMutationApplyEligibilityGateModel.eligibleOperationCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                      {boundedMutationApplyEligibilityGateModel.eligibleOperationCount} eligible
+                    </span>
+                  )}
+                </div>
+                {/* Headline and summary */}
+                <p className="text-[10px] text-[#E6E9EF]/90 mb-1.5 font-medium">
+                  {boundedMutationApplyEligibilityGateModel.headline}
+                </p>
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {boundedMutationApplyEligibilityGateModel.summary}
+                </p>
+                {/* Session counts */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    {boundedMutationApplyEligibilityGateModel.completedProtectedCount} completed (protected)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {boundedMutationApplyEligibilityGateModel.targetSessionCount} target session(s)
+                  </span>
+                </div>
+                {/* Top blocked reasons (max 3) */}
+                {boundedMutationApplyEligibilityGateModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    {boundedMutationApplyEligibilityGateModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-slate-400/60 mb-0.5">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety notes (max 3) */}
+                {boundedMutationApplyEligibilityGateModel.safetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-emerald-400/60 mb-0.5">Safety notes:</div>
+                    {boundedMutationApplyEligibilityGateModel.safetyNotes.slice(0, 3).map((note, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        ✓ {note}
+                      </div>
+                    ))}
+                    {boundedMutationApplyEligibilityGateModel.safetyNotes.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{boundedMutationApplyEligibilityGateModel.safetyNotes.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Next safe gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {boundedMutationApplyEligibilityGateModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Apply gate only. No confirmation UI rendered. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}
@@ -9608,7 +9739,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} />
           </div>
         </SheetContent>
       </Sheet>

@@ -6,12 +6,24 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.39)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.40)
 
-**Current active completed step:** MASTER-8C.39 / AB20.4.32  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (mutation-readiness corridor complete, controlled dry-run writer active)  
-**Current active step:** MASTER-8C.40 / AB20.4.33 — User confirmation or bounded mutation apply gate (only if explicitly authorized)  
+**Current active completed step:** MASTER-8C.40 / AB20.4.33  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (mutation-readiness corridor complete, controlled dry-run writer active, bounded apply eligibility gate active)  
+**Current active step:** MASTER-8C.41 / AB20.4.34 — Marker-only confirmation/apply UI or controlled apply writer (only if explicitly authorized)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Bounded Mutation Apply Eligibility Gate (MASTER-8C.40)
+- MASTER-8C.40 continues controlled future-session mutation writer corridor (Step 2 of 5)
+- New pure helper: bounded-mutation-apply-eligibility-gate.ts (482 lines)
+- 8 statuses: unavailable_missing_upstream, blocked_active_caution, blocked_no_future_targets, blocked_permission_locked, blocked_pre_mutation_lock, blocked_dry_run_not_ready, eligible_confirmation_preview_only, eligible_apply_future_step_locked
+- All UI flags locked: confirmationUiAllowed: false, applyButtonAllowed: false, applyButtonDisabled: true
+- All write flags locked false: canWriteSessions, canPersistProgram, canSaveMarker, canChangeProgramCards, canChangeStartWorkout, canChangeLiveWorkout
+- All safety flags true: noProgramChangesApplied, noMarkerSaved, noWorkoutChangesApplied, completedSessionsProtected, futureTargetsRequired
+- Priority order: active caution > no future targets > permission locked > pre-mutation lock > dry-run not ready
+- Plan Logic card: "Bounded Mutation Apply Gate" (violet border)
+- AI Foundation Map: Plan Logic row shows "Apply: [status]" chip
+- Programs/exercises/sets changed: NO
 
 ### Controlled Future-Session Mutation Writer Dry-Run (MASTER-8C.39)
 - MASTER-8C.39 begins controlled future-session mutation writer corridor (Step 1 of 5)

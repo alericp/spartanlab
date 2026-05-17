@@ -267,6 +267,13 @@ import {
   getConfirmationContractStatusColor,
   type MutationConfirmationContractPreviewModel,
 } from '@/lib/program/mutation-confirmation-contract-preview'
+// [MASTER-8C.34] Caution clearance gate
+import {
+  resolveMutationCautionClearanceGate,
+  getMutationCautionClearanceStatusLabel,
+  getMutationCautionClearanceStatusColor,
+  type MutationCautionClearanceGateModel,
+} from '@/lib/program/mutation-caution-clearance-gate'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3127,6 +3134,7 @@ function AIIntelligenceFoundationMap({
   mutationPathwayReadinessMapModel,
   mutationTargetSessionResolutionPreviewModel,
   mutationConfirmationContractPreviewModel,
+  mutationCautionClearanceGateModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3139,6 +3147,7 @@ function AIIntelligenceFoundationMap({
   mutationPathwayReadinessMapModel?: MutationPathwayReadinessMapModel | null
   mutationTargetSessionResolutionPreviewModel?: MutationTargetSessionResolutionPreviewModel | null
   mutationConfirmationContractPreviewModel?: MutationConfirmationContractPreviewModel | null
+  mutationCautionClearanceGateModel?: MutationCautionClearanceGateModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -7761,6 +7770,17 @@ export function ProgramCoachIntelligenceHub({
       mutationPathwayReadinessMapModel,
     })
   }, [mutationTargetSessionResolutionPreviewModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel])
+  
+  // [MASTER-8C.34] Caution Clearance Gate
+  const mutationCautionClearanceGateModel = useMemo<MutationCautionClearanceGateModel>(() => {
+    return resolveMutationCautionClearanceGate({
+      planEvidenceTrendReadinessModel,
+      mutationReadinessReviewGateModel,
+      mutationPathwayReadinessMapModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationConfirmationContractPreviewModel,
+    })
+  }, [planEvidenceTrendReadinessModel, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, mutationTargetSessionResolutionPreviewModel, mutationConfirmationContractPreviewModel])
   
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {

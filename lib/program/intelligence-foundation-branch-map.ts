@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.33 - Confirmation contract preview)
+  // PLAN LOGIC (MASTER-8C.34 - Caution clearance gate + mutation unlock preconditions)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, and confirmation contract preview analyzing marker-only confirmation eligibility',
-    nextSafeAction: 'User confirmation UI gate remains future-locked; no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Confirmation contract layer skipped, allowing next step to jump directly from target resolution into write/apply path',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, and caution clearance gate consolidating all mutation unlock preconditions',
+    nextSafeAction: 'Structural mutation preview gate remains future-locked; no marker or structural mutation allowed yet',
+    riskIfIgnored: 'Caution clearance layer skipped, allowing next step to assume mutation can proceed without explicit unlock precondition verification',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -265,6 +265,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/mutation-target-session-resolution-preview.ts',
       'lib/program/workout-log-session-identity-readonly-bridge.ts',
       'lib/program/mutation-confirmation-contract-preview.ts',
+      'lib/program/mutation-caution-clearance-gate.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

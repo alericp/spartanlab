@@ -6,12 +6,26 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.31)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.32)
 
-**Current active completed step:** MASTER-8C.31 / AB20.4.24  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active)  
-**Current active step:** MASTER-8C.32 / AB20.4.25 — to be verified from checklist (likely user-confirmation/preview contract gate, still read-only unless explicitly approved)  
+**Current active completed step:** MASTER-8C.32 / AB20.4.25  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, evidence bridge connected, trend classification active, mutation-readiness review gate active, mutation pathway map active, target-session resolution preview active with completed/future session identity resolution)  
+**Current active step:** MASTER-8C.33 / AB20.4.26 — to be verified from checklist (likely user-confirmation/marker-preview contract gate, still no structural mutation unless explicitly approved)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Completed/Future Session Identity Resolution (MASTER-8C.32)
+- MASTER-8C.32 repaired the target-resolution fragility where completedDays was hardcoded empty
+- New pure helper: workout-log-session-identity-readonly-bridge.ts (293 lines)
+- 4 identity statuses: no_logs, identity_unavailable, partially_resolved, resolved
+- Conservative day extraction from generatedWorkoutId using regex /day[-_\s]?(\d+)/i
+- Validates against program session day numbers (no array-index guessing)
+- Target resolution now consumes read-only completed-session identity from trusted workout logs
+- Reports unavailable/partial identity honestly instead of claiming "0 completed"
+- Extended MutationTargetSessionResolutionPreviewModel with identity fields
+- Plan Logic card: session identity proof chip + completed protected label + unmapped count
+- AI Foundation Map: plan_logic row shows identity status chip
+- Reuses existing getRecentWorkoutLogsForGenerationRequest() — no duplicate storage read
+- Programs/exercises/sets changed: NO
 
 ### Target Session Resolution Preview (MASTER-8C.31)
 - New pure helper: mutation-target-session-resolution-preview.ts (622 lines)

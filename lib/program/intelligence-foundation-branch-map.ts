@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.31 - Target session resolution preview)
+  // PLAN LOGIC (MASTER-8C.32 - Completed/future session identity resolution)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, and target-session resolution preview; maps candidates to possible future session targets without mutation',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution from trusted workout logs',
     nextSafeAction: 'Confirm/preview contract remains future-locked; no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Plan Logic cannot show which candidates map to which future sessions or what proof is missing',
+    riskIfIgnored: 'Plan Logic cannot prove completed-vs-future session identity honestly, risking false completed/future counts in target resolution',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -263,6 +263,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/mutation-readiness-review-gate.ts',
       'lib/program/mutation-pathway-readiness-map.ts',
       'lib/program/mutation-target-session-resolution-preview.ts',
+      'lib/program/workout-log-session-identity-readonly-bridge.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

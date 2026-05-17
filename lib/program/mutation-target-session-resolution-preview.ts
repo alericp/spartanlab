@@ -31,6 +31,11 @@ import type {
   MutationPathwayReadinessMapModel,
 } from './mutation-pathway-readiness-map'
 
+import type {
+  WorkoutLogSessionIdentityStatus,
+  WorkoutLogSessionIdentityModel,
+} from './workout-log-session-identity-readonly-bridge'
+
 // ─── Local adapter types (avoids importing AdaptiveProgram directly) ────────
 
 export interface TargetResolutionSessionInput {
@@ -106,6 +111,11 @@ export interface MutationTargetSessionResolutionPreviewModel {
   readonly blockedCandidateCount: number
   readonly unresolvedCandidateCount: number
   readonly resolvedReadOnlyCandidateCount: number
+  readonly completedSessionIdentityStatus: WorkoutLogSessionIdentityStatus
+  readonly completedSessionIdentityLabel: string
+  readonly unresolvedCompletedEvidenceCount: number
+  readonly identityMissingProof: readonly string[]
+  readonly identitySafetyNotes: readonly string[]
   readonly nextSafeGate: string
   readonly missingProof: readonly string[]
   readonly safetyNotes: readonly string[]
@@ -381,8 +391,32 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
   readonly programSessions?: TargetResolutionProgramInput | null
   readonly mutationReadinessReviewGateModel?: MutationReadinessReviewGateModel | null
   readonly mutationPathwayReadinessMapModel?: MutationPathwayReadinessMapModel | null
+  readonly sessionIdentityModel?: WorkoutLogSessionIdentityModel | null
 }): MutationTargetSessionResolutionPreviewModel {
-  const { programSessions, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel } = input
+  const { programSessions, mutationReadinessReviewGateModel, mutationPathwayReadinessMapModel, sessionIdentityModel } = input
+
+  // ── Identity defaults (used in all return paths) ──────────────────────
+  const identityStatus: WorkoutLogSessionIdentityStatus = sessionIdentityModel?.status ?? 'no_logs'
+  const identityLabel = sessionIdentityModel
+    ? (sessionIdentityModel.status === 'resolved'
+        ? `Resolved (${sessionIdentityModel.completedDayNumbers.length} day${sessionIdentityModel.completedDayNumbers.length !== 1 ? 's' : ''})`
+        : sessionIdentityModel.status === 'partially_resolved'
+        ? `Partial (${sessionIdentityModel.resolvedWorkoutCount} resolved, ${sessionIdentityModel.unresolvedWorkoutCount} unresolved)`
+        : sessionIdentityModel.status === 'identity_unavailable'
+        ? 'Identity unavailable — logs exist but no parseable day mapping'
+        : 'No logs')
+    : 'No session identity data'
+  const identityMissingProof = sessionIdentityModel?.missingProof ?? ['Session identity model required']
+  const identitySafetyNotes = sessionIdentityModel?.safetyNotes ?? ['No session identity analysis available']
+  const unresolvedCompletedEvidence = sessionIdentityModel?.unresolvedWorkoutCount ?? 0
+
+  const identityFields = {
+    completedSessionIdentityStatus: identityStatus,
+    completedSessionIdentityLabel: identityLabel,
+    unresolvedCompletedEvidenceCount: unresolvedCompletedEvidence,
+    identityMissingProof,
+    identitySafetyNotes,
+  }
 
   // ── Unavailable: no review gate or pathway map ──────────────────────────
   if (!mutationReadinessReviewGateModel || !mutationPathwayReadinessMapModel) {
@@ -400,6 +434,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
       nextSafeGate: 'Mutation-readiness review and pathway map required',
       missingProof: [...REQUIRED_PROOF],
       safetyNotes: ['No upstream models available for target resolution'],
+      ...identityFields,
       ...MODEL_LOCKED_FLAGS,
     }
   }
@@ -415,12 +450,12 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
   const completedSessions = allSessionCandidates.filter(s => s.isCompleted)
   const futureSessions = allSessionCandidates.filter(s => s.isFutureSession)
 
-  // ── No program sessions ─────────────────────────────────────────────────
-  if (sessions.length === 0) {
+  // ── No program sessions → unavailable
+  if (!programSessions || programSessions.sessions.length === 0) {
     return {
       status: 'unavailable',
-      headline: 'No program sessions available',
-      summary: 'Cannot resolve target sessions without a program. Generate a program first.',
+      headline: 'Target resolution preview: unavailable',
+      summary: 'No program sessions available for target resolution.',
       candidateResolutions: [],
       futureSessionCandidates: [],
       completedSessionCount: 0,
@@ -431,6 +466,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
       nextSafeGate: 'Program generation required',
       missingProof: [...REQUIRED_PROOF],
       safetyNotes: ['No program sessions exist'],
+      ...identityFields,
       ...MODEL_LOCKED_FLAGS,
     }
   }
@@ -451,6 +487,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
       nextSafeGate: 'Next program generation cycle',
       missingProof: [],
       safetyNotes: ['All sessions completed — protected from mutation'],
+      ...identityFields,
       ...MODEL_LOCKED_FLAGS,
     }
   }
@@ -479,6 +516,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
         'Completed sessions are permanently protected',
         'Future sessions listed for transparency only',
       ],
+      ...identityFields,
       ...MODEL_LOCKED_FLAGS,
     }
   }
@@ -503,6 +541,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
       nextSafeGate: 'Collect more evidence and generate review candidates',
       missingProof: [...REQUIRED_PROOF],
       safetyNotes: ['No candidates exist for target mapping'],
+      ...identityFields,
       ...MODEL_LOCKED_FLAGS,
     }
   }
@@ -586,6 +625,7 @@ export function resolveMutationTargetSessionResolutionPreview(input: {
     nextSafeGate,
     missingProof: [...allMissingProof],
     safetyNotes,
+    ...identityFields,
     ...MODEL_LOCKED_FLAGS,
   }
 }

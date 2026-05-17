@@ -9804,9 +9804,15 @@ export function ProgramCoachIntelligenceHub({
                       </span>
                     )
                   })()}
-                  {markerOnlyConfirmationBoundaryModel.activeCautionCount > 0 && (
+                  {/* [MASTER-8C.47] Show root/candidate clearance counts instead of raw activeCautionCount */}
+                  {(markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? markerOnlyConfirmationBoundaryModel.activeCautionCount) > 0 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
-                      {markerOnlyConfirmationBoundaryModel.activeCautionCount} caution
+                      {markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? markerOnlyConfirmationBoundaryModel.activeCautionCount} root/candidate
+                    </span>
+                  )}
+                  {(markerOnlyConfirmationBoundaryModel.cascadeEchoCount ?? 0) > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {markerOnlyConfirmationBoundaryModel.cascadeEchoCount} cascade (diagnostic)
                     </span>
                   )}
                   {markerOnlyConfirmationBoundaryModel.dryRunOperationCount > 0 && (
@@ -9908,9 +9914,15 @@ export function ProgramCoachIntelligenceHub({
                       </span>
                     )
                   })()}
-                  {markerSaveAuthorizationPreflightBoundaryModel.activeCautionCount > 0 && (
+                  {/* [MASTER-8C.47] Show root/candidate clearance counts instead of raw activeCautionCount */}
+                  {(markerSaveAuthorizationPreflightBoundaryModel.rootCandidateNeedsEvidenceCount ?? markerSaveAuthorizationPreflightBoundaryModel.activeCautionCount) > 0 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
-                      {markerSaveAuthorizationPreflightBoundaryModel.activeCautionCount} caution
+                      {markerSaveAuthorizationPreflightBoundaryModel.rootCandidateNeedsEvidenceCount ?? markerSaveAuthorizationPreflightBoundaryModel.activeCautionCount} root/candidate
+                    </span>
+                  )}
+                  {(markerSaveAuthorizationPreflightBoundaryModel.cascadeEchoCount ?? 0) > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                      {markerSaveAuthorizationPreflightBoundaryModel.cascadeEchoCount} cascade (diagnostic)
                     </span>
                   )}
                   {markerSaveAuthorizationPreflightBoundaryModel.markerCandidateCount > 0 && (

@@ -1,6 +1,7 @@
 /**
  * ============================================================================
  * MASTER-8C.34 / AB20.4.27 — MUTATION CAUTION CLEARANCE GATE (READ-ONLY)
+ * [MASTER-8C.45] Extended with caution provenance and deduplication
  * ============================================================================
  *
  * Pure, deterministic, read-only gate that consolidates all upstream caution
@@ -14,6 +15,13 @@
  *   5. Derives entirely from existing read-only models already computed in Hub.
  *   6. canWriteMarker is always false. canApplyStructuralMutation is always false.
  *   7. Never claims applied marker, confirmed plan, or structural changes.
+ *
+ * [MASTER-8C.45] Caution Provenance:
+ *   - Root caution: Direct evidence of pain/tension/injury from workout data
+ *   - Candidate-specific caution: Individual method/target candidate safety concern
+ *   - Derived cascade: Downstream gate echoes that reflect upstream caution
+ *   - Only root + candidate cautions count as independent blockers
+ *   - Derived cascade signals are diagnostic only
  */
 
 import type { PlanEvidenceTrendReadinessModel } from './plan-evidence-trend-readiness'
@@ -36,12 +44,28 @@ export type MutationCautionClearanceGateStatus =
 
 export type MutationCautionSignalSeverity = 'caution' | 'blocked' | 'watch'
 
+// [MASTER-8C.45] Caution provenance classification
+export type MutationCautionProvenance = 'root' | 'candidate_specific' | 'derived_cascade'
+
+// [MASTER-8C.45] Clearance mode based on caution provenance
+export type MutationCautionClearanceMode =
+  | 'blocked_by_root_caution'
+  | 'blocked_by_candidate_caution'
+  | 'derived_cascade_only'
+  | 'clearance_preview_ready'
+  | 'waiting_for_evidence'
+  | 'no_future_targets'
+  | 'future_locked'
+
 export interface MutationCautionClearanceSignal {
   readonly source: string
   readonly label: string
   readonly severity: MutationCautionSignalSeverity
   readonly reason: string
   readonly blocksMutation: boolean
+  // [MASTER-8C.45] Provenance fields
+  readonly provenance: MutationCautionProvenance
+  readonly dedupeKey: string
 }
 
 export interface MutationCautionClearanceGateModel {
@@ -56,6 +80,18 @@ export interface MutationCautionClearanceGateModel {
   readonly missingProofCount: number
   readonly completedSessionCount: number
   readonly futureSessionCount: number
+
+  // [MASTER-8C.45] Provenance-aware caution counts
+  readonly rootCautionSignals: readonly MutationCautionClearanceSignal[]
+  readonly candidateSpecificCautionSignals: readonly MutationCautionClearanceSignal[]
+  readonly derivedCascadeCautionSignals: readonly MutationCautionClearanceSignal[]
+  readonly dedupedActiveCautionSignals: readonly MutationCautionClearanceSignal[]
+  readonly rootActiveCautionCount: number
+  readonly candidateSpecificCautionCount: number
+  readonly derivedCascadeCautionCount: number
+  readonly allRawCautionSignalCount: number
+  readonly cautionProvenanceSummary: string
+  readonly cautionClearanceMode: MutationCautionClearanceMode
 
   // Permission flags — ALL LOCKED
   readonly canProceedToPreview: false
@@ -99,6 +135,80 @@ const LOCKED_SAFETY_FLAGS = {
   noLiveWorkoutChangesApplied: true as const,
 }
 
+// ─── Caution Classification Helper ──────────────────────────────────────────
+
+/**
+ * [MASTER-8C.45] Classify a caution signal by provenance and generate dedupe key.
+ * 
+ * Root caution: Direct evidence from workout data (pain, tension, injury signals)
+ * Candidate-specific: Individual method/target candidate safety concern
+ * Derived cascade: Downstream gate echoes reflecting upstream caution
+ */
+function classifyCautionSignal(
+  source: string,
+  label: string,
+  reason: string
+): { provenance: MutationCautionProvenance; dedupeKey: string } {
+  // Root/source caution - direct evidence from workout analysis
+  if (source === 'plan_evidence_trend') {
+    return {
+      provenance: 'root',
+      dedupeKey: `root:plan_evidence_trend:${label.toLowerCase().replace(/\s+/g, '_')}`,
+    }
+  }
+
+  // Candidate-specific caution - individual candidate safety concern
+  if (source === 'review_candidate') {
+    return {
+      provenance: 'candidate_specific',
+      dedupeKey: `candidate:${label}:${reason.slice(0, 50)}`,
+    }
+  }
+
+  // Candidate-specific for target candidates with non-generic reasons
+  if (source === 'target_candidate') {
+    const isGenericCascade = reason.toLowerCase().includes('global caution') ||
+      reason.toLowerCase().includes('must clear') ||
+      reason.toLowerCase().includes('upstream')
+    if (!isGenericCascade) {
+      return {
+        provenance: 'candidate_specific',
+        dedupeKey: `candidate:target:${label}:${reason.slice(0, 50)}`,
+      }
+    }
+  }
+
+  // Derived cascade - downstream gate echoes
+  // These sources just reflect that an upstream caution exists
+  const cascadeSources = [
+    'mutation_readiness_review',
+    'mutation_pathway',
+    'pathway_gate',
+    'target_resolution',
+    'confirmation_contract',
+  ]
+  if (cascadeSources.includes(source)) {
+    return {
+      provenance: 'derived_cascade',
+      dedupeKey: `derived:${source}:${label.toLowerCase().replace(/\s+/g, '_')}`,
+    }
+  }
+
+  // Target candidate with generic cascade reason
+  if (source === 'target_candidate') {
+    return {
+      provenance: 'derived_cascade',
+      dedupeKey: `derived:target_candidate:${label}`,
+    }
+  }
+
+  // Default to derived cascade for unknown sources
+  return {
+    provenance: 'derived_cascade',
+    dedupeKey: `derived:unknown:${source}:${label}`,
+  }
+}
+
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
 function extractCautionSignals(input: {
@@ -117,111 +227,177 @@ function extractCautionSignals(input: {
     mutationConfirmationContractPreviewModel,
   } = input
 
-  // Check evidence trend for caution pattern
+  // Check evidence trend for caution pattern (ROOT)
   if (planEvidenceTrendReadinessModel) {
     if (planEvidenceTrendReadinessModel.classification === 'caution_pattern_detected') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'plan_evidence_trend',
+        'Caution pattern detected',
+        'Evidence trend analysis indicates caution-level signals'
+      )
       signals.push({
         source: 'plan_evidence_trend',
         label: 'Caution pattern detected',
         severity: 'caution',
         reason: 'Evidence trend analysis indicates caution-level signals in workout history',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
     if (planEvidenceTrendReadinessModel.readinessPosture === 'caution_review') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'plan_evidence_trend',
+        'Caution review required',
+        'Readiness posture recommends caution review'
+      )
       signals.push({
         source: 'plan_evidence_trend',
         label: 'Caution review required',
         severity: 'watch',
         reason: 'Readiness posture recommends caution review before proceeding',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
   }
 
-  // Check mutation readiness review gate
+  // Check mutation readiness review gate (DERIVED CASCADE)
   if (mutationReadinessReviewGateModel) {
     if (mutationReadinessReviewGateModel.status === 'blocked_by_caution') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'mutation_readiness_review',
+        'Mutation blocked by caution',
+        'Mutation readiness review gate detected blocking caution signals'
+      )
       signals.push({
         source: 'mutation_readiness_review',
         label: 'Mutation blocked by caution',
         severity: 'blocked',
         reason: 'Mutation readiness review gate detected blocking caution signals',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
-    // Check individual candidates for caution blocks
+    // Check individual candidates for caution blocks (CANDIDATE-SPECIFIC)
     for (const candidate of mutationReadinessReviewGateModel.candidates) {
       if (candidate.resolution === 'blocked_caution') {
+        const reason = candidate.blockers.join(', ') || 'Caution-level blocker on candidate'
+        const { provenance, dedupeKey } = classifyCautionSignal(
+          'review_candidate',
+          `Candidate blocked: ${candidate.title}`,
+          reason
+        )
         signals.push({
           source: 'review_candidate',
           label: `Candidate blocked: ${candidate.title}`,
           severity: 'caution',
-          reason: candidate.blockers.join(', ') || 'Caution-level blocker on candidate',
+          reason,
           blocksMutation: true,
+          provenance,
+          dedupeKey,
         })
       }
     }
   }
 
-  // Check mutation pathway readiness map
+  // Check mutation pathway readiness map (DERIVED CASCADE)
   if (mutationPathwayReadinessMapModel) {
     if (mutationPathwayReadinessMapModel.status === 'blocked_by_caution') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'mutation_pathway',
+        'Pathway blocked by caution',
+        'Mutation pathway map indicates caution-level gate block'
+      )
       signals.push({
         source: 'mutation_pathway',
         label: 'Pathway blocked by caution',
         severity: 'blocked',
         reason: 'Mutation pathway map indicates caution-level gate block',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
-    // Check caution_cleared gate
+    // Check caution_cleared gate (DERIVED CASCADE)
     const cautionGate = mutationPathwayReadinessMapModel.gates.find(g => g.id === 'caution_cleared')
     if (cautionGate && cautionGate.status === 'blocked') {
+      const reason = cautionGate.blocker || 'Caution gate not cleared'
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'pathway_gate',
+        'Caution clearance gate blocked',
+        reason
+      )
       signals.push({
         source: 'pathway_gate',
         label: 'Caution clearance gate blocked',
         severity: 'blocked',
-        reason: cautionGate.blocker || 'Caution gate not cleared',
+        reason,
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
   }
 
-  // Check target session resolution
+  // Check target session resolution (DERIVED CASCADE or CANDIDATE-SPECIFIC)
   if (mutationTargetSessionResolutionPreviewModel) {
     if (mutationTargetSessionResolutionPreviewModel.status === 'blocked_by_caution') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'target_resolution',
+        'Target resolution blocked by caution',
+        'Target session resolution preview blocked by caution signals'
+      )
       signals.push({
         source: 'target_resolution',
         label: 'Target resolution blocked by caution',
         severity: 'blocked',
         reason: 'Target session resolution preview blocked by caution signals',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
     // Check for blocked candidates with caution reasons
     for (const cr of mutationTargetSessionResolutionPreviewModel.candidateResolutions) {
       if (cr.status === 'blocked' && cr.blockedReasons.some(r => r.toLowerCase().includes('caution'))) {
+        const reason = cr.blockedReasons.join(', ') || 'Caution blocker on target candidate'
+        const { provenance, dedupeKey } = classifyCautionSignal(
+          'target_candidate',
+          `Target candidate blocked: ${cr.title}`,
+          reason
+        )
         signals.push({
           source: 'target_candidate',
           label: `Target candidate blocked: ${cr.title}`,
           severity: 'caution',
-          reason: cr.blockedReasons.join(', ') || 'Caution blocker on target candidate',
+          reason,
           blocksMutation: true,
+          provenance,
+          dedupeKey,
         })
       }
     }
   }
 
-  // Check confirmation contract
+  // Check confirmation contract (DERIVED CASCADE)
   if (mutationConfirmationContractPreviewModel) {
     if (mutationConfirmationContractPreviewModel.status === 'blocked_by_caution') {
+      const { provenance, dedupeKey } = classifyCautionSignal(
+        'confirmation_contract',
+        'Confirmation blocked by caution',
+        'Confirmation contract preview blocked by caution signals'
+      )
       signals.push({
         source: 'confirmation_contract',
         label: 'Confirmation blocked by caution',
         severity: 'blocked',
         reason: 'Confirmation contract preview blocked by caution signals',
         blocksMutation: true,
+        provenance,
+        dedupeKey,
       })
     }
   }
@@ -292,6 +468,58 @@ function extractMissingProof(input: {
   return [...new Set(missing)]
 }
 
+/**
+ * [MASTER-8C.45] Dedupe caution signals by stable root key.
+ * Returns only unique signals based on dedupeKey.
+ */
+function dedupeCautionSignals(
+  signals: MutationCautionClearanceSignal[]
+): MutationCautionClearanceSignal[] {
+  const seen = new Set<string>()
+  const deduped: MutationCautionClearanceSignal[] = []
+  
+  for (const signal of signals) {
+    if (!seen.has(signal.dedupeKey)) {
+      seen.add(signal.dedupeKey)
+      deduped.push(signal)
+    }
+  }
+  
+  return deduped
+}
+
+/**
+ * [MASTER-8C.45] Generate provenance summary text.
+ */
+function generateProvenanceSummary(
+  rootCount: number,
+  candidateCount: number,
+  cascadeCount: number,
+  rawCount: number
+): string {
+  const parts: string[] = []
+  
+  if (rootCount > 0) {
+    parts.push(`${rootCount} root caution${rootCount !== 1 ? 's' : ''} active`)
+  }
+  if (candidateCount > 0) {
+    parts.push(`${candidateCount} candidate-specific caution${candidateCount !== 1 ? 's' : ''}`)
+  }
+  if (cascadeCount > 0) {
+    parts.push(`${cascadeCount} downstream echo${cascadeCount !== 1 ? 'es' : ''} suppressed`)
+  }
+  
+  if (parts.length === 0) {
+    return 'No active caution signals'
+  }
+  
+  const summary = parts.join('; ')
+  if (rawCount > rootCount + candidateCount) {
+    return `${summary} (${rawCount} raw signals total)`
+  }
+  return summary
+}
+
 // ─── Main Resolver ──────────────────────────────────────────────────────────
 
 export function resolveMutationCautionClearanceGate(input: {
@@ -321,6 +549,17 @@ export function resolveMutationCautionClearanceGate(input: {
       missingProofCount: 2,
       completedSessionCount: 0,
       futureSessionCount: 0,
+      // [MASTER-8C.45] Provenance fields
+      rootCautionSignals: [],
+      candidateSpecificCautionSignals: [],
+      derivedCascadeCautionSignals: [],
+      dedupedActiveCautionSignals: [],
+      rootActiveCautionCount: 0,
+      candidateSpecificCautionCount: 0,
+      derivedCascadeCautionCount: 0,
+      allRawCautionSignalCount: 0,
+      cautionProvenanceSummary: 'No models available',
+      cautionClearanceMode: 'waiting_for_evidence',
       cautionSignals: [],
       clearedSignals: [],
       missingProof: ['Evidence trend model required', 'Mutation readiness review required'],
@@ -332,9 +571,34 @@ export function resolveMutationCautionClearanceGate(input: {
   }
 
   // ── Extract caution signals from all upstream models ──────────────────────
-  const cautionSignals = extractCautionSignals(input)
+  const allCautionSignals = extractCautionSignals(input)
   const clearedSignals = extractClearedConditions(input)
   const missingProof = extractMissingProof(input)
+
+  // [MASTER-8C.45] Classify signals by provenance
+  const rootCautionSignals = allCautionSignals.filter(s => s.provenance === 'root')
+  const candidateSpecificCautionSignals = allCautionSignals.filter(s => s.provenance === 'candidate_specific')
+  const derivedCascadeCautionSignals = allCautionSignals.filter(s => s.provenance === 'derived_cascade')
+
+  // [MASTER-8C.45] Dedupe - only root + candidate count as active blockers
+  const activeSignals = [...rootCautionSignals, ...candidateSpecificCautionSignals]
+  const dedupedActiveCautionSignals = dedupeCautionSignals(activeSignals)
+
+  const rootActiveCautionCount = dedupeCautionSignals(rootCautionSignals).length
+  const candidateSpecificCautionCount = dedupeCautionSignals(candidateSpecificCautionSignals).length
+  const derivedCascadeCautionCount = dedupeCautionSignals(derivedCascadeCautionSignals).length
+  const allRawCautionSignalCount = allCautionSignals.length
+
+  // [MASTER-8C.45] Active caution count = root + candidate only (deduped)
+  const activeCautionCount = dedupedActiveCautionSignals.length
+
+  // [MASTER-8C.45] Generate provenance summary
+  const cautionProvenanceSummary = generateProvenanceSummary(
+    rootActiveCautionCount,
+    candidateSpecificCautionCount,
+    derivedCascadeCautionCount,
+    allRawCautionSignalCount
+  )
 
   // ── Extract session counts ────────────────────────────────────────────────
   const completedSessionCount = mutationTargetSessionResolutionPreviewModel?.completedSessionCount ?? 0
@@ -343,10 +607,15 @@ export function resolveMutationCautionClearanceGate(input: {
   // ── Derive blocked reasons ────────────────────────────────────────────────
   const blockedReasons: string[] = []
 
-  // Check for active caution signals
-  const activeCautionCount = cautionSignals.filter(s => s.blocksMutation).length
-  if (activeCautionCount > 0) {
-    blockedReasons.push(`${activeCautionCount} active caution signal${activeCautionCount !== 1 ? 's' : ''} detected`)
+  // [MASTER-8C.45] Provenance-aware blocked reasons
+  if (rootActiveCautionCount > 0) {
+    blockedReasons.push(`${rootActiveCautionCount} root caution${rootActiveCautionCount !== 1 ? 's' : ''} active from workout evidence`)
+  }
+  if (candidateSpecificCautionCount > 0) {
+    blockedReasons.push(`${candidateSpecificCautionCount} candidate-specific caution${candidateSpecificCautionCount !== 1 ? 's' : ''} require review`)
+  }
+  if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
+    blockedReasons.push(`${derivedCascadeCautionCount} downstream echo${derivedCascadeCautionCount !== 1 ? 'es' : ''} (diagnostic only)`)
   }
 
   // Check for no future targets
@@ -360,8 +629,28 @@ export function resolveMutationCautionClearanceGate(input: {
     blockedReasons.push('Confirmation blocked: no future targets')
   } else if (confirmationStatus === 'blocked_completed_only') {
     blockedReasons.push('Confirmation blocked: completed sessions only')
-  } else if (confirmationStatus === 'blocked_by_caution') {
-    blockedReasons.push('Confirmation blocked: active caution')
+  }
+
+  // ── Determine clearance mode ──────────────────────────────────────────────
+  let cautionClearanceMode: MutationCautionClearanceMode
+
+  if (futureSessionCount === 0) {
+    cautionClearanceMode = 'no_future_targets'
+  } else if (
+    planEvidenceTrendReadinessModel?.status === 'insufficient' ||
+    planEvidenceTrendReadinessModel?.status === 'unavailable'
+  ) {
+    cautionClearanceMode = 'waiting_for_evidence'
+  } else if (rootActiveCautionCount > 0) {
+    cautionClearanceMode = 'blocked_by_root_caution'
+  } else if (candidateSpecificCautionCount > 0) {
+    cautionClearanceMode = 'blocked_by_candidate_caution'
+  } else if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
+    cautionClearanceMode = 'derived_cascade_only'
+  } else if (confirmationStatus === 'preview_eligible_marker_only') {
+    cautionClearanceMode = 'clearance_preview_ready'
+  } else {
+    cautionClearanceMode = 'future_locked'
   }
 
   // ── Determine status ──────────────────────────────────────────────────────
@@ -371,13 +660,18 @@ export function resolveMutationCautionClearanceGate(input: {
   let confidence: 'high' | 'medium' | 'low' | 'none'
   let nextSafeGate: string
 
-  // Priority 1: Active caution blocks everything
+  // Priority 1: Active root/candidate caution blocks everything
   if (activeCautionCount > 0) {
     status = 'blocked_active_caution'
-    headline = 'Caution clearance blocked'
-    summary = `${activeCautionCount} active caution signal${activeCautionCount !== 1 ? 's' : ''} must be addressed before mutation can be considered.`
+    if (rootActiveCautionCount > 0) {
+      headline = `Blocked: ${rootActiveCautionCount} root caution${rootActiveCautionCount !== 1 ? 's' : ''} active`
+      summary = `Root caution from workout evidence must clear before marker/mutation can proceed. ${derivedCascadeCautionCount} downstream echoes suppressed from blocker count.`
+    } else {
+      headline = `Blocked: ${candidateSpecificCautionCount} candidate caution${candidateSpecificCautionCount !== 1 ? 's' : ''} require review`
+      summary = `Candidate-specific caution signals must be reviewed. ${derivedCascadeCautionCount} downstream echoes are diagnostic only.`
+    }
     confidence = 'high'
-    nextSafeGate = 'Clear caution signals through evidence review'
+    nextSafeGate = 'Clear root caution evidence before marker save'
   }
   // Priority 2: No future sessions (all completed)
   else if (futureSessionCount === 0 && completedSessionCount > 0) {
@@ -406,15 +700,23 @@ export function resolveMutationCautionClearanceGate(input: {
     confidence = 'low'
     nextSafeGate = 'Collect sufficient workout evidence'
   }
-  // Priority 5: Confirmation contract preview eligible
+  // Priority 5: Derived cascade only (no root/candidate caution)
+  else if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
+    status = 'clearance_review_only'
+    headline = 'Clear: derived cascade only'
+    summary = `No root/candidate cautions active. ${derivedCascadeCautionCount} downstream echo${derivedCascadeCautionCount !== 1 ? 'es are' : ' is'} diagnostic only and do${derivedCascadeCautionCount === 1 ? 'es' : ''} not block.`
+    confidence = 'medium'
+    nextSafeGate = 'Proceed to marker-only preview gate'
+  }
+  // Priority 6: Confirmation contract preview eligible
   else if (confirmationStatus === 'preview_eligible_marker_only') {
     status = 'clearance_preview_ready'
     headline = 'Caution clearance: preview ready'
     summary = 'No active caution signals. Future targets exist. Marker-only confirmation preview may proceed in future step.'
     confidence = 'medium'
-    nextSafeGate = 'Structural mutation preview gate (future step)'
+    nextSafeGate = 'Marker-only preview gate (future step)'
   }
-  // Priority 6: Review only state
+  // Priority 7: Review only state
   else if (
     mutationReadinessReviewGateModel?.status === 'review_candidates_read_only' ||
     (mutationReadinessReviewGateModel?.reviewCandidateCount ?? 0) > 0
@@ -444,7 +746,19 @@ export function resolveMutationCautionClearanceGate(input: {
     missingProofCount: missingProof.length,
     completedSessionCount,
     futureSessionCount,
-    cautionSignals,
+    // [MASTER-8C.45] Provenance fields
+    rootCautionSignals,
+    candidateSpecificCautionSignals,
+    derivedCascadeCautionSignals,
+    dedupedActiveCautionSignals,
+    rootActiveCautionCount,
+    candidateSpecificCautionCount,
+    derivedCascadeCautionCount,
+    allRawCautionSignalCount,
+    cautionProvenanceSummary,
+    cautionClearanceMode,
+    // Visible caution signals = deduped active + cascade for diagnostics
+    cautionSignals: [...dedupedActiveCautionSignals, ...dedupeCautionSignals(derivedCascadeCautionSignals)],
     clearedSignals,
     missingProof,
     blockedReasons,
@@ -526,5 +840,27 @@ export function getMutationCautionClearanceStatusColor(
         text: 'text-[#8A8A9A]',
         border: 'border-[#2A2A35]/40',
       }
+  }
+}
+
+// [MASTER-8C.45] Clearance mode label helper
+export function getMutationCautionClearanceModeLabel(
+  mode: MutationCautionClearanceMode
+): string {
+  switch (mode) {
+    case 'blocked_by_root_caution':
+      return 'Blocked: Root Caution'
+    case 'blocked_by_candidate_caution':
+      return 'Blocked: Candidate Caution'
+    case 'derived_cascade_only':
+      return 'Cascade Only'
+    case 'clearance_preview_ready':
+      return 'Preview Ready'
+    case 'waiting_for_evidence':
+      return 'Waiting for Evidence'
+    case 'no_future_targets':
+      return 'No Future Targets'
+    case 'future_locked':
+      return 'Future Locked'
   }
 }

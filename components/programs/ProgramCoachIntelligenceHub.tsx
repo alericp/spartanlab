@@ -10148,6 +10148,86 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [MASTER-8C.45] Caution Provenance proof card */}
+            {mutationCautionClearanceGateModel && (
+              <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-amber-300">
+                    Caution Provenance
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    provenance
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    deduped
+                  </span>
+                </div>
+                {/* Provenance counts row */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded border",
+                    mutationCautionClearanceGateModel.rootActiveCautionCount > 0
+                      ? "bg-rose-500/10 text-rose-400/70 border-rose-500/20"
+                      : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20"
+                  )}>
+                    {mutationCautionClearanceGateModel.rootActiveCautionCount} root
+                  </span>
+                  <span className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded border",
+                    mutationCautionClearanceGateModel.candidateSpecificCautionCount > 0
+                      ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20"
+                      : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20"
+                  )}>
+                    {mutationCautionClearanceGateModel.candidateSpecificCautionCount} candidate
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {mutationCautionClearanceGateModel.derivedCascadeCautionCount} cascade
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {mutationCautionClearanceGateModel.allRawCautionSignalCount} raw
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    {mutationCautionClearanceGateModel.futureSessionCount} future target(s)
+                  </span>
+                </div>
+                {/* Provenance summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1.5">
+                  {mutationCautionClearanceGateModel.cautionProvenanceSummary}
+                </p>
+                {/* Top root/candidate caution signals (max 3) */}
+                {mutationCautionClearanceGateModel.dedupedActiveCautionSignals.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Active cautions:</div>
+                    {mutationCautionClearanceGateModel.dedupedActiveCautionSignals.slice(0, 3).map((signal, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        {signal.provenance === 'root' ? '!' : '*'} {signal.label}
+                      </div>
+                    ))}
+                    {mutationCautionClearanceGateModel.dedupedActiveCautionSignals.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{mutationCautionClearanceGateModel.dedupedActiveCautionSignals.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Cascade explanation */}
+                {mutationCautionClearanceGateModel.derivedCascadeCautionCount > 0 && (
+                  <p className="text-[9px] text-slate-400/60 mb-1">
+                    Downstream gate echoes are diagnostic and do not multiply the root blocker.
+                  </p>
+                )}
+                {/* Next gate */}
+                <p className="text-[9px] text-[#8A8A9A] mb-1">
+                  Next: {mutationCautionClearanceGateModel.nextSafeGate}
+                </p>
+                {/* Safety line */}
+                <p className="text-[10px] text-amber-400/60">
+                  {mutationCautionClearanceGateModel.activeCautionCount > 0
+                    ? 'Root/candidate caution must clear before marker save. Cascade echoes suppressed from count.'
+                    : 'No active cautions. Derived cascade signals are diagnostic only.'}
+                </p>
+              </div>
+            )}
             {truthExplanation ? (
               <ProgramTruthSummary
                 truthExplanation={truthExplanation}

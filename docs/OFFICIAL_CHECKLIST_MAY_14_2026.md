@@ -6,12 +6,23 @@ This checklist supersedes ambiguous older checklist references. Do not invent ne
 
 ---
 
-## CURRENT ACTIVE POSITION (Updated after MASTER-8C.38)
+## CURRENT ACTIVE POSITION (Updated after MASTER-8C.39)
 
-**Current active completed step:** MASTER-8C.38 / AB20.4.31  
-**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (all read-only, mutation-readiness corridor complete with pre-mutation lock / bundle closure)  
-**Current active step:** MASTER-8C.39 / AB20.4.32 — First controlled future-session mutation writer step (only if explicitly authorized)  
+**Current active completed step:** MASTER-8C.39 / AB20.4.32  
+**Current protected corridor:** Method Planner + Superset structural + Set/Volume + Prehab/Rehab Safeguards + Recovery/Readiness + Exercise Knowledge Coverage + Progression/Periodization + Coach Recs + Plan Logic (mutation-readiness corridor complete, controlled dry-run writer active)  
+**Current active step:** MASTER-8C.40 / AB20.4.33 — User confirmation or bounded mutation apply gate (only if explicitly authorized)  
 **Stale historical checklists:** PROGRAM_INTELLIGENCE_QUALITY_CHECKLIST.md is historical/context only
+
+### Controlled Future-Session Mutation Writer Dry-Run (MASTER-8C.39)
+- MASTER-8C.39 begins controlled future-session mutation writer corridor (Step 1 of 5)
+- New pure helper: controlled-future-session-mutation-writer-dry-run.ts (604 lines)
+- 8 statuses: unavailable_missing_upstream, blocked_active_caution, blocked_no_future_targets, blocked_permission_locked, blocked_pre_mutation_lock, blocked_writer_boundary, dry_run_ready_preview_only, dry_run_empty_preview_only
+- All action flags locked false: canWriteSessions, canPersistProgram, canSaveMarker, canChangeProgramCards, canChangeStartWorkout, canChangeLiveWorkout, canApplyStructuralMutation
+- All safety flags true: dryRunOnly, completedSessionsProtected, futureSessionsPreviewOnly, noProgramChangesApplied, noMarkerSaved, noLiveWorkoutChangesApplied
+- Dry-run operations built from structural preview candidates only (no fabrication)
+- Plan Logic card: "Controlled Mutation Writer — Dry Run" (cyan border)
+- AI Foundation Map: Plan Logic row shows "Dry-Run: [status]" chip
+- Programs/exercises/sets changed: NO
 
 ### Pre-Mutation Lock / Bundle Closure (MASTER-8C.38)
 - MASTER-8C.38 closes the mutation-readiness corridor (Step 7 of 7)

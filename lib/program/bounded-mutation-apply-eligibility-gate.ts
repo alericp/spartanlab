@@ -181,32 +181,44 @@ export function resolveBoundedMutationApplyEligibilityGate(
   }
   
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Active caution (highest priority blocker)
+  // PRIORITY 2: Semantic hard blockers (blocking/waiting/unknown root candidates)
+  // [P27] Use semantic hard blocker count instead of raw activeCautionCount
   // -------------------------------------------------------------------------
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
+  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  
+  // Block only if semantic hard blockers remain (blocking + waiting + unknown)
+  // Do NOT block merely because raw activeCautionCount > 0 or clearable/diagnostic/cascade exist
   if (
-    activeCautionCount > 0 ||
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution'
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
   ) {
     return {
       status: 'blocked_active_caution',
       headline: 'Apply gate blocked by evidence requirements',
-      summary: `${activeCautionCount} root/candidate evidence blocker${activeCautionCount !== 1 ? 's' : ''} must be resolved before apply eligibility can be evaluated. Completed sessions remain protected.`,
+      summary: `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown) must be resolved before apply eligibility can be evaluated. Completed sessions remain protected.`,
       targetSessionCount: futureTargetCount,
       completedProtectedCount,
       activeCautionCount,
       dryRunOperationCount,
       eligibleOperationCount: 0,
       blockedReasons: [
-        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''} blocking apply eligibility`,
-        'Evidence clearance gate not ready',
-        'Apply controls remain locked until evidence is resolved',
+        `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence resolution`,
+        'Root/candidate clearance gate not ready',
+        'Apply controls remain locked until hard blockers are resolved',
       ],
       safetyNotes: [
         'Completed sessions protected',
         'No apply controls shown',
-        'No mutation possible while evidence blockers remain',
-      ],
-      nextSafeGate: 'Resolve root/candidate evidence blockers before evaluating apply eligibility',
+        'No mutation possible while hard blockers remain',
+        diagnosticOnlyCount > 0 ? `${diagnosticOnlyCount} diagnostic-only item${diagnosticOnlyCount !== 1 ? 's' : ''} (non-blocking)` : null,
+        clearableOnlyCount > 0 ? `${clearableOnlyCount} clearable/read-only item${clearableOnlyCount !== 1 ? 's' : ''} (non-blocking)` : null,
+        cascadeOnlyCount > 0 ? `${cascadeOnlyCount} cascade echo${cascadeOnlyCount !== 1 ? 'es' : ''} (non-blocking)` : null,
+      ].filter(Boolean) as string[],
+      nextSafeGate: 'Resolve hard blockers (blocking/waiting/unknown) before evaluating apply eligibility',
       ...LOCKED_UI_FLAGS,
       ...LOCKED_WRITE_FLAGS,
       ...LOCKED_SAFETY_FLAGS,

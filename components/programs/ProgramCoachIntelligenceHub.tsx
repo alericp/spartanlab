@@ -8092,22 +8092,37 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [boundedMutationApplyEligibilityGateModel, controlledFutureSessionMutationWriterDryRunModel, userConfirmationMarkerPermissionPreviewGateModel, preMutationLockBundleClosureModel, mutationCautionClearanceGateModel, mutationTargetSessionResolutionPreviewModel])
   
+  // [Prompt 20] Local-only marker-save authorization preview state
+  // This state is ephemeral and resets on refresh — it does NOT persist or save anything
+  // Must be declared before markerSaveAuthorizationPreflightBoundaryModel which depends on it
+  const [markerSaveAuthorizationPreviewAccepted, setMarkerSaveAuthorizationPreviewAccepted] = useState(false)
+  
+  // [Prompt 20] Determine if authorization preview is blocked
+  // Blocked when: no marker boundary, boundary blocked/unavailable, cautions exist, or no targets
+  const authPreviewBlocked = !markerOnlyConfirmationBoundaryModel || 
+    markerOnlyConfirmationBoundaryModel.status.startsWith('blocked_') ||
+    markerOnlyConfirmationBoundaryModel.status === 'unavailable_missing_upstream' ||
+    (markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? 0) > 0 ||
+    markerOnlyConfirmationBoundaryModel.targetSessionCount === 0
+
   // [MASTER-8C.42] Marker-Save Authorization Preflight Boundary
+  // [Prompt 20] Now wired to local-only authorization preview state
   const markerSaveAuthorizationPreflightBoundaryModel = useMemo<MarkerSaveAuthorizationPreflightBoundaryModel>(() => {
     return resolveMarkerSaveAuthorizationPreflightBoundary({
       markerOnlyConfirmationBoundaryModel,
-      explicitUserAuthorization: false, // hardcoded false - no UI control in this step
+      explicitUserAuthorization: markerSaveAuthorizationPreviewAccepted, // local-only preview, not persisted
     })
-  }, [markerOnlyConfirmationBoundaryModel])
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreviewAccepted])
   
   // [MASTER-8C.43] Controlled Marker-Save Action Boundary
+  // [Prompt 20] Now wired to local-only authorization preview state
   const controlledMarkerSaveActionBoundaryModel = useMemo<ControlledMarkerSaveActionBoundaryModel>(() => {
     return resolveControlledMarkerSaveActionBoundary({
       markerSaveAuthorizationPreflightBoundaryModel,
-      explicitUserAuthorization: false, // hardcoded false - no UI control in this step
-      markerSavedCount: 0, // no markers saved yet
+      explicitUserAuthorization: markerSaveAuthorizationPreviewAccepted, // local-only preview, not persisted
+      markerSavedCount: 0, // no markers saved yet — stays 0 in this step
     })
-  }, [markerSaveAuthorizationPreflightBoundaryModel])
+  }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted])
   
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
@@ -8158,6 +8173,14 @@ export function ProgramCoachIntelligenceHub({
   // [AB20.4.3] Reload context state
   const [isReloadingPlanner, setIsReloadingPlanner] = useState(false)
   const RELOAD_CONTEXT_KEY = 'spartanlab:methodOverridePlannerReloadContext'
+  
+  // [Prompt 20] Reset authorization preview if upstream blockers exist
+  // Prevents authorization acceptance when corridor is not ready
+  useEffect(() => {
+    if (authPreviewBlocked && markerSaveAuthorizationPreviewAccepted) {
+      setMarkerSaveAuthorizationPreviewAccepted(false)
+    }
+  }, [authPreviewBlocked, markerSaveAuthorizationPreviewAccepted])
   
   // [AB20.4.3] Save reload context and reload page
   const handleReloadPage = useCallback(() => {
@@ -10022,10 +10045,41 @@ export function ProgramCoachIntelligenceHub({
                     )}
                   </div>
                 )}
+                {/* [Prompt 20] Local-only authorization preview control */}
+                <div className="mb-2 p-2 rounded border border-[#2A2A35]/60 bg-[#12121A]/60">
+                  <div className="text-[9px] text-pink-400/60 mb-1.5">Authorization Preview (local-only)</div>
+                  {authPreviewBlocked ? (
+                    <div className="text-[9px] text-slate-400/70">
+                      Authorization locked until marker confirmation boundary is ready, cautions are cleared, and future targets exist.
+                    </div>
+                  ) : (
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={markerSaveAuthorizationPreviewAccepted}
+                        onChange={(e) => setMarkerSaveAuthorizationPreviewAccepted(e.target.checked)}
+                        className="mt-0.5 h-3 w-3 rounded border-pink-500/30 bg-[#1A1A2E] text-pink-500 focus:ring-pink-500/30"
+                      />
+                      <span className="text-[9px] text-[#8A8A9A]">
+                        I understand this is marker-only preview; no workout will change.
+                      </span>
+                    </label>
+                  )}
+                  <div className="text-[8px] text-[#6A6A7A] mt-1">
+                    Local preview only. No marker saved. Resets on refresh.
+                  </div>
+                </div>
                 {/* Locked marker save pill */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="text-[9px] px-2 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20 cursor-not-allowed">
-                    marker save locked
+                  <span className={cn(
+                    "text-[9px] px-2 py-0.5 rounded border cursor-not-allowed",
+                    markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked
+                      ? "bg-pink-500/10 text-pink-400/70 border-pink-500/20"
+                      : "bg-slate-500/10 text-slate-400/70 border-slate-500/20"
+                  )}>
+                    {markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked 
+                      ? 'preview authorized (local)' 
+                      : 'marker save locked'}
                   </span>
                 </div>
                 {/* Next safe gate */}
@@ -10034,7 +10088,9 @@ export function ProgramCoachIntelligenceHub({
                 </p>
                 {/* Safety line */}
                 <p className="text-[10px] text-pink-400/60">
-                  Marker-save preflight only. No authorization control enabled. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                  {markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked 
+                    ? 'Local preview authorization accepted. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.'
+                    : 'Marker-save preflight only. No authorization control enabled. No marker saved. No Program Cards, Start Workout, or Live Workout changes.'}
                 </p>
               </div>
             )}
@@ -10132,13 +10188,31 @@ export function ProgramCoachIntelligenceHub({
                     </span>
                   </div>
                 )}
+                {/* [Prompt 20] Local authorization preview state chip */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded border",
+                    markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked
+                      ? "bg-pink-500/10 text-pink-400/70 border-pink-500/20"
+                      : "bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40"
+                  )}>
+                    {markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked 
+                      ? 'local auth: accepted' 
+                      : 'local auth: not accepted'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    writer: not available
+                  </span>
+                </div>
                 {/* Next safe gate */}
                 <p className="text-[9px] text-[#8A8A9A] mb-1">
                   Next: {controlledMarkerSaveActionBoundaryModel.nextSafeGate}
                 </p>
                 {/* Safety line */}
                 <p className="text-[10px] text-rose-400/60">
-                  Marker action boundary only. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                  {markerSaveAuthorizationPreviewAccepted && !authPreviewBlocked
+                    ? 'Local preview authorization accepted. Marker writer not available. No marker saved. No writes.'
+                    : 'Marker action boundary only. No marker saved. No Program Cards, Start Workout, or Live Workout changes.'}
                 </p>
               </div>
             )}

@@ -55,6 +55,7 @@ import {
   HelpCircle,
   ArrowRight,
   Eye,
+  FileSearch,
   Loader2,
   Trash2,
   RefreshCw,
@@ -353,6 +354,15 @@ import {
   getMarkerWriteReadinessItemStatusColor,
   type MarkerWriteReadinessLedgerModel,
 } from '@/lib/program/marker-write-readiness-ledger'
+// [Prompt 23] Root/candidate clearance evidence detail
+import {
+  resolveRootCandidateClearanceEvidenceDetail,
+  getRootCandidateClearanceEvidenceDetailStatusLabel,
+  getRootCandidateClearanceEvidenceDetailStatusColor,
+  getRootCandidateEvidenceItemStatusColor,
+  getRootCandidateEvidenceItemStatusLabel,
+  type RootCandidateClearanceEvidenceDetailModel,
+} from '@/lib/program/root-candidate-clearance-evidence-detail'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -8197,6 +8207,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted])
   
+  // [Prompt 23] Root/candidate clearance evidence detail model
+  // Pure read-only detail of each root/candidate clearance item with evidence
+  const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
+    return resolveRootCandidateClearanceEvidenceDetail({
+      mutationCautionClearanceGateModel,
+      markerSaveArtifactPreviewModel,
+      markerWriteReadinessLedgerModel,
+      targetSessionCount: mutationTargetSessionResolutionPreviewModel?.futureSessionCount ?? 0,
+      completedSessionCount: mutationTargetSessionResolutionPreviewModel?.completedSessionCount ?? 0,
+    })
+  }, [mutationCautionClearanceGateModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel, mutationTargetSessionResolutionPreviewModel])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -10739,6 +10761,132 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-orange-400/60">
                   Read-only clearance proof. No marker saved. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 23] Root/Candidate Clearance Evidence Detail card
+                Pure read-only explanation of each root/candidate item with source evidence. */}
+            {rootCandidateClearanceEvidenceDetailModel && (
+              <div className="rounded-lg border border-orange-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileSearch className="h-4 w-4 text-orange-400" />
+                  <span className="text-sm font-medium text-orange-300">
+                    Root/Candidate Evidence Detail
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getRootCandidateClearanceEvidenceDetailStatusColor(rootCandidateClearanceEvidenceDetailModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getRootCandidateClearanceEvidenceDetailStatusLabel(rootCandidateClearanceEvidenceDetailModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        mode: {rootCandidateClearanceEvidenceDetailModel.mode.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-orange-300/90 font-medium mb-1">
+                  {rootCandidateClearanceEvidenceDetailModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {rootCandidateClearanceEvidenceDetailModel.summary}
+                </p>
+                {/* Counts row */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[8px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-400/70 border-red-500/20">
+                    blocking: {rootCandidateClearanceEvidenceDetailModel.blockingCount}
+                  </span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                    clearable RO: {rootCandidateClearanceEvidenceDetailModel.clearableReadOnlyCount}
+                  </span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-400/70 border-blue-500/20">
+                    diagnostic: {rootCandidateClearanceEvidenceDetailModel.diagnosticOnlyCount}
+                  </span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    missing evidence: {rootCandidateClearanceEvidenceDetailModel.missingEvidenceCount}
+                  </span>
+                </div>
+                {/* Item details */}
+                {rootCandidateClearanceEvidenceDetailModel.items.length > 0 && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-orange-500/10">
+                    <div className="text-[8px] text-orange-400/60 mb-1.5">Evidence Items:</div>
+                    <div className="space-y-1.5">
+                      {rootCandidateClearanceEvidenceDetailModel.items.slice(0, 5).map((item) => {
+                        const itemColor = getRootCandidateEvidenceItemStatusColor(item.status)
+                        return (
+                          <div key={item.id} className="p-1.5 rounded bg-[#1A1A2E]/40 border border-[#2A2A35]/30">
+                            <div className="flex items-start gap-2 mb-1">
+                              <span className={cn("text-[7px] px-1 py-0.5 rounded shrink-0", itemColor.bg, itemColor.text)}>
+                                {getRootCandidateEvidenceItemStatusLabel(item.status)}
+                              </span>
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-slate-500/10 text-slate-400 shrink-0">
+                                {item.category}
+                              </span>
+                              {item.blocksMarkerReadiness && (
+                                <span className="text-[7px] px-1 py-0.5 rounded bg-red-500/10 text-red-400 shrink-0">
+                                  blocks marker
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[8px] text-[#9A9AA9] font-medium mb-0.5">{item.label}</div>
+                            <div className="text-[7px] text-[#7A7A8A] mb-0.5">Source: {item.evidenceSource}</div>
+                            <div className="text-[7px] text-[#6A6A7A] truncate">{item.evidenceSummary}</div>
+                            {item.missingEvidence.length > 0 && (
+                              <div className="text-[7px] text-amber-400/60 mt-0.5">
+                                Missing: {item.missingEvidence.join(', ')}
+                              </div>
+                            )}
+                            <div className="text-[7px] text-[#8A8A9A] mt-0.5">
+                              Next: {item.nextRequiredAction}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {rootCandidateClearanceEvidenceDetailModel.items.length > 5 && (
+                        <div className="text-[8px] text-[#6A6A7A]">
+                          +{rootCandidateClearanceEvidenceDetailModel.items.length - 5} more items
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Blocker summary if any */}
+                {rootCandidateClearanceEvidenceDetailModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-red-400/60 mb-0.5">Blocker summary:</div>
+                    {rootCandidateClearanceEvidenceDetailModel.blockerSummary.slice(0, 3).map((b, i) => (
+                      <div key={i} className="text-[8px] text-red-300/70 mb-0.5 pl-2 truncate">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Source models */}
+                {rootCandidateClearanceEvidenceDetailModel.sourceModelsUsed.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-orange-400/60 mb-0.5">Source models:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {rootCandidateClearanceEvidenceDetailModel.sourceModelsUsed.map((src, i) => (
+                        <span key={i} className="text-[7px] px-1 py-0.5 rounded bg-orange-500/10 text-orange-300/70 border border-orange-500/20">
+                          {src}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-orange-400/60">Next: </span>
+                  {rootCandidateClearanceEvidenceDetailModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-orange-400/60">
+                  Read-only evidence detail. No cautions cleared. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.
                 </p>
               </div>
             )}

@@ -8220,8 +8220,9 @@ export function ProgramCoachIntelligenceHub({
       markerSaveAuthorizationPreflightBoundaryModel,
       controlledMarkerSaveActionBoundaryModel,
       authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
+      markerSavedCount, // [P39] Pass local marker saved count
     })
-  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted])
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
   
   // [Prompt 22] Marker write readiness ledger model
   // Pure read-only ledger summarizing all pre-writer conditions
@@ -8232,8 +8233,9 @@ export function ProgramCoachIntelligenceHub({
       controlledMarkerSaveActionBoundaryModel,
       markerSaveArtifactPreviewModel,
       authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
+      markerSavedCount, // [P39] Pass local marker saved count
     })
-  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted])
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence

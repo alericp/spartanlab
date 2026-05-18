@@ -27,6 +27,7 @@ export type MarkerWriteReadinessLedgerStatus =
   | 'blocked_artifact_not_ready'
   | 'blocked_writer_not_enabled'
   | 'ready_for_future_writer_no_write'
+  | 'local_marker_saved_no_persistence' // [P39] After local marker save
 
 // =============================================================================
 // LEDGER ITEM TYPE
@@ -48,8 +49,8 @@ export interface MarkerWriteReadinessLedgerModel {
   readonly headline: string
   readonly summary: string
 
-  readonly ledgerMode: 'read_only_writer_contract_preview'
-  readonly markerSavedCount: 0
+  readonly ledgerMode: 'read_only_writer_contract_preview' | 'local_marker_saved_proof' // [P39] Allow saved proof mode
+  readonly markerSavedCount: number // [P39] Dynamic, not hardcoded 0
 
   readonly items: readonly MarkerWriteReadinessLedgerItem[]
   readonly readyCount: number
@@ -70,7 +71,7 @@ export interface MarkerWriteReadinessLedgerModel {
   readonly canMutateStructure: false
 
   readonly completedSessionsProtected: true
-  readonly noMarkerSaved: true
+  readonly noMarkerSaved: boolean // [P39] Dynamic based on markerSavedCount
   readonly noMarkerWriteAttempted: true
   readonly noProgramChangesApplied: true
   readonly noWorkoutChangesApplied: true
@@ -86,6 +87,7 @@ export interface MarkerWriteReadinessLedgerInput {
   readonly controlledMarkerSaveActionBoundaryModel: ControlledMarkerSaveActionBoundaryModel | null | undefined
   readonly markerSaveArtifactPreviewModel: MarkerSaveArtifactPreviewModel | null | undefined
   readonly authorizationPreviewAccepted: boolean
+  readonly markerSavedCount?: number // [P39] Local marker saved count from UI state
 }
 
 // =============================================================================
@@ -101,6 +103,7 @@ export function resolveMarkerWriteReadinessLedger(
     controlledMarkerSaveActionBoundaryModel,
     markerSaveArtifactPreviewModel,
     authorizationPreviewAccepted,
+    markerSavedCount = 0, // [P39] Default to 0 if not provided
   } = input
 
   const items: MarkerWriteReadinessLedgerItem[] = []
@@ -243,23 +246,31 @@ export function resolveMarkerWriteReadinessLedger(
       : 'Action boundary not yet reviewable — requires local authorization',
   })
 
-  // Item 8: writer_enabled (always blocked in Prompt 22)
+  // Item 8: local_marker_save [P39] Dynamic based on local marker save state
+  const localMarkerSaveEnabled = controlledMarkerSaveActionBoundaryModel?.canExecuteMarkerSave === true || markerSavedCount > 0
+  const localMarkerSaved = markerSavedCount > 0
   items.push({
-    key: 'writer_enabled',
-    label: 'Writer Enabled',
-    status: 'blocked',
-    reason: 'Writer intentionally not enabled in Prompt 22',
+    key: 'local_marker_save',
+    label: 'Local Marker Save',
+    status: localMarkerSaved ? 'ready' : localMarkerSaveEnabled ? 'ready' : 'blocked',
+    reason: localMarkerSaved
+      ? `${markerSavedCount} marker saved locally. Duplicate save locked.`
+      : localMarkerSaveEnabled
+        ? 'Local marker save path is enabled; click to save locally.'
+        : 'Local marker save not yet enabled — requires authorization.',
   })
-  blockerSummary.push('Writer intentionally disabled')
+  if (!localMarkerSaveEnabled && !localMarkerSaved) {
+    blockerSummary.push('Local marker save not enabled')
+  }
 
-  // Item 9: persistence_enabled (always blocked in Prompt 22)
+  // Item 9: persistence_enabled (always blocked - persistence not implemented yet)
   items.push({
     key: 'persistence_enabled',
     label: 'Persistence Enabled',
     status: 'blocked',
-    reason: 'Persistence intentionally disabled in Prompt 22',
+    reason: 'Persistence not enabled yet. Local marker save is local-only proof.',
   })
-  blockerSummary.push('Persistence intentionally disabled')
+  blockerSummary.push('Persistence not enabled (local-only)')
 
   // Item 10: structural_mutation_disabled
   const noStructuralMutation = 
@@ -311,12 +322,24 @@ export function resolveMarkerWriteReadinessLedger(
     headline = 'Ledger Blocked — Artifact Not Ready'
     summary = 'Marker artifact preview is not in ready state.'
     nextRequiredStep = 'Resolve artifact preview blockers'
+  } else if (markerSavedCount > 0) {
+    // [P39] Local marker saved - show proof status
+    status = 'local_marker_saved_no_persistence'
+    headline = `Ledger: ${markerSavedCount} Local Marker Saved`
+    summary = `Local marker saved successfully. Persistence not enabled yet. No program/workout changes applied.`
+    nextRequiredStep = 'Local proof complete. Future step may enable persistence.'
+  } else if (localMarkerSaveEnabled) {
+    // [P39] Local marker save ready but not yet saved
+    status = 'ready_for_future_writer_no_write'
+    headline = 'Ledger Ready — Local Marker Save Available'
+    summary = `All preview gates are ready. Local marker save enabled. Click to save marker locally.`
+    nextRequiredStep = 'Click to save marker locally'
   } else {
-    // All preview gates are ready, but writer is intentionally disabled
+    // All preview gates are ready, but local marker save not enabled
     status = 'blocked_writer_not_enabled'
-    headline = 'Ledger Ready — Writer Not Enabled'
-    summary = `All ${readyCount - 2} preview gates are ready. Writer and persistence intentionally disabled in Prompt 22.`
-    nextRequiredStep = 'Future prompt will enable controlled marker writer'
+    headline = 'Ledger Ready — Local Save Not Enabled'
+    summary = `All preview gates are ready. Accept authorization to enable local marker save.`
+    nextRequiredStep = 'Accept authorization to enable local marker save'
   }
 
   return {
@@ -324,8 +347,8 @@ export function resolveMarkerWriteReadinessLedger(
     headline,
     summary,
 
-    ledgerMode: 'read_only_writer_contract_preview',
-    markerSavedCount: 0,
+    ledgerMode: markerSavedCount > 0 ? 'local_marker_saved_proof' : 'read_only_writer_contract_preview', // [P39] Dynamic mode
+    markerSavedCount, // [P39] Dynamic from input
 
     items,
     readyCount,
@@ -346,7 +369,7 @@ export function resolveMarkerWriteReadinessLedger(
     canMutateStructure: false,
 
     completedSessionsProtected: true,
-    noMarkerSaved: true,
+    noMarkerSaved: markerSavedCount === 0, // [P39] Dynamic based on saved count
     noMarkerWriteAttempted: true,
     noProgramChangesApplied: true,
     noWorkoutChangesApplied: true,
@@ -374,7 +397,9 @@ export function getMarkerWriteReadinessLedgerStatusLabel(
     case 'blocked_writer_not_enabled':
       return 'writer disabled'
     case 'ready_for_future_writer_no_write':
-      return 'ready (no write)'
+      return 'local save ready'
+    case 'local_marker_saved_no_persistence':
+      return 'local marker saved'
     default:
       return 'unknown'
   }
@@ -410,6 +435,12 @@ export function getMarkerWriteReadinessLedgerStatusColor(
         bg: 'bg-emerald-500/10',
         text: 'text-emerald-400/70',
         border: 'border-emerald-500/20',
+      }
+    case 'local_marker_saved_no_persistence':
+      return {
+        bg: 'bg-cyan-500/10',
+        text: 'text-cyan-400/70',
+        border: 'border-cyan-500/20',
       }
     default:
       return {

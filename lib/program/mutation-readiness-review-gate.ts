@@ -343,9 +343,14 @@ function resolveGateStatus(
     return 'collect_evidence'
   }
 
-  // Check caution blocking
+  // [P33] Check caution blocking - only block if there are actual blocked candidates
+  // Global caution_pattern_detected alone no longer forces blocked_by_caution
   if (trendClassification === 'caution_pattern_detected') {
-    return 'blocked_by_caution'
+    const hasBlockedCandidates = candidates.some(c => c.resolution === 'blocked_caution')
+    if (hasBlockedCandidates) {
+      return 'blocked_by_caution'
+    }
+    // No blocked candidates - fall through to check for review/monitor
   }
 
   // Check if any review candidates exist

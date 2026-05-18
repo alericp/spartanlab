@@ -354,6 +354,13 @@ import {
   getMarkerWriteReadinessItemStatusColor,
   type MarkerWriteReadinessLedgerModel,
 } from '@/lib/program/marker-write-readiness-ledger'
+// [Prompt 41] Durable marker receipt readiness
+import {
+  resolveDurableMarkerReceiptReadiness,
+  getDurableMarkerReceiptReadinessStatusLabel,
+  getDurableMarkerReceiptReadinessStatusColor,
+  type DurableMarkerReceiptReadinessModel,
+} from '@/lib/program/durable-marker-receipt-readiness'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3237,6 +3244,8 @@ function AIIntelligenceFoundationMap({
   markerSaveArtifactPreviewModel,
   // [Prompt 22] Marker write readiness ledger
   markerWriteReadinessLedgerModel,
+  // [Prompt 41] Durable marker receipt readiness
+  durableMarkerReceiptReadinessModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3264,6 +3273,8 @@ function AIIntelligenceFoundationMap({
   markerSaveArtifactPreviewModel?: MarkerSaveArtifactPreviewModel | null
   // [Prompt 22] Marker write readiness ledger
   markerWriteReadinessLedgerModel?: MarkerWriteReadinessLedgerModel | null
+  // [Prompt 41] Durable marker receipt readiness
+  durableMarkerReceiptReadinessModel?: DurableMarkerReceiptReadinessModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3985,7 +3996,12 @@ function AIIntelligenceFoundationMap({
                   <div className="text-[9px] text-teal-400/60">
                     {markerWriteReadinessLedgerModel && markerWriteReadinessLedgerModel.markerSavedCount > 0 ? (
                       <>
-                        Local marker saved: {markerWriteReadinessLedgerModel.markerSavedCount}. Persistence locked. No workout changes.
+                        Local marker saved: {markerWriteReadinessLedgerModel.markerSavedCount}.{' '}
+                        {durableMarkerReceiptReadinessModel?.status === 'persistence_candidate_ready_no_write' 
+                          ? `Receipt candidate: ${durableMarkerReceiptReadinessModel.receiptCandidateCount}. `
+                          : 'Receipt candidate: blocked. '
+                        }
+                        Persistence locked. No workout changes.
                       </>
                     ) : (
                       <>
@@ -8251,6 +8267,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
   
+  // [Prompt 41] Durable marker receipt readiness model
+  // Pure read-only evaluation of whether local marker proof is eligible for future durable receipt
+  const durableMarkerReceiptReadinessModel = useMemo<DurableMarkerReceiptReadinessModel>(() => {
+    return resolveDurableMarkerReceiptReadiness({
+      markerOnlyConfirmationBoundaryModel,
+      markerSaveAuthorizationPreflightBoundaryModel,
+      controlledMarkerSaveActionBoundaryModel,
+      markerSaveArtifactPreviewModel,
+      markerWriteReadinessLedgerModel,
+    })
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -10676,6 +10704,110 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 41] Durable Marker Receipt Readiness card
+                Pure read-only evaluation of whether local marker proof is eligible for future durable receipt.
+                No persistence or workout mutation - candidate readiness evaluation only. */}
+            {durableMarkerReceiptReadinessModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-violet-300">
+                    Durable Marker Receipt Readiness
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getDurableMarkerReceiptReadinessStatusColor(durableMarkerReceiptReadinessModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getDurableMarkerReceiptReadinessStatusLabel(durableMarkerReceiptReadinessModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        mode: {durableMarkerReceiptReadinessModel.receiptMode.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        receipt candidates: {durableMarkerReceiptReadinessModel.receiptCandidateCount}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: locked
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-violet-300/90 font-medium mb-1">
+                  {durableMarkerReceiptReadinessModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {durableMarkerReceiptReadinessModel.summary}
+                </p>
+                {/* Ready/blocked counts */}
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    ready: {durableMarkerReceiptReadinessModel.readyCount}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {durableMarkerReceiptReadinessModel.blockedCount}
+                  </span>
+                </div>
+                {/* Receipt fields */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                  <div className="text-[8px] text-violet-400/60 mb-1.5">Receipt Candidate Fields:</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {durableMarkerReceiptReadinessModel.receiptFields.slice(0, 6).map((field) => (
+                      <div key={field.label} className="flex items-center gap-1">
+                        <span className="text-[8px] text-[#6A6A7A]">{field.label}:</span>
+                        <span className="text-[8px] text-violet-300/70">{field.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Readiness items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                  <div className="text-[8px] text-violet-400/60 mb-1.5">Readiness Checklist:</div>
+                  <div className="space-y-1">
+                    {durableMarkerReceiptReadinessModel.items.map((item) => (
+                      <div key={item.key} className="flex items-start gap-2">
+                        <span className={cn(
+                          "text-[8px] px-1 py-0.5 rounded shrink-0",
+                          item.status === 'ready' 
+                            ? "bg-emerald-500/10 text-emerald-400" 
+                            : "bg-amber-500/10 text-amber-400"
+                        )}>
+                          {item.status}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                          <div className="text-[7px] text-[#6A6A7A] truncate">{item.reason}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {durableMarkerReceiptReadinessModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {durableMarkerReceiptReadinessModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-violet-400/60">Next: </span>
+                  {durableMarkerReceiptReadinessModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Read-only receipt candidate. No persistence. No Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -11093,7 +11225,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} />
           </div>
         </SheetContent>
       </Sheet>

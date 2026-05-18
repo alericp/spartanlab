@@ -8157,6 +8157,26 @@ export function ProgramCoachIntelligenceHub({
   // Must be declared before markerSaveAuthorizationPreflightBoundaryModel which depends on it
   const [markerSaveAuthorizationPreviewAccepted, setMarkerSaveAuthorizationPreviewAccepted] = useState(false)
   
+  // [P38] Local-only saved marker artifact state
+  // This is purely local UI state - resets on refresh, no persistence
+  // Contains proof fields only, no actual program/workout mutation
+  interface SavedMarkerArtifact {
+    markerId: string
+    savedAtMs: number
+    savedAtLabel: string
+    targetSessionCount: number
+    completedProtectedCount: number
+    authorizationAccepted: true
+    noProgramChangesApplied: true
+    noWorkoutChangesApplied: true
+    noProgramCardsChanged: true
+    noStartWorkoutChanged: true
+    noLiveWorkoutChanged: true
+    completedSessionsProtected: true
+  }
+  const [savedMarkerArtifact, setSavedMarkerArtifact] = useState<SavedMarkerArtifact | null>(null)
+  const markerSavedCount = savedMarkerArtifact ? 1 : 0
+  
   // [Prompt 20] Determine if authorization preview is blocked
   // [P30] Tightened guard: blocked when marker-only boundary is not preview-ready
   // Uses helper-derived semantic hard blocker count from marker-only boundary
@@ -8188,9 +8208,9 @@ export function ProgramCoachIntelligenceHub({
     return resolveControlledMarkerSaveActionBoundary({
       markerSaveAuthorizationPreflightBoundaryModel,
       explicitUserAuthorization: markerSaveAuthorizationPreviewAccepted, // local-only preview, not persisted
-      markerSavedCount: 0, // no markers saved yet — stays 0 in this step
+      markerSavedCount, // [P38] Now dynamic based on savedMarkerArtifact
     })
-  }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted])
+  }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
   
   // [Prompt 21] Marker-save artifact preview model
   // Pure read-only preview of what marker artifact would be saved later
@@ -8284,6 +8304,66 @@ export function ProgramCoachIntelligenceHub({
       setMarkerSaveAuthorizationPreviewAccepted(false)
     }
   }, [authPreviewBlocked, markerSaveAuthorizationPreviewAccepted])
+  
+  // [P38] Local marker save handler - event handler only, never runs during render
+  // Saves exactly one marker artifact locally, does NOT mutate program/workout/sessions
+  const handleLocalMarkerSave = useCallback(() => {
+    // Guard: already saved
+    if (savedMarkerArtifact !== null) {
+      console.log('[v0] Local marker already saved, blocking duplicate')
+      return
+    }
+    // Guard: authorization not accepted
+    if (!markerSaveAuthorizationPreviewAccepted) {
+      console.log('[v0] Authorization not accepted, blocking marker save')
+      return
+    }
+    // Guard: auth preview blocked
+    if (authPreviewBlocked) {
+      console.log('[v0] Auth preview blocked, blocking marker save')
+      return
+    }
+    // Guard: action boundary not ready for marker save
+    if (!controlledMarkerSaveActionBoundaryModel?.canExecuteMarkerSave) {
+      console.log('[v0] Action boundary not ready for marker save')
+      return
+    }
+    // Guard: no target sessions
+    if ((controlledMarkerSaveActionBoundaryModel?.targetSessionCount ?? 0) <= 0) {
+      console.log('[v0] No target sessions, blocking marker save')
+      return
+    }
+    // Guard: hard blockers exist
+    if ((controlledMarkerSaveActionBoundaryModel?.hardBlockingRootCandidateCount ?? 0) > 0) {
+      console.log('[v0] Hard blockers exist, blocking marker save')
+      return
+    }
+    
+    // Create local marker artifact proof
+    const now = Date.now()
+    const artifact: SavedMarkerArtifact = {
+      markerId: `marker-local-${now}`,
+      savedAtMs: now,
+      savedAtLabel: new Date(now).toLocaleTimeString(),
+      targetSessionCount: controlledMarkerSaveActionBoundaryModel?.targetSessionCount ?? 0,
+      completedProtectedCount: controlledMarkerSaveActionBoundaryModel?.completedProtectedCount ?? 0,
+      authorizationAccepted: true,
+      noProgramChangesApplied: true,
+      noWorkoutChangesApplied: true,
+      noProgramCardsChanged: true,
+      noStartWorkoutChanged: true,
+      noLiveWorkoutChanged: true,
+      completedSessionsProtected: true,
+    }
+    
+    setSavedMarkerArtifact(artifact)
+    console.log('[v0] Local marker saved:', artifact.markerId)
+  }, [
+    savedMarkerArtifact,
+    markerSaveAuthorizationPreviewAccepted,
+    authPreviewBlocked,
+    controlledMarkerSaveActionBoundaryModel,
+  ])
   
   // [AB20.4.3] Save reload context and reload page
   const handleReloadPage = useCallback(() => {
@@ -10283,8 +10363,38 @@ export function ProgramCoachIntelligenceHub({
                     )}
                   </div>
                 )}
-                {/* Locked marker action pill - non-interactive */}
-                {!controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && (
+                {/* [P38] Local marker save button - event handler controlled */}
+                {controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave ? (
+                  <div className="mb-2">
+                    <button
+                      onClick={handleLocalMarkerSave}
+                      className="text-[9px] px-3 py-1 rounded border bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30 transition-colors"
+                    >
+                      Save marker locally
+                    </button>
+                    <p className="text-[8px] text-emerald-400/60 mt-1">
+                      Click to save one local marker proof. No program/workout changes.
+                    </p>
+                  </div>
+                ) : savedMarkerArtifact ? (
+                  <div className="mb-2 p-2 rounded border border-emerald-500/30 bg-emerald-500/5">
+                    <div className="text-[9px] text-emerald-400 font-medium mb-1">
+                      1 marker saved locally
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A] space-y-0.5">
+                      <div>ID: {savedMarkerArtifact.markerId}</div>
+                      <div>Saved at: {savedMarkerArtifact.savedAtLabel}</div>
+                      <div>Targets: {savedMarkerArtifact.targetSessionCount} session(s)</div>
+                      <div>Protected: {savedMarkerArtifact.completedProtectedCount} completed</div>
+                    </div>
+                    <div className="text-[8px] text-emerald-400/60 mt-1 space-y-0.5">
+                      <div>No Program Cards changed</div>
+                      <div>No Start Workout changed</div>
+                      <div>No Live Workout changed</div>
+                      <div>Local proof only - resets on refresh</div>
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <span className="text-[9px] px-2 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20 cursor-not-allowed">
                       marker action locked
@@ -10303,8 +10413,19 @@ export function ProgramCoachIntelligenceHub({
                       ? 'local auth: accepted' 
                       : 'local auth: not accepted'}
                   </span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
-                    writer: not available
+                  <span className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded border",
+                    savedMarkerArtifact
+                      ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20"
+                      : controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave
+                        ? "bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20"
+                        : "bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40"
+                  )}>
+                    {savedMarkerArtifact
+                      ? 'local marker: saved'
+                      : controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave
+                        ? 'local marker: ready'
+                        : 'local marker: locked'}
                   </span>
                 </div>
                 {/* Next safe gate */}

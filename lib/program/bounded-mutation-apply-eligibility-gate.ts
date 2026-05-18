@@ -396,7 +396,7 @@ export function getBoundedMutationApplyEligibilityStatusLabel(
     case 'unavailable_missing_upstream':
       return 'Unavailable'
     case 'blocked_active_caution':
-      return 'Blocked: Active Caution'
+      return 'Blocked: Evidence Required'
     case 'blocked_no_future_targets':
       return 'Blocked: No Future Targets'
     case 'blocked_permission_locked':

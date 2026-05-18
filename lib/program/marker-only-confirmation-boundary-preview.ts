@@ -62,6 +62,11 @@ export interface MarkerOnlyConfirmationBoundaryModel {
   readonly rootCandidateNeedsEvidenceCount: number
   readonly cascadeEchoCount: number
   readonly rawCautionCount: number
+  // [Prompt 25] Semantic root/candidate fields from Prompt 24
+  readonly hardBlockingRootCandidateCount: number
+  readonly unknownStatusRootCandidateCount: number
+  readonly readOnlyClearableRootCandidateCount: number
+  readonly diagnosticOnlyRootCandidateCount: number
   
   // Blockers and notes
   readonly blockedReasons: readonly string[]
@@ -169,6 +174,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount: 0,
       cascadeEchoCount: 0,
       rawCautionCount: 0,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount: 0,
+      unknownStatusRootCandidateCount: 0,
+      readOnlyClearableRootCandidateCount: 0,
+      diagnosticOnlyRootCandidateCount: 0,
       blockedReasons: ['Missing required upstream gate models'],
       safetyNotes: ['No marker confirmation possible without upstream gates'],
       nextSafeGate: 'Resolve upstream gate availability',
@@ -196,7 +206,6 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
     mutationCautionClearanceGateModel.blockingRootCandidateCount ?? 0
   const rootCandidateWaitingCount = 
     mutationCautionClearanceGateModel.waitingRootCandidateCount ?? 0
-  const rootCandidateNeedsEvidenceCount = rootCandidateBlockingCount + rootCandidateWaitingCount
   const cascadeEchoCount = 
     mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
   const rawCautionCount = 
@@ -204,13 +213,31 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
   const rootCandidateClearanceReady = 
     mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
   
+  // [Prompt 25] Semantic root/candidate fields from Prompt 24
+  // Prefer direct semantic fields, fallback to computed if unavailable
+  const hardBlockingRootCandidateCount = 
+    mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ??
+    (rootCandidateBlockingCount + rootCandidateWaitingCount + (mutationCautionClearanceGateModel.unknownStatusRootCandidateCount ?? 0))
+  const unknownStatusRootCandidateCount =
+    mutationCautionClearanceGateModel.unknownStatusRootCandidateCount ?? 0
+  const readOnlyClearableRootCandidateCount =
+    mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ??
+    mutationCautionClearanceGateModel.clearableRootCandidateCount ?? 0
+  const diagnosticOnlyRootCandidateCount =
+    mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ??
+    ((mutationCautionClearanceGateModel.monitorOnlyRootCandidateCount ?? 0) + 
+     (mutationCautionClearanceGateModel.staleOrMisclassifiedCount ?? 0))
+  
+  // Semantic blocker count = true hard blockers (blocking + waiting + unknown)
+  const rootCandidateNeedsEvidenceCount = hardBlockingRootCandidateCount
+  
   // Marker candidates = future targets with dry-run operations available
   const markerCandidateCount = 
     futureTargetCount > 0 && dryRunOperationCount > 0 ? dryRunOperationCount : 0
   
   // -------------------------------------------------------------------------
-  // PRIORITY B: Active caution — now uses root/candidate clearance (8C47)
-  // Cascade echoes are diagnostic only and do not block marker preview
+  // PRIORITY B: Active caution — now uses Prompt 24 semantic root/candidate clearance
+  // Cascade echoes and diagnostic items do not block marker preview
   // -------------------------------------------------------------------------
   if (
     rootCandidateNeedsEvidenceCount > 0 ||
@@ -218,14 +245,40 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
     mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
     mutationCautionClearanceGateModel.status === 'clearance_waiting_for_evidence'
   ) {
-    const blockerLabel = rootCandidateBlockingCount > 0 
-      ? `${rootCandidateBlockingCount} blocking root/candidate caution(s)`
-      : `${rootCandidateWaitingCount} root/candidate caution(s) waiting for evidence`
+    // [Prompt 25] Refined blocker label using semantic counts
+    const blockerParts: string[] = []
+    if (rootCandidateBlockingCount > 0) {
+      blockerParts.push(`${rootCandidateBlockingCount} blocking`)
+    }
+    if (rootCandidateWaitingCount > 0) {
+      blockerParts.push(`${rootCandidateWaitingCount} waiting for evidence`)
+    }
+    if (unknownStatusRootCandidateCount > 0) {
+      blockerParts.push(`${unknownStatusRootCandidateCount} unknown status`)
+    }
+    const blockerLabel = blockerParts.length > 0
+      ? `${hardBlockingRootCandidateCount} hard blocker(s): ${blockerParts.join(', ')}`
+      : `${hardBlockingRootCandidateCount} semantic root/candidate blocker(s)`
+    
+    // Diagnostic info for non-blocking items
+    const diagnosticParts: string[] = []
+    if (readOnlyClearableRootCandidateCount > 0) {
+      diagnosticParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+    }
+    if (diagnosticOnlyRootCandidateCount > 0) {
+      diagnosticParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    }
+    if (cascadeEchoCount > 0) {
+      diagnosticParts.push(`${cascadeEchoCount} cascade echo(es)`)
+    }
+    const diagnosticSuffix = diagnosticParts.length > 0
+      ? ` Also present (non-blocking): ${diagnosticParts.join(', ')}.`
+      : ''
     
     return {
       status: 'blocked_active_caution',
-      headline: 'Marker Boundary Blocked — Root/Candidate Evidence Required',
-      summary: `${rootCandidateNeedsEvidenceCount} root/candidate clearance item(s) need resolution. ${cascadeEchoCount} cascade echo(es) are diagnostic only and do not independently block.`,
+      headline: 'Marker Boundary Blocked — Hard Blocker Evidence Required',
+      summary: `${hardBlockingRootCandidateCount} semantic root/candidate item(s) need resolution.${diagnosticSuffix}`,
       targetSessionCount: futureTargetCount,
       completedProtectedCount,
       activeCautionCount,
@@ -238,18 +291,23 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         blockerLabel,
-        `${cascadeEchoCount} cascade echo(es) diagnostic only`,
-        'Root/candidate evidence must resolve before marker preview',
+        ...(diagnosticParts.length > 0 ? [`Non-blocking: ${diagnosticParts.join(', ')}`] : []),
+        'Hard blocker evidence must resolve before marker preview',
       ],
       safetyNotes: [
         'Completed sessions remain protected',
         'No marker save attempted',
         'No program changes applied',
-        'Cascade echoes do not multiply the root blocker',
+        'Clearable/diagnostic items do not independently block',
       ],
-      nextSafeGate: 'Clear root/candidate evidence, then re-check marker boundary',
+      nextSafeGate: 'Clear hard blocker evidence, then re-check marker boundary',
       canRenderMarkerConfirmationPreview: false,
       ...LOCKED_FLAGS,
     }
@@ -277,6 +335,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         'No future target sessions available',
         'Marker confirmation requires future sessions',
@@ -316,6 +379,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         `Apply gate status: ${boundedMutationApplyEligibilityGateModel.status}`,
         'Apply gate must reach eligible state',
@@ -351,6 +419,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         `Dry-run status: ${controlledFutureSessionMutationWriterDryRunModel.status}`,
         'Dry-run must reach preview-ready state',
@@ -390,6 +463,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         `Permission gate status: ${userConfirmationMarkerPermissionPreviewGateModel.status}`,
         'Permission gate must reach preview-ready state',
@@ -424,6 +502,11 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
     rootCandidateNeedsEvidenceCount,
     cascadeEchoCount,
     rawCautionCount,
+    // [Prompt 25] Semantic root/candidate fields
+    hardBlockingRootCandidateCount,
+    unknownStatusRootCandidateCount,
+    readOnlyClearableRootCandidateCount,
+    diagnosticOnlyRootCandidateCount,
     blockedReasons: [],
     safetyNotes: [
       `${completedProtectedCount} completed session(s) protected`,

@@ -50,6 +50,11 @@ export interface MarkerSaveArtifactPreviewModel {
   readonly rootCandidateNeedsEvidenceCount: number
   readonly cascadeEchoCount: number
   readonly rawCautionCount: number
+  // [Prompt 25] Semantic root/candidate fields from Prompt 24
+  readonly hardBlockingRootCandidateCount: number
+  readonly unknownStatusRootCandidateCount: number
+  readonly readOnlyClearableRootCandidateCount: number
+  readonly diagnosticOnlyRootCandidateCount: number
 
   readonly sourceModelsUsed: readonly string[]
   readonly blockedReasons: readonly string[]
@@ -105,6 +110,11 @@ export function resolveMarkerSaveArtifactPreview(
   const rootCandidateNeedsEvidenceCount = markerOnlyConfirmationBoundaryModel?.rootCandidateNeedsEvidenceCount ?? 0
   const cascadeEchoCount = markerOnlyConfirmationBoundaryModel?.cascadeEchoCount ?? 0
   const rawCautionCount = markerOnlyConfirmationBoundaryModel?.rawCautionCount ?? 0
+  // [Prompt 25] Semantic root/candidate fields from marker-only boundary
+  const hardBlockingRootCandidateCount = markerOnlyConfirmationBoundaryModel?.hardBlockingRootCandidateCount ?? 0
+  const unknownStatusRootCandidateCount = markerOnlyConfirmationBoundaryModel?.unknownStatusRootCandidateCount ?? 0
+  const readOnlyClearableRootCandidateCount = markerOnlyConfirmationBoundaryModel?.readOnlyClearableRootCandidateCount ?? 0
+  const diagnosticOnlyRootCandidateCount = markerOnlyConfirmationBoundaryModel?.diagnosticOnlyRootCandidateCount ?? 0
 
   // Track source models used
   const sourceModelsUsed: string[] = []
@@ -135,12 +145,24 @@ export function resolveMarkerSaveArtifactPreview(
     if (!markerSaveAuthorizationPreflightBoundaryModel) blockedReasons.push('Missing marker-save authorization preflight model')
     if (!controlledMarkerSaveActionBoundaryModel) blockedReasons.push('Missing controlled marker-save action model')
   }
-  // Gate 2: Cautions not cleared (root/candidate needs evidence)
-  else if (rootCandidateNeedsEvidenceCount > 0) {
+  // Gate 2: Cautions not cleared (semantic hard blockers need evidence)
+  // [Prompt 25] Use hardBlockingRootCandidateCount as primary semantic blocker
+  else if (rootCandidateNeedsEvidenceCount > 0 || hardBlockingRootCandidateCount > 0) {
     status = 'blocked_cautions_not_cleared'
-    blockedReasons.push(`${rootCandidateNeedsEvidenceCount} root/candidate caution(s) need evidence`)
-    if (rootCandidateBlockingCount > 0) blockedReasons.push(`${rootCandidateBlockingCount} root/candidate blocking`)
-    if (rootCandidateWaitingCount > 0) blockedReasons.push(`${rootCandidateWaitingCount} root/candidate waiting`)
+    // Build semantic blocker message
+    const blockerParts: string[] = []
+    if (rootCandidateBlockingCount > 0) blockerParts.push(`${rootCandidateBlockingCount} blocking`)
+    if (rootCandidateWaitingCount > 0) blockerParts.push(`${rootCandidateWaitingCount} waiting`)
+    if (unknownStatusRootCandidateCount > 0) blockerParts.push(`${unknownStatusRootCandidateCount} unknown`)
+    blockedReasons.push(`${hardBlockingRootCandidateCount} hard blocker(s): ${blockerParts.join(', ')}`)
+    // Note diagnostic items that don't block
+    if (readOnlyClearableRootCandidateCount > 0 || diagnosticOnlyRootCandidateCount > 0 || cascadeEchoCount > 0) {
+      const diagParts: string[] = []
+      if (readOnlyClearableRootCandidateCount > 0) diagParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+      if (diagnosticOnlyRootCandidateCount > 0) diagParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+      if (cascadeEchoCount > 0) diagParts.push(`${cascadeEchoCount} cascade echoes`)
+      blockedReasons.push(`Non-blocking: ${diagParts.join(', ')}`)
+    }
   }
   // Gate 3: No future targets
   else if (targetSessionCount === 0) {
@@ -181,6 +203,11 @@ export function resolveMarkerSaveArtifactPreview(
     { label: 'Root/Candidate Needs Evidence', value: String(rootCandidateNeedsEvidenceCount) },
     { label: 'Cascade Echoes', value: String(cascadeEchoCount) },
     { label: 'Raw Caution Count', value: String(rawCautionCount) },
+    // [Prompt 25] Semantic root/candidate fields
+    { label: 'Hard Blocking', value: String(hardBlockingRootCandidateCount) },
+    { label: 'Unknown Status', value: String(unknownStatusRootCandidateCount) },
+    { label: 'Clearable Read-Only', value: String(readOnlyClearableRootCandidateCount) },
+    { label: 'Diagnostic-Only', value: String(diagnosticOnlyRootCandidateCount) },
   ]
 
   if (markerArtifactPreviewId) {
@@ -204,6 +231,11 @@ export function resolveMarkerSaveArtifactPreview(
     rootCandidateNeedsEvidenceCount,
     cascadeEchoCount,
     rawCautionCount,
+    // [Prompt 25] Semantic root/candidate fields
+    hardBlockingRootCandidateCount,
+    unknownStatusRootCandidateCount,
+    readOnlyClearableRootCandidateCount,
+    diagnosticOnlyRootCandidateCount,
 
     sourceModelsUsed,
     blockedReasons,

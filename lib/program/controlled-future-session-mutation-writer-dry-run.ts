@@ -247,16 +247,23 @@ export function resolveControlledFutureSessionMutationWriterDryRun(
   }
   
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Active caution blocks dry-run
+  // PRIORITY 2: Semantic hard blockers block dry-run
+  // [P28] Do NOT block merely because raw activeCautionCount > 0
   // -------------------------------------------------------------------------
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
+  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  
   if (
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
-    activeCautionCount > 0
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
   ) {
     return {
       status: 'blocked_active_caution',
       headline: 'Dry-Run Blocked — Evidence Required',
-      summary: `${activeCautionCount} evidence item(s) detected. The dry-run writer is blocked until evidence conditions are resolved.`,
+      summary: `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown) must be resolved before dry-run can proceed.`,
       confidence: 0.2,
       targetDayNumbers,
       targetSessionCount: futureTargetCount,
@@ -265,16 +272,19 @@ export function resolveControlledFutureSessionMutationWriterDryRun(
       operationCount: 0,
       operations: [],
       blockedReasons: [
-        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''} blocking dry-run`,
-        'Evidence clearance gate not passed',
-        'Dry-run writer requires evidence resolution',
+        `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`,
+        'Root/candidate clearance gate not ready',
+        'Dry-run requires hard blocker resolution',
       ],
       safetyNotes: [
         'Completed sessions protected',
         'Future sessions preview-only',
-        'No mutation allowed while evidence blockers remain',
-      ],
-      nextSafeGate: 'Resolve root/candidate evidence blockers',
+        'No mutation allowed while hard blockers remain',
+        diagnosticOnlyCount > 0 ? `${diagnosticOnlyCount} diagnostic-only (non-blocking)` : null,
+        clearableOnlyCount > 0 ? `${clearableOnlyCount} clearable/read-only (non-blocking)` : null,
+        cascadeOnlyCount > 0 ? `${cascadeOnlyCount} cascade echo${cascadeOnlyCount !== 1 ? 'es' : ''} (non-blocking)` : null,
+      ].filter(Boolean) as string[],
+      nextSafeGate: 'Resolve hard blockers (blocking/waiting/unknown)',
       ...hardFalseFlags,
       ...hardTrueFlags,
     }

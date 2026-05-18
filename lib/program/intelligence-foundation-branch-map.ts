@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.47 - Controlled durable receipt writer preview)
+  // PLAN LOGIC (MASTER-8C.48 - Persistence writer activation lock gate)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, and controlled durable receipt writer contract preview',
-    nextSafeAction: 'MASTER-8C.48+ controlled durable receipt persistence writer behind explicit locks; no persistence enabled yet',
-    riskIfIgnored: 'Writer contract preview skipped, allowing next persistence step to proceed without verifying the exact receipt contract shape and required safety locks',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, and explicit persistence activation lock gate',
+    nextSafeAction: 'MASTER-8C.49+ controlled no-write durable writer harness behind persistence activation lock; no persistence enabled yet',
+    riskIfIgnored: 'Persistence activation lock gate skipped, allowing next durable write step to proceed without a typed activation boundary that proves all persistence/write/API/DB/storage locks are engaged',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -279,6 +279,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/marker-write-readiness-ledger.ts',
       'lib/program/durable-marker-receipt-readiness.ts',
       'lib/program/controlled-durable-marker-receipt-writer-preview.ts',
+      'lib/program/persistence-writer-activation-lock-gate.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

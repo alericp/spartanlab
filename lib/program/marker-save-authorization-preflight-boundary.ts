@@ -50,6 +50,11 @@ export interface MarkerSaveAuthorizationPreflightBoundaryModel {
   readonly rootCandidateNeedsEvidenceCount: number
   readonly cascadeEchoCount: number
   readonly rawCautionCount: number
+  // [Prompt 25.1] Semantic root/candidate fields from Prompt 24/25
+  readonly hardBlockingRootCandidateCount: number
+  readonly unknownStatusRootCandidateCount: number
+  readonly readOnlyClearableRootCandidateCount: number
+  readonly diagnosticOnlyRootCandidateCount: number
   
   readonly blockedReasons: readonly string[]
   readonly safetyNotes: readonly string[]
@@ -138,6 +143,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       rootCandidateNeedsEvidenceCount: 0,
       cascadeEchoCount: 0,
       rawCautionCount: 0,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount: 0,
+      unknownStatusRootCandidateCount: 0,
+      readOnlyClearableRootCandidateCount: 0,
+      diagnosticOnlyRootCandidateCount: 0,
       blockedReasons: ['Missing marker-only confirmation boundary model'],
       safetyNotes: [
         'No marker saved',
@@ -162,23 +172,49 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
   // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
   const rootCandidateBlockingCount = markerOnlyConfirmationBoundaryModel.rootCandidateBlockingCount ?? 0
   const rootCandidateWaitingCount = markerOnlyConfirmationBoundaryModel.rootCandidateWaitingCount ?? 0
-  const rootCandidateNeedsEvidenceCount = rootCandidateBlockingCount + rootCandidateWaitingCount
   const cascadeEchoCount = markerOnlyConfirmationBoundaryModel.cascadeEchoCount ?? 0
   const rawCautionCount = markerOnlyConfirmationBoundaryModel.rawCautionCount ?? activeCautionCount
+  
+  // [Prompt 25.1] Semantic root/candidate fields from Prompt 24/25
+  const hardBlockingRootCandidateCount = 
+    markerOnlyConfirmationBoundaryModel.hardBlockingRootCandidateCount ??
+    markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? 0
+  const unknownStatusRootCandidateCount =
+    markerOnlyConfirmationBoundaryModel.unknownStatusRootCandidateCount ?? 0
+  const readOnlyClearableRootCandidateCount =
+    markerOnlyConfirmationBoundaryModel.readOnlyClearableRootCandidateCount ?? 0
+  const diagnosticOnlyRootCandidateCount =
+    markerOnlyConfirmationBoundaryModel.diagnosticOnlyRootCandidateCount ?? 0
+  // Semantic blocker count = hard blockers (blocking + waiting + unknown)
+  const rootCandidateNeedsEvidenceCount = hardBlockingRootCandidateCount
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Active cautions — now uses root/candidate clearance (8C47)
-  // Cascade echoes are diagnostic only and do not block marker-save auth
+  // PRIORITY 2: Semantic hard blockers (blocking/waiting/unknown)
+  // Clearable read-only and diagnostic-only items do NOT independently block
   // -------------------------------------------------------------------------
-  if (rootCandidateNeedsEvidenceCount > 0) {
-    const blockerLabel = rootCandidateBlockingCount > 0 
-      ? `${rootCandidateBlockingCount} blocking root/candidate caution(s)`
-      : `${rootCandidateWaitingCount} root/candidate caution(s) waiting for evidence`
+  if (hardBlockingRootCandidateCount > 0 || rootCandidateNeedsEvidenceCount > 0) {
+    // Build semantic blocker breakdown
+    const blockerParts: string[] = []
+    if (rootCandidateBlockingCount > 0) blockerParts.push(`${rootCandidateBlockingCount} blocking`)
+    if (rootCandidateWaitingCount > 0) blockerParts.push(`${rootCandidateWaitingCount} waiting`)
+    if (unknownStatusRootCandidateCount > 0) blockerParts.push(`${unknownStatusRootCandidateCount} unknown`)
+    const blockerLabel = blockerParts.length > 0
+      ? `${hardBlockingRootCandidateCount} hard blocker(s): ${blockerParts.join(', ')}`
+      : `${hardBlockingRootCandidateCount} semantic root/candidate blocker(s)`
+    
+    // Diagnostic items that don't block
+    const diagnosticParts: string[] = []
+    if (readOnlyClearableRootCandidateCount > 0) diagnosticParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+    if (diagnosticOnlyRootCandidateCount > 0) diagnosticParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    if (cascadeEchoCount > 0) diagnosticParts.push(`${cascadeEchoCount} cascade echo(es)`)
+    const diagnosticSuffix = diagnosticParts.length > 0
+      ? ` Non-blocking: ${diagnosticParts.join(', ')}.`
+      : ''
     
     return {
       status: 'blocked_active_caution',
-      headline: 'Marker-Save Authorization Blocked — Root/Candidate Evidence Required',
-      summary: `${rootCandidateNeedsEvidenceCount} root/candidate clearance item(s) need resolution. ${cascadeEchoCount} cascade echo(es) are diagnostic only and do not independently block.`,
+      headline: 'Marker-Save Authorization Blocked — Hard Blocker Evidence Required',
+      summary: `${hardBlockingRootCandidateCount} semantic root/candidate item(s) need resolution.${diagnosticSuffix}`,
       activeCautionCount,
       targetSessionCount,
       completedProtectedCount,
@@ -188,10 +224,15 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         blockerLabel,
-        `${cascadeEchoCount} cascade echo(es) diagnostic only`,
-        'Root/candidate evidence must resolve before marker-save authorization',
+        ...(diagnosticParts.length > 0 ? [`Non-blocking: ${diagnosticParts.join(', ')}`] : []),
+        'Hard blocker evidence must resolve before marker-save authorization',
       ],
       safetyNotes: [
         'No marker saved',
@@ -200,9 +241,9 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         'No Start Workout changed',
         'No Live Workout changed',
         `${completedProtectedCount} completed session(s) protected`,
-        'Cascade echoes do not multiply the root blocker',
+        'Clearable/diagnostic items do not independently block',
       ],
-      nextSafeGate: 'Clear root/candidate evidence, then re-evaluate marker-save authorization',
+      nextSafeGate: 'Resolve hard/waiting/unknown root-candidate evidence, then re-evaluate marker-save authorization',
       ...lockedFlags,
       ...safetyInvariants,
     }
@@ -225,6 +266,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         'No future target sessions available',
         'Marker-save authorization requires future targets',
@@ -265,6 +311,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         `Marker boundary status: ${markerOnlyConfirmationBoundaryModel.status}`,
         'Upstream boundary must reach preview-ready state',
@@ -301,6 +352,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       rootCandidateNeedsEvidenceCount,
       cascadeEchoCount,
       rawCautionCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
       blockedReasons: [
         'Explicit user authorization not yet granted',
         'User must confirm intention to save marker',
@@ -334,12 +390,17 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
     targetSessionCount,
     completedProtectedCount,
     markerCandidateCount,
-    rootCandidateBlockingCount,
-    rootCandidateWaitingCount,
-    rootCandidateNeedsEvidenceCount,
-    cascadeEchoCount,
-    rawCautionCount,
-    blockedReasons: [
+      rootCandidateBlockingCount,
+      rootCandidateWaitingCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      rawCautionCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      blockedReasons: [
       'Marker-save mechanism not yet implemented',
       'This step is preflight only',
       'Actual save will be enabled in MASTER-8C.43+',

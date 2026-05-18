@@ -54,6 +54,13 @@ export interface ControlledMarkerSaveActionBoundaryModel {
   readonly targetSessionCount: number
   readonly completedProtectedCount: number
   readonly markerSavedCount: number
+  // [Prompt 25.1] Semantic root/candidate fields
+  readonly hardBlockingRootCandidateCount: number
+  readonly unknownStatusRootCandidateCount: number
+  readonly readOnlyClearableRootCandidateCount: number
+  readonly diagnosticOnlyRootCandidateCount: number
+  readonly rootCandidateNeedsEvidenceCount: number
+  readonly cascadeEchoCount: number
   
   // Display
   readonly headline: string
@@ -129,6 +136,13 @@ export function resolveControlledMarkerSaveActionBoundary(
       targetSessionCount: 0,
       completedProtectedCount: 0,
       markerSavedCount: 0,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount: 0,
+      unknownStatusRootCandidateCount: 0,
+      readOnlyClearableRootCandidateCount: 0,
+      diagnosticOnlyRootCandidateCount: 0,
+      rootCandidateNeedsEvidenceCount: 0,
+      cascadeEchoCount: 0,
       headline: 'Action Boundary Unavailable',
       summary: 'Marker save action boundary cannot be evaluated because the authorization preflight model is missing.',
       blockedReasons: [
@@ -144,11 +158,45 @@ export function resolveControlledMarkerSaveActionBoundary(
   const activeCautionCount = markerSaveAuthorizationPreflightBoundaryModel.activeCautionCount
   const targetSessionCount = markerSaveAuthorizationPreflightBoundaryModel.targetSessionCount
   const completedProtectedCount = markerSaveAuthorizationPreflightBoundaryModel.completedProtectedCount
+  
+  // [Prompt 25.1] Semantic root/candidate fields from auth preflight
+  const hardBlockingRootCandidateCount = 
+    markerSaveAuthorizationPreflightBoundaryModel.hardBlockingRootCandidateCount ??
+    markerSaveAuthorizationPreflightBoundaryModel.rootCandidateNeedsEvidenceCount ?? 0
+  const unknownStatusRootCandidateCount =
+    markerSaveAuthorizationPreflightBoundaryModel.unknownStatusRootCandidateCount ?? 0
+  const readOnlyClearableRootCandidateCount =
+    markerSaveAuthorizationPreflightBoundaryModel.readOnlyClearableRootCandidateCount ?? 0
+  const diagnosticOnlyRootCandidateCount =
+    markerSaveAuthorizationPreflightBoundaryModel.diagnosticOnlyRootCandidateCount ?? 0
+  const rootCandidateNeedsEvidenceCount = hardBlockingRootCandidateCount
+  const cascadeEchoCount = markerSaveAuthorizationPreflightBoundaryModel.cascadeEchoCount ?? 0
 
   // -----------------------------------
-  // Priority 2: Active cautions block action
+  // Priority 2: Semantic hard blockers (blocking/waiting/unknown)
+  // Clearable/diagnostic items do NOT independently block
   // -----------------------------------
-  if (activeCautionCount > 0) {
+  if (
+    hardBlockingRootCandidateCount > 0 ||
+    markerSaveAuthorizationPreflightBoundaryModel.status === 'blocked_active_caution'
+  ) {
+    // Build semantic blocker breakdown
+    const blockerParts: string[] = []
+    const rootCandidateBlockingCount = markerSaveAuthorizationPreflightBoundaryModel.rootCandidateBlockingCount ?? 0
+    const rootCandidateWaitingCount = markerSaveAuthorizationPreflightBoundaryModel.rootCandidateWaitingCount ?? 0
+    if (rootCandidateBlockingCount > 0) blockerParts.push(`${rootCandidateBlockingCount} blocking`)
+    if (rootCandidateWaitingCount > 0) blockerParts.push(`${rootCandidateWaitingCount} waiting`)
+    if (unknownStatusRootCandidateCount > 0) blockerParts.push(`${unknownStatusRootCandidateCount} unknown`)
+    const blockerLabel = blockerParts.length > 0
+      ? `${hardBlockingRootCandidateCount} hard blocker(s): ${blockerParts.join(', ')}`
+      : `${hardBlockingRootCandidateCount} semantic root/candidate blocker(s)`
+    
+    // Diagnostic items
+    const diagnosticParts: string[] = []
+    if (readOnlyClearableRootCandidateCount > 0) diagnosticParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+    if (diagnosticOnlyRootCandidateCount > 0) diagnosticParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    if (cascadeEchoCount > 0) diagnosticParts.push(`${cascadeEchoCount} cascade echo(es)`)
+    
     return {
       status: 'blocked_active_caution',
       canShowAuthorizationControl: false,
@@ -159,19 +207,27 @@ export function resolveControlledMarkerSaveActionBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerSavedCount,
-      headline: 'Action Boundary Blocked: Active Caution',
-      summary: `Marker save action is blocked because ${activeCautionCount} active caution(s) exist. Clear all cautions before marker save can proceed.`,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      headline: 'Action Boundary Blocked: Hard Blocker Evidence Required',
+      summary: `Marker save action is blocked by ${hardBlockingRootCandidateCount} semantic root/candidate item(s). Clearable/diagnostic items do not independently block.`,
       blockedReasons: [
-        `${activeCautionCount} active caution(s) must be cleared`,
-        'Marker save action not available while cautions exist',
-        'No authorization control shown while blocked',
+        blockerLabel,
+        ...(diagnosticParts.length > 0 ? [`Non-blocking: ${diagnosticParts.join(', ')}`] : []),
+        'Hard blocker evidence must resolve before marker save action',
       ],
       safetyNotes: [
         ...baseSafetyNotes,
         'No marker will be saved in blocked state',
-        'No writes attempted while cautions exist',
+        'No writes attempted while blockers exist',
+        'Writer intentionally not enabled',
       ],
-      nextSafeGate: 'Clear all active cautions',
+      nextSafeGate: 'Resolve hard/waiting/unknown root-candidate evidence',
     }
   }
 
@@ -189,6 +245,13 @@ export function resolveControlledMarkerSaveActionBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerSavedCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
       headline: 'Action Boundary Blocked: No Future Targets',
       summary: 'Marker save action is blocked because there are no future target sessions. At least one future session must be available for marker save.',
       blockedReasons: [
@@ -219,8 +282,15 @@ export function resolveControlledMarkerSaveActionBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerSavedCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
       headline: 'Action Boundary: Authorization Required',
-      summary: `Marker save action requires explicit user authorization. ${targetSessionCount} future target session(s) available and all cautions cleared.`,
+      summary: `Marker save action requires explicit user authorization. ${targetSessionCount} future target session(s) available and no hard blockers remain.`,
       blockedReasons: [
         'Explicit user authorization not provided',
         'Marker save requires confirmation before execution',
@@ -249,6 +319,13 @@ export function resolveControlledMarkerSaveActionBoundary(
       targetSessionCount,
       completedProtectedCount,
       markerSavedCount,
+      // [Prompt 25.1] Semantic root/candidate fields
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
       headline: 'Action Boundary: Preflight Not Enabled',
       summary: 'Marker save action is blocked because the authorization preflight has not enabled marker save control.',
       blockedReasons: [
@@ -266,27 +343,41 @@ export function resolveControlledMarkerSaveActionBoundary(
   // -----------------------------------
   // Priority 6: Marker save action ready
   // -----------------------------------
+  // [Prompt 25.1] Final state: All gates passed but writer intentionally locked
+  // -----------------------------------
   return {
-    status: 'marker_save_action_ready',
+    status: 'blocked_marker_save_not_enabled',
     canShowAuthorizationControl: true,
-    canExecuteMarkerSave: true,
-    canWriteMarker: true,
+    canExecuteMarkerSave: false,
+    canWriteMarker: false,
     ...safetyInvariants,
     activeCautionCount,
     targetSessionCount,
     completedProtectedCount,
     markerSavedCount,
-    headline: 'Action Boundary: Marker Save Ready',
-    summary: `Marker save action is ready. ${targetSessionCount} future target session(s) available, all cautions cleared, and authorization granted. Marker-only save may proceed. Structural mutation remains disabled.`,
-    blockedReasons: [],
+    // [Prompt 25.1] Semantic root/candidate fields
+    hardBlockingRootCandidateCount,
+    unknownStatusRootCandidateCount,
+    readOnlyClearableRootCandidateCount,
+    diagnosticOnlyRootCandidateCount,
+    rootCandidateNeedsEvidenceCount,
+    cascadeEchoCount,
+    headline: 'Action Boundary: Review Only',
+    summary: `Marker save action review only. ${targetSessionCount} future target session(s) available, no hard blockers. Writer intentionally not enabled in this step.`,
+    blockedReasons: [
+      'Marker-save writer intentionally not enabled',
+      'This step is read-only preview',
+    ],
     safetyNotes: [
       ...baseSafetyNotes,
-      'Marker-only save is available',
-      'Structural mutation still disabled',
-      `${targetSessionCount} future session(s) may receive marker`,
+      'Marker-save review only',
+      'Writer not enabled in this step',
+      `${targetSessionCount} future session(s) identified`,
       `${completedProtectedCount} completed session(s) remain protected`,
+      'No marker saved',
+      'No writes attempted',
     ],
-    nextSafeGate: 'Execute marker-only save (structural mutation in future step)',
+    nextSafeGate: 'Future step may enable marker-save writer',
   }
 }
 

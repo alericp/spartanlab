@@ -164,20 +164,44 @@ export function resolveMarkerWriteReadinessLedger(
   })
 
   // Item 4: root_candidate_clearance
-  const rootCandidateNeedsEvidence = markerOnlyConfirmationBoundaryModel?.rootCandidateNeedsEvidenceCount ?? 0
-  const rootCandidateBlocking = markerSaveArtifactPreviewModel?.rootCandidateBlockingCount ?? 0
-  const rootCandidateWaiting = markerSaveArtifactPreviewModel?.rootCandidateWaitingCount ?? 0
-  const cautionsCleared = rootCandidateNeedsEvidence === 0 && rootCandidateBlocking === 0 && rootCandidateWaiting === 0
+  // [Prompt 25.1] Use semantic hard blocker counts instead of raw active caution
+  const hardBlockingRootCandidateCount = 
+    markerSaveArtifactPreviewModel?.hardBlockingRootCandidateCount ??
+    markerOnlyConfirmationBoundaryModel?.hardBlockingRootCandidateCount ?? 0
+  const unknownStatusRootCandidateCount =
+    markerSaveArtifactPreviewModel?.unknownStatusRootCandidateCount ??
+    markerOnlyConfirmationBoundaryModel?.unknownStatusRootCandidateCount ?? 0
+  const readOnlyClearableRootCandidateCount =
+    markerSaveArtifactPreviewModel?.readOnlyClearableRootCandidateCount ??
+    markerOnlyConfirmationBoundaryModel?.readOnlyClearableRootCandidateCount ?? 0
+  const diagnosticOnlyRootCandidateCount =
+    markerSaveArtifactPreviewModel?.diagnosticOnlyRootCandidateCount ??
+    markerOnlyConfirmationBoundaryModel?.diagnosticOnlyRootCandidateCount ?? 0
+  const cascadeEchoCount = markerSaveArtifactPreviewModel?.cascadeEchoCount ?? 
+    markerOnlyConfirmationBoundaryModel?.cascadeEchoCount ?? 0
+  
+  // Semantic clearance: no hard blockers = cleared
+  const semanticRootCandidateEvidenceCleared = hardBlockingRootCandidateCount === 0
+  
+  // Build diagnostic suffix for non-blocking items
+  const diagnosticParts: string[] = []
+  if (readOnlyClearableRootCandidateCount > 0) diagnosticParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+  if (diagnosticOnlyRootCandidateCount > 0) diagnosticParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+  if (cascadeEchoCount > 0) diagnosticParts.push(`${cascadeEchoCount} cascade echo(es)`)
+  const diagnosticSuffix = diagnosticParts.length > 0
+    ? ` Non-blocking: ${diagnosticParts.join(', ')}.`
+    : ''
+  
   items.push({
     key: 'root_candidate_clearance',
-    label: 'Root/Candidate Clearance',
-    status: cautionsCleared ? 'ready' : 'blocked',
-    reason: cautionsCleared 
-      ? 'No active cautions blocking marker readiness'
-      : `Active cautions: ${rootCandidateNeedsEvidence} need evidence, ${rootCandidateBlocking} blocking, ${rootCandidateWaiting} waiting`,
+    label: 'Root/Candidate Evidence Clearance',
+    status: semanticRootCandidateEvidenceCleared ? 'ready' : 'blocked',
+    reason: semanticRootCandidateEvidenceCleared 
+      ? `No semantic hard/waiting/unknown root-candidate evidence blockers remain.${diagnosticSuffix}`
+      : `${hardBlockingRootCandidateCount} semantic root/candidate blocker(s) need evidence/resolution.${diagnosticSuffix}`,
   })
-  if (!cautionsCleared) {
-    blockerSummary.push('Cautions not cleared')
+  if (!semanticRootCandidateEvidenceCleared) {
+    blockerSummary.push('Root/candidate evidence blockers remain')
   }
 
   // Item 5: authorization_preview_accepted
@@ -265,11 +289,12 @@ export function resolveMarkerWriteReadinessLedger(
     headline = 'Ledger Unavailable — Missing Models'
     summary = 'Required boundary models are not available. Cannot compute write readiness.'
     nextRequiredStep = 'Wait for all boundary models to become available'
-  } else if (!cautionsCleared) {
+  } else if (!semanticRootCandidateEvidenceCleared) {
+    // [Prompt 25.1] Use semantic hard blocker clearance
     status = 'blocked_cautions_not_cleared'
-    headline = 'Ledger Blocked — Cautions Not Cleared'
-    summary = 'Root/candidate cautions are still blocking marker readiness.'
-    nextRequiredStep = 'Clear or resolve active cautions'
+    headline = 'Ledger Blocked — Root/Candidate Evidence Required'
+    summary = `Semantic root/candidate evidence blockers still prevent marker readiness. Clearable read-only and diagnostic-only items do not independently block. No marker saved.`
+    nextRequiredStep = 'Resolve hard/waiting/unknown root-candidate evidence before marker write readiness can proceed'
   } else if (!hasFutureTargets) {
     status = 'blocked_no_future_targets'
     headline = 'Ledger Blocked — No Future Targets'

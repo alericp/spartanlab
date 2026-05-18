@@ -188,9 +188,26 @@ function resolveCandidate(
   // Override based on global trend classification
   if (trendClassification === 'caution_pattern_detected') {
     if (CAUTION_SENSITIVE_CATEGORIES.has(category)) {
-      // Progression / volume candidates are blocked under caution
-      resolution = 'blocked_caution'
-      blockers.push('Caution pattern detected — progression/volume changes blocked until reviewed')
+      // [P32] Progression/volume candidates under caution only block if they have safety evidence
+      // Otherwise they become monitor (not hard blockers)
+      const reasonLower = (source.summary ?? '').toLowerCase() + ' ' + (source.recommendation ?? '').toLowerCase() + ' ' + (source.why?.join(' ') ?? '').toLowerCase()
+      const hasSafetyEvidence = reasonLower.includes('pain') || 
+        reasonLower.includes('injury') || 
+        reasonLower.includes('tendon') || 
+        reasonLower.includes('joint') || 
+        reasonLower.includes('tension') ||
+        reasonLower.includes('unsafe') ||
+        reasonLower.includes('risk') ||
+        source.priority === 'high'
+      
+      if (hasSafetyEvidence) {
+        resolution = 'blocked_caution'
+        blockers.push('Caution pattern with safety evidence — progression/volume blocked')
+      } else {
+        // Generic caution without safety evidence → monitor, not block
+        resolution = 'monitor'
+        reviewReasons.push('Caution pattern detected — progression/volume under observation (no safety block)')
+      }
     } else if (CAUTION_REVIEW_CATEGORIES.has(category)) {
       // Recovery / prehab / balance may become review candidates under caution
       if (resolution !== 'blocked_caution') {

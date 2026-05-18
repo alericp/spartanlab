@@ -206,10 +206,13 @@ export function resolveMarkerSaveArtifactPreview(
   const headline = getHeadlineForStatus(status, targetSessionCount, rootCandidateNeedsEvidenceCount)
   const summary = getSummaryForStatus(status, blockedReasons)
 
-  // Build preview fields
+  // [P40] Compute markerMode once for both return and previewFields
+  const markerMode = markerSavedCount > 0 ? 'local_saved_proof' : 'preview_only'
+  
+  // Build preview fields - [P40] Now uses dynamic markerMode and markerSavedCount
   const previewFields: { label: string; value: string }[] = [
-    { label: 'Marker Mode', value: 'preview_only' },
-    { label: 'Marker Saved Count', value: '0' },
+    { label: 'Marker Mode', value: markerMode },
+    { label: 'Marker Saved Count', value: String(markerSavedCount) },
     { label: 'Target Sessions', value: String(targetSessionCount) },
     { label: 'Completed Protected', value: String(completedProtectedCount) },
     { label: 'Root/Candidate Blocking', value: String(rootCandidateBlockingCount) },
@@ -235,7 +238,7 @@ export function resolveMarkerSaveArtifactPreview(
 
     markerArtifactPreviewId,
     markerKind: 'future_session_mutation_readiness_marker',
-    markerMode: markerSavedCount > 0 ? 'local_saved_proof' : 'preview_only', // [P39] Dynamic mode
+    markerMode, // [P40] Uses computed variable
     markerSavedCount, // [P39] Dynamic from input
 
     targetSessionCount,

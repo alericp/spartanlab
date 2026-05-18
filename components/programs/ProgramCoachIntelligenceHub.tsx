@@ -3981,8 +3981,22 @@ function AIIntelligenceFoundationMap({
                       })()
                     )}
                   </div>
+                  {/* [P40] Dynamic marker saved proof display */}
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'} {markerSaveArtifactPreviewModel && !markerSaveArtifactPreviewModel.canPreviewMarkerArtifact && 'Artifact preview blocked.'} {markerWriteReadinessLedgerModel && !markerWriteReadinessLedgerModel.canWriteMarker && 'Writer locked.'}
+                    {markerWriteReadinessLedgerModel && markerWriteReadinessLedgerModel.markerSavedCount > 0 ? (
+                      <>
+                        Local marker saved: {markerWriteReadinessLedgerModel.markerSavedCount}. Persistence locked. No workout changes.
+                      </>
+                    ) : (
+                      <>
+                        Read-only target mapping. No mutation.{' '}
+                        {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved. '}
+                        {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked. '}
+                        {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked. '}
+                        {markerSaveArtifactPreviewModel && !markerSaveArtifactPreviewModel.canPreviewMarkerArtifact && 'Artifact preview blocked. '}
+                        {markerWriteReadinessLedgerModel && !markerWriteReadinessLedgerModel.canWriteMarker && 'Persistence locked.'}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

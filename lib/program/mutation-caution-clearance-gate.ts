@@ -137,6 +137,11 @@ export interface MutationCautionClearanceGateModel {
   readonly staleOrMisclassifiedCount: number
   readonly rootCandidateClearanceSummary: string
   readonly rootCandidateClearanceReady: boolean
+  // [Prompt 24] Refined semantic counts for decision semantics
+  readonly hardBlockingRootCandidateCount: number
+  readonly unknownStatusRootCandidateCount: number
+  readonly readOnlyClearableRootCandidateCount: number
+  readonly diagnosticOnlyRootCandidateCount: number
 
   // Permission flags — ALL LOCKED
   readonly canProceedToPreview: false
@@ -750,6 +755,11 @@ export function resolveMutationCautionClearanceGate(input: {
       staleOrMisclassifiedCount: 0,
       rootCandidateClearanceSummary: 'No models available',
       rootCandidateClearanceReady: false,
+      // [Prompt 24] Refined semantic counts
+      hardBlockingRootCandidateCount: 0,
+      unknownStatusRootCandidateCount: 0,
+      readOnlyClearableRootCandidateCount: 0,
+      diagnosticOnlyRootCandidateCount: 0,
       cautionSignals: [],
       clearedSignals: [],
       missingProof: ['Evidence trend model required', 'Mutation readiness review required'],
@@ -801,6 +811,15 @@ export function resolveMutationCautionClearanceGate(input: {
   const waitingRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'waiting_for_more_evidence').length
   const monitorOnlyRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'monitor_only').length
   const staleOrMisclassifiedCount = rootCandidateClearanceItems.filter(i => i.status === 'stale_or_misclassified').length
+  const unknownStatusRootCandidateCount = rootCandidateClearanceItems.filter(i => i.status === 'unknown').length
+  
+  // [Prompt 24] Refined semantic groupings for decision logic
+  // Hard blockers: items that truly block marker readiness
+  const hardBlockingRootCandidateCount = blockingRootCandidateCount + waitingRootCandidateCount + unknownStatusRootCandidateCount
+  // Read-only clearable: items with sufficient evidence but not actually cleared yet
+  const readOnlyClearableRootCandidateCount = clearableRootCandidateCount
+  // Diagnostic only: items that should not hard-block (monitor/stale/misclassified)
+  const diagnosticOnlyRootCandidateCount = monitorOnlyRootCandidateCount + staleOrMisclassifiedCount
   
   const rootCandidateClearanceSummary = generateRootCandidateClearanceSummary(
     blockingRootCandidateCount,
@@ -820,16 +839,17 @@ export function resolveMutationCautionClearanceGate(input: {
   // ── Derive blocked reasons ────────────────────────────────────────────────
   const blockedReasons: string[] = []
 
-  // [MASTER-8C.45] Provenance-aware blocked reasons
-  if (rootActiveCautionCount > 0) {
-    blockedReasons.push(`${rootActiveCautionCount} root caution${rootActiveCautionCount !== 1 ? 's' : ''} active from workout evidence`)
+  // [Prompt 24] Semantic blocked reasons - only true hard blockers
+  if (blockingRootCandidateCount > 0) {
+    blockedReasons.push(`${blockingRootCandidateCount} blocking root/candidate item${blockingRootCandidateCount !== 1 ? 's' : ''}`)
   }
-  if (candidateSpecificCautionCount > 0) {
-    blockedReasons.push(`${candidateSpecificCautionCount} candidate-specific caution${candidateSpecificCautionCount !== 1 ? 's' : ''} require review`)
+  if (waitingRootCandidateCount > 0) {
+    blockedReasons.push(`${waitingRootCandidateCount} item${waitingRootCandidateCount !== 1 ? 's' : ''} waiting for more evidence`)
   }
-  if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
-    blockedReasons.push(`${derivedCascadeCautionCount} downstream echo${derivedCascadeCautionCount !== 1 ? 'es' : ''} (diagnostic only)`)
+  if (unknownStatusRootCandidateCount > 0) {
+    blockedReasons.push(`${unknownStatusRootCandidateCount} item${unknownStatusRootCandidateCount !== 1 ? 's' : ''} with unknown status`)
   }
+  // Clearable/diagnostic items are NOT listed as blockers (they don't hard-block)
 
   // Check for no future targets
   if (futureSessionCount === 0 && completedSessionCount > 0) {
@@ -845,6 +865,7 @@ export function resolveMutationCautionClearanceGate(input: {
   }
 
   // ── Determine clearance mode ──────────────────────────────────────────────
+  // [Prompt 24] Semantic clearance mode based on item-level status
   let cautionClearanceMode: MutationCautionClearanceMode
 
   if (futureSessionCount === 0) {
@@ -854,11 +875,14 @@ export function resolveMutationCautionClearanceGate(input: {
     planEvidenceTrendReadinessModel?.status === 'unavailable'
   ) {
     cautionClearanceMode = 'waiting_for_evidence'
-  } else if (rootActiveCautionCount > 0) {
-    cautionClearanceMode = 'blocked_by_root_caution'
-  } else if (candidateSpecificCautionCount > 0) {
-    cautionClearanceMode = 'blocked_by_candidate_caution'
-  } else if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
+  } else if (hardBlockingRootCandidateCount > 0) {
+    // True hard blockers: blocking, waiting, or unknown items
+    cautionClearanceMode = blockingRootCandidateCount > 0 ? 'blocked_by_root_caution' : 'blocked_by_candidate_caution'
+  } else if (readOnlyClearableRootCandidateCount > 0) {
+    // Clearable items don't hard-block, move to review mode
+    cautionClearanceMode = 'clearance_preview_ready'
+  } else if (diagnosticOnlyRootCandidateCount > 0 || derivedCascadeCautionCount > 0) {
+    // Diagnostic/cascade only - doesn't hard-block
     cautionClearanceMode = 'derived_cascade_only'
   } else if (confirmationStatus === 'preview_eligible_marker_only') {
     cautionClearanceMode = 'clearance_preview_ready'
@@ -873,28 +897,16 @@ export function resolveMutationCautionClearanceGate(input: {
   let confidence: 'high' | 'medium' | 'low' | 'none'
   let nextSafeGate: string
 
-  // Priority 1: Active root/candidate caution blocks everything
-  if (activeCautionCount > 0) {
-    status = 'blocked_active_caution'
-    if (rootActiveCautionCount > 0) {
-      headline = `Blocked: ${rootActiveCautionCount} root caution${rootActiveCautionCount !== 1 ? 's' : ''} active`
-      summary = `Root caution from workout evidence must clear before marker/mutation can proceed. ${derivedCascadeCautionCount} downstream echoes suppressed from blocker count.`
-    } else {
-      headline = `Blocked: ${candidateSpecificCautionCount} candidate caution${candidateSpecificCautionCount !== 1 ? 's' : ''} require review`
-      summary = `Candidate-specific caution signals must be reviewed. ${derivedCascadeCautionCount} downstream echoes are diagnostic only.`
-    }
-    confidence = 'high'
-    nextSafeGate = 'Clear root caution evidence before marker save'
-  }
-  // Priority 2: No future sessions (all completed)
-  else if (futureSessionCount === 0 && completedSessionCount > 0) {
+  // [Prompt 24] Refined semantic decision order
+  // Priority 1: No future sessions (all completed)
+  if (futureSessionCount === 0 && completedSessionCount > 0) {
     status = 'blocked_completed_only'
     headline = 'Clearance blocked: all sessions completed'
     summary = `All ${completedSessionCount} program session${completedSessionCount !== 1 ? 's are' : ' is'} completed. No future sessions available for mutation.`
     confidence = 'high'
     nextSafeGate = 'Generate new program with future sessions'
   }
-  // Priority 3: No future targets at all
+  // Priority 2: No future targets at all
   else if (futureSessionCount === 0) {
     status = 'blocked_no_future_targets'
     headline = 'Clearance blocked: no future targets'
@@ -902,7 +914,35 @@ export function resolveMutationCautionClearanceGate(input: {
     confidence = 'high'
     nextSafeGate = 'Generate program with future sessions'
   }
-  // Priority 4: Evidence insufficient
+  // Priority 3: Hard-blocking root/candidate items (blocking, waiting, or unknown status)
+  else if (hardBlockingRootCandidateCount > 0) {
+    status = 'blocked_active_caution'
+    const parts: string[] = []
+    if (blockingRootCandidateCount > 0) {
+      parts.push(`${blockingRootCandidateCount} blocking`)
+    }
+    if (waitingRootCandidateCount > 0) {
+      parts.push(`${waitingRootCandidateCount} waiting for evidence`)
+    }
+    if (unknownStatusRootCandidateCount > 0) {
+      parts.push(`${unknownStatusRootCandidateCount} unknown`)
+    }
+    headline = `Blocked: ${hardBlockingRootCandidateCount} hard blocker${hardBlockingRootCandidateCount !== 1 ? 's' : ''} (${parts.join(', ')})`
+    const extraParts: string[] = []
+    if (readOnlyClearableRootCandidateCount > 0) {
+      extraParts.push(`${readOnlyClearableRootCandidateCount} clearable read-only`)
+    }
+    if (diagnosticOnlyRootCandidateCount > 0) {
+      extraParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    }
+    if (derivedCascadeCautionCount > 0) {
+      extraParts.push(`${derivedCascadeCautionCount} cascade echo${derivedCascadeCautionCount !== 1 ? 'es' : ''}`)
+    }
+    summary = `Hard blockers must resolve before marker/mutation can proceed.${extraParts.length > 0 ? ` Also present: ${extraParts.join(', ')}.` : ''}`
+    confidence = 'high'
+    nextSafeGate = 'Resolve hard-blocking root/candidate items'
+  }
+  // Priority 4: Evidence insufficient for evaluation
   else if (
     planEvidenceTrendReadinessModel?.status === 'insufficient' ||
     planEvidenceTrendReadinessModel?.status === 'unavailable'
@@ -913,15 +953,37 @@ export function resolveMutationCautionClearanceGate(input: {
     confidence = 'low'
     nextSafeGate = 'Collect sufficient workout evidence'
   }
-  // Priority 5: Derived cascade only (no root/candidate caution)
-  else if (derivedCascadeCautionCount > 0 && activeCautionCount === 0) {
+  // Priority 5: All items are clearable read-only (no hard blockers)
+  else if (readOnlyClearableRootCandidateCount > 0 && hardBlockingRootCandidateCount === 0) {
     status = 'clearance_review_only'
-    headline = 'Clear: derived cascade only'
-    summary = `No root/candidate cautions active. ${derivedCascadeCautionCount} downstream echo${derivedCascadeCautionCount !== 1 ? 'es are' : ' is'} diagnostic only and do${derivedCascadeCautionCount === 1 ? 'es' : ''} not block.`
+    const extraParts: string[] = []
+    if (diagnosticOnlyRootCandidateCount > 0) {
+      extraParts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    }
+    if (derivedCascadeCautionCount > 0) {
+      extraParts.push(`${derivedCascadeCautionCount} cascade echo${derivedCascadeCautionCount !== 1 ? 'es' : ''}`)
+    }
+    headline = `Review only: ${readOnlyClearableRootCandidateCount} item${readOnlyClearableRootCandidateCount !== 1 ? 's' : ''} clearable by current evidence`
+    summary = `Root/candidate items are clearable by current evidence, but no cautions are actually cleared in this step. Read-only preview.${extraParts.length > 0 ? ` Also present: ${extraParts.join(', ')}.` : ''}`
     confidence = 'medium'
     nextSafeGate = 'Proceed to marker-only preview gate'
   }
-  // Priority 6: Confirmation contract preview eligible
+  // Priority 6: Only diagnostic/cascade items (no hard blockers, no clearable)
+  else if (diagnosticOnlyRootCandidateCount > 0 || derivedCascadeCautionCount > 0) {
+    status = 'clearance_review_only'
+    const parts: string[] = []
+    if (diagnosticOnlyRootCandidateCount > 0) {
+      parts.push(`${diagnosticOnlyRootCandidateCount} diagnostic-only`)
+    }
+    if (derivedCascadeCautionCount > 0) {
+      parts.push(`${derivedCascadeCautionCount} cascade echo${derivedCascadeCautionCount !== 1 ? 'es' : ''}`)
+    }
+    headline = 'Clear: diagnostic items only'
+    summary = `No hard blockers or clearable items. Present: ${parts.join(', ')}. These do not block marker readiness.`
+    confidence = 'medium'
+    nextSafeGate = 'Proceed to marker-only preview gate'
+  }
+  // Priority 7: Confirmation contract preview eligible
   else if (confirmationStatus === 'preview_eligible_marker_only') {
     status = 'clearance_preview_ready'
     headline = 'Caution clearance: preview ready'
@@ -929,7 +991,7 @@ export function resolveMutationCautionClearanceGate(input: {
     confidence = 'medium'
     nextSafeGate = 'Marker-only preview gate (future step)'
   }
-  // Priority 7: Review only state
+  // Priority 8: Review candidates exist
   else if (
     mutationReadinessReviewGateModel?.status === 'review_candidates_read_only' ||
     (mutationReadinessReviewGateModel?.reviewCandidateCount ?? 0) > 0
@@ -979,6 +1041,11 @@ export function resolveMutationCautionClearanceGate(input: {
     staleOrMisclassifiedCount,
     rootCandidateClearanceSummary,
     rootCandidateClearanceReady,
+    // [Prompt 24] Refined semantic counts for decision semantics
+    hardBlockingRootCandidateCount,
+    unknownStatusRootCandidateCount,
+    readOnlyClearableRootCandidateCount,
+    diagnosticOnlyRootCandidateCount,
     // Visible caution signals = deduped active + cascade for diagnostics
     cautionSignals: [...dedupedActiveCautionSignals, ...dedupeCautionSignals(derivedCascadeCautionSignals)],
     clearedSignals,

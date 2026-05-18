@@ -2,7 +2,7 @@
  * MASTER-8C.43 / AB20.4.36 — Controlled Marker-Save Action Boundary
  * 
  * This is the FINAL action boundary before marker-only save.
- * It intentionally remains locked while active cautions or no future targets exist.
+ * It intentionally remains locked while semantic root/candidate evidence blockers or no future targets exist.
  * Structural workout mutation is NOT enabled in this step.
  * 
  * Pure TypeScript helper — no React, no fetch, no DB, no localStorage,
@@ -392,7 +392,7 @@ export function getControlledMarkerSaveActionStatusLabel(
     case 'unavailable_missing_preflight':
       return 'Unavailable: Missing Preflight'
     case 'blocked_active_caution':
-      return 'Blocked: Active Caution'
+      return 'Blocked: Evidence Required'
     case 'blocked_no_future_targets':
       return 'Blocked: No Future Targets'
     case 'blocked_authorization_missing':

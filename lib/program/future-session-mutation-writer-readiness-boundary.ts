@@ -277,7 +277,7 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
     : 'blocked'
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Blocked by active caution
+  // PRIORITY 2: Blocked by evidence requirements
   // -------------------------------------------------------------------------
   if (
     mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
@@ -285,8 +285,8 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
   ) {
     return {
       status: 'blocked_active_caution',
-      headline: 'Writer readiness blocked by active caution',
-      summary: `${activeCautionCount} active caution signal(s) prevent writer boundary from proceeding. Clear all caution conditions first.`,
+      headline: 'Writer readiness blocked by evidence requirements',
+      summary: `${activeCautionCount} root/candidate evidence blocker${activeCautionCount !== 1 ? 's' : ''} prevent writer boundary from proceeding. Resolve evidence requirements first.`,
       confidence: 0.1,
       writerReadinessState: 'blocked_by_caution',
       completedProtectedCount,
@@ -295,13 +295,13 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
       structuralPreviewCandidateCount,
       confirmationPermissionState,
       blockedReasons: [
-        `${activeCautionCount} active caution signal(s)`,
-        'Caution clearance gate not cleared',
-        'Writer instantiation blocked by caution',
+        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''}`,
+        'Evidence clearance gate not cleared',
+        'Writer instantiation blocked by evidence requirements',
       ],
-      missingProof: ['Caution clearance'],
+      missingProof: ['Evidence clearance'],
       protectedInvariants,
-      safetyNotes: ['Active caution prevents writer boundary activation'],
+      safetyNotes: ['Evidence requirements prevent writer boundary activation'],
       nextSafeGate: 'Clear all caution signals before proceeding',
       ...LOCKED_ACTION_FLAGS,
       ...TRUE_SAFETY_FLAGS,

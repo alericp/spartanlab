@@ -166,7 +166,7 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
 
   // Check caution signals
   if (activeCautionCount > 0) {
-    blockedReasons.push(`${activeCautionCount} active caution signal(s) block confirmation`)
+    blockedReasons.push(`${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''} block confirmation`)
   }
 
   // Check caution clearance status

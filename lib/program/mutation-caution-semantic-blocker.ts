@@ -82,6 +82,9 @@ export function computeSemanticBlockerSummary(
 
   const hasSemanticHardBlockers = semanticHardBlockerCount > 0
 
+  // [P28.1] Normalize rootCandidateClearanceReady: cannot be true while hard blockers exist
+  const semanticRootCandidateClearanceReady = rootCandidateClearanceReady && !hasSemanticHardBlockers
+
   // Build blocker reasons
   const blocksBecause: string[] = []
   if (blockingRootCandidateCount > 0) {
@@ -116,7 +119,7 @@ export function computeSemanticBlockerSummary(
     diagnosticOnlyRootCandidateCount,
     derivedCascadeCautionCount,
     rawActiveCautionCount,
-    rootCandidateClearanceReady,
+    rootCandidateClearanceReady: semanticRootCandidateClearanceReady,
     blocksBecause,
     nonBlockingContext,
   }

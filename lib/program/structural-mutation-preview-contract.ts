@@ -23,6 +23,7 @@ import type { MutationPathwayReadinessMapModel } from './mutation-pathway-readin
 import type { MutationTargetSessionResolutionPreviewModel } from './mutation-target-session-resolution-preview'
 import type { MutationConfirmationContractPreviewModel } from './mutation-confirmation-contract-preview'
 import type { MutationCautionClearanceGateModel } from './mutation-caution-clearance-gate'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // STATUS TYPES
@@ -191,21 +192,18 @@ export function resolveStructuralMutationPreviewContract(
   const futureTargetCount = mutationTargetSessionResolutionPreviewModel.futureSessionCount
   const activeCautionCount = mutationCautionClearanceGateModel.activeCautionCount
 
-  // [P28] Use semantic hard blocker count instead of raw activeCautionCount
-  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
-  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
-  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
-  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
-  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  // [P28.1] Use shared semantic helper as single source of truth
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
+  const semanticHardBlockerCount = semanticBlockerSummary.semanticHardBlockerCount
+  const diagnosticOnlyCount = semanticBlockerSummary.diagnosticOnlyRootCandidateCount
+  const clearableOnlyCount = semanticBlockerSummary.readOnlyClearableRootCandidateCount
+  const cascadeOnlyCount = semanticBlockerSummary.derivedCascadeCautionCount
 
   // -------------------------------------------------------------------------
   // PRIORITY 2: Blocked by semantic hard blockers only
-  // [P28] Do NOT block merely because raw activeCautionCount > 0
+  // [P28.1] Do NOT block merely because raw activeCautionCount > 0
   // -------------------------------------------------------------------------
-  if (
-    semanticHardBlockerCount > 0 ||
-    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
-  ) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     const candidates = buildBlockedCandidates(
       mutationTargetSessionResolutionPreviewModel,
       'caution_blocked',

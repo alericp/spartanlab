@@ -24,6 +24,7 @@ import type { UserConfirmationMarkerPermissionPreviewGateModel } from './user-co
 import type { PreMutationLockBundleClosureModel } from './pre-mutation-lock-bundle-closure'
 import type { MutationCautionClearanceGateModel } from './mutation-caution-clearance-gate'
 import type { MutationTargetSessionResolutionPreviewModel } from './mutation-target-session-resolution-preview'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // STATUS UNION
@@ -182,20 +183,17 @@ export function resolveBoundedMutationApplyEligibilityGate(
   
   // -------------------------------------------------------------------------
   // PRIORITY 2: Semantic hard blockers (blocking/waiting/unknown root candidates)
-  // [P27] Use semantic hard blocker count instead of raw activeCautionCount
+  // [P28.1] Use shared semantic helper as single source of truth
   // -------------------------------------------------------------------------
-  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
-  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
-  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
-  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
-  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
+  const semanticHardBlockerCount = semanticBlockerSummary.semanticHardBlockerCount
+  const diagnosticOnlyCount = semanticBlockerSummary.diagnosticOnlyRootCandidateCount
+  const clearableOnlyCount = semanticBlockerSummary.readOnlyClearableRootCandidateCount
+  const cascadeOnlyCount = semanticBlockerSummary.derivedCascadeCautionCount
   
   // Block only if semantic hard blockers remain (blocking + waiting + unknown)
   // Do NOT block merely because raw activeCautionCount > 0 or clearable/diagnostic/cascade exist
-  if (
-    semanticHardBlockerCount > 0 ||
-    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
-  ) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     return {
       status: 'blocked_active_caution',
       headline: 'Apply gate blocked by evidence requirements',

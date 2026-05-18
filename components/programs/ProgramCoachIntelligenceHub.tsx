@@ -337,6 +337,13 @@ import {
   getControlledMarkerSaveActionStatusColor,
   type ControlledMarkerSaveActionBoundaryModel,
 } from '@/lib/program/controlled-marker-save-action-boundary'
+// [Prompt 21] Marker-save artifact preview
+import {
+  resolveMarkerSaveArtifactPreview,
+  getMarkerSaveArtifactPreviewStatusLabel,
+  getMarkerSaveArtifactPreviewStatusColor,
+  type MarkerSaveArtifactPreviewModel,
+} from '@/lib/program/marker-save-artifact-preview'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3207,6 +3214,8 @@ function AIIntelligenceFoundationMap({
   markerOnlyConfirmationBoundaryModel,
   markerSaveAuthorizationPreflightBoundaryModel,
   controlledMarkerSaveActionBoundaryModel,
+  // [Prompt 21] Marker-save artifact preview
+  markerSaveArtifactPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3230,6 +3239,8 @@ function AIIntelligenceFoundationMap({
   markerOnlyConfirmationBoundaryModel?: MarkerOnlyConfirmationBoundaryModel | null
   markerSaveAuthorizationPreflightBoundaryModel?: MarkerSaveAuthorizationPreflightBoundaryModel | null
   controlledMarkerSaveActionBoundaryModel?: ControlledMarkerSaveActionBoundaryModel | null
+  // [Prompt 21] Marker-save artifact preview
+  markerSaveArtifactPreviewModel?: MarkerSaveArtifactPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3920,9 +3931,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [Prompt 21] Artifact preview status chip */}
+                    {markerSaveArtifactPreviewModel && (
+                      (() => {
+                        const artifactColor = getMarkerSaveArtifactPreviewStatusColor(
+                          markerSaveArtifactPreviewModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", artifactColor.bg, artifactColor.text, artifactColor.border)}>
+                            Artifact: {getMarkerSaveArtifactPreviewStatusLabel(markerSaveArtifactPreviewModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'} {markerSaveArtifactPreviewModel && !markerSaveArtifactPreviewModel.canPreviewMarkerArtifact && 'Artifact preview blocked.'}
                   </div>
                 </div>
               </div>
@@ -8124,6 +8148,17 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted])
   
+  // [Prompt 21] Marker-save artifact preview model
+  // Pure read-only preview of what marker artifact would be saved later
+  const markerSaveArtifactPreviewModel = useMemo<MarkerSaveArtifactPreviewModel>(() => {
+    return resolveMarkerSaveArtifactPreview({
+      markerOnlyConfirmationBoundaryModel,
+      markerSaveAuthorizationPreflightBoundaryModel,
+      controlledMarkerSaveActionBoundaryModel,
+      authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
+    })
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -10216,6 +10251,126 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 21] Marker Save Artifact Preview card
+                Pure read-only preview of what marker artifact would be saved.
+                Shows exactly what would be saved later without saving anything. */}
+            {markerSaveArtifactPreviewModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Eye className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-violet-300">
+                    Marker Save Artifact Preview
+                  </span>
+                </div>
+                {/* Status chip */}
+                {(() => {
+                  const statusColor = getMarkerSaveArtifactPreviewStatusColor(markerSaveArtifactPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getMarkerSaveArtifactPreviewStatusLabel(markerSaveArtifactPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        mode: {markerSaveArtifactPreviewModel.markerMode}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        saved: {markerSaveArtifactPreviewModel.markerSavedCount}
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-violet-300/90 font-medium mb-1">
+                  {markerSaveArtifactPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {markerSaveArtifactPreviewModel.summary}
+                </p>
+                {/* Preview ID if available */}
+                {markerSaveArtifactPreviewModel.markerArtifactPreviewId && (
+                  <div className="mb-2 p-1.5 rounded bg-[#12121A]/60 border border-violet-500/10">
+                    <div className="text-[8px] text-violet-400/60 mb-0.5">Artifact Preview ID:</div>
+                    <code className="text-[8px] text-violet-300/80 break-all">
+                      {markerSaveArtifactPreviewModel.markerArtifactPreviewId}
+                    </code>
+                  </div>
+                )}
+                {/* Preview fields grid */}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 mb-2">
+                  {markerSaveArtifactPreviewModel.previewFields.slice(0, 8).map((field, i) => (
+                    <div key={i} className="flex justify-between text-[8px]">
+                      <span className="text-[#6A6A7A]">{field.label}:</span>
+                      <span className="text-[#9A9AA9]">{field.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Source models used */}
+                {markerSaveArtifactPreviewModel.sourceModelsUsed.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-violet-400/60 mb-0.5">Source models:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {markerSaveArtifactPreviewModel.sourceModelsUsed.map((src, i) => (
+                        <span key={i} className="text-[8px] px-1 py-0.5 rounded bg-violet-500/10 text-violet-300/70 border border-violet-500/20">
+                          {src}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Blocked reasons if any */}
+                {markerSaveArtifactPreviewModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocked reasons:</div>
+                    {markerSaveArtifactPreviewModel.blockedReasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        ⊘ {reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety notes */}
+                {markerSaveArtifactPreviewModel.safetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-emerald-400/60 mb-0.5">Safety notes:</div>
+                    {markerSaveArtifactPreviewModel.safetyNotes.slice(0, 3).map((note, i) => (
+                      <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
+                        ✓ {note}
+                      </div>
+                    ))}
+                    {markerSaveArtifactPreviewModel.safetyNotes.length > 3 && (
+                      <div className="text-[9px] text-[#8A8A9A] pl-2">
+                        +{markerSaveArtifactPreviewModel.safetyNotes.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Capability flags */}
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  <span className={cn(
+                    "text-[8px] px-1 py-0.5 rounded border",
+                    markerSaveArtifactPreviewModel.canPreviewMarkerArtifact
+                      ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20"
+                      : "bg-slate-500/10 text-slate-400/70 border-slate-500/20"
+                  )}>
+                    preview: {markerSaveArtifactPreviewModel.canPreviewMarkerArtifact ? 'ready' : 'blocked'}
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    save: locked
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write: locked
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persist: locked
+                  </span>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Preview only. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -10473,7 +10628,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

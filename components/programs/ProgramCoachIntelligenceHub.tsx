@@ -3204,6 +3204,9 @@ function AIIntelligenceFoundationMap({
   preMutationLockBundleClosureModel,
   controlledFutureSessionMutationWriterDryRunModel,
   boundedMutationApplyEligibilityGateModel,
+  markerOnlyConfirmationBoundaryModel,
+  markerSaveAuthorizationPreflightBoundaryModel,
+  controlledMarkerSaveActionBoundaryModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3223,6 +3226,10 @@ function AIIntelligenceFoundationMap({
   preMutationLockBundleClosureModel?: PreMutationLockBundleClosureModel | null
   controlledFutureSessionMutationWriterDryRunModel?: ControlledFutureSessionMutationDryRunEnvelope | null
   boundedMutationApplyEligibilityGateModel?: BoundedMutationApplyEligibilityGateModel | null
+  // [MASTER-8C.48] Marker-gate proof parity bridge
+  markerOnlyConfirmationBoundaryModel?: MarkerOnlyConfirmationBoundaryModel | null
+  markerSaveAuthorizationPreflightBoundaryModel?: MarkerSaveAuthorizationPreflightBoundaryModel | null
+  controlledMarkerSaveActionBoundaryModel?: ControlledMarkerSaveActionBoundaryModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3874,9 +3881,48 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [MASTER-8C.48] Marker-only confirmation boundary status chip */}
+                    {markerOnlyConfirmationBoundaryModel && (
+                      (() => {
+                        const markerColor = getMarkerOnlyConfirmationBoundaryStatusColor(
+                          markerOnlyConfirmationBoundaryModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", markerColor.bg, markerColor.text, markerColor.border)}>
+                            Marker: {getMarkerOnlyConfirmationBoundaryStatusLabel(markerOnlyConfirmationBoundaryModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
+                    {/* [MASTER-8C.48] Marker-save authorization preflight status chip */}
+                    {markerSaveAuthorizationPreflightBoundaryModel && (
+                      (() => {
+                        const preflightColor = getMarkerSaveAuthorizationPreflightStatusColor(
+                          markerSaveAuthorizationPreflightBoundaryModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", preflightColor.bg, preflightColor.text, preflightColor.border)}>
+                            Auth: {getMarkerSaveAuthorizationPreflightStatusLabel(markerSaveAuthorizationPreflightBoundaryModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
+                    {/* [MASTER-8C.48] Controlled marker-save action boundary status chip */}
+                    {controlledMarkerSaveActionBoundaryModel && (
+                      (() => {
+                        const actionColor = getControlledMarkerSaveActionStatusColor(
+                          controlledMarkerSaveActionBoundaryModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", actionColor.bg, actionColor.text, actionColor.border)}>
+                            Action: {getControlledMarkerSaveActionStatusLabel(controlledMarkerSaveActionBoundaryModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {boundedMutationApplyEligibilityGateModel?.applyButtonDisabled && 'Apply locked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'}
                   </div>
                 </div>
               </div>
@@ -10353,7 +10399,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} />
           </div>
         </SheetContent>
       </Sheet>

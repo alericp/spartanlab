@@ -38,6 +38,10 @@ export type ControlledMarkerSaveActionStatus =
 export interface ControlledMarkerSaveActionBoundaryModel {
   readonly status: ControlledMarkerSaveActionStatus
   
+  // [P31] Read-only reviewability - separate from execution
+  readonly canReviewMarkerSaveAction: boolean
+  readonly canPreviewMarkerSaveAction: boolean
+  
   // Action capabilities - all locked in current step except marker-only save when ready
   readonly canShowAuthorizationControl: boolean
   readonly canExecuteMarkerSave: boolean
@@ -128,6 +132,8 @@ export function resolveControlledMarkerSaveActionBoundary(
   if (!markerSaveAuthorizationPreflightBoundaryModel) {
     return {
       status: 'unavailable_missing_preflight',
+      canReviewMarkerSaveAction: false,
+      canPreviewMarkerSaveAction: false,
       canShowAuthorizationControl: false,
       canExecuteMarkerSave: false,
       canWriteMarker: false,
@@ -199,6 +205,8 @@ export function resolveControlledMarkerSaveActionBoundary(
     
     return {
       status: 'blocked_active_caution',
+      canReviewMarkerSaveAction: false,
+      canPreviewMarkerSaveAction: false,
       canShowAuthorizationControl: false,
       canExecuteMarkerSave: false,
       canWriteMarker: false,
@@ -237,6 +245,8 @@ export function resolveControlledMarkerSaveActionBoundary(
   if (targetSessionCount === 0) {
     return {
       status: 'blocked_no_future_targets',
+      canReviewMarkerSaveAction: false,
+      canPreviewMarkerSaveAction: false,
       canShowAuthorizationControl: false,
       canExecuteMarkerSave: false,
       canWriteMarker: false,
@@ -274,6 +284,8 @@ export function resolveControlledMarkerSaveActionBoundary(
   if (!explicitUserAuthorization) {
     return {
       status: 'blocked_authorization_missing',
+      canReviewMarkerSaveAction: false,
+      canPreviewMarkerSaveAction: false,
       canShowAuthorizationControl: true, // Can show control when gates pass but auth missing
       canExecuteMarkerSave: false,
       canWriteMarker: false,
@@ -306,11 +318,14 @@ export function resolveControlledMarkerSaveActionBoundary(
   }
 
   // -----------------------------------
-  // Priority 5: Preflight not enabled
+  // Priority 5: Preflight not enabled - but reviewable if auth accepted
+  // [P31] canReviewMarkerSaveAction is true when local auth is accepted
   // -----------------------------------
   if (!markerSaveAuthorizationPreflightBoundaryModel.canShowMarkerSaveControl) {
     return {
       status: 'blocked_marker_save_not_enabled',
+      canReviewMarkerSaveAction: explicitUserAuthorization, // Reviewable when auth accepted
+      canPreviewMarkerSaveAction: explicitUserAuthorization,
       canShowAuthorizationControl: false,
       canExecuteMarkerSave: false,
       canWriteMarker: false,
@@ -341,12 +356,13 @@ export function resolveControlledMarkerSaveActionBoundary(
   }
 
   // -----------------------------------
-  // Priority 6: Marker save action ready
-  // -----------------------------------
-  // [Prompt 25.1] Final state: All gates passed but writer intentionally locked
+  // Priority 6: Marker save action review-ready but writer disabled
+  // [P31] All gates passed, reviewable but not executable
   // -----------------------------------
   return {
     status: 'blocked_marker_save_not_enabled',
+    canReviewMarkerSaveAction: true, // [P31] Reviewable when all gates pass
+    canPreviewMarkerSaveAction: true,
     canShowAuthorizationControl: true,
     canExecuteMarkerSave: false,
     canWriteMarker: false,

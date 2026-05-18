@@ -232,14 +232,15 @@ export function resolveMarkerWriteReadinessLedger(
   }
 
   // Item 7: action_boundary_reviewable
-  const actionReviewable = controlledMarkerSaveActionBoundaryModel?.canShowAuthorizationControl ?? false
+  // [P31] Use canReviewMarkerSaveAction, not canShowAuthorizationControl
+  const actionReviewable = controlledMarkerSaveActionBoundaryModel?.canReviewMarkerSaveAction ?? false
   items.push({
     key: 'action_boundary_reviewable',
     label: 'Action Boundary Reviewable',
     status: actionReviewable ? 'ready' : 'blocked',
     reason: actionReviewable 
-      ? 'Action boundary is reviewable for future writer consideration'
-      : 'Action boundary not yet reviewable',
+      ? 'Action boundary is reviewable (writer execution separate)'
+      : 'Action boundary not yet reviewable — requires local authorization',
   })
 
   // Item 8: writer_enabled (always blocked in Prompt 22)

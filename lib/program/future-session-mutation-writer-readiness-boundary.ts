@@ -26,6 +26,7 @@ import type { MutationConfirmationContractPreviewModel } from './mutation-confir
 import type { MutationCautionClearanceGateModel } from './mutation-caution-clearance-gate'
 import type { StructuralMutationPreviewContractModel } from './structural-mutation-preview-contract'
 import type { UserConfirmationMarkerPermissionPreviewGateModel } from './user-confirmation-marker-permission-preview-gate'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // TYPES
@@ -278,18 +279,15 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
 
   // -------------------------------------------------------------------------
   // PRIORITY 2: Blocked by semantic hard blockers only
-  // [P28] Do NOT block merely because raw activeCautionCount > 0
+  // [P28.1] Use shared semantic helper as single source of truth
   // -------------------------------------------------------------------------
-  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
-  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
-  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
-  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
-  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
+  const semanticHardBlockerCount = semanticBlockerSummary.semanticHardBlockerCount
+  const diagnosticOnlyCount = semanticBlockerSummary.diagnosticOnlyRootCandidateCount
+  const clearableOnlyCount = semanticBlockerSummary.readOnlyClearableRootCandidateCount
+  const cascadeOnlyCount = semanticBlockerSummary.derivedCascadeCautionCount
   
-  if (
-    semanticHardBlockerCount > 0 ||
-    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
-  ) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     return {
       status: 'blocked_active_caution',
       headline: 'Writer readiness blocked by evidence requirements',

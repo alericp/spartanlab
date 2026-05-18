@@ -22,6 +22,7 @@ import type { MutationTargetSessionResolutionPreviewModel } from './mutation-tar
 import type { MutationConfirmationContractPreviewModel } from './mutation-confirmation-contract-preview'
 import type { MutationCautionClearanceGateModel } from './mutation-caution-clearance-gate'
 import type { StructuralMutationPreviewContractModel } from './structural-mutation-preview-contract'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // STATUS TYPE
@@ -164,14 +165,12 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
     missingProof.push('Target session resolution preview unavailable')
   }
 
-  // [P28] Use semantic hard blocker count instead of raw activeCautionCount
-  const semanticHardBlockerCount = mutationCautionClearanceGateModel?.hardBlockingRootCandidateCount ?? 0
-  const diagnosticOnlyCount = mutationCautionClearanceGateModel?.diagnosticOnlyRootCandidateCount ?? 0
-  const clearableOnlyCount = mutationCautionClearanceGateModel?.readOnlyClearableRootCandidateCount ?? 0
-  const cascadeOnlyCount = mutationCautionClearanceGateModel?.derivedCascadeCautionCount ?? 0
+  // [P28.1] Use shared semantic helper as single source of truth
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
+  const semanticHardBlockerCount = semanticBlockerSummary.semanticHardBlockerCount
   
   // Check semantic hard blockers only (not raw activeCautionCount)
-  if (semanticHardBlockerCount > 0) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     blockedReasons.push(`${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`)
   }
 
@@ -255,11 +254,8 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
     nextSafeGate = 'Wait for upstream gates to initialize'
   }
   // PRIORITY 2: Semantic hard blockers only
-  // [P28] Do NOT block merely because raw activeCautionCount > 0
-  else if (
-    semanticHardBlockerCount > 0 ||
-    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !mutationCautionClearanceGateModel.rootCandidateClearanceReady)
-  ) {
+  // [P28.1] Use shared semantic helper as single source of truth
+  else if (semanticBlockerSummary.hasSemanticHardBlockers) {
     status = 'blocked_active_caution'
     permissionState = 'denied_caution_active'
     headline = 'Blocked — Evidence Required'

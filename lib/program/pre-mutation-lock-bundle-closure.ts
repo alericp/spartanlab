@@ -25,6 +25,7 @@ import type { MutationCautionClearanceGateModel } from './mutation-caution-clear
 import type { StructuralMutationPreviewContractModel } from './structural-mutation-preview-contract'
 import type { UserConfirmationMarkerPermissionPreviewGateModel } from './user-confirmation-marker-permission-preview-gate'
 import type { FutureSessionMutationWriterReadinessBoundaryModel } from './future-session-mutation-writer-readiness-boundary'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // STATUS TYPES
@@ -220,17 +221,20 @@ export function resolvePreMutationLockBundleClosure(
   const futureTargetCount = futureSessionMutationWriterReadinessBoundaryModel.futureTargetCount
   const activeCautionCount = futureSessionMutationWriterReadinessBoundaryModel.activeCautionCount
 
+  // [P28.1] Use shared semantic helper as single source of truth
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
+  
   // -------------------------------------------------------------------------
-  // Build gate summary from upstream models
+  // GATE SUMMARY — Build summary of each upstream gate's status
   // -------------------------------------------------------------------------
   const gateSummary: PreMutationGateSummaryItem[] = [
     {
       gate: 'Caution Clearance',
       status: mutationCautionClearanceGateModel.status,
-      locked: mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ? mutationCautionClearanceGateModel.hardBlockingRootCandidateCount > 0 : mutationCautionClearanceGateModel.status === 'blocked_active_caution',
-      reason: (mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0) > 0
-        ? `${mutationCautionClearanceGateModel.hardBlockingRootCandidateCount} hard blocker(s)`
-        : mutationCautionClearanceGateModel.rootCandidateClearanceReady ? 'Cleared' : 'Pending',
+      locked: semanticBlockerSummary.hasSemanticHardBlockers,
+      reason: semanticBlockerSummary.hasSemanticHardBlockers
+        ? `${semanticBlockerSummary.semanticHardBlockerCount} hard blocker(s)`
+        : semanticBlockerSummary.rootCandidateClearanceReady ? 'Cleared' : 'Pending',
     },
     {
       gate: 'Target Resolution',
@@ -264,18 +268,14 @@ export function resolvePreMutationLockBundleClosure(
 
   // -------------------------------------------------------------------------
   // PRIORITY 2: Blocked by semantic hard blockers only
-  // [P28] Do NOT block merely because raw activeCautionCount > 0
+  // [P28.1] Use shared semantic helper as single source of truth
   // -------------------------------------------------------------------------
-  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
-  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
-  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
-  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
-  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  const semanticHardBlockerCount = semanticBlockerSummary.semanticHardBlockerCount
+  const diagnosticOnlyCount = semanticBlockerSummary.diagnosticOnlyRootCandidateCount
+  const clearableOnlyCount = semanticBlockerSummary.readOnlyClearableRootCandidateCount
+  const cascadeOnlyCount = semanticBlockerSummary.derivedCascadeCautionCount
   
-  if (
-    semanticHardBlockerCount > 0 ||
-    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
-  ) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     return {
       status: 'locked_active_caution',
       headline: 'Pre-Mutation Locked: Evidence Required',

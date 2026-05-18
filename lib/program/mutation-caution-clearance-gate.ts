@@ -618,18 +618,22 @@ function evaluateRootCandidateClearanceItem(
         visibleEvidence = 'Evidence model shows stable status'
         blocksMarkerReadiness = false
       } else {
-        status = 'waiting_for_more_evidence'
-        requirement = 'readiness_evidence_required'
-        clearanceExplanation = 'Caution posture exists. More workout evidence needed.'
-        visibleEvidence = 'Current evidence is insufficient for clearance'
-        blocksMarkerReadiness = true
+        // [P33] Generic caution_review without safety evidence is NOT a hard blocker
+        // It becomes clearable-read-only, allowing marker preview to proceed
+        status = 'clearable_by_current_evidence'
+        requirement = 'not_action_blocking'
+        clearanceExplanation = 'Generic caution posture is explained by read-only plan evidence. No direct safety evidence detected. Does not hard-block marker preview, but mutation remains locked.'
+        visibleEvidence = 'Caution classification without safety evidence'
+        blocksMarkerReadiness = false
       }
     } else {
-      status = 'waiting_for_more_evidence'
-      requirement = 'readiness_evidence_required'
-      clearanceExplanation = 'Caution pattern detected. Additional evidence required.'
-      visibleEvidence = 'Caution classification from workout analysis'
-      blocksMarkerReadiness = true
+      // [P33] Generic caution_pattern_detected without safety evidence is NOT a hard blocker
+      // Plan-evidence caution without pain/injury/tendon/joint/tension becomes monitor-only
+      status = 'monitor_only'
+      requirement = 'not_action_blocking'
+      clearanceExplanation = 'Generic caution pattern from plan evidence. No direct safety evidence. Does not block marker preview.'
+      visibleEvidence = 'Caution classification from workout analysis (no safety concern)'
+      blocksMarkerReadiness = false
     }
   } else if (signal.provenance === 'candidate_specific') {
     if (hasPainIndicator || hasInjuryIndicator || hasTendonIndicator || hasJointIndicator) {

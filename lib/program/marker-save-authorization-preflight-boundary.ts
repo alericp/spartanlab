@@ -13,7 +13,9 @@
 // - Change Start Workout
 // - Change Live Workout
 //
-// Current expected state (7 cautions, 0 targets) must resolve to: blocked_active_caution
+// [P30] Semantic blocker readiness now comes from marker-only boundary (which is helper-aligned).
+// Raw activeCautionCount is display/context only — not a blocking condition.
+// This preflight never saves, writes, persists, mutates, or changes Program Cards / Start Workout / Live Workout.
 // =============================================================================
 
 import type { MarkerOnlyConfirmationBoundaryModel } from './marker-only-confirmation-boundary-preview'
@@ -190,9 +192,11 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
 
   // -------------------------------------------------------------------------
   // PRIORITY 2: Semantic hard blockers (blocking/waiting/unknown)
+  // [P30] Use helper-derived fields from marker-only boundary (already semantic-aligned)
   // Clearable read-only and diagnostic-only items do NOT independently block
+  // Raw activeCautionCount is display/context only — not a blocking condition
   // -------------------------------------------------------------------------
-  if (hardBlockingRootCandidateCount > 0 || rootCandidateNeedsEvidenceCount > 0) {
+  if (hardBlockingRootCandidateCount > 0) {
     // Build semantic blocker breakdown
     const blockerParts: string[] = []
     if (rootCandidateBlockingCount > 0) blockerParts.push(`${rootCandidateBlockingCount} blocking`)

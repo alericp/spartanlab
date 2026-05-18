@@ -8158,12 +8158,20 @@ export function ProgramCoachIntelligenceHub({
   const [markerSaveAuthorizationPreviewAccepted, setMarkerSaveAuthorizationPreviewAccepted] = useState(false)
   
   // [Prompt 20] Determine if authorization preview is blocked
-  // Blocked when: no marker boundary, boundary blocked/unavailable, cautions exist, or no targets
-  const authPreviewBlocked = !markerOnlyConfirmationBoundaryModel || 
-    markerOnlyConfirmationBoundaryModel.status.startsWith('blocked_') ||
-    markerOnlyConfirmationBoundaryModel.status === 'unavailable_missing_upstream' ||
-    (markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? 0) > 0 ||
-    markerOnlyConfirmationBoundaryModel.targetSessionCount === 0
+  // [P30] Tightened guard: blocked when marker-only boundary is not preview-ready
+  // Uses helper-derived semantic hard blocker count from marker-only boundary
+  const markerOnlyBoundaryPreviewReadyForLocalAuthorization = 
+    markerOnlyConfirmationBoundaryModel &&
+    markerOnlyConfirmationBoundaryModel.canRenderMarkerConfirmationPreview === true &&
+    (markerOnlyConfirmationBoundaryModel.hardBlockingRootCandidateCount ?? 0) === 0 &&
+    (markerOnlyConfirmationBoundaryModel.rootCandidateNeedsEvidenceCount ?? 0) === 0 &&
+    markerOnlyConfirmationBoundaryModel.targetSessionCount > 0 &&
+    markerOnlyConfirmationBoundaryModel.noMarkerSaved === true &&
+    markerOnlyConfirmationBoundaryModel.noMarkerWriteAttempted === true &&
+    markerOnlyConfirmationBoundaryModel.noProgramChangesApplied === true &&
+    markerOnlyConfirmationBoundaryModel.noWorkoutChangesApplied === true
+  
+  const authPreviewBlocked = !markerOnlyBoundaryPreviewReadyForLocalAuthorization
 
   // [MASTER-8C.42] Marker-Save Authorization Preflight Boundary
   // [Prompt 20] Now wired to local-only authorization preview state

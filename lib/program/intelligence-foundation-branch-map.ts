@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.40 - Bounded mutation apply eligibility gate)
+  // PLAN LOGIC (MASTER-8C.45 - Local marker saved proof + persistence readiness evaluation)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, user confirmation/marker permission preview gate, future-session mutation writer readiness boundary, pre-mutation lock / bundle closure, controlled future-session mutation writer dry-run envelope, and bounded mutation apply eligibility gate',
-    nextSafeAction: 'MASTER-8C.41 marker-only confirmation/apply UI or controlled apply writer (only if explicitly authorized); no marker or structural mutation allowed yet',
-    riskIfIgnored: 'Bounded apply eligibility gate skipped, allowing next step to assume apply controls can be rendered without explicit eligibility verification',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), and persistence readiness evaluation',
+    nextSafeAction: 'MASTER-8C.46+ durable marker receipt / persistence candidate readiness evaluation; structural/future-session mutation remains deferred until explicit gated authorization',
+    riskIfIgnored: 'Foundation Map and Plan Logic UI could show stale marker proof status (e.g. "writer locked" or "marker count 0") even after local marker is successfully saved, confusing the user about system state',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -272,6 +272,11 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/pre-mutation-lock-bundle-closure.ts',
       'lib/program/controlled-future-session-mutation-writer-dry-run.ts',
       'lib/program/bounded-mutation-apply-eligibility-gate.ts',
+      'lib/program/marker-only-confirmation-boundary.ts',
+      'lib/program/marker-save-authorization-preflight-boundary.ts',
+      'lib/program/controlled-marker-save-action-boundary.ts',
+      'lib/program/marker-save-artifact-preview.ts',
+      'lib/program/marker-write-readiness-ledger.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

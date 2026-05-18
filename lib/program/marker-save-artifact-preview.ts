@@ -199,7 +199,7 @@ export function resolveMarkerSaveArtifactPreview(
     { label: 'Completed Protected', value: String(completedProtectedCount) },
     { label: 'Root/Candidate Blocking', value: String(rootCandidateBlockingCount) },
     { label: 'Root/Candidate Waiting', value: String(rootCandidateWaitingCount) },
-    { label: 'Root/Candidate Needs Evidence', value: String(rootCandidateNeedsEvidenceCount) },
+    { label: 'Hard Evidence Blockers', value: String(rootCandidateNeedsEvidenceCount) },
     { label: 'Cascade Echoes', value: String(cascadeEchoCount) },
     { label: 'Raw Caution Count', value: String(rawCautionCount) },
     // [Prompt 25] Semantic root/candidate fields
@@ -271,7 +271,8 @@ function getHeadlineForStatus(
     case 'unavailable_missing_boundary_models':
       return 'Artifact Preview Unavailable'
     case 'blocked_cautions_not_cleared':
-      return `Blocked: ${rootCandidateNeedsEvidenceCount} Root/Candidate Caution(s) Need Evidence`
+      // [P35] Use hard blocker wording instead of stale "cautions" language
+      return `Blocked: ${rootCandidateNeedsEvidenceCount} Hard Root/Candidate Evidence Blocker(s)`
     case 'blocked_no_future_targets':
       return 'Blocked: No Future Target Sessions'
     case 'blocked_authorization_missing':
@@ -309,7 +310,7 @@ export function getMarkerSaveArtifactPreviewStatusLabel(
     case 'unavailable_missing_boundary_models':
       return 'unavailable'
     case 'blocked_cautions_not_cleared':
-      return 'cautions blocking'
+      return 'hard evidence required'
     case 'blocked_no_future_targets':
       return 'no targets'
     case 'blocked_authorization_missing':

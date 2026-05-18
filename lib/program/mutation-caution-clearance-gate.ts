@@ -560,7 +560,7 @@ function generateProvenanceSummary(
   }
   
   if (parts.length === 0) {
-    return 'No active caution signals'
+    return 'No unresolved evidence blockers'
   }
   
   const summary = parts.join('; ')
@@ -987,7 +987,7 @@ export function resolveMutationCautionClearanceGate(input: {
   else if (confirmationStatus === 'preview_eligible_marker_only') {
     status = 'clearance_preview_ready'
     headline = 'Caution clearance: preview ready'
-    summary = 'No active caution signals. Future targets exist. Marker-only confirmation preview may proceed in future step.'
+    summary = 'No unresolved evidence blockers. Future targets exist. Marker-only confirmation preview may proceed in a future step.'
     confidence = 'medium'
     nextSafeGate = 'Marker-only preview gate (future step)'
   }

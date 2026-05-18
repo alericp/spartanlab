@@ -265,16 +265,16 @@ export function resolveControlledFutureSessionMutationWriterDryRun(
       operationCount: 0,
       operations: [],
       blockedReasons: [
-        `${activeCautionCount} active caution(s) blocking dry-run`,
-        'Caution clearance gate not passed',
-        'Dry-run writer requires caution resolution',
+        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''} blocking dry-run`,
+        'Evidence clearance gate not passed',
+        'Dry-run writer requires evidence resolution',
       ],
       safetyNotes: [
         'Completed sessions protected',
         'Future sessions preview-only',
-        'No mutation allowed while caution active',
+        'No mutation allowed while evidence blockers remain',
       ],
-      nextSafeGate: 'Resolve or acknowledge active cautions',
+      nextSafeGate: 'Resolve root/candidate evidence blockers',
       ...hardFalseFlags,
       ...hardTrueFlags,
     }

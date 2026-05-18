@@ -192,7 +192,7 @@ export function resolveStructuralMutationPreviewContract(
   const activeCautionCount = mutationCautionClearanceGateModel.activeCautionCount
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Blocked by active caution
+  // PRIORITY 2: Blocked by evidence requirements
   // -------------------------------------------------------------------------
   if (
     mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
@@ -201,12 +201,12 @@ export function resolveStructuralMutationPreviewContract(
     const candidates = buildBlockedCandidates(
       mutationTargetSessionResolutionPreviewModel,
       'caution_blocked',
-      'Blocked by active caution signals'
+      'Blocked by evidence requirements'
     )
     return {
       status: 'blocked_active_caution',
-      headline: 'Structural preview blocked: active caution',
-      summary: `${activeCautionCount} caution signal(s) are active. Structural mutation preview cannot proceed until caution signals are resolved or cleared.`,
+      headline: 'Structural preview blocked: evidence required',
+      summary: `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's are' : ' is'} unresolved. Structural mutation preview cannot proceed until evidence requirements are resolved.`,
       confidence: 'high',
       candidatePreviewCount: 0,
       blockedPreviewCount: candidates.length,
@@ -215,12 +215,12 @@ export function resolveStructuralMutationPreviewContract(
       activeCautionCount,
       previewCandidates: candidates,
       blockedReasons: [
-        `${activeCautionCount} active caution signal(s)`,
-        'Caution clearance gate not cleared',
+        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''}`,
+        'Evidence clearance gate not cleared',
       ],
-      missingProof: ['Caution clearance'],
-      safetyNotes: ['Caution must clear before structural preview can be considered'],
-      nextSafeGate: 'Caution clearance gate must report cleared status',
+      missingProof: ['Evidence clearance'],
+      safetyNotes: ['Evidence must be resolved before structural preview can be considered'],
+      nextSafeGate: 'Evidence clearance gate must report cleared status',
       ...LOCKED_PERMISSION_FLAGS,
       ...LOCKED_SAFETY_FLAGS,
     }

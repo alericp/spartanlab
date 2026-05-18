@@ -10644,7 +10644,7 @@ export function ProgramCoachIntelligenceHub({
                 {/* Top root/candidate caution signals (max 3) */}
                 {mutationCautionClearanceGateModel.dedupedActiveCautionSignals.length > 0 && (
                   <div className="mb-1.5">
-                    <div className="text-[9px] text-amber-400/60 mb-0.5">Active cautions:</div>
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Root/candidate evidence blockers:</div>
                     {mutationCautionClearanceGateModel.dedupedActiveCautionSignals.slice(0, 3).map((signal, i) => (
                       <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5 pl-2">
                         {signal.provenance === 'root' ? '!' : '*'} {signal.label}
@@ -10670,8 +10670,8 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-amber-400/60">
                   {mutationCautionClearanceGateModel.activeCautionCount > 0
-                    ? 'Root/candidate caution must clear before marker save. Cascade echoes suppressed from count.'
-                    : 'No active cautions. Derived cascade signals are diagnostic only.'}
+                    ? 'Hard/waiting/unknown root-candidate evidence must resolve before marker preview can proceed. Cascade echoes are diagnostic only.'
+                    : 'No hard root-candidate evidence blockers. Derived cascade signals are diagnostic only.'}
                 </p>
               </div>
             )}
@@ -10886,7 +10886,7 @@ export function ProgramCoachIntelligenceHub({
                 </div>
                 {/* Safety line */}
                 <p className="text-[10px] text-orange-400/60">
-                  Read-only evidence detail. No cautions cleared. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.
+                  Read-only evidence detail. No evidence items were cleared or changed. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.
                 </p>
               </div>
             )}

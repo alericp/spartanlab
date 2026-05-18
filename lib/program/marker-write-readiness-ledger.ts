@@ -363,7 +363,7 @@ export function getMarkerWriteReadinessLedgerStatusLabel(
     case 'unavailable_missing_models':
       return 'unavailable'
     case 'blocked_cautions_not_cleared':
-      return 'cautions'
+      return 'evidence required'
     case 'blocked_no_future_targets':
       return 'no targets'
     case 'blocked_authorization_missing':

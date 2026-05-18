@@ -641,11 +641,30 @@ function evaluateRootCandidateClearanceItem(
       visibleEvidence = `${signal.label}: ${signal.reason.slice(0, 80)}`
       blocksMarkerReadiness = true
     } else if (hasProgressionIndicator) {
-      status = 'waiting_for_more_evidence'
-      requirement = 'progression_readiness_required'
-      clearanceExplanation = 'Progression readiness not confirmed.'
-      visibleEvidence = `Progression status: ${signal.reason.slice(0, 60)}`
-      blocksMarkerReadiness = true
+      // [P32] Progression indicators are NOT hard blockers unless they have safety evidence
+      // Plan-only/generic progression "not ready" is monitor-only, not marker-blocking
+      const hasAnySafetyKeyword = hasPainIndicator || hasInjuryIndicator || hasTendonIndicator || hasJointIndicator || hasTensionIndicator
+      const isActionBlockingProgression = reasonLower.includes('unsafe') || 
+        reasonLower.includes('risk') || 
+        reasonLower.includes('danger') ||
+        reasonLower.includes('stop') ||
+        reasonLower.includes('avoid')
+      
+      if (hasAnySafetyKeyword || isActionBlockingProgression) {
+        // True safety-related progression issue - remains blocking
+        status = 'waiting_for_more_evidence'
+        requirement = 'progression_readiness_required'
+        clearanceExplanation = 'Progression has safety concern that requires evidence.'
+        visibleEvidence = `Safety progression: ${signal.reason.slice(0, 60)}`
+        blocksMarkerReadiness = true
+      } else {
+        // Generic plan-only progression - monitor only, does NOT block marker preview
+        status = 'monitor_only'
+        requirement = 'not_action_blocking'
+        clearanceExplanation = 'Progression candidate is plan-inference only. Does not block marker preview.'
+        visibleEvidence = `Plan inference: ${signal.label}`
+        blocksMarkerReadiness = false
+      }
     } else {
       const isGenericCaution = reasonLower.includes('caution') && 
         !hasPainIndicator && !hasInjuryIndicator && !hasTendonIndicator

@@ -28,6 +28,7 @@ export type MarkerSaveArtifactPreviewStatus =
   | 'blocked_authorization_missing'
   | 'blocked_action_not_ready'
   | 'preview_ready_no_write'
+  | 'local_marker_saved_no_persistence' // [P39] After local marker save
 
 // -----------------------------------------------------------------------------
 // Model Interface
@@ -40,8 +41,8 @@ export interface MarkerSaveArtifactPreviewModel {
 
   readonly markerArtifactPreviewId: string | null
   readonly markerKind: 'future_session_mutation_readiness_marker'
-  readonly markerMode: 'preview_only'
-  readonly markerSavedCount: 0
+  readonly markerMode: 'preview_only' | 'local_saved_proof' // [P39] Allow local saved proof mode
+  readonly markerSavedCount: number // [P39] Dynamic, not hardcoded 0
 
   readonly targetSessionCount: number
   readonly completedProtectedCount: number
@@ -71,7 +72,7 @@ export interface MarkerSaveArtifactPreviewModel {
   readonly canMutateStructure: false
 
   readonly completedSessionsProtected: true
-  readonly noMarkerSaved: true
+  readonly noMarkerSaved: boolean // [P39] Dynamic based on markerSavedCount
   readonly noMarkerWriteAttempted: true
   readonly noProgramChangesApplied: true
   readonly noWorkoutChangesApplied: true
@@ -86,6 +87,7 @@ export interface MarkerSaveArtifactPreviewInput {
   readonly markerSaveAuthorizationPreflightBoundaryModel: MarkerSaveAuthorizationPreflightBoundaryModel | null | undefined
   readonly controlledMarkerSaveActionBoundaryModel: ControlledMarkerSaveActionBoundaryModel | null | undefined
   readonly authorizationPreviewAccepted: boolean
+  readonly markerSavedCount?: number // [P39] Local marker saved count from UI state
 }
 
 // -----------------------------------------------------------------------------
@@ -100,6 +102,7 @@ export function resolveMarkerSaveArtifactPreview(
     markerSaveAuthorizationPreflightBoundaryModel,
     controlledMarkerSaveActionBoundaryModel,
     authorizationPreviewAccepted,
+    markerSavedCount = 0, // [P39] Default to 0 if not provided
   } = input
 
   // Extract counts from marker-only boundary if available
@@ -125,18 +128,30 @@ export function resolveMarkerSaveArtifactPreview(
   // Track blocked reasons
   const blockedReasons: string[] = []
 
-  // Safety notes always present
-  const safetyNotes: string[] = [
-    'Preview only — no marker saved',
-    'No writes to storage',
-    'No Program Card changes',
-    'No Start Workout changes',
-    'No Live Workout changes',
-    'Completed sessions protected',
-  ]
+  // Safety notes - [P39] dynamic based on marker saved state
+  const safetyNotes: string[] = markerSavedCount > 0 
+    ? [
+        `${markerSavedCount} marker saved locally`,
+        'Local proof only — persistence not enabled',
+        'No Program Card changes',
+        'No Start Workout changes',
+        'No Live Workout changes',
+        'Completed sessions protected',
+      ]
+    : [
+        'Preview only — no marker saved',
+        'No writes to storage',
+        'No Program Card changes',
+        'No Start Workout changes',
+        'No Live Workout changes',
+        'Completed sessions protected',
+      ]
 
   // Check gate conditions in order
-  let status: MarkerSaveArtifactPreviewStatus = 'preview_ready_no_write'
+  // [P39] Default status depends on whether marker already saved
+  let status: MarkerSaveArtifactPreviewStatus = markerSavedCount > 0 
+    ? 'local_marker_saved_no_persistence' 
+    : 'preview_ready_no_write'
 
   // Gate 1: Missing boundary models
   if (!markerOnlyConfirmationBoundaryModel || !markerSaveAuthorizationPreflightBoundaryModel || !controlledMarkerSaveActionBoundaryModel) {
@@ -220,8 +235,8 @@ export function resolveMarkerSaveArtifactPreview(
 
     markerArtifactPreviewId,
     markerKind: 'future_session_mutation_readiness_marker',
-    markerMode: 'preview_only',
-    markerSavedCount: 0,
+    markerMode: markerSavedCount > 0 ? 'local_saved_proof' : 'preview_only', // [P39] Dynamic mode
+    markerSavedCount, // [P39] Dynamic from input
 
     targetSessionCount,
     completedProtectedCount,
@@ -241,7 +256,7 @@ export function resolveMarkerSaveArtifactPreview(
     safetyNotes,
     previewFields,
 
-    canPreviewMarkerArtifact: status === 'preview_ready_no_write',
+    canPreviewMarkerArtifact: status === 'preview_ready_no_write' || status === 'local_marker_saved_no_persistence',
     canSaveMarker: false,
     canWriteMarker: false,
     canPersistMarker: false,
@@ -251,7 +266,7 @@ export function resolveMarkerSaveArtifactPreview(
     canMutateStructure: false,
 
     completedSessionsProtected: true,
-    noMarkerSaved: true,
+    noMarkerSaved: markerSavedCount === 0, // [P39] Dynamic based on saved count
     noMarkerWriteAttempted: true,
     noProgramChangesApplied: true,
     noWorkoutChangesApplied: true,
@@ -281,6 +296,8 @@ function getHeadlineForStatus(
       return 'Blocked: Action Boundary Not Ready'
     case 'preview_ready_no_write':
       return `Preview Ready: ${targetSessionCount} Target Session(s) — No Write`
+    case 'local_marker_saved_no_persistence':
+      return `Local Marker Saved: ${targetSessionCount} Target Session(s) — Persistence Not Enabled`
     default:
       return 'Artifact Preview Status Unknown'
   }
@@ -292,6 +309,9 @@ function getSummaryForStatus(
 ): string {
   if (status === 'preview_ready_no_write') {
     return 'Marker artifact preview is ready. No marker will be saved until writer is enabled in a future step.'
+  }
+  if (status === 'local_marker_saved_no_persistence') {
+    return 'Local marker saved successfully. Persistence not enabled yet. No program/workout changes applied.'
   }
   if (blockedReasons.length > 0) {
     return blockedReasons.slice(0, 2).join('. ') + '.'
@@ -319,6 +339,8 @@ export function getMarkerSaveArtifactPreviewStatusLabel(
       return 'action not ready'
     case 'preview_ready_no_write':
       return 'preview ready'
+    case 'local_marker_saved_no_persistence':
+      return 'local marker saved'
     default:
       return 'unknown'
   }
@@ -340,6 +362,8 @@ export function getMarkerSaveArtifactPreviewStatusColor(
       return { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20' }
     case 'preview_ready_no_write':
       return { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' }
+    case 'local_marker_saved_no_persistence':
+      return { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20' }
     default:
       return { bg: 'bg-slate-500/10', text: 'text-slate-400', border: 'border-slate-500/20' }
   }

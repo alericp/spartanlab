@@ -277,16 +277,23 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
     : 'blocked'
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Blocked by evidence requirements
+  // PRIORITY 2: Blocked by semantic hard blockers only
+  // [P28] Do NOT block merely because raw activeCautionCount > 0
   // -------------------------------------------------------------------------
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
+  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  
   if (
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
-    activeCautionCount > 0
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
   ) {
     return {
       status: 'blocked_active_caution',
       headline: 'Writer readiness blocked by evidence requirements',
-      summary: `${activeCautionCount} root/candidate evidence blocker${activeCautionCount !== 1 ? 's' : ''} prevent writer boundary from proceeding. Resolve evidence requirements first.`,
+      summary: `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown) must be resolved before writer boundary can proceed.`,
       confidence: 0.1,
       writerReadinessState: 'blocked_by_caution',
       completedProtectedCount,
@@ -295,14 +302,19 @@ export function resolveFutureSessionMutationWriterReadinessBoundary(
       structuralPreviewCandidateCount,
       confirmationPermissionState,
       blockedReasons: [
-        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''}`,
-        'Evidence clearance gate not cleared',
+        `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`,
+        'Root/candidate clearance gate not ready',
         'Writer instantiation blocked by evidence requirements',
       ],
       missingProof: ['Evidence clearance'],
       protectedInvariants,
-      safetyNotes: ['Evidence requirements prevent writer boundary activation'],
-      nextSafeGate: 'Clear all caution signals before proceeding',
+      safetyNotes: [
+        'Hard blockers prevent writer boundary activation',
+        diagnosticOnlyCount > 0 ? `${diagnosticOnlyCount} diagnostic-only (non-blocking)` : null,
+        clearableOnlyCount > 0 ? `${clearableOnlyCount} clearable/read-only (non-blocking)` : null,
+        cascadeOnlyCount > 0 ? `${cascadeOnlyCount} cascade echo${cascadeOnlyCount !== 1 ? 'es' : ''} (non-blocking)` : null,
+      ].filter(Boolean) as string[],
+      nextSafeGate: 'Resolve hard blockers (blocking/waiting/unknown) first',
       ...LOCKED_ACTION_FLAGS,
       ...TRUE_SAFETY_FLAGS,
     }

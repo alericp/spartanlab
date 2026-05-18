@@ -191,12 +191,20 @@ export function resolveStructuralMutationPreviewContract(
   const futureTargetCount = mutationTargetSessionResolutionPreviewModel.futureSessionCount
   const activeCautionCount = mutationCautionClearanceGateModel.activeCautionCount
 
+  // [P28] Use semantic hard blocker count instead of raw activeCautionCount
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
+  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Blocked by evidence requirements
+  // PRIORITY 2: Blocked by semantic hard blockers only
+  // [P28] Do NOT block merely because raw activeCautionCount > 0
   // -------------------------------------------------------------------------
   if (
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
-    activeCautionCount > 0
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
   ) {
     const candidates = buildBlockedCandidates(
       mutationTargetSessionResolutionPreviewModel,
@@ -206,7 +214,7 @@ export function resolveStructuralMutationPreviewContract(
     return {
       status: 'blocked_active_caution',
       headline: 'Structural preview blocked: evidence required',
-      summary: `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's are' : ' is'} unresolved. Structural mutation preview cannot proceed until evidence requirements are resolved.`,
+      summary: `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown) must be resolved before structural preview can proceed.`,
       confidence: 'high',
       candidatePreviewCount: 0,
       blockedPreviewCount: candidates.length,
@@ -215,12 +223,17 @@ export function resolveStructuralMutationPreviewContract(
       activeCautionCount,
       previewCandidates: candidates,
       blockedReasons: [
-        `${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''}`,
-        'Evidence clearance gate not cleared',
+        `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`,
+        'Root/candidate clearance gate not ready',
       ],
       missingProof: ['Evidence clearance'],
-      safetyNotes: ['Evidence must be resolved before structural preview can be considered'],
-      nextSafeGate: 'Evidence clearance gate must report cleared status',
+      safetyNotes: [
+        'Hard blockers must be resolved before structural preview',
+        diagnosticOnlyCount > 0 ? `${diagnosticOnlyCount} diagnostic-only (non-blocking)` : null,
+        clearableOnlyCount > 0 ? `${clearableOnlyCount} clearable/read-only (non-blocking)` : null,
+        cascadeOnlyCount > 0 ? `${cascadeOnlyCount} cascade echo${cascadeOnlyCount !== 1 ? 'es' : ''} (non-blocking)` : null,
+      ].filter(Boolean) as string[],
+      nextSafeGate: 'Resolve hard blockers (blocking/waiting/unknown) first',
       ...LOCKED_PERMISSION_FLAGS,
       ...LOCKED_SAFETY_FLAGS,
     }

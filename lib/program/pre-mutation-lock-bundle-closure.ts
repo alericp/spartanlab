@@ -227,10 +227,10 @@ export function resolvePreMutationLockBundleClosure(
     {
       gate: 'Caution Clearance',
       status: mutationCautionClearanceGateModel.status,
-      locked: mutationCautionClearanceGateModel.status === 'blocked_active_caution',
-      reason: mutationCautionClearanceGateModel.status === 'blocked_active_caution'
-        ? `${activeCautionCount} active caution(s)`
-        : 'Cleared',
+      locked: mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ? mutationCautionClearanceGateModel.hardBlockingRootCandidateCount > 0 : mutationCautionClearanceGateModel.status === 'blocked_active_caution',
+      reason: (mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0) > 0
+        ? `${mutationCautionClearanceGateModel.hardBlockingRootCandidateCount} hard blocker(s)`
+        : mutationCautionClearanceGateModel.rootCandidateClearanceReady ? 'Cleared' : 'Pending',
     },
     {
       gate: 'Target Resolution',
@@ -263,28 +263,39 @@ export function resolvePreMutationLockBundleClosure(
   const lockedGates = gateSummary.filter(g => g.locked)
 
   // -------------------------------------------------------------------------
-  // PRIORITY 2: Blocked by active caution
+  // PRIORITY 2: Blocked by semantic hard blockers only
+  // [P28] Do NOT block merely because raw activeCautionCount > 0
   // -------------------------------------------------------------------------
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ?? 0
+  const rootCandidateClearanceReady = mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
+  
   if (
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
-    activeCautionCount > 0
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !rootCandidateClearanceReady)
   ) {
     return {
       status: 'locked_active_caution',
-      headline: 'Pre-Mutation Locked: Active Caution',
-      summary: `Bundle closure blocked by ${activeCautionCount} active caution(s). All sessions remain protected. No mutation can proceed until caution conditions clear.`,
+      headline: 'Pre-Mutation Locked: Evidence Required',
+      summary: `Bundle closure blocked by ${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown). All sessions remain protected.`,
       confidence: 0.85,
       completedProtectedCount,
       futureTargetCount,
       activeCautionCount,
       gateSummary,
       blockedReasons: [
-        `${activeCautionCount} active caution(s) blocking mutation`,
-        'Caution clearance gate not passed',
+        `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`,
+        'Root/candidate clearance gate not ready',
         ...lockedGates.slice(0, 2).map(g => `${g.gate}: ${g.reason}`),
-      ],
+        // Non-blocking context as info only
+        diagnosticOnlyCount > 0 ? `(${diagnosticOnlyCount} diagnostic-only, non-blocking)` : '',
+        clearableOnlyCount > 0 ? `(${clearableOnlyCount} clearable/read-only, non-blocking)` : '',
+        cascadeOnlyCount > 0 ? `(${cascadeOnlyCount} cascade echo${cascadeOnlyCount !== 1 ? 'es' : ''}, non-blocking)` : '',
+      ].filter(Boolean),
       protectedInvariants,
-      nextSafeGate: 'Clear active cautions before mutation can proceed',
+      nextSafeGate: 'Resolve hard blockers (blocking/waiting/unknown) before mutation can proceed',
       ...HARD_FALSE_ACTION_FLAGS,
       ...HARD_TRUE_SAFETY_FLAGS,
     }

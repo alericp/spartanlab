@@ -164,16 +164,21 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
     missingProof.push('Target session resolution preview unavailable')
   }
 
-  // Check caution signals
-  if (activeCautionCount > 0) {
-    blockedReasons.push(`${activeCautionCount} evidence blocker${activeCautionCount !== 1 ? 's' : ''} block confirmation`)
+  // [P28] Use semantic hard blocker count instead of raw activeCautionCount
+  const semanticHardBlockerCount = mutationCautionClearanceGateModel?.hardBlockingRootCandidateCount ?? 0
+  const diagnosticOnlyCount = mutationCautionClearanceGateModel?.diagnosticOnlyRootCandidateCount ?? 0
+  const clearableOnlyCount = mutationCautionClearanceGateModel?.readOnlyClearableRootCandidateCount ?? 0
+  const cascadeOnlyCount = mutationCautionClearanceGateModel?.derivedCascadeCautionCount ?? 0
+  
+  // Check semantic hard blockers only (not raw activeCautionCount)
+  if (semanticHardBlockerCount > 0) {
+    blockedReasons.push(`${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} need evidence`)
   }
 
-  // Check caution clearance status
+  // Check caution clearance status (but only for non-caution-count reasons)
   if (mutationCautionClearanceGateModel) {
     const cautionStatus = mutationCautionClearanceGateModel.status
     if (
-      cautionStatus === 'blocked_active_caution' ||
       cautionStatus === 'blocked_no_future_targets' ||
       cautionStatus === 'blocked_completed_only'
     ) {
@@ -249,17 +254,18 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
     confidence = 'none'
     nextSafeGate = 'Wait for upstream gates to initialize'
   }
-  // PRIORITY 2: Active caution blocks
+  // PRIORITY 2: Semantic hard blockers only
+  // [P28] Do NOT block merely because raw activeCautionCount > 0
   else if (
-    activeCautionCount > 0 ||
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution'
+    semanticHardBlockerCount > 0 ||
+    (mutationCautionClearanceGateModel.status === 'blocked_active_caution' && !mutationCautionClearanceGateModel.rootCandidateClearanceReady)
   ) {
     status = 'blocked_active_caution'
     permissionState = 'denied_caution_active'
     headline = 'Blocked — Evidence Required'
-    summary = `${activeCautionCount} evidence signal(s) must be resolved before confirmation/marker permission can be considered.`
+    summary = `${semanticHardBlockerCount} hard blocker${semanticHardBlockerCount !== 1 ? 's' : ''} (blocking/waiting/unknown) must be resolved before confirmation/marker permission can be considered.`
     confidence = 'high'
-    nextSafeGate = 'Resolve evidence signals first'
+    nextSafeGate = 'Resolve hard blockers first'
   }
   // PRIORITY 3: No future targets
   else if (

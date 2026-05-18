@@ -174,13 +174,12 @@ export function resolveMarkerSaveArtifactPreview(
     status = 'blocked_authorization_missing'
     blockedReasons.push('Local authorization preview not accepted')
   }
-  // Gate 5: Action boundary not ready (check canShowAuthorizationControl and canExecuteMarkerSave)
-  else if (!controlledMarkerSaveActionBoundaryModel.canShowAuthorizationControl) {
+  // Gate 5: Action boundary not reviewable (use canReviewMarkerSaveAction, not canExecuteMarkerSave)
+  // [P31] Reviewability is separate from execution - preview can be ready without writer enabled
+  else if (!controlledMarkerSaveActionBoundaryModel.canReviewMarkerSaveAction) {
     status = 'blocked_action_not_ready'
-    blockedReasons.push('Controlled marker-save action boundary not ready')
-    if (!controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave) {
-      blockedReasons.push('Marker-save execution not available')
-    }
+    blockedReasons.push('Controlled marker-save action boundary not reviewable')
+    blockedReasons.push('Action boundary requires local authorization to be reviewable')
   }
 
   // Generate deterministic artifact preview ID (no randomness)

@@ -22,6 +22,7 @@ import type { UserConfirmationMarkerPermissionPreviewGateModel } from './user-co
 import type { PreMutationLockBundleClosureModel } from './pre-mutation-lock-bundle-closure'
 import type { MutationCautionClearanceGateModel } from './mutation-caution-clearance-gate'
 import type { MutationTargetSessionResolutionPreviewModel } from './mutation-target-session-resolution-preview'
+import { computeSemanticBlockerSummary } from './mutation-caution-semantic-blocker'
 
 // =============================================================================
 // STATUS TYPE
@@ -201,32 +202,21 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
   const eligibleOperationCount = 
     boundedMutationApplyEligibilityGateModel.eligibleOperationCount ?? 0
   
-  // [MASTER-8C.47] Root/candidate clearance metrics (deduped from cascade)
-  const rootCandidateBlockingCount = 
-    mutationCautionClearanceGateModel.blockingRootCandidateCount ?? 0
-  const rootCandidateWaitingCount = 
-    mutationCautionClearanceGateModel.waitingRootCandidateCount ?? 0
-  const cascadeEchoCount = 
-    mutationCautionClearanceGateModel.derivedCascadeCautionCount ?? 0
-  const rawCautionCount = 
-    mutationCautionClearanceGateModel.allRawCautionSignalCount ?? activeCautionCount
-  const rootCandidateClearanceReady = 
-    mutationCautionClearanceGateModel.rootCandidateClearanceReady ?? false
+  // [P29] Use shared semantic helper as single source of truth
+  const semanticBlockerSummary = computeSemanticBlockerSummary(mutationCautionClearanceGateModel)
   
-  // [Prompt 25] Semantic root/candidate fields from Prompt 24
-  // Prefer direct semantic fields, fallback to computed if unavailable
-  const hardBlockingRootCandidateCount = 
-    mutationCautionClearanceGateModel.hardBlockingRootCandidateCount ??
-    (rootCandidateBlockingCount + rootCandidateWaitingCount + (mutationCautionClearanceGateModel.unknownStatusRootCandidateCount ?? 0))
-  const unknownStatusRootCandidateCount =
-    mutationCautionClearanceGateModel.unknownStatusRootCandidateCount ?? 0
-  const readOnlyClearableRootCandidateCount =
-    mutationCautionClearanceGateModel.readOnlyClearableRootCandidateCount ??
-    mutationCautionClearanceGateModel.clearableRootCandidateCount ?? 0
-  const diagnosticOnlyRootCandidateCount =
-    mutationCautionClearanceGateModel.diagnosticOnlyRootCandidateCount ??
-    ((mutationCautionClearanceGateModel.monitorOnlyRootCandidateCount ?? 0) + 
-     (mutationCautionClearanceGateModel.staleOrMisclassifiedCount ?? 0))
+  // [MASTER-8C.47] Root/candidate clearance metrics from semantic helper
+  const rootCandidateBlockingCount = semanticBlockerSummary.blockingRootCandidateCount
+  const rootCandidateWaitingCount = semanticBlockerSummary.waitingRootCandidateCount
+  const cascadeEchoCount = semanticBlockerSummary.derivedCascadeCautionCount
+  const rawCautionCount = semanticBlockerSummary.rawActiveCautionCount
+  const rootCandidateClearanceReady = semanticBlockerSummary.rootCandidateClearanceReady
+  
+  // [P29] Semantic root/candidate fields from shared helper
+  const hardBlockingRootCandidateCount = semanticBlockerSummary.semanticHardBlockerCount
+  const unknownStatusRootCandidateCount = semanticBlockerSummary.unknownStatusRootCandidateCount
+  const readOnlyClearableRootCandidateCount = semanticBlockerSummary.readOnlyClearableRootCandidateCount
+  const diagnosticOnlyRootCandidateCount = semanticBlockerSummary.diagnosticOnlyRootCandidateCount
   
   // Semantic blocker count = true hard blockers (blocking + waiting + unknown)
   const rootCandidateNeedsEvidenceCount = hardBlockingRootCandidateCount
@@ -236,15 +226,12 @@ export function resolveMarkerOnlyConfirmationBoundaryPreview(
     futureTargetCount > 0 && dryRunOperationCount > 0 ? dryRunOperationCount : 0
   
   // -------------------------------------------------------------------------
-  // PRIORITY B: Active caution — now uses Prompt 24 semantic root/candidate clearance
+  // PRIORITY B: Semantic hard blockers only
+  // [P29] Use shared helper as single source of truth
+  // Do NOT block merely because raw activeCautionCount > 0 or status
   // Cascade echoes and diagnostic items do not block marker preview
   // -------------------------------------------------------------------------
-  if (
-    rootCandidateNeedsEvidenceCount > 0 ||
-    !rootCandidateClearanceReady ||
-    mutationCautionClearanceGateModel.status === 'blocked_active_caution' ||
-    mutationCautionClearanceGateModel.status === 'clearance_waiting_for_evidence'
-  ) {
+  if (semanticBlockerSummary.hasSemanticHardBlockers) {
     // [Prompt 25] Refined blocker label using semantic counts
     const blockerParts: string[] = []
     if (rootCandidateBlockingCount > 0) {

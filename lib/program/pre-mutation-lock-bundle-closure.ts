@@ -259,7 +259,9 @@ export function resolvePreMutationLockBundleClosure(
     {
       gate: 'Writer Boundary',
       status: futureSessionMutationWriterReadinessBoundaryModel.status,
-      locked: !futureSessionMutationWriterReadinessBoundaryModel.status.includes('preview_ready'),
+      // [P36] writer_boundary_locked is a valid safe state, not a blocker
+      locked: !futureSessionMutationWriterReadinessBoundaryModel.status.includes('preview_ready') &&
+              futureSessionMutationWriterReadinessBoundaryModel.status !== 'writer_boundary_locked',
       reason: futureSessionMutationWriterReadinessBoundaryModel.headline,
     },
   ]
@@ -385,9 +387,12 @@ export function resolvePreMutationLockBundleClosure(
 
   // -------------------------------------------------------------------------
   // PRIORITY 6: Blocked by writer boundary
+  // [P36] Accept writer_boundary_locked as a valid safe state
+  // writer_boundary_locked means upstream proof is complete, writer is just locked by design
   // -------------------------------------------------------------------------
   if (
-    !futureSessionMutationWriterReadinessBoundaryModel.status.includes('preview_ready')
+    !futureSessionMutationWriterReadinessBoundaryModel.status.includes('preview_ready') &&
+    futureSessionMutationWriterReadinessBoundaryModel.status !== 'writer_boundary_locked'
   ) {
     return {
       status: 'locked_writer_boundary',

@@ -361,6 +361,13 @@ import {
   getDurableMarkerReceiptReadinessStatusColor,
   type DurableMarkerReceiptReadinessModel,
 } from '@/lib/program/durable-marker-receipt-readiness'
+// [Prompt 42] Controlled durable marker receipt writer preview
+import {
+  resolveControlledDurableMarkerReceiptWriterPreview,
+  getControlledDurableMarkerReceiptWriterPreviewStatusLabel,
+  getControlledDurableMarkerReceiptWriterPreviewStatusColor,
+  type ControlledDurableMarkerReceiptWriterPreviewModel,
+} from '@/lib/program/controlled-durable-marker-receipt-writer-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3246,6 +3253,8 @@ function AIIntelligenceFoundationMap({
   markerWriteReadinessLedgerModel,
   // [Prompt 41] Durable marker receipt readiness
   durableMarkerReceiptReadinessModel,
+  // [Prompt 42] Controlled durable marker receipt writer preview
+  controlledDurableMarkerReceiptWriterPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3275,6 +3284,8 @@ function AIIntelligenceFoundationMap({
   markerWriteReadinessLedgerModel?: MarkerWriteReadinessLedgerModel | null
   // [Prompt 41] Durable marker receipt readiness
   durableMarkerReceiptReadinessModel?: DurableMarkerReceiptReadinessModel | null
+  // [Prompt 42] Controlled durable marker receipt writer preview
+  controlledDurableMarkerReceiptWriterPreviewModel?: ControlledDurableMarkerReceiptWriterPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4001,7 +4012,11 @@ function AIIntelligenceFoundationMap({
                           ? `Receipt candidate: ${durableMarkerReceiptReadinessModel.receiptCandidateCount}. `
                           : 'Receipt candidate: blocked. '
                         }
-                        Persistence locked. No workout changes.
+                        {controlledDurableMarkerReceiptWriterPreviewModel?.status === 'writer_contract_preview_ready_no_write'
+                          ? `Writer contract: ${controlledDurableMarkerReceiptWriterPreviewModel.writerPreviewCandidateCount}. `
+                          : 'Writer contract: blocked. '
+                        }
+                        Persistence locked. No receipt written. No workout changes.
                       </>
                     ) : (
                       <>
@@ -8279,6 +8294,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
   
+  // [Prompt 42] Controlled durable marker receipt writer preview model
+  // Pure read-only preview of future durable receipt writer contract - no persistence or write enabled
+  const controlledDurableMarkerReceiptWriterPreviewModel = useMemo<ControlledDurableMarkerReceiptWriterPreviewModel>(() => {
+    return resolveControlledDurableMarkerReceiptWriterPreview({
+      durableMarkerReceiptReadinessModel,
+    })
+  }, [durableMarkerReceiptReadinessModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -10808,6 +10831,116 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 42] Controlled Durable Receipt Writer Preview card
+                Pure read-only preview of future durable receipt writer contract.
+                No persistence, receipt write, or workout mutation - contract preview only. */}
+            {controlledDurableMarkerReceiptWriterPreviewModel && (
+              <div className="rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-fuchsia-400" />
+                  <span className="text-sm font-medium text-fuchsia-300">
+                    Controlled Durable Receipt Writer Preview
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getControlledDurableMarkerReceiptWriterPreviewStatusColor(controlledDurableMarkerReceiptWriterPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getControlledDurableMarkerReceiptWriterPreviewStatusLabel(controlledDurableMarkerReceiptWriterPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        mode: {controlledDurableMarkerReceiptWriterPreviewModel.mode.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        writer preview: {controlledDurableMarkerReceiptWriterPreviewModel.writerPreviewCandidateCount}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-fuchsia-300/90 font-medium mb-1">
+                  {controlledDurableMarkerReceiptWriterPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {controlledDurableMarkerReceiptWriterPreviewModel.summary}
+                </p>
+                {/* Ready/blocked counts */}
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    ready: {controlledDurableMarkerReceiptWriterPreviewModel.readyCount}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {controlledDurableMarkerReceiptWriterPreviewModel.blockedCount}
+                  </span>
+                </div>
+                {/* Contract fields */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-fuchsia-500/10">
+                  <div className="text-[8px] text-fuchsia-400/60 mb-1.5">Writer Contract Fields:</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {controlledDurableMarkerReceiptWriterPreviewModel.contractFields.slice(0, 8).map((field) => (
+                      <div key={field.key} className="flex items-center gap-1">
+                        <span className="text-[8px] text-[#6A6A7A]">{field.label}:</span>
+                        <span className="text-[8px] text-fuchsia-300/70">{field.value}</span>
+                        {field.requiredForFutureWrite && (
+                          <span className="text-[7px] text-amber-400/50">*</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Safety checklist */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-fuchsia-500/10">
+                  <div className="text-[8px] text-fuchsia-400/60 mb-1.5">Safety Checklist:</div>
+                  <div className="space-y-1">
+                    {controlledDurableMarkerReceiptWriterPreviewModel.safetyItems.map((item) => (
+                      <div key={item.key} className="flex items-start gap-2">
+                        <span className={cn(
+                          "text-[8px] px-1 py-0.5 rounded shrink-0",
+                          item.status === 'ready' 
+                            ? "bg-emerald-500/10 text-emerald-400" 
+                            : "bg-amber-500/10 text-amber-400"
+                        )}>
+                          {item.status}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                          <div className="text-[7px] text-[#6A6A7A] truncate">{item.reason}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {controlledDurableMarkerReceiptWriterPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {controlledDurableMarkerReceiptWriterPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-fuchsia-400/60">Next: </span>
+                  {controlledDurableMarkerReceiptWriterPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-fuchsia-400/60">
+                  Read-only writer contract preview. No persistence, no receipt write, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -11225,7 +11358,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

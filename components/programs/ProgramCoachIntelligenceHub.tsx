@@ -41,6 +41,7 @@ import {
   Layers,
   Brain,
   ClipboardCheck,
+  ClipboardList,
   Sparkles,
   ListX,
   ChevronRight,
@@ -344,6 +345,14 @@ import {
   getMarkerSaveArtifactPreviewStatusColor,
   type MarkerSaveArtifactPreviewModel,
 } from '@/lib/program/marker-save-artifact-preview'
+// [Prompt 22] Marker write readiness ledger
+import {
+  resolveMarkerWriteReadinessLedger,
+  getMarkerWriteReadinessLedgerStatusLabel,
+  getMarkerWriteReadinessLedgerStatusColor,
+  getMarkerWriteReadinessItemStatusColor,
+  type MarkerWriteReadinessLedgerModel,
+} from '@/lib/program/marker-write-readiness-ledger'
 
 // =============================================================================
 // REQUESTED/DEFERRED METHOD SURFACE — DATA CONTRACT
@@ -3216,6 +3225,8 @@ function AIIntelligenceFoundationMap({
   controlledMarkerSaveActionBoundaryModel,
   // [Prompt 21] Marker-save artifact preview
   markerSaveArtifactPreviewModel,
+  // [Prompt 22] Marker write readiness ledger
+  markerWriteReadinessLedgerModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3241,6 +3252,8 @@ function AIIntelligenceFoundationMap({
   controlledMarkerSaveActionBoundaryModel?: ControlledMarkerSaveActionBoundaryModel | null
   // [Prompt 21] Marker-save artifact preview
   markerSaveArtifactPreviewModel?: MarkerSaveArtifactPreviewModel | null
+  // [Prompt 22] Marker write readiness ledger
+  markerWriteReadinessLedgerModel?: MarkerWriteReadinessLedgerModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -3944,9 +3957,22 @@ function AIIntelligenceFoundationMap({
                         )
                       })()
                     )}
+                    {/* [Prompt 22] Ledger status chip */}
+                    {markerWriteReadinessLedgerModel && (
+                      (() => {
+                        const ledgerColor = getMarkerWriteReadinessLedgerStatusColor(
+                          markerWriteReadinessLedgerModel.status
+                        )
+                        return (
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", ledgerColor.bg, ledgerColor.text, ledgerColor.border)}>
+                            Ledger: {getMarkerWriteReadinessLedgerStatusLabel(markerWriteReadinessLedgerModel.status)}
+                          </span>
+                        )
+                      })()
+                    )}
                   </div>
                   <div className="text-[9px] text-teal-400/60">
-                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'} {markerSaveArtifactPreviewModel && !markerSaveArtifactPreviewModel.canPreviewMarkerArtifact && 'Artifact preview blocked.'}
+                    Read-only target mapping. No mutation. {mutationConfirmationContractPreviewModel?.noMarkerSaved && 'No marker saved.'} {markerOnlyConfirmationBoundaryModel?.noMarkerSaved && 'Marker locked.'} {controlledMarkerSaveActionBoundaryModel && !controlledMarkerSaveActionBoundaryModel.canExecuteMarkerSave && 'Action locked.'} {markerSaveArtifactPreviewModel && !markerSaveArtifactPreviewModel.canPreviewMarkerArtifact && 'Artifact preview blocked.'} {markerWriteReadinessLedgerModel && !markerWriteReadinessLedgerModel.canWriteMarker && 'Writer locked.'}
                   </div>
                 </div>
               </div>
@@ -8159,6 +8185,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted])
   
+  // [Prompt 22] Marker write readiness ledger model
+  // Pure read-only ledger summarizing all pre-writer conditions
+  const markerWriteReadinessLedgerModel = useMemo<MarkerWriteReadinessLedgerModel>(() => {
+    return resolveMarkerWriteReadinessLedger({
+      markerOnlyConfirmationBoundaryModel,
+      markerSaveAuthorizationPreflightBoundaryModel,
+      controlledMarkerSaveActionBoundaryModel,
+      markerSaveArtifactPreviewModel,
+      authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
+    })
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted])
+  
   // [MASTER-8B.4] Derive tile summary and badge from balance result
   const programBalanceTileSummary = useMemo(() => {
     if (programBalanceResult.status === 'unavailable') return 'Needs program'
@@ -10371,6 +10409,106 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 22] Marker Write Readiness Ledger card
+                Pure read-only ledger summarizing all pre-writer conditions.
+                Shows whether the system has every required condition for a future marker-only writer. */}
+            {markerWriteReadinessLedgerModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <ClipboardList className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Marker Write Readiness Ledger
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getMarkerWriteReadinessLedgerStatusColor(markerWriteReadinessLedgerModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getMarkerWriteReadinessLedgerStatusLabel(markerWriteReadinessLedgerModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        mode: {markerWriteReadinessLedgerModel.ledgerMode.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        saved: {markerWriteReadinessLedgerModel.markerSavedCount}
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {markerWriteReadinessLedgerModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {markerWriteReadinessLedgerModel.summary}
+                </p>
+                {/* Ready/blocked counts */}
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    ready: {markerWriteReadinessLedgerModel.readyCount}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {markerWriteReadinessLedgerModel.blockedCount}
+                  </span>
+                </div>
+                {/* Ledger items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Pre-Writer Checklist:</div>
+                  <div className="space-y-1">
+                    {markerWriteReadinessLedgerModel.items.map((item) => {
+                      const itemColor = getMarkerWriteReadinessItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn("text-[8px] px-1 py-0.5 rounded shrink-0", itemColor.bg, itemColor.text)}>
+                            {item.status}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            <div className="text-[7px] text-[#6A6A7A] truncate">{item.reason}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Source models used */}
+                {markerWriteReadinessLedgerModel.sourceModelsUsed.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-cyan-400/60 mb-0.5">Source models:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {markerWriteReadinessLedgerModel.sourceModelsUsed.map((src, i) => (
+                        <span key={i} className="text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-300/70 border border-cyan-500/20">
+                          {src}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Blocker summary if any */}
+                {markerWriteReadinessLedgerModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {markerWriteReadinessLedgerModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-cyan-400/60">Next: </span>
+                  {markerWriteReadinessLedgerModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Read-only ledger. No marker saved. No writes. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -10628,7 +10766,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} />
           </div>
         </SheetContent>
       </Sheet>

@@ -10897,19 +10897,53 @@ export function ProgramCoachIntelligenceHub({
                 goalFamilyBalanceAudit={goalFamilyBalanceAudit ?? null}
               />
             ) : (
-              /* Empty state when no truth explanation exists */
-              <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] p-6 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#2A2A35]">
-                  <Info className="h-6 w-6 text-[#7A7A8A]" />
-                </div>
-                <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
-                  Plan logic unavailable
-                </h3>
-                <p className="text-sm text-[#7A7A8A] leading-relaxed">
-                  This program was generated before plan logic tracking was added.
-                  Regenerate your program to see detailed construction logic.
-                </p>
-              </div>
+              /* [P26-HYGIENE] Conditional fallback: only show "unavailable" if no source-backed Plan Logic models exist */
+              (() => {
+                const hasSourceBackedPlanLogic = !!(
+                  markerWriteReadinessLedgerModel ||
+                  mutationTargetSessionResolutionPreviewModel ||
+                  mutationCautionClearanceGateModel ||
+                  rootCandidateClearanceEvidenceDetailModel ||
+                  mutationReadinessReviewGateModel ||
+                  mutationPathwayReadinessMapModel ||
+                  mutationConfirmationContractPreviewModel ||
+                  structuralMutationPreviewContractModel ||
+                  userConfirmationMarkerPermissionPreviewGateModel ||
+                  futureSessionMutationWriterReadinessBoundaryModel ||
+                  preMutationLockBundleClosureModel ||
+                  controlledFutureSessionMutationWriterDryRunModel ||
+                  boundedMutationApplyEligibilityGateModel ||
+                  markerOnlyConfirmationBoundaryModel ||
+                  markerSaveAuthorizationPreflightBoundaryModel ||
+                  controlledMarkerSaveActionBoundaryModel ||
+                  markerSaveArtifactPreviewModel
+                )
+                
+                if (hasSourceBackedPlanLogic) {
+                  return (
+                    <div className="rounded-lg border border-[#2A2A35]/50 bg-[#1A1A1F]/50 p-3 text-center">
+                      <p className="text-[10px] text-[#7A7A8A]">
+                        Legacy construction summary unavailable; source-backed Plan Logic gates are shown above.
+                      </p>
+                    </div>
+                  )
+                }
+                
+                return (
+                  <div className="rounded-xl border border-[#2A2A35] bg-[#1A1A1F] p-6 text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#2A2A35]">
+                      <Info className="h-6 w-6 text-[#7A7A8A]" />
+                    </div>
+                    <h3 className="text-base font-medium text-[#E6E9EF] mb-2">
+                      Plan logic unavailable
+                    </h3>
+                    <p className="text-sm text-[#7A7A8A] leading-relaxed">
+                      This program was generated before plan logic tracking was added.
+                      Regenerate your program to see detailed construction logic.
+                    </p>
+                  </div>
+                )
+              })()
             )}
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}

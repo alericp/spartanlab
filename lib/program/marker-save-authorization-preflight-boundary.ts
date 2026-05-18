@@ -62,9 +62,11 @@ export interface MarkerSaveAuthorizationPreflightBoundaryModel {
   readonly safetyNotes: readonly string[]
   readonly nextSafeGate: string
 
-  // All action/write/change flags MUST remain locked false in this step
-  readonly canShowMarkerSaveControl: false
-  readonly canEnableMarkerSaveControl: false
+  // [P37] Local review/control flags - may be true when upstream gates pass (no write occurs)
+  readonly canShowMarkerSaveControl: boolean
+  readonly canEnableMarkerSaveControl: boolean
+  
+  // All write/save/mutation flags MUST remain locked false in this step
   readonly canSaveMarker: false
   readonly canWriteMarker: false
   readonly canPersistMarker: false
@@ -102,10 +104,8 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
 ): MarkerSaveAuthorizationPreflightBoundaryModel {
   const { markerOnlyConfirmationBoundaryModel, explicitUserAuthorization = false } = input
 
-  // Locked action/write/change flags - NEVER true in this step
-  const lockedFlags = {
-    canShowMarkerSaveControl: false as const,
-    canEnableMarkerSaveControl: false as const,
+  // [P37] Write/save/mutation flags - NEVER true in this step
+  const lockedWriteFlags = {
     canSaveMarker: false as const,
     canWriteMarker: false as const,
     canPersistMarker: false as const,
@@ -114,7 +114,17 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
     canChangeStartWorkout: false as const,
     canChangeLiveWorkout: false as const,
   }
-
+  
+  // [P37] Local review control flags - may be true when upstream gates pass (no write occurs)
+  const disabledLocalControls = {
+    canShowMarkerSaveControl: false,
+    canEnableMarkerSaveControl: false,
+  }
+  
+  const enabledLocalControls = {
+    canShowMarkerSaveControl: true,
+    canEnableMarkerSaveControl: true,
+  }
   // Safety invariants - ALWAYS true
   const safetyInvariants = {
     completedSessionsProtected: true as const,
@@ -160,7 +170,8 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         'Completed sessions protected',
       ],
       nextSafeGate: 'Resolve upstream marker boundary first',
-      ...lockedFlags,
+      ...disabledLocalControls,
+      ...lockedWriteFlags,
       ...safetyInvariants,
     }
   }
@@ -248,7 +259,8 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         'Clearable/diagnostic items do not independently block',
       ],
       nextSafeGate: 'Resolve hard/waiting/unknown root-candidate evidence, then re-evaluate marker-save authorization',
-      ...lockedFlags,
+      ...disabledLocalControls,
+      ...lockedWriteFlags,
       ...safetyInvariants,
     }
   }
@@ -289,7 +301,8 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         `${completedProtectedCount} completed session(s) protected`,
       ],
       nextSafeGate: 'Generate a new program with future sessions or wait for schedule progression',
-      ...lockedFlags,
+      ...disabledLocalControls,
+      ...lockedWriteFlags,
       ...safetyInvariants,
     }
   }
@@ -334,7 +347,8 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         `${completedProtectedCount} completed session(s) protected`,
       ],
       nextSafeGate: 'Resolve upstream marker boundary status first',
-      ...lockedFlags,
+      ...disabledLocalControls,
+      ...lockedWriteFlags,
       ...safetyInvariants,
     }
   }
@@ -376,7 +390,9 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
         `${targetSessionCount} future target(s) identified but not mutated`,
       ],
       nextSafeGate: 'MASTER-8C.43 may add user authorization control if explicitly authorized',
-      ...lockedFlags,
+      // [P37] Enable local review controls when prerequisites pass - allows user to accept authorization
+      ...enabledLocalControls,
+      ...lockedWriteFlags,
       ...safetyInvariants,
     }
   }
@@ -420,7 +436,9 @@ export function resolveMarkerSaveAuthorizationPreflightBoundary(
       'Authorization granted but save locked',
     ],
     nextSafeGate: 'MASTER-8C.43 may implement actual marker-save if explicitly authorized',
-    ...lockedFlags,
+    // [P37] Enable local review controls when authorization granted - allows downstream review
+    ...enabledLocalControls,
+    ...lockedWriteFlags,
     ...safetyInvariants,
   }
 }

@@ -356,12 +356,95 @@ export function resolveControlledMarkerSaveActionBoundary(
   }
 
   // -----------------------------------
-  // Priority 6: Marker save action review-ready but writer disabled
-  // [P31] All gates passed, reviewable but not executable
+  // Priority 6: [P38] Marker save action ready for local-only marker save
+  // All gates passed, authorization accepted, ready for local marker save
+  // -----------------------------------
+  if (
+    explicitUserAuthorization &&
+    markerSavedCount === 0 &&
+    hardBlockingRootCandidateCount === 0 &&
+    unknownStatusRootCandidateCount === 0 &&
+    targetSessionCount > 0 &&
+    markerSaveAuthorizationPreflightBoundaryModel.noMarkerSaved === true &&
+    markerSaveAuthorizationPreflightBoundaryModel.noMarkerWriteAttempted === true &&
+    markerSaveAuthorizationPreflightBoundaryModel.noProgramChangesApplied === true &&
+    markerSaveAuthorizationPreflightBoundaryModel.noWorkoutChangesApplied === true
+  ) {
+    return {
+      status: 'marker_save_action_ready',
+      canReviewMarkerSaveAction: true,
+      canPreviewMarkerSaveAction: true,
+      canShowAuthorizationControl: true,
+      canExecuteMarkerSave: true, // [P38] Local marker save enabled
+      canWriteMarker: false, // Stays false - this is local UI state only, not persistence
+      ...safetyInvariants,
+      activeCautionCount,
+      targetSessionCount,
+      completedProtectedCount,
+      markerSavedCount,
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      headline: 'Action Boundary: Local Marker Save Ready',
+      summary: `Local marker save enabled. ${targetSessionCount} future target session(s) available. Click to save marker locally. No program/workout changes will occur.`,
+      blockedReasons: [],
+      safetyNotes: [
+        ...baseSafetyNotes,
+        'Local marker save enabled',
+        'No program changes will occur',
+        'No workout changes will occur',
+        `${targetSessionCount} future session(s) identified`,
+        `${completedProtectedCount} completed session(s) remain protected`,
+      ],
+      nextSafeGate: 'Click to save marker locally',
+    }
+  }
+
+  // -----------------------------------
+  // Priority 7: Marker already saved - lock duplicate saves
+  // -----------------------------------
+  if (markerSavedCount > 0) {
+    return {
+      status: 'marker_save_action_ready',
+      canReviewMarkerSaveAction: true,
+      canPreviewMarkerSaveAction: true,
+      canShowAuthorizationControl: true,
+      canExecuteMarkerSave: false, // Locked after save
+      canWriteMarker: false,
+      ...safetyInvariants,
+      activeCautionCount,
+      targetSessionCount,
+      completedProtectedCount,
+      markerSavedCount,
+      hardBlockingRootCandidateCount,
+      unknownStatusRootCandidateCount,
+      readOnlyClearableRootCandidateCount,
+      diagnosticOnlyRootCandidateCount,
+      rootCandidateNeedsEvidenceCount,
+      cascadeEchoCount,
+      headline: 'Action Boundary: Marker Saved',
+      summary: `${markerSavedCount} marker(s) saved locally. Duplicate save locked. No program/workout changes occurred.`,
+      blockedReasons: [],
+      safetyNotes: [
+        ...baseSafetyNotes,
+        `${markerSavedCount} marker(s) saved locally`,
+        'Duplicate save locked',
+        'No program changes applied',
+        'No workout changes applied',
+      ],
+      nextSafeGate: 'Marker save complete',
+    }
+  }
+
+  // -----------------------------------
+  // Priority 8: Review-ready but authorization not yet accepted
   // -----------------------------------
   return {
     status: 'blocked_marker_save_not_enabled',
-    canReviewMarkerSaveAction: true, // [P31] Reviewable when all gates pass
+    canReviewMarkerSaveAction: true,
     canPreviewMarkerSaveAction: true,
     canShowAuthorizationControl: true,
     canExecuteMarkerSave: false,
@@ -371,29 +454,24 @@ export function resolveControlledMarkerSaveActionBoundary(
     targetSessionCount,
     completedProtectedCount,
     markerSavedCount,
-    // [Prompt 25.1] Semantic root/candidate fields
     hardBlockingRootCandidateCount,
     unknownStatusRootCandidateCount,
     readOnlyClearableRootCandidateCount,
     diagnosticOnlyRootCandidateCount,
     rootCandidateNeedsEvidenceCount,
     cascadeEchoCount,
-    headline: 'Action Boundary: Review Only',
-    summary: `Marker save action review only. ${targetSessionCount} future target session(s) available, no hard blockers. Writer intentionally not enabled in this step.`,
+    headline: 'Action Boundary: Awaiting Authorization',
+    summary: `Marker save ready for review. Accept authorization checkbox to enable local marker save. ${targetSessionCount} future target session(s) available.`,
     blockedReasons: [
-      'Marker-save writer intentionally not enabled',
-      'This step is read-only preview',
+      'Authorization checkbox not accepted',
     ],
     safetyNotes: [
       ...baseSafetyNotes,
-      'Marker-save review only',
-      'Writer not enabled in this step',
+      'Accept authorization to enable local marker save',
       `${targetSessionCount} future session(s) identified`,
       `${completedProtectedCount} completed session(s) remain protected`,
-      'No marker saved',
-      'No writes attempted',
     ],
-    nextSafeGate: 'Future step may enable marker-save writer',
+    nextSafeGate: 'Accept authorization checkbox',
   }
 }
 

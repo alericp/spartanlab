@@ -255,8 +255,8 @@ export function resolveControlledFutureSessionMutationWriterDryRun(
   ) {
     return {
       status: 'blocked_active_caution',
-      headline: 'Dry-Run Blocked by Active Caution',
-      summary: `${activeCautionCount} active caution(s) detected. The dry-run writer is blocked until caution conditions are resolved or acknowledged.`,
+      headline: 'Dry-Run Blocked — Evidence Required',
+      summary: `${activeCautionCount} evidence item(s) detected. The dry-run writer is blocked until evidence conditions are resolved.`,
       confidence: 0.2,
       targetDayNumbers,
       targetSessionCount: futureTargetCount,
@@ -521,7 +521,7 @@ export function getControlledFutureSessionMutationWriterDryRunStatusLabel(
     case 'unavailable_missing_upstream':
       return 'Unavailable'
     case 'blocked_active_caution':
-      return 'Blocked: Active Caution'
+      return 'Blocked: Evidence Required'
     case 'blocked_no_future_targets':
       return 'Blocked: No Future Targets'
     case 'blocked_permission_locked':

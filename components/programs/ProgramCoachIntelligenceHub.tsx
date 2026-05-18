@@ -10191,7 +10191,7 @@ export function ProgramCoachIntelligenceHub({
             )}
             {/* [MASTER-8C.43] Controlled Marker Save Action Boundary card
                 This is the FINAL action boundary before marker-only save.
-                It intentionally remains locked while active cautions or no future targets exist.
+                It intentionally remains locked while semantic root/candidate evidence blockers or no future targets exist.
                 Structural workout mutation is NOT enabled in this step. */}
             {controlledMarkerSaveActionBoundaryModel && (
               <div className="rounded-lg border border-rose-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">

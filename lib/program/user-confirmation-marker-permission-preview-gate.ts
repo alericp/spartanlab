@@ -256,10 +256,10 @@ export function resolveUserConfirmationMarkerPermissionPreviewGate(
   ) {
     status = 'blocked_active_caution'
     permissionState = 'denied_caution_active'
-    headline = 'Blocked by Active Caution'
-    summary = `${activeCautionCount} active caution signal(s) must be cleared before confirmation/marker permission can be considered.`
+    headline = 'Blocked — Evidence Required'
+    summary = `${activeCautionCount} evidence signal(s) must be resolved before confirmation/marker permission can be considered.`
     confidence = 'high'
-    nextSafeGate = 'Clear caution signals first'
+    nextSafeGate = 'Resolve evidence signals first'
   }
   // PRIORITY 3: No future targets
   else if (
@@ -402,7 +402,7 @@ export function getUserConfirmationMarkerPermissionStatusLabel(
     case 'unavailable_missing_upstream':
       return 'Unavailable'
     case 'blocked_active_caution':
-      return 'Blocked: Active Caution'
+      return 'Blocked: Evidence Required'
     case 'blocked_no_future_targets':
       return 'Blocked: No Future Targets'
     case 'blocked_completed_only':

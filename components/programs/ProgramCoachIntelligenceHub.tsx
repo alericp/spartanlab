@@ -391,6 +391,15 @@ import {
   getDurableReceiptWriterEligibilityItemStatusColor,
   type DurableReceiptWriterEligibilityLedgerModel,
 } from '@/lib/program/durable-receipt-writer-eligibility-ledger'
+// [Prompt 46] Durable receipt writer activation preconditions review
+import {
+  resolveDurableReceiptWriterActivationPreconditionsReview,
+  getDurableReceiptWriterActivationPreconditionsReviewStatusLabel,
+  getDurableReceiptWriterActivationPreconditionsReviewStatusColor,
+  getDurableReceiptWriterActivationPreconditionStatusLabel,
+  getDurableReceiptWriterActivationPreconditionStatusColor,
+  type DurableReceiptWriterActivationPreconditionsReviewModel,
+} from '@/lib/program/durable-receipt-writer-activation-preconditions-review'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3284,6 +3293,8 @@ function AIIntelligenceFoundationMap({
   controlledDurableMarkerReceiptWriterNoWriteHarnessModel,
   // [Prompt 45] Durable receipt writer eligibility ledger
   durableReceiptWriterEligibilityLedgerModel,
+  // [Prompt 46] Durable receipt writer activation preconditions review
+  durableReceiptWriterActivationPreconditionsReviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3321,6 +3332,8 @@ function AIIntelligenceFoundationMap({
   controlledDurableMarkerReceiptWriterNoWriteHarnessModel?: ControlledDurableMarkerReceiptWriterNoWriteHarnessModel | null
   // [Prompt 45] Durable receipt writer eligibility ledger
   durableReceiptWriterEligibilityLedgerModel?: DurableReceiptWriterEligibilityLedgerModel | null
+  // [Prompt 46] Durable receipt writer activation preconditions review
+  durableReceiptWriterActivationPreconditionsReviewModel?: DurableReceiptWriterActivationPreconditionsReviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4062,6 +4075,10 @@ function AIIntelligenceFoundationMap({
                         {durableReceiptWriterEligibilityLedgerModel?.status === 'eligible_for_future_activation_review_persistence_disabled'
                           ? `Eligibility: ${durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.satisfiedItems}/${durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.totalItems} satisfied. `
                           : 'Eligibility: blocked. '
+                        }
+                        {durableReceiptWriterActivationPreconditionsReviewModel?.status === 'ready_for_explicit_activation_request_review_persistence_disabled'
+                          ? `Preconditions: ${durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.satisfiedPreconditions}/${durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.totalPreconditions} satisfied. `
+                          : 'Preconditions: blocked. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8373,6 +8390,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [controlledDurableMarkerReceiptWriterNoWriteHarnessModel])
   
+  // [Prompt 46] Durable receipt writer activation preconditions review model
+  // Pure read-only activation preconditions review for explicit activation request preview
+  const durableReceiptWriterActivationPreconditionsReviewModel = useMemo<DurableReceiptWriterActivationPreconditionsReviewModel>(() => {
+    return resolveDurableReceiptWriterActivationPreconditionsReview({
+      eligibilityLedgerModel: durableReceiptWriterEligibilityLedgerModel,
+    })
+  }, [durableReceiptWriterEligibilityLedgerModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -11355,6 +11380,125 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 46] Durable Receipt Writer Activation Preconditions Review card
+                Pure read-only activation preconditions review.
+                Real activation is NOT allowed. All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {durableReceiptWriterActivationPreconditionsReviewModel && (
+              <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-teal-400" />
+                  <span className="text-sm font-medium text-teal-300">
+                    Durable Receipt Writer Activation Preconditions Review
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getDurableReceiptWriterActivationPreconditionsReviewStatusColor(durableReceiptWriterActivationPreconditionsReviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getDurableReceiptWriterActivationPreconditionsReviewStatusLabel(durableReceiptWriterActivationPreconditionsReviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        satisfied: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.satisfiedPreconditions}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        locked until activation: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.lockedUntilExplicitActivation}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                        future step: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.futureStepRequiredPreconditions}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        review ready: {durableReceiptWriterActivationPreconditionsReviewModel.readyForExplicitActivationRequestReview ? 'yes' : 'no'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-teal-300/90 font-medium mb-1">
+                  {durableReceiptWriterActivationPreconditionsReviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {durableReceiptWriterActivationPreconditionsReviewModel.summary}
+                </p>
+                {/* Compact summary row */}
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.totalPreconditions}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    satisfied: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.satisfiedPreconditions}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    locked: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.lockedUntilExplicitActivation}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    future: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.futureStepRequiredPreconditions}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.blockedPreconditions}
+                  </span>
+                </div>
+                {/* Preconditions */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                  <div className="text-[8px] text-teal-400/60 mb-1.5">Activation Preconditions:</div>
+                  <div className="space-y-1">
+                    {durableReceiptWriterActivationPreconditionsReviewModel.preconditions.slice(0, 14).map((precondition) => {
+                      const preconditionColor = getDurableReceiptWriterActivationPreconditionStatusColor(precondition.status)
+                      return (
+                        <div key={precondition.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            preconditionColor.bg, preconditionColor.text
+                          )}>
+                            {getDurableReceiptWriterActivationPreconditionStatusLabel(precondition.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{precondition.label}</span>
+                            {precondition.requiredBeforeRealActivation && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {durableReceiptWriterActivationPreconditionsReviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {durableReceiptWriterActivationPreconditionsReviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-teal-400/60">Next: </span>
+                  {durableReceiptWriterActivationPreconditionsReviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-teal-400/60">
+                  Preconditions review only. Persistence still disabled. Real activation is not allowed. No receipt written. No write attempted. No API/DB/storage/schema. No Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -11772,7 +11916,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} />
           </div>
         </SheetContent>
       </Sheet>

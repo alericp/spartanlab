@@ -436,6 +436,15 @@ import {
   getExplicitActivationAuthorizationReviewRequirementStatusColor,
   type ExplicitActivationAuthorizationReviewPreviewModel,
 } from '@/lib/program/explicit-activation-authorization-review-preview'
+// [Prompt 51] Controlled activation permission boundary preview
+import {
+  resolveControlledActivationPermissionBoundaryPreview,
+  getControlledActivationPermissionBoundaryPreviewStatusLabel,
+  getControlledActivationPermissionBoundaryPreviewStatusColor,
+  getControlledActivationPermissionBoundaryStatusLabel,
+  getControlledActivationPermissionBoundaryStatusColor,
+  type ControlledActivationPermissionBoundaryPreviewModel,
+} from '@/lib/program/controlled-activation-permission-boundary-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3339,6 +3348,8 @@ function AIIntelligenceFoundationMap({
   explicitActivationRequestIntentCapturePreviewModel,
   // [Prompt 50] Explicit activation authorization review preview
   explicitActivationAuthorizationReviewPreviewModel,
+  // [Prompt 51] Controlled activation permission boundary preview
+  controlledActivationPermissionBoundaryPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3386,6 +3397,8 @@ function AIIntelligenceFoundationMap({
   explicitActivationRequestIntentCapturePreviewModel?: ExplicitActivationRequestIntentCapturePreviewModel | null
   // [Prompt 50] Explicit activation authorization review preview
   explicitActivationAuthorizationReviewPreviewModel?: ExplicitActivationAuthorizationReviewPreviewModel | null
+  // [Prompt 51] Controlled activation permission boundary preview
+  controlledActivationPermissionBoundaryPreviewModel?: ControlledActivationPermissionBoundaryPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4147,6 +4160,10 @@ function AIIntelligenceFoundationMap({
                         {explicitActivationAuthorizationReviewPreviewModel?.status === 'authorization_review_preview_ready_persistence_disabled'
                           ? `Auth review: ${explicitActivationAuthorizationReviewPreviewModel.previewSummary.sourceIntentPreviewVerifiedRequirements}/${explicitActivationAuthorizationReviewPreviewModel.previewSummary.totalRequirements} verified. `
                           : 'Auth review: not ready. '
+                        }
+                        {controlledActivationPermissionBoundaryPreviewModel?.status === 'permission_boundary_preview_ready_persistence_disabled'
+                          ? `Perm boundary: ${controlledActivationPermissionBoundaryPreviewModel.previewSummary.sourceAuthorizationReviewVerifiedBoundaries}/${controlledActivationPermissionBoundaryPreviewModel.previewSummary.totalBoundaries} verified. `
+                          : 'Perm boundary: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8498,6 +8515,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [explicitActivationRequestIntentCapturePreviewModel])
   
+  // [Prompt 51] Controlled activation permission boundary preview model
+  // Pure read-only permission boundary preview - auth review verified but no permission granted
+  const controlledActivationPermissionBoundaryPreviewModel = useMemo<ControlledActivationPermissionBoundaryPreviewModel>(() => {
+    return resolveControlledActivationPermissionBoundaryPreview({
+      explicitActivationAuthorizationReviewPreviewModel,
+    })
+  }, [explicitActivationAuthorizationReviewPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -12335,6 +12360,235 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 51] Controlled Activation Permission Boundary Preview card
+                Pure read-only permission boundary preview - auth review verified but no permission granted.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {controlledActivationPermissionBoundaryPreviewModel && (
+              <div className="rounded-lg border border-lime-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-lime-400" />
+                  <span className="text-sm font-medium text-lime-300">
+                    Controlled Activation Permission Boundary Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getControlledActivationPermissionBoundaryPreviewStatusColor(controlledActivationPermissionBoundaryPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getControlledActivationPermissionBoundaryPreviewStatusLabel(controlledActivationPermissionBoundaryPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        auth review verified: {controlledActivationPermissionBoundaryPreviewModel.authorizationReviewPreviewVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", controlledActivationPermissionBoundaryPreviewModel.permissionBoundaryPreviewReady ? "bg-lime-500/10 text-lime-400/70 border-lime-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        permission boundary preview: {controlledActivationPermissionBoundaryPreviewModel.permissionBoundaryPreviewReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        future explicit consent: {controlledActivationPermissionBoundaryPreviewModel.readyForFutureExplicitConsentPreview ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user intent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit activation requested: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization reviewed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation allowed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-lime-300/90 font-medium mb-1">
+                  {controlledActivationPermissionBoundaryPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {controlledActivationPermissionBoundaryPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.totalBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    auth verified: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.sourceAuthorizationReviewVerifiedBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    scope: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureScopeBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    grant: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureGrantBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    denial: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureDenialBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                    activation: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureActivationAllowedBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    writer: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureWriterBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    receipt: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.futureReceiptBoundaries}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    blocked: {controlledActivationPermissionBoundaryPreviewModel.previewSummary.blockedByDesignBoundaries}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {controlledActivationPermissionBoundaryPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-lime-500/10">
+                    <div className="text-[8px] text-lime-400/60 mb-1.5">Preview Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">kind:</span> {controlledActivationPermissionBoundaryPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">source auth review:</span> {controlledActivationPermissionBoundaryPreviewModel.previewPayload.sourceAuthorizationReviewPreviewStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">mode:</span> {controlledActivationPermissionBoundaryPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">auth review preview verified:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">permission boundary preview ready:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">explicit user intent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">explicit activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">authorization reviewed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">authorization granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">permission denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">real activation allowed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">intended future capability:</span> {controlledActivationPermissionBoundaryPreviewModel.previewPayload.intendedFutureCapability}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must be user scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must be program scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must be marker scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must be explicit and revocable:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must have denied state:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-lime-400/50">future permission must preserve completed sessions:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Boundaries */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-lime-500/10">
+                  <div className="text-[8px] text-lime-400/60 mb-1.5">Permission Boundary Preview:</div>
+                  <div className="space-y-1">
+                    {controlledActivationPermissionBoundaryPreviewModel.boundaries.slice(0, 12).map((b) => {
+                      const bColor = getControlledActivationPermissionBoundaryStatusColor(b.status)
+                      return (
+                        <div key={b.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            bColor.bg, bColor.text
+                          )}>
+                            {getControlledActivationPermissionBoundaryStatusLabel(b.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{b.label}</span>
+                            {b.requiredBeforeRealPermission && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {controlledActivationPermissionBoundaryPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {controlledActivationPermissionBoundaryPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-lime-400/60">Next: </span>
+                  {controlledActivationPermissionBoundaryPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-lime-400/60">
+                  Permission boundary preview only. Authorization review preview verified, but no user intent captured, no activation requested, no authorization reviewed or granted, no permission granted or denied. Persistence disabled. No writer, no receipt, no API/DB/storage/schema, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -12752,7 +13006,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

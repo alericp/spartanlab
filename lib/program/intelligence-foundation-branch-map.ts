@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.53 - Activation request authorization lock)
+  // PLAN LOGIC (MASTER-8C.54 - Explicit activation request intent capture preview)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, and read-only activation request authorization lock',
-    nextSafeAction: 'MASTER-8C.54+ explicit user activation intent preview while persistence remains disabled; no write path enabled yet',
-    riskIfIgnored: 'Authorization lock skipped, allowing next persistence step to confuse "request preview ready" with "user requested activation" or "authorization granted"',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, and read-only explicit activation request intent capture preview',
+    nextSafeAction: 'MASTER-8C.55+ authorization review preview while persistence remains disabled; no write path enabled yet',
+    riskIfIgnored: 'Intent capture preview skipped, allowing next persistence step to confuse "authorization lock ready" with "user already requested activation"',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -285,6 +285,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/durable-receipt-writer-activation-preconditions-review.ts',
       'lib/program/explicit-persistence-activation-request-preview.ts',
       'lib/program/activation-request-authorization-lock.ts',
+      'lib/program/explicit-activation-request-intent-capture-preview.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

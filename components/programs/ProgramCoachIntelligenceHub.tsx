@@ -418,6 +418,15 @@ import {
   getActivationRequestAuthorizationLockRequirementStatusColor,
   type ActivationRequestAuthorizationLockModel,
 } from '@/lib/program/activation-request-authorization-lock'
+// [Prompt 49] Explicit activation request intent capture preview
+import {
+  resolveExplicitActivationRequestIntentCapturePreview,
+  getExplicitActivationRequestIntentCapturePreviewStatusLabel,
+  getExplicitActivationRequestIntentCapturePreviewStatusColor,
+  getExplicitActivationRequestIntentCaptureRequirementStatusLabel,
+  getExplicitActivationRequestIntentCaptureRequirementStatusColor,
+  type ExplicitActivationRequestIntentCapturePreviewModel,
+} from '@/lib/program/explicit-activation-request-intent-capture-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3317,6 +3326,8 @@ function AIIntelligenceFoundationMap({
   explicitPersistenceActivationRequestPreviewModel,
   // [Prompt 48] Activation request authorization lock
   activationRequestAuthorizationLockModel,
+  // [Prompt 49] Explicit activation request intent capture preview
+  explicitActivationRequestIntentCapturePreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3360,6 +3371,8 @@ function AIIntelligenceFoundationMap({
   explicitPersistenceActivationRequestPreviewModel?: ExplicitPersistenceActivationRequestPreviewModel | null
   // [Prompt 48] Activation request authorization lock
   activationRequestAuthorizationLockModel?: ActivationRequestAuthorizationLockModel | null
+  // [Prompt 49] Explicit activation request intent capture preview
+  explicitActivationRequestIntentCapturePreviewModel?: ExplicitActivationRequestIntentCapturePreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4113,6 +4126,10 @@ function AIIntelligenceFoundationMap({
                         {activationRequestAuthorizationLockModel?.status === 'authorization_lock_engaged_persistence_disabled'
                           ? `Auth lock: ${activationRequestAuthorizationLockModel.lockSummary.lockEngagedRequirements}/${activationRequestAuthorizationLockModel.lockSummary.totalRequirements} engaged. `
                           : 'Auth lock: not ready. '
+                        }
+                        {explicitActivationRequestIntentCapturePreviewModel?.status === 'intent_capture_preview_ready_persistence_disabled'
+                          ? `Intent preview: ${explicitActivationRequestIntentCapturePreviewModel.previewSummary.sourceLockVerifiedRequirements}/${explicitActivationRequestIntentCapturePreviewModel.previewSummary.totalRequirements} verified. `
+                          : 'Intent preview: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8448,6 +8465,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [explicitPersistenceActivationRequestPreviewModel])
   
+  // [Prompt 49] Explicit activation request intent capture preview model
+  // Pure read-only intent capture preview - authorization lock verified but no user intent captured
+  const explicitActivationRequestIntentCapturePreviewModel = useMemo<ExplicitActivationRequestIntentCapturePreviewModel>(() => {
+    return resolveExplicitActivationRequestIntentCapturePreview({
+      activationRequestAuthorizationLockModel,
+    })
+  }, [activationRequestAuthorizationLockModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -11878,6 +11903,199 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 49] Explicit Activation Request Intent Capture Preview card
+                Pure read-only intent capture preview - authorization lock verified but no user intent captured.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {explicitActivationRequestIntentCapturePreviewModel && (
+              <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-teal-400" />
+                  <span className="text-sm font-medium text-teal-300">
+                    Explicit Activation Request Intent Capture Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getExplicitActivationRequestIntentCapturePreviewStatusColor(explicitActivationRequestIntentCapturePreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getExplicitActivationRequestIntentCapturePreviewStatusLabel(explicitActivationRequestIntentCapturePreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        authorization lock verified: {explicitActivationRequestIntentCapturePreviewModel.authorizationLockVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", explicitActivationRequestIntentCapturePreviewModel.intentCapturePreviewReady ? "bg-teal-500/10 text-teal-400/70 border-teal-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        intent capture preview: {explicitActivationRequestIntentCapturePreviewModel.intentCapturePreviewReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        future auth review: {explicitActivationRequestIntentCapturePreviewModel.readyForFutureAuthorizationReviewPreview ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user intent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit activation requested: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-teal-300/90 font-medium mb-1">
+                  {explicitActivationRequestIntentCapturePreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {explicitActivationRequestIntentCapturePreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.totalRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    lock verified: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.sourceLockVerifiedRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    user intent: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.futureUserIntentRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    confirmation: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.futureConfirmationRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    scope review: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.futureScopeReviewRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    reversal review: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.futureReversalReviewRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    blocked: {explicitActivationRequestIntentCapturePreviewModel.previewSummary.blockedByDesignRequirements}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {explicitActivationRequestIntentCapturePreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                    <div className="text-[8px] text-teal-400/60 mb-1.5">Preview Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">kind:</span> {explicitActivationRequestIntentCapturePreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">source auth lock:</span> {explicitActivationRequestIntentCapturePreviewModel.previewPayload.sourceAuthorizationLockStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">mode:</span> {explicitActivationRequestIntentCapturePreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">authorization lock verified:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">intent capture preview ready:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">explicit user intent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">explicit activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">authorization granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">real activation allowed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">intended future capability:</span> {explicitActivationRequestIntentCapturePreviewModel.previewPayload.intendedFutureCapability}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future intent must be user visible:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future intent must be program scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future intent must preserve completed sessions:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Requirements */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                  <div className="text-[8px] text-teal-400/60 mb-1.5">Intent Capture Preview Requirements:</div>
+                  <div className="space-y-1">
+                    {explicitActivationRequestIntentCapturePreviewModel.requirements.slice(0, 12).map((req) => {
+                      const reqColor = getExplicitActivationRequestIntentCaptureRequirementStatusColor(req.status)
+                      return (
+                        <div key={req.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            reqColor.bg, reqColor.text
+                          )}>
+                            {getExplicitActivationRequestIntentCaptureRequirementStatusLabel(req.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{req.label}</span>
+                            {req.requiredBeforeRealActivation && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {explicitActivationRequestIntentCapturePreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {explicitActivationRequestIntentCapturePreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-teal-400/60">Next: </span>
+                  {explicitActivationRequestIntentCapturePreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-teal-400/60">
+                  Intent capture preview only. Authorization lock verified, but no user intent captured, no activation requested, no authorization granted. Persistence disabled. No writer, no receipt, no API/DB/storage/schema, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -12295,7 +12513,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

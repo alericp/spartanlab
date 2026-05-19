@@ -400,6 +400,15 @@ import {
   getDurableReceiptWriterActivationPreconditionStatusColor,
   type DurableReceiptWriterActivationPreconditionsReviewModel,
 } from '@/lib/program/durable-receipt-writer-activation-preconditions-review'
+// [Prompt 47] Explicit persistence activation request preview
+import {
+  resolveExplicitPersistenceActivationRequestPreview,
+  getExplicitPersistenceActivationRequestPreviewStatusLabel,
+  getExplicitPersistenceActivationRequestPreviewStatusColor,
+  getExplicitPersistenceActivationRequestRequirementStatusLabel,
+  getExplicitPersistenceActivationRequestRequirementStatusColor,
+  type ExplicitPersistenceActivationRequestPreviewModel,
+} from '@/lib/program/explicit-persistence-activation-request-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3295,6 +3304,8 @@ function AIIntelligenceFoundationMap({
   durableReceiptWriterEligibilityLedgerModel,
   // [Prompt 46] Durable receipt writer activation preconditions review
   durableReceiptWriterActivationPreconditionsReviewModel,
+  // [Prompt 47] Explicit persistence activation request preview
+  explicitPersistenceActivationRequestPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3334,6 +3345,8 @@ function AIIntelligenceFoundationMap({
   durableReceiptWriterEligibilityLedgerModel?: DurableReceiptWriterEligibilityLedgerModel | null
   // [Prompt 46] Durable receipt writer activation preconditions review
   durableReceiptWriterActivationPreconditionsReviewModel?: DurableReceiptWriterActivationPreconditionsReviewModel | null
+  // [Prompt 47] Explicit persistence activation request preview
+  explicitPersistenceActivationRequestPreviewModel?: ExplicitPersistenceActivationRequestPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4079,6 +4092,10 @@ function AIIntelligenceFoundationMap({
                         {durableReceiptWriterActivationPreconditionsReviewModel?.status === 'ready_for_explicit_activation_request_review_persistence_disabled'
                           ? `Preconditions: ${durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.satisfiedPreconditions}/${durableReceiptWriterActivationPreconditionsReviewModel.preconditionsSummary.totalPreconditions} satisfied. `
                           : 'Preconditions: blocked. '
+                        }
+                        {explicitPersistenceActivationRequestPreviewModel?.status === 'request_preview_ready_persistence_disabled'
+                          ? `Request preview: ${explicitPersistenceActivationRequestPreviewModel.requestSummary.previewAvailableRequirements}/${explicitPersistenceActivationRequestPreviewModel.requestSummary.totalRequirements} available. `
+                          : 'Request preview: blocked. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8075,7 +8092,7 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [program, recoveryReadinessResult, safeguardAnalysisResult, exerciseKnowledgeCoverageResult, progressionPeriodizationResult, programBalanceResult, workoutEvidenceSummary])
   
-  // [MASTER-8C.27] Plan Evidence Read-Only Hook — translates Coach Recs evidence into Plan Logic-visible proof
+  // [MASTER-8C.27] Plan Evidence Read-Only Hook �� translates Coach Recs evidence into Plan Logic-visible proof
   const planEvidenceHookModel = useMemo<PlanEvidenceReadonlyHookModel>(() => {
     return resolvePlanEvidenceReadonlyHook({
       coachRecommendationCandidateModel: coachRecommendationCandidateResult,
@@ -8397,6 +8414,14 @@ export function ProgramCoachIntelligenceHub({
       eligibilityLedgerModel: durableReceiptWriterEligibilityLedgerModel,
     })
   }, [durableReceiptWriterEligibilityLedgerModel])
+  
+  // [Prompt 47] Explicit persistence activation request preview model
+  // Pure read-only request preview - no activation requested, no authorization granted
+  const explicitPersistenceActivationRequestPreviewModel = useMemo<ExplicitPersistenceActivationRequestPreviewModel>(() => {
+    return resolveExplicitPersistenceActivationRequestPreview({
+      activationPreconditionsReviewModel: durableReceiptWriterActivationPreconditionsReviewModel,
+    })
+  }, [durableReceiptWriterActivationPreconditionsReviewModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -11499,6 +11524,163 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 47] Explicit Persistence Activation Request Preview card
+                Pure read-only request preview - no activation requested, no authorization granted.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {explicitPersistenceActivationRequestPreviewModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Explicit Persistence Activation Request Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getExplicitPersistenceActivationRequestPreviewStatusColor(explicitPersistenceActivationRequestPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getExplicitPersistenceActivationRequestPreviewStatusLabel(explicitPersistenceActivationRequestPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        preview ready: {explicitPersistenceActivationRequestPreviewModel.canPreviewExplicitPersistenceActivationRequest ? 'yes' : 'no'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {explicitPersistenceActivationRequestPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {explicitPersistenceActivationRequestPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {explicitPersistenceActivationRequestPreviewModel.requestSummary.totalRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    preview: {explicitPersistenceActivationRequestPreviewModel.requestSummary.previewAvailableRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    user action: {explicitPersistenceActivationRequestPreviewModel.requestSummary.futureExplicitUserActionRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    server: {explicitPersistenceActivationRequestPreviewModel.requestSummary.futureServerContractRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    storage: {explicitPersistenceActivationRequestPreviewModel.requestSummary.futureStorageContractRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    reload: {explicitPersistenceActivationRequestPreviewModel.requestSummary.futureReloadProofRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    locked: {explicitPersistenceActivationRequestPreviewModel.requestSummary.lockedByDesignRequirements}
+                  </span>
+                </div>
+                {/* Request Preview Payload */}
+                {explicitPersistenceActivationRequestPreviewModel.requestPreviewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                    <div className="text-[8px] text-cyan-400/60 mb-1.5">Request Preview Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">kind:</span> {explicitPersistenceActivationRequestPreviewModel.requestPreviewPayload.requestKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">capability:</span> {explicitPersistenceActivationRequestPreviewModel.requestPreviewPayload.requestedCapability}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">mode:</span> {explicitPersistenceActivationRequestPreviewModel.requestPreviewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">real activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">receipt written:</span> no
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Requirements */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Activation Request Requirements:</div>
+                  <div className="space-y-1">
+                    {explicitPersistenceActivationRequestPreviewModel.requirements.slice(0, 12).map((req) => {
+                      const reqColor = getExplicitPersistenceActivationRequestRequirementStatusColor(req.status)
+                      return (
+                        <div key={req.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            reqColor.bg, reqColor.text
+                          )}>
+                            {getExplicitPersistenceActivationRequestRequirementStatusLabel(req.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{req.label}</span>
+                            {req.requiredBeforeRealActivation && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {explicitPersistenceActivationRequestPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {explicitPersistenceActivationRequestPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-cyan-400/60">Next: </span>
+                  {explicitPersistenceActivationRequestPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Request preview only. No explicit activation requested. Authorization locked. Persistence disabled. No writer, no receipt, no API/DB/storage/schema, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -11916,7 +12098,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

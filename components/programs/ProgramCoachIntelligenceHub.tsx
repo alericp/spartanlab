@@ -382,6 +382,15 @@ import {
   getControlledDurableMarkerReceiptWriterNoWriteHarnessStatusColor,
   type ControlledDurableMarkerReceiptWriterNoWriteHarnessModel,
 } from '@/lib/program/controlled-durable-marker-receipt-writer-no-write-harness'
+// [Prompt 45] Durable receipt writer eligibility ledger
+import {
+  resolveDurableReceiptWriterEligibilityLedger,
+  getDurableReceiptWriterEligibilityLedgerStatusLabel,
+  getDurableReceiptWriterEligibilityLedgerStatusColor,
+  getDurableReceiptWriterEligibilityItemStatusLabel,
+  getDurableReceiptWriterEligibilityItemStatusColor,
+  type DurableReceiptWriterEligibilityLedgerModel,
+} from '@/lib/program/durable-receipt-writer-eligibility-ledger'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3273,6 +3282,8 @@ function AIIntelligenceFoundationMap({
   persistenceWriterActivationLockGateModel,
   // [Prompt 44] Controlled durable marker receipt writer no-write harness
   controlledDurableMarkerReceiptWriterNoWriteHarnessModel,
+  // [Prompt 45] Durable receipt writer eligibility ledger
+  durableReceiptWriterEligibilityLedgerModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3308,6 +3319,8 @@ function AIIntelligenceFoundationMap({
   persistenceWriterActivationLockGateModel?: PersistenceWriterActivationLockGateModel | null
   // [Prompt 44] Controlled durable marker receipt writer no-write harness
   controlledDurableMarkerReceiptWriterNoWriteHarnessModel?: ControlledDurableMarkerReceiptWriterNoWriteHarnessModel | null
+  // [Prompt 45] Durable receipt writer eligibility ledger
+  durableReceiptWriterEligibilityLedgerModel?: DurableReceiptWriterEligibilityLedgerModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4045,6 +4058,10 @@ function AIIntelligenceFoundationMap({
                         {controlledDurableMarkerReceiptWriterNoWriteHarnessModel?.status === 'dry_run_ready_persistence_disabled'
                           ? `No-write harness: ${controlledDurableMarkerReceiptWriterNoWriteHarnessModel.dryRunCandidateCount}. `
                           : 'No-write harness: blocked. '
+                        }
+                        {durableReceiptWriterEligibilityLedgerModel?.status === 'eligible_for_future_activation_review_persistence_disabled'
+                          ? `Eligibility: ${durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.satisfiedItems}/${durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.totalItems} satisfied. `
+                          : 'Eligibility: blocked. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8348,6 +8365,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistenceWriterActivationLockGateModel])
   
+  // [Prompt 45] Durable receipt writer eligibility ledger model
+  // Pure read-only eligibility ledger for future durable receipt writer activation review
+  const durableReceiptWriterEligibilityLedgerModel = useMemo<DurableReceiptWriterEligibilityLedgerModel>(() => {
+    return resolveDurableReceiptWriterEligibilityLedger({
+      noWriteHarnessModel: controlledDurableMarkerReceiptWriterNoWriteHarnessModel,
+    })
+  }, [controlledDurableMarkerReceiptWriterNoWriteHarnessModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -11220,6 +11245,116 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 45] Durable Receipt Writer Eligibility Ledger card
+                Pure read-only eligibility ledger for future durable receipt writer activation review.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {durableReceiptWriterEligibilityLedgerModel && (
+              <div className="rounded-lg border border-lime-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-lime-400" />
+                  <span className="text-sm font-medium text-lime-300">
+                    Durable Receipt Writer Eligibility Ledger
+                  </span>
+                </div>
+                {/* Status chip and mode */}
+                {(() => {
+                  const statusColor = getDurableReceiptWriterEligibilityLedgerStatusColor(durableReceiptWriterEligibilityLedgerModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getDurableReceiptWriterEligibilityLedgerStatusLabel(durableReceiptWriterEligibilityLedgerModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        satisfied: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.satisfiedItems}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        locked by design: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.lockedByDesignItems}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        eligible for review: {durableReceiptWriterEligibilityLedgerModel.canProceedToFutureActivationReview ? 'yes' : 'no'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-lime-300/90 font-medium mb-1">
+                  {durableReceiptWriterEligibilityLedgerModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {durableReceiptWriterEligibilityLedgerModel.summary}
+                </p>
+                {/* Compact summary row */}
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    satisfied: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.satisfiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    locked: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.lockedByDesignItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {durableReceiptWriterEligibilityLedgerModel.eligibilitySummary.blockedItems}
+                  </span>
+                </div>
+                {/* Eligibility items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-lime-500/10">
+                  <div className="text-[8px] text-lime-400/60 mb-1.5">Eligibility Items:</div>
+                  <div className="space-y-1">
+                    {durableReceiptWriterEligibilityLedgerModel.eligibilityItems.slice(0, 14).map((item) => {
+                      const itemColor = getDurableReceiptWriterEligibilityItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getDurableReceiptWriterEligibilityItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.requiredBeforeActivation && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {durableReceiptWriterEligibilityLedgerModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {durableReceiptWriterEligibilityLedgerModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-lime-400/60">Next: </span>
+                  {durableReceiptWriterEligibilityLedgerModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-lime-400/60">
+                  Eligibility ledger only. Persistence still disabled. No receipt written. No write attempted. No API/DB/storage/schema. No Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -11637,7 +11772,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} />
           </div>
         </SheetContent>
       </Sheet>

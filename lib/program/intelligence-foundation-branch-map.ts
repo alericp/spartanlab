@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.67 - Persistence writer boundary step preview)
+  // PLAN LOGIC (MASTER-8C.68 - Persistence writer boundary continuity preview)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, read-only consent decision state preview, read-only consent decision review lock preview, read-only consent permission boundary preview, read-only persistence permission review preview, read-only persistence write preflight preview, read-only persistence writer activation review preview, read-only persistence boundary review preview, read-only persistence writer gate preview, and read-only persistence writer boundary step preview',
-    nextSafeAction: 'MASTER-8C.68+ next writer/persistence boundary step / persistence still disabled unless official checklist explicitly enables writes',
-    riskIfIgnored: 'Boundary step review skipped, allowing next code to confuse "step reviewed" with "writer opened"',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, read-only consent decision state preview, read-only consent decision review lock preview, read-only consent permission boundary preview, read-only persistence permission review preview, read-only persistence write preflight preview, read-only persistence writer activation review preview, read-only persistence boundary review preview, read-only persistence writer gate preview, read-only persistence writer boundary step preview, and read-only persistence writer boundary continuity preview',
+    nextSafeAction: 'MASTER-8C.69+ next writer/persistence boundary step / persistence still disabled unless official checklist explicitly enables writes',
+    riskIfIgnored: 'Boundary continuity review skipped, allowing next code to confuse "continuity reviewed" with "writer opened"',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -299,6 +299,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/persistence-boundary-review-preview.ts',
       'lib/program/persistence-writer-gate-preview.ts',
       'lib/program/persistence-writer-boundary-step-preview.ts',
+      'lib/program/persistence-writer-boundary-continuity-preview.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

@@ -545,6 +545,15 @@ import {
   getPersistenceWriterBoundaryStepItemStatusColor,
   type PersistenceWriterBoundaryStepPreviewModel,
 } from '@/lib/program/persistence-writer-boundary-step-preview'
+// [Prompt 63] Persistence writer boundary continuity preview
+import {
+  resolvePersistenceWriterBoundaryContinuityPreview,
+  getPersistenceWriterBoundaryContinuityPreviewStatusLabel,
+  getPersistenceWriterBoundaryContinuityPreviewStatusColor,
+  getPersistenceWriterBoundaryContinuityItemStatusLabel,
+  getPersistenceWriterBoundaryContinuityItemStatusColor,
+  type PersistenceWriterBoundaryContinuityPreviewModel,
+} from '@/lib/program/persistence-writer-boundary-continuity-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8767,6 +8776,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistenceWriterGatePreviewModel])
   
+  // [Prompt 63] Persistence writer boundary continuity preview model
+  // Pure read-only boundary continuity preview - continuity reviewed but writer NOT opened
+  const persistenceWriterBoundaryContinuityPreviewModel = useMemo<PersistenceWriterBoundaryContinuityPreviewModel>(() => {
+    return resolvePersistenceWriterBoundaryContinuityPreview({
+      persistenceWriterBoundaryStepPreviewModel,
+    })
+  }, [persistenceWriterBoundaryStepPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -15290,6 +15307,211 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-teal-400/60">
                   Persistence writer boundary step preview only. Writer gate review does not open the real writer. No persistence, no write, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 63] Persistence Writer Boundary Continuity Preview card
+                Pure read-only boundary continuity preview - continuity reviewed but writer NOT opened.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {persistenceWriterBoundaryContinuityPreviewModel && (
+              <div className="rounded-lg border border-sky-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-sky-400" />
+                  <span className="text-sm font-medium text-sky-300">
+                    Persistence Writer Boundary Continuity Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getPersistenceWriterBoundaryContinuityPreviewStatusColor(persistenceWriterBoundaryContinuityPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getPersistenceWriterBoundaryContinuityPreviewStatusLabel(persistenceWriterBoundaryContinuityPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                        boundary continuity preview
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        writer closed
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no write
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no receipt
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                        read-only
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Visible fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistenceWriterBoundaryContinuityPreviewModel.previousBoundaryStepVerified ? "bg-teal-500/10 text-teal-400/70 border-teal-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    previous boundary step verified: {persistenceWriterBoundaryContinuityPreviewModel.previousBoundaryStepVerified ? 'yes' : 'no'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistenceWriterBoundaryContinuityPreviewModel.currentContinuityReviewComplete ? "bg-sky-500/10 text-sky-400/70 border-sky-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    current continuity review complete: {persistenceWriterBoundaryContinuityPreviewModel.currentContinuityReviewComplete ? 'yes' : 'no'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    writer opened: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write attempted: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt written: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    API/DB/storage touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    schema touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    future session mutation enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-sky-300/90 font-medium mb-1">
+                  {persistenceWriterBoundaryContinuityPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {persistenceWriterBoundaryContinuityPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                    step verified: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.boundaryStepVerifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    continuity reviewed: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.continuityReviewedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    disabled: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.disabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    blocked: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.blockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    protected: {persistenceWriterBoundaryContinuityPreviewModel.continuitySummary.protectedItems}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {persistenceWriterBoundaryContinuityPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-sky-500/10">
+                    <div className="text-[8px] text-sky-400/60 mb-1.5">Boundary Continuity Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">kind:</span> {persistenceWriterBoundaryContinuityPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">source boundary step status:</span> {persistenceWriterBoundaryContinuityPreviewModel.previewPayload.sourceBoundaryStepStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">mode:</span> {persistenceWriterBoundaryContinuityPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">continuity state:</span> {persistenceWriterBoundaryContinuityPreviewModel.previewPayload.currentContinuityState}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">real writer opened:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">writer factory enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-sky-400/50">completed sessions protected:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Continuity Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-sky-500/10">
+                  <div className="text-[8px] text-sky-400/60 mb-1.5">Continuity Items:</div>
+                  <div className="space-y-1">
+                    {persistenceWriterBoundaryContinuityPreviewModel.continuityItems.slice(0, 12).map((item) => {
+                      const itemColor = getPersistenceWriterBoundaryContinuityItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getPersistenceWriterBoundaryContinuityItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.boundaryStepVerifiedNow && (
+                              <span className="text-[7px] text-teal-400/50 ml-1">*step</span>
+                            )}
+                            {item.continuityReviewedNow && (
+                              <span className="text-[7px] text-sky-400/50 ml-1">*continuity</span>
+                            )}
+                            {item.disabledNow && (
+                              <span className="text-[7px] text-slate-400/50 ml-1">*disabled</span>
+                            )}
+                            {item.blockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*blocked</span>
+                            )}
+                            {item.protectedNow && (
+                              <span className="text-[7px] text-emerald-400/50 ml-1">*protected</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {persistenceWriterBoundaryContinuityPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {persistenceWriterBoundaryContinuityPreviewModel.blockerSummary.slice(0, 5).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-sky-400/60">Next: </span>
+                  {persistenceWriterBoundaryContinuityPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-sky-400/60">
+                  Persistence writer boundary continuity preview only. Boundary step review does not open the real writer. No persistence, no write, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
                 </p>
               </div>
             )}

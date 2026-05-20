@@ -615,6 +615,7 @@ import {
   buildControlledMarkerSaveLocalReceiptGateModel,
   getLocalReceiptGateStatusLabel,
   getLocalReceiptGateStatusColor,
+  buildLocalReceiptSourceFingerprint, // [Prompt 69.1]
   type ControlledMarkerSaveLocalReceiptGateModel,
 } from '@/lib/program/controlled-marker-save-local-receipt-gate'
 // [Prompt 23] Root/candidate clearance evidence detail
@@ -8610,9 +8611,15 @@ export function ProgramCoachIntelligenceHub({
     receiptMode?: 'local_react_state_only'
     durablePersistenceEnabled?: false
     futureSessionMutationEnabled?: false
+    // [Prompt 69.1] Source fingerprint for stale detection
+    sourceFingerprint?: string
   }
   const [savedMarkerArtifact, setSavedMarkerArtifact] = useState<SavedMarkerArtifact | null>(null)
-  const markerSavedCount = savedMarkerArtifact ? 1 : 0
+  // [Prompt 69.1] Raw count for older downstream models declared before the receipt gate
+  const rawLocalReceiptCount = savedMarkerArtifact ? 1 : 0
+  // [Prompt 69.1] markerSavedCount will be updated after local receipt gate validates
+  // For now, use raw count for backward compatibility; downstream valid count comes from gate
+  const markerSavedCount = rawLocalReceiptCount
   
   // [Prompt 20] Determine if authorization preview is blocked
   // [P30] Tightened guard: blocked when marker-only boundary is not preview-ready
@@ -8940,12 +8947,18 @@ export function ProgramCoachIntelligenceHub({
   // [Prompt 69] Controlled Marker-Save Local Receipt Gate model
   // Pure read-only model that decides whether local receipt can be created
   // Requires Prompt 68 verification gate as source of truth
+  // [Prompt 69.1] Now passes saved fingerprint for stale detection
   const controlledMarkerSaveLocalReceiptGateModel = useMemo<ControlledMarkerSaveLocalReceiptGateModel>(() => {
     return buildControlledMarkerSaveLocalReceiptGateModel({
       controlledMarkerSaveDryRunVerificationGateModel,
-      localReceiptCount: markerSavedCount,
+      localReceiptCount: rawLocalReceiptCount,
+      savedSourceFingerprint: savedMarkerArtifact?.sourceFingerprint ?? null,
+      hasSavedLocalReceipt: savedMarkerArtifact !== null,
     })
-  }, [controlledMarkerSaveDryRunVerificationGateModel, markerSavedCount])
+  }, [controlledMarkerSaveDryRunVerificationGateModel, rawLocalReceiptCount, savedMarkerArtifact])
+  
+  // [Prompt 69.1] Valid marker count for downstream models — only valid if gate says so
+  const validMarkerSavedCountForDownstream = controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? 1 : 0
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -9020,16 +9033,29 @@ export function ProgramCoachIntelligenceHub({
   // [P38][Prompt 69] Local marker save handler - event handler only, never runs during render
   // Saves exactly one marker artifact locally, does NOT mutate program/workout/sessions
   // [Prompt 69] Now requires Prompt 68 verification gate as source of truth
+  // [Prompt 69.1] Now includes fingerprint for stale detection
   const handleLocalMarkerSave = useCallback(() => {
-    // Guard: already saved
+    // Guard: already saved (valid or stale)
     if (savedMarkerArtifact !== null) {
       console.log('[v0] Local marker already saved, blocking duplicate')
+      return
+    }
+    
+    // [Prompt 69.1] REQUIRED: No stale receipt blocking (must clear stale first)
+    if (controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent) {
+      console.log('[v0] Stale local receipt exists, blocking save until cleared')
       return
     }
     
     // [Prompt 69] REQUIRED: Local receipt gate must allow creation
     if (!controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt) {
       console.log('[v0] Local receipt gate does not allow creation:', controlledMarkerSaveLocalReceiptGateModel.status)
+      return
+    }
+    
+    // [Prompt 69.1] REQUIRED: Current source fingerprint must exist
+    if (!controlledMarkerSaveLocalReceiptGateModel.currentSourceFingerprint) {
+      console.log('[v0] No current source fingerprint, blocking marker save')
       return
     }
     
@@ -9073,7 +9099,17 @@ export function ProgramCoachIntelligenceHub({
       return
     }
     
-    // Create local marker artifact proof with Prompt 68/69 source proof fields
+    // [Prompt 69.1] Build fingerprint to store with artifact
+    const sourceFingerprint = buildLocalReceiptSourceFingerprint(
+      controlledMarkerSaveDryRunVerificationGateModel?.status ?? 'unknown',
+      controlledMarkerSaveDryRunVerificationGateModel?.verified ?? false,
+      controlledMarkerSaveDryRunVerificationGateModel?.candidateId ?? '',
+      controlledMarkerSaveDryRunVerificationGateModel?.targetSessionCount ?? 0,
+      controlledMarkerSaveDryRunVerificationGateModel?.previewChangeCount ?? 0,
+      controlledMarkerSaveDryRunVerificationGateModel?.mismatches?.length ?? 0
+    )
+    
+    // Create local marker artifact proof with Prompt 68/69/69.1 source proof fields
     const now = Date.now()
     const artifact: SavedMarkerArtifact = {
       markerId: `marker-local-${now}`,
@@ -9098,10 +9134,12 @@ export function ProgramCoachIntelligenceHub({
       receiptMode: 'local_react_state_only' as const,
       durablePersistenceEnabled: false,
       futureSessionMutationEnabled: false,
+      // [Prompt 69.1] Store fingerprint for stale detection
+      sourceFingerprint,
     }
     
     setSavedMarkerArtifact(artifact)
-    console.log('[v0] Local marker saved (Prompt 69 verification-gated):', artifact.markerId)
+    console.log('[v0] Local marker saved (Prompt 69.1 verification-gated with fingerprint):', artifact.markerId, sourceFingerprint)
   }, [
     savedMarkerArtifact,
     markerSaveAuthorizationPreviewAccepted,
@@ -16778,11 +16816,21 @@ export function ProgramCoachIntelligenceHub({
                     {controlledMarkerSaveLocalReceiptGateModel.previewChangeCount} change(s)
                   </span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-400/70 border-lime-500/20">
-                    {controlledMarkerSaveLocalReceiptGateModel.localReceiptCount} receipt(s)
+                    {controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptCount} valid receipt(s)
                   </span>
-                  {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated && (
+                  {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                      {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptCount} stale receipt(s)
+                    </span>
+                  )}
+                  {controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
                       duplicate locked
+                    </span>
+                  )}
+                  {controlledMarkerSaveLocalReceiptGateModel.sourceFingerprintMatches && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-400/70 border-lime-500/20">
+                      source matched
                     </span>
                   )}
                 </div>
@@ -16831,8 +16879,47 @@ export function ProgramCoachIntelligenceHub({
                         Candidate: <span className="text-cyan-300/70 font-mono">{controlledMarkerSaveLocalReceiptGateModel.candidateId}</span>
                       </div>
                     )}
+                    {/* [Prompt 69.1] Fingerprint display */}
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Current Fingerprint: <span className="text-cyan-300/70 font-mono text-[7px]">
+                        {controlledMarkerSaveLocalReceiptGateModel.currentSourceFingerprint 
+                          ? controlledMarkerSaveLocalReceiptGateModel.currentSourceFingerprint.slice(0, 40) + (controlledMarkerSaveLocalReceiptGateModel.currentSourceFingerprint.length > 40 ? '...' : '')
+                          : 'none'}
+                      </span>
+                    </div>
+                    {controlledMarkerSaveLocalReceiptGateModel.savedSourceFingerprint && (
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Saved Fingerprint: <span className="text-amber-300/70 font-mono text-[7px]">
+                          {controlledMarkerSaveLocalReceiptGateModel.savedSourceFingerprint.slice(0, 40) + (controlledMarkerSaveLocalReceiptGateModel.savedSourceFingerprint.length > 40 ? '...' : '')}
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Source Match: <span className={controlledMarkerSaveLocalReceiptGateModel.sourceFingerprintMatches ? "text-lime-400/70" : "text-red-400/70"}>
+                        {controlledMarkerSaveLocalReceiptGateModel.sourceFingerprintMatches ? 'true' : 'false'}
+                      </span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Valid Local Receipt: <span className={controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? "text-lime-400/70" : "text-zinc-400/70"}>
+                        {controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? 'true' : 'false'}
+                      </span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Stale Local Receipt: <span className={controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? "text-orange-400/70" : "text-zinc-400/70"}>
+                        {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? 'true' : 'false'}
+                      </span>
+                    </div>
                   </div>
                 </div>
+                {/* [Prompt 69.1] Stale receipt warning */}
+                {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent && (
+                  <div className="mb-2 p-2 rounded bg-orange-500/5 border border-orange-500/20">
+                    <div className="text-[8px] text-orange-400/60 mb-1">Stale Receipt Warning:</div>
+                    <p className="text-[8px] text-orange-400/70">
+                      Local receipt is stale because the verification source changed. It cannot authorize future steps. Clear it and re-create proof after verification is valid.
+                    </p>
+                  </div>
+                )}
                 {/* Blockers */}
                 {controlledMarkerSaveLocalReceiptGateModel.blockers.length > 0 && (
                   <div className="mb-2 p-2 rounded bg-red-500/5 border border-red-500/20">
@@ -16844,28 +16931,39 @@ export function ProgramCoachIntelligenceHub({
                 )}
                 {/* Create Local Receipt button */}
                 {controlledMarkerSaveLocalReceiptGateModel.canShowLocalReceiptControl && (
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <Button
                       size="sm"
-                      variant={controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated ? "secondary" : "default"}
+                      variant={controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? "secondary" : "default"}
                       className={cn(
                         "h-7 text-[10px]",
-                        controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated
+                        controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent
                           ? "bg-lime-500/20 text-lime-400 border-lime-500/30 cursor-default"
                           : controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt
                             ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/30"
                             : "bg-zinc-500/20 text-zinc-500 border-zinc-500/30 cursor-not-allowed"
                       )}
-                      disabled={!controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt || controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated}
+                      disabled={!controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt || controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent}
                       onClick={handleLocalMarkerSave}
                     >
-                      {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated
+                      {controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent
                         ? 'Local Receipt Proof Created'
                         : 'Create Local Receipt Proof'}
                     </Button>
-                    {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated && (
-                      <p className="text-[8px] text-lime-400/60 mt-1">
-                        Receipt created. Duplicate save locked. No program/workout mutation.
+                    {/* [Prompt 69.1] Clear stale receipt button */}
+                    {controlledMarkerSaveLocalReceiptGateModel.canClearStaleLocalReceipt && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20"
+                        onClick={() => setSavedMarkerArtifact(null)}
+                      >
+                        Clear Stale Local Receipt
+                      </Button>
+                    )}
+                    {controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent && (
+                      <p className="text-[8px] text-lime-400/60">
+                        Receipt created — source matched — duplicate locked. No program/workout mutation.
                       </p>
                     )}
                   </div>

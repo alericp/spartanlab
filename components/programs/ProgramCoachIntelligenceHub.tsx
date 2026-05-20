@@ -610,6 +610,13 @@ import {
   getVerificationItemStatusColor,
   type ControlledMarkerSaveDryRunVerificationGateModel,
 } from '@/lib/program/controlled-marker-save-dry-run-verification-gate'
+// [Prompt 69] Controlled Marker-Save Local Receipt Gate
+import {
+  buildControlledMarkerSaveLocalReceiptGateModel,
+  getLocalReceiptGateStatusLabel,
+  getLocalReceiptGateStatusColor,
+  type ControlledMarkerSaveLocalReceiptGateModel,
+} from '@/lib/program/controlled-marker-save-local-receipt-gate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8593,6 +8600,16 @@ export function ProgramCoachIntelligenceHub({
     noStartWorkoutChanged: true
     noLiveWorkoutChanged: true
     completedSessionsProtected: true
+    // [Prompt 69] Source proof fields from Prompt 68 verification gate
+    sourceVerificationGateStatus?: string
+    sourceVerificationGateVerified?: boolean
+    sourceDryRunCandidateId?: string
+    sourceTargetSessionCount?: number
+    sourcePreviewChangeCount?: number
+    sourceMismatchCount?: number
+    receiptMode?: 'local_react_state_only'
+    durablePersistenceEnabled?: false
+    futureSessionMutationEnabled?: false
   }
   const [savedMarkerArtifact, setSavedMarkerArtifact] = useState<SavedMarkerArtifact | null>(null)
   const markerSavedCount = savedMarkerArtifact ? 1 : 0
@@ -8920,6 +8937,16 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [controlledMarkerSaveDryRunCandidateModel, futureSessionAdaptivePreviewDiffModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
   
+  // [Prompt 69] Controlled Marker-Save Local Receipt Gate model
+  // Pure read-only model that decides whether local receipt can be created
+  // Requires Prompt 68 verification gate as source of truth
+  const controlledMarkerSaveLocalReceiptGateModel = useMemo<ControlledMarkerSaveLocalReceiptGateModel>(() => {
+    return buildControlledMarkerSaveLocalReceiptGateModel({
+      controlledMarkerSaveDryRunVerificationGateModel,
+      localReceiptCount: markerSavedCount,
+    })
+  }, [controlledMarkerSaveDryRunVerificationGateModel, markerSavedCount])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -8990,47 +9017,69 @@ export function ProgramCoachIntelligenceHub({
     }
   }, [authPreviewBlocked, markerSaveAuthorizationPreviewAccepted])
   
-  // [P38] Local marker save handler - event handler only, never runs during render
+  // [P38][Prompt 69] Local marker save handler - event handler only, never runs during render
   // Saves exactly one marker artifact locally, does NOT mutate program/workout/sessions
+  // [Prompt 69] Now requires Prompt 68 verification gate as source of truth
   const handleLocalMarkerSave = useCallback(() => {
     // Guard: already saved
     if (savedMarkerArtifact !== null) {
       console.log('[v0] Local marker already saved, blocking duplicate')
       return
     }
-    // Guard: authorization not accepted
+    
+    // [Prompt 69] REQUIRED: Local receipt gate must allow creation
+    if (!controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt) {
+      console.log('[v0] Local receipt gate does not allow creation:', controlledMarkerSaveLocalReceiptGateModel.status)
+      return
+    }
+    
+    // [Prompt 69] REQUIRED: Prompt 68 verification gate must be verified
+    if (!controlledMarkerSaveDryRunVerificationGateModel?.verified) {
+      console.log('[v0] Verification gate not verified, blocking marker save')
+      return
+    }
+    
+    // [Prompt 69] REQUIRED: Verification gate status must be dry_run_verified_no_write
+    if (controlledMarkerSaveDryRunVerificationGateModel?.status !== 'dry_run_verified_no_write') {
+      console.log('[v0] Verification gate status not dry_run_verified_no_write:', controlledMarkerSaveDryRunVerificationGateModel?.status)
+      return
+    }
+    
+    // [Prompt 69] REQUIRED: Target session count must be > 0
+    if ((controlledMarkerSaveDryRunVerificationGateModel?.targetSessionCount ?? 0) <= 0) {
+      console.log('[v0] No target sessions from verification gate, blocking marker save')
+      return
+    }
+    
+    // [Prompt 69] REQUIRED: Preview change count must be > 0
+    if ((controlledMarkerSaveDryRunVerificationGateModel?.previewChangeCount ?? 0) <= 0) {
+      console.log('[v0] No preview changes from verification gate, blocking marker save')
+      return
+    }
+    
+    // [Prompt 69] REQUIRED: No source mismatches
+    if ((controlledMarkerSaveDryRunVerificationGateModel?.mismatches?.length ?? 0) > 0) {
+      console.log('[v0] Source mismatches exist, blocking marker save:', controlledMarkerSaveDryRunVerificationGateModel?.mismatches)
+      return
+    }
+    
+    // Legacy guards (kept for defense-in-depth but no longer primary authority)
     if (!markerSaveAuthorizationPreviewAccepted) {
       console.log('[v0] Authorization not accepted, blocking marker save')
       return
     }
-    // Guard: auth preview blocked
     if (authPreviewBlocked) {
       console.log('[v0] Auth preview blocked, blocking marker save')
       return
     }
-    // Guard: action boundary not ready for marker save
-    if (!controlledMarkerSaveActionBoundaryModel?.canExecuteMarkerSave) {
-      console.log('[v0] Action boundary not ready for marker save')
-      return
-    }
-    // Guard: no target sessions
-    if ((controlledMarkerSaveActionBoundaryModel?.targetSessionCount ?? 0) <= 0) {
-      console.log('[v0] No target sessions, blocking marker save')
-      return
-    }
-    // Guard: hard blockers exist
-    if ((controlledMarkerSaveActionBoundaryModel?.hardBlockingRootCandidateCount ?? 0) > 0) {
-      console.log('[v0] Hard blockers exist, blocking marker save')
-      return
-    }
     
-    // Create local marker artifact proof
+    // Create local marker artifact proof with Prompt 68/69 source proof fields
     const now = Date.now()
     const artifact: SavedMarkerArtifact = {
       markerId: `marker-local-${now}`,
       savedAtMs: now,
       savedAtLabel: new Date(now).toLocaleTimeString(),
-      targetSessionCount: controlledMarkerSaveActionBoundaryModel?.targetSessionCount ?? 0,
+      targetSessionCount: controlledMarkerSaveDryRunVerificationGateModel?.targetSessionCount ?? 0,
       completedProtectedCount: controlledMarkerSaveActionBoundaryModel?.completedProtectedCount ?? 0,
       authorizationAccepted: true,
       noProgramChangesApplied: true,
@@ -9039,15 +9088,27 @@ export function ProgramCoachIntelligenceHub({
       noStartWorkoutChanged: true,
       noLiveWorkoutChanged: true,
       completedSessionsProtected: true,
+      // [Prompt 69] Source proof fields
+      sourceVerificationGateStatus: controlledMarkerSaveDryRunVerificationGateModel?.status ?? 'unknown',
+      sourceVerificationGateVerified: controlledMarkerSaveDryRunVerificationGateModel?.verified ?? false,
+      sourceDryRunCandidateId: controlledMarkerSaveDryRunVerificationGateModel?.candidateId ?? '',
+      sourceTargetSessionCount: controlledMarkerSaveDryRunVerificationGateModel?.targetSessionCount ?? 0,
+      sourcePreviewChangeCount: controlledMarkerSaveDryRunVerificationGateModel?.previewChangeCount ?? 0,
+      sourceMismatchCount: controlledMarkerSaveDryRunVerificationGateModel?.mismatches?.length ?? 0,
+      receiptMode: 'local_react_state_only' as const,
+      durablePersistenceEnabled: false,
+      futureSessionMutationEnabled: false,
     }
     
     setSavedMarkerArtifact(artifact)
-    console.log('[v0] Local marker saved:', artifact.markerId)
+    console.log('[v0] Local marker saved (Prompt 69 verification-gated):', artifact.markerId)
   }, [
     savedMarkerArtifact,
     markerSaveAuthorizationPreviewAccepted,
     authPreviewBlocked,
     controlledMarkerSaveActionBoundaryModel,
+    controlledMarkerSaveLocalReceiptGateModel,
+    controlledMarkerSaveDryRunVerificationGateModel,
   ])
   
   // [AB20.4.3] Save reload context and reload page
@@ -16674,6 +16735,144 @@ export function ProgramCoachIntelligenceHub({
                   {controlledMarkerSaveDryRunVerificationGateModel.verified
                     ? 'Dry-run verified. No marker saved. No persistence. Program Cards, Start Workout, and Live Workout remain unchanged.'
                     : 'Verification incomplete. No marker saved. No persistence. Program Cards, Start Workout, and Live Workout remain unchanged.'}
+                </p>
+              </div>
+            )}
+            {/* [Prompt 69] Controlled Marker-Save Local Receipt Gate card */}
+            {controlledMarkerSaveLocalReceiptGateModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[10px] font-medium text-cyan-300">
+                    Controlled Marker-Save Local Receipt Gate
+                  </span>
+                  {(() => {
+                    const statusColor = getLocalReceiptGateStatusColor(controlledMarkerSaveLocalReceiptGateModel.status)
+                    return (
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded border",
+                        statusColor.bg, statusColor.text, statusColor.border
+                      )}>
+                        {getLocalReceiptGateStatusLabel(controlledMarkerSaveLocalReceiptGateModel.status)}
+                      </span>
+                    )
+                  })()}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#6A6A7A] border-[#2A2A35]/40">
+                    local receipt
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#6A6A7A] border-[#2A2A35]/40">
+                    verification-gated
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#6A6A7A] border-[#2A2A35]/40">
+                    React state only
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">
+                    no durable persistence
+                  </span>
+                </div>
+                {/* Counts row */}
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    {controlledMarkerSaveLocalReceiptGateModel.targetSessionCount} session(s)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    {controlledMarkerSaveLocalReceiptGateModel.previewChangeCount} change(s)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-400/70 border-lime-500/20">
+                    {controlledMarkerSaveLocalReceiptGateModel.localReceiptCount} receipt(s)
+                  </span>
+                  {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      duplicate locked
+                    </span>
+                  )}
+                </div>
+                {/* Safety chips row */}
+                <div className="flex items-center gap-1 mb-2 flex-wrap">
+                  <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400/60 border border-emerald-500/20">
+                    Program Cards unchanged
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400/60 border border-emerald-500/20">
+                    Start Workout unchanged
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400/60 border border-emerald-500/20">
+                    Live Workout unchanged
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400/60 border border-emerald-500/20">
+                    completed protected
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {controlledMarkerSaveLocalReceiptGateModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {controlledMarkerSaveLocalReceiptGateModel.summary}
+                </p>
+                {/* Verification source proof */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Verification Source Proof:</div>
+                  <div className="space-y-0.5">
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Gate Status: <span className="text-cyan-400/70">{controlledMarkerSaveLocalReceiptGateModel.verificationGateStatus}</span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Verified: <span className={controlledMarkerSaveLocalReceiptGateModel.verificationGateVerified ? "text-lime-400/70" : "text-red-400/70"}>
+                        {controlledMarkerSaveLocalReceiptGateModel.verificationGateVerified ? 'true' : 'false'}
+                      </span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Source Mismatches: <span className={controlledMarkerSaveLocalReceiptGateModel.verificationGateMismatchCount === 0 ? "text-lime-400/70" : "text-red-400/70"}>
+                        {controlledMarkerSaveLocalReceiptGateModel.verificationGateMismatchCount}
+                      </span>
+                    </div>
+                    {controlledMarkerSaveLocalReceiptGateModel.candidateId && (
+                      <div className="text-[8px] text-[#6A6A7A] truncate">
+                        Candidate: <span className="text-cyan-300/70 font-mono">{controlledMarkerSaveLocalReceiptGateModel.candidateId}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Blockers */}
+                {controlledMarkerSaveLocalReceiptGateModel.blockers.length > 0 && (
+                  <div className="mb-2 p-2 rounded bg-red-500/5 border border-red-500/20">
+                    <div className="text-[8px] text-red-400/60 mb-1">Blockers:</div>
+                    {controlledMarkerSaveLocalReceiptGateModel.blockers.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[8px] text-red-400/70">• {b}</div>
+                    ))}
+                  </div>
+                )}
+                {/* Create Local Receipt button */}
+                {controlledMarkerSaveLocalReceiptGateModel.canShowLocalReceiptControl && (
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      variant={controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated ? "secondary" : "default"}
+                      className={cn(
+                        "h-7 text-[10px]",
+                        controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated
+                          ? "bg-lime-500/20 text-lime-400 border-lime-500/30 cursor-default"
+                          : controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt
+                            ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/30"
+                            : "bg-zinc-500/20 text-zinc-500 border-zinc-500/30 cursor-not-allowed"
+                      )}
+                      disabled={!controlledMarkerSaveLocalReceiptGateModel.canCreateLocalReceipt || controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated}
+                      onClick={handleLocalMarkerSave}
+                    >
+                      {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated
+                        ? 'Local Receipt Proof Created'
+                        : 'Create Local Receipt Proof'}
+                    </Button>
+                    {controlledMarkerSaveLocalReceiptGateModel.localReceiptCreated && (
+                      <p className="text-[8px] text-lime-400/60 mt-1">
+                        Receipt created. Duplicate save locked. No program/workout mutation.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60 mt-2">
+                  {controlledMarkerSaveLocalReceiptGateModel.sourceStep} — Local React state only. No durable persistence. No DB/API/storage. Program Cards, Start Workout, Live Workout unchanged.
                 </p>
               </div>
             )}

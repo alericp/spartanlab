@@ -445,6 +445,15 @@ import {
   getControlledActivationPermissionBoundaryStatusColor,
   type ControlledActivationPermissionBoundaryPreviewModel,
 } from '@/lib/program/controlled-activation-permission-boundary-preview'
+// [Prompt 52] Explicit persistence activation consent preview
+import {
+  resolveExplicitPersistenceActivationConsentPreview,
+  getExplicitPersistenceActivationConsentPreviewStatusLabel,
+  getExplicitPersistenceActivationConsentPreviewStatusColor,
+  getExplicitPersistenceActivationConsentRequirementStatusLabel,
+  getExplicitPersistenceActivationConsentRequirementStatusColor,
+  type ExplicitPersistenceActivationConsentPreviewModel,
+} from '@/lib/program/explicit-persistence-activation-consent-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3350,6 +3359,8 @@ function AIIntelligenceFoundationMap({
   explicitActivationAuthorizationReviewPreviewModel,
   // [Prompt 51] Controlled activation permission boundary preview
   controlledActivationPermissionBoundaryPreviewModel,
+  // [Prompt 52] Explicit persistence activation consent preview
+  explicitPersistenceActivationConsentPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3399,6 +3410,8 @@ function AIIntelligenceFoundationMap({
   explicitActivationAuthorizationReviewPreviewModel?: ExplicitActivationAuthorizationReviewPreviewModel | null
   // [Prompt 51] Controlled activation permission boundary preview
   controlledActivationPermissionBoundaryPreviewModel?: ControlledActivationPermissionBoundaryPreviewModel | null
+  // [Prompt 52] Explicit persistence activation consent preview
+  explicitPersistenceActivationConsentPreviewModel?: ExplicitPersistenceActivationConsentPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4164,6 +4177,10 @@ function AIIntelligenceFoundationMap({
                         {controlledActivationPermissionBoundaryPreviewModel?.status === 'permission_boundary_preview_ready_persistence_disabled'
                           ? `Perm boundary: ${controlledActivationPermissionBoundaryPreviewModel.previewSummary.sourceAuthorizationReviewVerifiedBoundaries}/${controlledActivationPermissionBoundaryPreviewModel.previewSummary.totalBoundaries} verified. `
                           : 'Perm boundary: not ready. '
+                        }
+                        {explicitPersistenceActivationConsentPreviewModel?.status === 'consent_preview_ready_persistence_disabled'
+                          ? `Consent: ${explicitPersistenceActivationConsentPreviewModel.previewSummary.sourcePermissionBoundaryVerifiedRequirements}/${explicitPersistenceActivationConsentPreviewModel.previewSummary.totalRequirements} verified. `
+                          : 'Consent: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8523,6 +8540,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [explicitActivationAuthorizationReviewPreviewModel])
   
+  // [Prompt 52] Explicit persistence activation consent preview model
+  // Pure read-only consent preview - permission boundary verified but no consent captured
+  const explicitPersistenceActivationConsentPreviewModel = useMemo<ExplicitPersistenceActivationConsentPreviewModel>(() => {
+    return resolveExplicitPersistenceActivationConsentPreview({
+      controlledActivationPermissionBoundaryPreviewModel,
+    })
+  }, [controlledActivationPermissionBoundaryPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -12589,6 +12614,247 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 52] Explicit Persistence Activation Consent Preview card
+                Pure read-only consent preview - permission boundary verified but no consent captured.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {explicitPersistenceActivationConsentPreviewModel && (
+              <div className="rounded-lg border border-green-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-green-400" />
+                  <span className="text-sm font-medium text-green-300">
+                    Explicit Persistence Activation Consent Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getExplicitPersistenceActivationConsentPreviewStatusColor(explicitPersistenceActivationConsentPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getExplicitPersistenceActivationConsentPreviewStatusLabel(explicitPersistenceActivationConsentPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        permission boundary verified: {explicitPersistenceActivationConsentPreviewModel.permissionBoundaryPreviewVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", explicitPersistenceActivationConsentPreviewModel.consentPreviewReady ? "bg-green-500/10 text-green-400/70 border-green-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        consent preview: {explicitPersistenceActivationConsentPreviewModel.consentPreviewReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        future consent auth lock: {explicitPersistenceActivationConsentPreviewModel.readyForFutureConsentAuthorizationLock ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user consent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user intent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit activation requested: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization reviewed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation allowed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-green-300/90 font-medium mb-1">
+                  {explicitPersistenceActivationConsentPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {explicitPersistenceActivationConsentPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {explicitPersistenceActivationConsentPreviewModel.previewSummary.totalRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    boundary verified: {explicitPersistenceActivationConsentPreviewModel.previewSummary.sourcePermissionBoundaryVerifiedRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    explicit consent: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureExplicitConsentRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    consent scope: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureConsentScopeRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    revocation: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureConsentRevocationRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                    denial: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureConsentDenialRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    activation: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureActivationRequestRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    writer: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futurePersistenceWriterRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    receipt: {explicitPersistenceActivationConsentPreviewModel.previewSummary.futureDurableReceiptRequirements}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    blocked: {explicitPersistenceActivationConsentPreviewModel.previewSummary.blockedByDesignRequirements}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {explicitPersistenceActivationConsentPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-green-500/10">
+                    <div className="text-[8px] text-green-400/60 mb-1.5">Preview Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">kind:</span> {explicitPersistenceActivationConsentPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">source permission boundary:</span> {explicitPersistenceActivationConsentPreviewModel.previewPayload.sourcePermissionBoundaryPreviewStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">mode:</span> {explicitPersistenceActivationConsentPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">permission boundary preview verified:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">consent preview ready:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">explicit user consent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">explicit user intent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">explicit activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">authorization reviewed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">authorization granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">permission denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">real activation allowed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">intended future capability:</span> {explicitPersistenceActivationConsentPreviewModel.previewPayload.intendedFutureCapability}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must be explicit:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must be user scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must be program scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must be marker scoped:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must be revocable:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must have denied state:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-green-400/50">future consent must preserve completed sessions:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Requirements */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-green-500/10">
+                  <div className="text-[8px] text-green-400/60 mb-1.5">Consent Requirements Preview:</div>
+                  <div className="space-y-1">
+                    {explicitPersistenceActivationConsentPreviewModel.requirements.slice(0, 12).map((r) => {
+                      const rColor = getExplicitPersistenceActivationConsentRequirementStatusColor(r.status)
+                      return (
+                        <div key={r.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            rColor.bg, rColor.text
+                          )}>
+                            {getExplicitPersistenceActivationConsentRequirementStatusLabel(r.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{r.label}</span>
+                            {r.requiredBeforeRealConsent && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*required</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {explicitPersistenceActivationConsentPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {explicitPersistenceActivationConsentPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-green-400/60">Next: </span>
+                  {explicitPersistenceActivationConsentPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-green-400/60">
+                  Consent preview only. Permission boundary preview verified, but no consent captured, no user intent captured, no activation requested, no authorization reviewed or granted, no permission granted or denied. Persistence disabled. No writer, no receipt, no API/DB/storage/schema, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -13006,7 +13272,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

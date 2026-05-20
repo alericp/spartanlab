@@ -473,6 +473,15 @@ import {
   getConsentDecisionStatePreviewBranchStatusColor,
   type ConsentDecisionStatePreviewModel,
 } from '@/lib/program/consent-decision-state-preview'
+// [Prompt 55] Consent decision review lock preview
+import {
+  resolveConsentDecisionReviewLockPreview,
+  getConsentDecisionReviewLockPreviewStatusLabel,
+  getConsentDecisionReviewLockPreviewStatusColor,
+  getConsentDecisionReviewLockItemStatusLabel,
+  getConsentDecisionReviewLockItemStatusColor,
+  type ConsentDecisionReviewLockPreviewModel,
+} from '@/lib/program/consent-decision-review-lock-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3384,6 +3393,8 @@ function AIIntelligenceFoundationMap({
   consentAuthorizationLockPreviewModel,
   // [Prompt 54] Consent decision state preview
   consentDecisionStatePreviewModel,
+  // [Prompt 55] Consent decision review lock preview
+  consentDecisionReviewLockPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3439,6 +3450,8 @@ function AIIntelligenceFoundationMap({
   consentAuthorizationLockPreviewModel?: ConsentAuthorizationLockPreviewModel | null
   // [Prompt 54] Consent decision state preview
   consentDecisionStatePreviewModel?: ConsentDecisionStatePreviewModel | null
+  // [Prompt 55] Consent decision review lock preview
+  consentDecisionReviewLockPreviewModel?: ConsentDecisionReviewLockPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4216,6 +4229,10 @@ function AIIntelligenceFoundationMap({
                         {consentDecisionStatePreviewModel?.status === 'consent_decision_state_preview_ready_persistence_disabled'
                           ? `Decision: ${consentDecisionStatePreviewModel.decisionSummary.totalBranches} branches, no decision. `
                           : 'Decision: not ready. '
+                        }
+                        {consentDecisionReviewLockPreviewModel?.status === 'consent_decision_review_locked_persistence_disabled'
+                          ? `Review: ${consentDecisionReviewLockPreviewModel.reviewLockSummary.totalItems} items locked. `
+                          : 'Review: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8598,6 +8615,14 @@ export function ProgramCoachIntelligenceHub({
       consentAuthorizationLockPreviewModel,
     })
   }, [consentAuthorizationLockPreviewModel])
+  
+  // [Prompt 55] Consent decision review lock preview model
+  // Pure read-only consent decision review lock - review is required but not performed
+  const consentDecisionReviewLockPreviewModel = useMemo<ConsentDecisionReviewLockPreviewModel>(() => {
+    return resolveConsentDecisionReviewLockPreview({
+      consentDecisionStatePreviewModel,
+    })
+  }, [consentDecisionStatePreviewModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -13427,6 +13452,304 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 55] Consent Decision Review Lock card
+                Pure read-only consent decision review lock - review is required but not performed.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {consentDecisionReviewLockPreviewModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-violet-300">
+                    Consent Decision Review Lock
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getConsentDecisionReviewLockPreviewStatusColor(consentDecisionReviewLockPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getConsentDecisionReviewLockPreviewStatusLabel(consentDecisionReviewLockPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        decision-state preview verified: {consentDecisionReviewLockPreviewModel.consentDecisionStatePreviewVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", consentDecisionReviewLockPreviewModel.consentDecisionReviewLockReady ? "bg-violet-500/10 text-violet-400/70 border-violet-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        review lock: {consentDecisionReviewLockPreviewModel.consentDecisionReviewLockReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        future permission boundary: {consentDecisionReviewLockPreviewModel.readyForFutureConsentPermissionBoundaryPreview ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                        current review state: {consentDecisionReviewLockPreviewModel.currentReviewState === 'review_not_performed' ? 'review not performed' : consentDecisionReviewLockPreviewModel.currentReviewState}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        consent decision collected: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        consent decision granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        consent decision denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                        consent undecided: yes
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        review performed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        grant review approved: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        deny review approved: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user consent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user intent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit activation requested: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization reviewed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation allowed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        completed sessions: protected
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-violet-300/90 font-medium mb-1">
+                  {consentDecisionReviewLockPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {consentDecisionReviewLockPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {consentDecisionReviewLockPreviewModel.reviewLockSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    source verified: {consentDecisionReviewLockPreviewModel.reviewLockSummary.sourceVerifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    review required: {consentDecisionReviewLockPreviewModel.reviewLockSummary.reviewRequiredNotPerformedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    grant review locked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.grantReviewLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    deny review locked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.denyReviewLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-400/70 border-yellow-500/20">
+                    undecided review locked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.undecidedReviewLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-400/70 border-red-500/20">
+                    fallthrough blocked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.fallthroughBlockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-pink-500/10 text-pink-400/70 border-pink-500/20">
+                    authorization locked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.authorizationLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-fuchsia-500/10 text-fuchsia-400/70 border-fuchsia-500/20">
+                    permission locked: {consentDecisionReviewLockPreviewModel.reviewLockSummary.permissionLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence disabled: {consentDecisionReviewLockPreviewModel.reviewLockSummary.persistenceDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                    receipt disabled: {consentDecisionReviewLockPreviewModel.reviewLockSummary.receiptDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-neutral-500/10 text-neutral-400/70 border-neutral-500/20">
+                    runtime disabled: {consentDecisionReviewLockPreviewModel.reviewLockSummary.programRuntimeMutationDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected: {consentDecisionReviewLockPreviewModel.reviewLockSummary.completedSessionsProtectedItems}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {consentDecisionReviewLockPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                    <div className="text-[8px] text-violet-400/60 mb-1.5">Review Lock Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">kind:</span> {consentDecisionReviewLockPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">source decision-state preview:</span> {consentDecisionReviewLockPreviewModel.previewPayload.sourceConsentDecisionStatePreviewStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">mode:</span> {consentDecisionReviewLockPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">current review state:</span> {consentDecisionReviewLockPreviewModel.previewPayload.currentReviewState}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">decision-state preview verified:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">review lock ready:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">consent decision collected:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">consent decision granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">consent decision denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">consent undecided:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">review performed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">grant review approved:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">deny review approved:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">explicit user consent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">explicit user intent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">explicit activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">authorization reviewed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">authorization granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">authorization denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">permission denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">real activation allowed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">future review must require explicit consent decision:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">future review must separate grant and deny review:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">future review must block undecided state:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">future review must prevent fallthrough authorization:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-violet-400/50">future review must preserve completed sessions:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Review Lock Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                  <div className="text-[8px] text-violet-400/60 mb-1.5">Review Lock Items:</div>
+                  <div className="space-y-1">
+                    {consentDecisionReviewLockPreviewModel.reviewLockItems.slice(0, 12).map((item) => {
+                      const itemColor = getConsentDecisionReviewLockItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getConsentDecisionReviewLockItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.lockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*locked</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {consentDecisionReviewLockPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {consentDecisionReviewLockPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-violet-400/60">Next: </span>
+                  {consentDecisionReviewLockPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Consent decision review lock only. No consent decision review performed, no grant review approved, no deny review approved, no authorization, no permission, no activation, no persistence, no writer, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -13844,7 +14167,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} consentAuthorizationLockPreviewModel={consentAuthorizationLockPreviewModel} consentDecisionStatePreviewModel={consentDecisionStatePreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} consentAuthorizationLockPreviewModel={consentAuthorizationLockPreviewModel} consentDecisionStatePreviewModel={consentDecisionStatePreviewModel} consentDecisionReviewLockPreviewModel={consentDecisionReviewLockPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

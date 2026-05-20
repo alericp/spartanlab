@@ -601,6 +601,15 @@ import {
   getDryRunChecklistItemStatusColor,
   type ControlledMarkerSaveDryRunCandidateModel,
 } from '@/lib/program/controlled-marker-save-dry-run-candidate'
+// [Prompt 68] Controlled Marker-Save Dry-Run Verification Gate
+import {
+  resolveControlledMarkerSaveDryRunVerificationGate,
+  getDryRunVerificationStatusLabel,
+  getDryRunVerificationStatusColor,
+  getVerificationItemStatusLabel,
+  getVerificationItemStatusColor,
+  type ControlledMarkerSaveDryRunVerificationGateModel,
+} from '@/lib/program/controlled-marker-save-dry-run-verification-gate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8897,6 +8906,20 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [futureSessionAdaptivePreviewDiffModel, localAuthorizationCautionReviewGateModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
   
+  // [Prompt 68] Controlled Marker-Save Dry-Run Verification Gate model
+  // Verifies the dry-run candidate against source models and hard safety invariants
+  // Does NOT save anything — read-only verification only
+  const controlledMarkerSaveDryRunVerificationGateModel = useMemo<ControlledMarkerSaveDryRunVerificationGateModel>(() => {
+    return resolveControlledMarkerSaveDryRunVerificationGate({
+      controlledMarkerSaveDryRunCandidateModel,
+      futureSessionAdaptivePreviewDiffModel,
+      localAuthorizationCautionReviewGateModel,
+      mutationTargetSessionResolutionPreviewModel,
+      markerSaveArtifactPreviewModel,
+      markerWriteReadinessLedgerModel,
+    })
+  }, [controlledMarkerSaveDryRunCandidateModel, futureSessionAdaptivePreviewDiffModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -16447,6 +16470,160 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-orange-400/60">
                   Dry-run candidate review only — no marker saved, no persistence, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 68] Marker-Save Dry-Run Verification Gate card
+                Verifies the dry-run candidate against source models and safety invariants
+                Does NOT save anything — read-only verification only */}
+            {controlledMarkerSaveDryRunVerificationGateModel && (
+              <div className="rounded-lg border border-lime-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-lime-400" />
+                  <span className="text-sm font-medium text-lime-300">
+                    Marker-Save Dry-Run Verification Gate
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getDryRunVerificationStatusColor(controlledMarkerSaveDryRunVerificationGateModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getDryRunVerificationStatusLabel(controlledMarkerSaveDryRunVerificationGateModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-400/70 border-lime-500/20">
+                        read-only
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no write
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Safety invariant chips */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    Program Cards unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    Start Workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    Live Workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected
+                  </span>
+                </div>
+                {/* Target info */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] text-lime-400/70">Target:</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-300/90 border-lime-500/20">
+                    {controlledMarkerSaveDryRunVerificationGateModel.targetLabel}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {controlledMarkerSaveDryRunVerificationGateModel.targetSessionCount} session(s)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {controlledMarkerSaveDryRunVerificationGateModel.previewChangeCount} change(s)
+                  </span>
+                </div>
+                {/* Candidate ID */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[8px] text-[#6A6A7A]">Candidate ID:</span>
+                  <span className="text-[8px] text-lime-300/70 font-mono">{controlledMarkerSaveDryRunVerificationGateModel.candidateId}</span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-lime-300/90 font-medium mb-1">
+                  {controlledMarkerSaveDryRunVerificationGateModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {controlledMarkerSaveDryRunVerificationGateModel.summary}
+                </p>
+                {/* Verification Checklist */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-lime-500/10">
+                  <div className="text-[8px] text-lime-400/60 mb-1.5">Verification Checklist:</div>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {controlledMarkerSaveDryRunVerificationGateModel.verificationItems.slice(0, 15).map((item) => {
+                      const itemColor = getVerificationItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0 w-14 text-center",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getVerificationItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            <span className="text-[7px] text-[#6A6A7A] ml-1">— {item.detail}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Source Models */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[8px] text-[#6A6A7A]">Sources:</span>
+                  {controlledMarkerSaveDryRunVerificationGateModel.sourceModelsUsed.map((src) => (
+                    <span key={src} className="text-[7px] px-1 py-0.5 rounded bg-[#1A1A2E]/60 text-[#7A7A8A] border border-[#2A2A35]/40">
+                      {src}
+                    </span>
+                  ))}
+                </div>
+                {/* Mismatches if any */}
+                {controlledMarkerSaveDryRunVerificationGateModel.mismatches.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-rose-400/60 mb-0.5">Source Mismatches:</div>
+                    {controlledMarkerSaveDryRunVerificationGateModel.mismatches.slice(0, 4).map((m, i) => (
+                      <div key={i} className="text-[9px] text-rose-300/70 mb-0.5 pl-2">
+                        - {m}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Blockers if any */}
+                {controlledMarkerSaveDryRunVerificationGateModel.blockers.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blockers:</div>
+                    {controlledMarkerSaveDryRunVerificationGateModel.blockers.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Hard Safety Invariants summary */}
+                <div className="mb-1.5 p-1.5 rounded bg-slate-500/5 border border-slate-500/20">
+                  <div className="text-[8px] text-slate-400/60 mb-0.5">Hard Safety Invariants:</div>
+                  <div className="text-[7px] text-slate-400/70 space-y-0.5">
+                    <div>dryRunOnly=true, localOnly=true, previewOnly=true</div>
+                    <div>realMarkerWriteEnabled=false, realWriterOpened=false</div>
+                    <div>persistenceEnabled=false, receiptWritten=false</div>
+                    <div>programCardsChanged=false, startWorkoutChanged=false, liveWorkoutChanged=false</div>
+                    <div>completedSessionsProtected=true</div>
+                  </div>
+                </div>
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-lime-500/5 border border-lime-500/20">
+                  <div className="text-[9px] text-lime-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-lime-300/90 mt-0.5">
+                    {controlledMarkerSaveDryRunVerificationGateModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-lime-400/60">
+                  {controlledMarkerSaveDryRunVerificationGateModel.verified
+                    ? 'Dry-run verified. No marker saved. No persistence. Program Cards, Start Workout, and Live Workout remain unchanged.'
+                    : 'Verification incomplete. No marker saved. No persistence. Program Cards, Start Workout, and Live Workout remain unchanged.'}
                 </p>
               </div>
             )}

@@ -509,6 +509,15 @@ import {
   getPersistenceWritePreflightItemStatusColor,
   type PersistenceWritePreflightPreviewModel,
 } from '@/lib/program/persistence-write-preflight-preview'
+// [Prompt 59] Persistence writer activation review preview
+import {
+  resolvePersistenceWriterActivationReviewPreview,
+  getPersistenceWriterActivationReviewPreviewStatusLabel,
+  getPersistenceWriterActivationReviewPreviewStatusColor,
+  getPersistenceWriterActivationReviewItemStatusLabel,
+  getPersistenceWriterActivationReviewItemStatusColor,
+  type PersistenceWriterActivationReviewPreviewModel,
+} from '@/lib/program/persistence-writer-activation-review-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8699,6 +8708,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistencePermissionReviewPreviewModel])
   
+  // [Prompt 59] Persistence writer activation review preview model
+  // Pure read-only writer activation review - activation reviewed but not allowed
+  const persistenceWriterActivationReviewPreviewModel = useMemo<PersistenceWriterActivationReviewPreviewModel>(() => {
+    return resolvePersistenceWriterActivationReviewPreview({
+      persistenceWritePreflightPreviewModel,
+    })
+  }, [persistenceWritePreflightPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -14440,6 +14457,173 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-teal-400/60">
                   Persistence write preflight preview only. Permission review is verified, but persistence permission is not granted and write preflight remains blocked. No writer, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 59] Persistence Writer Activation Review Preview card
+                Pure read-only activation review preview - activation reviewed but not allowed.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {persistenceWriterActivationReviewPreviewModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-violet-300">
+                    Persistence Writer Activation Review Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getPersistenceWriterActivationReviewPreviewStatusColor(persistenceWriterActivationReviewPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getPersistenceWriterActivationReviewPreviewStatusLabel(persistenceWriterActivationReviewPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                        activation review
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        writer disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no write
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no receipt
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                        read-only
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Visible fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    preflight verified: {persistenceWriterActivationReviewPreviewModel.persistenceWritePreflightVerified ? 'yes' : 'no'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistenceWriterActivationReviewPreviewModel.writerActivationReviewed ? "bg-violet-500/10 text-violet-400/70 border-violet-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    writer activation reviewed: {persistenceWriterActivationReviewPreviewModel.writerActivationReviewed ? 'yes' : 'no'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    writer activation allowed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    writer factory enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write attempted: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt written: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    API/DB/storage touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    schema touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    future session mutation enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-violet-300/90 font-medium mb-1">
+                  {persistenceWriterActivationReviewPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {persistenceWriterActivationReviewPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {persistenceWriterActivationReviewPreviewModel.writerActivationReviewSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    reviewed: {persistenceWriterActivationReviewPreviewModel.writerActivationReviewSummary.writerActivationReviewedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    not allowed: {persistenceWriterActivationReviewPreviewModel.writerActivationReviewSummary.writerActivationNotAllowedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected: {persistenceWriterActivationReviewPreviewModel.writerActivationReviewSummary.completedSessionsProtectedItems}
+                  </span>
+                </div>
+                {/* Writer Activation Review Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                  <div className="text-[8px] text-violet-400/60 mb-1.5">Writer Activation Review Items:</div>
+                  <div className="space-y-1">
+                    {persistenceWriterActivationReviewPreviewModel.writerActivationReviewItems.slice(0, 14).map((item) => {
+                      const itemColor = getPersistenceWriterActivationReviewItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getPersistenceWriterActivationReviewItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.reviewedNow && (
+                              <span className="text-[7px] text-violet-400/50 ml-1">*reviewed</span>
+                            )}
+                            {item.blockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*blocked</span>
+                            )}
+                            {item.disabledNow && (
+                              <span className="text-[7px] text-slate-400/50 ml-1">*disabled</span>
+                            )}
+                            {item.protectedNow && (
+                              <span className="text-[7px] text-emerald-400/50 ml-1">*protected</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {persistenceWriterActivationReviewPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {persistenceWriterActivationReviewPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-violet-400/60">Next: </span>
+                  {persistenceWriterActivationReviewPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Writer activation review preview only. Preflight review does not grant activation. No writer, no persistence, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
                 </p>
               </div>
             )}

@@ -572,6 +572,15 @@ import {
   getWriterOpenPreviewBoundaryItemStatusColor,
   type WriterOpenPreviewBoundaryModel,
 } from '@/lib/program/writer-open-preview-boundary'
+// [Prompt 66] Local authorization + caution review gate
+import {
+  resolveLocalAuthorizationCautionReviewGate,
+  getLocalAuthCautionReviewGateStatusLabel,
+  getLocalAuthCautionReviewGateStatusColor,
+  getLocalAuthCautionReviewGateItemStatusLabel,
+  getLocalAuthCautionReviewGateItemStatusColor,
+  type LocalAuthorizationCautionReviewGateModel,
+} from '@/lib/program/local-authorization-caution-review-gate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8530,9 +8539,14 @@ export function ProgramCoachIntelligenceHub({
   }, [boundedMutationApplyEligibilityGateModel, controlledFutureSessionMutationWriterDryRunModel, userConfirmationMarkerPermissionPreviewGateModel, preMutationLockBundleClosureModel, mutationCautionClearanceGateModel, mutationTargetSessionResolutionPreviewModel])
   
   // [Prompt 20] Local-only marker-save authorization preview state
-  // This state is ephemeral and resets on refresh — it does NOT persist or save anything
+  // This state is ephemeral and resets on refresh ��� it does NOT persist or save anything
   // Must be declared before markerSaveAuthorizationPreflightBoundaryModel which depends on it
   const [markerSaveAuthorizationPreviewAccepted, setMarkerSaveAuthorizationPreviewAccepted] = useState(false)
+  
+  // [Prompt 66] Local-only caution review accepted state
+  // This is purely local UI state - resets on refresh, no persistence
+  // Local preview acknowledgement only — does not write, persist, or mutate the program
+  const [localCautionReviewAccepted, setLocalCautionReviewAccepted] = useState(false)
   
   // [P38] Local-only saved marker artifact state
   // This is purely local UI state - resets on refresh, no persistence
@@ -8824,6 +8838,19 @@ export function ProgramCoachIntelligenceHub({
       authorizationMissingOverride: !markerSaveAuthorizationPreviewAccepted,
     })
   }, [mutationUnlockRoadmapDecisionGateModel, markerWriteReadinessLedgerModel, mutationCautionClearanceGateModel, markerSaveAuthorizationPreviewAccepted])
+  
+  // [Prompt 66] Local Authorization + Caution Review Gate model
+  // Local-only review gate that answers: has the user locally reviewed caution/authorization
+  // enough to proceed to marker dry-run preview (while keeping real persistence disabled)?
+  const localAuthorizationCautionReviewGateModel = useMemo<LocalAuthorizationCautionReviewGateModel>(() => {
+    return resolveLocalAuthorizationCautionReviewGate({
+      writerOpenPreviewBoundaryModel,
+      markerWriteReadinessLedgerModel,
+      cautionPatternActive: (mutationCautionClearanceGateModel?.activeCautionCount ?? 0) > 0,
+      localCautionReviewAccepted,
+      localAuthorizationAccepted: markerSaveAuthorizationPreviewAccepted,
+    })
+  }, [writerOpenPreviewBoundaryModel, markerWriteReadinessLedgerModel, mutationCautionClearanceGateModel, localCautionReviewAccepted, markerSaveAuthorizationPreviewAccepted])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -15860,6 +15887,186 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-cyan-400/60">
                   Preview boundary is available — this is forward movement. Real writer remains closed. Real persistence remains disabled until explicit enablement. No Program Cards, Start Workout, or Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 66] Local Authorization + Caution Review Gate card
+                LOCAL-ONLY review gate - answers if user has reviewed caution/authorization
+                enough to proceed to marker dry-run preview (not real writes) */}
+            {localAuthorizationCautionReviewGateModel && (
+              <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-violet-300">
+                    Local Authorization + Caution Review Gate
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getLocalAuthCautionReviewGateStatusColor(localAuthorizationCautionReviewGateModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getLocalAuthCautionReviewGateStatusLabel(localAuthorizationCautionReviewGateModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                        local review gate
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Key gate fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.writerOpenPreviewCandidate ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    writer-open preview: {localAuthorizationCautionReviewGateModel.writerOpenPreviewCandidate ? 'yes' : 'no'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.cautionPatternActive ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20")}>
+                    caution pattern: {localAuthorizationCautionReviewGateModel.cautionPatternActive ? 'active' : 'clear'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.localCautionReviewAccepted ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : (localAuthorizationCautionReviewGateModel.cautionReviewRequired ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20"))}>
+                    caution review: {localAuthorizationCautionReviewGateModel.localCautionReviewAccepted ? 'accepted' : (localAuthorizationCautionReviewGateModel.cautionReviewRequired ? 'required' : 'n/a')}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.localAuthorizationAccepted ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : "bg-amber-500/10 text-amber-400/70 border-amber-500/20")}>
+                    local authorization: {localAuthorizationCautionReviewGateModel.localAuthorizationAccepted ? 'accepted' : 'missing'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.markerReadinessBlocked ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20")}>
+                    marker readiness: {localAuthorizationCautionReviewGateModel.markerReadinessBlocked ? 'blocked' : 'ready'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", localAuthorizationCautionReviewGateModel.localDryRunGateReady ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : "bg-amber-500/10 text-amber-400/70 border-amber-500/20")}>
+                    dry-run gate: {localAuthorizationCautionReviewGateModel.localDryRunGateReady ? 'ready' : 'blocked'}
+                  </span>
+                </div>
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    real write: disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence: disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-violet-300/90 font-medium mb-1">
+                  {localAuthorizationCautionReviewGateModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {localAuthorizationCautionReviewGateModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {localAuthorizationCautionReviewGateModel.reviewSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    ready: {localAuthorizationCautionReviewGateModel.reviewSummary.readyItems}
+                  </span>
+                  {localAuthorizationCautionReviewGateModel.reviewSummary.reviewRequiredItems > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      review required: {localAuthorizationCautionReviewGateModel.reviewSummary.reviewRequiredItems}
+                    </span>
+                  )}
+                  {localAuthorizationCautionReviewGateModel.reviewSummary.blockedItems > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                      blocked: {localAuthorizationCautionReviewGateModel.reviewSummary.blockedItems}
+                    </span>
+                  )}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    local only: {localAuthorizationCautionReviewGateModel.reviewSummary.localOnlyItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    disabled: {localAuthorizationCautionReviewGateModel.reviewSummary.disabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    protected: {localAuthorizationCautionReviewGateModel.reviewSummary.protectedItems}
+                  </span>
+                </div>
+                {/* Review Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-violet-500/10">
+                  <div className="text-[8px] text-violet-400/60 mb-1.5">Review Items:</div>
+                  <div className="space-y-1">
+                    {localAuthorizationCautionReviewGateModel.reviewItems.slice(0, 11).map((item) => {
+                      const itemColor = getLocalAuthCautionReviewGateItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getLocalAuthCautionReviewGateItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.blocksDryRun && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*blocks dry-run</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {localAuthorizationCautionReviewGateModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blockers:</div>
+                    {localAuthorizationCautionReviewGateModel.blockedReasons.slice(0, 5).map((r, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {r}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Local caution review acknowledgement button (if caution is active and not yet reviewed) */}
+                {localAuthorizationCautionReviewGateModel.cautionPatternActive && !localCautionReviewAccepted && (
+                  <div className="mb-2 p-2 rounded bg-amber-500/5 border border-amber-500/20">
+                    <div className="text-[9px] text-amber-300/80 mb-1.5">
+                      Caution pattern is active. Local preview acknowledgement required:
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLocalCautionReviewAccepted(true)}
+                      className="text-[9px] px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
+                    >
+                      I reviewed the caution pattern for preview
+                    </button>
+                    <div className="text-[8px] text-amber-400/50 mt-1">
+                      Local preview acknowledgement only. This does not save or change the program.
+                    </div>
+                  </div>
+                )}
+                {/* Show local caution review accepted indicator */}
+                {localAuthorizationCautionReviewGateModel.cautionPatternActive && localCautionReviewAccepted && (
+                  <div className="mb-2 p-2 rounded bg-emerald-500/5 border border-emerald-500/20">
+                    <div className="text-[9px] text-emerald-300/80">
+                      Caution pattern reviewed locally for preview. No changes saved.
+                    </div>
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-violet-500/5 border border-violet-500/20">
+                  <div className="text-[9px] text-violet-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-violet-300/90 mt-0.5">
+                    {localAuthorizationCautionReviewGateModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-violet-400/60">
+                  Local review gate only — does not write, persist, or mutate the program. Real marker write, persistence, and workout mutation remain disabled.
                 </p>
               </div>
             )}

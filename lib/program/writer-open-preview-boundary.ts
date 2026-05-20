@@ -198,12 +198,14 @@ export function resolveWriterOpenPreviewBoundary(
   // Default to true if no override provided (safe assumption)
   const authorizationMissing = authorizationMissingOverride ?? true
 
-  // Marker readiness blocked: check if ledger is not in ready state
+  // Marker readiness blocked: check if ledger status is not ready or has blockers
+  // REPAIRED in Prompt 66: now uses ledger status/blockedCount instead of intentionally-false mutation flags
+  // Note: "ready" statuses are 'ready_for_future_writer_no_write' or 'local_marker_saved_no_persistence'
   const markerReadinessBlocked = markerWriteReadinessLedgerModel
-    ? markerWriteReadinessLedgerModel.canPersistMarker !== false || 
-      markerWriteReadinessLedgerModel.canMutateProgramCards !== false ||
-      markerWriteReadinessLedgerModel.canMutateStartWorkout !== false ||
-      markerWriteReadinessLedgerModel.canMutateLiveWorkout !== false
+    ? (markerWriteReadinessLedgerModel.status !== 'ready_for_future_writer_no_write' &&
+       markerWriteReadinessLedgerModel.status !== 'local_marker_saved_no_persistence') ||
+      markerWriteReadinessLedgerModel.blockedCount > 0 ||
+      markerWriteReadinessLedgerModel.blockerSummary.length > 0
     : true // If no ledger, assume blocked
 
   // Build blocked reasons

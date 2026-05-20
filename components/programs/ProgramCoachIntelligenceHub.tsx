@@ -8615,11 +8615,12 @@ export function ProgramCoachIntelligenceHub({
     sourceFingerprint?: string
   }
   const [savedMarkerArtifact, setSavedMarkerArtifact] = useState<SavedMarkerArtifact | null>(null)
-  // [Prompt 69.1] Raw count for older downstream models declared before the receipt gate
+  // [Prompt 69.1] Raw count for local receipt gate input only
   const rawLocalReceiptCount = savedMarkerArtifact ? 1 : 0
-  // [Prompt 69.1] markerSavedCount will be updated after local receipt gate validates
-  // For now, use raw count for backward compatibility; downstream valid count comes from gate
-  const markerSavedCount = rawLocalReceiptCount
+  // [Prompt 69.2] Pre-verification legacy marker saved count must be 0
+  // These pre-gate models run BEFORE Prompt 69.1 source fingerprint validation
+  // They must NOT trust raw local artifact count as valid saved proof
+  const preVerificationLegacyMarkerSavedCount = 0
   
   // [Prompt 20] Determine if authorization preview is blocked
   // [P30] Tightened guard: blocked when marker-only boundary is not preview-ready
@@ -8648,28 +8649,31 @@ export function ProgramCoachIntelligenceHub({
   
   // [MASTER-8C.43] Controlled Marker-Save Action Boundary
   // [Prompt 20] Now wired to local-only authorization preview state
+  // [Prompt 69.2] Uses preVerificationLegacyMarkerSavedCount (always 0) since this runs before source validation
   const controlledMarkerSaveActionBoundaryModel = useMemo<ControlledMarkerSaveActionBoundaryModel>(() => {
     return resolveControlledMarkerSaveActionBoundary({
       markerSaveAuthorizationPreflightBoundaryModel,
       explicitUserAuthorization: markerSaveAuthorizationPreviewAccepted, // local-only preview, not persisted
-      markerSavedCount, // [P38] Now dynamic based on savedMarkerArtifact
+      markerSavedCount: preVerificationLegacyMarkerSavedCount, // [Prompt 69.2] Always 0 before source validation
     })
-  }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
+  }, [markerSaveAuthorizationPreflightBoundaryModel, markerSaveAuthorizationPreviewAccepted, preVerificationLegacyMarkerSavedCount])
   
   // [Prompt 21] Marker-save artifact preview model
   // Pure read-only preview of what marker artifact would be saved later
+  // [Prompt 69.2] Uses preVerificationLegacyMarkerSavedCount (always 0) since this runs before source validation
   const markerSaveArtifactPreviewModel = useMemo<MarkerSaveArtifactPreviewModel>(() => {
     return resolveMarkerSaveArtifactPreview({
       markerOnlyConfirmationBoundaryModel,
       markerSaveAuthorizationPreflightBoundaryModel,
       controlledMarkerSaveActionBoundaryModel,
       authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
-      markerSavedCount, // [P39] Pass local marker saved count
+      markerSavedCount: preVerificationLegacyMarkerSavedCount, // [Prompt 69.2] Always 0 before source validation
     })
-  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveAuthorizationPreviewAccepted, preVerificationLegacyMarkerSavedCount])
   
   // [Prompt 22] Marker write readiness ledger model
   // Pure read-only ledger summarizing all pre-writer conditions
+  // [Prompt 69.2] Uses preVerificationLegacyMarkerSavedCount (always 0) since this runs before source validation
   const markerWriteReadinessLedgerModel = useMemo<MarkerWriteReadinessLedgerModel>(() => {
     return resolveMarkerWriteReadinessLedger({
       markerOnlyConfirmationBoundaryModel,
@@ -8677,9 +8681,9 @@ export function ProgramCoachIntelligenceHub({
       controlledMarkerSaveActionBoundaryModel,
       markerSaveArtifactPreviewModel,
       authorizationPreviewAccepted: markerSaveAuthorizationPreviewAccepted,
-      markerSavedCount, // [P39] Pass local marker saved count
+      markerSavedCount: preVerificationLegacyMarkerSavedCount, // [Prompt 69.2] Always 0 before source validation
     })
-  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted, markerSavedCount])
+  }, [markerOnlyConfirmationBoundaryModel, markerSaveAuthorizationPreflightBoundaryModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerSaveAuthorizationPreviewAccepted, preVerificationLegacyMarkerSavedCount])
   
   // [Prompt 41] Durable marker receipt readiness model
   // Pure read-only evaluation of whether local marker proof is eligible for future durable receipt
@@ -8958,7 +8962,12 @@ export function ProgramCoachIntelligenceHub({
   }, [controlledMarkerSaveDryRunVerificationGateModel, rawLocalReceiptCount, savedMarkerArtifact])
   
   // [Prompt 69.1] Valid marker count for downstream models — only valid if gate says so
-  const validMarkerSavedCountForDownstream = controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? 1 : 0
+  // [Prompt 69.2] These are the ONLY valid count sources after source fingerprint validation
+  const validatedMarkerSavedCount = controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptPresent ? 1 : 0
+  const validLocalReceiptCount = controlledMarkerSaveLocalReceiptGateModel.validLocalReceiptCount
+  const staleLocalReceiptCount = controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptCount
+  // [Prompt 69.2] Downstream proof count: only valid receipts count as saved proof
+  const downstreamSavedProofCount = validatedMarkerSavedCount
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -16909,6 +16918,25 @@ export function ProgramCoachIntelligenceHub({
                         {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? 'true' : 'false'}
                       </span>
                     </div>
+                    {/* [Prompt 69.2] Count diagnostics */}
+                    <div className="mt-1.5 pt-1.5 border-t border-zinc-700/30">
+                      <div className="text-[7px] text-zinc-500 mb-1">Count Diagnostics:</div>
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Raw local artifact: <span className="text-zinc-400/70 font-mono">{rawLocalReceiptCount}</span>
+                      </div>
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Valid receipt count: <span className={validLocalReceiptCount > 0 ? "text-lime-400/70 font-mono" : "text-zinc-400/70 font-mono"}>{validLocalReceiptCount}</span>
+                      </div>
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Stale receipt count: <span className={staleLocalReceiptCount > 0 ? "text-orange-400/70 font-mono" : "text-zinc-400/70 font-mono"}>{staleLocalReceiptCount}</span>
+                      </div>
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Downstream saved proof: <span className={downstreamSavedProofCount > 0 ? "text-lime-400/70 font-mono" : "text-zinc-400/70 font-mono"}>{downstreamSavedProofCount}</span>
+                      </div>
+                      <div className="text-[8px] text-[#8A8A9A]">
+                        Pre-verification legacy: <span className="text-zinc-400/70 font-mono">{preVerificationLegacyMarkerSavedCount}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {/* [Prompt 69.1] Stale receipt warning */}
@@ -16920,6 +16948,12 @@ export function ProgramCoachIntelligenceHub({
                     </p>
                   </div>
                 )}
+                {/* [Prompt 69.2] Source validation notice */}
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500">
+                    Local receipt validity is controlled by the Prompt 69 source fingerprint gate. Older ledgers remain no-write/read-only until the receipt source is valid.
+                  </p>
+                </div>
                 {/* Blockers */}
                 {controlledMarkerSaveLocalReceiptGateModel.blockers.length > 0 && (
                   <div className="mb-2 p-2 rounded bg-red-500/5 border border-red-500/20">

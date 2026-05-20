@@ -68,6 +68,7 @@ import {
   Check,
   Settings2,
   Minus,
+  Lock,
 } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import type { SelectedSkillRepresentationDisplay } from '@/lib/program/selected-skill-representation-guidance'
@@ -454,6 +455,15 @@ import {
   getExplicitPersistenceActivationConsentRequirementStatusColor,
   type ExplicitPersistenceActivationConsentPreviewModel,
 } from '@/lib/program/explicit-persistence-activation-consent-preview'
+// [Prompt 53] Consent authorization lock preview
+import {
+  resolveConsentAuthorizationLockPreview,
+  getConsentAuthorizationLockPreviewStatusLabel,
+  getConsentAuthorizationLockPreviewStatusColor,
+  getConsentAuthorizationLockItemStatusLabel,
+  getConsentAuthorizationLockItemStatusColor,
+  type ConsentAuthorizationLockPreviewModel,
+} from '@/lib/program/consent-authorization-lock-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3361,6 +3371,8 @@ function AIIntelligenceFoundationMap({
   controlledActivationPermissionBoundaryPreviewModel,
   // [Prompt 52] Explicit persistence activation consent preview
   explicitPersistenceActivationConsentPreviewModel,
+  // [Prompt 53] Consent authorization lock preview
+  consentAuthorizationLockPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3412,6 +3424,8 @@ function AIIntelligenceFoundationMap({
   controlledActivationPermissionBoundaryPreviewModel?: ControlledActivationPermissionBoundaryPreviewModel | null
   // [Prompt 52] Explicit persistence activation consent preview
   explicitPersistenceActivationConsentPreviewModel?: ExplicitPersistenceActivationConsentPreviewModel | null
+  // [Prompt 53] Consent authorization lock preview
+  consentAuthorizationLockPreviewModel?: ConsentAuthorizationLockPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4181,6 +4195,10 @@ function AIIntelligenceFoundationMap({
                         {explicitPersistenceActivationConsentPreviewModel?.status === 'consent_preview_ready_persistence_disabled'
                           ? `Consent: ${explicitPersistenceActivationConsentPreviewModel.previewSummary.sourcePermissionBoundaryVerifiedRequirements}/${explicitPersistenceActivationConsentPreviewModel.previewSummary.totalRequirements} verified. `
                           : 'Consent: not ready. '
+                        }
+                        {consentAuthorizationLockPreviewModel?.status === 'consent_authorization_locked_persistence_disabled'
+                          ? `Auth lock: ${consentAuthorizationLockPreviewModel.lockSummary.authorizationLockedItems}/${consentAuthorizationLockPreviewModel.lockSummary.totalLockItems} locked. `
+                          : 'Auth lock: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8548,6 +8566,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [controlledActivationPermissionBoundaryPreviewModel])
   
+  // [Prompt 53] Consent authorization lock preview model
+  // Pure read-only consent authorization lock - consent preview verified but authorization locked
+  const consentAuthorizationLockPreviewModel = useMemo<ConsentAuthorizationLockPreviewModel>(() => {
+    return resolveConsentAuthorizationLockPreview({
+      explicitPersistenceActivationConsentPreviewModel,
+    })
+  }, [explicitPersistenceActivationConsentPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -12855,6 +12881,256 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 53] Consent Authorization Lock Preview card
+                Pure read-only consent authorization lock - consent preview verified but authorization locked.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {consentAuthorizationLockPreviewModel && (
+              <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-teal-400" />
+                  <span className="text-sm font-medium text-teal-300">
+                    Consent Authorization Lock Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getConsentAuthorizationLockPreviewStatusColor(consentAuthorizationLockPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getConsentAuthorizationLockPreviewStatusLabel(consentAuthorizationLockPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        consent preview verified: {consentAuthorizationLockPreviewModel.consentPreviewVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", consentAuthorizationLockPreviewModel.consentAuthorizationLockReady ? "bg-teal-500/10 text-teal-400/70 border-teal-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        consent auth lock: {consentAuthorizationLockPreviewModel.consentAuthorizationLockReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        future consent decision: {consentAuthorizationLockPreviewModel.readyForFutureConsentDecisionStatePreview ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user consent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit user intent captured: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        explicit activation requested: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization reviewed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        permission denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        real activation allowed: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API/DB/storage: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema: locked
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        workout mutation: disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        completed sessions: protected
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-teal-300/90 font-medium mb-1">
+                  {consentAuthorizationLockPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {consentAuthorizationLockPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {consentAuthorizationLockPreviewModel.lockSummary.totalLockItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    consent verified: {consentAuthorizationLockPreviewModel.lockSummary.sourceConsentPreviewVerifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    auth locked: {consentAuthorizationLockPreviewModel.lockSummary.authorizationLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    consent missing: {consentAuthorizationLockPreviewModel.lockSummary.missingConsentCaptureItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    review missing: {consentAuthorizationLockPreviewModel.lockSummary.missingAuthorizationReviewItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    grant locked: {consentAuthorizationLockPreviewModel.lockSummary.grantPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    deny locked: {consentAuthorizationLockPreviewModel.lockSummary.denyPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                    permission locked: {consentAuthorizationLockPreviewModel.lockSummary.permissionPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                    activation locked: {consentAuthorizationLockPreviewModel.lockSummary.activationPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence locked: {consentAuthorizationLockPreviewModel.lockSummary.persistencePathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                    receipt locked: {consentAuthorizationLockPreviewModel.lockSummary.receiptPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-neutral-500/10 text-neutral-400/70 border-neutral-500/20">
+                    runtime locked: {consentAuthorizationLockPreviewModel.lockSummary.programRuntimeMutationLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected: {consentAuthorizationLockPreviewModel.lockSummary.completedSessionsProtectedItems}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {consentAuthorizationLockPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                    <div className="text-[8px] text-teal-400/60 mb-1.5">Lock Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">kind:</span> {consentAuthorizationLockPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">source consent preview:</span> {consentAuthorizationLockPreviewModel.previewPayload.sourceConsentPreviewStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">mode:</span> {consentAuthorizationLockPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">consent preview verified:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">consent authorization lock ready:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">explicit user consent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">explicit user intent captured:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">explicit activation requested:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">authorization reviewed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">authorization granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">authorization denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">permission denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">real activation allowed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">write enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future auth must require real consent:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future auth must have grant path:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future auth must have deny path:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future auth must prevent fallthrough:</span> yes
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-teal-400/50">future auth must preserve completed:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Lock Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                  <div className="text-[8px] text-teal-400/60 mb-1.5">Authorization Lock Items:</div>
+                  <div className="space-y-1">
+                    {consentAuthorizationLockPreviewModel.lockItems.slice(0, 12).map((item) => {
+                      const itemColor = getConsentAuthorizationLockItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getConsentAuthorizationLockItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.lockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*locked</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {consentAuthorizationLockPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {consentAuthorizationLockPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-teal-400/60">Next: </span>
+                  {consentAuthorizationLockPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-teal-400/60">
+                  Consent authorization lock only. Consent preview verified, but no consent captured, no user intent captured, no activation requested, no authorization reviewed/granted/denied, no permission granted/denied. Persistence disabled. No writer, no receipt, no API/DB/storage/schema, no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -13272,7 +13548,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} consentAuthorizationLockPreviewModel={consentAuthorizationLockPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

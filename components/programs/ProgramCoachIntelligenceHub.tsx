@@ -554,6 +554,15 @@ import {
   getPersistenceWriterBoundaryContinuityItemStatusColor,
   type PersistenceWriterBoundaryContinuityPreviewModel,
 } from '@/lib/program/persistence-writer-boundary-continuity-preview'
+// [Prompt 64] Mutation unlock roadmap decision gate
+import {
+  resolveMutationUnlockRoadmapDecisionGate,
+  getMutationUnlockDecisionStatusLabel,
+  getMutationUnlockDecisionStatusColor,
+  getMutationUnlockDecisionItemStatusLabel,
+  getMutationUnlockDecisionItemStatusColor,
+  type MutationUnlockRoadmapDecisionGateModel,
+} from '@/lib/program/mutation-unlock-roadmap-decision-gate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8784,6 +8793,15 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistenceWriterBoundaryStepPreviewModel])
   
+  // [Prompt 64] Mutation unlock roadmap decision gate model
+  // DECISION GATE that stops redundant closed-boundary cards and answers:
+  // Are we ready for writer-open preview next, or what exact blocker remains?
+  const mutationUnlockRoadmapDecisionGateModel = useMemo<MutationUnlockRoadmapDecisionGateModel>(() => {
+    return resolveMutationUnlockRoadmapDecisionGate({
+      persistenceWriterBoundaryContinuityPreviewModel,
+    })
+  }, [persistenceWriterBoundaryContinuityPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -15512,6 +15530,155 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-sky-400/60">
                   Persistence writer boundary continuity preview only. Boundary step review does not open the real writer. No persistence, no write, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 64] Mutation Unlock Roadmap Decision Gate card
+                DECISION GATE - NOT another redundant closed-boundary card.
+                Answers: Are we ready for writer-open preview next? */}
+            {mutationUnlockRoadmapDecisionGateModel && (
+              <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-amber-400" />
+                  <span className="text-sm font-medium text-amber-300">
+                    Mutation Unlock Roadmap Decision Gate
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getMutationUnlockDecisionStatusColor(mutationUnlockRoadmapDecisionGateModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getMutationUnlockDecisionStatusLabel(mutationUnlockRoadmapDecisionGateModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                        decision gate
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        not a redundant card
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Key decision fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", mutationUnlockRoadmapDecisionGateModel.redundantClosedBoundaryCardsShouldStop ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    redundant closed-boundary cards should stop: {mutationUnlockRoadmapDecisionGateModel.redundantClosedBoundaryCardsShouldStop ? 'yes' : 'no'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", mutationUnlockRoadmapDecisionGateModel.readyForWriterOpenPreviewNext ? "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20" : "bg-rose-500/10 text-rose-400/70 border-rose-500/20")}>
+                    ready for writer-open preview next: {mutationUnlockRoadmapDecisionGateModel.readyForWriterOpenPreviewNext ? 'yes' : 'no'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    known remaining read-only steps: {mutationUnlockRoadmapDecisionGateModel.knownRemainingReadOnlySteps ?? 'not found in repo'}
+                  </span>
+                </div>
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    writer opened: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write attempted: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt written: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    future session mutation enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-amber-300/90 font-medium mb-1">
+                  {mutationUnlockRoadmapDecisionGateModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {mutationUnlockRoadmapDecisionGateModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    verified: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.verifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    ready: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.readyItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    disabled: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.disabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    protected: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.protectedItems}
+                  </span>
+                  {mutationUnlockRoadmapDecisionGateModel.decisionSummary.blockedItems > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                      blocked: {mutationUnlockRoadmapDecisionGateModel.decisionSummary.blockedItems}
+                    </span>
+                  )}
+                </div>
+                {/* Decision Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-amber-500/10">
+                  <div className="text-[8px] text-amber-400/60 mb-1.5">Decision Items:</div>
+                  <div className="space-y-1">
+                    {mutationUnlockRoadmapDecisionGateModel.decisionItems.slice(0, 11).map((item) => {
+                      const itemColor = getMutationUnlockDecisionItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getMutationUnlockDecisionItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {mutationUnlockRoadmapDecisionGateModel.blockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-rose-400/60 mb-0.5">Blockers:</div>
+                    {mutationUnlockRoadmapDecisionGateModel.blockedReasons.slice(0, 5).map((b, i) => (
+                      <div key={i} className="text-[9px] text-rose-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-emerald-500/5 border border-emerald-500/20">
+                  <div className="text-[9px] text-emerald-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-emerald-300/90 mt-0.5">
+                    {mutationUnlockRoadmapDecisionGateModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-amber-400/60">
+                  This is a DECISION GATE, not another redundant closed-boundary card. No Program Cards changed. No Start Workout changed. No Live Workout changed. This is not real mutation yet.
                 </p>
               </div>
             )}

@@ -253,8 +253,8 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
     currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, read-only consent decision state preview, read-only consent decision review lock preview, read-only consent permission boundary preview, read-only persistence permission review preview, read-only persistence write preflight preview, read-only persistence writer activation review preview, read-only persistence boundary review preview, read-only persistence writer gate preview, read-only persistence writer boundary step preview, read-only persistence writer boundary continuity preview, mutation unlock roadmap decision gate, writer-open preview boundary, local authorization + caution review gate, future session adaptive preview diff, controlled marker-save dry-run candidate, and marker-save dry-run verification gate',
-    nextSafeAction: 'Prompt 69 / MASTER-8C.74 / AB20.4.67 — controlled marker-save receipt / local persistence gate; Program Cards still protected',
-    riskIfIgnored: 'Verification gate skipped, advancing to receipt/persistence without verifying dry-run candidate consistency',
+    nextSafeAction: 'Prompt 70 / next official roadmap step — pending roadmap source; Program Cards, Start Workout, Live Workout still protected',
+    riskIfIgnored: 'Local receipt gate skipped, advancing to persistence without verifying local receipt proof',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -306,6 +306,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/future-session-adaptive-preview-diff.ts',
       'lib/program/controlled-marker-save-dry-run-candidate.ts',
       'lib/program/controlled-marker-save-dry-run-verification-gate.ts',
+      'lib/program/controlled-marker-save-local-receipt-gate.ts', // [Prompt 69]
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

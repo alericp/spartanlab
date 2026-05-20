@@ -392,7 +392,7 @@ export function resolveFutureSessionAdaptivePreviewDiff(
     headline,
     summary,
     targetLabel,
-    targetSessionCount: targetSessionCount > 0 ? targetSessionCount : 1, // At least 1 if we got here
+    targetSessionCount, // [Prompt 68.2] No fake fallback to 1 — use true source count only (0 if unavailable)
     writerOpenPreviewCandidate,
     localReviewGateReady,
     cautionPatternActive,

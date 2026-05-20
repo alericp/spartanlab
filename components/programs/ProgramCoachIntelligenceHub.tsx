@@ -16545,11 +16545,61 @@ export function ProgramCoachIntelligenceHub({
                 <p className="text-[9px] text-[#8A8A9A] mb-2">
                   {controlledMarkerSaveDryRunVerificationGateModel.summary}
                 </p>
+                {/* [Prompt 68.2] Target Session Source Proof — pinned above verification checklist */}
+                {(() => {
+                  const targetSourceItem = controlledMarkerSaveDryRunVerificationGateModel.verificationItems.find(
+                    (item) => item.key === 'target_session_count_source'
+                  )
+                  const targetMatchItem = controlledMarkerSaveDryRunVerificationGateModel.verificationItems.find(
+                    (item) => item.key === 'target_session_count_match'
+                  )
+                  if (!targetSourceItem && !targetMatchItem) return null
+                  return (
+                    <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/20">
+                      <div className="text-[8px] text-cyan-400/60 mb-1.5">Target Session Source Proof:</div>
+                      <div className="space-y-1">
+                        {targetSourceItem && (
+                          <div className="flex items-start gap-2">
+                            <span className={cn(
+                              "text-[7px] px-1 py-0.5 rounded shrink-0 w-14 text-center",
+                              getVerificationItemStatusColor(targetSourceItem.status).bg,
+                              getVerificationItemStatusColor(targetSourceItem.status).text
+                            )}>
+                              {getVerificationItemStatusLabel(targetSourceItem.status)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[8px] text-[#9A9AA9]">{targetSourceItem.label}</span>
+                              <span className="text-[7px] text-[#6A6A7A] ml-1">— {targetSourceItem.detail}</span>
+                            </div>
+                          </div>
+                        )}
+                        {targetMatchItem && (
+                          <div className="flex items-start gap-2">
+                            <span className={cn(
+                              "text-[7px] px-1 py-0.5 rounded shrink-0 w-14 text-center",
+                              getVerificationItemStatusColor(targetMatchItem.status).bg,
+                              getVerificationItemStatusColor(targetMatchItem.status).text
+                            )}>
+                              {getVerificationItemStatusLabel(targetMatchItem.status)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[8px] text-[#9A9AA9]">{targetMatchItem.label}</span>
+                              <span className="text-[7px] text-[#6A6A7A] ml-1">— {targetMatchItem.detail}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {/* Verification Checklist */}
                 <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-lime-500/10">
                   <div className="text-[8px] text-lime-400/60 mb-1.5">Verification Checklist:</div>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {controlledMarkerSaveDryRunVerificationGateModel.verificationItems.slice(0, 15).map((item) => {
+                    {controlledMarkerSaveDryRunVerificationGateModel.verificationItems
+                      .filter((item) => item.key !== 'target_session_count_source' && item.key !== 'target_session_count_match')
+                      .slice(0, 15)
+                      .map((item) => {
                       const itemColor = getVerificationItemStatusColor(item.status)
                       return (
                         <div key={item.key} className="flex items-start gap-2">

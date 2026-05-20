@@ -527,6 +527,15 @@ import {
   getPersistenceBoundaryReviewItemStatusColor,
   type PersistenceBoundaryReviewPreviewModel,
 } from '@/lib/program/persistence-boundary-review-preview'
+// [Prompt 61] Persistence writer gate preview
+import {
+  resolvePersistenceWriterGatePreview,
+  getPersistenceWriterGatePreviewStatusLabel,
+  getPersistenceWriterGatePreviewStatusColor,
+  getPersistenceWriterGateItemStatusLabel,
+  getPersistenceWriterGateItemStatusColor,
+  type PersistenceWriterGatePreviewModel,
+} from '@/lib/program/persistence-writer-gate-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8733,6 +8742,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistenceWriterActivationReviewPreviewModel])
   
+  // [Prompt 61] Persistence writer gate preview model
+  // Pure read-only writer gate preview - gate reviewed but NOT opened
+  const persistenceWriterGatePreviewModel = useMemo<PersistenceWriterGatePreviewModel>(() => {
+    return resolvePersistenceWriterGatePreview({
+      persistenceBoundaryReviewPreviewModel,
+    })
+  }, [persistenceBoundaryReviewPreviewModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -14849,6 +14866,214 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-indigo-400/60">
                   Persistence boundary review preview only. Writer activation review does not open the real writer boundary. No persistence, no write, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 61] Persistence Writer Gate Preview card
+                Pure read-only writer gate preview - gate reviewed but NOT opened.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {persistenceWriterGatePreviewModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Persistence Writer Gate Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getPersistenceWriterGatePreviewStatusColor(persistenceWriterGatePreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getPersistenceWriterGatePreviewStatusLabel(persistenceWriterGatePreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        writer gate preview
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        writer disabled
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no write
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no receipt
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        read-only
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Visible fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistenceWriterGatePreviewModel.previousBoundaryReviewVerified ? "bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    previous boundary review verified: {persistenceWriterGatePreviewModel.previousBoundaryReviewVerified ? 'yes' : 'no'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistenceWriterGatePreviewModel.writerGateReviewed ? "bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    writer gate reviewed: {persistenceWriterGatePreviewModel.writerGateReviewed ? 'yes' : 'no'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    writer gate opened: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    writer factory enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write attempted: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt written: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    API/DB/storage touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    schema touched: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    future session mutation enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {persistenceWriterGatePreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {persistenceWriterGatePreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {persistenceWriterGatePreviewModel.writerGateSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400/70 border-indigo-500/20">
+                    boundary verified: {persistenceWriterGatePreviewModel.writerGateSummary.boundaryReviewVerifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    gate reviewed: {persistenceWriterGatePreviewModel.writerGateSummary.writerGateReviewedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    not opened: {persistenceWriterGatePreviewModel.writerGateSummary.writerGateNotOpenedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    disabled: {persistenceWriterGatePreviewModel.writerGateSummary.writerDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    protected: {persistenceWriterGatePreviewModel.writerGateSummary.completedSessionsProtectedItems}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {persistenceWriterGatePreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                    <div className="text-[8px] text-cyan-400/60 mb-1.5">Writer Gate Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">kind:</span> {persistenceWriterGatePreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">source boundary review status:</span> {persistenceWriterGatePreviewModel.previewPayload.sourceBoundaryReviewStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">mode:</span> {persistenceWriterGatePreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">gate state:</span> {persistenceWriterGatePreviewModel.previewPayload.currentWriterGateState}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">real writer gate opened:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">writer factory enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">completed sessions protected:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Writer Gate Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Writer Gate Items:</div>
+                  <div className="space-y-1">
+                    {persistenceWriterGatePreviewModel.writerGateItems.slice(0, 16).map((item) => {
+                      const itemColor = getPersistenceWriterGateItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getPersistenceWriterGateItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.boundaryReviewVerifiedNow && (
+                              <span className="text-[7px] text-indigo-400/50 ml-1">*verified</span>
+                            )}
+                            {item.writerGateReviewedNow && (
+                              <span className="text-[7px] text-cyan-400/50 ml-1">*reviewed</span>
+                            )}
+                            {item.blockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*blocked</span>
+                            )}
+                            {item.disabledNow && (
+                              <span className="text-[7px] text-slate-400/50 ml-1">*disabled</span>
+                            )}
+                            {item.protectedNow && (
+                              <span className="text-[7px] text-emerald-400/50 ml-1">*protected</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {persistenceWriterGatePreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {persistenceWriterGatePreviewModel.blockerSummary.slice(0, 5).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-cyan-400/60">Next: </span>
+                  {persistenceWriterGatePreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Persistence writer gate preview only. Boundary review does not open the real writer gate. No persistence, no write, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
                 </p>
               </div>
             )}

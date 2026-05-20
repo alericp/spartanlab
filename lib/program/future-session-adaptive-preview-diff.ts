@@ -223,14 +223,42 @@ export function resolveFutureSessionAdaptivePreviewDiff(
     }
   }
 
-  // Check if no future targets
-  if (targetSessionCount === 0 && mutationTargetSessionResolutionPreviewModel?.status === 'unavailable') {
+  // [Prompt 68.3] Comprehensive target-session source blocking
+  // Must catch: missing model, zero count, unavailable, no_future_targets, targets_unresolved
+  const targetSessionSourceMissing = !mutationTargetSessionResolutionPreviewModel
+  const targetSessionCountMissing = targetSessionCount <= 0
+  const targetResolutionStatus = mutationTargetSessionResolutionPreviewModel?.status
+  const targetSessionResolutionBlocked =
+    targetSessionSourceMissing ||
+    targetSessionCountMissing ||
+    targetResolutionStatus === 'unavailable' ||
+    targetResolutionStatus === 'no_future_targets' ||
+    targetResolutionStatus === 'targets_unresolved'
+
+  // Check if no future targets — broader condition than before
+  if (targetSessionResolutionBlocked) {
+    // Determine specific blocker reason
+    let blockerReason = 'No true future target sessions resolved'
+    let blockerLabel = 'No future sessions available'
+    if (targetSessionSourceMissing) {
+      blockerReason = 'Target session resolution model is missing'
+      blockerLabel = 'Target unavailable — target resolution missing'
+    } else if (targetResolutionStatus === 'no_future_targets') {
+      blockerReason = 'Target session resolution found no future targets'
+    } else if (targetResolutionStatus === 'targets_unresolved') {
+      blockerReason = 'Target session resolution is unresolved'
+      blockerLabel = 'Target unavailable — targets unresolved'
+    } else if (targetResolutionStatus === 'unavailable') {
+      blockerReason = 'Target session resolution is unavailable'
+      blockerLabel = 'Target unavailable — resolution unavailable'
+    }
+    
     return {
       ...hardInvariants,
       status: 'blocked_no_future_targets',
       headline: 'Adaptive Preview — No Future Targets',
-      summary: 'No future sessions are available for adaptive preview.',
-      targetLabel: 'No future sessions available',
+      summary: `Adaptive preview cannot be ready until a true future target session source exists. ${blockerReason}.`,
+      targetLabel: blockerLabel,
       targetSessionCount: 0,
       writerOpenPreviewCandidate,
       localReviewGateReady,
@@ -238,8 +266,8 @@ export function resolveFutureSessionAdaptivePreviewDiff(
       localCautionReviewAccepted,
       localAuthorizationAccepted,
       changes: [],
-      blockers: ['No future sessions identified for adaptation'],
-      nextRequiredStep: 'Ensure future sessions exist before adaptive preview.',
+      blockers: [blockerReason],
+      nextRequiredStep: 'Resolve future target-session source before adaptive preview.',
       changeSummary: {
         totalChanges: 0,
         highConfidence: 0,

@@ -712,6 +712,14 @@ export function resolveControlledMarkerSaveDryRunVerificationGate(
     summary = `The dry-run candidate exists but its status is not ready: ${controlledMarkerSaveDryRunCandidateModel.status}. Cannot verify until candidate is in ready state.`
     verified = false
     nextRequiredStep = 'Resolve candidate blockers to reach dry_run_candidate_ready_no_write status.'
+  } else if (targetSessionCount <= 0) {
+    // [Prompt 68.3] Block verification when target-session source is missing/zero
+    status = 'dry_run_verification_blocked_candidate_not_ready'
+    headline = 'Verification Blocked: Target Session Source Required'
+    summary = 'The dry-run candidate cannot be verified for marker-save progression until a true target-session source resolves at least one future session.'
+    verified = false
+    blockers.push('No true target session source — targetSessionCount is 0')
+    nextRequiredStep = 'Resolve future target-session source before Prompt 69 marker-save receipt/local persistence gate.'
   } else {
     status = 'dry_run_verified_no_write'
     headline = 'Dry-Run Verified (No Write)'

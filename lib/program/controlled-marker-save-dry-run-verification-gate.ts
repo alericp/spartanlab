@@ -306,9 +306,23 @@ export function resolveControlledMarkerSaveDryRunVerificationGate(
 
   const candidateId = controlledMarkerSaveDryRunCandidateModel.dryRunCandidateId
   const targetLabel = controlledMarkerSaveDryRunCandidateModel.targetLabel
-  // targetSessionCount is derived from simulated marker fields or defaults to 1
-  const targetSessionCount = controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields?.previewChangeCount ?? 1
   const previewChangeCount = controlledMarkerSaveDryRunCandidateModel.previewChangeCount
+  
+  // [Prompt 68.1 repair] targetSessionCount must use true target-session sources only
+  // NOT derived from previewChangeCount (which is number of proposed before/after changes)
+  // Primary source: mutationTargetSessionResolutionPreviewModel.futureSessionCount
+  // Secondary source: futureSessionAdaptivePreviewDiffModel.targetSessionCount
+  const resolutionTargetSessionCount = mutationTargetSessionResolutionPreviewModel?.futureSessionCount ?? 0
+  const adaptivePreviewTargetSessionCount = futureSessionAdaptivePreviewDiffModel?.targetSessionCount ?? 0
+  
+  // Derive targetSessionCount from true sources only (no fallback to 1)
+  let targetSessionCount = 0
+  if (resolutionTargetSessionCount > 0) {
+    targetSessionCount = resolutionTargetSessionCount
+  } else if (adaptivePreviewTargetSessionCount > 0) {
+    targetSessionCount = adaptivePreviewTargetSessionCount
+  }
+  // If both are 0, keep targetSessionCount at 0 — no fake default
 
   // -------------------------------------------------------------------------
   // CHECK 2: Candidate status is ready
@@ -488,6 +502,54 @@ export function resolveControlledMarkerSaveDryRunVerificationGate(
       label: 'Target session resolution model',
       status: 'pending',
       detail: 'Model not available — may be resolved later',
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // CHECK 17.1 [Prompt 68.1]: Target session count source verification
+  // -------------------------------------------------------------------------
+  verificationItems.push({
+    key: 'target_session_count_source',
+    label: 'Target session count uses true source (resolution/adaptive-preview)',
+    status: targetSessionCount > 0 ? 'passed' : 'pending',
+    detail: targetSessionCount > 0
+      ? `targetSessionCount=${targetSessionCount} from ${resolutionTargetSessionCount > 0 ? 'target-resolution' : 'adaptive-preview'}`
+      : 'No true target-session source available yet',
+  })
+
+  // -------------------------------------------------------------------------
+  // CHECK 17.2 [Prompt 68.1]: Target session count source match
+  // -------------------------------------------------------------------------
+  if (resolutionTargetSessionCount > 0 && adaptivePreviewTargetSessionCount > 0) {
+    if (resolutionTargetSessionCount === adaptivePreviewTargetSessionCount) {
+      verificationItems.push({
+        key: 'target_session_count_match',
+        label: 'Target session count sources match',
+        status: 'passed',
+        detail: `Both sources agree: ${resolutionTargetSessionCount} session(s)`,
+      })
+    } else {
+      verificationItems.push({
+        key: 'target_session_count_match',
+        label: 'Target session count sources match',
+        status: 'failed',
+        detail: `Mismatch: resolution=${resolutionTargetSessionCount}, adaptive-preview=${adaptivePreviewTargetSessionCount}`,
+      })
+      mismatches.push(`Target session count mismatch: target resolution=${resolutionTargetSessionCount}, adaptive preview=${adaptivePreviewTargetSessionCount}`)
+    }
+  } else if (resolutionTargetSessionCount > 0 || adaptivePreviewTargetSessionCount > 0) {
+    verificationItems.push({
+      key: 'target_session_count_match',
+      label: 'Target session count sources match',
+      status: 'pending',
+      detail: `Only one source available: resolution=${resolutionTargetSessionCount}, adaptive-preview=${adaptivePreviewTargetSessionCount}`,
+    })
+  } else {
+    verificationItems.push({
+      key: 'target_session_count_match',
+      label: 'Target session count sources match',
+      status: 'pending',
+      detail: 'No target-session sources available yet',
     })
   }
 

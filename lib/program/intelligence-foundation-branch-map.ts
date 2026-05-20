@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.69 - Mutation unlock roadmap decision gate)
+  // PLAN LOGIC (MASTER-8C.70 - Writer-open preview boundary)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, read-only consent decision state preview, read-only consent decision review lock preview, read-only consent permission boundary preview, read-only persistence permission review preview, read-only persistence write preflight preview, read-only persistence writer activation review preview, read-only persistence boundary review preview, read-only persistence writer gate preview, read-only persistence writer boundary step preview, read-only persistence writer boundary continuity preview, and mutation unlock roadmap decision gate',
-    nextSafeAction: 'Prompt 65 / MASTER-8C.70 / AB20.4.63 — writer-open preview boundary; real persistence still disabled until explicit enablement',
-    riskIfIgnored: 'Decision gate skipped, leading to continued redundant closed-boundary cards without forward movement toward writer-open preview',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, read-only consent decision state preview, read-only consent decision review lock preview, read-only consent permission boundary preview, read-only persistence permission review preview, read-only persistence write preflight preview, read-only persistence writer activation review preview, read-only persistence boundary review preview, read-only persistence writer gate preview, read-only persistence writer boundary step preview, read-only persistence writer boundary continuity preview, mutation unlock roadmap decision gate, and writer-open preview boundary',
+    nextSafeAction: 'Prompt 66 / MASTER-8C.71 / AB20.4.64 — local authorization + caution review gate before any marker write',
+    riskIfIgnored: 'Preview boundary skipped, leaving system stuck in closed-boundary loop without forward movement toward authorization/caution review',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -301,6 +301,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/persistence-writer-boundary-step-preview.ts',
       'lib/program/persistence-writer-boundary-continuity-preview.ts',
       'lib/program/mutation-unlock-roadmap-decision-gate.ts',
+      'lib/program/writer-open-preview-boundary.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

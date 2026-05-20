@@ -592,6 +592,15 @@ import {
   getAdaptiveChangeSourceColor,
   type FutureSessionAdaptivePreviewDiffModel,
 } from '@/lib/program/future-session-adaptive-preview-diff'
+// [Prompt 67] Controlled Marker-Save Dry-Run Candidate
+import {
+  resolveControlledMarkerSaveDryRunCandidate,
+  getDryRunCandidateStatusLabel,
+  getDryRunCandidateStatusColor,
+  getDryRunChecklistItemStatusLabel,
+  getDryRunChecklistItemStatusColor,
+  type ControlledMarkerSaveDryRunCandidateModel,
+} from '@/lib/program/controlled-marker-save-dry-run-candidate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8875,6 +8884,19 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [writerOpenPreviewBoundaryModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, mutationCautionClearanceGateModel])
   
+  // [Prompt 67] Controlled Marker-Save Dry-Run Candidate model
+  // Bridge from "adaptive preview exists" to "marker-save dry-run is reviewable"
+  // This is NOT real persistence — this is dry-run review only
+  const controlledMarkerSaveDryRunCandidateModel = useMemo<ControlledMarkerSaveDryRunCandidateModel>(() => {
+    return resolveControlledMarkerSaveDryRunCandidate({
+      futureSessionAdaptivePreviewDiffModel,
+      localAuthorizationCautionReviewGateModel,
+      controlledMarkerSaveActionBoundaryModel,
+      markerSaveArtifactPreviewModel,
+      markerWriteReadinessLedgerModel,
+    })
+  }, [futureSessionAdaptivePreviewDiffModel, localAuthorizationCautionReviewGateModel, controlledMarkerSaveActionBoundaryModel, markerSaveArtifactPreviewModel, markerWriteReadinessLedgerModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -16255,6 +16277,176 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-teal-400/60">
                   This is a concrete adaptation preview only. Nothing has been saved or applied. Real persistence and workout mutation remain disabled.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 67] Controlled Marker-Save Dry-Run Candidate card
+                Bridge from "adaptive preview exists" to "marker-save dry-run is reviewable"
+                Shows simulated marker fields and dry-run checklist — NOT real persistence */}
+            {controlledMarkerSaveDryRunCandidateModel && (
+              <div className="rounded-lg border border-orange-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-orange-400" />
+                  <span className="text-sm font-medium text-orange-300">
+                    Controlled Marker-Save Dry-Run Candidate
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getDryRunCandidateStatusColor(controlledMarkerSaveDryRunCandidateModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getDryRunCandidateStatusLabel(controlledMarkerSaveDryRunCandidateModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                        dry-run only
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        local only
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        no write
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    Program Cards unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected
+                  </span>
+                </div>
+                {/* Target info */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] text-orange-400/70">Target:</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-300/90 border-orange-500/20">
+                    {controlledMarkerSaveDryRunCandidateModel.targetLabel}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {controlledMarkerSaveDryRunCandidateModel.previewChangeCount} change(s)
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-orange-300/90 font-medium mb-1">
+                  {controlledMarkerSaveDryRunCandidateModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {controlledMarkerSaveDryRunCandidateModel.summary}
+                </p>
+                {/* Simulated Marker Fields */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-orange-500/10">
+                  <div className="text-[8px] text-orange-400/60 mb-1.5">Simulated Marker Fields (not saved):</div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Marker Kind:</span>
+                      <span className="text-[8px] text-orange-300/80">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.markerKind}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Target Session:</span>
+                      <span className="text-[8px] text-orange-300/80">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.targetSessionLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Preview Changes:</span>
+                      <span className="text-[8px] text-orange-300/80">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.previewChangeCount}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Mutation Mode:</span>
+                      <span className="text-[8px] text-amber-300/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.mutationMode}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Persistence:</span>
+                      <span className="text-[8px] text-slate-400/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.persistence}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Program Cards:</span>
+                      <span className="text-[8px] text-slate-400/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.programCardsChanged}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Start Workout:</span>
+                      <span className="text-[8px] text-slate-400/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.startWorkoutChanged}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Live Workout:</span>
+                      <span className="text-[8px] text-slate-400/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.liveWorkoutChanged}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-[#6A6A7A] w-24 shrink-0">Source:</span>
+                      <span className="text-[8px] text-teal-300/70">{controlledMarkerSaveDryRunCandidateModel.simulatedMarkerFields.source}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Dry-Run Checklist */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-orange-500/10">
+                  <div className="text-[8px] text-orange-400/60 mb-1.5">Dry-Run Checklist:</div>
+                  <div className="space-y-1">
+                    {controlledMarkerSaveDryRunCandidateModel.dryRunChecklist.map((item) => {
+                      const itemColor = getDryRunChecklistItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0 w-14 text-center",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getDryRunChecklistItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            <span className="text-[7px] text-[#6A6A7A] ml-1">— {item.detail}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Source Models */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[8px] text-[#6A6A7A]">Sources:</span>
+                  {controlledMarkerSaveDryRunCandidateModel.sourceModelsUsed.map((src) => (
+                    <span key={src} className="text-[7px] px-1 py-0.5 rounded bg-[#1A1A2E]/60 text-[#7A7A8A] border border-[#2A2A35]/40">
+                      {src}
+                    </span>
+                  ))}
+                </div>
+                {/* Blockers if any */}
+                {controlledMarkerSaveDryRunCandidateModel.blockers.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blockers:</div>
+                    {controlledMarkerSaveDryRunCandidateModel.blockers.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Safety notes */}
+                <div className="mb-1.5 p-1.5 rounded bg-slate-500/5 border border-slate-500/20">
+                  <div className="text-[8px] text-slate-400/60 mb-0.5">Safety:</div>
+                  {controlledMarkerSaveDryRunCandidateModel.safetyNotes.slice(0, 3).map((note, i) => (
+                    <div key={i} className="text-[8px] text-slate-400/70 mb-0.5 pl-1">
+                      {note}
+                    </div>
+                  ))}
+                </div>
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-orange-500/5 border border-orange-500/20">
+                  <div className="text-[9px] text-orange-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-orange-300/90 mt-0.5">
+                    {controlledMarkerSaveDryRunCandidateModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-orange-400/60">
+                  Dry-run candidate review only — no marker saved, no persistence, no Program Cards / Start Workout / Live Workout changes.
                 </p>
               </div>
             )}

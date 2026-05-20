@@ -491,6 +491,15 @@ import {
   getConsentPermissionBoundaryItemStatusColor,
   type ConsentPermissionBoundaryPreviewModel,
 } from '@/lib/program/consent-permission-boundary-preview'
+// [Prompt 57] Persistence permission review preview
+import {
+  resolvePersistencePermissionReviewPreview,
+  getPersistencePermissionReviewPreviewStatusLabel,
+  getPersistencePermissionReviewPreviewStatusColor,
+  getPersistencePermissionReviewItemStatusLabel,
+  getPersistencePermissionReviewItemStatusColor,
+  type PersistencePermissionReviewPreviewModel,
+} from '@/lib/program/persistence-permission-review-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -3406,6 +3415,8 @@ function AIIntelligenceFoundationMap({
   consentDecisionReviewLockPreviewModel,
   // [Prompt 56] Consent permission boundary preview
   consentPermissionBoundaryPreviewModel,
+  // [Prompt 57] Persistence permission review preview
+  persistencePermissionReviewPreviewModel,
 }: {
   safeguardModel?: PrehabRehabTendonSafeguardReadonlyModel | null
   recoveryReadinessModel?: RecoveryReadinessReadonlyModel | null
@@ -3465,6 +3476,8 @@ function AIIntelligenceFoundationMap({
   consentDecisionReviewLockPreviewModel?: ConsentDecisionReviewLockPreviewModel | null
   // [Prompt 56] Consent permission boundary preview
   consentPermissionBoundaryPreviewModel?: ConsentPermissionBoundaryPreviewModel | null
+  // [Prompt 57] Persistence permission review preview
+  persistencePermissionReviewPreviewModel?: PersistencePermissionReviewPreviewModel | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const summary = getFoundationMapSummary()
@@ -4250,6 +4263,10 @@ function AIIntelligenceFoundationMap({
                         {consentPermissionBoundaryPreviewModel?.status === 'consent_permission_boundary_ready_persistence_disabled'
                           ? `Permission: ${consentPermissionBoundaryPreviewModel.permissionBoundarySummary.totalItems} items, not granted. `
                           : 'Permission: not ready. '
+                        }
+                        {persistencePermissionReviewPreviewModel?.status === 'persistence_permission_review_ready_persistence_disabled'
+                          ? `Persistence: ${persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.totalItems} items reviewed, not granted. `
+                          : 'Persistence: not ready. '
                         }
                         No receipt written. No write attempted. No workout changes.
                       </>
@@ -8648,6 +8665,14 @@ export function ProgramCoachIntelligenceHub({
       consentDecisionReviewLockPreviewModel,
     })
   }, [consentDecisionReviewLockPreviewModel])
+  
+  // [Prompt 57] Persistence permission review preview model
+  // Pure read-only persistence permission review - permission not granted
+  const persistencePermissionReviewPreviewModel = useMemo<PersistencePermissionReviewPreviewModel>(() => {
+    return resolvePersistencePermissionReviewPreview({
+      consentPermissionBoundaryPreviewModel,
+    })
+  }, [consentPermissionBoundaryPreviewModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -13974,6 +13999,214 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 57] Persistence Permission Review Preview card
+                Pure read-only persistence permission review - permission not granted.
+                All persistence/write/API/DB/storage/schema/program/workout mutation disabled. */}
+            {persistencePermissionReviewPreviewModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Persistence Permission Review Preview
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getPersistencePermissionReviewPreviewStatusColor(persistencePermissionReviewPreviewModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getPersistencePermissionReviewPreviewStatusLabel(persistencePermissionReviewPreviewModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                        consent boundary verified: {persistencePermissionReviewPreviewModel.consentPermissionBoundaryVerified ? 'yes' : 'no'}
+                      </span>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", persistencePermissionReviewPreviewModel.persistencePermissionReviewReady ? "bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                        persistence review: {persistencePermissionReviewPreviewModel.persistencePermissionReviewReady ? 'ready' : 'not ready'}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                        current persistence permission state: {persistencePermissionReviewPreviewModel.currentPersistencePermissionState === 'persistence_permission_not_granted' ? 'persistence permission not granted' : persistencePermissionReviewPreviewModel.currentPersistencePermissionState}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        consent permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence permission granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence permission denied: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        authorization granted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        persistence enabled: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        write attempted: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        receipt written: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        API route called: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        DB/storage used: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        schema touched: no
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        completed sessions: protected
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                        future mutation enabled: no
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {persistencePermissionReviewPreviewModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {persistencePermissionReviewPreviewModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    boundary verified: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.consentBoundaryVerifiedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                    permission required: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.persistencePermissionRequiredItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                    grant locked: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.persistenceGrantPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                    deny locked: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.persistenceDenyPathLockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-pink-500/10 text-pink-400/70 border-pink-500/20">
+                    write blocked: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.writeAuthorizationBlockedItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt disabled: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.durableReceiptDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                    API disabled: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.apiRouteDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-neutral-500/10 text-neutral-400/70 border-neutral-500/20">
+                    DB disabled: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.dbStorageDisabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected: {persistencePermissionReviewPreviewModel.persistencePermissionReviewSummary.completedSessionsProtectedItems}
+                  </span>
+                </div>
+                {/* Preview Payload */}
+                {persistencePermissionReviewPreviewModel.previewPayload && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                    <div className="text-[8px] text-cyan-400/60 mb-1.5">Persistence Permission Review Payload:</div>
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">kind:</span> {persistencePermissionReviewPreviewModel.previewPayload.previewKind}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">source consent permission boundary:</span> {persistencePermissionReviewPreviewModel.previewPayload.sourceConsentPermissionBoundaryStatus}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">mode:</span> {persistencePermissionReviewPreviewModel.previewPayload.currentMode}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">current persistence permission state:</span> {persistencePermissionReviewPreviewModel.previewPayload.currentPersistencePermissionState}
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">consent permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">persistence permission granted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">persistence permission denied:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">persistence enabled:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">write attempted:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">receipt written:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">program cards changed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">start workout changed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">live workout changed:</span> no
+                      </div>
+                      <div className="text-[8px] text-[#9A9AA9]">
+                        <span className="text-cyan-400/50">completed sessions protected:</span> yes
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Persistence Permission Review Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Persistence Permission Review Items:</div>
+                  <div className="space-y-1">
+                    {persistencePermissionReviewPreviewModel.persistencePermissionReviewItems.slice(0, 14).map((item) => {
+                      const itemColor = getPersistencePermissionReviewItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getPersistencePermissionReviewItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.lockedNow && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*locked</span>
+                            )}
+                            {item.disabledNow && (
+                              <span className="text-[7px] text-slate-400/50 ml-1">*disabled</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Blocker summary if any */}
+                {persistencePermissionReviewPreviewModel.blockerSummary.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Blocker summary:</div>
+                    {persistencePermissionReviewPreviewModel.blockerSummary.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 text-[9px] text-[#8A8A9A]">
+                  <span className="text-cyan-400/60">Next: </span>
+                  {persistencePermissionReviewPreviewModel.nextRequiredStep}
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Persistence permission review preview only. Consent permission boundary is verified, but persistence permission has not been granted or denied. No persistence, no writer, no receipt, no API/DB/storage/schema, and no Program Cards / Start Workout / Live Workout changes.
+                </p>
+              </div>
+            )}
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -14391,7 +14624,7 @@ export function ProgramCoachIntelligenceHub({
             
             {/* [MASTER-8C.16] AI Intelligence Foundation Map */}
             {/* [MASTER-8C.18.1] Now passes safeguard model for dynamic proof */}
-            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} consentAuthorizationLockPreviewModel={consentAuthorizationLockPreviewModel} consentDecisionStatePreviewModel={consentDecisionStatePreviewModel} consentDecisionReviewLockPreviewModel={consentDecisionReviewLockPreviewModel} consentPermissionBoundaryPreviewModel={consentPermissionBoundaryPreviewModel} />
+            <AIIntelligenceFoundationMap safeguardModel={safeguardAnalysisResult} recoveryReadinessModel={recoveryReadinessResult} exerciseKnowledgeCoverageModel={exerciseKnowledgeCoverageResult} progressionPeriodizationModel={progressionPeriodizationResult} coachRecommendationCandidateModel={coachRecommendationCandidateResult} planEvidenceHookModel={planEvidenceHookModel} planEvidenceTrendReadinessModel={planEvidenceTrendReadinessModel} mutationReadinessReviewGateModel={mutationReadinessReviewGateModel} mutationPathwayReadinessMapModel={mutationPathwayReadinessMapModel} mutationTargetSessionResolutionPreviewModel={mutationTargetSessionResolutionPreviewModel} mutationConfirmationContractPreviewModel={mutationConfirmationContractPreviewModel} mutationCautionClearanceGateModel={mutationCautionClearanceGateModel} structuralMutationPreviewContractModel={structuralMutationPreviewContractModel} userConfirmationMarkerPermissionPreviewGateModel={userConfirmationMarkerPermissionPreviewGateModel} futureSessionMutationWriterReadinessBoundaryModel={futureSessionMutationWriterReadinessBoundaryModel} preMutationLockBundleClosureModel={preMutationLockBundleClosureModel} controlledFutureSessionMutationWriterDryRunModel={controlledFutureSessionMutationWriterDryRunModel} boundedMutationApplyEligibilityGateModel={boundedMutationApplyEligibilityGateModel} markerOnlyConfirmationBoundaryModel={markerOnlyConfirmationBoundaryModel} markerSaveAuthorizationPreflightBoundaryModel={markerSaveAuthorizationPreflightBoundaryModel} controlledMarkerSaveActionBoundaryModel={controlledMarkerSaveActionBoundaryModel} markerSaveArtifactPreviewModel={markerSaveArtifactPreviewModel} markerWriteReadinessLedgerModel={markerWriteReadinessLedgerModel} durableMarkerReceiptReadinessModel={durableMarkerReceiptReadinessModel} controlledDurableMarkerReceiptWriterPreviewModel={controlledDurableMarkerReceiptWriterPreviewModel} persistenceWriterActivationLockGateModel={persistenceWriterActivationLockGateModel} controlledDurableMarkerReceiptWriterNoWriteHarnessModel={controlledDurableMarkerReceiptWriterNoWriteHarnessModel} durableReceiptWriterEligibilityLedgerModel={durableReceiptWriterEligibilityLedgerModel} durableReceiptWriterActivationPreconditionsReviewModel={durableReceiptWriterActivationPreconditionsReviewModel} explicitPersistenceActivationRequestPreviewModel={explicitPersistenceActivationRequestPreviewModel} activationRequestAuthorizationLockModel={activationRequestAuthorizationLockModel} explicitActivationRequestIntentCapturePreviewModel={explicitActivationRequestIntentCapturePreviewModel} explicitActivationAuthorizationReviewPreviewModel={explicitActivationAuthorizationReviewPreviewModel} controlledActivationPermissionBoundaryPreviewModel={controlledActivationPermissionBoundaryPreviewModel} explicitPersistenceActivationConsentPreviewModel={explicitPersistenceActivationConsentPreviewModel} consentAuthorizationLockPreviewModel={consentAuthorizationLockPreviewModel} consentDecisionStatePreviewModel={consentDecisionStatePreviewModel} consentDecisionReviewLockPreviewModel={consentDecisionReviewLockPreviewModel} consentPermissionBoundaryPreviewModel={consentPermissionBoundaryPreviewModel} persistencePermissionReviewPreviewModel={persistencePermissionReviewPreviewModel} />
           </div>
         </SheetContent>
       </Sheet>

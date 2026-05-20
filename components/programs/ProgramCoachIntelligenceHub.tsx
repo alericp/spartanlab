@@ -17008,6 +17008,84 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            {/* [Prompt 70] Source Confirmation Gate */}
+            <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-amber-300">
+                  Prompt 70 Source Confirmation Gate
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                  source gap
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  read-only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+              </div>
+              {/* Status explanation */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className="text-[9px] text-amber-400/80 font-medium mb-1">
+                  Official Prompt 70 / MASTER-8C.75 / AB20.4.68 scope not found in repo.
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  Branch map says: &quot;Prompt 70 / next official roadmap step — pending roadmap source&quot;
+                </p>
+              </div>
+              {/* Gate dependency check */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Prompt 69.2 Receipt Gate Dependency:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Valid local receipt present: <span className={validatedMarkerSavedCount > 0 ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {validatedMarkerSavedCount > 0 ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Stale local receipt blocked: <span className={!controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? "text-lime-400/70" : "text-orange-400/70"}>
+                    {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? 'true (blocked)' : 'false (ok)'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Downstream saved proof count: <span className={downstreamSavedProofCount > 0 ? "text-lime-400/70 font-mono" : "text-zinc-400/70 font-mono"}>
+                    {downstreamSavedProofCount}
+                  </span>
+                </div>
+              </div>
+              {/* Prompt 70 blocked reason */}
+              {(validatedMarkerSavedCount === 0 || controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent) && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80">
+                    Prompt 70 blocked — valid local receipt proof required first.
+                  </p>
+                </div>
+              )}
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future-session mutation disabled
+                </span>
+              </div>
+              {/* Next action */}
+              <div className="p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next action: Provide or define official Prompt 70 source before implementation. No mutation opened.
+                </p>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-amber-400/60 mt-2">
+                MASTER-8C.75 / AB20.4.68 / Prompt 70 — Source confirmation gate only. No durable persistence. No DB/API/storage.
+              </p>
+            </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">

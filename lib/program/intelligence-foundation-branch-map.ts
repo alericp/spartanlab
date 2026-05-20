@@ -245,16 +245,16 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
   },
 
   // -------------------------------------------------------------------------
-  // PLAN LOGIC (MASTER-8C.58 - Consent authorization lock preview)
+  // PLAN LOGIC (MASTER-8C.59 - Consent decision state preview)
   // -------------------------------------------------------------------------
   {
     id: 'plan_logic',
     label: 'Plan Logic',
     uiStatus: 'read_only',
     mutationStatus: 'display_only',
-    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, and read-only consent authorization lock preview',
-    nextSafeAction: 'MASTER-8C.59+ explicit consent decision state preview while persistence remains disabled; no real consent, permission, activation, or write path enabled yet',
-    riskIfIgnored: 'Consent authorization lock skipped, allowing next persistence step to confuse "consent preview ready" with "consent authorized or permission granted"',
+    currentRole: 'Construction rationale plus read-only plan evidence hook, evidence trend classification/readiness scoring, mutation-readiness review gate, mutation pathway readiness map, target-session resolution preview with completed/future session identity resolution, confirmation contract preview, caution clearance gate, structural mutation preview contract, marker-only confirmation boundary, marker-save authorization preflight boundary, controlled marker-save action boundary, marker-save artifact preview, marker write readiness ledger, local marker saved proof (in-memory), persistence readiness evaluation, durable marker receipt candidate readiness evaluation, controlled durable receipt writer contract preview, explicit persistence activation lock gate, controlled no-write durable receipt writer harness, read-only durable receipt writer eligibility ledger, read-only durable receipt writer activation preconditions review, read-only explicit persistence activation request preview, read-only activation request authorization lock, read-only explicit activation request intent capture preview, read-only explicit activation authorization review preview, read-only controlled activation permission boundary preview, read-only explicit persistence activation consent preview, read-only consent authorization lock preview, and read-only consent decision state preview',
+    nextSafeAction: 'MASTER-8C.60+ consent decision review lock while persistence remains disabled; no real consent decision, authorization, permission, activation, or write path enabled yet',
+    riskIfIgnored: 'Consent decision state preview skipped, allowing next persistence step to confuse "authorization lock ready" with "consent decision made or grant/deny executed"',
     sourceFiles: [
       'components/programs/ProgramTruthSummary.tsx',
       'lib/program/program-display-contract.ts',
@@ -290,6 +290,7 @@ export const INTELLIGENCE_FOUNDATION_BRANCH_MAP: readonly IntelligenceFoundation
       'lib/program/controlled-activation-permission-boundary-preview.ts',
       'lib/program/explicit-persistence-activation-consent-preview.ts',
       'lib/program/consent-authorization-lock-preview.ts',
+      'lib/program/consent-decision-state-preview.ts',
     ],
     consumedBy: ['Coach Intelligence Hub'],
     currentUISurface: 'Plan Logic tile + sheet + AI Intelligence Foundation Map row',

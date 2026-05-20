@@ -563,6 +563,15 @@ import {
   getMutationUnlockDecisionItemStatusColor,
   type MutationUnlockRoadmapDecisionGateModel,
 } from '@/lib/program/mutation-unlock-roadmap-decision-gate'
+// [Prompt 65] Writer-open preview boundary
+import {
+  resolveWriterOpenPreviewBoundary,
+  getWriterOpenPreviewBoundaryStatusLabel,
+  getWriterOpenPreviewBoundaryStatusColor,
+  getWriterOpenPreviewBoundaryItemStatusLabel,
+  getWriterOpenPreviewBoundaryItemStatusColor,
+  type WriterOpenPreviewBoundaryModel,
+} from '@/lib/program/writer-open-preview-boundary'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8802,6 +8811,20 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [persistenceWriterBoundaryContinuityPreviewModel])
   
+  // [Prompt 65] Writer-open preview boundary model
+  // FEATURE STEP - moves corridor forward from "closed-boundary loop" to "preview-open candidate"
+  // Distinguishes "preview-open candidate" from "real writer opened"
+  const writerOpenPreviewBoundaryModel = useMemo<WriterOpenPreviewBoundaryModel>(() => {
+    return resolveWriterOpenPreviewBoundary({
+      mutationUnlockRoadmapDecisionGateModel,
+      markerWriteReadinessLedgerModel,
+      // Derive caution pattern from existing caution clearance gate (activeCautionCount > 0)
+      cautionPatternActiveOverride: (mutationCautionClearanceGateModel?.activeCautionCount ?? 0) > 0,
+      // Derive authorization missing from local state (markerSaveAuthorizationPreviewAccepted)
+      authorizationMissingOverride: !markerSaveAuthorizationPreviewAccepted,
+    })
+  }, [mutationUnlockRoadmapDecisionGateModel, markerWriteReadinessLedgerModel, mutationCautionClearanceGateModel, markerSaveAuthorizationPreviewAccepted])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -15679,6 +15702,164 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-amber-400/60">
                   This is a DECISION GATE, not another redundant closed-boundary card. No Program Cards changed. No Start Workout changed. No Live Workout changed. This is not real mutation yet.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 65] Writer-Open Preview Boundary card
+                FEATURE STEP - moves corridor forward from "closed-boundary loop" to "preview-open candidate"
+                Distinguishes "preview-open candidate" from "real writer opened" */}
+            {writerOpenPreviewBoundaryModel && (
+              <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Writer-Open Preview Boundary
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getWriterOpenPreviewBoundaryStatusColor(writerOpenPreviewBoundaryModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getWriterOpenPreviewBoundaryStatusLabel(writerOpenPreviewBoundaryModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        preview boundary
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                        forward movement
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Key preview boundary fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerOpenPreviewBoundaryModel.previewOpenCandidate ? "bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20" : "bg-slate-500/10 text-slate-400/70 border-slate-500/20")}>
+                    preview-open candidate: {writerOpenPreviewBoundaryModel.previewOpenCandidate ? 'yes' : 'no'}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    real writer opened: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence enabled: no
+                  </span>
+                </div>
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    write attempted: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    receipt written: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout changed: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    future mutation enabled: no
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed sessions protected: yes
+                  </span>
+                </div>
+                {/* Blocker status chips */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerOpenPreviewBoundaryModel.cautionPatternActive ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20")}>
+                    caution pattern: {writerOpenPreviewBoundaryModel.cautionPatternActive ? 'active' : 'clear'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerOpenPreviewBoundaryModel.authorizationMissing ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20")}>
+                    authorization: {writerOpenPreviewBoundaryModel.authorizationMissing ? 'missing' : 'accepted'}
+                  </span>
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", writerOpenPreviewBoundaryModel.markerReadinessBlocked ? "bg-amber-500/10 text-amber-400/70 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20")}>
+                    marker readiness: {writerOpenPreviewBoundaryModel.markerReadinessBlocked ? 'blocked' : 'ready'}
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {writerOpenPreviewBoundaryModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {writerOpenPreviewBoundaryModel.summary}
+                </p>
+                {/* Compact counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {writerOpenPreviewBoundaryModel.previewBoundarySummary.totalItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    ready: {writerOpenPreviewBoundaryModel.previewBoundarySummary.readyItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                    preview open: {writerOpenPreviewBoundaryModel.previewBoundarySummary.previewOpenItems}
+                  </span>
+                  {writerOpenPreviewBoundaryModel.previewBoundarySummary.blockedItems > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-400/70 border-rose-500/20">
+                      blocked: {writerOpenPreviewBoundaryModel.previewBoundarySummary.blockedItems}
+                    </span>
+                  )}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    disabled: {writerOpenPreviewBoundaryModel.previewBoundarySummary.disabledItems}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                    protected: {writerOpenPreviewBoundaryModel.previewBoundarySummary.protectedItems}
+                  </span>
+                </div>
+                {/* Preview Boundary Items */}
+                <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                  <div className="text-[8px] text-cyan-400/60 mb-1.5">Preview Boundary Items:</div>
+                  <div className="space-y-1">
+                    {writerOpenPreviewBoundaryModel.previewBoundaryItems.slice(0, 11).map((item) => {
+                      const itemColor = getWriterOpenPreviewBoundaryItemStatusColor(item.status)
+                      return (
+                        <div key={item.key} className="flex items-start gap-2">
+                          <span className={cn(
+                            "text-[7px] px-1 py-0.5 rounded shrink-0",
+                            itemColor.bg, itemColor.text
+                          )}>
+                            {getWriterOpenPreviewBoundaryItemStatusLabel(item.status)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[8px] text-[#9A9AA9]">{item.label}</span>
+                            {item.blocksRealWrite && (
+                              <span className="text-[7px] text-amber-400/50 ml-1">*blocks real write</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Real write blocked reasons */}
+                {writerOpenPreviewBoundaryModel.realWriteBlockedReasons.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Real write blocked by:</div>
+                    {writerOpenPreviewBoundaryModel.realWriteBlockedReasons.slice(0, 5).map((r, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {r}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-cyan-500/5 border border-cyan-500/20">
+                  <div className="text-[9px] text-cyan-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-cyan-300/90 mt-0.5">
+                    {writerOpenPreviewBoundaryModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Preview boundary is available — this is forward movement. Real writer remains closed. Real persistence remains disabled until explicit enablement. No Program Cards, Start Workout, or Live Workout changes.
                 </p>
               </div>
             )}

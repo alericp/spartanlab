@@ -581,6 +581,17 @@ import {
   getLocalAuthCautionReviewGateItemStatusColor,
   type LocalAuthorizationCautionReviewGateModel,
 } from '@/lib/program/local-authorization-caution-review-gate'
+// [Prompt 66.1] Future Session Adaptive Preview Diff
+import {
+  resolveFutureSessionAdaptivePreviewDiff,
+  getAdaptivePreviewStatusLabel,
+  getAdaptivePreviewStatusColor,
+  getAdaptiveChangeConfidenceLabel,
+  getAdaptiveChangeConfidenceColor,
+  getAdaptiveChangeSourceLabel,
+  getAdaptiveChangeSourceColor,
+  type FutureSessionAdaptivePreviewDiffModel,
+} from '@/lib/program/future-session-adaptive-preview-diff'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8852,6 +8863,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [writerOpenPreviewBoundaryModel, markerWriteReadinessLedgerModel, mutationCautionClearanceGateModel, localCautionReviewAccepted, markerSaveAuthorizationPreviewAccepted])
   
+  // [Prompt 66.1] Future Session Adaptive Preview Diff model
+  // REPAIR: The first concrete read-only adaptive preview showing actual before/after changes
+  // NOT another boundary gate — this shows real proposed adaptations
+  const futureSessionAdaptivePreviewDiffModel = useMemo<FutureSessionAdaptivePreviewDiffModel>(() => {
+    return resolveFutureSessionAdaptivePreviewDiff({
+      writerOpenPreviewBoundaryModel,
+      localAuthorizationCautionReviewGateModel,
+      mutationTargetSessionResolutionPreviewModel,
+      mutationCautionClearanceGateModel,
+    })
+  }, [writerOpenPreviewBoundaryModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, mutationCautionClearanceGateModel])
+  
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
   const rootCandidateClearanceEvidenceDetailModel = useMemo<RootCandidateClearanceEvidenceDetailModel>(() => {
@@ -16067,6 +16090,171 @@ export function ProgramCoachIntelligenceHub({
                 {/* Safety line */}
                 <p className="text-[10px] text-violet-400/60">
                   Local review gate only — does not write, persist, or mutate the program. Real marker write, persistence, and workout mutation remain disabled.
+                </p>
+              </div>
+            )}
+            {/* [Prompt 66.1] Future Session Adaptive Preview Diff card
+                REPAIR: The first concrete read-only adaptive preview showing actual before/after changes
+                NOT another boundary gate — this shows real proposed adaptations */}
+            {futureSessionAdaptivePreviewDiffModel && futureSessionAdaptivePreviewDiffModel.status !== 'blocked_missing_source_models' && (
+              <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-teal-400" />
+                  <span className="text-sm font-medium text-teal-300">
+                    Future Session Adaptive Preview Diff
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getAdaptivePreviewStatusColor(futureSessionAdaptivePreviewDiffModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getAdaptivePreviewStatusLabel(futureSessionAdaptivePreviewDiffModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                        preview only
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        before → after
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    real write disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    persistence disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected
+                  </span>
+                </div>
+                {/* Target info */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] text-teal-400/70">Target:</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-300/90 border-teal-500/20">
+                    {futureSessionAdaptivePreviewDiffModel.targetLabel}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    {futureSessionAdaptivePreviewDiffModel.targetSessionCount} session(s)
+                  </span>
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-teal-300/90 font-medium mb-1">
+                  {futureSessionAdaptivePreviewDiffModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {futureSessionAdaptivePreviewDiffModel.summary}
+                </p>
+                {/* Change summary counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    total: {futureSessionAdaptivePreviewDiffModel.changeSummary.totalChanges}
+                  </span>
+                  {futureSessionAdaptivePreviewDiffModel.changeSummary.highConfidence > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                      high: {futureSessionAdaptivePreviewDiffModel.changeSummary.highConfidence}
+                    </span>
+                  )}
+                  {futureSessionAdaptivePreviewDiffModel.changeSummary.mediumConfidence > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      medium: {futureSessionAdaptivePreviewDiffModel.changeSummary.mediumConfidence}
+                    </span>
+                  )}
+                  {futureSessionAdaptivePreviewDiffModel.changeSummary.lowConfidence > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                      low: {futureSessionAdaptivePreviewDiffModel.changeSummary.lowConfidence}
+                    </span>
+                  )}
+                  {futureSessionAdaptivePreviewDiffModel.changeSummary.fromCaution > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      from caution: {futureSessionAdaptivePreviewDiffModel.changeSummary.fromCaution}
+                    </span>
+                  )}
+                  {futureSessionAdaptivePreviewDiffModel.changeSummary.fromEvidence > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      from evidence: {futureSessionAdaptivePreviewDiffModel.changeSummary.fromEvidence}
+                    </span>
+                  )}
+                </div>
+                {/* Before/After Changes - THE KEY PART */}
+                {futureSessionAdaptivePreviewDiffModel.changes.length > 0 && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-teal-500/10">
+                    <div className="text-[8px] text-teal-400/60 mb-1.5">Proposed Adaptive Changes (Before → After):</div>
+                    <div className="space-y-2">
+                      {futureSessionAdaptivePreviewDiffModel.changes.map((change) => {
+                        const confColor = getAdaptiveChangeConfidenceColor(change.confidence)
+                        const srcColor = getAdaptiveChangeSourceColor(change.source)
+                        return (
+                          <div key={change.key} className="p-1.5 rounded bg-[#1A1A2E]/40 border border-teal-500/10">
+                            {/* Change header */}
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[9px] font-medium text-teal-300/90">{change.label}</span>
+                              <span className={cn("text-[7px] px-1 py-0.5 rounded", confColor.bg, confColor.text)}>
+                                {getAdaptiveChangeConfidenceLabel(change.confidence)}
+                              </span>
+                              <span className={cn("text-[7px] px-1 py-0.5 rounded", srcColor.bg, srcColor.text)}>
+                                {getAdaptiveChangeSourceLabel(change.source)}
+                              </span>
+                            </div>
+                            {/* Before */}
+                            <div className="flex items-start gap-1 mb-0.5">
+                              <span className="text-[8px] text-rose-400/70 shrink-0 w-10">Before:</span>
+                              <span className="text-[8px] text-[#9A9AA9]">{change.before}</span>
+                            </div>
+                            {/* After */}
+                            <div className="flex items-start gap-1 mb-0.5">
+                              <span className="text-[8px] text-emerald-400/70 shrink-0 w-10">After:</span>
+                              <span className="text-[8px] text-emerald-300/80">{change.after}</span>
+                            </div>
+                            {/* Reason */}
+                            <div className="flex items-start gap-1">
+                              <span className="text-[8px] text-amber-400/50 shrink-0 w-10">Why:</span>
+                              <span className="text-[8px] text-amber-300/60">{change.reason}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Blockers if any */}
+                {futureSessionAdaptivePreviewDiffModel.blockers.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Why not applied:</div>
+                    {futureSessionAdaptivePreviewDiffModel.blockers.slice(0, 4).map((b, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-teal-500/5 border border-teal-500/20">
+                  <div className="text-[9px] text-teal-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-teal-300/90 mt-0.5">
+                    {futureSessionAdaptivePreviewDiffModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-teal-400/60">
+                  This is a concrete adaptation preview only. Nothing has been saved or applied. Real persistence and workout mutation remain disabled.
                 </p>
               </div>
             )}

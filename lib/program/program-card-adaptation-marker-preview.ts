@@ -394,3 +394,34 @@ export function extractSourceBackedMarkerPreviewItems(
   // Return real source-backed items only
   return model.previewItems
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 80.6] React Context for source-backed marker preview model sharing
+// Hub provides the model, Day cards consume it - one-way data flow
+// ─────────────────────────────────────────────────────────────────────────────
+import { createContext, useContext } from 'react'
+
+/**
+ * Context for sharing the source-backed Prompt 78 marker preview model
+ * between Hub (provider) and Day cards (consumers).
+ * Default value is null - consumers must handle this case.
+ */
+export const ProgramCardAdaptationMarkerPreviewContext = createContext<ProgramCardAdaptationMarkerPreviewModel | null>(null)
+
+/**
+ * Hook to consume the source-backed marker preview model from Context.
+ * Returns null if no provider exists (e.g., Hub not rendered yet).
+ */
+export function useProgramCardAdaptationMarkerPreviewModel(): ProgramCardAdaptationMarkerPreviewModel | null {
+  return useContext(ProgramCardAdaptationMarkerPreviewContext)
+}
+
+/**
+ * Hook to get source-backed marker preview items from Context.
+ * Returns empty array when model is unavailable or has no items.
+ * This is the primary hook for Day card marker rendering.
+ */
+export function useProgramCardAdaptationMarkerPreviewItems(): readonly ProgramCardAdaptationMarkerPreviewItem[] {
+  const model = useContext(ProgramCardAdaptationMarkerPreviewContext)
+  return extractSourceBackedMarkerPreviewItems(model)
+}

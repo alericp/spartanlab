@@ -13,7 +13,8 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80.5] Marker preview imports removed - source models not available to parent
+// [Prompt 80.6] Source-backed marker preview Context hook - consumed after Hub renders
+import { useProgramCardAdaptationMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -446,6 +447,80 @@ function isDisplayWeeklyRepresentation(
   })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 80.6] Program Card Adaptation Marker Preview - Context Consumer Component
+// This component consumes the Context provided by Hub and renders the marker
+// Source-backed: reads same Prompt 78 model that Plan Logic displays
+// ─────────────────────────────────────────────────────────────────────────────
+interface ProgramCardAdaptationMarkerProps {
+  readonly dayNumber: number
+}
+
+function ProgramCardAdaptationMarker({ dayNumber }: ProgramCardAdaptationMarkerProps) {
+  // [Prompt 80.6] Consume source-backed marker items from Hub's Context
+  const programCardAdaptationMarkerPreviewItems = useProgramCardAdaptationMarkerPreviewItems()
+  
+  // Match preview items to this session by targetDayNumber
+  const matchedPreviewItem = programCardAdaptationMarkerPreviewItems.find(item => {
+    // Match by day number - this is the stable identifier
+    if (item.targetDayNumber !== undefined && dayNumber === item.targetDayNumber) {
+      return true
+    }
+    return false
+  })
+  
+  // Only show on matched future sessions
+  if (!matchedPreviewItem) return null
+  
+  return (
+    <div 
+      className="mb-3 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40"
+      data-program-card-adaptation-marker-preview="true"
+      data-no-start-workout-bridge="true"
+      data-no-live-workout-bridge="true"
+    >
+      <div className="flex items-start gap-2">
+        <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+          <Activity className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
+              Adaptive preview
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
+              Program Card proof
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
+              read-only
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+              No workout change
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+              Start Workout unchanged
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+              Live Workout unchanged
+            </span>
+          </div>
+          <p className="text-[10px] text-emerald-300 font-medium mb-1">
+            {matchedPreviewItem.markerLabel}
+          </p>
+          <p className="text-[9px] text-[#6A6A7A] leading-relaxed">
+            {matchedPreviewItem.markerPreviewText}
+          </p>
+          <p className="text-[8px] text-[#5A5A6A] mt-1 italic">
+            {matchedPreviewItem.whyShown}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AdaptiveProgramDisplay({
   program,
   onDelete,
@@ -642,14 +717,10 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.5] Program Card Adaptation Marker Preview items
-  // Source-backed Prompt 78 model requires upstream models (writerOpenPreviewBoundaryModel,
-  // localAuthorizationCautionReviewGateModel, etc.) that are computed inside Hub.
-  // Without duplicating the entire Prompt 66.1→78 chain here, markers cannot be source-backed.
-  // Per instruction: hide marker when source unavailable, ensure Plan Logic ↔ Day card consistency.
-  // If Plan Logic says "No marker items", Day cards correctly show no marker.
-  // Future: if marker visibility is needed, lift Prompt 78 chain to shared helper.
-  const programCardAdaptationMarkerPreviewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[] = []
+  // [Prompt 80.6] Program Card Adaptation Marker Preview items
+  // Now consumed from Context provided by Hub - source-backed, Plan Logic ↔ Day card consistent
+  // The Context consumer hook is used directly in the Day card render section
+  // since Context is only available after Hub renders its Provider
 
 
   
@@ -3151,68 +3222,8 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
-                {/* [Prompt 80.1] Program Card Adaptation Marker Preview — read-only preview indicator */}
-                {(() => {
-                  // [Prompt 80.1] Match preview items to this session by targetDayNumber
-                  const matchedPreviewItem = programCardAdaptationMarkerPreviewItems.find(item => {
-                    // Match by day number - this is the stable identifier
-                    if (item.targetDayNumber !== undefined && session.dayNumber === item.targetDayNumber) {
-                      return true
-                    }
-                    return false
-                  })
-                  
-                  // Only show on matched future sessions
-                  if (!matchedPreviewItem) return null
-                  
-                  return (
-                    <div 
-                      className="mb-3 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40"
-                      data-program-card-adaptation-marker-preview="true"
-                      data-no-start-workout-bridge="true"
-                      data-no-live-workout-bridge="true"
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                          <Activity className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
-                              Adaptive preview
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
-                              Program Card proof
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
-                              read-only
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
-                              No workout change
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
-                              Start Workout unchanged
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-emerald-300 font-medium mb-1">
-                            {matchedPreviewItem.markerLabel}
-                          </p>
-                          <p className="text-[9px] text-[#8A8A9A] mb-1">
-                            {matchedPreviewItem.markerPreviewText}
-                          </p>
-                          <p className="text-[9px] text-[#6A6A7A]">
-                            {matchedPreviewItem.whyShown}
-                          </p>
-                          <p className="text-[8px] text-zinc-500 mt-2 border-t border-zinc-700/30 pt-2">
-                            Program Card marker only — Start Workout and Live Workout still use the original session.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
+                {/* [Prompt 80.6] Program Card Adaptation Marker Preview — Context-based, source-backed */}
+                <ProgramCardAdaptationMarker dayNumber={session.dayNumber} />
 <AdaptiveSessionCard
   session={session}
   programId={program.id}

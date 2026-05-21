@@ -1626,8 +1626,7 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  /** [Prompt 80] Callback to lift Program Card Adaptation Marker Preview items to parent for card display */
-  onProgramCardAdaptationMarkerPreviewChange?: (items: readonly ProgramCardAdaptationMarkerPreviewItem[]) => void
+  // [Prompt 80.2] Removed onProgramCardAdaptationMarkerPreviewChange callback - markers derived locally now
 }
 
 // =============================================================================
@@ -8073,7 +8072,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  onProgramCardAdaptationMarkerPreviewChange, // [Prompt 80] Lift preview items to parent
+  // [Prompt 80.2] Removed onProgramCardAdaptationMarkerPreviewChange - markers derived locally in parent
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9110,19 +9109,9 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.1] Lift preview items to parent using stable signature to avoid feedback loop
-  // Use item count + first item id as stable dependency instead of array reference
-  const previewItemsSignature = useMemo(() => {
-    const items = programCardAdaptationMarkerPreviewModel.previewItems
-    return `${items.length}:${items[0]?.sessionId ?? 'none'}:${items[0]?.targetDayNumber ?? 0}`
-  }, [programCardAdaptationMarkerPreviewModel.previewItems])
-  
-  useEffect(() => {
-    if (onProgramCardAdaptationMarkerPreviewChange) {
-      onProgramCardAdaptationMarkerPreviewChange(programCardAdaptationMarkerPreviewModel.previewItems)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- use stable signature, not array ref
-  }, [previewItemsSignature, onProgramCardAdaptationMarkerPreviewChange])
+  // [Prompt 80.2] Removed child-to-parent callback bridge
+  // Marker preview items are now derived locally in AdaptiveProgramDisplay using useMemo
+  // This eliminates the effect-based state lifting that caused React #185
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

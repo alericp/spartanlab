@@ -361,3 +361,47 @@ export function resolveProgramCardAdaptationMarkerPreview(
       : 'Wait for draft items to be generated',
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 80.2] Pure session-based marker derivation for local computation
+// No state lifting, no effects, no child-to-parent callbacks
+// ─────────────────────────────────────────────────────────────────────────────
+export interface SessionBasedMarkerInput {
+  readonly dayNumber: number
+  readonly dayLabel?: string
+  readonly sessionTitle?: string
+}
+
+/**
+ * Derive marker preview items directly from session data.
+ * This is a pure function - no side effects, safe for useMemo.
+ * Returns marker items for Day 1 as a proof-of-concept target.
+ */
+export function deriveSessionBasedMarkerPreviewItems(
+  sessions: readonly SessionBasedMarkerInput[]
+): readonly ProgramCardAdaptationMarkerPreviewItem[] {
+  // Only target Day 1 as the proof-of-concept target for Prompt 80
+  // This is read-only preview - no actual workout changes
+  const targetDay = 1
+  const targetSession = sessions.find(s => s.dayNumber === targetDay)
+  
+  if (!targetSession) {
+    return []
+  }
+  
+  return [{
+    sessionId: `session-day-${targetDay}`,
+    dayLabel: targetSession.dayLabel || `Day ${targetDay}`,
+    sessionTitle: targetSession.sessionTitle || `Session ${targetDay}`,
+    markerLabel: 'Adaptive preview',
+    markerTone: 'emerald' as const,
+    markerPreviewText: 'Would show: Future workout may be adjusted based on recent performance.',
+    whyShown: 'Prompt 80 Program Card proof gate — read-only marker demonstration',
+    wouldProgramCardChange: false as const,
+    wouldStartWorkoutChange: false as const,
+    wouldLiveWorkoutChange: false as const,
+    sourceDraftItemId: undefined,
+    sourceTargetSessionId: `session-day-${targetDay}`,
+    targetDayNumber: targetDay,
+  }]
+}

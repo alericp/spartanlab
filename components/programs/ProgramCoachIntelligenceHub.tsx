@@ -1626,7 +1626,11 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  // [Prompt 80.2] Removed onProgramCardAdaptationMarkerPreviewChange callback - markers derived locally now
+  /** [Prompt 80.4] One-way ref bridge for source-backed marker preview model
+   * Hub populates this ref with the computed Prompt 78 model.
+   * Display reads from ref to render markers on Day cards.
+   * This is one-way (Hub → Display), pure, and render-safe - no callbacks or effects. */
+  markerPreviewModelRef?: React.MutableRefObject<ProgramCardAdaptationMarkerPreviewModel | null>
 }
 
 // =============================================================================
@@ -8072,7 +8076,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  // [Prompt 80.2] Removed onProgramCardAdaptationMarkerPreviewChange - markers derived locally in parent
+  markerPreviewModelRef, // [Prompt 80.4] One-way ref bridge for source-backed markers
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9109,9 +9113,11 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.2] Removed child-to-parent callback bridge
-  // Marker preview items are now derived locally in AdaptiveProgramDisplay using useMemo
-  // This eliminates the effect-based state lifting that caused React #185
+  // [Prompt 80.4] Populate one-way ref bridge with source-backed model
+  // This is render-safe assignment, not an effect - runs synchronously during render
+  if (markerPreviewModelRef) {
+    markerPreviewModelRef.current = programCardAdaptationMarkerPreviewModel
+  }
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

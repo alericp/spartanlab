@@ -664,6 +664,14 @@ import {
   getFutureSessionMutationApplyCandidateStatusColor,
   type FutureSessionMutationApplyCandidateModel,
 } from '@/lib/program/future-session-mutation-apply-candidate'
+// [Prompt 78] Program Card Adaptation Marker Preview
+import {
+  resolveProgramCardAdaptationMarkerPreview,
+  getProgramCardAdaptationMarkerPreviewStatusLabel,
+  getProgramCardAdaptationMarkerPreviewStatusColor,
+  getProgramCardMarkerToneClass,
+  type ProgramCardAdaptationMarkerPreviewModel,
+} from '@/lib/program/program-card-adaptation-marker-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -9078,6 +9086,17 @@ export function ProgramCoachIntelligenceHub({
       writerReadinessBoundaryModel: prompt74WriterReadinessBoundaryModel,
     })
   }, [prompt77RoadmapStep, futureSessionMutationDraftPreviewModel, userConfirmedMutationAuthorizationBoundaryModel, prompt74WriterReadinessBoundaryModel])
+
+  // [Prompt 78] Program Card Adaptation Marker Preview Model
+  // Read-only preview showing how adapted sessions would be marked on Program Cards
+  const prompt78RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(78), [])
+  const programCardAdaptationMarkerPreviewModel = useMemo<ProgramCardAdaptationMarkerPreviewModel>(() => {
+    return resolveProgramCardAdaptationMarkerPreview({
+      roadmapStep: prompt78RoadmapStep,
+      futureSessionMutationApplyCandidateModel,
+      futureSessionMutationDraftPreviewModel,
+    })
+  }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -18098,6 +18117,184 @@ export function ProgramCoachIntelligenceHub({
                 MASTER-8C.82 / AB20.4.75 / Prompt 77 — Apply candidate only. No applied change. No write. No storage. No DB/API/schema. Program Cards, Start Workout, and Live Workout unchanged.
               </p>
             </div>
+            {/* [Prompt 78] Program Card Adaptation Marker Preview card */}
+            <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-teal-300">
+                  Prompt 78 of 85
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                  MASTER-8C.83 / AB20.4.76
+                </span>
+                {(() => {
+                  const statusColor = getProgramCardAdaptationMarkerPreviewStatusColor(programCardAdaptationMarkerPreviewModel.status)
+                  const colorClasses: Record<string, string> = {
+                    red: 'bg-red-500/10 text-red-400/70 border-red-500/20',
+                    amber: 'bg-amber-500/10 text-amber-400/70 border-amber-500/20',
+                    lime: 'bg-lime-500/10 text-lime-400/70 border-lime-500/20',
+                    sky: 'bg-sky-500/10 text-sky-400/70 border-sky-500/20',
+                  }
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border ${colorClasses[statusColor] || colorClasses.amber}`}>
+                      {getProgramCardAdaptationMarkerPreviewStatusLabel(programCardAdaptationMarkerPreviewModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  preview only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no Program Card change
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no Start Workout bridge
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no Live Workout bridge
+                </span>
+              </div>
+              <div className="text-[9px] text-teal-300/80 font-medium mb-2">
+                Program Card Adaptation Marker Preview
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${programCardAdaptationMarkerPreviewModel.markerPreviewReady ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {programCardAdaptationMarkerPreviewModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {programCardAdaptationMarkerPreviewModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Marker Preview Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Marker preview ready: <span className={programCardAdaptationMarkerPreviewModel.markerPreviewReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {programCardAdaptationMarkerPreviewModel.markerPreviewReady ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Apply candidate ready: <span className={programCardAdaptationMarkerPreviewModel.applyCandidateReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {programCardAdaptationMarkerPreviewModel.applyCandidateReady ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation present: <span className={programCardAdaptationMarkerPreviewModel.userConfirmationPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {programCardAdaptationMarkerPreviewModel.userConfirmationPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Apply button enabled: <span className="text-zinc-400/70 font-mono">{programCardAdaptationMarkerPreviewModel.applyButtonEnabled ? 'true' : 'false'}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{programCardAdaptationMarkerPreviewModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Marker preview items: <span className="text-zinc-400/70 font-mono">{programCardAdaptationMarkerPreviewModel.markerPreviewItemCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Applied change count: <span className="text-zinc-400/70 font-mono">{programCardAdaptationMarkerPreviewModel.appliedChangeCount}</span>
+                </div>
+              </div>
+              {/* Preview items if any */}
+              {programCardAdaptationMarkerPreviewModel.previewItems.length > 0 ? (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500 mb-1">Would mark these Program Cards ({programCardAdaptationMarkerPreviewModel.previewItems.length}):</p>
+                  {programCardAdaptationMarkerPreviewModel.previewItems.slice(0, 5).map((item) => (
+                    <div key={item.sessionId} className="text-[8px] text-[#8A8A9A] mb-1 p-1 rounded bg-[#0A0A12]/50 border border-zinc-800/30">
+                      <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                        <span className={`text-[7px] px-1 py-0.5 rounded border ${getProgramCardMarkerToneClass(item.markerTone)}`}>
+                          {item.markerLabel}
+                        </span>
+                        <span className="font-medium">{item.dayLabel}: {item.sessionTitle}</span>
+                      </div>
+                      <div className="text-[7px] text-zinc-400">
+                        {item.markerPreviewText}
+                      </div>
+                      <div className="text-[7px] text-zinc-500 mt-0.5">
+                        Why: {item.whyShown}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        <span className="text-[6px] px-0.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                          preview only
+                        </span>
+                        <span className="text-[6px] px-0.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                          card unchanged
+                        </span>
+                        <span className="text-[6px] px-0.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                          runtime unchanged
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {programCardAdaptationMarkerPreviewModel.previewItems.length > 5 && (
+                    <p className="text-[7px] text-zinc-500">...and {programCardAdaptationMarkerPreviewModel.previewItems.length - 5} more marker(s)</p>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/70">No Program Card marker preview is available yet because no eligible draft session marker exists.</p>
+                </div>
+              )}
+              {/* Blockers if any */}
+              {programCardAdaptationMarkerPreviewModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {programCardAdaptationMarkerPreviewModel.blockers.slice(0, 5).map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Safety notes if any */}
+              {programCardAdaptationMarkerPreviewModel.safetyNotes.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500 mb-1">Safety Notes:</p>
+                  {programCardAdaptationMarkerPreviewModel.safetyNotes.slice(0, 3).map((note, i) => (
+                    <p key={i} className="text-[7px] text-zinc-500">• {note}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {programCardAdaptationMarkerPreviewModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future sessions not mutated
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  storage untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  DB/API/schema untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  generator untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  preview only
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-teal-400/60 mt-2">
+                MASTER-8C.83 / AB20.4.76 / Prompt 78 — Program Card marker preview only. No actual Program Cards changed. No Start Workout bridge. No Live Workout bridge. No write, storage, DB/API, schema, generator, or mutation.
+              </p>
+            </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
@@ -18149,7 +18346,7 @@ export function ProgramCoachIntelligenceHub({
                   <div className="mb-1.5">
                     {sessionIdentityModel.scopeSafetyNotes.slice(0, 3).map((note, i) => (
                       <div key={i} className="text-[9px] text-[#8A8A9A] mb-0.5">
-                        {sessionIdentityModel.programScopeAvailable ? '✓' : '⚠'} {note}
+                        {sessionIdentityModel.programScopeAvailable ? '��' : '⚠'} {note}
                       </div>
                     ))}
                   </div>

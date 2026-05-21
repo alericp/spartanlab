@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -1628,10 +1628,8 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  /** [Prompt 80.8] Callback for marker preview items - called via useEffect when model updates
-   * This is NOT a render-time bridge - it's a controlled callback pattern.
-   * Items come from same Prompt 78 model shown in Plan Logic. */
-  onMarkerPreviewItemsChange?: (items: readonly ProgramCardAdaptationMarkerPreviewItem[]) => void
+  // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback to fix React #185 crash
+  // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.
   /** [Prompt 80.8] Children rendered inside Context.Provider for marker access
    * Day card section passed as children can use useProgramCardAdaptationMarkerPreviewItems()
    * to access source-backed items from same Prompt 78 model shown in Plan Logic. */
@@ -8081,7 +8079,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  onMarkerPreviewItemsChange, // [Prompt 80.8] Callback for marker preview items
+  // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange to fix React #185 crash
   children, // [Prompt 80.8] Children for Context-based marker access
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
@@ -9119,18 +9117,9 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.8.1] Notify parent of marker preview items via controlled callback
-  // FIX: Use ref to stabilize callback and avoid React #185 infinite loop
-  // The callback identity changes each parent render, so we store it in a ref
-  const onMarkerPreviewItemsChangeRef = useRef(onMarkerPreviewItemsChange)
-  onMarkerPreviewItemsChangeRef.current = onMarkerPreviewItemsChange
-  
-  useEffect(() => {
-    if (onMarkerPreviewItemsChangeRef.current) {
-      const items = extractSourceBackedMarkerPreviewItems(programCardAdaptationMarkerPreviewModel)
-      onMarkerPreviewItemsChangeRef.current(items)
-    }
-  }, [programCardAdaptationMarkerPreviewModel]) // Callback excluded - accessed via stable ref
+  // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback/ref/effect to fix React #185
+  // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.
+  // Day-card markers in parent use empty array until proper parent-owned architecture is built.
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

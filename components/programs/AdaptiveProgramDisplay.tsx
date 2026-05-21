@@ -714,12 +714,11 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.8] Program Card Adaptation Marker Preview items state
-  // Populated via controlled callback from Hub (useEffect, not render-time)
-  // Source-backed from same Prompt 78 model displayed in Plan Logic
-  const [programCardAdaptationMarkerPreviewItems, setProgramCardAdaptationMarkerPreviewItems] = useState<
-    readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[]
-  >([])
+  // [Prompt 80.8.2] Program Card Adaptation Marker Preview items
+  // BRIDGE REMOVED: No longer fed by Hub callback to avoid React #185 infinite loop
+  // Day-card markers will be empty until proper parent-owned architecture is built
+  // Plan Logic in Hub continues to show its internal Prompt 78 model
+  const programCardAdaptationMarkerPreviewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[] = []
 
 
   
@@ -1464,7 +1463,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
-    onMarkerPreviewItemsChange={setProgramCardAdaptationMarkerPreviewItems} // [Prompt 80.8] Controlled callback
+    // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback to fix React #185 crash
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

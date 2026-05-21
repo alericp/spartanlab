@@ -17086,6 +17086,89 @@ export function ProgramCoachIntelligenceHub({
                 MASTER-8C.75 / AB20.4.68 / Prompt 70 — Source confirmation gate only. No durable persistence. No DB/API/storage.
               </p>
             </div>
+            {/* [Prompt 71] Roadmap Source Lock card */}
+            <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-cyan-300">
+                  Prompt 71 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                  MASTER-8C.76 / AB20.4.69
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-lime-500/10 text-lime-400/70 border-lime-500/20">
+                  source locked
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  read-only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+              </div>
+              <div className="text-[9px] text-cyan-300/80 font-medium mb-2">
+                Roadmap Source Lock
+              </div>
+              {/* Source registry status */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className="text-[9px] text-lime-400/80 font-medium mb-1">
+                  Official remaining roadmap source is now defined in code. This does not mutate the program.
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  Remaining steps registered: <span className="text-cyan-400/70 font-mono">14</span> (Prompt 71–84)
+                </p>
+              </div>
+              {/* Gate dependency check */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Prior Gate Dependencies:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Valid local receipt present: <span className={validatedMarkerSavedCount > 0 ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {validatedMarkerSavedCount > 0 ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Stale local receipt: <span className={!controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? "text-lime-400/70" : "text-orange-400/70"}>
+                    {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent ? 'true (blocks)' : 'false (ok)'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Downstream saved proof: <span className={downstreamSavedProofCount > 0 ? "text-lime-400/70 font-mono" : "text-zinc-400/70 font-mono"}>
+                    {downstreamSavedProofCount}
+                  </span>
+                </div>
+              </div>
+              {/* Blocked reason if prior gates incomplete */}
+              {(validatedMarkerSavedCount === 0 || controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent) && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80">
+                    {controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptPresent
+                      ? 'Blocked — stale local receipt cannot unlock roadmap.'
+                      : 'Next adaptive write path remains blocked — valid local receipt proof required.'}
+                  </p>
+                </div>
+              )}
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future-session mutation disabled
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-cyan-400/60 mt-2">
+                MASTER-8C.76 / AB20.4.69 / Prompt 71 — Roadmap source lock only. No durable persistence. No DB/API/storage. Program Cards, Start Workout, Live Workout unchanged.
+              </p>
+            </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}
             {sessionIdentityModel && (
               <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">

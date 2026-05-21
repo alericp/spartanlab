@@ -638,3 +638,521 @@ export function getFutureSessionMutationWriterReadinessStatusColor(
       }
   }
 }
+
+// =============================================================================
+// [PROMPT 74] FUTURE-SESSION MUTATION WRITER READINESS BOUNDARY
+// MASTER-8C.79 / AB20.4.72 / Step 4 of 14
+// Consumes Prompt 73 Controlled Durable Write Preflight Boundary
+// Preview-only / no mutation / no write
+// =============================================================================
+
+import type { ControlledDurableWritePreflightBoundaryModel } from './controlled-durable-write-preflight-boundary'
+import type { PlanLogicMutationReadinessRoadmapStep } from './plan-logic-mutation-readiness-roadmap-source'
+
+/**
+ * Prompt 74 status — writer readiness boundary consuming Prompt 73 preflight
+ */
+export type Prompt74WriterReadinessStatus =
+  | 'writer_readiness_blocked_roadmap_source_missing'
+  | 'writer_readiness_blocked_preflight_missing'
+  | 'writer_readiness_blocked_preflight_not_ready'
+  | 'writer_readiness_blocked_no_target_sessions'
+  | 'writer_readiness_blocked_no_preview_changes'
+  | 'writer_readiness_blocked_completed_session_protection_missing'
+  | 'writer_readiness_blocked_write_invariant_violation'
+  | 'writer_readiness_ready_preview_only'
+
+/**
+ * Prompt 74 item status
+ */
+export type Prompt74WriterReadinessItemStatus =
+  | 'passed'
+  | 'blocked'
+  | 'failed'
+  | 'protected'
+  | 'pending'
+
+/**
+ * Prompt 74 readiness item
+ */
+export interface Prompt74WriterReadinessItem {
+  readonly key: string
+  readonly label: string
+  readonly status: Prompt74WriterReadinessItemStatus
+  readonly detail: string
+}
+
+/**
+ * Prompt 74 Model — Future-Session Mutation Writer Readiness Boundary
+ */
+export interface Prompt74WriterReadinessBoundaryModel {
+  readonly sourceStep: 'MASTER-8C.79 / AB20.4.72 / Prompt 74'
+  readonly promptNumber: 74
+  readonly totalPrompts: 84
+  readonly status: Prompt74WriterReadinessStatus
+  readonly headline: string
+  readonly summary: string
+  readonly writerReadinessPreviewReady: boolean
+  readonly mutationWriterEnabled: false
+  readonly futureSessionMutationEnabled: false
+  readonly futureSessionsMutated: false
+  readonly completedSessionsMutated: false
+  readonly completedSessionsProtected: true
+  readonly durableWriteEnabled: false
+  readonly durablePersistenceEnabled: false
+  readonly durableReceiptWritten: false
+  readonly storageTouched: false
+  readonly apiTouched: false
+  readonly dbTouched: false
+  readonly schemaTouched: false
+  readonly programCardsChanged: false
+  readonly startWorkoutChanged: false
+  readonly liveWorkoutChanged: false
+  readonly roadmapStepFound: boolean
+  readonly roadmapTitle: string
+  readonly roadmapVisibleProofTarget: string
+  readonly upstreamPrompt73Status: string
+  readonly upstreamPrompt73Ready: boolean
+  readonly upstreamPrompt73Headline: string
+  readonly targetSessionCount: number
+  readonly previewChangeCount: number
+  readonly candidateId: string
+  readonly preflightValid: boolean
+  readonly completedSessionProtectionValid: boolean
+  readonly writeInvariantsValid: boolean
+  readonly readinessItems: readonly Prompt74WriterReadinessItem[]
+  readonly blockers: readonly string[]
+  readonly safetyNotes: readonly string[]
+  readonly nextRequiredStep: string
+}
+
+/**
+ * Prompt 74 resolver input
+ */
+export interface Prompt74WriterReadinessBoundaryInput {
+  readonly durableWritePreflightBoundaryModel: ControlledDurableWritePreflightBoundaryModel | null | undefined
+  readonly roadmapStep: PlanLogicMutationReadinessRoadmapStep | null | undefined
+}
+
+// Locked flags for Prompt 74
+const PROMPT74_LOCKED_FLAGS = {
+  mutationWriterEnabled: false as const,
+  futureSessionMutationEnabled: false as const,
+  futureSessionsMutated: false as const,
+  completedSessionsMutated: false as const,
+  completedSessionsProtected: true as const,
+  durableWriteEnabled: false as const,
+  durablePersistenceEnabled: false as const,
+  durableReceiptWritten: false as const,
+  storageTouched: false as const,
+  apiTouched: false as const,
+  dbTouched: false as const,
+  schemaTouched: false as const,
+  programCardsChanged: false as const,
+  startWorkoutChanged: false as const,
+  liveWorkoutChanged: false as const,
+}
+
+// Safety notes for Prompt 74
+const PROMPT74_SAFETY_NOTES: readonly string[] = [
+  'Prompt 74 is preview-only; no future session mutation is performed.',
+  'Completed sessions remain protected.',
+  'Program Cards remain unchanged.',
+  'Start Workout remains unchanged.',
+  'Live Workout remains unchanged.',
+  'No storage/API/DB/schema write is performed.',
+  'Writer readiness preview may be ready only after Prompt 73 preflight is ready.',
+]
+
+/**
+ * Resolve Prompt 74 Future-Session Mutation Writer Readiness Boundary
+ */
+export function resolvePrompt74WriterReadinessBoundary(
+  input: Prompt74WriterReadinessBoundaryInput
+): Prompt74WriterReadinessBoundaryModel {
+  const { durableWritePreflightBoundaryModel, roadmapStep } = input
+
+  // Base fields
+  const baseFields = {
+    sourceStep: 'MASTER-8C.79 / AB20.4.72 / Prompt 74' as const,
+    promptNumber: 74 as const,
+    totalPrompts: 84 as const,
+    ...PROMPT74_LOCKED_FLAGS,
+    safetyNotes: PROMPT74_SAFETY_NOTES,
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: Roadmap source missing
+  // -------------------------------------------------------------------------
+  if (!roadmapStep) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_roadmap_source_missing',
+      headline: 'Writer readiness blocked — roadmap source missing',
+      summary: 'Prompt 74 roadmap entry not found. Cannot verify writer readiness boundary.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: false,
+      roadmapTitle: '',
+      roadmapVisibleProofTarget: '',
+      upstreamPrompt73Status: 'unknown',
+      upstreamPrompt73Ready: false,
+      upstreamPrompt73Headline: '',
+      targetSessionCount: 0,
+      previewChangeCount: 0,
+      candidateId: '',
+      preflightValid: false,
+      completedSessionProtectionValid: false,
+      writeInvariantsValid: false,
+      readinessItems: [],
+      blockers: ['Prompt 74 roadmap source entry not found'],
+      nextRequiredStep: 'Add Prompt 74 to roadmap source registry',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: Preflight model missing
+  // -------------------------------------------------------------------------
+  if (!durableWritePreflightBoundaryModel) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_preflight_missing',
+      headline: 'Writer readiness blocked — preflight missing',
+      summary: 'Prompt 73 durable write preflight boundary model not available.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: 'missing',
+      upstreamPrompt73Ready: false,
+      upstreamPrompt73Headline: '',
+      targetSessionCount: 0,
+      previewChangeCount: 0,
+      candidateId: '',
+      preflightValid: false,
+      completedSessionProtectionValid: false,
+      writeInvariantsValid: false,
+      readinessItems: [],
+      blockers: ['Prompt 73 durable write preflight boundary model missing'],
+      nextRequiredStep: 'Ensure Prompt 73 preflight model is computed',
+    }
+  }
+
+  // Extract upstream values
+  const {
+    status: p73Status,
+    headline: p73Headline,
+    durableWritePreflightReady: p73Ready,
+    targetSessionCount,
+    previewChangeCount,
+    candidateId,
+    completedSessionsProtected: p73CompletedProtected,
+    durableWriteEnabled: p73DurableWrite,
+    durablePersistenceEnabled: p73DurablePersist,
+    durableReceiptWritten: p73DurableReceipt,
+    storageTouched: p73Storage,
+    apiTouched: p73Api,
+    dbTouched: p73Db,
+    schemaTouched: p73Schema,
+    programCardsChanged: p73ProgramCards,
+    startWorkoutChanged: p73StartWorkout,
+    liveWorkoutChanged: p73LiveWorkout,
+  } = durableWritePreflightBoundaryModel
+
+  // Check write invariants
+  const writeInvariantsValid = (
+    p73DurableWrite === false &&
+    p73DurablePersist === false &&
+    p73DurableReceipt === false &&
+    p73Storage === false &&
+    p73Api === false &&
+    p73Db === false &&
+    p73Schema === false &&
+    p73ProgramCards === false &&
+    p73StartWorkout === false &&
+    p73LiveWorkout === false
+  )
+
+  // Build readiness items
+  const readinessItems: Prompt74WriterReadinessItem[] = [
+    {
+      key: 'roadmap_source',
+      label: 'Roadmap Source',
+      status: 'passed',
+      detail: 'Prompt 74 roadmap entry found',
+    },
+    {
+      key: 'preflight_model',
+      label: 'Preflight Model',
+      status: 'passed',
+      detail: 'Prompt 73 model available',
+    },
+    {
+      key: 'preflight_ready',
+      label: 'Preflight Ready',
+      status: p73Ready ? 'passed' : 'blocked',
+      detail: p73Ready ? 'Prompt 73 preflight ready' : `Prompt 73 status: ${p73Status}`,
+    },
+    {
+      key: 'target_sessions',
+      label: 'Target Sessions',
+      status: targetSessionCount > 0 ? 'passed' : 'blocked',
+      detail: `${targetSessionCount} target session(s)`,
+    },
+    {
+      key: 'preview_changes',
+      label: 'Preview Changes',
+      status: previewChangeCount > 0 ? 'passed' : 'blocked',
+      detail: `${previewChangeCount} preview change(s)`,
+    },
+    {
+      key: 'completed_protection',
+      label: 'Completed Protection',
+      status: p73CompletedProtected ? 'passed' : 'blocked',
+      detail: p73CompletedProtected ? 'Completed sessions protected' : 'Protection missing',
+    },
+    {
+      key: 'write_invariants',
+      label: 'Write Invariants',
+      status: writeInvariantsValid ? 'passed' : 'blocked',
+      detail: writeInvariantsValid ? 'All no-write invariants valid' : 'Write invariant violation',
+    },
+  ]
+
+  // -------------------------------------------------------------------------
+  // BLOCK: Preflight not ready
+  // -------------------------------------------------------------------------
+  if (!p73Ready || p73Status !== 'preflight_ready_no_write') {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_preflight_not_ready',
+      headline: 'Writer readiness blocked — preflight not ready',
+      summary: `Prompt 73 durable write preflight is not ready. Status: ${p73Status}`,
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: p73Status,
+      upstreamPrompt73Ready: false,
+      upstreamPrompt73Headline: p73Headline,
+      targetSessionCount,
+      previewChangeCount,
+      candidateId,
+      preflightValid: false,
+      completedSessionProtectionValid: p73CompletedProtected,
+      writeInvariantsValid,
+      readinessItems,
+      blockers: [
+        'Prompt 73 durable write preflight is not ready',
+        `Upstream status: ${p73Status}`,
+      ],
+      nextRequiredStep: 'Complete Prompt 73 preflight requirements first',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: No target sessions
+  // -------------------------------------------------------------------------
+  if (targetSessionCount <= 0) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_no_target_sessions',
+      headline: 'Writer readiness blocked — no target sessions',
+      summary: 'No future sessions identified for mutation. Writer readiness requires target sessions.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: p73Status,
+      upstreamPrompt73Ready: true,
+      upstreamPrompt73Headline: p73Headline,
+      targetSessionCount,
+      previewChangeCount,
+      candidateId,
+      preflightValid: true,
+      completedSessionProtectionValid: p73CompletedProtected,
+      writeInvariantsValid,
+      readinessItems,
+      blockers: ['No target sessions identified'],
+      nextRequiredStep: 'Identify future sessions for mutation',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: No preview changes
+  // -------------------------------------------------------------------------
+  if (previewChangeCount <= 0) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_no_preview_changes',
+      headline: 'Writer readiness blocked — no preview changes',
+      summary: 'No preview changes computed. Writer readiness requires preview changes.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: p73Status,
+      upstreamPrompt73Ready: true,
+      upstreamPrompt73Headline: p73Headline,
+      targetSessionCount,
+      previewChangeCount,
+      candidateId,
+      preflightValid: true,
+      completedSessionProtectionValid: p73CompletedProtected,
+      writeInvariantsValid,
+      readinessItems,
+      blockers: ['No preview changes computed'],
+      nextRequiredStep: 'Compute preview changes before writer readiness',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: Completed session protection missing
+  // -------------------------------------------------------------------------
+  if (!p73CompletedProtected) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_completed_session_protection_missing',
+      headline: 'Writer readiness blocked — completed session protection missing',
+      summary: 'Completed session protection is not confirmed. Writer readiness requires protection proof.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: p73Status,
+      upstreamPrompt73Ready: true,
+      upstreamPrompt73Headline: p73Headline,
+      targetSessionCount,
+      previewChangeCount,
+      candidateId,
+      preflightValid: true,
+      completedSessionProtectionValid: false,
+      writeInvariantsValid,
+      readinessItems,
+      blockers: ['Completed session protection not confirmed'],
+      nextRequiredStep: 'Confirm completed session protection',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BLOCK: Write invariant violation
+  // -------------------------------------------------------------------------
+  if (!writeInvariantsValid) {
+    return {
+      ...baseFields,
+      status: 'writer_readiness_blocked_write_invariant_violation',
+      headline: 'Writer readiness blocked — write invariant violation',
+      summary: 'One or more no-write invariants are violated. Writer readiness requires all invariants valid.',
+      writerReadinessPreviewReady: false,
+      roadmapStepFound: true,
+      roadmapTitle: roadmapStep.title,
+      roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+      upstreamPrompt73Status: p73Status,
+      upstreamPrompt73Ready: true,
+      upstreamPrompt73Headline: p73Headline,
+      targetSessionCount,
+      previewChangeCount,
+      candidateId,
+      preflightValid: true,
+      completedSessionProtectionValid: true,
+      writeInvariantsValid: false,
+      readinessItems,
+      blockers: ['Write invariant violation detected'],
+      nextRequiredStep: 'Fix write invariant violations',
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // READY: Preview-only
+  // -------------------------------------------------------------------------
+  return {
+    ...baseFields,
+    status: 'writer_readiness_ready_preview_only',
+    headline: 'Writer readiness boundary ready — preview only',
+    summary: `All Prompt 73 preflight checks passed. ${targetSessionCount} target session(s), ${previewChangeCount} preview change(s). Writer is NOT enabled — preview-only boundary.`,
+    writerReadinessPreviewReady: true,
+    roadmapStepFound: true,
+    roadmapTitle: roadmapStep.title,
+    roadmapVisibleProofTarget: roadmapStep.visibleProofTarget,
+    upstreamPrompt73Status: p73Status,
+    upstreamPrompt73Ready: true,
+    upstreamPrompt73Headline: p73Headline,
+    targetSessionCount,
+    previewChangeCount,
+    candidateId,
+    preflightValid: true,
+    completedSessionProtectionValid: true,
+    writeInvariantsValid: true,
+    readinessItems,
+    blockers: [],
+    nextRequiredStep: 'Prompt 75 — User-Confirmed Mutation Authorization Boundary',
+  }
+}
+
+// =============================================================================
+// [PROMPT 74] UI HELPERS
+// =============================================================================
+
+export function getPrompt74WriterReadinessStatusLabel(
+  status: Prompt74WriterReadinessStatus
+): string {
+  switch (status) {
+    case 'writer_readiness_blocked_roadmap_source_missing':
+      return 'Blocked: Roadmap Missing'
+    case 'writer_readiness_blocked_preflight_missing':
+      return 'Blocked: Preflight Missing'
+    case 'writer_readiness_blocked_preflight_not_ready':
+      return 'Blocked: Preflight Not Ready'
+    case 'writer_readiness_blocked_no_target_sessions':
+      return 'Blocked: No Targets'
+    case 'writer_readiness_blocked_no_preview_changes':
+      return 'Blocked: No Changes'
+    case 'writer_readiness_blocked_completed_session_protection_missing':
+      return 'Blocked: Protection Missing'
+    case 'writer_readiness_blocked_write_invariant_violation':
+      return 'Blocked: Invariant Violation'
+    case 'writer_readiness_ready_preview_only':
+      return 'Ready: Preview Only'
+    default:
+      return 'Unknown'
+  }
+}
+
+export function getPrompt74WriterReadinessStatusColor(
+  status: Prompt74WriterReadinessStatus
+): string {
+  switch (status) {
+    case 'writer_readiness_ready_preview_only':
+      return 'lime'
+    case 'writer_readiness_blocked_roadmap_source_missing':
+    case 'writer_readiness_blocked_preflight_missing':
+      return 'zinc'
+    case 'writer_readiness_blocked_preflight_not_ready':
+    case 'writer_readiness_blocked_no_target_sessions':
+    case 'writer_readiness_blocked_no_preview_changes':
+    case 'writer_readiness_blocked_completed_session_protection_missing':
+      return 'amber'
+    case 'writer_readiness_blocked_write_invariant_violation':
+      return 'orange'
+    default:
+      return 'zinc'
+  }
+}
+
+export function getPrompt74WriterReadinessItemStatusColor(
+  status: Prompt74WriterReadinessItemStatus
+): string {
+  switch (status) {
+    case 'passed':
+      return 'lime'
+    case 'blocked':
+      return 'amber'
+    case 'failed':
+      return 'red'
+    case 'protected':
+      return 'cyan'
+    case 'pending':
+      return 'zinc'
+    default:
+      return 'zinc'
+  }
+}

@@ -649,6 +649,14 @@ import {
   getUserMutationAuthorizationStatusColor,
   type UserConfirmedMutationAuthorizationBoundaryModel,
 } from '@/lib/program/user-confirmed-mutation-authorization-boundary'
+// [Prompt 76] Future-Session Mutation Draft Preview
+import {
+  resolveFutureSessionMutationDraftPreview,
+  getFutureSessionMutationDraftPreviewStatusLabel,
+  getFutureSessionMutationDraftPreviewStatusColor,
+  getFutureSessionMutationDraftItemStatusColor,
+  type FutureSessionMutationDraftPreviewModel,
+} from '@/lib/program/future-session-mutation-draft-preview'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -9039,6 +9047,18 @@ export function ProgramCoachIntelligenceHub({
       roadmapStep: prompt75RoadmapStep,
     })
   }, [prompt74WriterReadinessBoundaryModel, prompt75RoadmapStep])
+
+  // [Prompt 76] Future-Session Mutation Draft Preview Model
+  // Read-only draft preview that consumes Prompt 75 authorization and upstream preview diff
+  const prompt76RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(76), [])
+  const futureSessionMutationDraftPreviewModel = useMemo<FutureSessionMutationDraftPreviewModel>(() => {
+    return resolveFutureSessionMutationDraftPreview({
+      roadmapStep: prompt76RoadmapStep,
+      userAuthorizationBoundaryModel: userConfirmedMutationAuthorizationBoundaryModel,
+      writerReadinessBoundaryModel: prompt74WriterReadinessBoundaryModel,
+      adaptivePreviewDiffModel: futureSessionAdaptivePreviewDiffModel,
+    })
+  }, [prompt76RoadmapStep, userConfirmedMutationAuthorizationBoundaryModel, prompt74WriterReadinessBoundaryModel, futureSessionAdaptivePreviewDiffModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -17703,6 +17723,171 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-fuchsia-400/60 mt-2">
                 {userConfirmedMutationAuthorizationBoundaryModel.sourceStep} — Authorization boundary only. No automatic mutation. No write. No storage. No DB/API/schema.
+              </p>
+            </div>
+            {/* [Prompt 76] Future-Session Mutation Draft Preview card */}
+            <div className="rounded-lg border border-sky-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-sky-300">
+                  Prompt 76 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-400/70 border-sky-500/20">
+                  MASTER-8C.81 / AB20.4.74
+                </span>
+                {(() => {
+                  const statusColor = getFutureSessionMutationDraftPreviewStatusColor(futureSessionMutationDraftPreviewModel.status)
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-${statusColor}-500/10 text-${statusColor}-400/70 border-${statusColor}-500/20`}>
+                      {getFutureSessionMutationDraftPreviewStatusLabel(futureSessionMutationDraftPreviewModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  preview only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no applied change
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+              </div>
+              <div className="text-[9px] text-sky-300/80 font-medium mb-2">
+                Future-Session Mutation Draft Preview
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${futureSessionMutationDraftPreviewModel.status === 'draft_preview_ready_no_applied_change' ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {futureSessionMutationDraftPreviewModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {futureSessionMutationDraftPreviewModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Draft Preview Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Prompt 75 authorization: <span className={futureSessionMutationDraftPreviewModel.prompt75AuthorizationReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationDraftPreviewModel.prompt75Status} ({futureSessionMutationDraftPreviewModel.prompt75AuthorizationReady ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation required: <span className="text-orange-400/70">
+                    {futureSessionMutationDraftPreviewModel.prompt75UserConfirmationRequired ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation present: <span className={futureSessionMutationDraftPreviewModel.prompt75UserConfirmationPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationDraftPreviewModel.prompt75UserConfirmationPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User authorized mutation: <span className={futureSessionMutationDraftPreviewModel.prompt75UserAuthorizedMutation ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationDraftPreviewModel.prompt75UserAuthorizedMutation ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Prompt 74 writer: <span className={futureSessionMutationDraftPreviewModel.prompt74WriterReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationDraftPreviewModel.prompt74Status} ({futureSessionMutationDraftPreviewModel.prompt74WriterReady ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Preview diff: <span className={futureSessionMutationDraftPreviewModel.previewDiffAvailable ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationDraftPreviewModel.previewDiffStatus} ({futureSessionMutationDraftPreviewModel.previewDiffAvailable ? 'available' : 'not available'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{futureSessionMutationDraftPreviewModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Draft change count: <span className="text-zinc-400/70 font-mono">{futureSessionMutationDraftPreviewModel.draftChangeCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Applied change count: <span className="text-zinc-400/70 font-mono">{futureSessionMutationDraftPreviewModel.appliedChangeCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Candidate ID: <span className="text-zinc-400/70 font-mono text-[7px]">{futureSessionMutationDraftPreviewModel.candidateId.slice(0, 12) || 'none'}</span>
+                </div>
+              </div>
+              {/* Draft items if any */}
+              {futureSessionMutationDraftPreviewModel.draftItems.length > 0 ? (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500 mb-1">Draft Items ({futureSessionMutationDraftPreviewModel.draftItems.length}):</p>
+                  {futureSessionMutationDraftPreviewModel.draftItems.slice(0, 5).map((item) => (
+                    <div key={item.key} className="text-[8px] text-[#8A8A9A] mb-1 p-1 rounded bg-[#0A0A12]/50 border border-zinc-800/30">
+                      <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                        <span className={`text-${getFutureSessionMutationDraftItemStatusColor(item.status)}-400/70`}>
+                          [{item.status}]
+                        </span>
+                        <span className="font-medium">{item.label}</span>
+                        <span className="text-[7px] text-zinc-500">({item.confidence})</span>
+                      </div>
+                      <div className="text-[7px]">
+                        <span className="text-red-400/60">Before:</span> {item.before.slice(0, 40)}{item.before.length > 40 ? '...' : ''} → <span className="text-lime-400/60">After:</span> {item.after.slice(0, 40)}{item.after.length > 40 ? '...' : ''}
+                      </div>
+                      <div className="text-[7px] text-zinc-500">
+                        Reason: {item.reason.slice(0, 60)}{item.reason.length > 60 ? '...' : ''} | Source: {item.source} | Applied: {item.applied ? 'yes' : 'no'}
+                      </div>
+                    </div>
+                  ))}
+                  {futureSessionMutationDraftPreviewModel.draftItems.length > 5 && (
+                    <p className="text-[7px] text-zinc-500">...and {futureSessionMutationDraftPreviewModel.draftItems.length - 5} more draft item(s)</p>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[8px] text-zinc-500">No draft changes available yet.</p>
+                </div>
+              )}
+              {/* Blockers if any */}
+              {futureSessionMutationDraftPreviewModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {futureSessionMutationDraftPreviewModel.blockers.map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {futureSessionMutationDraftPreviewModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future sessions not mutated
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  DB/API/schema untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  storage untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no automatic mutation
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no applied change
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-sky-400/60 mt-2">
+                {futureSessionMutationDraftPreviewModel.sourceStep} — Draft preview only. No applied change. No write. No storage. No DB/API/schema.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

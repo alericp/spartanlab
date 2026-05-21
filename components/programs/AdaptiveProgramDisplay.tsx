@@ -13,7 +13,8 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80.8] Context hook removed - using controlled callback + direct prop
+// [Prompt 80.8.3] Context hook for source-backed marker items - consumed inside Hub's Provider
+import { useProgramCardAdaptationMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -447,17 +448,19 @@ function isDisplayWeeklyRepresentation(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// [Prompt 80.8] Program Card Adaptation Marker Preview - Direct Prop Component
-// Receives preview items from parent state (controlled via Hub callback)
-// Source-backed: items come from Hub's Prompt 78 model via useEffect callback
+// [Prompt 80.8.3] Program Card Adaptation Marker Preview - Context Consumer Component
+// Uses useProgramCardAdaptationMarkerPreviewItems() hook to consume source-backed items
+// from Hub's Context.Provider - no child-to-parent callbacks, pure render-only access
 // ─────────────────────────────────────────────────────────────────────────────
 interface ProgramCardAdaptationMarkerProps {
   readonly dayNumber: number
-  readonly previewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[]
 }
 
-function ProgramCardAdaptationMarker({ dayNumber, previewItems }: ProgramCardAdaptationMarkerProps) {
-  // [Prompt 80.8] Match preview items to this session by targetDayNumber
+function ProgramCardAdaptationMarker({ dayNumber }: ProgramCardAdaptationMarkerProps) {
+  // [Prompt 80.8.3] Consume source-backed items from Hub's Context - render-only, no callbacks
+  const previewItems = useProgramCardAdaptationMarkerPreviewItems()
+  
+  // Match preview items to this session by targetDayNumber
   const matchedPreviewItem = previewItems.find(item => {
     // Match by day number - this is the stable identifier
     if (item.targetDayNumber !== undefined && dayNumber === item.targetDayNumber) {
@@ -714,11 +717,9 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.8.2] Program Card Adaptation Marker Preview items
-  // BRIDGE REMOVED: No longer fed by Hub callback to avoid React #185 infinite loop
-  // Day-card markers will be empty until proper parent-owned architecture is built
-  // Plan Logic in Hub continues to show its internal Prompt 78 model
-  const programCardAdaptationMarkerPreviewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[] = []
+  // [Prompt 80.8.3] Program Card Adaptation Marker Preview items
+  // Day-card markers now consume source-backed items via useProgramCardAdaptationMarkerPreviewItems()
+  // hook inside Hub's Context.Provider - no child-to-parent callbacks, render-only access
 
 
   
@@ -1452,6 +1453,7 @@ export function AdaptiveProgramDisplay({
       </Card>
 
   {/* [SPARTANLAB-P2B] Coach Intelligence Hub — Method Override Planner corridor */}
+  {/* [Prompt 80.8.3] Hub wraps subsequent content to provide marker preview Context */}
   <ProgramCoachIntelligenceHub
     program={program}
     selectedSkillRepresentations={selectedSkillRepresentations}
@@ -1464,7 +1466,7 @@ export function AdaptiveProgramDisplay({
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
     // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback to fix React #185 crash
-  />
+  >
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}
       {todayGuidance && todayGuidance.available && (
@@ -3220,11 +3222,8 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
-                {/* [Prompt 80.8] Program Card Adaptation Marker Preview — controlled callback, direct prop */}
-                <ProgramCardAdaptationMarker 
-                  dayNumber={session.dayNumber}
-                  previewItems={programCardAdaptationMarkerPreviewItems}
-                />
+                {/* [Prompt 80.8.3] Program Card Adaptation Marker Preview — context-based, render-only */}
+                <ProgramCardAdaptationMarker dayNumber={session.dayNumber} />
 <AdaptiveSessionCard
   session={session}
   programId={program.id}
@@ -3307,6 +3306,7 @@ export function AdaptiveProgramDisplay({
           </Card>
         )}
       </div>
+  </ProgramCoachIntelligenceHub>
 
       {/* [PPX-7] Why This Plan Fits - Premium evidence-driven explanation sheet */}
       <Dialog open={showWhySheet} onOpenChange={setShowWhySheet}>

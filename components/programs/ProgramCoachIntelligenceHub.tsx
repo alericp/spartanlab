@@ -670,6 +670,7 @@ import {
   getProgramCardAdaptationMarkerPreviewStatusLabel,
   getProgramCardAdaptationMarkerPreviewStatusColor,
   getProgramCardMarkerToneClass,
+  extractSourceBackedMarkerPreviewItems, // [Prompt 80.7] Extract items for render prop
   ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.6] Context provider
   type ProgramCardAdaptationMarkerPreviewModel,
   type ProgramCardAdaptationMarkerPreviewItem,
@@ -1627,7 +1628,10 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  // [Prompt 80.5] Removed markerPreviewModelRef - source models stay Hub-internal
+  /** [Prompt 80.7] Render prop for Day card markers - Hub provides source-backed preview items
+   * This is NOT a callback - Hub renders what parent provides, passing the items as data.
+   * Items come from the same Prompt 78 model shown in Plan Logic. */
+  renderDayCardMarkers?: (previewItems: readonly ProgramCardAdaptationMarkerPreviewItem[]) => React.ReactNode
 }
 
 // =============================================================================
@@ -8073,7 +8077,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  // [Prompt 80.5] Removed markerPreviewModelRef - source models stay Hub-internal
+  renderDayCardMarkers, // [Prompt 80.7] Render prop for source-backed Day card markers
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9427,9 +9431,15 @@ export function ProgramCoachIntelligenceHub({
 
   // [Prompt 80.6] Wrap return in Context Provider for source-backed marker sharing
   // Hub provides the Prompt 78 model, Day cards in parent consume via Context
+  // [Prompt 80.7] Also call render prop with source-backed items for Day card markers
+  const sourceBackedMarkerPreviewItems = extractSourceBackedMarkerPreviewItems(programCardAdaptationMarkerPreviewModel)
+  
   return (
     <ProgramCardAdaptationMarkerPreviewContext.Provider value={programCardAdaptationMarkerPreviewModel}>
     <>
+      {/* [Prompt 80.7] Render Day card markers via render prop - source-backed from same Prompt 78 model */}
+      {renderDayCardMarkers?.(sourceBackedMarkerPreviewItems)}
+      
       {/* Hub Container */}
       <div 
         className="mb-4 p-3 rounded-lg border border-[#2A2A35] bg-gradient-to-br from-[#1A1A22]/80 to-[#1A1A20]/60"

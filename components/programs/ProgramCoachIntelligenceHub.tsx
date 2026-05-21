@@ -618,6 +618,16 @@ import {
   buildLocalReceiptSourceFingerprint, // [Prompt 69.1]
   type ControlledMarkerSaveLocalReceiptGateModel,
 } from '@/lib/program/controlled-marker-save-local-receipt-gate'
+// [Prompt 71] Plan Logic Roadmap Source
+import { getPlanLogicRoadmapStep } from '@/lib/program/plan-logic-mutation-readiness-roadmap-source'
+// [Prompt 72] Local Receipt Authorization Readiness
+import {
+  resolveLocalReceiptAuthorizationReadiness,
+  getLocalReceiptAuthorizationStatusLabel,
+  getLocalReceiptAuthorizationStatusColor,
+  getReadinessItemStatusColor,
+  type LocalReceiptAuthorizationReadinessModel,
+} from '@/lib/program/local-receipt-authorization-readiness'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8968,6 +8978,16 @@ export function ProgramCoachIntelligenceHub({
   const staleLocalReceiptCount = controlledMarkerSaveLocalReceiptGateModel.staleLocalReceiptCount
   // [Prompt 69.2] Downstream proof count: only valid receipts count as saved proof
   const downstreamSavedProofCount = validatedMarkerSavedCount
+
+  // [Prompt 72] Local Receipt Authorization Readiness Model
+  // Pure read-only verification boundary consuming local receipt gate
+  const prompt72RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(72), [])
+  const localReceiptAuthorizationReadinessModel = useMemo<LocalReceiptAuthorizationReadinessModel>(() => {
+    return resolveLocalReceiptAuthorizationReadiness({
+      localReceiptGateModel: controlledMarkerSaveLocalReceiptGateModel,
+      roadmapStep: prompt72RoadmapStep,
+    })
+  }, [controlledMarkerSaveLocalReceiptGateModel, prompt72RoadmapStep])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -17167,6 +17187,115 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-cyan-400/60 mt-2">
                 MASTER-8C.76 / AB20.4.69 / Prompt 71 — Roadmap source lock only. No durable persistence. No DB/API/storage. Program Cards, Start Workout, Live Workout unchanged.
+              </p>
+            </div>
+            {/* [Prompt 72] Local Receipt Authorization Readiness card */}
+            <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-violet-300">
+                  Prompt 72 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                  MASTER-8C.77 / AB20.4.70
+                </span>
+                {(() => {
+                  const statusColor = getLocalReceiptAuthorizationStatusColor(localReceiptAuthorizationReadinessModel.status)
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-${statusColor}-500/10 text-${statusColor}-400/70 border-${statusColor}-500/20`}>
+                      {getLocalReceiptAuthorizationStatusLabel(localReceiptAuthorizationReadinessModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  read-only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no durable write
+                </span>
+              </div>
+              <div className="text-[9px] text-violet-300/80 font-medium mb-2">
+                Local Receipt Authorization Readiness
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${localReceiptAuthorizationReadinessModel.readyForDurableWritePreflight ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {localReceiptAuthorizationReadinessModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {localReceiptAuthorizationReadinessModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Authorization Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Valid local receipt: <span className={localReceiptAuthorizationReadinessModel.validLocalReceiptPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {localReceiptAuthorizationReadinessModel.validLocalReceiptPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Stale local receipt: <span className={!localReceiptAuthorizationReadinessModel.staleLocalReceiptPresent ? "text-lime-400/70" : "text-orange-400/70"}>
+                    {localReceiptAuthorizationReadinessModel.staleLocalReceiptPresent ? 'true (blocks)' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Source fingerprint match: <span className={localReceiptAuthorizationReadinessModel.sourceFingerprintMatches ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {localReceiptAuthorizationReadinessModel.sourceFingerprintMatches ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Verification gate: <span className={localReceiptAuthorizationReadinessModel.verificationGateVerified ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {localReceiptAuthorizationReadinessModel.verificationGateStatus} ({localReceiptAuthorizationReadinessModel.verificationGateVerified ? 'verified' : 'not verified'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Mismatch count: <span className={localReceiptAuthorizationReadinessModel.verificationGateMismatchCount === 0 ? "text-lime-400/70 font-mono" : "text-amber-400/70 font-mono"}>
+                    {localReceiptAuthorizationReadinessModel.verificationGateMismatchCount}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{localReceiptAuthorizationReadinessModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Preview changes: <span className="text-zinc-400/70 font-mono">{localReceiptAuthorizationReadinessModel.previewChangeCount}</span>
+                </div>
+              </div>
+              {/* Blockers if any */}
+              {localReceiptAuthorizationReadinessModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {localReceiptAuthorizationReadinessModel.blockers.map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {localReceiptAuthorizationReadinessModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future-session mutation disabled
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-violet-400/60 mt-2">
+                {localReceiptAuthorizationReadinessModel.sourceStep} — {localReceiptAuthorizationReadinessModel.receiptMode}. No durable persistence. No DB/API/storage.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

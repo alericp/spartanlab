@@ -13,8 +13,7 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80.2] Program Card Adaptation Marker Preview - pure local derivation
-import { deriveSessionBasedMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 80.3] Import removed - no longer using demo derivation function
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -51,7 +50,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   consumePendingScheduleNotice, 
   evaluateActiveWeekMutation,
@@ -643,20 +642,12 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.2] Program Card Adaptation Marker Preview items - pure local derivation via useMemo
-  // No state lifting, no effects, no child-to-parent callbacks - eliminates React #185 risk
-  const programCardAdaptationMarkerPreviewItems = useMemo(() => {
-    if (!scaledSessions || scaledSessions.length === 0) {
-      return []
-    }
-    return deriveSessionBasedMarkerPreviewItems(
-      scaledSessions.map(s => ({
-        dayNumber: s.dayNumber,
-        dayLabel: s.dayLabel,
-        sessionTitle: s.dayLabel || `Day ${s.dayNumber}`,
-      }))
-    )
-  }, [scaledSessions])
+  // [Prompt 80.3] Program Card Adaptation Marker Preview items
+  // Source-backed marker data requires upstream Prompt 76/77/78 models that are computed in Hub.
+  // Without child-to-parent callback bridge (removed in 80.2), these models are not available here.
+  // Per Prompt 80.3 instructions: hide marker when source-backed data unavailable, do not fake.
+  // Marker will appear when proper source-backed extraction path is established in future prompts.
+  const programCardAdaptationMarkerPreviewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[] = []
 
 
   

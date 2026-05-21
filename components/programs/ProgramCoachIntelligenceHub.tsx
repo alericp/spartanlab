@@ -1626,11 +1626,7 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  /** [Prompt 80.4] One-way ref bridge for source-backed marker preview model
-   * Hub populates this ref with the computed Prompt 78 model.
-   * Display reads from ref to render markers on Day cards.
-   * This is one-way (Hub → Display), pure, and render-safe - no callbacks or effects. */
-  markerPreviewModelRef?: React.MutableRefObject<ProgramCardAdaptationMarkerPreviewModel | null>
+  // [Prompt 80.5] Removed markerPreviewModelRef - source models stay Hub-internal
 }
 
 // =============================================================================
@@ -8076,7 +8072,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  markerPreviewModelRef, // [Prompt 80.4] One-way ref bridge for source-backed markers
+  // [Prompt 80.5] Removed markerPreviewModelRef - source models stay Hub-internal
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9113,11 +9109,9 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.4] Populate one-way ref bridge with source-backed model
-  // This is render-safe assignment, not an effect - runs synchronously during render
-  if (markerPreviewModelRef) {
-    markerPreviewModelRef.current = programCardAdaptationMarkerPreviewModel
-  }
+  // [Prompt 80.5] Marker preview model is Hub-internal, displayed in Plan Logic only
+  // Day card markers require parent-owned model, but source models not available to parent
+  // When Plan Logic says "No marker items", Day cards correctly show no marker
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

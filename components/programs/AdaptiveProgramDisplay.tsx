@@ -1,6 +1,5 @@
 'use client'
 
-import { useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
@@ -14,9 +13,7 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80.4] Source-backed marker preview model and extractor
-import { extractSourceBackedMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
-import type { ProgramCardAdaptationMarkerPreviewModel } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 80.5] Marker preview imports removed - source models not available to parent
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -645,17 +642,14 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.4] One-way ref bridge for source-backed marker preview model
-  // Hub populates this ref during render, Display reads from it for Day card markers
-  // This is one-way (Hub → Display), pure, and render-safe - no callbacks or effects
-  const markerPreviewModelRef = useRef<ProgramCardAdaptationMarkerPreviewModel | null>(null)
-  
-  // [Prompt 80.4] Extract source-backed marker preview items from the ref
-  // Returns real items only when the Prompt 78 model is ready and has source-backed data
-  // Returns [] when model is null, not ready, or has no items - never fakes markers
-  const programCardAdaptationMarkerPreviewItems = extractSourceBackedMarkerPreviewItems(
-    markerPreviewModelRef.current
-  )
+  // [Prompt 80.5] Program Card Adaptation Marker Preview items
+  // Source-backed Prompt 78 model requires upstream models (writerOpenPreviewBoundaryModel,
+  // localAuthorizationCautionReviewGateModel, etc.) that are computed inside Hub.
+  // Without duplicating the entire Prompt 66.1→78 chain here, markers cannot be source-backed.
+  // Per instruction: hide marker when source unavailable, ensure Plan Logic ↔ Day card consistency.
+  // If Plan Logic says "No marker items", Day cards correctly show no marker.
+  // Future: if marker visibility is needed, lift Prompt 78 chain to shared helper.
+  const programCardAdaptationMarkerPreviewItems: readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[] = []
 
 
   
@@ -672,7 +666,7 @@ export function AdaptiveProgramDisplay({
         summaryRenderableSkills?: string[]
       })
     : null
-  // [BUILD GREEN GATE] safeWeeklyRepresentation — narrow through the typed
+  // [BUILD GREEN GATE] safeWeeklyRepresentation ��� narrow through the typed
   // runtime guard so every downstream `.policies` / `.find` / `.actualExposure`
   // read typechecks structurally without inline casts. Invalid or missing
   // input degrades to `null`, preserving the existing honest fallback in
@@ -1400,7 +1394,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
-    markerPreviewModelRef={markerPreviewModelRef} // [Prompt 80.4] One-way ref bridge for source-backed markers
+    // [Prompt 80.5] Removed markerPreviewModelRef - source models not available to parent
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

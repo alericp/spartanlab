@@ -3145,53 +3145,61 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
-                {/* [Prompt 80] Program Card Adaptation Marker Preview — read-only preview indicator */}
+                {/* [Prompt 80.1] Program Card Adaptation Marker Preview — read-only preview indicator */}
                 {(() => {
-                  // Match preview items to this session by dayLabel
-                  const sessionDayLabel = (session as unknown as { dayLabel?: string }).dayLabel
-                  const matchedPreviewItem = sessionDayLabel
-                    ? programCardAdaptationMarkerPreviewItems.find(item => item.dayLabel === sessionDayLabel)
-                    : null
+                  // [Prompt 80.1] Match preview items to this session by targetDayNumber
+                  const matchedPreviewItem = programCardAdaptationMarkerPreviewItems.find(item => {
+                    // Match by day number - this is the stable identifier
+                    if (item.targetDayNumber !== undefined && session.dayNumber === item.targetDayNumber) {
+                      return true
+                    }
+                    return false
+                  })
                   
-                  // Only show on future sessions (not completed/past)
+                  // Only show on matched future sessions
                   if (!matchedPreviewItem) return null
                   
                   return (
                     <div 
-                      className="mb-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20"
+                      className="mb-3 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40"
                       data-program-card-adaptation-marker-preview="true"
                       data-no-start-workout-bridge="true"
                       data-no-live-workout-bridge="true"
                     >
                       <div className="flex items-start gap-2">
-                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <Activity className="w-3 h-3 text-emerald-400" />
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <Activity className="w-4 h-4 text-emerald-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/90 font-medium">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
                               Adaptive preview
                             </span>
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-500/10 text-zinc-400/70">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
                               Program Card proof
                             </span>
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-500/10 text-zinc-400/70">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
                               read-only
                             </span>
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/70">
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
                               No workout change
                             </span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                              Start Workout unchanged
+                            </span>
                           </div>
-                          <p className="text-[9px] text-emerald-400/80 font-medium mb-0.5">
+                          <p className="text-[10px] text-emerald-300 font-medium mb-1">
                             {matchedPreviewItem.markerLabel}
                           </p>
-                          <p className="text-[8px] text-[#6A6A7A] mb-1">
-                            Would show: {matchedPreviewItem.markerPreviewText}
+                          <p className="text-[9px] text-[#8A8A9A] mb-1">
+                            {matchedPreviewItem.markerPreviewText}
                           </p>
-                          <p className="text-[8px] text-[#5A5A6A]">
+                          <p className="text-[9px] text-[#6A6A7A]">
                             {matchedPreviewItem.whyShown}
                           </p>
-                          <p className="text-[7px] text-zinc-500 mt-1.5 border-t border-zinc-700/30 pt-1">
+                          <p className="text-[8px] text-zinc-500 mt-2 border-t border-zinc-700/30 pt-2">
                             Program Card marker only — Start Workout and Live Workout still use the original session.
                           </p>
                         </div>

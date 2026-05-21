@@ -657,6 +657,13 @@ import {
   getFutureSessionMutationDraftItemStatusColor,
   type FutureSessionMutationDraftPreviewModel,
 } from '@/lib/program/future-session-mutation-draft-preview'
+// [Prompt 77] Future-Session Mutation Apply Candidate
+import {
+  resolveFutureSessionMutationApplyCandidate,
+  getFutureSessionMutationApplyCandidateStatusLabel,
+  getFutureSessionMutationApplyCandidateStatusColor,
+  type FutureSessionMutationApplyCandidateModel,
+} from '@/lib/program/future-session-mutation-apply-candidate'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -5348,7 +5355,7 @@ function ProgramBalanceSheetContent({
             </span>
           )
         })() : (
-          <span>Current status: MASTER-8B.7.2 eligibility gate — preview a Future Candidate to stage a marker-only mutation plan</span>
+          <span>Current status: MASTER-8B.7.2 eligibility gate �� preview a Future Candidate to stage a marker-only mutation plan</span>
         )}
       </div>
       
@@ -9059,6 +9066,18 @@ export function ProgramCoachIntelligenceHub({
       adaptivePreviewDiffModel: futureSessionAdaptivePreviewDiffModel,
     })
   }, [prompt76RoadmapStep, userConfirmedMutationAuthorizationBoundaryModel, prompt74WriterReadinessBoundaryModel, futureSessionAdaptivePreviewDiffModel])
+
+  // [Prompt 77] Future-Session Mutation Apply Candidate Model
+  // Read-only model that determines apply eligibility while remaining blocked unless explicit confirmation
+  const prompt77RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(77), [])
+  const futureSessionMutationApplyCandidateModel = useMemo<FutureSessionMutationApplyCandidateModel>(() => {
+    return resolveFutureSessionMutationApplyCandidate({
+      roadmapStep: prompt77RoadmapStep,
+      draftPreviewModel: futureSessionMutationDraftPreviewModel,
+      userAuthorizationBoundaryModel: userConfirmedMutationAuthorizationBoundaryModel,
+      writerReadinessBoundaryModel: prompt74WriterReadinessBoundaryModel,
+    })
+  }, [prompt77RoadmapStep, futureSessionMutationDraftPreviewModel, userConfirmedMutationAuthorizationBoundaryModel, prompt74WriterReadinessBoundaryModel])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -17888,6 +17907,195 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-sky-400/60 mt-2">
                 {futureSessionMutationDraftPreviewModel.sourceStep} — Draft preview only. No applied change. No write. No storage. No DB/API/schema.
+              </p>
+            </div>
+            {/* [Prompt 77] Future-Session Mutation Apply Candidate card */}
+            <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-violet-300">
+                  Prompt 77 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400/70 border-violet-500/20">
+                  MASTER-8C.82 / AB20.4.75
+                </span>
+                {(() => {
+                  const statusColor = getFutureSessionMutationApplyCandidateStatusColor(futureSessionMutationApplyCandidateModel.status)
+                  const colorClasses: Record<string, string> = {
+                    red: 'bg-red-500/10 text-red-400/70 border-red-500/20',
+                    amber: 'bg-amber-500/10 text-amber-400/70 border-amber-500/20',
+                    lime: 'bg-lime-500/10 text-lime-400/70 border-lime-500/20',
+                    sky: 'bg-sky-500/10 text-sky-400/70 border-sky-500/20',
+                  }
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border ${colorClasses[statusColor] || colorClasses.amber}`}>
+                      {getFutureSessionMutationApplyCandidateStatusLabel(futureSessionMutationApplyCandidateModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-orange-500/10 text-orange-400/70 border-orange-500/20">
+                  confirmation required
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  preview only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no applied change
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  apply button disabled
+                </span>
+              </div>
+              <div className="text-[9px] text-violet-300/80 font-medium mb-2">
+                Future-Session Mutation Apply Candidate
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${futureSessionMutationApplyCandidateModel.applyCandidateReady ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {futureSessionMutationApplyCandidateModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {futureSessionMutationApplyCandidateModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Apply Candidate Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Prompt 76 draft preview: <span className={futureSessionMutationApplyCandidateModel.prompt76DraftPreviewReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.prompt76Status} ({futureSessionMutationApplyCandidateModel.prompt76DraftPreviewReady ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Draft change count: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.prompt76DraftChangeCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Prompt 75 authorization: <span className={futureSessionMutationApplyCandidateModel.prompt75AuthorizationReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.prompt75Status} ({futureSessionMutationApplyCandidateModel.prompt75AuthorizationReady ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation required: <span className="text-orange-400/70">
+                    {futureSessionMutationApplyCandidateModel.prompt75UserConfirmationRequired ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation present: <span className={futureSessionMutationApplyCandidateModel.prompt75UserConfirmationPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.prompt75UserConfirmationPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User authorized mutation: <span className={futureSessionMutationApplyCandidateModel.prompt75UserAuthorizedMutation ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.prompt75UserAuthorizedMutation ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Prompt 74 writer: <span className={futureSessionMutationApplyCandidateModel.prompt74WriterReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.prompt74Status} ({futureSessionMutationApplyCandidateModel.prompt74WriterReady ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Eligible draft items: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.eligibleDraftItemCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Protected completed sessions: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.protectedCompletedSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Apply candidate ready: <span className={futureSessionMutationApplyCandidateModel.applyCandidateReady ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {futureSessionMutationApplyCandidateModel.applyCandidateReady ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Apply button enabled: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.applyButtonEnabled ? 'true' : 'false'}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Applied change count: <span className="text-zinc-400/70 font-mono">{futureSessionMutationApplyCandidateModel.appliedChangeCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Candidate ID: <span className="text-zinc-400/70 font-mono text-[7px]">{futureSessionMutationApplyCandidateModel.candidateId.slice(0, 12) || 'none'}</span>
+                </div>
+              </div>
+              {/* Apply blocked reason */}
+              {futureSessionMutationApplyCandidateModel.applyBlockedReason && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium">Apply Blocked:</p>
+                  <p className="text-[8px] text-amber-400/70">{futureSessionMutationApplyCandidateModel.applyBlockedReason}</p>
+                </div>
+              )}
+              {/* Disabled apply button */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/60 border border-zinc-700/30">
+                <button
+                  disabled
+                  className="w-full px-2 py-1.5 rounded bg-zinc-700/30 text-zinc-500 text-[9px] cursor-not-allowed"
+                >
+                  Apply future-session mutation
+                </button>
+                <p className="text-[7px] text-zinc-500 mt-1 text-center">
+                  Disabled until explicit user confirmation and all upstream gates pass.
+                </p>
+              </div>
+              {/* Blockers if any */}
+              {futureSessionMutationApplyCandidateModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {futureSessionMutationApplyCandidateModel.blockers.slice(0, 5).map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Safety notes if any */}
+              {futureSessionMutationApplyCandidateModel.safetyNotes.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500 mb-1">Safety Notes:</p>
+                  {futureSessionMutationApplyCandidateModel.safetyNotes.slice(0, 3).map((note, i) => (
+                    <p key={i} className="text-[7px] text-zinc-500">• {note}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {futureSessionMutationApplyCandidateModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future sessions not mutated
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  DB/API/schema untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  storage untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no automatic mutation
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  apply disabled
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-violet-400/60 mt-2">
+                MASTER-8C.82 / AB20.4.75 / Prompt 77 — Apply candidate only. No applied change. No write. No storage. No DB/API/schema. Program Cards, Start Workout, and Live Workout unchanged.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

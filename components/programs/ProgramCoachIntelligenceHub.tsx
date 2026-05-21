@@ -642,6 +642,13 @@ import {
   getPrompt74WriterReadinessStatusColor,
   type Prompt74WriterReadinessBoundaryModel,
 } from '@/lib/program/future-session-mutation-writer-readiness-boundary'
+// [Prompt 75] User-Confirmed Mutation Authorization Boundary
+import {
+  resolveUserConfirmedMutationAuthorizationBoundary,
+  getUserMutationAuthorizationStatusLabel,
+  getUserMutationAuthorizationStatusColor,
+  type UserConfirmedMutationAuthorizationBoundaryModel,
+} from '@/lib/program/user-confirmed-mutation-authorization-boundary'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -9022,6 +9029,16 @@ export function ProgramCoachIntelligenceHub({
       roadmapStep: prompt74RoadmapStep,
     })
   }, [durableWritePreflightBoundaryModel, prompt74RoadmapStep])
+
+  // [Prompt 75] User-Confirmed Mutation Authorization Boundary Model
+  // Read-only authorization boundary that consumes Prompt 74 writer readiness
+  const prompt75RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(75), [])
+  const userConfirmedMutationAuthorizationBoundaryModel = useMemo<UserConfirmedMutationAuthorizationBoundaryModel>(() => {
+    return resolveUserConfirmedMutationAuthorizationBoundary({
+      writerReadinessBoundaryModel: prompt74WriterReadinessBoundaryModel,
+      roadmapStep: prompt75RoadmapStep,
+    })
+  }, [prompt74WriterReadinessBoundaryModel, prompt75RoadmapStep])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -17556,6 +17573,136 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-rose-400/60 mt-2">
                 {prompt74WriterReadinessBoundaryModel.sourceStep} — Preview-only boundary. No mutation. No write. No storage. No DB/API/schema.
+              </p>
+            </div>
+            {/* [Prompt 75] User-Confirmed Mutation Authorization Boundary card */}
+            <div className="rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-fuchsia-300">
+                  Prompt 75 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-fuchsia-500/10 text-fuchsia-400/70 border-fuchsia-500/20">
+                  MASTER-8C.80 / AB20.4.73
+                </span>
+                {(() => {
+                  const statusColor = getUserMutationAuthorizationStatusColor(userConfirmedMutationAuthorizationBoundaryModel.status)
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-${statusColor}-500/10 text-${statusColor}-400/70 border-${statusColor}-500/20`}>
+                      {getUserMutationAuthorizationStatusLabel(userConfirmedMutationAuthorizationBoundaryModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no automatic mutation
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+              </div>
+              <div className="text-[9px] text-fuchsia-300/80 font-medium mb-2">
+                User-Confirmed Mutation Authorization Boundary
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${userConfirmedMutationAuthorizationBoundaryModel.mutationAuthorizationBoundaryReady ? 'text-lime-400/80' : 'text-orange-400/80'}`}>
+                  {userConfirmedMutationAuthorizationBoundaryModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {userConfirmedMutationAuthorizationBoundaryModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Authorization Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Upstream Prompt 74: <span className={userConfirmedMutationAuthorizationBoundaryModel.upstreamPrompt74Ready ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {userConfirmedMutationAuthorizationBoundaryModel.upstreamPrompt74Status} ({userConfirmedMutationAuthorizationBoundaryModel.upstreamPrompt74Ready ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation required: <span className="text-orange-400/70">
+                    {userConfirmedMutationAuthorizationBoundaryModel.userConfirmationRequired ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User confirmation present: <span className={userConfirmedMutationAuthorizationBoundaryModel.userConfirmationPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {userConfirmedMutationAuthorizationBoundaryModel.userConfirmationPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  User authorized mutation: <span className={userConfirmedMutationAuthorizationBoundaryModel.userAuthorizedMutation ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {userConfirmedMutationAuthorizationBoundaryModel.userAuthorizedMutation ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{userConfirmedMutationAuthorizationBoundaryModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Preview changes: <span className="text-zinc-400/70 font-mono">{userConfirmedMutationAuthorizationBoundaryModel.previewChangeCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Candidate ID: <span className="text-zinc-400/70 font-mono text-[7px]">{userConfirmedMutationAuthorizationBoundaryModel.candidateId.slice(0, 12) || 'none'}</span>
+                </div>
+              </div>
+              {/* Authorization items */}
+              {userConfirmedMutationAuthorizationBoundaryModel.authorizationItems.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                  <p className="text-[7px] text-zinc-500 mb-1">Authorization Items:</p>
+                  {userConfirmedMutationAuthorizationBoundaryModel.authorizationItems.map((item) => (
+                    <div key={item.key} className="text-[8px] text-[#8A8A9A] flex items-center gap-1">
+                      <span className={`text-${getUserMutationAuthorizationStatusColor(userConfirmedMutationAuthorizationBoundaryModel.status === 'authorization_blocked_no_user_confirmation' && item.key === 'user_confirmation' ? 'authorization_blocked_no_user_confirmation' : 'authorization_blocked_writer_not_ready')}-400/70`}>
+                        [{item.status}]
+                      </span>
+                      <span>{item.label}: {item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Blockers if any */}
+              {userConfirmedMutationAuthorizationBoundaryModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-orange-500/10 border border-orange-500/20">
+                  <p className="text-[8px] text-orange-400/80 font-medium mb-1">Blockers:</p>
+                  {userConfirmedMutationAuthorizationBoundaryModel.blockers.map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-orange-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {userConfirmedMutationAuthorizationBoundaryModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future sessions not mutated
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  DB/API/schema untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  storage untouched
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no automatic mutation
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-fuchsia-400/60 mt-2">
+                {userConfirmedMutationAuthorizationBoundaryModel.sourceStep} — Authorization boundary only. No automatic mutation. No write. No storage. No DB/API/schema.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

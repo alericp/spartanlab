@@ -52,6 +52,8 @@ export interface ProgramCardAdaptationMarkerPreviewItem {
   readonly wouldLiveWorkoutChange: false
   readonly sourceDraftItemId?: string
   readonly sourceTargetSessionId?: string
+  // [Prompt 80.1] Target day number for matching to actual Program Day cards
+  readonly targetDayNumber?: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -309,6 +311,8 @@ export function resolveProgramCardAdaptationMarkerPreview(
       wouldLiveWorkoutChange: false as const,
       sourceDraftItemId: item.key,
       sourceTargetSessionId: item.key,
+      // [Prompt 80.1] Target day number for matching - derived from draft item index
+      targetDayNumber: index + 1,
     }
   })
 

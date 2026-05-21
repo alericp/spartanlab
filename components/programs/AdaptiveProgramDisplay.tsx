@@ -13,6 +13,8 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
+// [Prompt 80] Program Card Adaptation Marker Preview item type
+import type { ProgramCardAdaptationMarkerPreviewItem } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -538,6 +540,10 @@ export function AdaptiveProgramDisplay({
   type MultiSessionPushForwardState = 'idle' | 'confirming' | 'applying' | 'applied' | 'failed' | 'already_applied'
   const [multiSessionPushForwardState, setMultiSessionPushForwardState] = useState<MultiSessionPushForwardState>('idle')
   const [multiSessionPushForwardResult, setMultiSessionPushForwardResult] = useState<MultiSessionPushForwardResult | null>(null)
+
+  // [Prompt 80] Program Card Adaptation Marker Preview items lifted from Hub
+  const [programCardAdaptationMarkerPreviewItems, setProgramCardAdaptationMarkerPreviewItems] = 
+    useState<readonly ProgramCardAdaptationMarkerPreviewItem[]>([])
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -1382,6 +1388,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
+    onProgramCardAdaptationMarkerPreviewChange={setProgramCardAdaptationMarkerPreviewItems} // [Prompt 80] Lift preview items
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}
@@ -3138,6 +3145,60 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
+                {/* [Prompt 80] Program Card Adaptation Marker Preview — read-only preview indicator */}
+                {(() => {
+                  // Match preview items to this session by dayLabel
+                  const sessionDayLabel = (session as unknown as { dayLabel?: string }).dayLabel
+                  const matchedPreviewItem = sessionDayLabel
+                    ? programCardAdaptationMarkerPreviewItems.find(item => item.dayLabel === sessionDayLabel)
+                    : null
+                  
+                  // Only show on future sessions (not completed/past)
+                  if (!matchedPreviewItem) return null
+                  
+                  return (
+                    <div 
+                      className="mb-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20"
+                      data-program-card-adaptation-marker-preview="true"
+                      data-no-start-workout-bridge="true"
+                      data-no-live-workout-bridge="true"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <Activity className="w-3 h-3 text-emerald-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/90 font-medium">
+                              Adaptive preview
+                            </span>
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-500/10 text-zinc-400/70">
+                              Program Card proof
+                            </span>
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-500/10 text-zinc-400/70">
+                              read-only
+                            </span>
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/70">
+                              No workout change
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-emerald-400/80 font-medium mb-0.5">
+                            {matchedPreviewItem.markerLabel}
+                          </p>
+                          <p className="text-[8px] text-[#6A6A7A] mb-1">
+                            Would show: {matchedPreviewItem.markerPreviewText}
+                          </p>
+                          <p className="text-[8px] text-[#5A5A6A]">
+                            {matchedPreviewItem.whyShown}
+                          </p>
+                          <p className="text-[7px] text-zinc-500 mt-1.5 border-t border-zinc-700/30 pt-1">
+                            Program Card marker only — Start Workout and Live Workout still use the original session.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
 <AdaptiveSessionCard
   session={session}
   programId={program.id}

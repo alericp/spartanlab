@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -9119,14 +9119,18 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.8] Notify parent of marker preview items via controlled callback (not render-time)
-  // This useEffect pattern avoids render-time state updates while keeping marker data in sync
+  // [Prompt 80.8.1] Notify parent of marker preview items via controlled callback
+  // FIX: Use ref to stabilize callback and avoid React #185 infinite loop
+  // The callback identity changes each parent render, so we store it in a ref
+  const onMarkerPreviewItemsChangeRef = useRef(onMarkerPreviewItemsChange)
+  onMarkerPreviewItemsChangeRef.current = onMarkerPreviewItemsChange
+  
   useEffect(() => {
-    if (onMarkerPreviewItemsChange) {
+    if (onMarkerPreviewItemsChangeRef.current) {
       const items = extractSourceBackedMarkerPreviewItems(programCardAdaptationMarkerPreviewModel)
-      onMarkerPreviewItemsChange(items)
+      onMarkerPreviewItemsChangeRef.current(items)
     }
-  }, [programCardAdaptationMarkerPreviewModel, onMarkerPreviewItemsChange])
+  }, [programCardAdaptationMarkerPreviewModel]) // Callback excluded - accessed via stable ref
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

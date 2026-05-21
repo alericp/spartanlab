@@ -672,6 +672,14 @@ import {
   getProgramCardMarkerToneClass,
   type ProgramCardAdaptationMarkerPreviewModel,
 } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 79] Exercise Knowledge Source Foundation Readiness (inserted gate)
+import {
+  resolveExerciseKnowledgeSourceFoundationReadiness,
+  getExerciseKnowledgeSourceFoundationStatusLabel,
+  getExerciseKnowledgeSourceFoundationStatusColor,
+  getHighImpactFamilyStatusColor,
+  type ExerciseKnowledgeSourceFoundationReadinessModel,
+} from '@/lib/program/exercise-knowledge-source-foundation-readiness'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -9097,6 +9105,17 @@ export function ProgramCoachIntelligenceHub({
       futureSessionMutationDraftPreviewModel,
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
+
+  // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
+  // Read-only proof of what source knowledge exists for high-impact exercise families
+  const exerciseKnowledgeSourceFoundationReadinessModel = useMemo<ExerciseKnowledgeSourceFoundationReadinessModel>(() => {
+    return resolveExerciseKnowledgeSourceFoundationReadiness({
+      currentProgramExerciseCount: exerciseKnowledgeCoverageResult?.totalExerciseCount ?? 0,
+      currentProgramFullScienceKnownCount: exerciseKnowledgeCoverageResult?.fullScienceKnownCount ?? 0,
+      currentProgramPartialOrBasicCount: (exerciseKnowledgeCoverageResult?.enhancedPartialKnownCount ?? 0) + (exerciseKnowledgeCoverageResult?.basicIdentityKnownCount ?? 0),
+      currentProgramUnknownCount: exerciseKnowledgeCoverageResult?.trulyUnknownCount ?? 0,
+    })
+  }, [exerciseKnowledgeCoverageResult])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -18293,6 +18312,158 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-teal-400/60 mt-2">
                 MASTER-8C.83 / AB20.4.76 / Prompt 78 — Program Card marker preview only. No actual Program Cards changed. No Start Workout bridge. No Live Workout bridge. No write, storage, DB/API, schema, generator, or mutation.
+              </p>
+            </div>
+            {/* [Prompt 79] Exercise Knowledge Source Foundation Readiness card (inserted gate) */}
+            <div className="rounded-lg border border-emerald-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-emerald-300">
+                  Prompt 79 of 86
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                  MASTER-8C.83.1 / AB20.4.76.1
+                </span>
+                {(() => {
+                  const statusColor = getExerciseKnowledgeSourceFoundationStatusColor(exerciseKnowledgeSourceFoundationReadinessModel.status)
+                  const colorClasses: Record<string, string> = {
+                    red: 'bg-red-500/10 text-red-400/70 border-red-500/20',
+                    amber: 'bg-amber-500/10 text-amber-400/70 border-amber-500/20',
+                    lime: 'bg-lime-500/10 text-lime-400/70 border-lime-500/20',
+                    sky: 'bg-sky-500/10 text-sky-400/70 border-sky-500/20',
+                  }
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border ${colorClasses[statusColor] || colorClasses.amber}`}>
+                      {getExerciseKnowledgeSourceFoundationStatusLabel(exerciseKnowledgeSourceFoundationReadinessModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                  inserted gate
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  read-only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  mutation locked
+                </span>
+              </div>
+              <div className="text-[9px] text-emerald-300/80 font-medium mb-2">
+                Exercise Knowledge Source Foundation Readiness
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${exerciseKnowledgeSourceFoundationReadinessModel.status === 'read_only_ready' ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {exerciseKnowledgeSourceFoundationReadinessModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {exerciseKnowledgeSourceFoundationReadinessModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Source Foundation Metrics:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Exercise seed count: <span className="text-zinc-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.exerciseSeedCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Skill seed count: <span className="text-zinc-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.skillSeedCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Validation errors: <span className={exerciseKnowledgeSourceFoundationReadinessModel.validationErrorCount > 0 ? "text-red-400/70" : "text-zinc-400/70"}>
+                    {exerciseKnowledgeSourceFoundationReadinessModel.validationErrorCount}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Validation warnings: <span className={exerciseKnowledgeSourceFoundationReadinessModel.validationWarningCount > 0 ? "text-amber-400/70" : "text-zinc-400/70"}>
+                    {exerciseKnowledgeSourceFoundationReadinessModel.validationWarningCount}
+                  </span>
+                </div>
+                <div className="text-[7px] text-zinc-500 mt-1 mb-1">High-Impact Family Coverage:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Source-backed: <span className="text-lime-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.highImpactCoveredCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Partial: <span className="text-amber-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.highImpactPartialCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Missing: <span className={exerciseKnowledgeSourceFoundationReadinessModel.highImpactMissingCount > 0 ? "text-red-400/70" : "text-zinc-400/70"}>
+                    {exerciseKnowledgeSourceFoundationReadinessModel.highImpactMissingCount}
+                  </span>
+                </div>
+                {exerciseKnowledgeSourceFoundationReadinessModel.currentProgramExerciseCount > 0 && (
+                  <>
+                    <div className="text-[7px] text-zinc-500 mt-1 mb-1">Current Program Coverage:</div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Program exercises: <span className="text-zinc-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.currentProgramExerciseCount}</span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Full science known: <span className="text-lime-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.currentProgramFullScienceKnownCount}</span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Partial/basic: <span className="text-amber-400/70 font-mono">{exerciseKnowledgeSourceFoundationReadinessModel.currentProgramPartialOrBasicCount}</span>
+                    </div>
+                    <div className="text-[8px] text-[#8A8A9A]">
+                      Unknown: <span className={exerciseKnowledgeSourceFoundationReadinessModel.currentProgramUnknownCount > 0 ? "text-red-400/70" : "text-zinc-400/70"}>
+                        {exerciseKnowledgeSourceFoundationReadinessModel.currentProgramUnknownCount}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* High-impact family list */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500 mb-1">High-Impact Families ({exerciseKnowledgeSourceFoundationReadinessModel.highImpactFamilyCount}):</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {exerciseKnowledgeSourceFoundationReadinessModel.highImpactFamilies.map((family) => (
+                    <div key={family.familyId} className="text-[7px] flex items-center gap-1">
+                      <span className={`px-1 py-0.5 rounded border ${getHighImpactFamilyStatusColor(family.status)}`}>
+                        {family.status === 'source_backed' ? '✓' : family.status === 'partial' ? '◐' : '✗'}
+                      </span>
+                      <span className="text-zinc-400/80">{family.label}</span>
+                      <span className="text-zinc-500">({family.seedExerciseMatches})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Blockers if any */}
+              {exerciseKnowledgeSourceFoundationReadinessModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {exerciseKnowledgeSourceFoundationReadinessModel.blockers.slice(0, 5).map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {exerciseKnowledgeSourceFoundationReadinessModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no Program Card change
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no Start Workout bridge
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no Live Workout bridge
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  no DB/API/schema/storage
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  mutation locked
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-emerald-400/60 mt-2">
+                MASTER-8C.83.1 / AB20.4.76.1 / Prompt 79 — Source foundation readiness gate. Read-only. Mutation locked. No Program Card change. No Start Workout bridge. No Live Workout bridge. No DB/API/schema/storage.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

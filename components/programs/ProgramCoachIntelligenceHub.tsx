@@ -671,6 +671,7 @@ import {
   getProgramCardAdaptationMarkerPreviewStatusColor,
   getProgramCardMarkerToneClass,
   type ProgramCardAdaptationMarkerPreviewModel,
+  type ProgramCardAdaptationMarkerPreviewItem,
 } from '@/lib/program/program-card-adaptation-marker-preview'
 // [Prompt 79] Exercise Knowledge Source Foundation Readiness (inserted gate)
 import {
@@ -1625,6 +1626,8 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
+  /** [Prompt 80] Callback to lift Program Card Adaptation Marker Preview items to parent for card display */
+  onProgramCardAdaptationMarkerPreviewChange?: (items: readonly ProgramCardAdaptationMarkerPreviewItem[]) => void
 }
 
 // =============================================================================
@@ -8070,6 +8073,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
+  onProgramCardAdaptationMarkerPreviewChange, // [Prompt 80] Lift preview items to parent
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9105,6 +9109,13 @@ export function ProgramCoachIntelligenceHub({
       futureSessionMutationDraftPreviewModel,
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
+
+  // [Prompt 80] Lift preview items to parent for Program Card display
+  useEffect(() => {
+    if (onProgramCardAdaptationMarkerPreviewChange) {
+      onProgramCardAdaptationMarkerPreviewChange(programCardAdaptationMarkerPreviewModel.previewItems)
+    }
+  }, [programCardAdaptationMarkerPreviewModel.previewItems, onProgramCardAdaptationMarkerPreviewChange])
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families

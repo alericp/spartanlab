@@ -628,6 +628,13 @@ import {
   getReadinessItemStatusColor,
   type LocalReceiptAuthorizationReadinessModel,
 } from '@/lib/program/local-receipt-authorization-readiness'
+// [Prompt 73] Controlled Durable Write Preflight Boundary
+import {
+  resolveControlledDurableWritePreflightBoundary,
+  getControlledDurableWritePreflightStatusLabel,
+  getControlledDurableWritePreflightStatusColor,
+  type ControlledDurableWritePreflightBoundaryModel,
+} from '@/lib/program/controlled-durable-write-preflight-boundary'
 // [Prompt 23] Root/candidate clearance evidence detail
 import {
   resolveRootCandidateClearanceEvidenceDetail,
@@ -8988,6 +8995,16 @@ export function ProgramCoachIntelligenceHub({
       roadmapStep: prompt72RoadmapStep,
     })
   }, [controlledMarkerSaveLocalReceiptGateModel, prompt72RoadmapStep])
+
+  // [Prompt 73] Controlled Durable Write Preflight Boundary Model
+  // Read-only preflight that consumes Prompt 72 authorization readiness
+  const prompt73RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(73), [])
+  const durableWritePreflightBoundaryModel = useMemo<ControlledDurableWritePreflightBoundaryModel>(() => {
+    return resolveControlledDurableWritePreflightBoundary({
+      localReceiptAuthorizationReadinessModel,
+      roadmapStep: prompt73RoadmapStep,
+    })
+  }, [localReceiptAuthorizationReadinessModel, prompt73RoadmapStep])
   
   // [Prompt 23] Root/candidate clearance evidence detail model
   // Pure read-only detail of each root/candidate clearance item with evidence
@@ -17296,6 +17313,121 @@ export function ProgramCoachIntelligenceHub({
               {/* Safety line */}
               <p className="text-[10px] text-violet-400/60 mt-2">
                 {localReceiptAuthorizationReadinessModel.sourceStep} — {localReceiptAuthorizationReadinessModel.receiptMode}. No durable persistence. No DB/API/storage.
+              </p>
+            </div>
+            {/* [Prompt 73] Controlled Durable Write Preflight Boundary card */}
+            <div className="rounded-lg border border-teal-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-medium text-teal-300">
+                  Prompt 73 of 84
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-teal-500/10 text-teal-400/70 border-teal-500/20">
+                  MASTER-8C.78 / AB20.4.71
+                </span>
+                {(() => {
+                  const statusColor = getControlledDurableWritePreflightStatusColor(durableWritePreflightBoundaryModel.status)
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-${statusColor}-500/10 text-${statusColor}-400/70 border-${statusColor}-500/20`}>
+                      {getControlledDurableWritePreflightStatusLabel(durableWritePreflightBoundaryModel.status)}
+                    </span>
+                  )
+                })()}
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  read-only
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no write
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/70 border-zinc-500/20">
+                  no storage
+                </span>
+              </div>
+              <div className="text-[9px] text-teal-300/80 font-medium mb-2">
+                Controlled Durable Write Preflight Boundary
+              </div>
+              {/* Headline and summary */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/50 border border-zinc-700/30">
+                <p className={`text-[9px] font-medium mb-1 ${durableWritePreflightBoundaryModel.durableWritePreflightReady ? 'text-lime-400/80' : 'text-amber-400/80'}`}>
+                  {durableWritePreflightBoundaryModel.headline}
+                </p>
+                <p className="text-[8px] text-[#8A8A9A]">
+                  {durableWritePreflightBoundaryModel.summary}
+                </p>
+              </div>
+              {/* Key metrics */}
+              <div className="mb-2 space-y-0.5">
+                <div className="text-[7px] text-zinc-500 mb-1">Preflight Checks:</div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Upstream Prompt 72: <span className={durableWritePreflightBoundaryModel.upstreamPrompt72Ready ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {durableWritePreflightBoundaryModel.upstreamPrompt72Status} ({durableWritePreflightBoundaryModel.upstreamPrompt72Ready ? 'ready' : 'not ready'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Valid local receipt: <span className={durableWritePreflightBoundaryModel.validLocalReceiptPresent ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {durableWritePreflightBoundaryModel.validLocalReceiptPresent ? 'true' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Stale local receipt: <span className={!durableWritePreflightBoundaryModel.staleLocalReceiptPresent ? "text-lime-400/70" : "text-orange-400/70"}>
+                    {durableWritePreflightBoundaryModel.staleLocalReceiptPresent ? 'true (blocks)' : 'false'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Source fingerprint: <span className={durableWritePreflightBoundaryModel.sourceFingerprintMatches ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {durableWritePreflightBoundaryModel.sourceFingerprintMatches ? 'matches' : 'mismatch'}
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Verification gate: <span className={durableWritePreflightBoundaryModel.verificationGateVerified ? "text-lime-400/70" : "text-amber-400/70"}>
+                    {durableWritePreflightBoundaryModel.verificationGateStatus} ({durableWritePreflightBoundaryModel.verificationGateVerified ? 'verified' : 'not verified'})
+                  </span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Target sessions: <span className="text-zinc-400/70 font-mono">{durableWritePreflightBoundaryModel.targetSessionCount}</span>
+                </div>
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Preview changes: <span className="text-zinc-400/70 font-mono">{durableWritePreflightBoundaryModel.previewChangeCount}</span>
+                </div>
+              </div>
+              {/* Blockers if any */}
+              {durableWritePreflightBoundaryModel.blockers.length > 0 && (
+                <div className="mb-2 p-1.5 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[8px] text-amber-400/80 font-medium mb-1">Blockers:</p>
+                  {durableWritePreflightBoundaryModel.blockers.map((blocker, i) => (
+                    <p key={i} className="text-[8px] text-amber-400/70">• {blocker}</p>
+                  ))}
+                </div>
+              )}
+              {/* Next step */}
+              <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
+                <p className="text-[7px] text-zinc-500">
+                  Next: {durableWritePreflightBoundaryModel.nextRequiredStep}
+                </p>
+              </div>
+              {/* Protection chips */}
+              <div className="flex items-center gap-1 flex-wrap mb-2">
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Program Cards unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Start Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  Live Workout unchanged
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  future-session mutation disabled
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  completed sessions protected
+                </span>
+                <span className="text-[8px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                  DB/API/schema untouched
+                </span>
+              </div>
+              {/* Safety line */}
+              <p className="text-[10px] text-teal-400/60 mt-2">
+                {durableWritePreflightBoundaryModel.sourceStep} — Preflight boundary only. No durable write. No storage. No DB/API/schema.
               </p>
             </div>
             {/* [MASTER-8C.44] Current Program Target Scope proof card */}

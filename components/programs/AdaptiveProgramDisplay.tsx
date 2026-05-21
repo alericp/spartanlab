@@ -13,7 +13,7 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80.7] Context hook removed - using direct prop pattern instead
+// [Prompt 80.8] Context hook removed - using controlled callback + direct prop
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -447,9 +447,9 @@ function isDisplayWeeklyRepresentation(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// [Prompt 80.7] Program Card Adaptation Marker Preview - Direct Prop Component
-// Receives preview items directly from parent, matches by dayNumber
-// Source-backed: items come from Hub's render prop, same Prompt 78 model as Plan Logic
+// [Prompt 80.8] Program Card Adaptation Marker Preview - Direct Prop Component
+// Receives preview items from parent state (controlled via Hub callback)
+// Source-backed: items come from Hub's Prompt 78 model via useEffect callback
 // ─────────────────────────────────────────────────────────────────────────────
 interface ProgramCardAdaptationMarkerProps {
   readonly dayNumber: number
@@ -457,8 +457,7 @@ interface ProgramCardAdaptationMarkerProps {
 }
 
 function ProgramCardAdaptationMarker({ dayNumber, previewItems }: ProgramCardAdaptationMarkerProps) {
-  // [Prompt 80.7] Match preview items to this session by targetDayNumber
-  // Items are passed directly from parent, not from Context
+  // [Prompt 80.8] Match preview items to this session by targetDayNumber
   const matchedPreviewItem = previewItems.find(item => {
     // Match by day number - this is the stable identifier
     if (item.targetDayNumber !== undefined && dayNumber === item.targetDayNumber) {
@@ -715,9 +714,9 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
-  // [Prompt 80.7] Program Card Adaptation Marker Preview items state
-  // Populated via Hub's render prop - source-backed from same Prompt 78 model as Plan Logic
-  // Initial empty array until Hub provides real items
+  // [Prompt 80.8] Program Card Adaptation Marker Preview items state
+  // Populated via controlled callback from Hub (useEffect, not render-time)
+  // Source-backed from same Prompt 78 model displayed in Plan Logic
   const [programCardAdaptationMarkerPreviewItems, setProgramCardAdaptationMarkerPreviewItems] = useState<
     readonly import('@/lib/program/program-card-adaptation-marker-preview').ProgramCardAdaptationMarkerPreviewItem[]
   >([])
@@ -1465,17 +1464,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
-    renderDayCardMarkers={(items) => {
-      // [Prompt 80.7] Render prop bridge: Hub provides source-backed items, we store in state
-      // This runs during Hub render, updating parent state with source-backed items
-      // Items come from same Prompt 78 model displayed in Plan Logic
-      if (items.length !== programCardAdaptationMarkerPreviewItems.length ||
-          items.some((item, i) => item.sessionId !== programCardAdaptationMarkerPreviewItems[i]?.sessionId)) {
-        // Only update if items actually changed to avoid infinite loops
-        setTimeout(() => setProgramCardAdaptationMarkerPreviewItems(items), 0)
-      }
-      return null // Actual markers render in Day card section, not here
-    }}
+    onMarkerPreviewItemsChange={setProgramCardAdaptationMarkerPreviewItems} // [Prompt 80.8] Controlled callback
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}
@@ -3232,9 +3221,9 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
-                {/* [Prompt 80.7] Program Card Adaptation Marker Preview — direct prop, source-backed */}
+                {/* [Prompt 80.8] Program Card Adaptation Marker Preview — controlled callback, direct prop */}
                 <ProgramCardAdaptationMarker 
-                  dayNumber={session.dayNumber} 
+                  dayNumber={session.dayNumber}
                   previewItems={programCardAdaptationMarkerPreviewItems}
                 />
 <AdaptiveSessionCard

@@ -670,8 +670,8 @@ import {
   getProgramCardAdaptationMarkerPreviewStatusLabel,
   getProgramCardAdaptationMarkerPreviewStatusColor,
   getProgramCardMarkerToneClass,
-  extractSourceBackedMarkerPreviewItems, // [Prompt 80.7] Extract items for render prop
-  ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.6] Context provider
+  extractSourceBackedMarkerPreviewItems, // [Prompt 80.8] For callback
+  ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.8] Context for children
   type ProgramCardAdaptationMarkerPreviewModel,
   type ProgramCardAdaptationMarkerPreviewItem,
 } from '@/lib/program/program-card-adaptation-marker-preview'
@@ -1628,10 +1628,14 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
-  /** [Prompt 80.7] Render prop for Day card markers - Hub provides source-backed preview items
-   * This is NOT a callback - Hub renders what parent provides, passing the items as data.
-   * Items come from the same Prompt 78 model shown in Plan Logic. */
-  renderDayCardMarkers?: (previewItems: readonly ProgramCardAdaptationMarkerPreviewItem[]) => React.ReactNode
+  /** [Prompt 80.8] Callback for marker preview items - called via useEffect when model updates
+   * This is NOT a render-time bridge - it's a controlled callback pattern.
+   * Items come from same Prompt 78 model shown in Plan Logic. */
+  onMarkerPreviewItemsChange?: (items: readonly ProgramCardAdaptationMarkerPreviewItem[]) => void
+  /** [Prompt 80.8] Children rendered inside Context.Provider for marker access
+   * Day card section passed as children can use useProgramCardAdaptationMarkerPreviewItems()
+   * to access source-backed items from same Prompt 78 model shown in Plan Logic. */
+  children?: React.ReactNode
 }
 
 // =============================================================================
@@ -8077,7 +8081,8 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
-  renderDayCardMarkers, // [Prompt 80.7] Render prop for source-backed Day card markers
+  onMarkerPreviewItemsChange, // [Prompt 80.8] Callback for marker preview items
+  children, // [Prompt 80.8] Children for Context-based marker access
 }: ProgramCoachIntelligenceHubProps) {
   // Sheet open states
   const [skillPhaseOpen, setSkillPhaseOpen] = useState(false)
@@ -9114,9 +9119,14 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
 
-  // [Prompt 80.5] Marker preview model is Hub-internal, displayed in Plan Logic only
-  // Day card markers require parent-owned model, but source models not available to parent
-  // When Plan Logic says "No marker items", Day cards correctly show no marker
+  // [Prompt 80.8] Notify parent of marker preview items via controlled callback (not render-time)
+  // This useEffect pattern avoids render-time state updates while keeping marker data in sync
+  useEffect(() => {
+    if (onMarkerPreviewItemsChange) {
+      const items = extractSourceBackedMarkerPreviewItems(programCardAdaptationMarkerPreviewModel)
+      onMarkerPreviewItemsChange(items)
+    }
+  }, [programCardAdaptationMarkerPreviewModel, onMarkerPreviewItemsChange])
 
   // [Prompt 79] Exercise Knowledge Source Foundation Readiness Model (inserted gate)
   // Read-only proof of what source knowledge exists for high-impact exercise families
@@ -9432,14 +9442,12 @@ export function ProgramCoachIntelligenceHub({
   // [Prompt 80.6] Wrap return in Context Provider for source-backed marker sharing
   // Hub provides the Prompt 78 model, Day cards in parent consume via Context
   // [Prompt 80.7] Also call render prop with source-backed items for Day card markers
-  const sourceBackedMarkerPreviewItems = extractSourceBackedMarkerPreviewItems(programCardAdaptationMarkerPreviewModel)
+  // [Prompt 80.8] Extract items for Context - no longer needed for render prop
+  // Context provides the model, children can use useProgramCardAdaptationMarkerPreviewItems()
   
   return (
     <ProgramCardAdaptationMarkerPreviewContext.Provider value={programCardAdaptationMarkerPreviewModel}>
     <>
-      {/* [Prompt 80.7] Render Day card markers via render prop - source-backed from same Prompt 78 model */}
-      {renderDayCardMarkers?.(sourceBackedMarkerPreviewItems)}
-      
       {/* Hub Container */}
       <div 
         className="mb-4 p-3 rounded-lg border border-[#2A2A35] bg-gradient-to-br from-[#1A1A22]/80 to-[#1A1A20]/60"
@@ -18926,6 +18934,11 @@ export function ProgramCoachIntelligenceHub({
           </div>
         </SheetContent>
       </Sheet>
+      
+      {/* [Prompt 80.8] Children rendered inside Context.Provider
+       * Day card section can use useProgramCardAdaptationMarkerPreviewItems()
+       * for source-backed marker access from same Prompt 78 model */}
+      {children}
     </>
     </ProgramCardAdaptationMarkerPreviewContext.Provider>
   )

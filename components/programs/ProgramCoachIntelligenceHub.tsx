@@ -670,6 +670,7 @@ import {
   getProgramCardAdaptationMarkerPreviewStatusLabel,
   getProgramCardAdaptationMarkerPreviewStatusColor,
   getProgramCardMarkerToneClass,
+  ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.6] Context provider
   type ProgramCardAdaptationMarkerPreviewModel,
   type ProgramCardAdaptationMarkerPreviewItem,
 } from '@/lib/program/program-card-adaptation-marker-preview'
@@ -9424,7 +9425,10 @@ export function ProgramCoachIntelligenceHub({
   // [MASTER-8C.22] Check for read-only candidates from source branches
   const hasReadOnlyCoachCandidates = Boolean(coachRecommendationCandidateResult?.topCandidate)
 
+  // [Prompt 80.6] Wrap return in Context Provider for source-backed marker sharing
+  // Hub provides the Prompt 78 model, Day cards in parent consume via Context
   return (
+    <ProgramCardAdaptationMarkerPreviewContext.Provider value={programCardAdaptationMarkerPreviewModel}>
     <>
       {/* Hub Container */}
       <div 
@@ -18913,5 +18917,6 @@ export function ProgramCoachIntelligenceHub({
         </SheetContent>
       </Sheet>
     </>
+    </ProgramCardAdaptationMarkerPreviewContext.Provider>
   )
 }

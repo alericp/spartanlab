@@ -13,8 +13,8 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 // [MASTER-8C.12A] Types for frequency placement apply callback
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
-// [Prompt 80] Program Card Adaptation Marker Preview item type
-import type { ProgramCardAdaptationMarkerPreviewItem } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 80.2] Program Card Adaptation Marker Preview - pure local derivation
+import { deriveSessionBasedMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -51,7 +51,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { 
   consumePendingScheduleNotice, 
   evaluateActiveWeekMutation,
@@ -541,9 +541,7 @@ export function AdaptiveProgramDisplay({
   const [multiSessionPushForwardState, setMultiSessionPushForwardState] = useState<MultiSessionPushForwardState>('idle')
   const [multiSessionPushForwardResult, setMultiSessionPushForwardResult] = useState<MultiSessionPushForwardResult | null>(null)
 
-  // [Prompt 80] Program Card Adaptation Marker Preview items lifted from Hub
-  const [programCardAdaptationMarkerPreviewItems, setProgramCardAdaptationMarkerPreviewItems] = 
-    useState<readonly ProgramCardAdaptationMarkerPreviewItem[]>([])
+  // [Prompt 80.2] programCardAdaptationMarkerPreviewItems is computed below, after scaledSessions is declared
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -645,6 +643,21 @@ export function AdaptiveProgramDisplay({
   // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
   const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
+  // [Prompt 80.2] Program Card Adaptation Marker Preview items - pure local derivation via useMemo
+  // No state lifting, no effects, no child-to-parent callbacks - eliminates React #185 risk
+  const programCardAdaptationMarkerPreviewItems = useMemo(() => {
+    if (!scaledSessions || scaledSessions.length === 0) {
+      return []
+    }
+    return deriveSessionBasedMarkerPreviewItems(
+      scaledSessions.map(s => ({
+        dayNumber: s.dayNumber,
+        dayLabel: s.dayLabel,
+        sessionTitle: s.dayLabel || `Day ${s.dayNumber}`,
+      }))
+    )
+  }, [scaledSessions])
+
 
   
   const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
@@ -1388,7 +1401,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
-    onProgramCardAdaptationMarkerPreviewChange={setProgramCardAdaptationMarkerPreviewItems} // [Prompt 80] Lift preview items
+    // [Prompt 80.2] Removed callback - markers now derived locally via useMemo
   />
 
       {/* [P2C] Condensed Today Guidance — compact actionable inline, details available in hub */}

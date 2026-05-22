@@ -672,8 +672,12 @@ import {
   getProgramCardMarkerToneClass,
   extractSourceBackedMarkerPreviewItems, // [Prompt 80.8] For callback
   ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.8] Context for children
+  AppliedMarkerContext, // [Prompt 81] Applied marker context
+  createAppliedMarkerItem, // [Prompt 81] Helper to create applied marker items
   type ProgramCardAdaptationMarkerPreviewModel,
   type ProgramCardAdaptationMarkerPreviewItem,
+  type AppliedMarkerContextValue, // [Prompt 81] Applied marker context type
+  type AppliedMarkerItem, // [Prompt 81] Applied marker item type
 } from '@/lib/program/program-card-adaptation-marker-preview'
 // [Prompt 79] Exercise Knowledge Source Foundation Readiness (inserted gate)
 import {
@@ -9133,6 +9137,48 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel, mutationTargetSessionResolutionPreviewModel])
 
+  // [Prompt 81] Applied Marker State - user-confirmed marker-only application
+  // This is current-page state only - no persistence in this step
+  const [appliedMarkerItems, setAppliedMarkerItems] = useState<readonly AppliedMarkerItem[]>([])
+  
+  // [Prompt 81] Derive applied marker context value
+  const appliedMarkerContextValue = useMemo<AppliedMarkerContextValue>(() => {
+    const appliedSessionIds = new Set(appliedMarkerItems.map(item => item.sessionId))
+    const appliedDayNumbers = new Set(appliedMarkerItems.map(item => item.targetDayNumber))
+    
+    // Can apply marker when preview is ready and has items
+    const canApplyMarker = 
+      programCardAdaptationMarkerPreviewModel.markerPreviewReady &&
+      programCardAdaptationMarkerPreviewModel.previewItems.length > 0 &&
+      appliedMarkerItems.length === 0 // Only allow one application per page load
+    
+    const applyMarkers = () => {
+      if (!canApplyMarker) return
+      
+      // Apply markers from preview items
+      const newAppliedItems = programCardAdaptationMarkerPreviewModel.previewItems
+        .filter(item => item.targetDayNumber !== undefined && item.targetDayNumber > 0)
+        .map(item => createAppliedMarkerItem(item))
+      
+      setAppliedMarkerItems(newAppliedItems)
+    }
+    
+    const isMarkerApplied = (sessionId: string, dayNumber: number): boolean => {
+      if (appliedSessionIds.has(sessionId)) return true
+      if (appliedDayNumbers.has(dayNumber)) return true
+      return false
+    }
+    
+    return {
+      appliedMarkerSessionIds: appliedSessionIds,
+      appliedMarkerDayNumbers: appliedDayNumbers,
+      applyMarkers,
+      isMarkerApplied,
+      appliedCount: appliedMarkerItems.length,
+      canApplyMarker,
+    }
+  }, [appliedMarkerItems, programCardAdaptationMarkerPreviewModel])
+
   // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback/ref/effect to fix React #185
   // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.
   // Day-card markers in parent use empty array until proper parent-owned architecture is built.
@@ -9453,9 +9499,11 @@ export function ProgramCoachIntelligenceHub({
   // [Prompt 80.7] Also call render prop with source-backed items for Day card markers
   // [Prompt 80.8] Extract items for Context - no longer needed for render prop
   // Context provides the model, children can use useProgramCardAdaptationMarkerPreviewItems()
+  // [Prompt 81] Added AppliedMarkerContext for user-confirmed marker application
   
   return (
     <ProgramCardAdaptationMarkerPreviewContext.Provider value={programCardAdaptationMarkerPreviewModel}>
+    <AppliedMarkerContext.Provider value={appliedMarkerContextValue}>
     <>
       {/* Hub Container */}
       <div 
@@ -18252,7 +18300,66 @@ export function ProgramCoachIntelligenceHub({
                 <div className="text-[8px] text-[#8A8A9A]">
                   Applied change count: <span className="text-zinc-400/70 font-mono">{programCardAdaptationMarkerPreviewModel.appliedChangeCount}</span>
                 </div>
+                {/* [Prompt 81] Applied marker status */}
+                <div className="text-[8px] text-[#8A8A9A]">
+                  Applied markers (this session): <span className={appliedMarkerContextValue.appliedCount > 0 ? "text-emerald-400/70" : "text-zinc-400/70"}>
+                    {appliedMarkerContextValue.appliedCount}
+                  </span>
+                </div>
               </div>
+              {/* [Prompt 81] Apply Marker Button */}
+              {programCardAdaptationMarkerPreviewModel.markerPreviewReady && (
+                <div className="mb-2 p-2 rounded bg-[#12121A]/40 border border-emerald-500/20">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[8px] text-emerald-400/80 font-medium mb-0.5">
+                        {appliedMarkerContextValue.appliedCount > 0 
+                          ? 'Marker Applied' 
+                          : 'Ready to Apply Marker'}
+                      </p>
+                      <p className="text-[7px] text-zinc-500">
+                        {appliedMarkerContextValue.appliedCount > 0 
+                          ? `${appliedMarkerContextValue.appliedCount} marker(s) applied to Program Cards (marker-only, no workout change)`
+                          : `Apply marker to ${programCardAdaptationMarkerPreviewModel.markerPreviewItemCount} Program Card(s) without changing workout structure`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={appliedMarkerContextValue.applyMarkers}
+                      disabled={!appliedMarkerContextValue.canApplyMarker}
+                      className={`px-3 py-1.5 text-[9px] font-medium rounded border transition-colors ${
+                        appliedMarkerContextValue.canApplyMarker
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                          : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 cursor-not-allowed'
+                      }`}
+                      data-apply-marker-button="true"
+                      data-can-apply={appliedMarkerContextValue.canApplyMarker}
+                      data-applied-count={appliedMarkerContextValue.appliedCount}
+                    >
+                      {appliedMarkerContextValue.appliedCount > 0 
+                        ? 'Marker Applied' 
+                        : 'Apply Marker to Card'}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    <span className="text-[6px] px-1 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/60 border-emerald-500/20">
+                      marker-only
+                    </span>
+                    <span className="text-[6px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                      no workout structure change
+                    </span>
+                    <span className="text-[6px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                      Start Workout unchanged
+                    </span>
+                    <span className="text-[6px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">
+                      Live Workout unchanged
+                    </span>
+                    <span className="text-[6px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">
+                      current page only
+                    </span>
+                  </div>
+                </div>
+              )}
               {/* Preview items if any */}
               {programCardAdaptationMarkerPreviewModel.previewItems.length > 0 ? (
                 <div className="mb-2 p-1.5 rounded bg-[#12121A]/40 border border-zinc-700/20">
@@ -18949,6 +19056,7 @@ export function ProgramCoachIntelligenceHub({
        * for source-backed marker access from same Prompt 78 model */}
       {children}
     </>
+    </AppliedMarkerContext.Provider>
     </ProgramCardAdaptationMarkerPreviewContext.Provider>
   )
 }

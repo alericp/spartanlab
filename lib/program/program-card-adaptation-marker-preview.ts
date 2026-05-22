@@ -58,6 +58,28 @@ export interface ProgramCardAdaptationMarkerPreviewItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 81] Applied marker state - tracks user-confirmed marker application
+// This is marker-only application - no workout structure changes
+// ─────────────────────────────────────────────────────────────────────────────
+export type MarkerApplicationStatus =
+  | 'MARKER_PREVIEW_READY_NOT_APPLIED'
+  | 'MARKER_APPLIED_CONFIRMED'
+  | 'USER_CONFIRMATION_REQUIRED'
+  | 'NO_SOURCE_TARGET_SESSIONS'
+  | 'COMPLETED_SESSION_PROTECTED'
+  | 'WORKOUT_MUTATION_NOT_ALLOWED_IN_THIS_STEP'
+
+export interface AppliedMarkerItem {
+  readonly sessionId: string
+  readonly targetDayNumber: number
+  readonly appliedAt: string // ISO timestamp (current page session only)
+  readonly markerOnly: true
+  readonly workoutStructureChanged: false
+  readonly startWorkoutChanged: false
+  readonly liveWorkoutChanged: false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Model interface
 // ─────────────────────────────────────────────────────────────────────────────
 export interface ProgramCardAdaptationMarkerPreviewModel {
@@ -100,6 +122,51 @@ export interface ProgramCardAdaptationMarkerPreviewModel {
   readonly blockers: readonly string[]
   readonly safetyNotes: readonly string[]
   readonly nextRequiredStep: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 81] Applied Marker Model - user-confirmed marker-only application
+// This model tracks which markers have been applied by user confirmation
+// IMPORTANT: This is marker-only - no workout structure changes
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ProgramCardAdaptationMarkerAppliedModel {
+  readonly promptNumber: 81
+  readonly masterStep: 'MASTER-8C.85'
+  readonly abStep: 'AB20.4.78'
+  
+  // Applied markers state
+  readonly appliedMarkerItems: readonly AppliedMarkerItem[]
+  readonly appliedMarkerCount: number
+  readonly appliedMarkerSessionIds: readonly string[]
+  readonly applicationStatus: MarkerApplicationStatus
+  
+  // Control flags
+  readonly canApplyMarker: boolean
+  readonly markerApplyButtonEnabled: boolean
+  readonly userConfirmedMarkerApplication: boolean
+  
+  // Hard-locked invariants - marker-only means no workout changes
+  readonly markerOnly: true
+  readonly workoutStructureChanged: false
+  readonly startWorkoutChanged: false
+  readonly liveWorkoutChanged: false
+  readonly completedSessionsProtected: true
+  readonly persistenceStatus: 'current_page_only' | 'persisted'
+}
+
+// [Prompt 81] Helper to create applied marker item
+export function createAppliedMarkerItem(
+  previewItem: ProgramCardAdaptationMarkerPreviewItem
+): AppliedMarkerItem {
+  return {
+    sessionId: previewItem.sessionId,
+    targetDayNumber: previewItem.targetDayNumber ?? 0,
+    appliedAt: new Date().toISOString(),
+    markerOnly: true as const,
+    workoutStructureChanged: false as const,
+    startWorkoutChanged: false as const,
+    liveWorkoutChanged: false as const,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -482,4 +549,47 @@ export function useProgramCardAdaptationMarkerPreviewModel(): ProgramCardAdaptat
 export function useProgramCardAdaptationMarkerPreviewItems(): readonly ProgramCardAdaptationMarkerPreviewItem[] {
   const model = useContext(ProgramCardAdaptationMarkerPreviewContext)
   return extractSourceBackedMarkerPreviewItems(model)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 81] Applied Marker Context - for user-confirmed marker application
+// ─────────────────────────────────────────────────────────────────────────────
+export interface AppliedMarkerContextValue {
+  readonly appliedMarkerSessionIds: ReadonlySet<string>
+  readonly appliedMarkerDayNumbers: ReadonlySet<number>
+  readonly applyMarkers: () => void
+  readonly isMarkerApplied: (sessionId: string, dayNumber: number) => boolean
+  readonly appliedCount: number
+  readonly canApplyMarker: boolean
+}
+
+export const AppliedMarkerContext = createContext<AppliedMarkerContextValue | null>(null)
+
+/**
+ * Hook to consume applied marker state from Context.
+ * Returns null if no provider exists.
+ */
+export function useAppliedMarkerContext(): AppliedMarkerContextValue | null {
+  return useContext(AppliedMarkerContext)
+}
+
+/**
+ * Hook to check if a specific session/day has an applied marker.
+ * Used by Day card marker to show applied vs preview state.
+ */
+export function useIsMarkerApplied(sessionId: string | null | undefined, dayNumber: number): boolean {
+  const context = useContext(AppliedMarkerContext)
+  if (!context) return false
+  
+  // Check by session ID first (strongest match)
+  if (sessionId && context.appliedMarkerSessionIds.has(sessionId)) {
+    return true
+  }
+  
+  // Fall back to day number
+  if (context.appliedMarkerDayNumbers.has(dayNumber)) {
+    return true
+  }
+  
+  return false
 }

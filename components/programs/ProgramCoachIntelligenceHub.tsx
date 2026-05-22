@@ -9000,17 +9000,27 @@ export function ProgramCoachIntelligenceHub({
     })
   }, [writerOpenPreviewBoundaryModel, markerWriteReadinessLedgerModel, mutationCautionClearanceGateModel, localCautionReviewAccepted, markerSaveAuthorizationPreviewAccepted])
   
+  // [Prompt 83.1] Early persisted marker state - read from program for source-backed path
+  // This is computed before futureSessionAdaptivePreviewDiffModel so it can provide
+  // an alternative source-backed path when the older writer-open gate is stale
+  const earlyPersistedMarkerState = useMemo(() => {
+    return getProgramCardAdaptationMarkerApplicationState(program)
+  }, [program])
+  
   // [Prompt 66.1] Future Session Adaptive Preview Diff model
   // REPAIR: The first concrete read-only adaptive preview showing actual before/after changes
   // NOT another boundary gate — this shows real proposed adaptations
+  // [Prompt 83.1] Now accepts earlyPersistedMarkerState for source-backed alternative path
   const futureSessionAdaptivePreviewDiffModel = useMemo<FutureSessionAdaptivePreviewDiffModel>(() => {
     return resolveFutureSessionAdaptivePreviewDiff({
       writerOpenPreviewBoundaryModel,
       localAuthorizationCautionReviewGateModel,
       mutationTargetSessionResolutionPreviewModel,
       mutationCautionClearanceGateModel,
+      // [Prompt 83.1] Alternative source-backed inputs
+      persistedMarkerState: earlyPersistedMarkerState,
     })
-  }, [writerOpenPreviewBoundaryModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, mutationCautionClearanceGateModel])
+  }, [writerOpenPreviewBoundaryModel, localAuthorizationCautionReviewGateModel, mutationTargetSessionResolutionPreviewModel, mutationCautionClearanceGateModel, earlyPersistedMarkerState])
   
   // [Prompt 67] Controlled Marker-Save Dry-Run Candidate model
   // Bridge from "adaptive preview exists" to "marker-save dry-run is reviewable"
@@ -9153,9 +9163,8 @@ export function ProgramCoachIntelligenceHub({
 
   // [Prompt 81] Applied Marker State - user-confirmed marker-only application
   // [Prompt 82] Now seeded from persisted state on mount and supports persistence
-  const persistedMarkerState = useMemo(() => {
-    return getProgramCardAdaptationMarkerApplicationState(program)
-  }, [program])
+  // [Prompt 83.1] Reuse earlyPersistedMarkerState computed above to avoid duplication
+  const persistedMarkerState = earlyPersistedMarkerState
   
   // [Prompt 83] Computable Adaptive Mutation Proposal
   // Converts generic before/after text into computable operation candidates with target session identity

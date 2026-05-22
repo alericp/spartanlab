@@ -674,10 +674,12 @@ import {
   ProgramCardAdaptationMarkerPreviewContext, // [Prompt 80.8] Context for children
   AppliedMarkerContext, // [Prompt 81] Applied marker context
   createAppliedMarkerItem, // [Prompt 81] Helper to create applied marker items
+  getProgramCardAdaptationMarkerApplicationState, // [Prompt 82] Read persisted state
   type ProgramCardAdaptationMarkerPreviewModel,
   type ProgramCardAdaptationMarkerPreviewItem,
   type AppliedMarkerContextValue, // [Prompt 81] Applied marker context type
   type AppliedMarkerItem, // [Prompt 81] Applied marker item type
+  type ApplyProgramCardAdaptationMarkersResult, // [Prompt 82] Apply result type
 } from '@/lib/program/program-card-adaptation-marker-preview'
 // [Prompt 79] Exercise Knowledge Source Foundation Readiness (inserted gate)
 import {
@@ -1632,6 +1634,8 @@ interface ProgramCoachIntelligenceHubProps {
   ) => Promise<FrequencyPlacementApplyResult>
   /** [MASTER-8C.12B] Selective removal callback for removing specific applied methods */
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
+  /** [Prompt 82] Marker application callback with persistence */
+  onApplyProgramCardAdaptationMarkers?: (previewModel: ProgramCardAdaptationMarkerPreviewModel) => Promise<ApplyProgramCardAdaptationMarkersResult>
   // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback to fix React #185 crash
   // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.
   /** [Prompt 80.8] Children rendered inside Context.Provider for marker access
@@ -8083,6 +8087,7 @@ export function ProgramCoachIntelligenceHub({
   onResetAllMethodOverrides, // [AB20.4.2] Callback to reset all overrides
   onApplyFrequencyPlacement, // [MASTER-8C.12A] Dedicated callback for frequency placement with save
   onRemoveSelectedPlacements, // [MASTER-8C.12B] Selective removal callback
+  onApplyProgramCardAdaptationMarkers, // [Prompt 82] Marker application callback with persistence
   // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange to fix React #185 crash
   children, // [Prompt 80.8] Children for Context-based marker access
 }: ProgramCoachIntelligenceHubProps) {
@@ -9138,29 +9143,82 @@ export function ProgramCoachIntelligenceHub({
   }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel, mutationTargetSessionResolutionPreviewModel])
 
   // [Prompt 81] Applied Marker State - user-confirmed marker-only application
-  // This is current-page state only - no persistence in this step
-  const [appliedMarkerItems, setAppliedMarkerItems] = useState<readonly AppliedMarkerItem[]>([])
+  // [Prompt 82] Now seeded from persisted state on mount and supports persistence
+  const persistedMarkerState = useMemo(() => {
+    return getProgramCardAdaptationMarkerApplicationState(program)
+  }, [program])
+  
+  const [appliedMarkerItems, setAppliedMarkerItems] = useState<readonly AppliedMarkerItem[]>(() => {
+    // Seed from persisted state if available
+    if (persistedMarkerState?.appliedItems) {
+      return persistedMarkerState.appliedItems
+    }
+    return []
+  })
+  
+  // [Prompt 82] Track persistence status
+  const [markerPersistenceStatus, setMarkerPersistenceStatus] = useState<'current_page_only' | 'persisted'>(() => {
+    return persistedMarkerState ? 'persisted' : 'current_page_only'
+  })
+  
+  // [Prompt 82] Track if apply is in progress
+  const [isApplyingMarkers, setIsApplyingMarkers] = useState(false)
   
   // [Prompt 81] Derive applied marker context value
   const appliedMarkerContextValue = useMemo<AppliedMarkerContextValue>(() => {
     const appliedSessionIds = new Set(appliedMarkerItems.map(item => item.sessionId))
     const appliedDayNumbers = new Set(appliedMarkerItems.map(item => item.targetDayNumber))
     
-    // Can apply marker when preview is ready and has items
+    // Can apply marker when preview is ready, has items, and not already persisted
     const canApplyMarker = 
       programCardAdaptationMarkerPreviewModel.markerPreviewReady &&
       programCardAdaptationMarkerPreviewModel.previewItems.length > 0 &&
-      appliedMarkerItems.length === 0 // Only allow one application per page load
+      appliedMarkerItems.length === 0 && // Only allow one application
+      markerPersistenceStatus !== 'persisted' && // Not already persisted
+      !isApplyingMarkers // Not currently applying
     
-    const applyMarkers = () => {
+    const applyMarkers = async () => {
       if (!canApplyMarker) return
       
-      // Apply markers from preview items
+      // [Prompt 82] If callback available, use persistence path
+      if (onApplyProgramCardAdaptationMarkers) {
+        setIsApplyingMarkers(true)
+        try {
+          const result = await onApplyProgramCardAdaptationMarkers(programCardAdaptationMarkerPreviewModel)
+          
+          if (result.status === 'success') {
+            // Apply markers locally and mark as persisted
+            const newAppliedItems = programCardAdaptationMarkerPreviewModel.previewItems
+              .filter(item => item.targetDayNumber !== undefined && item.targetDayNumber > 0)
+              .map(item => createAppliedMarkerItem(item))
+            
+            setAppliedMarkerItems(newAppliedItems)
+            setMarkerPersistenceStatus('persisted')
+            console.log('[Prompt 82] Markers applied and persisted', {
+              appliedCount: result.appliedCount,
+              targetDayNumbers: result.targetDayNumbers,
+            })
+          } else {
+            console.log('[Prompt 82] Marker application blocked', {
+              reason: result.blockedReason,
+              evidence: result.evidence,
+            })
+          }
+        } catch (error) {
+          console.error('[Prompt 82] Marker application error:', error)
+        } finally {
+          setIsApplyingMarkers(false)
+        }
+        return
+      }
+      
+      // Fallback: local-only application (no persistence)
       const newAppliedItems = programCardAdaptationMarkerPreviewModel.previewItems
         .filter(item => item.targetDayNumber !== undefined && item.targetDayNumber > 0)
         .map(item => createAppliedMarkerItem(item))
       
       setAppliedMarkerItems(newAppliedItems)
+      // Keep as current_page_only since no persistence callback
     }
     
     const isMarkerApplied = (sessionId: string, dayNumber: number): boolean => {
@@ -9177,7 +9235,7 @@ export function ProgramCoachIntelligenceHub({
       appliedCount: appliedMarkerItems.length,
       canApplyMarker,
     }
-  }, [appliedMarkerItems, programCardAdaptationMarkerPreviewModel])
+  }, [appliedMarkerItems, programCardAdaptationMarkerPreviewModel, markerPersistenceStatus, isApplyingMarkers, onApplyProgramCardAdaptationMarkers])
 
   // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback/ref/effect to fix React #185
   // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.
@@ -9625,22 +9683,28 @@ export function ProgramCoachIntelligenceHub({
         </div>
         
         {/* [Prompt 81.2] Centralized Adaptive Coach Review — one surface for marker preview/apply */}
-        {programCardAdaptationMarkerPreviewModel.markerPreviewReady && programCardAdaptationMarkerPreviewModel.previewItems.length > 0 && (
+        {/* [Prompt 82] Now shows persistence status after save */}
+        {(programCardAdaptationMarkerPreviewModel.markerPreviewReady && programCardAdaptationMarkerPreviewModel.previewItems.length > 0) || markerPersistenceStatus === 'persisted' ? (
           <div 
             className="mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5"
             data-adaptive-coach-review="true"
+            data-marker-persistence-status={markerPersistenceStatus}
+            data-marker-applied-count={appliedMarkerContextValue.appliedCount}
+            data-workout-structure-changed="false"
+            data-no-start-workout-bridge="true"
+            data-no-live-workout-bridge="true"
           >
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-emerald-400" />
               <span className="text-xs font-medium text-emerald-300">Adaptive Coach Review</span>
-              {appliedMarkerContextValue.appliedCount > 0 ? (
+              {appliedMarkerContextValue.appliedCount > 0 || markerPersistenceStatus === 'persisted' ? (
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 ml-auto">Applied</span>
               ) : (
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 ml-auto">Preview</span>
               )}
             </div>
             <p className="text-[10px] text-[#8A8A9A] mb-2">
-              {appliedMarkerContextValue.appliedCount > 0 
+              {appliedMarkerContextValue.appliedCount > 0 || markerPersistenceStatus === 'persisted'
                 ? 'Adaptive marker applied. No workout structure changed.'
                 : `Preview ready for ${programCardAdaptationMarkerPreviewModel.previewItems.length} upcoming workout(s).`}
             </p>
@@ -9659,25 +9723,37 @@ export function ProgramCoachIntelligenceHub({
               <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">no workout change</span>
               <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Start Workout unchanged</span>
               <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Live Workout unchanged</span>
-              <span className="text-[7px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">current page only</span>
+              {/* [Prompt 82] Show persistence status dynamically */}
+              {markerPersistenceStatus === 'persisted' ? (
+                <>
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">persisted</span>
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">reload-proof</span>
+                </>
+              ) : (
+                <span className="text-[7px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">not saved yet</span>
+              )}
             </div>
             <button
               type="button"
               onClick={appliedMarkerContextValue.applyMarkers}
-              disabled={!appliedMarkerContextValue.canApplyMarker}
+              disabled={!appliedMarkerContextValue.canApplyMarker || isApplyingMarkers}
               className={`w-full px-3 py-2 text-[10px] font-medium rounded border transition-colors ${
-                appliedMarkerContextValue.appliedCount > 0
+                appliedMarkerContextValue.appliedCount > 0 || markerPersistenceStatus === 'persisted'
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
-                  : appliedMarkerContextValue.canApplyMarker
+                  : appliedMarkerContextValue.canApplyMarker && !isApplyingMarkers
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                     : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 cursor-not-allowed'
               }`}
               data-centralized-apply-marker="true"
             >
-              {appliedMarkerContextValue.appliedCount > 0 ? 'Marker Applied' : 'Review & Apply Marker'}
+              {isApplyingMarkers 
+                ? 'Applying...' 
+                : appliedMarkerContextValue.appliedCount > 0 || markerPersistenceStatus === 'persisted' 
+                  ? 'Marker Applied' 
+                  : 'Review & Apply Marker'}
             </button>
           </div>
-        )}
+        ) : null}
         
         {/* [AB18 / IQ8 / AB19] Weekly Recovery Check — compact proof line from weeklyStressDistributionPlan */}
         {/* [AB19 / IQ9] Explanation Parity: source classification added for transparency */}

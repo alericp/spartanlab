@@ -16,7 +16,14 @@ import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequen
 // [Prompt 80.8.3] Context hook for source-backed marker items - consumed inside Hub's Provider
 // [Prompt 81] Added useIsMarkerApplied for applied marker state
 // [Prompt 81.1] Added useAppliedMarkerContext for inline Apply Marker button
-import { useProgramCardAdaptationMarkerPreviewItems, useIsMarkerApplied, useAppliedMarkerContext } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 82] Added types for marker application persistence
+import { 
+  useProgramCardAdaptationMarkerPreviewItems, 
+  useIsMarkerApplied, 
+  useAppliedMarkerContext,
+  type ProgramCardAdaptationMarkerPreviewModel,
+  type ApplyProgramCardAdaptationMarkersResult,
+} from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -324,6 +331,9 @@ interface AdaptiveProgramDisplayProps {
   // [MASTER-8C.12B] Selective removal callback for removing specific applied methods.
   // Program Page owns the save path. Hub requests, Page persists.
   onRemoveSelectedPlacements?: (placementIds: string[]) => Promise<SelectiveRemovalResult>
+  // [Prompt 82] Marker application callback with persistence.
+  // Program Page owns the save path. Hub requests, Page persists. Marker-only.
+  onApplyProgramCardAdaptationMarkers?: (previewModel: ProgramCardAdaptationMarkerPreviewModel) => Promise<ApplyProgramCardAdaptationMarkersResult>
 }
 
 // =============================================================================
@@ -657,6 +667,8 @@ export function AdaptiveProgramDisplay({
   onApplyFrequencyPlacement,
   // [MASTER-8C.12B] Selective removal callback with save persistence
   onRemoveSelectedPlacements,
+  // [Prompt 82] Marker application callback with save persistence
+  onApplyProgramCardAdaptationMarkers,
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1558,6 +1570,7 @@ export function AdaptiveProgramDisplay({
     onResetAllMethodOverrides={onResetAllMethodOverrides} // [AB20.4.2] Wire through for reset-all
     onApplyFrequencyPlacement={onApplyFrequencyPlacement} // [MASTER-8C.12A] Wire through for frequency save
     onRemoveSelectedPlacements={onRemoveSelectedPlacements} // [MASTER-8C.12B] Wire through for selective removal
+    onApplyProgramCardAdaptationMarkers={onApplyProgramCardAdaptationMarkers} // [Prompt 82] Wire through for marker save
     // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback to fix React #185 crash
   >
 

@@ -593,3 +593,214 @@ export function useIsMarkerApplied(sessionId: string | null | undefined, dayNumb
   
   return false
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 82] Persisted Marker Application State
+// Marker-only persistence - saves applied marker metadata to program object
+// No workout structure changes, no Start Workout bridge, no Live Workout bridge
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Persisted marker application state stored on the program object.
+ * This allows marker application to survive page refresh/reload.
+ */
+export interface ProgramCardAdaptationMarkerApplicationState {
+  readonly version: 1
+  readonly appliedAt: string // ISO timestamp
+  readonly markerOnly: true
+  readonly source: 'adaptive_coach_review'
+  readonly appliedItems: readonly AppliedMarkerItem[]
+  readonly appliedCount: number
+  readonly previewItemCountAtApply: number
+  readonly targetDayNumbers: readonly number[]
+  readonly completedSessionsProtected: true
+  readonly workoutStructureChanged: false
+  readonly startWorkoutChanged: false
+  readonly liveWorkoutChanged: false
+  readonly futureSessionsMutated: false
+  readonly persistenceStatus: 'persisted'
+}
+
+/**
+ * Type guard to check if an unknown value is a valid marker application state.
+ */
+export function isValidProgramCardAdaptationMarkerApplicationState(
+  value: unknown
+): value is ProgramCardAdaptationMarkerApplicationState {
+  if (!value || typeof value !== 'object') return false
+  const state = value as Record<string, unknown>
+  
+  return (
+    state.version === 1 &&
+    typeof state.appliedAt === 'string' &&
+    state.markerOnly === true &&
+    state.source === 'adaptive_coach_review' &&
+    Array.isArray(state.appliedItems) &&
+    typeof state.appliedCount === 'number' &&
+    state.workoutStructureChanged === false &&
+    state.startWorkoutChanged === false &&
+    state.liveWorkoutChanged === false &&
+    state.futureSessionsMutated === false &&
+    state.persistenceStatus === 'persisted'
+  )
+}
+
+/**
+ * Read persisted marker application state from a program object.
+ * Returns null if missing or invalid.
+ */
+export function getProgramCardAdaptationMarkerApplicationState(
+  program: unknown
+): ProgramCardAdaptationMarkerApplicationState | null {
+  if (!program || typeof program !== 'object') return null
+  
+  const programObj = program as Record<string, unknown>
+  const state = programObj.programCardAdaptationMarkerApplicationState
+  
+  if (isValidProgramCardAdaptationMarkerApplicationState(state)) {
+    return state
+  }
+  
+  return null
+}
+
+/**
+ * Check if a program has persisted marker application.
+ */
+export function hasPersistedProgramCardAdaptationMarkerApplication(
+  program: unknown
+): boolean {
+  return getProgramCardAdaptationMarkerApplicationState(program) !== null
+}
+
+/**
+ * Result type for applying markers to a program.
+ */
+export type ApplyProgramCardAdaptationMarkersResult =
+  | {
+      readonly status: 'success'
+      readonly updatedProgram: unknown
+      readonly appliedCount: number
+      readonly targetDayNumbers: readonly number[]
+      readonly persistenceStatus: 'persisted'
+      readonly workoutStructureChanged: false
+      readonly startWorkoutChanged: false
+      readonly liveWorkoutChanged: false
+      readonly futureSessionsMutated: false
+      readonly evidence: readonly string[]
+    }
+  | {
+      readonly status: 'blocked'
+      readonly blockedReason: string
+      readonly evidence: readonly string[]
+    }
+
+/**
+ * Apply marker metadata to a program object (marker-only, no workout changes).
+ * Returns an updated program with persisted marker application state.
+ */
+export function applyProgramCardAdaptationMarkersToProgram(input: {
+  readonly program: unknown
+  readonly previewModel: ProgramCardAdaptationMarkerPreviewModel
+  readonly existingState?: ProgramCardAdaptationMarkerApplicationState | null
+}): ApplyProgramCardAdaptationMarkersResult {
+  const { program, previewModel, existingState } = input
+  
+  // Guard: Must have program
+  if (!program || typeof program !== 'object') {
+    return {
+      status: 'blocked',
+      blockedReason: 'No program available',
+      evidence: ['program is null or undefined'],
+    }
+  }
+  
+  // Guard: Preview must be ready
+  if (!previewModel.markerPreviewReady) {
+    return {
+      status: 'blocked',
+      blockedReason: 'Preview not ready',
+      evidence: ['markerPreviewReady is false'],
+    }
+  }
+  
+  // Guard: Must have preview items
+  if (previewModel.previewItems.length === 0) {
+    return {
+      status: 'blocked',
+      blockedReason: 'No preview items available',
+      evidence: ['previewItems.length is 0'],
+    }
+  }
+  
+  // Guard: Check if already applied (can re-apply with existingState for reload)
+  if (existingState && existingState.appliedCount > 0) {
+    return {
+      status: 'success',
+      updatedProgram: program,
+      appliedCount: existingState.appliedCount,
+      targetDayNumbers: existingState.targetDayNumbers,
+      persistenceStatus: 'persisted',
+      workoutStructureChanged: false,
+      startWorkoutChanged: false,
+      liveWorkoutChanged: false,
+      futureSessionsMutated: false,
+      evidence: ['Using existing persisted state'],
+    }
+  }
+  
+  // Create applied marker items from preview items
+  const appliedItems: AppliedMarkerItem[] = previewModel.previewItems
+    .filter(item => item.targetDayNumber !== undefined && item.targetDayNumber > 0)
+    .map(item => createAppliedMarkerItem(item))
+  
+  // Guard: Must have at least one valid item
+  if (appliedItems.length === 0) {
+    return {
+      status: 'blocked',
+      blockedReason: 'No valid target day numbers in preview items',
+      evidence: ['All preview items have invalid targetDayNumber'],
+    }
+  }
+  
+  // Create persisted state
+  const markerApplicationState: ProgramCardAdaptationMarkerApplicationState = {
+    version: 1,
+    appliedAt: new Date().toISOString(),
+    markerOnly: true,
+    source: 'adaptive_coach_review',
+    appliedItems,
+    appliedCount: appliedItems.length,
+    previewItemCountAtApply: previewModel.previewItems.length,
+    targetDayNumbers: appliedItems.map(item => item.targetDayNumber),
+    completedSessionsProtected: true,
+    workoutStructureChanged: false,
+    startWorkoutChanged: false,
+    liveWorkoutChanged: false,
+    futureSessionsMutated: false,
+    persistenceStatus: 'persisted',
+  }
+  
+  // Create updated program with marker state (shallow copy)
+  const updatedProgram = {
+    ...(program as object),
+    programCardAdaptationMarkerApplicationState: markerApplicationState,
+  }
+  
+  return {
+    status: 'success',
+    updatedProgram,
+    appliedCount: appliedItems.length,
+    targetDayNumbers: markerApplicationState.targetDayNumbers,
+    persistenceStatus: 'persisted',
+    workoutStructureChanged: false,
+    startWorkoutChanged: false,
+    liveWorkoutChanged: false,
+    futureSessionsMutated: false,
+    evidence: [
+      `Applied ${appliedItems.length} marker(s)`,
+      `Target days: ${markerApplicationState.targetDayNumbers.join(', ')}`,
+      'Marker-only: no workout structure changed',
+    ],
+  }
+}

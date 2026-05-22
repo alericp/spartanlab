@@ -161,6 +161,13 @@ import {
   type SelectiveRemovalResult,
 } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
+// [Prompt 82] Marker application persistence
+import {
+  type ProgramCardAdaptationMarkerPreviewModel,
+  type ApplyProgramCardAdaptationMarkersResult,
+  applyProgramCardAdaptationMarkersToProgram,
+  getProgramCardAdaptationMarkerApplicationState,
+} from '@/lib/program/program-card-adaptation-marker-preview'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -2954,6 +2961,77 @@ function ProgramDisplayWrapper({
   )
   
   // ==========================================================================
+  // [Prompt 82 / AB20.4.79] Program Card Adaptation Marker Application Callback
+  // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
+  // This is marker-only: no workout structure changes, no Start Workout/Live Workout bridge.
+  // ==========================================================================
+  const handleApplyProgramCardAdaptationMarkers = useCallback(
+    async (previewModel: ProgramCardAdaptationMarkerPreviewModel): Promise<ApplyProgramCardAdaptationMarkersResult> => {
+      // Guard: Must have program
+      if (!program) {
+        return {
+          status: 'blocked',
+          blockedReason: 'No program available',
+          evidence: ['program is null or undefined'],
+        }
+      }
+      
+      console.log('[Prompt 82-marker-apply] Starting marker application', {
+        programId: program.id,
+        markerPreviewReady: previewModel.markerPreviewReady,
+        previewItemCount: previewModel.previewItems.length,
+      })
+      
+      // Call the pure helper
+      const result = applyProgramCardAdaptationMarkersToProgram({
+        program,
+        previewModel,
+      })
+      
+      console.log('[Prompt 82-marker-apply] Helper result', {
+        status: result.status,
+        evidence: result.evidence,
+      })
+      
+      // If blocked, return early — do not save
+      if (result.status !== 'success') {
+        return result
+      }
+      
+      // Save the updated program through the authoritative save path
+      try {
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        const savedProgram = saveAdaptiveProgram(result.updatedProgram as AdaptiveProgram)
+        
+        // Update Program Page state via parent callback
+        if (onProgramUpdate) {
+          onProgramUpdate(savedProgram)
+        }
+        
+        console.log('[Prompt 82-marker-apply] Program saved successfully', {
+          programId: savedProgram.id,
+          appliedCount: result.appliedCount,
+          targetDayNumbers: result.targetDayNumbers,
+          persistenceStatus: result.persistenceStatus,
+        })
+        
+        return {
+          ...result,
+          updatedProgram: savedProgram,
+        }
+      } catch (error) {
+        console.error('[Prompt 82-marker-apply] Save failed:', error)
+        return {
+          status: 'blocked',
+          blockedReason: 'Failed to save program',
+          evidence: ['saveAdaptiveProgram threw an error', String(error)],
+        }
+      }
+    },
+    [program, onProgramUpdate]
+  )
+  
+  // ==========================================================================
   // [MASTER-8C.12B] Selective Method Placement Removal Callback
   // Program Page owns the save path. Hub requests, Page persists via saveAdaptiveProgram.
   // This allows users to remove specific applied methods without resetting all.
@@ -3863,6 +3941,9 @@ function ProgramDisplayWrapper({
   /* [MASTER-8C.12B] Selective removal callback with saveAdaptiveProgram.
   Allows removing specific applied methods without resetting all. */
   onRemoveSelectedPlacements={handleRemoveSelectedPlacements}
+  /* [Prompt 82] Marker application callback with saveAdaptiveProgram.
+  Program Page owns the save path. Hub requests, Page persists. Marker-only. */
+  onApplyProgramCardAdaptationMarkers={handleApplyProgramCardAdaptationMarkers}
   />
       </ErrorBoundary>
     </div>

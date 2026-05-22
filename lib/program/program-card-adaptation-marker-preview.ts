@@ -104,10 +104,23 @@ export interface ProgramCardAdaptationMarkerPreviewModel {
 // ─────────────────────────────────────────────────────────────────────────────
 // Input interface
 // ─────────────────────────────────────────────────────────────────────────────
+// [Prompt 80.8.4] Minimal target session type for marker targeting
+// Avoids coupling to full MutationTargetSessionResolutionPreviewModel import
+export interface MarkerTargetSession {
+  readonly dayNumber: number
+  readonly sessionId: string | null
+  readonly sessionTitle: string
+  readonly isFutureSession: boolean
+  readonly eligibleForFutureMutationPreview: boolean
+  readonly status: string
+}
+
 export interface ProgramCardAdaptationMarkerPreviewInput {
   readonly roadmapStep: PlanLogicMutationReadinessRoadmapStep | null | undefined
   readonly futureSessionMutationApplyCandidateModel: FutureSessionMutationApplyCandidateModel | null | undefined
   readonly futureSessionMutationDraftPreviewModel: FutureSessionMutationDraftPreviewModel | null | undefined
+  // [Prompt 80.8.4] Real target sessions for marker targeting - replaces draft item index
+  readonly targetSessions?: readonly MarkerTargetSession[] | null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,7 +192,7 @@ export function getProgramCardMarkerToneClass(
 export function resolveProgramCardAdaptationMarkerPreview(
   input: ProgramCardAdaptationMarkerPreviewInput
 ): ProgramCardAdaptationMarkerPreviewModel {
-  const { roadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel } = input
+  const { roadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel, targetSessions } = input
 
   // Hard-locked base fields
   const base = {
@@ -293,26 +306,66 @@ export function resolveProgramCardAdaptationMarkerPreview(
     }
   }
 
-  // Step 5: Generate preview items from draft items
-  const previewItems: ProgramCardAdaptationMarkerPreviewItem[] = draftItems.map((item, index) => {
+  // Step 5: [Prompt 80.8.4] Generate preview items from REAL target sessions
+  // Primary source: targetSessions from mutationTargetSessionResolutionPreviewModel
+  // Draft items used only as evidence/reason text, NOT for target identity
+  
+  // Filter to eligible future sessions only
+  const eligibleTargetSessions = (targetSessions ?? []).filter(
+    session => session.isFutureSession && session.eligibleForFutureMutationPreview
+  )
+  
+  // If no real target sessions, return blocked status
+  if (eligibleTargetSessions.length === 0) {
+    return {
+      ...base,
+      status: 'blocked_no_draft_items', // Re-use existing status
+      statusLabel: getProgramCardAdaptationMarkerPreviewStatusLabel('blocked_no_draft_items'),
+      headline: 'Program Card Marker Preview Blocked',
+      summary: 'No source-backed future target sessions available for Program Card marker preview.',
+      applyCandidateReady,
+      applyButtonEnabled,
+      userConfirmationPresent,
+      markerPreviewReady: false,
+      markerPreviewItemCount: 0,
+      targetSessionCount: 0,
+      previewItems: [],
+      blockers: ['No source-backed future target sessions available for Program Card marker preview'],
+      safetyNotes: ['Marker preview requires target resolution day/session identity from real program sessions'],
+      nextRequiredStep: 'Pass target session resolution to marker preview resolver',
+    }
+  }
+  
+  // Generate preview items from real target sessions with draft items as evidence
+  const previewItems: ProgramCardAdaptationMarkerPreviewItem[] = eligibleTargetSessions.map((targetSession, index) => {
     const tones: ProgramCardAdaptationMarkerPreviewItem['markerTone'][] = ['emerald', 'amber', 'cyan', 'violet', 'zinc']
     const tone = tones[index % tones.length]
+    
+    // Use draft item as evidence if available (by index cycling)
+    const evidenceItem = draftItems.length > 0 ? draftItems[index % draftItems.length] : null
 
     return {
-      sessionId: item.key || `draft-session-${index}`,
-      dayLabel: `Session ${index + 1}`,
-      sessionTitle: item.label || 'Future Session',
+      // [Prompt 80.8.4] Real session identity from target resolution
+      sessionId: targetSession.sessionId ?? `day-${targetSession.dayNumber}`,
+      dayLabel: `Day ${targetSession.dayNumber}`,
+      sessionTitle: targetSession.sessionTitle,
       markerLabel: 'Adaptive preview',
       markerTone: tone,
-      markerPreviewText: `Would show: ${item.reason || 'Workout adjusted from recent performance.'}`,
-      whyShown: `Draft item: ${item.label} (${item.confidence} confidence)`,
+      // Draft item as evidence text, not targeting
+      markerPreviewText: evidenceItem
+        ? `Would show: ${evidenceItem.reason || 'Workout adjusted from recent performance.'}`
+        : 'Would show: future session adaptation marker preview.',
+      whyShown: evidenceItem
+        ? `Target Day ${targetSession.dayNumber}: ${evidenceItem.label} (${evidenceItem.confidence} confidence)`
+        : `Target Day ${targetSession.dayNumber}: source-backed future session target`,
       wouldProgramCardChange: false as const,
       wouldStartWorkoutChange: false as const,
       wouldLiveWorkoutChange: false as const,
-      sourceDraftItemId: item.key,
-      sourceTargetSessionId: item.key,
-      // [Prompt 80.1] Target day number for matching - derived from draft item index
-      targetDayNumber: index + 1,
+      sourceDraftItemId: evidenceItem?.key ?? undefined,
+      // [Prompt 80.8.4] Real session ID from target resolution
+      sourceTargetSessionId: targetSession.sessionId ?? undefined,
+      // [Prompt 80.8.4] Real day number from target resolution - NOT index + 1
+      targetDayNumber: targetSession.dayNumber,
     }
   })
 

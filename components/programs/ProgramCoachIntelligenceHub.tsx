@@ -9110,12 +9110,16 @@ export function ProgramCoachIntelligenceHub({
   // Read-only preview showing how adapted sessions would be marked on Program Cards
   const prompt78RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(78), [])
   const programCardAdaptationMarkerPreviewModel = useMemo<ProgramCardAdaptationMarkerPreviewModel>(() => {
+    // [Prompt 80.8.4] Pass real target sessions from mutation target resolution
+    // This replaces draft-item-index targeting with real session identity
+    const targetSessions = mutationTargetSessionResolutionPreviewModel?.futureSessionCandidates ?? []
     return resolveProgramCardAdaptationMarkerPreview({
       roadmapStep: prompt78RoadmapStep,
       futureSessionMutationApplyCandidateModel,
       futureSessionMutationDraftPreviewModel,
+      targetSessions,
     })
-  }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel])
+  }, [prompt78RoadmapStep, futureSessionMutationApplyCandidateModel, futureSessionMutationDraftPreviewModel, mutationTargetSessionResolutionPreviewModel])
 
   // [Prompt 80.8.2] REMOVED: onMarkerPreviewItemsChange callback/ref/effect to fix React #185
   // Hub no longer pushes marker items to parent. Plan Logic displays internal model only.

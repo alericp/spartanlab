@@ -9624,6 +9624,61 @@ export function ProgramCoachIntelligenceHub({
           />
         </div>
         
+        {/* [Prompt 81.2] Centralized Adaptive Coach Review — one surface for marker preview/apply */}
+        {programCardAdaptationMarkerPreviewModel.markerPreviewReady && programCardAdaptationMarkerPreviewModel.previewItems.length > 0 && (
+          <div 
+            className="mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5"
+            data-adaptive-coach-review="true"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-300">Adaptive Coach Review</span>
+              {appliedMarkerContextValue.appliedCount > 0 ? (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 ml-auto">Applied</span>
+              ) : (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 ml-auto">Preview</span>
+              )}
+            </div>
+            <p className="text-[10px] text-[#8A8A9A] mb-2">
+              {appliedMarkerContextValue.appliedCount > 0 
+                ? 'Adaptive marker applied. No workout structure changed.'
+                : `Preview ready for ${programCardAdaptationMarkerPreviewModel.previewItems.length} upcoming workout(s).`}
+            </p>
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              {programCardAdaptationMarkerPreviewModel.previewItems.slice(0, 5).map((item, idx) => (
+                <span key={item.sessionId || idx} className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
+                  Day {item.targetDayNumber || '?'}
+                </span>
+              ))}
+              {programCardAdaptationMarkerPreviewModel.previewItems.length > 5 && (
+                <span className="text-[8px] text-zinc-500">+{programCardAdaptationMarkerPreviewModel.previewItems.length - 5} more</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1 flex-wrap mb-3">
+              <span className="text-[7px] px-1 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">marker-only</span>
+              <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">no workout change</span>
+              <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Start Workout unchanged</span>
+              <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Live Workout unchanged</span>
+              <span className="text-[7px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">current page only</span>
+            </div>
+            <button
+              type="button"
+              onClick={appliedMarkerContextValue.applyMarkers}
+              disabled={!appliedMarkerContextValue.canApplyMarker}
+              className={`w-full px-3 py-2 text-[10px] font-medium rounded border transition-colors ${
+                appliedMarkerContextValue.appliedCount > 0
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                  : appliedMarkerContextValue.canApplyMarker
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                    : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 cursor-not-allowed'
+              }`}
+              data-centralized-apply-marker="true"
+            >
+              {appliedMarkerContextValue.appliedCount > 0 ? 'Marker Applied' : 'Review & Apply Marker'}
+            </button>
+          </div>
+        )}
+        
         {/* [AB18 / IQ8 / AB19] Weekly Recovery Check — compact proof line from weeklyStressDistributionPlan */}
         {/* [AB19 / IQ9] Explanation Parity: source classification added for transparency */}
         {(() => {

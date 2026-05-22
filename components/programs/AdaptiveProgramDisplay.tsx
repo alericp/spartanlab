@@ -3315,9 +3315,7 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 )}
-                {/* [Prompt 80.8.3] Program Card Adaptation Marker Preview — context-based, render-only */}
-                {/* [Prompt 80.8.4] Uses real dayNumber from target resolution for matching */}
-                <ProgramCardAdaptationMarker dayNumber={session.dayNumber} />
+                {/* [Prompt 81.2] REMOVED: Day-card marker consolidated into centralized Hub review */}
 <AdaptiveSessionCard
   session={session}
   programId={program.id}

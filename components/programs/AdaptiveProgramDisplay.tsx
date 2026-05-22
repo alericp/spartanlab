@@ -15,7 +15,8 @@ import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/li
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 // [Prompt 80.8.3] Context hook for source-backed marker items - consumed inside Hub's Provider
 // [Prompt 81] Added useIsMarkerApplied for applied marker state
-import { useProgramCardAdaptationMarkerPreviewItems, useIsMarkerApplied } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 81.1] Added useAppliedMarkerContext for inline Apply Marker button
+import { useProgramCardAdaptationMarkerPreviewItems, useIsMarkerApplied, useAppliedMarkerContext } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -473,6 +474,9 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
   // [Prompt 81] Check if marker has been applied by user
   const isApplied = useIsMarkerApplied(sessionId ?? null, dayNumber)
   
+  // [Prompt 81.1] Get apply action from context for inline button
+  const appliedMarkerContext = useAppliedMarkerContext()
+  
   // [Prompt 80.8.5] Normalize day number for robust matching
   const normalizedDayNumber = toFiniteDayNumber(dayNumber)
   
@@ -568,6 +572,42 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
           <p className="text-[8px] text-[#5A5A6A] mt-1 italic">
             {matchedPreviewItem.whyShown}
           </p>
+          {/* [Prompt 81.1] Inline Apply Marker button - visible action surface */}
+          {appliedMarkerContext && (
+            <div className="mt-3 pt-2 border-t border-emerald-500/20">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[8px] text-zinc-400">
+                    {isApplied 
+                      ? 'Marker-only. This workout has not changed.'
+                      : 'Marker-only. Does not change this workout.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={appliedMarkerContext.applyMarkers}
+                  disabled={!appliedMarkerContext.canApplyMarker || isApplied}
+                  className={`px-3 py-1.5 text-[9px] font-medium rounded border transition-colors ${
+                    isApplied
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 cursor-default'
+                      : appliedMarkerContext.canApplyMarker
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                        : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 cursor-not-allowed'
+                  }`}
+                  data-inline-apply-marker="true"
+                  data-can-apply={appliedMarkerContext.canApplyMarker && !isApplied}
+                  data-is-applied={isApplied}
+                >
+                  {isApplied ? 'Marker Applied' : 'Apply Marker'}
+                </button>
+              </div>
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                <span className="text-[6px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">
+                  current page only
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

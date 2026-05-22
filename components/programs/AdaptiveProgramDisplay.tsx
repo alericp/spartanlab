@@ -448,31 +448,46 @@ function isDisplayWeeklyRepresentation(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// [Prompt 80.8.3] Program Card Adaptation Marker Preview - Context Consumer Component
+// [Prompt 80.8.3/80.8.5] Program Card Adaptation Marker Preview - Context Consumer Component
 // Uses useProgramCardAdaptationMarkerPreviewItems() hook to consume source-backed items
 // from Hub's Context.Provider - no child-to-parent callbacks, pure render-only access
 // [Prompt 80.8.4] Updated to accept optional sessionId for stronger matching
+// [Prompt 80.8.5] Added diagnostic data attributes for source-to-consumer tracing
 // ─────────────────────────────────────────────────────────────────────────────
 interface ProgramCardAdaptationMarkerProps {
   readonly dayNumber: number
   readonly sessionId?: string | null
 }
 
+// [Prompt 80.8.5] Helper to normalize day number to finite integer
+function toFiniteDayNumber(value: unknown): number | null {
+  const num = Number(value)
+  return Number.isFinite(num) && num >= 1 ? Math.floor(num) : null
+}
+
 function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdaptationMarkerProps) {
   // [Prompt 80.8.3] Consume source-backed items from Hub's Context - render-only, no callbacks
   const previewItems = useProgramCardAdaptationMarkerPreviewItems()
   
-  // [Prompt 80.8.4] Match preview items by real session ID first, then by day number
+  // [Prompt 80.8.5] Normalize day number for robust matching
+  const normalizedDayNumber = toFiniteDayNumber(dayNumber)
+  
+  // [Prompt 80.8.4/80.8.5] Match preview items by real session ID first, then by day number
+  let matchSource: 'session_id' | 'target_session_id' | 'day_number' | 'none' = 'none'
   const matchedPreviewItem = previewItems.find(item => {
+    const itemDay = toFiniteDayNumber(item.targetDayNumber)
     // First try matching by real session ID (strongest match)
     if (sessionId && item.sourceTargetSessionId && item.sourceTargetSessionId === sessionId) {
+      matchSource = 'target_session_id'
       return true
     }
     if (sessionId && item.sessionId && item.sessionId === sessionId) {
+      matchSource = 'session_id'
       return true
     }
     // Fall back to day number matching
-    if (item.targetDayNumber !== undefined && dayNumber === item.targetDayNumber) {
+    if (normalizedDayNumber !== null && itemDay !== null && normalizedDayNumber === itemDay) {
+      matchSource = 'day_number'
       return true
     }
     return false
@@ -485,6 +500,10 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
     <div 
       className="mb-3 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40"
       data-program-card-adaptation-marker-preview="true"
+      data-marker-source-count={previewItems.length}
+      data-marker-target-day={matchedPreviewItem.targetDayNumber ?? ''}
+      data-marker-current-day={normalizedDayNumber ?? ''}
+      data-marker-match-source={matchSource}
       data-no-start-workout-bridge="true"
       data-no-live-workout-bridge="true"
     >

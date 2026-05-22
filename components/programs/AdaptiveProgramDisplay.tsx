@@ -14,7 +14,8 @@ import type { MethodOverridePreview, MethodOverrideApplyResult, MethodOverrideRe
 import type { FrequencyPlacementApplyResult, SelectiveRemovalResult } from '@/lib/program/method-frequency-placement-apply-contract'
 import type { FrequencySlotPlacementPreview } from '@/lib/program/method-frequency-slot-placement-preview'
 // [Prompt 80.8.3] Context hook for source-backed marker items - consumed inside Hub's Provider
-import { useProgramCardAdaptationMarkerPreviewItems } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 81] Added useIsMarkerApplied for applied marker state
+import { useProgramCardAdaptationMarkerPreviewItems, useIsMarkerApplied } from '@/lib/program/program-card-adaptation-marker-preview'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Activity,
@@ -469,6 +470,9 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
   // [Prompt 80.8.3] Consume source-backed items from Hub's Context - render-only, no callbacks
   const previewItems = useProgramCardAdaptationMarkerPreviewItems()
   
+  // [Prompt 81] Check if marker has been applied by user
+  const isApplied = useIsMarkerApplied(sessionId ?? null, dayNumber)
+  
   // [Prompt 80.8.5] Normalize day number for robust matching
   const normalizedDayNumber = toFiniteDayNumber(dayNumber)
   
@@ -496,10 +500,19 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
   // Only show on matched future sessions
   if (!matchedPreviewItem) return null
   
+  // [Prompt 81] Show different UI based on applied vs preview state
+  const markerState = isApplied ? 'applied' : 'preview'
+  
   return (
     <div 
-      className="mb-3 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40"
+      className={`mb-3 p-3 rounded-lg border-2 ${
+        isApplied 
+          ? 'bg-emerald-500/20 border-emerald-500/60' 
+          : 'bg-emerald-500/10 border-emerald-500/40'
+      }`}
       data-program-card-adaptation-marker-preview="true"
+      data-marker-state={markerState}
+      data-marker-applied={isApplied}
       data-marker-source-count={previewItems.length}
       data-marker-target-day={matchedPreviewItem.targetDayNumber ?? ''}
       data-marker-current-day={normalizedDayNumber ?? ''}
@@ -508,19 +521,29 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
       data-no-live-workout-bridge="true"
     >
       <div className="flex items-start gap-2">
-        <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-          <Activity className="w-4 h-4 text-emerald-400" />
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+          isApplied ? 'bg-emerald-500/30' : 'bg-emerald-500/20'
+        }`}>
+          <Activity className={`w-4 h-4 ${isApplied ? 'text-emerald-300' : 'text-emerald-400'}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
-            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
-              Adaptive preview
+            <span className={`text-[10px] px-2 py-1 rounded font-semibold ${
+              isApplied 
+                ? 'bg-emerald-500/30 text-emerald-200' 
+                : 'bg-emerald-500/20 text-emerald-300'
+            }`}>
+              {isApplied ? 'Adaptive marker applied' : 'Adaptive preview'}
             </span>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
               Program Card proof
             </span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
-              read-only
+            <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+              isApplied 
+                ? 'bg-emerald-500/20 text-emerald-300' 
+                : 'bg-zinc-500/20 text-zinc-300'
+            }`}>
+              {isApplied ? 'marker-only' : 'read-only'}
             </span>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
@@ -534,11 +557,13 @@ function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdapta
               Live Workout unchanged
             </span>
           </div>
-          <p className="text-[10px] text-emerald-300 font-medium mb-1">
+          <p className={`text-[10px] font-medium mb-1 ${isApplied ? 'text-emerald-200' : 'text-emerald-300'}`}>
             {matchedPreviewItem.markerLabel}
           </p>
           <p className="text-[9px] text-[#6A6A7A] leading-relaxed">
-            {matchedPreviewItem.markerPreviewText}
+            {isApplied 
+              ? 'Marker applied to this Program Card. No workout structure has changed.'
+              : matchedPreviewItem.markerPreviewText}
           </p>
           <p className="text-[8px] text-[#5A5A6A] mt-1 italic">
             {matchedPreviewItem.whyShown}

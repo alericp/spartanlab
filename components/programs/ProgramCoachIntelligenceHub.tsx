@@ -681,6 +681,15 @@ import {
   type AppliedMarkerItem, // [Prompt 81] Applied marker item type
   type ApplyProgramCardAdaptationMarkersResult, // [Prompt 82] Apply result type
 } from '@/lib/program/program-card-adaptation-marker-preview'
+// [Prompt 83] Computable Adaptive Mutation Proposal
+import {
+  resolveFutureSessionAdaptiveMutationProposal,
+  getOperationKindLabel,
+  getFieldCategoryLabel,
+  getProposalStatusLabel,
+  getProposalStatusColor,
+  type FutureSessionAdaptiveMutationProposalModel,
+} from '@/lib/program/future-session-adaptive-mutation-proposal'
 // [Prompt 79] Exercise Knowledge Source Foundation Readiness (inserted gate)
 import {
   resolveExerciseKnowledgeSourceFoundationReadiness,
@@ -9148,6 +9157,17 @@ export function ProgramCoachIntelligenceHub({
     return getProgramCardAdaptationMarkerApplicationState(program)
   }, [program])
   
+  // [Prompt 83] Computable Adaptive Mutation Proposal
+  // Converts generic before/after text into computable operation candidates with target session identity
+  // This is PROPOSAL ONLY — no real mutation, no persistence
+  const futureSessionAdaptiveMutationProposalModel = useMemo<FutureSessionAdaptiveMutationProposalModel>(() => {
+    return resolveFutureSessionAdaptiveMutationProposal({
+      futureSessionAdaptivePreviewDiffModel,
+      mutationTargetSessionResolutionPreviewModel,
+      persistedMarkerState,
+    })
+  }, [futureSessionAdaptivePreviewDiffModel, mutationTargetSessionResolutionPreviewModel, persistedMarkerState])
+  
   const [appliedMarkerItems, setAppliedMarkerItems] = useState<readonly AppliedMarkerItem[]>(() => {
     // Seed from persisted state if available
     if (persistedMarkerState?.appliedItems) {
@@ -9752,6 +9772,55 @@ export function ProgramCoachIntelligenceHub({
                   ? 'Marker Applied' 
                   : 'Review & Apply Marker'}
             </button>
+            
+            {/* [Prompt 83] Compact proposal proof — shows after marker applied */}
+            {(appliedMarkerContextValue.appliedCount > 0 || markerPersistenceStatus === 'persisted') && 
+             futureSessionAdaptiveMutationProposalModel.operationCount > 0 && (
+              <div 
+                className="mt-3 pt-3 border-t border-emerald-500/20"
+                data-adaptive-mutation-proposal="true"
+                data-proposal-status={futureSessionAdaptiveMutationProposalModel.status}
+                data-proposal-operation-count={futureSessionAdaptiveMutationProposalModel.operationCount}
+                data-real-mutation-enabled="false"
+                data-workout-structure-changed="false"
+                data-start-workout-changed="false"
+                data-live-workout-changed="false"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[9px] font-medium text-cyan-300">Next Adaptive Proposal</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 ml-auto">
+                    {futureSessionAdaptiveMutationProposalModel.operationCount} operation{futureSessionAdaptiveMutationProposalModel.operationCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  {/* Target day chips */}
+                  {[...new Set(futureSessionAdaptiveMutationProposalModel.operations.map(op => op.targetDayNumber))].slice(0, 4).map(dayNum => (
+                    <span key={dayNum} className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
+                      Day {dayNum}
+                    </span>
+                  ))}
+                  {[...new Set(futureSessionAdaptiveMutationProposalModel.operations.map(op => op.targetDayNumber))].length > 4 && (
+                    <span className="text-[8px] text-zinc-500">
+                      +{[...new Set(futureSessionAdaptiveMutationProposalModel.operations.map(op => op.targetDayNumber))].length - 4} more
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap mb-2">
+                  {/* Operation type chips */}
+                  {[...new Set(futureSessionAdaptiveMutationProposalModel.operations.map(op => op.fieldCategory))].slice(0, 5).map(cat => (
+                    <span key={cat} className="text-[7px] px-1 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                      {getFieldCategoryLabel(cat)}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-amber-500/10 text-amber-400/60 border-amber-500/20">not applied yet</span>
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">no workout change yet</span>
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Start Workout unchanged</span>
+                  <span className="text-[7px] px-1 py-0.5 rounded border bg-zinc-500/10 text-zinc-400/60 border-zinc-500/20">Live Workout unchanged</span>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
         
@@ -16776,6 +16845,164 @@ export function ProgramCoachIntelligenceHub({
                 </p>
               </div>
             )}
+            
+            {/* [Prompt 83] Computable Mutation Proposal proof
+                Converts generic before/after text into computable operation candidates */}
+            {futureSessionAdaptiveMutationProposalModel && futureSessionAdaptiveMutationProposalModel.status !== 'blocked_missing_source_models' && (
+              <div 
+                className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-[#1A1A2E]/80 to-[#12121A]/90 p-3 mb-3"
+                data-adaptive-mutation-proposal="true"
+                data-proposal-status={futureSessionAdaptiveMutationProposalModel.status}
+                data-proposal-operation-count={futureSessionAdaptiveMutationProposalModel.operationCount}
+                data-real-mutation-enabled="false"
+                data-workout-structure-changed="false"
+                data-start-workout-changed="false"
+                data-live-workout-changed="false"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-cyan-300">
+                    Computable Mutation Proposal
+                  </span>
+                </div>
+                {/* Status chips */}
+                {(() => {
+                  const statusColor = getProposalStatusColor(futureSessionAdaptiveMutationProposalModel.status)
+                  return (
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded border", statusColor.bg, statusColor.text, statusColor.border)}>
+                        {getProposalStatusLabel(futureSessionAdaptiveMutationProposalModel.status)}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-cyan-500/10 text-cyan-400/70 border-cyan-500/20">
+                        proposal only
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                        mutation disabled
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Safety fields */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    real write disabled
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    program cards unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    start workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                    live workout unchanged
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                    completed protected
+                  </span>
+                </div>
+                {/* Operation counts */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    operations: {futureSessionAdaptiveMutationProposalModel.operationCount}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#1A1A2E]/60 text-[#8A8A9A] border-[#2A2A35]/40">
+                    targets: {futureSessionAdaptiveMutationProposalModel.targetSessionCount}
+                  </span>
+                  {futureSessionAdaptiveMutationProposalModel.highConfidenceCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400/70 border-emerald-500/20">
+                      high: {futureSessionAdaptiveMutationProposalModel.highConfidenceCount}
+                    </span>
+                  )}
+                  {futureSessionAdaptiveMutationProposalModel.mediumConfidenceCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400/70 border-amber-500/20">
+                      medium: {futureSessionAdaptiveMutationProposalModel.mediumConfidenceCount}
+                    </span>
+                  )}
+                  {futureSessionAdaptiveMutationProposalModel.lowConfidenceCount > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-400/70 border-slate-500/20">
+                      low: {futureSessionAdaptiveMutationProposalModel.lowConfidenceCount}
+                    </span>
+                  )}
+                </div>
+                {/* Headline */}
+                <p className="text-[10px] text-cyan-300/90 font-medium mb-1">
+                  {futureSessionAdaptiveMutationProposalModel.headline}
+                </p>
+                {/* Summary */}
+                <p className="text-[9px] text-[#8A8A9A] mb-2">
+                  {futureSessionAdaptiveMutationProposalModel.summary}
+                </p>
+                {/* Operations list - show first 3 */}
+                {futureSessionAdaptiveMutationProposalModel.operations.length > 0 && (
+                  <div className="mb-2 p-2 rounded bg-[#12121A]/60 border border-cyan-500/10">
+                    <div className="text-[8px] text-cyan-400/60 mb-1.5">Proposed Operations:</div>
+                    <div className="space-y-2">
+                      {futureSessionAdaptiveMutationProposalModel.operations.slice(0, 3).map((operation) => (
+                        <div key={operation.id} className="p-1.5 rounded bg-[#1A1A2E]/40 border border-cyan-500/10">
+                          {/* Operation header */}
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <span className="text-[9px] font-medium text-cyan-300/90">
+                              {getOperationKindLabel(operation.operationKind)}
+                            </span>
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-zinc-500/20 text-zinc-300">
+                              {operation.targetDayLabel}
+                            </span>
+                            <span className="text-[7px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400/70">
+                              {getFieldCategoryLabel(operation.fieldCategory)}
+                            </span>
+                          </div>
+                          {/* Before */}
+                          <div className="flex items-start gap-1 mb-0.5">
+                            <span className="text-[8px] text-rose-400/70 shrink-0 w-10">Before:</span>
+                            <span className="text-[8px] text-[#9A9AA9]">{operation.beforeLabel}</span>
+                          </div>
+                          {/* After */}
+                          <div className="flex items-start gap-1 mb-0.5">
+                            <span className="text-[8px] text-emerald-400/70 shrink-0 w-10">After:</span>
+                            <span className="text-[8px] text-emerald-300/80">{operation.afterLabel}</span>
+                          </div>
+                          {/* Reason */}
+                          <div className="flex items-start gap-1">
+                            <span className="text-[8px] text-amber-400/50 shrink-0 w-10">Why:</span>
+                            <span className="text-[8px] text-amber-300/60">{operation.reason}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {futureSessionAdaptiveMutationProposalModel.operations.length > 3 && (
+                        <div className="text-[8px] text-zinc-500">
+                          +{futureSessionAdaptiveMutationProposalModel.operations.length - 3} more operation{futureSessionAdaptiveMutationProposalModel.operations.length - 3 !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Safety notes if any */}
+                {futureSessionAdaptiveMutationProposalModel.safetyNotes.length > 0 && (
+                  <div className="mb-1.5">
+                    <div className="text-[9px] text-amber-400/60 mb-0.5">Safety notes:</div>
+                    {futureSessionAdaptiveMutationProposalModel.safetyNotes.map((note, i) => (
+                      <div key={i} className="text-[9px] text-amber-300/70 mb-0.5 pl-2">
+                        - {note}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Next required step */}
+                <div className="mb-1.5 p-2 rounded bg-cyan-500/5 border border-cyan-500/20">
+                  <div className="text-[9px] text-cyan-400/80 font-medium">
+                    Next required step:
+                  </div>
+                  <div className="text-[9px] text-cyan-300/90 mt-0.5">
+                    {futureSessionAdaptiveMutationProposalModel.nextRequiredStep}
+                  </div>
+                </div>
+                {/* Safety line */}
+                <p className="text-[10px] text-cyan-400/60">
+                  Proposal only — real workout mutation remains disabled until Prompt 84.
+                </p>
+              </div>
+            )}
+            
             {/* [Prompt 67] Controlled Marker-Save Dry-Run Candidate card
                 Bridge from "adaptive preview exists" to "marker-save dry-run is reviewable"
                 Shows simulated marker fields and dry-run checklist — NOT real persistence */}

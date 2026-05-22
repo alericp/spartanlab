@@ -32,6 +32,7 @@ export type ProgramCardAdaptationMarkerPreviewStatus =
   | 'blocked_apply_candidate_missing'
   | 'blocked_draft_preview_missing'
   | 'blocked_no_draft_items'
+  | 'blocked_no_target_sessions' // [Prompt 80.8.6] Replaces hard draft-item gate
   | 'blocked_upstream_not_ready'
   | 'not_ready'
   | 'preview_ready'
@@ -139,6 +140,8 @@ export function getProgramCardAdaptationMarkerPreviewStatusLabel(
       return 'Blocked: Draft Preview Missing'
     case 'blocked_no_draft_items':
       return 'Blocked: No Draft Items'
+    case 'blocked_no_target_sessions':
+      return 'Blocked: No Target Sessions'
     case 'blocked_upstream_not_ready':
       return 'Blocked: Upstream Not Ready'
     case 'not_ready':
@@ -159,6 +162,7 @@ export function getProgramCardAdaptationMarkerPreviewStatusColor(
     case 'blocked_draft_preview_missing':
       return 'red'
     case 'blocked_no_draft_items':
+    case 'blocked_no_target_sessions':
     case 'blocked_upstream_not_ready':
     case 'not_ready':
       return 'amber'
@@ -284,34 +288,13 @@ export function resolveProgramCardAdaptationMarkerPreview(
   const applyButtonEnabled = futureSessionMutationApplyCandidateModel.applyButtonEnabled
   const userConfirmationPresent = futureSessionMutationApplyCandidateModel.prompt75UserConfirmationPresent
   const draftItems = futureSessionMutationDraftPreviewModel.draftItems
-  const targetSessionCount = futureSessionMutationDraftPreviewModel.targetSessionCount
 
-  // Step 4: No draft items
-  if (draftItems.length === 0) {
-    return {
-      ...base,
-      status: 'blocked_no_draft_items',
-      statusLabel: getProgramCardAdaptationMarkerPreviewStatusLabel('blocked_no_draft_items'),
-      headline: 'No Program Card Markers to Preview',
-      summary: 'No draft session items exist yet. Program Card marker preview requires at least one draft candidate session.',
-      applyCandidateReady,
-      applyButtonEnabled,
-      userConfirmationPresent,
-      markerPreviewReady: false,
-      markerPreviewItemCount: 0,
-      targetSessionCount,
-      previewItems: [],
-      blockers: ['No draft session items exist — cannot generate marker preview'],
-      safetyNotes: ['Marker preview will populate when upstream draft items are created'],
-      nextRequiredStep: 'Wait for upstream draft preview to produce candidate sessions',
-    }
-  }
+  // [Prompt 80.8.6] REMOVED: Hard gate that blocked when draftItems.length === 0
+  // Draft items are now OPTIONAL evidence text, not a hard requirement.
+  // Source-backed target sessions are the primary requirement for read-only marker preview.
 
-  // Step 5: [Prompt 80.8.4/80.8.5] Generate preview items from REAL target sessions
-  // Primary source: targetSessions from mutationTargetSessionResolutionPreviewModel
-  // Draft items used only as evidence/reason text, NOT for target identity
-  
-  // [Prompt 80.8.5] For READ-ONLY marker preview, include future sessions that are:
+  // Step 4: [Prompt 80.8.6] Build eligible target sessions FIRST (before checking draft items)
+  // For READ-ONLY marker preview, include future sessions that are:
   // - Actually future (isFutureSession === true)
   // - Not completed/protected (protectedCompletedSession !== true)
   // - Have valid day identity (dayNumber is finite positive number)
@@ -327,11 +310,11 @@ export function resolveProgramCardAdaptationMarkerPreview(
     return true
   })
   
-  // If no real target sessions, return blocked status
+  // Step 5: [Prompt 80.8.6] Block only when NO source-backed target sessions exist
   if (eligibleTargetSessions.length === 0) {
     return {
       ...base,
-      status: 'blocked_no_draft_items', // Re-use existing status
+      status: 'blocked_no_target_sessions',
       statusLabel: getProgramCardAdaptationMarkerPreviewStatusLabel('blocked_no_draft_items'),
       headline: 'Program Card Marker Preview Blocked',
       summary: 'No source-backed future target sessions available for Program Card marker preview.',
@@ -342,13 +325,17 @@ export function resolveProgramCardAdaptationMarkerPreview(
       markerPreviewItemCount: 0,
       targetSessionCount: 0,
       previewItems: [],
-      blockers: ['No source-backed future target sessions available for Program Card marker preview'],
+      blockers: ['NO_SOURCE_TARGET_SESSIONS'],
       safetyNotes: ['Marker preview requires target resolution day/session identity from real program sessions'],
       nextRequiredStep: 'Pass target session resolution to marker preview resolver',
     }
   }
   
-  // Generate preview items from real target sessions with draft items as evidence
+  // [Prompt 80.8.6] Determine preview mode based on draft item availability
+  const hasDraftEvidence = draftItems.length > 0
+  const previewMode = hasDraftEvidence ? 'DRAFT_EVIDENCE_ATTACHED' : 'TARGET_SESSION_ONLY_MARKER_PREVIEW'
+  
+  // Step 6: Generate preview items from real target sessions with draft items as evidence
   const previewItems: ProgramCardAdaptationMarkerPreviewItem[] = eligibleTargetSessions.map((targetSession, index) => {
     const tones: ProgramCardAdaptationMarkerPreviewItem['markerTone'][] = ['emerald', 'amber', 'cyan', 'violet', 'zinc']
     const tone = tones[index % tones.length]
@@ -363,13 +350,13 @@ export function resolveProgramCardAdaptationMarkerPreview(
       sessionTitle: targetSession.sessionTitle,
       markerLabel: 'Adaptive preview',
       markerTone: tone,
-      // Draft item as evidence text, not targeting
+      // [Prompt 80.8.6] Draft item as evidence text when present, else target-session-only fallback
       markerPreviewText: evidenceItem
         ? `Would show: ${evidenceItem.reason || 'Workout adjusted from recent performance.'}`
-        : 'Would show: future session adaptation marker preview.',
+        : 'Read-only marker target identified from future-session resolution. No workout structure has changed.',
       whyShown: evidenceItem
         ? `Target Day ${targetSession.dayNumber}: ${evidenceItem.label} (${evidenceItem.confidence} confidence)`
-        : `Target Day ${targetSession.dayNumber}: source-backed future session target`,
+        : `Target Day ${targetSession.dayNumber}: source-backed future session target (${targetSession.status}).`,
       wouldProgramCardChange: false as const,
       wouldStartWorkoutChange: false as const,
       wouldLiveWorkoutChange: false as const,
@@ -388,6 +375,11 @@ export function resolveProgramCardAdaptationMarkerPreview(
     'Start Workout and Live Workout remain unchanged',
     'Completed sessions are protected',
   ]
+
+  // [Prompt 80.8.6] Add mode-specific safety note
+  if (previewMode === 'TARGET_SESSION_ONLY_MARKER_PREVIEW') {
+    safetyNotes.push('No draft change item is attached yet — marker uses target-session proof only.')
+  }
 
   if (!userConfirmationPresent) {
     blockers.push('User confirmation not yet present — markers shown as preview only')
@@ -410,20 +402,21 @@ export function resolveProgramCardAdaptationMarkerPreview(
       ? 'Program Card Marker Preview Ready'
       : 'Program Card Marker Preview Not Ready',
     summary: markerPreviewReady
-      ? `Showing how ${previewItems.length} Program Card(s) would be marked if adaptation is later authorized. No actual cards changed yet.`
-      : 'No marker preview is available because no eligible draft session markers exist.',
+      ? `Showing how ${previewItems.length} Program Card(s) would be marked if adaptation is later authorized. No actual cards changed yet. Mode: ${previewMode}.`
+      : 'No marker preview is available because no eligible target sessions exist.',
     applyCandidateReady,
     applyButtonEnabled,
     userConfirmationPresent,
     markerPreviewReady,
     markerPreviewItemCount: previewItems.length,
-    targetSessionCount,
+    // [Prompt 80.8.6] Use eligible target session count, not draft preview count
+    targetSessionCount: eligibleTargetSessions.length,
     previewItems,
     blockers,
     safetyNotes,
     nextRequiredStep: markerPreviewReady
       ? 'Prompt 79: Program Card Changed-Session Proof / No Start Workout Bridge'
-      : 'Wait for draft items to be generated',
+      : 'Wait for target sessions to be resolved',
   }
 }
 

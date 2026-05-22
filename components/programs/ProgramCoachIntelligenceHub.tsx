@@ -9110,9 +9110,21 @@ export function ProgramCoachIntelligenceHub({
   // Read-only preview showing how adapted sessions would be marked on Program Cards
   const prompt78RoadmapStep = useMemo(() => getPlanLogicRoadmapStep(78), [])
   const programCardAdaptationMarkerPreviewModel = useMemo<ProgramCardAdaptationMarkerPreviewModel>(() => {
-    // [Prompt 80.8.4] Pass real target sessions from mutation target resolution
+    // [Prompt 80.8.4/80.8.5] Pass real target sessions from mutation target resolution
     // This replaces draft-item-index targeting with real session identity
-    const targetSessions = mutationTargetSessionResolutionPreviewModel?.futureSessionCandidates ?? []
+    // [Prompt 80.8.5] Prefer candidateResolutions[].targetSessions for resolved targets,
+    // fall back to futureSessionCandidates for broader future session pool
+    const fromCandidateResolutions = mutationTargetSessionResolutionPreviewModel
+      ?.candidateResolutions
+      ?.flatMap(r => r.targetSessions ?? []) ?? []
+    
+    const fromFutureCandidates = mutationTargetSessionResolutionPreviewModel?.futureSessionCandidates ?? []
+    
+    // Use resolved targets if available, otherwise use broader future candidates
+    const targetSessions = fromCandidateResolutions.length > 0
+      ? fromCandidateResolutions
+      : fromFutureCandidates
+    
     return resolveProgramCardAdaptationMarkerPreview({
       roadmapStep: prompt78RoadmapStep,
       futureSessionMutationApplyCandidateModel,

@@ -104,7 +104,7 @@ export interface ProgramCardAdaptationMarkerPreviewModel {
 // ─────────────────────────────────────────────────────────────────────────────
 // Input interface
 // ─────────────────────────────────────────────────────────────────────────────
-// [Prompt 80.8.4] Minimal target session type for marker targeting
+// [Prompt 80.8.4/80.8.5] Minimal target session type for marker targeting
 // Avoids coupling to full MutationTargetSessionResolutionPreviewModel import
 export interface MarkerTargetSession {
   readonly dayNumber: number
@@ -112,6 +112,7 @@ export interface MarkerTargetSession {
   readonly sessionTitle: string
   readonly isFutureSession: boolean
   readonly eligibleForFutureMutationPreview: boolean
+  readonly protectedCompletedSession?: boolean // [80.8.5] For filtering out completed sessions
   readonly status: string
 }
 
@@ -306,14 +307,25 @@ export function resolveProgramCardAdaptationMarkerPreview(
     }
   }
 
-  // Step 5: [Prompt 80.8.4] Generate preview items from REAL target sessions
+  // Step 5: [Prompt 80.8.4/80.8.5] Generate preview items from REAL target sessions
   // Primary source: targetSessions from mutationTargetSessionResolutionPreviewModel
   // Draft items used only as evidence/reason text, NOT for target identity
   
-  // Filter to eligible future sessions only
-  const eligibleTargetSessions = (targetSessions ?? []).filter(
-    session => session.isFutureSession && session.eligibleForFutureMutationPreview
-  )
+  // [Prompt 80.8.5] For READ-ONLY marker preview, include future sessions that are:
+  // - Actually future (isFutureSession === true)
+  // - Not completed/protected (protectedCompletedSession !== true)
+  // - Have valid day identity (dayNumber is finite positive number)
+  // DO NOT require eligibleForFutureMutationPreview === true because that blocks
+  // preview when mutation is locked, but read-only preview is safe even when locked
+  const eligibleTargetSessions = (targetSessions ?? []).filter(session => {
+    // Must be a future session
+    if (!session.isFutureSession) return false
+    // Must not be a protected/completed session
+    if (session.protectedCompletedSession) return false
+    // Must have valid day number
+    if (!Number.isFinite(session.dayNumber) || session.dayNumber < 1) return false
+    return true
+  })
   
   // If no real target sessions, return blocked status
   if (eligibleTargetSessions.length === 0) {

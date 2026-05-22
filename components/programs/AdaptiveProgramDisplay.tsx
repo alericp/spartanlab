@@ -451,18 +451,27 @@ function isDisplayWeeklyRepresentation(
 // [Prompt 80.8.3] Program Card Adaptation Marker Preview - Context Consumer Component
 // Uses useProgramCardAdaptationMarkerPreviewItems() hook to consume source-backed items
 // from Hub's Context.Provider - no child-to-parent callbacks, pure render-only access
+// [Prompt 80.8.4] Updated to accept optional sessionId for stronger matching
 // ─────────────────────────────────────────────────────────────────────────────
 interface ProgramCardAdaptationMarkerProps {
   readonly dayNumber: number
+  readonly sessionId?: string | null
 }
 
-function ProgramCardAdaptationMarker({ dayNumber }: ProgramCardAdaptationMarkerProps) {
+function ProgramCardAdaptationMarker({ dayNumber, sessionId }: ProgramCardAdaptationMarkerProps) {
   // [Prompt 80.8.3] Consume source-backed items from Hub's Context - render-only, no callbacks
   const previewItems = useProgramCardAdaptationMarkerPreviewItems()
   
-  // Match preview items to this session by targetDayNumber
+  // [Prompt 80.8.4] Match preview items by real session ID first, then by day number
   const matchedPreviewItem = previewItems.find(item => {
-    // Match by day number - this is the stable identifier
+    // First try matching by real session ID (strongest match)
+    if (sessionId && item.sourceTargetSessionId && item.sourceTargetSessionId === sessionId) {
+      return true
+    }
+    if (sessionId && item.sessionId && item.sessionId === sessionId) {
+      return true
+    }
+    // Fall back to day number matching
     if (item.targetDayNumber !== undefined && dayNumber === item.targetDayNumber) {
       return true
     }
@@ -3223,6 +3232,7 @@ export function AdaptiveProgramDisplay({
                   </div>
                 )}
                 {/* [Prompt 80.8.3] Program Card Adaptation Marker Preview — context-based, render-only */}
+                {/* [Prompt 80.8.4] Uses real dayNumber from target resolution for matching */}
                 <ProgramCardAdaptationMarker dayNumber={session.dayNumber} />
 <AdaptiveSessionCard
   session={session}

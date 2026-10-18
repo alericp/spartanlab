@@ -1,34 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { 
-  getWorkoutHistoryForUser, 
+import { getSession } from '@/lib/auth-service-server'
+import {
+  getWorkoutHistoryForUser,
   getProgramHistoryForUser,
   getPersonalRecordHistoryForUser,
   getTotalPRCount,
 } from '@/lib/history-service'
+import { readOwnedAthleteResource } from '@/lib/server/athlete-ownership'
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const userId = searchParams.get('userId')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'User ID required' }, { status: 400 })
-  }
+  const requestedUserId = request.nextUrl.searchParams.get('userId')
+  const { userId } = await getSession()
 
   try {
-    // Fetch all history data in parallel with optimized count query
-    const [workoutHistory, programHistory, recentPRs, totalPRs] = await Promise.all([
-      getWorkoutHistoryForUser(userId, { limit: 20, sortOrder: 'desc' }),
-      getProgramHistoryForUser(userId, { limit: 10, sortOrder: 'desc' }),
-      getPersonalRecordHistoryForUser(userId, { limit: 5, sortOrder: 'desc' }),
-      getTotalPRCount(userId),
-    ])
-
-    return NextResponse.json({
-      workoutHistory,
-      programHistory,
-      recentPRs,
-      totalPRs,
+    const result = await readOwnedAthleteResource({
+      authenticatedUserId: userId,
+      requestedAthleteId: requestedUserId,
+      missingIdError: 'User ID required',
+      load: async (athleteId) => {
+        const [workoutHistory, programHistory, recentPRs, totalPRs] = await Promise.all([
+          getWorkoutHistoryForUser(athleteId, { limit: 20, sortOrder: 'desc' }),
+          getProgramHistoryForUser(athleteId, { limit: 10, sortOrder: 'desc' }),
+          getPersonalRecordHistoryForUser(athleteId, { limit: 5, sortOrder: 'desc' }),
+          getTotalPRCount(athleteId),
+        ])
+        return { workoutHistory, programHistory, recentPRs, totalPRs }
+      },
     })
+
+    return NextResponse.json(result.body, { status: result.status })
   } catch (error) {
     console.error('[HistoryAPI] Error fetching history:', error)
     return NextResponse.json(

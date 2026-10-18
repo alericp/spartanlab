@@ -8,18 +8,26 @@
  * This route is diagnostic only:
  * - Does not change generation behavior.
  * - Does not write to the doctrine DB.
- * - Does not require auth changes.
- * - Does not return user-private data (only structural doctrine readiness).
+ * - Requires the caller to be an authenticated Clerk user.
+ * - Does not accept an athlete id and does not return another athlete's records.
  *
- * The companion route at /api/audit/doctrine-db remains untouched.
+ * /api/audit/doctrine-db uses the same authenticated-caller gate.
  */
 
 import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth-service-server'
 import { buildDoctrineCorridorReport } from '@/lib/doctrine/doctrine-corridor-audit'
+import { decideAuthenticatedAccess } from '@/lib/server/athlete-ownership'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const { userId } = await getSession()
+  const access = decideAuthenticatedAccess(userId)
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status })
+  }
+
   try {
     const report = await buildDoctrineCorridorReport()
     return NextResponse.json(report)

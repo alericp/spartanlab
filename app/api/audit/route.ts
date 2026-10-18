@@ -1,28 +1,35 @@
 import { NextResponse } from 'next/server'
-import { runFullAudit, auditSkill, type AuditResult } from '@/lib/skill-audit-system'
+import { getSession } from '@/lib/auth-service-server'
+import { runFullAudit, auditSkill } from '@/lib/skill-audit-system'
 import type { SkillType } from '@/lib/training-principles-engine'
+import { runWhenAuthenticated } from '@/lib/server/athlete-ownership'
 
 /**
  * GET /api/audit
- * Run system-wide skill audit
+ * Run system-wide skill audit for an authenticated Clerk user.
+ * The audit is diagnostic and does not accept an athlete id.
  */
 export async function GET(request: Request) {
+  const { userId } = await getSession()
   const { searchParams } = new URL(request.url)
   const skill = searchParams.get('skill') as SkillType | null
 
-  if (skill) {
-    // Audit single skill
-    const result = auditSkill(skill)
-    return NextResponse.json({ result })
-  }
+  const result = await runWhenAuthenticated({
+    authenticatedUserId: userId,
+    load: async () => {
+      if (skill) {
+        return { result: auditSkill(skill) }
+      }
 
-  // Run full system audit
-  const audit = runFullAudit()
-  
-  return NextResponse.json({
-    summary: audit.summary,
-    systemStatus: audit.systemStatus,
-    results: audit.results,
-    timestamp: new Date().toISOString(),
+      const audit = runFullAudit()
+      return {
+        summary: audit.summary,
+        systemStatus: audit.systemStatus,
+        results: audit.results,
+        timestamp: new Date().toISOString(),
+      }
+    },
   })
+
+  return NextResponse.json(result.body, { status: result.status })
 }

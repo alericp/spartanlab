@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth-service-server'
 import {
   generateShortSession,
   getAvailableShortSessionFormats,
@@ -8,12 +9,22 @@ import {
   type ShortSessionDuration,
 } from '@/lib/short-session-generation'
 import type { TrainingStyleMode } from '@/lib/training-style-service'
+import { decideAuthenticatedAccess, decideRequestedAthleteAccess } from '@/lib/server/athlete-ownership'
 
 // =============================================================================
 // GET - Get available formats and duration options
 // =============================================================================
 
 export async function GET() {
+  const { userId } = await getSession()
+  const access = decideAuthenticatedAccess(userId)
+  if (!access.allowed) {
+    return NextResponse.json(
+      { success: false, error: access.error },
+      { status: access.status },
+    )
+  }
+
   try {
     const formats = getAvailableShortSessionFormats()
     const durations = getShortSessionDurationOptions()
@@ -58,15 +69,21 @@ interface ShortSessionRequestBody {
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await getSession()
     const body: ShortSessionRequestBody = await request.json()
-    
-    // Validate required fields
-    if (!body.userId) {
+    const decision = decideRequestedAthleteAccess(
+      userId,
+      body?.userId ?? null,
+      'userId is required',
+    )
+
+    if (!decision.allowed) {
       return NextResponse.json(
-        { success: false, error: 'userId is required' },
-        { status: 400 }
+        { success: false, error: decision.error },
+        { status: decision.status },
       )
     }
+
     
     if (!body.availableMinutes || ![10, 15, 20, 25].includes(body.availableMinutes)) {
       return NextResponse.json(
@@ -77,7 +94,7 @@ export async function POST(request: Request) {
     
     // Build the request with defaults
     const shortSessionRequest: ShortSessionRequest = {
-      userId: body.userId,
+      userId: decision.athleteId,
       availableMinutes: body.availableMinutes,
       preferredFormat: body.preferredFormat || 'auto',
       trainingStyle: body.trainingStyle || 'balanced_hybrid',

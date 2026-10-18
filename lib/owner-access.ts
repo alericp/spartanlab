@@ -1,10 +1,9 @@
 /**
  * Owner Access System
- * 
- * Allows the platform owner to bypass Pro subscription checks.
- * The owner email is configured via the NEXT_PUBLIC_OWNER_EMAIL environment variable.
- * 
- * Client-side: Use setCurrentUserEmail() after Clerk auth loads to enable owner detection.
+ *
+ * The platform owner bypasses Pro subscription checks. The server prefers
+ * OWNER_EMAIL and falls back to NEXT_PUBLIC_OWNER_EMAIL. A cached email or
+ * client flag never grants owner access.
  */
 
 // =============================================================================
@@ -36,11 +35,11 @@ export function getOwnerEmail(): string | null {
 // =============================================================================
 
 /**
- * Set the current user's email (call this from components with Clerk useUser)
- * This enables owner detection on the client side.
+ * Cache the signed-in email for display. This does not grant owner access.
  */
 export function setCurrentUserEmail(email: string | null): void {
   cachedCurrentUserEmail = email
+  serverVerifiedOwner = false
 }
 
 /**
@@ -55,6 +54,7 @@ export function getCurrentUserEmail(): string | null {
  */
 export function clearCurrentUserEmail(): void {
   cachedCurrentUserEmail = null
+  serverVerifiedOwner = false
 }
 
 // =============================================================================
@@ -62,27 +62,111 @@ export function clearCurrentUserEmail(): void {
 // =============================================================================
 
 /**
- * Check if the given email is the platform owner
- * Applies trim and case-insensitive comparison
+ * Check if the given email is the platform owner.
+ * Applies trim and case-insensitive comparison.
+ * A missing argument does not fall back to the client cache.
  */
 export function isOwner(currentEmail?: string | null): boolean {
-  const ownerEmail = getOwnerEmail()
-  const emailToCheck = currentEmail ?? cachedCurrentUserEmail
-  
-  if (!ownerEmail || !emailToCheck) {
-    return false
+  return emailMatchesOwner(getOwnerEmail(), currentEmail)
+}
+
+export function emailMatchesOwner(
+  configuredOwnerEmail: string | null | undefined,
+  email: string | null | undefined,
+): boolean {
+  if (!configuredOwnerEmail || !email) return false
+  return configuredOwnerEmail.trim().toLowerCase() === email.trim().toLowerCase()
+}
+
+export interface ClerkEmailRecord {
+  id?: string | null
+  emailAddress?: string | null
+  verification?: { status?: string | null } | null
+}
+
+/** Primary address, plus any other address Clerk has already verified. */
+export function clerkEmailsEligibleForOwnerMatch(
+  primaryEmailAddressId: string | null | undefined,
+  emailAddresses: readonly ClerkEmailRecord[] | null | undefined,
+): string[] {
+  const eligible: string[] = []
+  for (const email of emailAddresses ?? []) {
+    const value = email.emailAddress?.trim()
+    if (!value) continue
+    const verified = email.verification?.status === 'verified'
+    const primary = Boolean(primaryEmailAddressId) && email.id === primaryEmailAddressId
+    if (verified || primary) eligible.push(value)
   }
-  
-  // Normalize: trim whitespace and compare case-insensitively
-  return ownerEmail.trim().toLowerCase() === emailToCheck.trim().toLowerCase()
+  return eligible
+}
+
+/** Eligible address that matches the configured owner, if Clerk returned one. */
+export function matchingOwnerEmail(
+  configuredOwnerEmail: string | null | undefined,
+  primaryEmailAddressId: string | null | undefined,
+  emailAddresses: readonly ClerkEmailRecord[] | null | undefined,
+): string | null {
+  for (const email of clerkEmailsEligibleForOwnerMatch(primaryEmailAddressId, emailAddresses)) {
+    if (emailMatchesOwner(configuredOwnerEmail, email)) return email
+  }
+  return null
+}
+
+export interface OwnerEntitlementInput {
+  authenticatedUserId: string | null | undefined
+  configuredOwnerEmail: string | null | undefined
+  verifiedEmails: readonly string[]
+  subscriptionPlan?: 'free' | 'pro' | null
+  subscriptionStatus?: string | null
+  clientSuppliedEmail?: string | null
+  clientClaimsOwner?: boolean
+}
+
+export interface OwnerEntitlementDecision {
+  isOwner: boolean
+  hasProAccess: boolean
+  reason: 'owner' | 'pro' | 'trial' | 'free' | 'unauthenticated'
 }
 
 /**
- * Check if current cached user is the owner (client-side convenience)
- * Use this after setCurrentUserEmail() has been called.
+ * Owner access follows the authenticated Clerk user. A client-supplied
+ * email or owner flag is ignored.
+ */
+export function resolveOwnerEntitlement(input: OwnerEntitlementInput): OwnerEntitlementDecision {
+  if (!input.authenticatedUserId) {
+    return { isOwner: false, hasProAccess: false, reason: 'unauthenticated' }
+  }
+  const isOwnerAccount = input.verifiedEmails.some((email) =>
+    emailMatchesOwner(input.configuredOwnerEmail, email),
+  )
+  if (isOwnerAccount) {
+    return { isOwner: true, hasProAccess: true, reason: 'owner' }
+  }
+  const plan = input.subscriptionPlan
+  const status = input.subscriptionStatus
+  if (plan === 'pro' && (status === 'active' || status === 'trialing')) {
+    return {
+      isOwner: false,
+      hasProAccess: true,
+      reason: status === 'trialing' ? 'trial' : 'pro',
+    }
+  }
+  return { isOwner: false, hasProAccess: false, reason: 'free' }
+}
+
+let serverVerifiedOwner = false
+
+/** Set only from the authenticated owner-status response. */
+export function setServerVerifiedOwner(isOwnerAccount: boolean): void {
+  serverVerifiedOwner = isOwnerAccount === true
+}
+
+/**
+ * True only after the server has confirmed this signed-in user.
+ * Setting the cached email does not grant this.
  */
 export function isCurrentUserOwner(): boolean {
-  return isOwner(cachedCurrentUserEmail)
+  return serverVerifiedOwner
 }
 
 /**

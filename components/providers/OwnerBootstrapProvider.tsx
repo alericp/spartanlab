@@ -19,9 +19,7 @@ import { useUser } from '@clerk/nextjs'
 import {
   setCurrentUserEmail,
   clearCurrentUserEmail,
-  isCurrentUserOwner,
-  getOwnerEmail,
-  getCurrentUserEmail,
+  setServerVerifiedOwner,
 } from '@/lib/owner-access'
 
 // =============================================================================
@@ -68,14 +66,6 @@ function getSimulationMode(): 'off' | 'free' | 'pro' {
   }
 }
 
-function isPreviewEnvironment(): boolean {
-  if (typeof window === 'undefined') return false
-  const hostname = window.location.hostname
-  return hostname.includes('vusercontent.net') || 
-         hostname.includes('localhost') ||
-         hostname.includes('vercel.app')
-}
-
 // =============================================================================
 // ERROR BOUNDARY
 // =============================================================================
@@ -118,102 +108,56 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useUser()
   
   useEffect(() => {
-    const isPreview = isPreviewEnvironment()
-    const ownerEmail = getOwnerEmail()
-    const simMode = getSimulationMode()
-    
-    // [PHASE 14B] Audit: Log bootstrap start
-    console.log('[phase14b-owner-bootstrap-audit]', {
-      authLoaded: isLoaded,
-      isPreview,
-      clerkUserExists: !!user,
-      clerkEmail: user?.emailAddresses?.[0]?.emailAddress ?? null,
-      configuredOwnerEmail: ownerEmail,
-      cachedEmailBefore: getCurrentUserEmail(),
-    })
-    
-    // In preview environments, enable owner features for testing
-    if (isPreview) {
+    let cancelled = false
+
+    const loadOwner = async () => {
+      if (!isLoaded) return
+      const simMode = getSimulationMode()
+
+      if (!user) {
+        clearCurrentUserEmail()
+        setServerVerifiedOwner(false)
+        if (!cancelled) {
+          setState({
+            isLoaded: true,
+            isOwner: false,
+            userEmail: null,
+            ownerEmail: null,
+            simulationMode: 'off',
+          })
+        }
+        return
+      }
+
+      const rawEmail = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress
+      const email = rawEmail ? rawEmail.trim() : null
+      setCurrentUserEmail(email)
+
+      let isOwnerResult = false
+      try {
+        const response = await fetch('/api/auth/owner-status')
+        if (response.ok) {
+          const body = await response.json() as { isOwner?: boolean }
+          isOwnerResult = body.isOwner === true
+        }
+      } catch {
+        isOwnerResult = false
+      }
+
+      if (cancelled) return
+      setServerVerifiedOwner(isOwnerResult)
       setState({
         isLoaded: true,
-        isOwner: true,
-        userEmail: 'preview-mode@spartanlab.app',
-        ownerEmail,
-        simulationMode: simMode,
+        isOwner: isOwnerResult,
+        userEmail: email,
+        ownerEmail: null,
+        simulationMode: isOwnerResult ? simMode : 'off',
       })
-      
-      console.log('[phase14b-owner-bootstrap-final-verdict]', {
-        verdict: 'owner_enabled_preview_mode',
-        isOwner: true,
-        simulationMode: simMode,
-      })
-      return
     }
-    
-    if (isLoaded) {
-      if (user) {
-        // Get email from Clerk
-        const rawEmail = user?.emailAddresses?.[0]?.emailAddress
-        const email = rawEmail ? rawEmail.trim() : null
-        
-        // CRITICAL: Set the cached email for owner-access module
-        setCurrentUserEmail(email)
-        
-        const isOwnerResult = isCurrentUserOwner()
-        
-        setState({
-          isLoaded: true,
-          isOwner: isOwnerResult,
-          userEmail: email,
-          ownerEmail,
-          simulationMode: isOwnerResult ? simMode : 'off',
-        })
-        
-        // [PHASE 14B] Audit: Log final bootstrap result
-        console.log('[phase14b-owner-bootstrap-final-verdict]', {
-          verdict: isOwnerResult ? 'owner_detected' : 'not_owner',
-          isOwner: isOwnerResult,
-          userEmail: email,
-          ownerEmail,
-          cachedEmailAfter: getCurrentUserEmail(),
-          simulationMode: isOwnerResult ? simMode : 'off',
-        })
-        
-        // [PHASE 14C TASK 6] Owner E2E flow audit
-        console.log('[phase14c-owner-e2e-flow-audit]', {
-          step: 'bootstrap_complete',
-          isOwner: isOwnerResult,
-          simulationMode: isOwnerResult ? simMode : 'off',
-          expectedBehavior: isOwnerResult
-            ? (simMode === 'off' ? 'owner_bypass_pro' : `owner_simulation_${simMode}`)
-            : 'regular_user',
-        })
-        
-        console.log('[phase14c-owner-flow-final-verdict]', {
-          ownerDetected: isOwnerResult,
-          simulationMode: isOwnerResult ? simMode : 'off',
-          checkoutPrevented: isOwnerResult && simMode !== 'free',
-          proAccessGranted: isOwnerResult && simMode !== 'free',
-          verdict: isOwnerResult ? 'owner_flow_correct' : 'regular_user_flow',
-        })
-      } else {
-        // No user - clear cache
-        clearCurrentUserEmail()
-        
-        setState({
-          isLoaded: true,
-          isOwner: false,
-          userEmail: null,
-          ownerEmail,
-          simulationMode: 'off',
-        })
-        
-        console.log('[phase14b-owner-bootstrap-final-verdict]', {
-          verdict: 'no_user',
-          isOwner: false,
-          cachedEmailAfter: getCurrentUserEmail(),
-        })
-      }
+
+    loadOwner()
+    return () => {
+      cancelled = true
     }
   }, [user, isLoaded])
   

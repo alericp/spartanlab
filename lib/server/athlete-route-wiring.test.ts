@@ -70,19 +70,19 @@ const routes: Array<{
   {
     file: 'app/api/audit/route.ts',
     helper: 'decideOwnerAccess',
-    auth: 'getCurrentUserServer',
+    auth: 'currentUser',
     loader: 'runFullAudit',
   },
   {
     file: 'app/api/audit/doctrine-corridor/route.ts',
     helper: 'decideOwnerAccess',
-    auth: 'getCurrentUserServer',
+    auth: 'currentUser',
     loader: 'buildDoctrineCorridorReport',
   },
   {
     file: 'app/api/audit/doctrine-db/route.ts',
     helper: 'decideOwnerAccess',
-    auth: 'getCurrentUserServer',
+    auth: 'currentUser',
     loader: 'checkDoctrineRuntimeReadiness',
   },
 ]

@@ -2,6 +2,8 @@ import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { PRICING } from "@/lib/billing/pricing";
+import { queryOne } from "@/lib/db";
+import { checkoutCustomerFields } from "@/lib/stripe/webhook-reliability";
 
 /**
  * POST /api/stripe/create-checkout-session
@@ -40,7 +42,13 @@ export async function POST() {
 
     console.log(`[Checkout] Creating session for user: ${userId}`);
 
+    const existing = await queryOne<{ stripe_customer_id: string | null }>(
+      "SELECT stripe_customer_id FROM users WHERE clerk_id = $1",
+      [userId]
+    );
+
     const session = await stripe.checkout.sessions.create({
+      ...checkoutCustomerFields(existing?.stripe_customer_id),
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [

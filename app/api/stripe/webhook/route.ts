@@ -6,8 +6,16 @@ import {
   downgradeUserSubscription,
   findUserByStripeCustomerId,
   findUserByEmail,
+  findUserByClerkId,
   type StripeSubscriptionData,
 } from '@/lib/subscription-sync'
+import {
+  gateStripeWebhookRequest,
+  gateStripeWebhookSignature,
+  planSubscriptionWrite,
+  selectCheckoutAccount,
+  stripeEventClaims,
+} from '@/lib/stripe/webhook-reliability'
 import {
   sendProUpgradeEmail,
   sendPaymentFailedEmail,
@@ -79,43 +87,73 @@ async function handleCheckoutSessionCompleted(event: StripeEvent, stripe: Return
   }
 
   try {
-    // Get the subscription from the customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      limit: 1,
+    const metadataUserId = typeof session.metadata?.userId === 'string' && session.metadata.userId
+      ? session.metadata.userId
+      : null
+
+    let subscriptionId = typeof session.subscription === 'string' ? session.subscription : ''
+    let subscriptionStatus: StripeSubscriptionData['status'] = 'active'
+    let currentPeriodEnd = Math.floor(Date.now() / 1000)
+
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      subscriptionId = subscription.id
+      subscriptionStatus = (subscription.status as StripeSubscriptionData['status']) || 'active'
+      currentPeriodEnd = subscription.current_period_end
+    } else {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        limit: 1,
+      })
+      if (subscriptions.data.length === 0) {
+        console.warn('[Stripe Webhook] No subscription found for customer', customerId)
+        return
+      }
+      const subscription = subscriptions.data[0]
+      subscriptionId = subscription.id
+      subscriptionStatus = (subscription.status as StripeSubscriptionData['status']) || 'active'
+      currentPeriodEnd = subscription.current_period_end
+    }
+
+    const accountByClerkId = metadataUserId ? await findUserByClerkId(metadataUserId) : null
+    const accountByEmail = metadataUserId ? null : await findUserByEmail(email)
+    const user = selectCheckoutAccount({
+      metadataUserId,
+      accountByClerkId,
+      accountByEmail,
     })
 
-    if (subscriptions.data.length === 0) {
-      console.warn('[Stripe Webhook] No subscription found for customer', customerId)
-      return
-    }
-
-    const subscription = subscriptions.data[0]
-
-    // Find user by email
-    const user = await findUserByEmail(email)
     if (!user) {
-      console.warn(`[Stripe Webhook] User not found for email: ${email}`)
-      // Still send email even if user not in DB yet (they just signed up)
+      console.warn('[Stripe Webhook] Checkout account not found for completed session')
     }
 
-    // Sync subscription to user if found
+    let applied = !user
     if (user) {
       const subscriptionData: StripeSubscriptionData = {
         customerId,
-        subscriptionId: subscription.id,
+        subscriptionId,
         email,
-        status: (subscription.status as any) || 'active',
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        status: subscriptionStatus,
+        currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
       }
+      const planned = planSubscriptionWrite({
+        existingCustomerId: user.stripeCustomerId,
+        incoming: subscriptionData,
+      })
 
-      await syncStripeSubscriptionToUser(user.id, subscriptionData)
-      console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
+      if (!planned.write) {
+        applied = false
+        console.warn(`[Stripe Webhook] Preserved existing Stripe customer for user ${user.id}`)
+      } else {
+        await syncStripeSubscriptionToUser(user.id, planned.write)
+        applied = true
+        console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
+      }
     }
 
     // Send Pro upgrade confirmation email (idempotent)
     // Use subscription ID as resource ID to prevent duplicate emails
-    if (!wasEmailAlreadySent('pro_upgrade', subscription.id)) {
+    if (applied && !wasEmailAlreadySent('pro_upgrade', subscriptionId)) {
       const customerName = session.customer_details?.name || user?.username
       await sendProUpgradeEmail({
         email,
@@ -150,7 +188,6 @@ async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<
       return
     }
 
-    // Sync subscription data
     const subscriptionData: StripeSubscriptionData = {
       customerId,
       subscriptionId,
@@ -158,8 +195,17 @@ async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<
       status: status as StripeSubscriptionData['status'],
       currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
     }
+    const planned = planSubscriptionWrite({
+      existingCustomerId: user.stripeCustomerId,
+      incoming: subscriptionData,
+    })
 
-    await syncStripeSubscriptionToUser(user.id, subscriptionData)
+    if (!planned.write) {
+      console.warn(`[Stripe Webhook] Preserved existing Stripe customer for user ${user.id}`)
+      return
+    }
+
+    await syncStripeSubscriptionToUser(user.id, planned.write)
     console.log(`[Stripe Webhook] Successfully synced subscription update for user ${user.id}`)
   } catch (error) {
     console.error('[Stripe Webhook] Error handling subscription.updated:', error)
@@ -283,42 +329,42 @@ async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType
  * Main webhook handler
  */
 export async function POST(request: Request) {
-  // Verify webhook secret is configured
-  if (!STRIPE_WEBHOOK_SECRET) {
-    console.error('[Stripe Webhook] STRIPE_WEBHOOK_SECRET not configured')
+  const headerPayload = await headers()
+  const signature = headerPayload.get('stripe-signature')
+  const admission = gateStripeWebhookRequest({
+    secretConfigured: Boolean(STRIPE_WEBHOOK_SECRET),
+    signature,
+  })
+
+  if (!admission.ok) {
+    console.error(`[Stripe Webhook] ${admission.error}`)
     return NextResponse.json(
-      { error: 'Webhook secret not configured' },
-      { status: 500 }
+      { error: admission.error },
+      { status: admission.status }
     )
   }
 
   try {
     // Get Stripe client (request-time safe)
     const stripe = getStripe()
-    
-    // Get raw body for signature verification
     const body = await request.text()
-    const headerPayload = await headers()
-    const signature = headerPayload.get('stripe-signature')
 
-    if (!signature) {
-      console.error('[Stripe Webhook] Missing stripe-signature header')
+    let event: StripeEvent
+    try {
+      event = stripe.webhooks.constructEvent(body, signature as string, STRIPE_WEBHOOK_SECRET as string) as StripeEvent
+    } catch (error) {
+      console.error('[Stripe Webhook] Signature verification failed:', error)
+      const rejected = gateStripeWebhookSignature(false)
       return NextResponse.json(
-        { error: 'Missing signature' },
-        { status: 400 }
+        { error: rejected.error },
+        { status: rejected.status }
       )
     }
 
-    // Verify webhook signature
-    let event: StripeEvent
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET) as StripeEvent
-    } catch (error) {
-      console.error('[Stripe Webhook] Signature verification failed:', error)
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 400 }
-      )
+    const claim = stripeEventClaims.claim(event.id)
+    if (claim === 'duplicate') {
+      console.log(`[Stripe Webhook] Duplicate event ${event.id}`)
+      return NextResponse.json({ received: true, duplicate: true }, { status: 200 })
     }
 
     console.log(`[Stripe Webhook] Processing event: ${event.type}`)

@@ -10,6 +10,34 @@ import 'server-only'
 import { query, queryOne, isDatabaseAvailable } from './db'
 import type { User } from '@/types/domain'
 
+export interface BillingAccountRow {
+  id: string
+  email: string
+  username: string
+  stripeCustomerId: string | null
+}
+
+interface UserLookupRow {
+  id: string
+  email: string
+  username: string
+  stripe_customer_id?: string | null
+  stripeCustomerId?: string | null
+}
+
+function toBillingAccount(row: UserLookupRow | null): BillingAccountRow | null {
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    stripeCustomerId: row.stripe_customer_id ?? row.stripeCustomerId ?? null,
+  }
+}
+
+const USER_LOOKUP_SQL = `SELECT id, email, username, subscription_plan, stripe_customer_id, stripe_subscription_id, created_at
+       FROM users`
+
 /**
  * User subscription data from Stripe
  */
@@ -128,7 +156,7 @@ export async function downgradeUserSubscription(userId: string): Promise<User | 
 /**
  * Find user by Stripe customer ID
  */
-export async function findUserByStripeCustomerId(customerId: string): Promise<User | null> {
+export async function findUserByStripeCustomerId(customerId: string): Promise<BillingAccountRow | null> {
   console.log(`[Subscription Sync] Looking up user by Stripe customer ID: ${customerId}`)
 
   if (!(await isDatabaseAvailable())) {
@@ -136,20 +164,20 @@ export async function findUserByStripeCustomerId(customerId: string): Promise<Us
   }
 
   try {
-    const user = await queryOne<User>(
-      `SELECT id, email, username, subscription_plan, stripe_customer_id, stripe_subscription_id, created_at
-       FROM users 
+    const user = await queryOne<UserLookupRow>(
+      `${USER_LOOKUP_SQL}
        WHERE stripe_customer_id = $1`,
       [customerId]
     )
-    
-    if (user) {
-      console.log(`[Subscription Sync] Found user: ${user.id}`)
+    const account = toBillingAccount(user)
+
+    if (account) {
+      console.log(`[Subscription Sync] Found user: ${account.id}`)
     } else {
       console.log(`[Subscription Sync] No user found for customer: ${customerId}`)
     }
-    
-    return user
+
+    return account
   } catch (error) {
     console.error('[Subscription Sync] Error finding user by customer ID:', error)
     return null
@@ -159,7 +187,7 @@ export async function findUserByStripeCustomerId(customerId: string): Promise<Us
 /**
  * Find user by email
  */
-export async function findUserByEmail(email: string): Promise<User | null> {
+export async function findUserByEmail(email: string): Promise<BillingAccountRow | null> {
   console.log(`[Subscription Sync] Looking up user by email: ${email}`)
 
   if (!(await isDatabaseAvailable())) {
@@ -167,22 +195,53 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   }
 
   try {
-    const user = await queryOne<User>(
-      `SELECT id, email, username, subscription_plan, stripe_customer_id, stripe_subscription_id, created_at
-       FROM users 
+    const user = await queryOne<UserLookupRow>(
+      `${USER_LOOKUP_SQL}
        WHERE email = $1`,
       [email]
     )
-    
-    if (user) {
-      console.log(`[Subscription Sync] Found user: ${user.id}`)
+    const account = toBillingAccount(user)
+
+    if (account) {
+      console.log(`[Subscription Sync] Found user: ${account.id}`)
     } else {
       console.log(`[Subscription Sync] No user found for email: ${email}`)
     }
-    
-    return user
+
+    return account
   } catch (error) {
     console.error('[Subscription Sync] Error finding user by email:', error)
+    return null
+  }
+}
+
+/**
+ * Find the account that started checkout. metadata.userId is the raw Clerk id.
+ */
+export async function findUserByClerkId(clerkId: string): Promise<BillingAccountRow | null> {
+  console.log(`[Subscription Sync] Looking up user by Clerk id`)
+
+  if (!(await isDatabaseAvailable())) {
+    return null
+  }
+
+  try {
+    const user = await queryOne<UserLookupRow>(
+      `${USER_LOOKUP_SQL}
+       WHERE clerk_id = $1`,
+      [clerkId]
+    )
+    const account = toBillingAccount(user)
+
+    if (account) {
+      console.log(`[Subscription Sync] Found user: ${account.id}`)
+    } else {
+      console.log(`[Subscription Sync] No user found for Clerk id`)
+    }
+
+    return account
+  } catch (error) {
+    console.error('[Subscription Sync] Error finding user by Clerk id:', error)
     return null
   }
 }

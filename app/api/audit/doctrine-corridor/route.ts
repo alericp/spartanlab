@@ -8,22 +8,24 @@
  * This route is diagnostic only:
  * - Does not change generation behavior.
  * - Does not write to the doctrine DB.
- * - Requires the caller to be an authenticated Clerk user.
+ * - Requires the platform owner. A signed-in non-owner is denied.
  * - Does not accept an athlete id and does not return another athlete's records.
  *
- * /api/audit/doctrine-db uses the same authenticated-caller gate.
+ * /api/audit/doctrine-db uses the same owner gate.
  */
 
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth-service-server'
+import { getCurrentUserServer, getSession } from '@/lib/auth-service-server'
 import { buildDoctrineCorridorReport } from '@/lib/doctrine/doctrine-corridor-audit'
-import { decideAuthenticatedAccess } from '@/lib/server/athlete-ownership'
+import { checkOwnerByEmail } from '@/lib/owner-access'
+import { decideOwnerAccess } from '@/lib/server/athlete-ownership'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const { userId } = await getSession()
-  const access = decideAuthenticatedAccess(userId)
+  const user = await getCurrentUserServer()
+  const access = decideOwnerAccess(userId, user?.email ?? null, checkOwnerByEmail)
   if (!access.allowed) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }

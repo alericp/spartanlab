@@ -21,6 +21,23 @@ export function decideAuthenticatedAccess(
   return { allowed: true, athleteId: authenticatedUserId }
 }
 
+/**
+ * Neon profile and evidence rows use users.id, which this codebase writes as
+ * `user_${clerkId}`. Workout history written from useAuth() stores the raw
+ * Clerk id. Both identify the same athlete. Any other id does not.
+ */
+export function canonicalStoredUserId(clerkUserId: string): string {
+  return `user_${clerkUserId}`
+}
+
+export function isAthleteIdOwnedByClerkUser(
+  clerkUserId: string,
+  athleteId: string | null | undefined,
+): boolean {
+  if (!athleteId) return false
+  return athleteId === clerkUserId || athleteId === canonicalStoredUserId(clerkUserId)
+}
+
 export function decideRequestedAthleteAccess(
   authenticatedUserId: string | null | undefined,
   requestedAthleteId: string | null | undefined,
@@ -31,10 +48,10 @@ export function decideRequestedAthleteAccess(
   if (!requestedAthleteId) {
     return { allowed: false, status: 400, error: missingIdError }
   }
-  if (requestedAthleteId !== authenticated.athleteId) {
+  if (!isAthleteIdOwnedByClerkUser(authenticated.athleteId, requestedAthleteId)) {
     return { allowed: false, status: 403, error: 'Forbidden' }
   }
-  return { allowed: true, athleteId: authenticated.athleteId }
+  return { allowed: true, athleteId: requestedAthleteId }
 }
 
 export function decideRecordAccess(
@@ -44,10 +61,23 @@ export function decideRecordAccess(
 ): OwnershipDecision {
   const authenticated = decideAuthenticatedAccess(authenticatedUserId)
   if (!authenticated.allowed) return authenticated
-  if (!recordOwnerId || recordOwnerId !== authenticated.athleteId) {
+  if (!isAthleteIdOwnedByClerkUser(authenticated.athleteId, recordOwnerId)) {
     return { allowed: false, status: 404, error: notFoundError }
   }
   return { allowed: true, athleteId: authenticated.athleteId }
+}
+
+export function decideOwnerAccess(
+  authenticatedUserId: string | null | undefined,
+  email: string | null | undefined,
+  isOwnerEmail: (email: string | null | undefined) => boolean,
+): OwnershipDecision {
+  const authenticated = decideAuthenticatedAccess(authenticatedUserId)
+  if (!authenticated.allowed) return authenticated
+  if (!isOwnerEmail(email)) {
+    return { allowed: false, status: 403, error: 'Forbidden' }
+  }
+  return authenticated
 }
 
 export interface OwnedReadResult<T> {

@@ -576,10 +576,11 @@ export async function lookupSessionPersonalRecords(
       WHERE user_id = ${userId}
         AND workout_session_id = ${workoutSessionId}
     `
-    const records = result.flatMap((row) => {
-      const entry = row as { exercise_key?: unknown; pr_type?: unknown }
-      if (typeof entry.exercise_key !== 'string' || typeof entry.pr_type !== 'string') return []
-      return [{ exerciseKey: entry.exercise_key, prType: entry.pr_type }]
+    const records = result.flatMap((row: Record<string, unknown>) => {
+      const exerciseKey = row.exercise_key
+      const prType = row.pr_type
+      if (typeof exerciseKey !== 'string' || typeof prType !== 'string') return []
+      return [{ exerciseKey, prType }]
     })
     return { status: 'known', records }
   } catch (error) {

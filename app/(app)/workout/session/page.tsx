@@ -1963,7 +1963,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
           data-recovery-adjustment-scope={recoveryAdjustmentApplied.scope}
         >
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          Recovery-adjusted today only
+          Recovery-adjusted today only. Saved week unchanged.
         </div>
       )}
       {/* [PHASE-X+1] Dev badge for session source - only in development */}

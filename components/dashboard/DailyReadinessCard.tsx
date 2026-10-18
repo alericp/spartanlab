@@ -13,6 +13,11 @@ import {
 import { Activity, ChevronDown, ChevronUp, TrendingUp, Zap, Battery, Crown } from 'lucide-react'
 import { hasProAccess } from '@/lib/feature-access'
 import Link from 'next/link'
+import { getProgramState } from '@/lib/program-state'
+import {
+  PERSONAL_READINESS_BOUNDARY,
+  resolveSavedProgramGuidance,
+} from '@/lib/program/training-experience-guidance'
 
 interface DailyReadinessCardProps {
   className?: string
@@ -21,16 +26,28 @@ interface DailyReadinessCardProps {
 
 export function DailyReadinessCard({ className, compact = false }: DailyReadinessCardProps) {
   const [readiness, setReadiness] = useState<DailyReadinessResult | null>(null)
+  const [savedScheduleLabel, setSavedScheduleLabel] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
 
   useEffect(() => {
-    // Calculate readiness on mount
     try {
       const result = getDailyReadiness()
       setReadiness(result)
+      setUnavailable(!result)
     } catch (error) {
       console.error('Failed to calculate readiness:', error)
+      setUnavailable(true)
+    }
+
+    try {
+      const { adaptiveProgram } = getProgramState()
+      if (adaptiveProgram) {
+        setSavedScheduleLabel(resolveSavedProgramGuidance(adaptiveProgram).savedScheduleLabel)
+      }
+    } catch {
+      setSavedScheduleLabel(null)
     } finally {
       setIsLoading(false)
     }
@@ -47,8 +64,15 @@ export function DailyReadinessCard({ className, compact = false }: DailyReadines
     )
   }
 
-  if (!readiness) {
-    return null
+  if (!readiness || unavailable) {
+    return (
+      <Card className={`bg-[#1A1F26] border-[#2B313A] p-4 ${className}`}>
+        <div className="text-xs text-[#6B7280] uppercase tracking-wider">Readiness</div>
+        <p className="text-sm text-[#A4ACB8] mt-2">
+          Today&apos;s readiness was not available and was not used to change your plan.
+        </p>
+      </Card>
+    )
   }
 
   const tierColor = getReadinessTierColor(readiness.readinessTier)
@@ -80,6 +104,10 @@ export function DailyReadinessCard({ className, compact = false }: DailyReadines
             {getRecommendationLabel(readiness.recommendation)}
           </div>
         </div>
+        <p className="text-[10px] text-[#6B7280] mt-3 leading-relaxed">{PERSONAL_READINESS_BOUNDARY}</p>
+        {savedScheduleLabel && (
+          <p className="text-[10px] text-[#A4ACB8] mt-1">{savedScheduleLabel}</p>
+        )}
       </Card>
     )
   }
@@ -221,6 +249,10 @@ export function DailyReadinessCard({ className, compact = false }: DailyReadines
       <p className="text-[10px] text-[#4B5563] mt-4 leading-relaxed">
         Training readiness estimate based on logged workouts. Not a medical assessment.
       </p>
+      <p className="text-[10px] text-[#6B7280] mt-2 leading-relaxed">{PERSONAL_READINESS_BOUNDARY}</p>
+      {savedScheduleLabel && (
+        <p className="text-[10px] text-[#A4ACB8] mt-1">{savedScheduleLabel}</p>
+      )}
     </Card>
   )
 }

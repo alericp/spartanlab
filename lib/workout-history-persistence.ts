@@ -10,8 +10,17 @@ import {
   recordSessionPersonalRecords,
   getPersonalRecordsByExercise,
   getActiveProgramHistory,
-  isSessionAlreadyPersisted,
+  lookupPersistedSession,
+  lookupSessionPersonalRecords,
+  getWorkoutSessionHistoryById,
 } from './history-service'
+import {
+  historyWritePlan,
+  missingSessionPersonalRecords,
+  personalRecordPersistencePlan,
+  readPersonalRecordSnapshot,
+  type SessionPersonalRecord,
+} from './workout/save-reliability'
 import type {
   CreateWorkoutSessionInput,
   SessionMetricsSnapshot,
@@ -46,10 +55,13 @@ export interface WorkoutSessionData {
   perceivedDifficulty?: 'easy' | 'normal' | 'hard'
   notes?: string
   activeProgramId?: string
+  workoutDate?: string
+  clientSessionId?: string
 }
 
 export interface PersistenceResult {
   success: boolean
+  persisted?: 'saved' | 'duplicate' | 'failed'
   sessionHistoryId?: string
   prsDetected: PRHitSnapshot[]
   summaryMessage: string
@@ -404,21 +416,56 @@ export async function persistWorkoutSession(
   data: WorkoutSessionData
 ): Promise<PersistenceResult> {
   try {
-    const workoutDate = new Date().toISOString().split('T')[0]
-    
-    // Idempotency check - prevent duplicate saves
-    const alreadyPersisted = await isSessionAlreadyPersisted(
+    const workoutDate = data.workoutDate || new Date().toISOString().split('T')[0]
+    const lookup = await lookupPersistedSession(
       data.userId,
       data.workoutName,
-      workoutDate
+      workoutDate,
+      data.clientSessionId,
     )
-    
-    if (alreadyPersisted) {
+    const writePlan = historyWritePlan({
+      databaseAvailable: lookup.status !== 'unknown',
+      lookup: lookup.status,
+    })
+
+    if (writePlan === 'retry') {
+      return {
+        success: false,
+        persisted: 'failed',
+        prsDetected: [],
+        summaryMessage: 'Session completed.',
+        error: 'Workout history was not saved. Retry the save.',
+      }
+    }
+
+    if (writePlan === 'already_saved' && lookup.status === 'found') {
+      const performances = aggregateExercisePerformance(data.completedSets, data.exercises)
+      const completion = await completeMissingPersonalRecords(
+        data.userId,
+        lookup.id,
+        (exerciseKey) => performances.find((performance) => performance.exerciseId === exerciseKey)?.category,
+      )
+      if (completion.plan === 'retry') {
+        return {
+          success: false,
+          persisted: 'failed',
+          sessionHistoryId: lookup.id,
+          prsDetected: completion.prs,
+          summaryMessage: 'Session already saved.',
+          error: 'Personal records were not fully saved. Retry the save.',
+        }
+      }
       return {
         success: true,
-        prsDetected: [],
-        summaryMessage: 'Session already saved.',
-        error: 'Duplicate save prevented - session already persisted',
+        persisted: 'duplicate',
+        sessionHistoryId: lookup.id,
+        prsDetected: completion.prs,
+        summaryMessage: completion.plan === 'completed'
+          ? 'Personal records saved for this session.'
+          : 'Session already saved.',
+        error: completion.plan === 'unchanged'
+          ? 'Duplicate save prevented - session already persisted'
+          : undefined,
       }
     }
 
@@ -447,6 +494,7 @@ export async function persistWorkoutSession(
       completionRate: data.exercises.length > 0
         ? new Set(data.completedSets.map(s => s.exerciseId)).size / data.exercises.length
         : 1,
+      clientSessionId: data.clientSessionId,
     }
 
     // Build exercise results snapshot
@@ -541,34 +589,34 @@ export async function persistWorkoutSession(
     const sessionHistory = await createWorkoutSessionHistoryEntry(sessionInput)
 
     if (!sessionHistory) {
-      // Database might not be available - return success with local-only result
       return {
-        success: true,
+        success: false,
+        persisted: 'failed',
         prsDetected: detectedPRs,
         summaryMessage,
-        error: 'Session logged locally only - database unavailable',
+        error: 'Workout history was not saved. Retry the save.',
       }
     }
 
-    // Record PRs to PR history table
-    if (detectedPRs.length > 0) {
-      await recordSessionPersonalRecords(
-        data.userId,
-        sessionHistory.id,
-        activeProgram?.id,
-        detectedPRs.map(pr => ({
-          exerciseKey: pr.exerciseKey,
-          exerciseName: pr.exerciseName,
-          exerciseCategory: performances.find(p => p.exerciseId === pr.exerciseKey)?.category,
-          prType: pr.prType,
-          valuePrimary: pr.newValue,
-          unit: pr.unit,
-        }))
-      )
+    const completion = await completeMissingPersonalRecords(
+      data.userId,
+      sessionHistory.id,
+      (exerciseKey) => performances.find((performance) => performance.exerciseId === exerciseKey)?.category,
+    )
+    if (completion.plan === 'retry') {
+      return {
+        success: false,
+        persisted: 'failed',
+        sessionHistoryId: sessionHistory.id,
+        prsDetected: completion.prs.length > 0 ? completion.prs : detectedPRs,
+        summaryMessage,
+        error: 'Personal records were not fully saved. Retry the save.',
+      }
     }
 
     return {
       success: true,
+      persisted: 'saved',
       sessionHistoryId: sessionHistory.id,
       prsDetected: detectedPRs,
       summaryMessage,
@@ -577,6 +625,7 @@ export async function persistWorkoutSession(
     console.error('[WorkoutHistoryPersistence] Error persisting session:', error)
     return {
       success: false,
+      persisted: 'failed',
       prsDetected: [],
       summaryMessage: 'Session completed.',
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -587,6 +636,68 @@ export async function persistWorkoutSession(
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Writes personal records named on the saved workout that are not already
+ * linked to that workout. The workout row is not inserted or updated.
+ */
+async function completeMissingPersonalRecords(
+  userId: string,
+  sessionHistoryId: string,
+  categoryFor: (exerciseKey: string) => string | undefined,
+): Promise<{ plan: 'unchanged' | 'completed' | 'retry'; prs: PRHitSnapshot[] }> {
+  const session = await getWorkoutSessionHistoryById(sessionHistoryId)
+  if (!session || session.userId !== userId) {
+    return { plan: 'retry', prs: [] }
+  }
+
+  const intended = readPersonalRecordSnapshot(session.prsHitSnapshot)
+  if (intended.length === 0) {
+    return { plan: 'unchanged', prs: [] }
+  }
+  const lookup = await lookupSessionPersonalRecords(userId, sessionHistoryId)
+  if (lookup.status === 'unknown') {
+    return { plan: 'retry', prs: toPrHits(intended) }
+  }
+
+  const missing = missingSessionPersonalRecords(intended, lookup.records)
+  let failedCount = 0
+  if (missing.length > 0) {
+    const write = await recordSessionPersonalRecords(
+      userId,
+      sessionHistoryId,
+      session.programHistoryId,
+      missing.map((record) => ({
+        exerciseKey: record.exerciseKey,
+        exerciseName: record.exerciseName,
+        exerciseCategory: categoryFor(record.exerciseKey),
+        prType: record.prType,
+        valuePrimary: record.newValue,
+        unit: record.unit,
+      })),
+    )
+    failedCount = write.failedCount
+  }
+
+  return {
+    plan: personalRecordPersistencePlan({
+      lookup: 'known',
+      missingCount: missing.length,
+      failedCount,
+    }),
+    prs: toPrHits(intended),
+  }
+}
+
+function toPrHits(records: SessionPersonalRecord[]): PRHitSnapshot[] {
+  return records.map((record) => ({
+    exerciseKey: record.exerciseKey,
+    exerciseName: record.exerciseName,
+    prType: record.prType as PRHitSnapshot['prType'],
+    newValue: record.newValue,
+    unit: record.unit,
+  }))
+}
 
 function mapToExerciseCategory(category: string): ExerciseCategory {
   const categoryMap: Record<string, ExerciseCategory> = {

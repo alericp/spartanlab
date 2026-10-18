@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +20,7 @@ import {
   quickLogWorkout,
   DIFFICULTY_LABELS,
 } from '@/lib/workout-log-service'
+import { createOccurrenceId } from '@/lib/workout/save-reliability'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
@@ -53,8 +54,13 @@ export function QuickLogModal({
   const [pushUps, setPushUps] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const saveLockRef = useRef(false)
+  const occurrenceIdRef = useRef<string | null>(null)
 
   const handleSubmit = async () => {
+    if (saveLockRef.current || saved) return
+    saveLockRef.current = true
+    if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
     setSaving(true)
 
     try {
@@ -64,7 +70,7 @@ export function QuickLogModal({
       if (dips && parseInt(dips) > 0) keyPerformance.dips = parseInt(dips)
       if (pushUps && parseInt(pushUps) > 0) keyPerformance.pushUps = parseInt(pushUps)
 
-      quickLogWorkout({
+      const savedLog = quickLogWorkout({
         sessionName: workoutName,
         sessionType,
         focusArea,
@@ -72,12 +78,14 @@ export function QuickLogModal({
         perceivedDifficulty: difficulty,
         generatedWorkoutId: workoutId,
         keyPerformance: Object.keys(keyPerformance).length > 0 ? keyPerformance : undefined,
+        occurrenceId: occurrenceIdRef.current,
       })
 
-      // Check for newly unlocked achievements
-      // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] onTrainingEvent now requires
-      // a TrainingEventType. Use 'workout_complete' to mirror the call
-      // in useWorkoutSession.ts:400.
+      if (savedLog.saveDisposition !== 'inserted') {
+        setSaved(true)
+        return
+      }
+
       const newAchievements = onTrainingEvent('workout_complete')
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
@@ -102,6 +110,7 @@ export function QuickLogModal({
       }, 1500)
     } finally {
       setSaving(false)
+      saveLockRef.current = false
     }
   }
 

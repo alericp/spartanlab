@@ -228,10 +228,18 @@ import {
 } from '@/lib/rest-intelligence'
 import {
   quickLogWorkout,
+  retryPendingWorkoutEvidence,
   type PerceivedDifficulty,
   type SessionType,
   type FocusArea,
 } from '@/lib/workout-log-service'
+import {
+  WORKOUT_OCCURRENCE_STORAGE_KEY,
+  createOccurrenceId,
+  resolveOccurrenceId,
+  shouldKeepOccurrenceAfterLocalSave,
+  type StoredOccurrence,
+} from '@/lib/workout/save-reliability'
 // [LIVE-WORKOUT-CORRIDOR-FIX] Challenge/achievement engines loaded dynamically
 // These are POST-COMPLETION-ONLY and have heavy cascading imports that can crash module evaluation
 // Moving to dynamic import prevents route death if these modules have any initialization issues
@@ -2057,10 +2065,33 @@ export function buildResumeWorkoutUrl(summary: ResumableSessionSummary): string 
   return `/workout/session?${params.toString()}`
 }
 
-export function clearSessionStorage() {
+function readStoredOccurrence(): StoredOccurrence | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as StoredOccurrence
+    if (!parsed || typeof parsed.sessionId !== 'string' || typeof parsed.occurrenceId !== 'string') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function rememberOccurrence(occurrence: StoredOccurrence) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(occurrence))
+  } catch {}
+}
+
+export function clearSessionStorage(options?: { keepOccurrence?: boolean }) {
   if (typeof window === 'undefined') return
   try {
     localStorage.removeItem(STORAGE_KEY)
+    if (!options?.keepOccurrence) {
+      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    }
   } catch {}
 }
 
@@ -4612,6 +4643,11 @@ export function StreamlinedWorkoutSession({
   // Save state for completed workout
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const saveLockRef = useRef(false)
+
+  useEffect(() => {
+    retryPendingWorkoutEvidence()
+  }, [])
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<PerceivedDifficulty | null>(null)
   const [showQuickLog, setShowQuickLog] = useState(false)
   
@@ -7643,6 +7679,8 @@ failureStage: null,
   
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
+    if (saveLockRef.current || isSaved) return
+    saveLockRef.current = true
     setIsSaving(true)
     try {
       // Use provided difficulty or the state value
@@ -7783,7 +7821,14 @@ failureStage: null,
     // Ensure minimum 1 minute duration to prevent 0-minute sessions
     // [LIVE-WORKOUT-MACHINE] Use safe values from machine
     const durationMinutes = Math.max(1, Math.round(safeElapsedSeconds / 60))
-    quickLogWorkout({
+    const occurrence = resolveOccurrenceId({
+      sessionId,
+      stored: readStoredOccurrence(),
+      createId: () => createOccurrenceId(),
+    })
+    rememberOccurrence(occurrence.occurrence)
+    const savedLog = quickLogWorkout({
+      occurrenceId: occurrence.occurrence.occurrenceId,
       sessionName: safeSession.dayLabel,
       sessionType,
       focusArea,
@@ -7812,6 +7857,7 @@ failureStage: null,
       // [LIVE-WORKOUT-CORRIDOR-FIX] Evaluate achievements and challenges with DYNAMIC import
       // These engines have heavy cascading imports - loading them eagerly can crash module evaluation
       // Using dynamic import ensures the workout route doesn't die if these modules fail
+      if (savedLog.saveDisposition === 'inserted') {
       try {
         const [{ evaluateAchievements }, { evaluateAllChallenges }] = await Promise.all([
           import('@/lib/achievements/achievement-engine'),
@@ -7824,19 +7870,24 @@ failureStage: null,
         // Non-fatal: workout was still logged, achievements/challenges just won't update
         console.error('[LIVE-WORKOUT-CORRIDOR] Failed to evaluate achievements/challenges (non-fatal):', e)
       }
+      }
       
-      // Clear session data
-      clearSessionStorage()
+      // Keep the occurrence while the evidence post can still fail, so a
+      // repeated save of this session retries the same log.
+      clearSessionStorage({
+        keepOccurrence: shouldKeepOccurrenceAfterLocalSave(savedLog.serverEvidence),
+      })
       clearRestTimerState()
       clearSessionOverrides()
       setIsSaved(true)
       setShowQuickLog(false)
     } catch (error) {
       console.error('Failed to save workout:', error)
+      saveLockRef.current = false
     } finally {
       setIsSaving(false)
     }
-  }, [session, liveSession, sessionId, perceivedDifficulty])
+  }, [session, liveSession, sessionId, perceivedDifficulty, isSaved])
   
   // [LIVE-WORKOUT-CORRIDOR] Rest recommendation - uses safeCurrentExercise for crash safety
   // [LIVE-WORKOUT-MACHINE] Use normalized values from machine

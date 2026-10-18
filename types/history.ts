@@ -126,6 +126,9 @@ export interface SessionMetricsSnapshot {
   preFatigue?: number
   postFatigue?: number
   perceivedDifficulty?: number
+
+  // Stable id for one completed attempt. Stored in the existing JSON snapshot.
+  clientSessionId?: string
 }
 
 /**

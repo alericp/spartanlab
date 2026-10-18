@@ -11,6 +11,11 @@
  */
 
 import { saveSessionFeedback } from './session-feedback'
+import {
+  planLocalWorkoutSave,
+  workoutLogIdForOccurrence,
+  WORKOUT_OCCURRENCE_STORAGE_KEY,
+} from './workout/save-reliability'
 // [PHASE-L / AB10-CONTRACT-CLEANUP] CompletedSetEvidence is the canonical
 // per-set ledger shape — type-only import keeps the runtime acyclic while
 // pinning WorkoutLog and QuickLogInput to the authoritative contract.
@@ -94,7 +99,11 @@ export interface WorkoutLog {
   // lib/server/workout-set-evidence-persistence.ts and
   // lib/program/performance-feedback-adaptation-contract.ts.
   completedSetEvidence?: CompletedSetEvidence[]
+  occurrenceId?: string
+  serverEvidence?: 'pending' | 'saved' | 'skipped'
 }
+
+export type SavedWorkoutLog = WorkoutLog & { saveDisposition: 'inserted' | 'kept' }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
 
@@ -117,89 +126,142 @@ export function getWorkoutLogs(): WorkoutLog[] {
   return []
 }
 
-// Save a workout log
-export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): WorkoutLog {
-  if (!isBrowser()) {
-    return {
-      ...log,
-      id: `workout-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    }
-  }
-  
-  const logs = getWorkoutLogs()
-  
-  const newLog: WorkoutLog = {
-    ...log,
-    id: `workout-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    createdAt: new Date().toISOString(),
-  }
-  
-  logs.push(newLog)
+const evidenceSyncInFlight = new Set<string>()
+
+function evidenceSyncNeeded(log: WorkoutLog): boolean {
+  return log.trusted !== false
+    && log.sourceRoute !== 'demo'
+    && Array.isArray(log.completedSetEvidence)
+    && log.completedSetEvidence.length > 0
+}
+
+function writeStoredLogs(logs: WorkoutLog[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
-  
-  // [PPX-R7.5] Fire non-blocking server evidence persistence for trusted workouts
-  // This ensures completed set evidence survives program restart/rebuild/regenerate
-  // and feeds future adaptation even if localStorage is cleared.
-  if (
-    newLog.trusted !== false &&
-    newLog.sourceRoute !== 'demo' &&
-    Array.isArray(newLog.completedSetEvidence) &&
-    newLog.completedSetEvidence.length > 0
-  ) {
-    try {
-      // Extract programId from generatedWorkoutId if available
-      const programId = newLog.generatedWorkoutId?.split('_session_')[0] || null
-      
-      // Fire-and-forget: don't await, don't block workout completion
-      fetch('/api/workout-log/save-evidence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workoutLog: newLog,
-          programId,
-        }),
+}
+
+function patchStoredLog(id: string, patch: Partial<WorkoutLog>) {
+  const logs = getWorkoutLogs()
+  const index = logs.findIndex((log) => log.id === id)
+  if (index < 0) return
+  logs[index] = { ...logs[index], ...patch }
+  writeStoredLogs(logs)
+}
+
+function releaseOccurrenceAfterEvidenceSave(occurrenceId?: string) {
+  if (!isBrowser() || !occurrenceId) return
+  try {
+    const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { occurrenceId?: unknown }
+    if (parsed?.occurrenceId === occurrenceId) {
+      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    }
+  } catch {}
+}
+
+function scheduleEvidenceRetry(log: WorkoutLog, attempt: number) {
+  const timer = setTimeout(() => queueEvidenceSync(log, attempt), 1000) as { unref?: () => void }
+  timer.unref?.()
+}
+
+function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
+  if (!isBrowser() || !evidenceSyncNeeded(log) || evidenceSyncInFlight.has(log.id)) return
+  evidenceSyncInFlight.add(log.id)
+  try {
+    const programId = log.generatedWorkoutId?.split('_session_')[0] || null
+    fetch('/api/workout-log/save-evidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workoutLog: log,
+        programId,
+      }),
+    })
+      .then((response) => {
+        evidenceSyncInFlight.delete(log.id)
+        if (response.ok) {
+          patchStoredLog(log.id, { serverEvidence: 'saved' })
+          releaseOccurrenceAfterEvidenceSave(log.occurrenceId)
+          return
+        }
+        if (attempt < 1) {
+          scheduleEvidenceRetry(log, attempt + 1)
+          return
+        }
+        patchStoredLog(log.id, { serverEvidence: 'pending' })
       })
-        .then(response => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PPX-R7.5] Server evidence save:', {
-              workoutId: newLog.id,
-              status: response.ok ? 'ok' : 'failed',
-              setsCount: newLog.completedSetEvidence?.length || 0,
-            })
-          }
-        })
-        .catch(err => {
-          // Non-blocking: don't crash UI if server unavailable
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PPX-R7.5] Server evidence save failed (non-blocking):', String(err))
-          }
-        })
+      .catch(() => {
+        evidenceSyncInFlight.delete(log.id)
+        if (attempt < 1) {
+          scheduleEvidenceRetry(log, attempt + 1)
+          return
+        }
+        patchStoredLog(log.id, { serverEvidence: 'pending' })
+      })
+  } catch {
+    evidenceSyncInFlight.delete(log.id)
+    patchStoredLog(log.id, { serverEvidence: 'pending' })
+  }
+}
+
+export function retryPendingWorkoutEvidence(): void {
+  if (!isBrowser()) return
+  for (const log of getWorkoutLogs()) {
+    if (log.serverEvidence === 'pending') queueEvidenceSync(log)
+  }
+}
+
+// Save a workout log
+export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): SavedWorkoutLog {
+  const occurrenceId = log.occurrenceId
+  const id = occurrenceId
+    ? workoutLogIdForOccurrence(occurrenceId)
+    : `workout-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+  const candidate: WorkoutLog = {
+    ...log,
+    id,
+    occurrenceId,
+    createdAt: new Date().toISOString(),
+    serverEvidence: evidenceSyncNeeded({ ...log, id, createdAt: '' }) ? 'pending' : 'skipped',
+  }
+
+  if (!isBrowser()) {
+    return { ...candidate, saveDisposition: 'inserted' }
+  }
+
+  const logs = getWorkoutLogs()
+  const plan = planLocalWorkoutSave(logs, candidate)
+
+  if (plan.action === 'insert') {
+    logs.push(plan.log)
+    writeStoredLogs(logs)
+    queueEvidenceSync(plan.log)
+  } else if (plan.action === 'retry-server') {
+    queueEvidenceSync(plan.log)
+  }
+
+  // Auto-save session feedback only for the first local commit.
+  if (plan.action === 'insert') {
+    try {
+      saveSessionFeedback(plan.log.id, {
+        difficulty: plan.log.perceivedDifficulty || 'normal',
+        completed: plan.log.exercises.every(e => e.completed),
+        trusted: plan.log.trusted !== false && plan.log.sourceRoute !== 'demo',
+      })
+      console.log('[fatigue-loop] Session feedback saved:', {
+        sessionId: plan.log.id,
+        difficulty: plan.log.perceivedDifficulty || 'normal',
+        trusted: plan.log.trusted !== false && plan.log.sourceRoute !== 'demo',
+      })
     } catch {
-      // Outer try-catch for environments without fetch
+      // Non-blocking - don't fail the save if feedback capture fails
     }
   }
-  
-  // Auto-save session feedback for fatigue tracking
-  // Uses perceived difficulty from the workout log
-  // FEEDBACK LOOP: Pass trusted flag so only real workouts affect adaptation
-  try {
-    saveSessionFeedback(newLog.id, {
-      difficulty: newLog.perceivedDifficulty || 'normal',
-      completed: newLog.exercises.every(e => e.completed),
-      trusted: newLog.trusted !== false && newLog.sourceRoute !== 'demo',
-      // Regional soreness can be added via separate UI - default to undefined
-    })
-    console.log('[fatigue-loop] Session feedback saved:', {
-      sessionId: newLog.id,
-      difficulty: newLog.perceivedDifficulty || 'normal',
-      trusted: newLog.trusted !== false && newLog.sourceRoute !== 'demo',
-    })
-  } catch {
-    // Non-blocking - don't fail the save if feedback capture fails
+
+  return {
+    ...plan.log,
+    saveDisposition: plan.action === 'insert' ? 'inserted' : 'kept',
   }
-  
-  return newLog
 }
 
 // Delete a workout log
@@ -311,6 +373,7 @@ interface QuickLogInput {
   // prescription mutation can consume per-set RPE / reps / hold / reason
   // tags. Optional because callers prior to AB10 may not provide it.
   completedSetEvidence?: CompletedSetEvidence[]
+  occurrenceId?: string
 }
 
 /**
@@ -322,7 +385,7 @@ interface QuickLogInput {
  * 
  * [PHASE 13] After logging, this triggers active-week mutation evaluation.
  */
-export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
+export function quickLogWorkout(input: QuickLogInput): SavedWorkoutLog {
   // Demo workouts are never trusted for adaptive logic
   const isDemo = input.isDemo === true
   const trusted = !isDemo
@@ -359,6 +422,7 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     // built. Downstream readers (extractCompletedSetEvidence + persistence
     // adapter) consume `log.completedSetEvidence` directly.
     completedSetEvidence: input.completedSetEvidence,
+    occurrenceId: input.occurrenceId,
   })
   
   // [PHASE 13] Dispatch event for active-week mutation evaluation

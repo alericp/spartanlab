@@ -254,6 +254,13 @@ export interface PhaseLProgramShape {
   trainingDaysPerWeek?: number
   selectedSkills?: string[] | unknown
   sessions?: PhaseLSessionShape[]
+  /**
+   * Workout log ids whose performance has already been considered for a
+   * future-session adjustment. Stored on the saved program so refresh,
+   * retry, and reopen do not apply the same completed workout again.
+   * Optional on programs saved before this field existed.
+   */
+  performanceFeedbackAppliedLogIds?: string[]
 }
 
 export interface ExercisePerformanceAdaptationStamp {
@@ -278,8 +285,11 @@ export interface ExercisePerformanceAdaptationStamp {
   shortLabel: string
   /** Mutation status for display. `applied` means the bounded mutation
    *  succeeded. `blocked_by_safety_bound` means the contract chose not to
-   *  apply because the change would violate a Phase L safety bound. */
-  status: 'applied' | 'blocked_by_safety_bound'
+   *  apply because the change would violate a Phase L safety bound.
+   *  `reverted_by_athlete` means the athlete restored the pre-adjustment
+   *  prescription. The evidence hash stays so the same workout cannot
+   *  reapply the adjustment. */
+  status: 'applied' | 'blocked_by_safety_bound' | 'reverted_by_athlete'
   /** [PHASE-M] Which corridor applied this adaptation. `server` means the
    *  authoritative generator stamped it during executeAuthoritativeGeneration
    *  using client-supplied recent workout history. `client` means the Program
@@ -1424,6 +1434,275 @@ export function resolvePerformanceFeedbackAdaptation(
     trendIntelligence,
     coachDecisions,
   }
+}
+
+// =============================================================================
+// IDEMPOTENT APPLY + ATHLETE REVERT
+// =============================================================================
+
+function walkAdaptationStamps(
+  program: PhaseLProgramShape | null | undefined,
+): ExercisePerformanceAdaptationStamp[] {
+  if (!program || !Array.isArray(program.sessions)) return []
+  const stamps: ExercisePerformanceAdaptationStamp[] = []
+  for (const sess of program.sessions) {
+    if (!Array.isArray(sess.exercises)) continue
+    for (const ex of sess.exercises) {
+      if (ex.performanceAdaptation) stamps.push(ex.performanceAdaptation)
+    }
+  }
+  return stamps
+}
+
+/** True when any stamp, including an athlete revert, already used this evidence. */
+export function programHasPerformanceEvidenceHash(
+  program: PhaseLProgramShape | null | undefined,
+  hash: string,
+): boolean {
+  if (!hash) return false
+  return walkAdaptationStamps(program).some(
+    (stamp) => typeof stamp.evidenceHash === 'string' && stamp.evidenceHash === hash,
+  )
+}
+
+export interface IdempotentPerformanceFeedbackInput {
+  completedSetEvidence: CompletedSetEvidence[]
+  completedDayNumbers?: number[]
+  /** Hash of the workout logs represented by this evidence. */
+  evidenceHash: string
+  nowIso?: string
+  consumedLogIds?: string[]
+  incomingLogIds?: string[]
+}
+
+export interface IdempotentPerformanceFeedbackResult<T extends PhaseLProgramShape> {
+  program: T
+  changed: boolean
+  skipReason?: 'already_applied_same_evidence' | 'no_mutations'
+  adaptation: PerformanceFeedbackAdaptationResult
+}
+
+function preservedAdaptation(summary: string): PerformanceFeedbackAdaptationResult {
+  return {
+    status: 'healthy',
+    signals: [],
+    mutations: [],
+    summary,
+    blockedReasons: [],
+    proof: {
+      completedSetsRead: 0,
+      sessionsRead: 0,
+      highRpeCount: 0,
+      underTargetCount: 0,
+      noteWarningsCount: 0,
+      mutationsApplied: 0,
+      mutationsBlocked: 0,
+      currentProgramPreserved: true,
+    },
+  }
+}
+
+function mergeLogIds(existing: readonly string[] | undefined, incoming: readonly string[] | undefined): string[] {
+  const merged: string[] = []
+  for (const id of [...(existing ?? []), ...(incoming ?? [])]) {
+    if (typeof id === 'string' && id.length > 0 && !merged.includes(id)) merged.push(id)
+  }
+  return merged
+}
+
+function sameLogIds(existing: readonly string[] | undefined, next: readonly string[]): boolean {
+  if (!existing) return next.length === 0
+  if (existing.length !== next.length) return false
+  return existing.every((id, index) => id === next[index])
+}
+
+function logIdentity(log: { id?: string; createdAt?: string; sessionDate?: string }): string {
+  if (typeof log.id === 'string' && log.id.length > 0) return log.id
+  const fallback = log.createdAt ?? log.sessionDate ?? ''
+  return typeof fallback === 'string' ? fallback : ''
+}
+
+function latestStampTime(program: PhaseLProgramShape): string | null {
+  let latest: string | null = null
+  for (const stamp of walkAdaptationStamps(program)) {
+    if (stamp.computedAt && (latest === null || stamp.computedAt > latest)) latest = stamp.computedAt
+  }
+  return latest
+}
+
+function consumedLogIds(
+  program: PhaseLProgramShape,
+  logs: readonly { id?: string; createdAt?: string; sessionDate?: string }[],
+): string[] {
+  if (Array.isArray(program.performanceFeedbackAppliedLogIds)) {
+    return program.performanceFeedbackAppliedLogIds.filter((id) => typeof id === 'string' && id.length > 0)
+  }
+  if (walkAdaptationStamps(program).length === 0) return []
+  const latest = latestStampTime(program)
+  const identities = logs.map(logIdentity).filter((id) => id.length > 0)
+  if (!latest) return identities
+  const consumed: string[] = []
+  for (const log of logs) {
+    const id = logIdentity(log)
+    if (!id) continue
+    const created = log.createdAt ?? log.sessionDate ?? ''
+    if (created && created <= latest) consumed.push(id)
+  }
+  return consumed
+}
+
+function evidenceHashForLogs(logs: readonly { id?: string; createdAt?: string; sessionDate?: string }[]): string {
+  const ids = logs.map(logIdentity).filter((id) => id.length > 0).sort()
+  if (ids.length === 0) return ''
+  let h = 0x811c9dc5
+  const input = `${ids.length}::${ids.join('|')}`
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i)
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+function completedDayNumbersFromLogs(logs: readonly MinimalWorkoutLogShape[]): number[] {
+  const days: number[] = []
+  for (const log of logs) {
+    const gid = log.generatedWorkoutId
+    if (typeof gid !== 'string') continue
+    const match = gid.match(/day[-_]?(\d+)/i)
+    if (!match) continue
+    const dayNumber = Number.parseInt(match[1], 10)
+    if (Number.isFinite(dayNumber) && !days.includes(dayNumber)) days.push(dayNumber)
+  }
+  return days
+}
+
+/**
+ * Apply logged performance to future sessions. Already-closed workouts,
+ * including ones the athlete reverted, are not applied again.
+ */
+export function applyLoggedPerformanceFeedback<T extends PhaseLProgramShape>(
+  program: T,
+  logs: readonly MinimalWorkoutLogShape[],
+  options?: { nowIso?: string },
+): IdempotentPerformanceFeedbackResult<T> {
+  const trusted = logs.filter((log) => log.trusted !== false && log.sourceRoute !== 'demo')
+  const consumed = consumedLogIds(program, trusted)
+  const consumedSet = new Set(consumed)
+  const unapplied = trusted.filter((log) => {
+    const id = logIdentity(log)
+    return id.length > 0 && !consumedSet.has(id)
+  })
+  const sessionByDay: Record<number, PhaseLSessionShape> = {}
+  for (const sess of program.sessions ?? []) {
+    const dayNumber = typeof sess.dayNumber === 'number' ? sess.dayNumber : -1
+    if (dayNumber >= 0) sessionByDay[dayNumber] = sess
+  }
+  const evidence = unapplied.flatMap((log) => extractCompletedSetEvidence(log, sessionByDay))
+  return applyIdempotentPerformanceFeedback(program, {
+    completedSetEvidence: evidence,
+    completedDayNumbers: completedDayNumbersFromLogs(trusted),
+    evidenceHash: evidenceHashForLogs(unapplied),
+    nowIso: options?.nowIso,
+    consumedLogIds: consumed,
+    incomingLogIds: unapplied.map(logIdentity),
+  })
+}
+
+/**
+ * Apply one evidence corridor to future sessions, once.
+ * A matching evidence hash — including a stamp the athlete reverted —
+ * does not change the prescription again.
+ */
+export function applyIdempotentPerformanceFeedback<T extends PhaseLProgramShape>(
+  program: T,
+  input: IdempotentPerformanceFeedbackInput,
+): IdempotentPerformanceFeedbackResult<T> {
+  const mergedIds = mergeLogIds(
+    input.consumedLogIds ?? program.performanceFeedbackAppliedLogIds,
+    input.incomingLogIds,
+  )
+  const idsChanged = mergedIds.length > 0 && !sameLogIds(program.performanceFeedbackAppliedLogIds, mergedIds)
+  const withIds: T = idsChanged
+    ? { ...program, performanceFeedbackAppliedLogIds: mergedIds }
+    : program
+
+  if (input.evidenceHash && programHasPerformanceEvidenceHash(program, input.evidenceHash)) {
+    return {
+      program: withIds,
+      changed: idsChanged,
+      skipReason: 'already_applied_same_evidence',
+      adaptation: preservedAdaptation('This completed workout was already applied.'),
+    }
+  }
+
+  const adaptation = resolvePerformanceFeedbackAdaptation({
+    currentProgram: withIds,
+    completedSetEvidence: input.completedSetEvidence,
+    completedDayNumbers: input.completedDayNumbers,
+    nowIso: input.nowIso,
+  })
+
+  if (adaptation.proof.mutationsApplied === 0) {
+    return {
+      program: withIds,
+      changed: idsChanged,
+      skipReason: idsChanged ? undefined : 'no_mutations',
+      adaptation,
+    }
+  }
+
+  const mutated = applyFuturePrescriptionMutations(
+    withIds,
+    adaptation.mutations,
+    input.nowIso,
+    { appliedBy: 'client', evidenceHash: input.evidenceHash },
+  )
+  return { program: mutated, changed: true, adaptation }
+}
+
+/**
+ * Restore the pre-adjustment sets, reps or duration, target RPE, and rest
+ * for one future exercise. The evidence hash stays on the stamp.
+ */
+export function revertPerformanceAdaptation<T extends PhaseLProgramShape>(
+  program: T,
+  target: { dayNumber: number; exerciseId?: string; exerciseName?: string },
+): { program: T; changed: boolean } {
+  if (!program || !Array.isArray(program.sessions)) return { program, changed: false }
+  let changed = false
+  const sessions = program.sessions.map((sess) => {
+    if (sess.dayNumber !== target.dayNumber || !Array.isArray(sess.exercises)) return sess
+    const exercises = sess.exercises.map((ex) => {
+      const stamp = ex.performanceAdaptation
+      if (!stamp || stamp.applied !== true || stamp.status === 'reverted_by_athlete') return ex
+      const idMatch = !!target.exerciseId && ex.id === target.exerciseId
+      const nameMatch = !!target.exerciseName && lower(ex.name) === lower(target.exerciseName)
+      if (!idMatch && !nameMatch) return ex
+      changed = true
+      const explanation = stamp.userVisibleExplanation.startsWith('You kept the original prescription.')
+        ? stamp.userVisibleExplanation
+        : `You kept the original prescription. ${stamp.userVisibleExplanation}`
+      return {
+        ...ex,
+        sets: typeof stamp.before.sets === 'number' ? stamp.before.sets : ex.sets,
+        repsOrTime: typeof stamp.before.repsOrTime === 'string' ? stamp.before.repsOrTime : ex.repsOrTime,
+        targetRPE: typeof stamp.before.targetRPE === 'number' ? stamp.before.targetRPE : ex.targetRPE,
+        restSeconds: typeof stamp.before.restSeconds === 'number' ? stamp.before.restSeconds : ex.restSeconds,
+        performanceAdaptation: {
+          ...stamp,
+          applied: false,
+          status: 'reverted_by_athlete' as const,
+          after: { ...stamp.before },
+          shortLabel: 'ORIGINAL KEPT',
+          userVisibleExplanation: explanation,
+          evidenceHash: stamp.evidenceHash,
+        },
+      }
+    })
+    return { ...sess, exercises }
+  })
+  if (!changed) return { program, changed: false }
+  return { program: { ...program, sessions }, changed: true }
 }
 
 // =============================================================================

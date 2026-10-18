@@ -2134,6 +2134,11 @@ export interface AdaptiveProgram {
   // canonical program object. UI consumers (FeedbackLoopProofCard)
   // read it directly to render the "what was actually applied at
   // generation time" strip — no client-side rebuild required.
+  /**
+   * Workout log ids already considered by the future-session performance
+   * adjustment. Optional. Older saved programs omit it.
+   */
+  performanceFeedbackAppliedLogIds?: string[]
   evidenceCalibrationInfluence?: EvidenceCalibrationGenerationInfluence
   // [AB13-4] Optional, non-destructive evidence-calibration program-shaping
   // proof. Stamped immediately AFTER `evidenceCalibrationInfluence` by the
@@ -6353,7 +6358,7 @@ async function generateAdaptiveProgramImpl(
   const canonicalBuilderEntry = {
     primaryGoal: primaryGoal,
     secondaryGoal: secondaryGoal || null,
-    experienceLevel: experienceLevel || 'intermediate',
+    experienceLevel,
     trainingDaysPerWeek: trainingDaysPerWeek,
     sessionLength: sessionLength || 60,
     equipment: Array.isArray(equipment) ? equipment : [],

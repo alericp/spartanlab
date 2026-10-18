@@ -20,6 +20,7 @@ import {
 // per-set ledger shape — type-only import keeps the runtime acyclic while
 // pinning WorkoutLog and QuickLogInput to the authoritative contract.
 import type { CompletedSetEvidence } from './program/performance-feedback-adaptation-contract'
+import { persistActiveProgramPerformanceFeedback } from './program/performance-feedback-persistence'
 
 export type SessionType = 'skill' | 'strength' | 'mixed' | 'recovery'
 export type FocusArea = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general'
@@ -425,6 +426,16 @@ export function quickLogWorkout(input: QuickLogInput): SavedWorkoutLog {
     occurrenceId: input.occurrenceId,
   })
   
+  // Persist the future-session adjustment before anything else reads the
+  // active program. The program page used to keep this only in React state.
+  if (trusted && typeof window !== 'undefined') {
+    try {
+      persistActiveProgramPerformanceFeedback()
+    } catch (err) {
+      console.error('[performance-feedback] future session save failed', err)
+    }
+  }
+
   // [PHASE 13] Dispatch event for active-week mutation evaluation
   // This allows the program display to react to workout completion
   if (typeof window !== 'undefined' && trusted) {

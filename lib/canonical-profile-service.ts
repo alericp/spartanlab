@@ -2561,7 +2561,7 @@ export interface ComposedPlannerInput {
   // Final resolved values
   primaryGoal: string | null
   secondaryGoal: string | null
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | null
   scheduleMode: 'static' | 'flexible'
   sessionDurationMode: 'static' | 'adaptive' | null
   trainingDaysPerWeek: number | 'flexible' | null
@@ -2688,7 +2688,7 @@ export function composeCanonicalPlannerInput(
   const result: ComposedPlannerInput = {
     primaryGoal: resolve('primaryGoal', profile.primaryGoal, builderOverrides?.primaryGoal, 'planche'),
     secondaryGoal: resolve('secondaryGoal', profile.secondaryGoal, builderOverrides?.secondaryGoal, null),
-    experienceLevel: resolve('experienceLevel', profile.experienceLevel, builderOverrides?.experienceLevel, 'intermediate'),
+    experienceLevel: resolveSavedExperience(profile.experienceLevel, builderOverrides?.experienceLevel, fallbacksUsed),
     scheduleMode: effectiveScheduleMode,
     sessionDurationMode: resolve('sessionDurationMode', profile.sessionDurationMode, builderOverrides?.sessionDurationMode, null),
     trainingDaysPerWeek: effectiveTrainingDaysPerWeek,
@@ -3319,7 +3319,30 @@ function generationFieldRequest(field: string): string {
   if (field === 'primaryGoal') {
     return 'Choose a primary goal before generating a program.'
   }
+  if (field === 'experienceLevel') {
+    return 'Choose a training experience level before generating a program.'
+  }
   return `Add ${field} before generating a program.`
+}
+
+function savedExperienceLevel(
+  value: string | null | undefined,
+): 'beginner' | 'intermediate' | 'advanced' | null {
+  if (value === 'beginner' || value === 'intermediate' || value === 'advanced') return value
+  return null
+}
+
+function resolveSavedExperience(
+  canonical: string | null | undefined,
+  override: string | null | undefined,
+  fallbacksUsed: string[],
+): 'beginner' | 'intermediate' | 'advanced' | null {
+  const overrideLevel = savedExperienceLevel(override)
+  if (overrideLevel) return overrideLevel
+  const canonicalLevel = savedExperienceLevel(canonical)
+  if (canonicalLevel) return canonicalLevel
+  fallbacksUsed.push('experienceLevel')
+  return null
 }
 
 /**
@@ -3328,7 +3351,7 @@ function generationFieldRequest(field: string): string {
  * This is the SINGLE function that all generation paths MUST use to build
  * their entry object. It guarantees:
  * 
- * 1. experienceLevel is ALWAYS present (never undefined)
+ * 1. experienceLevel is present only when the athlete saved one
  * 2. All required fields validated before return
  * 3. Composition from canonical profile truth, not stale UI state
  * 4. Explicit fallbacks with tracking for debugging
@@ -3479,16 +3502,15 @@ export function buildCanonicalGenerationEntry(
   const resolvedPrimaryGoal = overrides?.primaryGoal || profile.primaryGoal || null
   const resolvedSecondaryGoal = overrides?.secondaryGoal || profile.secondaryGoal || undefined
   
-  // CRITICAL: experienceLevel fallback chain - NEVER return undefined
-  let resolvedExperienceLevel: 'beginner' | 'intermediate' | 'advanced' = 'intermediate'
-  if (overrides?.experienceLevel) {
-    resolvedExperienceLevel = overrides.experienceLevel
-  } else if (profile.experienceLevel) {
-    resolvedExperienceLevel = profile.experienceLevel
-  } else {
-    fallbacksUsed.push('experienceLevel')
-    // Default to 'intermediate' as safe middle ground
-    resolvedExperienceLevel = 'intermediate'
+  // A missing experience level blocks generation. It is not replaced
+  // with intermediate.
+  const resolvedExperienceLevel = resolveSavedExperience(
+    profile.experienceLevel,
+    overrides?.experienceLevel,
+    fallbacksUsed,
+  )
+  if (!resolvedExperienceLevel) {
+    missingFields.push('experienceLevel')
   }
   
   // ==========================================================================
@@ -3688,6 +3710,20 @@ export function buildCanonicalGenerationEntry(
         code: 'validation_failed',
         message: generationFieldRequest('trainingDaysPerWeek'),
         missingFields: [...missingFields, 'trainingDaysPerWeek'],
+      },
+    }
+  }
+
+  if (!resolvedExperienceLevel) {
+    return {
+      success: false,
+      entry: null,
+      error: {
+        code: 'validation_failed',
+        message: generationFieldRequest('experienceLevel'),
+        missingFields: missingFields.includes('experienceLevel')
+          ? missingFields
+          : [...missingFields, 'experienceLevel'],
       },
     }
   }

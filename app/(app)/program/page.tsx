@@ -4549,42 +4549,61 @@ export default function ProgramPage() {
     if (!mounted) return
     if (!program || !program.id) return
     if (typeof window === 'undefined') return
-    try {
-      const result = applyPerformanceFeedbackOverlay(program)
-      if (!result) return
-      if (phaseLAppliedSignatureRef.current === result.signature) return
-      phaseLAppliedSignatureRef.current = result.signature
-      console.log('[phase-l-performance-feedback]', {
-        programId: program.id,
-        status: result.adaptation.status,
-        signals: result.adaptation.signals.length,
-        mutations: result.adaptation.mutations.length,
-        mutationsApplied: result.adaptation.proof.mutationsApplied,
-        mutationsBlocked: result.adaptation.proof.mutationsBlocked,
-        completedSetsRead: result.adaptation.proof.completedSetsRead,
-        sessionsRead: result.adaptation.proof.sessionsRead,
-        highRpeCount: result.adaptation.proof.highRpeCount,
-        underTargetCount: result.adaptation.proof.underTargetCount,
-        noteWarningsCount: result.adaptation.proof.noteWarningsCount,
-        changed: result.changed,
-        signature: result.signature,
-        // [PHASE-M] When the server already applied the same evidence
-        // corridor, the overlay returns skipReason='server_already_applied_*'
-        // and `changed=false`. We surface the reason in logs so we can audit
-        // server/client provenance without re-running the resolver.
-        skipReason: result.skipReason,
-      })
-      if (result.changed) {
-        setProgram(result.program as AdaptiveProgram)
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = applyPerformanceFeedbackOverlay(program)
+        if (!result || cancelled) return
+        if (phaseLAppliedSignatureRef.current === result.signature) return
+        console.log('[phase-l-performance-feedback]', {
+          programId: program.id,
+          status: result.adaptation.status,
+          signals: result.adaptation.signals.length,
+          mutations: result.adaptation.mutations.length,
+          mutationsApplied: result.adaptation.proof.mutationsApplied,
+          mutationsBlocked: result.adaptation.proof.mutationsBlocked,
+          completedSetsRead: result.adaptation.proof.completedSetsRead,
+          sessionsRead: result.adaptation.proof.sessionsRead,
+          highRpeCount: result.adaptation.proof.highRpeCount,
+          underTargetCount: result.adaptation.proof.underTargetCount,
+          noteWarningsCount: result.adaptation.proof.noteWarningsCount,
+          changed: result.changed,
+          signature: result.signature,
+          skipReason: result.skipReason,
+        })
+        if (!result.changed) {
+          phaseLAppliedSignatureRef.current = result.signature
+          return
+        }
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        if (cancelled) return
+        const saved = saveAdaptiveProgram(result.program as AdaptiveProgram)
+        phaseLAppliedSignatureRef.current = result.signature
+        setProgram(saved)
+      } catch (err) {
+        console.error('[phase-l-performance-feedback] overlay failed', err)
       }
-    } catch (err) {
-      console.error('[phase-l-performance-feedback] overlay failed', err)
+    })()
+    return () => {
+      cancelled = true
     }
     // We deliberately depend on program identity + length so log changes
     // forced by re-mount or regenerate retrigger the overlay. The signature
     // ref guarantees idempotency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, program?.id, program?.sessions?.length])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onRevert = (event: Event) => {
+      const saved = (event as CustomEvent<{ program?: AdaptiveProgram }>).detail?.program
+      if (!saved) return
+      phaseLAppliedSignatureRef.current = null
+      setProgram(saved)
+    }
+    window.addEventListener('spartanlab:performance-adaptation-reverted', onRevert)
+    return () => window.removeEventListener('spartanlab:performance-adaptation-reverted', onRevert)
+  }, [])
   
   // ==========================================================================
   // [DEBUG-PROBE-GATE] Opt-in diagnostic visibility
@@ -10895,7 +10914,7 @@ export default function ProgramPage() {
       const modifyCanonicalOverride = {
         primaryGoal: effectiveInputs.primaryGoal || 'skill_acquisition',
         secondaryGoal: effectiveInputs.secondaryGoal || null,
-        experienceLevel: effectiveInputs.experienceLevel || 'intermediate',
+        experienceLevel: effectiveInputs.experienceLevel,
         // [STEP-4B] Removed `|| 4` fake default. Canonical profile expects
         // numeric truth or null — flexible mode owns flexibility, the
         // numeric slot stores absence. No invented day count.

@@ -148,5 +148,11 @@ describe('generation truth wiring', () => {
     assert.doesNotMatch(authoritative, /sessionLengthMinutes: builderInputs\.sessionLength \?\? canonicalProfile\.sessionLengthMinutes \?\? 45/)
     assert.doesNotMatch(authoritative, /experienceLevel: builderInputs\.experienceLevel \|\| canonicalProfile\.experienceLevel \|\| 'intermediate'/)
     assert.match(authoritative, /experienceLevel: canonicalProfileTyped\.experienceLevel \|\| null/)
+
+    const canonical = readFileSync('lib/canonical-profile-service.ts', 'utf8')
+    const programPage = readFileSync('app/(app)/program/page.tsx', 'utf8')
+    assert.doesNotMatch(canonical, /resolvedExperienceLevel = 'intermediate'/)
+    assert.doesNotMatch(canonical, /builderOverrides\?\.experienceLevel, 'intermediate'/)
+    assert.doesNotMatch(programPage, /experienceLevel: effectiveInputs\.experienceLevel \|\| 'intermediate'/)
   })
 })

@@ -355,9 +355,15 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error('[Stripe Webhook] Signature verification failed:', error)
       const rejected = gateStripeWebhookSignature(false)
+      if (!rejected.ok) {
+        return NextResponse.json(
+          { error: rejected.error },
+          { status: rejected.status }
+        )
+      }
       return NextResponse.json(
-        { error: rejected.error },
-        { status: rejected.status }
+        { error: 'Invalid signature' },
+        { status: 400 }
       )
     }
 

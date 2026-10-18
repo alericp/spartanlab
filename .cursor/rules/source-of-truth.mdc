@@ -1,0 +1,24 @@
+---
+description: Keep one authority for profile, program, logs, history, and entitlement
+alwaysApply: true
+---
+
+# Source of truth
+
+Before adding or changing a data path, name the single authority for that fact:
+
+- athlete profile
+- program and prescription
+- logged performance
+- completed session
+- subscription entitlement
+
+Do not add a second store, a localStorage fork, or a display copy that can disagree with that authority.
+
+Trace the path from UI to API to persistence to the training engine to history before creating a new writer.
+
+Master Ledger V9 is the planning reference. The current source code is authoritative for what is implemented. ZIP snapshots and old reports are not runtime proof. Label a claim Confirmed, Historical, Proposal, or Unverified.
+
+When historical instructions disagree, including an older checklist and V9, name both sources and ask which one to follow before changing that behavior. Do not treat the newer document as the winner.
+
+Leave public SEO URLs in place unless the task explicitly changes them.

@@ -1,0 +1,16 @@
+---
+description: Classify Phone, Computer, or Either work and verify the affected viewports
+alwaysApply: true
+---
+
+# Device class and viewport proof
+
+Name the work device before editing: Phone, Computer, or Either. Ledger classifications are proposals; change the class when the real scope requires it.
+
+- Phone work is planning, review, cloud-agent edits, and light preview checks. It does not include local builds, schema changes, secrets, billing actions, or production database access.
+- Computer work is local build, terminal, migration, security review, and final verification.
+- Either work may start on a phone and finishes on a computer when tests or local simulation are required.
+
+For a user-facing change, state whether acceptance is phone, desktop, or both. A phone preview does not prove desktop. A desktop check does not prove the phone layout. Workout, program, and onboarding changes need both viewports when they change those screens.
+
+The V9 device workflow lists preview, approval, merge, and production verification in that order. A listed merge or production step is not approval. Phone and computer work still follow `no-unapproved-main-or-deploy.mdc`.

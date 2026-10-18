@@ -1,0 +1,14 @@
+---
+description: Protect private athlete information and enforce security checks
+alwaysApply: true
+---
+
+# Protect private athlete information
+
+Athlete and user data is private. That includes names, contact details, health, injuries, body measurements, workout history, and payment identity.
+
+- Do not log, print, commit, or paste private athlete data into code, fixtures, docs, screenshots, or chat.
+- Use synthetic data in examples and tests.
+- Do not weaken authentication, authorization, or row-level access checks.
+- When a change reads or writes personal data, confirm the existing security check still limits access to the authorized user.
+- Do not expose secrets, tokens, or production credentials in the diff or the reply.

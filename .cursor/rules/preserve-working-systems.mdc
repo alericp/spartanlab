@@ -1,0 +1,18 @@
+---
+description: Preserve working SpartanLab features, data, billing, auth, and programming
+alwaysApply: true
+---
+
+# Preserve working production systems
+
+Leave working behavior in place. A fix or feature must not replace an unrelated system.
+
+Protect these unless the current task explicitly changes that one system and the user approved the change:
+
+- Existing user-facing features
+- Databases, Prisma models, and stored user data
+- Stripe billing, subscriptions, webhooks, and payment records (`lib/stripe.ts`, `STRIPE_WEBHOOK_INTEGRATION.md`)
+- Authentication and session handling (`lib/auth-service.ts`, `lib/auth-service-server.ts`, `components/auth/AuthGuard.tsx`)
+- Exercise-programming logic, prescriptions, progression, and program generation (`lib/program/`, `lib/server/authoritative-program-generation.ts`)
+
+Do not rewrite a subsystem to implement a small fix. Do not drop, rename, or bypass a working path because a new path looks cleaner.

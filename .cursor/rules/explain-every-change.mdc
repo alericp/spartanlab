@@ -1,0 +1,15 @@
+---
+description: Explain each SpartanLab change, its purpose, risks, and testing
+alwaysApply: true
+---
+
+# Explain every change
+
+For every change, report all four of these:
+
+- What changed, including the files
+- Why it changed
+- Risks, including which existing behavior could break
+- How it was tested, including the command, scenario, or observation and the result
+
+If a change was not tested, say that it was not tested and why.

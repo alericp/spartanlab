@@ -1,0 +1,15 @@
+---
+description: Protect completed training history, units, and record provenance
+alwaysApply: true
+---
+
+# Athlete data integrity
+
+Completed sessions and logged sets are history.
+
+- Change history only through an explicit edit or undo. Regeneration, import, and program updates must not silently rewrite it.
+- Keep planned, performed, imported, and self-reported records distinct. Do not invent a date, set, load, hold, or PR.
+- Store one canonical unit value. Repeating a pounds/kilograms conversion must not compound the number.
+- A repeated save, retry, or double submit commits one set.
+- A draft, preview, or note stays out of history until the user commits it.
+- Deleting or migrating stored athlete records still requires the approval in `approval-before-destructive-operations.mdc`.

@@ -1,0 +1,15 @@
+---
+description: Inspect existing SpartanLab code before changing it
+alwaysApply: true
+---
+
+# Inspect existing code before changing it
+
+SpartanLab is an existing production fitness application. Do not rebuild it.
+
+Before editing any file:
+
+- Read the implementation that already owns the behavior, including its callers, data access, and tests.
+- Search for the established pattern and follow it.
+- Name the files you inspected and what they already do before proposing a change.
+- If the relevant code is unclear, keep reading. Do not invent a replacement architecture or a parallel implementation.

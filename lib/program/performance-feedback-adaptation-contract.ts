@@ -47,6 +47,7 @@ import {
   type PerformanceTrendIntelligence,
 } from './performance-trend-intelligence-contract'
 import { resolveUnscaledBaseSets } from './unscaled-prescription-base'
+import { noteTextMayInfluenceTraining } from '../workout/notes-interpretation'
 
 // =============================================================================
 // PUBLIC TYPES
@@ -650,10 +651,11 @@ export function classifyPerformanceSignals(
 
       const flags = (ev.noteFlags ?? []).map(lower)
       const text = lower(ev.note)
-      if (flags.includes('pain') || tokenInText(PAIN_TOKENS, text)) painNote = true
-      if (flags.includes('too_hard') || flags.includes('technique_breakdown') || tokenInText(TENSION_TOKENS, text))
+      const textCounts = noteTextMayInfluenceTraining(ev.note)
+      if (flags.includes('pain') || (textCounts && tokenInText(PAIN_TOKENS, text))) painNote = true
+      if (flags.includes('too_hard') || flags.includes('technique_breakdown') || (textCounts && tokenInText(TENSION_TOKENS, text)))
         tensionNote = true
-      if (flags.includes('sleep_fatigue') || flags.includes('grip_issue') || tokenInText(CAPACITY_TOKENS, text))
+      if (flags.includes('sleep_fatigue') || flags.includes('grip_issue') || (textCounts && tokenInText(CAPACITY_TOKENS, text)))
         capacityNote = true
 
       // Very-high RPE on a straight-arm skill auto-elevates tension.

@@ -230,6 +230,7 @@ import {
   buildGroupedRoundBadgeText,
   buildGroupedFlowHintText,
 } from '@/lib/workout/live-grouped-runtime-hints'
+import { NoteCoachingInsight } from '@/components/workout/NoteCoachingInsight'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
@@ -3513,10 +3514,18 @@ export function ActiveWorkoutStartCorridor({
                         Notes
                       </div>
                       <Textarea
-                        placeholder="Any details for your coach AI..."
+                        placeholder="Optional note for this set"
                         value={currentSetNote}
                         onChange={(e) => onSetNote(e.target.value)}
                         className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
+                      />
+                      <NoteCoachingInsight
+                        text={currentSetNote}
+                        selectedTags={currentSetReasonTags}
+                        sessionLabel={sessionLabel}
+                        exerciseName={exerciseName}
+                        exerciseIndex={currentExerciseIndex}
+                        setNumber={currentSetNumber}
                       />
                     </div>
                   </div>

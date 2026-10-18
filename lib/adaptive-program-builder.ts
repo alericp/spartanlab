@@ -20,7 +20,7 @@
  * - primaryGoal must exist (throws error if missing)
  * - onboardingComplete must be true (throws error if false)
  * - At least one of: selectedSkills, selectedFlexibility, or selectedStrength must exist
- * - equipmentAvailable must not be empty
+ * - empty equipment is allowed; floor and wall stay available and the saved list is not filled in
  * 
  * These checks ensure we never generate garbage programs from incomplete data.
  * 
@@ -946,6 +946,7 @@ import {
   type FlexibleWeekStructure,
   type DayStressLevel,
 } from './flexible-schedule-engine'
+import { classifyEquipment } from './profile/input-reliability'
 import {
   validateSession,
   validateWarmupForSkill,
@@ -1535,7 +1536,7 @@ export interface AdaptiveProgramInputs {
   secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays | 'flexible'  // Can be numeric or 'flexible'
-  sessionLength: SessionLength
+  sessionLength: SessionLength | null
   equipment: EquipmentType[]
   todaySessionMinutes?: number // Override for today's available time
   // ==========================================================================
@@ -6274,6 +6275,9 @@ async function generateAdaptiveProgramImpl(
   // reads of `sessionLength` are now `number`. The original raw form is
   // still available as `sessionLengthRaw` for sinks that intentionally
   // accept the wider union.
+  // Adaptive or unspecified duration has no chosen minute count. The assembler
+  // still needs a numeric budget; 60 here is that internal budget, not a saved
+  // athlete choice and not a reason to label the profile adaptive or static.
   const sessionLength: number = sessionLengthRaw != null
     ? normalizeSessionLengthMinutes(sessionLengthRaw)
     : 60
@@ -6289,8 +6293,11 @@ async function generateAdaptiveProgramImpl(
   if (!primaryGoal) entryValidationErrors.push('primaryGoal is required')
   if (!experienceLevel) entryValidationErrors.push('experienceLevel is required')
   if (!Array.isArray(equipment)) entryValidationWarnings.push('equipment is not an array, defaulting to []')
-  // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] check the raw form for missing input.
-  if (sessionLengthRaw === undefined || sessionLengthRaw === null) entryValidationWarnings.push('sessionLength missing, will use default')
+  if ((sessionLengthRaw === undefined || sessionLengthRaw === null) && readSessionDurationMode(inputs) === 'static') {
+    entryValidationErrors.push('sessionLength is required')
+  } else if (sessionLengthRaw === undefined || sessionLengthRaw === null) {
+    entryValidationWarnings.push('sessionLength missing, assembler budget only')
+  }
   
   // Log entry validation
   console.log('[entry-contract-validation-audit]', {
@@ -6337,7 +6344,7 @@ async function generateAdaptiveProgramImpl(
     // [PHASE 29A] Preserve baseline schedule mode - do NOT default to 'flexible'
     scheduleMode: inputs.scheduleMode || (typeof trainingDaysPerWeek === 'number' ? 'static' : 'flexible'),
     adaptiveWorkloadEnabled: inputAdaptiveWorkload,
-    sessionDurationMode: readSessionDurationMode(inputs) || 'adaptive',
+    sessionDurationMode: readSessionDurationMode(inputs),
     selectedSkills: inputs.selectedSkills || [],
     trainingPathType: inputs.trainingPathType || 'balanced',
   }
@@ -7974,7 +7981,10 @@ async function generateAdaptiveProgramImpl(
       adjustmentReason: flexibleWeekStructure.adjustmentReason || 'none',
     })
   } else {
-    effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
+    const staticFrequency = getEffectiveFrequency(trainingDaysPerWeek)
+    if (typeof staticFrequency === 'number') {
+      effectiveTrainingDays = staticFrequency as TrainingDays
+    }
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
   
@@ -32719,39 +32729,34 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     'minimal': 'floor' as EquipmentType, // Minimal = bodyweight only, floor is always present
   }
   
-  // Start with floor and wall (always available)
-  const mappedEquipment: EquipmentType[] = ['floor', 'wall']
-  
-  // Add equipment from canonical profile
-  if (canonicalProfile.equipmentAvailable && canonicalProfile.equipmentAvailable.length > 0) {
-    for (const eq of canonicalProfile.equipmentAvailable) {
-      const mapped = equipmentMap[eq]
-      if (mapped && !mappedEquipment.includes(mapped)) {
+  const equipmentSelection = classifyEquipment(canonicalProfile.equipmentAvailable)
+  const mappedEquipment: EquipmentType[] = []
+  if (equipmentSelection.kind === 'explicit') {
+    for (const eq of equipmentSelection.equipment) {
+      const mapped = (equipmentMap[eq] || eq) as EquipmentType
+      if (!mappedEquipment.includes(mapped)) {
         mappedEquipment.push(mapped)
       }
     }
-  } else {
-    // Fallback to sensible defaults if no equipment saved
-    mappedEquipment.push('pull_bar', 'dip_bars')
   }
   
   // [equipment-hydration-audit] Log equipment truth when builder inputs are loaded
   console.log('[equipment-hydration-audit] Builder inputs loaded from canonical:', {
     canonicalProfileEquipment: canonicalProfile.equipmentAvailable,
     mappedBuilderEquipment: mappedEquipment,
-    hiddenRuntimeAdded: ['floor', 'wall'],
-    usedFallbackDefaults: !canonicalProfile.equipmentAvailable || canonicalProfile.equipmentAvailable.length === 0,
+    hiddenRuntimeAdded: [],
+    usedFallbackDefaults: equipmentSelection.kind !== 'explicit',
   })
   
   // TASK 6: Unified duration contract - use canonical 30/45/60/90 minutes
   // DO NOT map 90 to 75 - this caused label drift between settings and builder
-  let sessionLength: SessionLength = 60
+  let sessionLength: SessionLength | null = null
   const profileSessionLength = canonicalProfile.sessionLengthMinutes
   if (profileSessionLength === 30) sessionLength = 30
   else if (profileSessionLength === 45) sessionLength = 45
   else if (profileSessionLength === 60) sessionLength = 60
-  else if (profileSessionLength === 75) sessionLength = 75 // Legacy support - normalize to 90 in display
-  else if (profileSessionLength === 90) sessionLength = 90 as SessionLength // Cast to handle type constraint
+  else if (profileSessionLength === 75) sessionLength = 75
+  else if (profileSessionLength === 90) sessionLength = 90 as SessionLength
   
   // ==========================================================================
   // [PHASE 32A] SCHEDULE IDENTITY FIX: Use explicit scheduleMode, NOT inferred from null days
@@ -32760,18 +32765,13 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   // The only truthful flexible signal is scheduleMode === 'flexible'.
   // ==========================================================================
   const isFlexibleUser = canonicalProfile.scheduleMode === 'flexible'
-  const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
-  
-  // For flexible users: trainingDaysPerWeek = 'flexible' (identity)
-  // For static users: trainingDaysPerWeek = numeric value from canonical profile
-  // ISSUE A FIX: Only fallback to 4 if canonical field is truly null/undefined (new user)
-  // Use explicit null check to avoid treating 0 or other falsy values as missing
   const canonicalDays = canonicalProfile.trainingDaysPerWeek
-  const trainingDaysPerWeek: TrainingDays | 'flexible' = isFlexibleUser 
-    ? 'flexible' 
-    : canonicalDays !== null && canonicalDays !== undefined 
-      ? (canonicalDays as TrainingDays)
-      : 4  // Only for truly new users with no saved value
+  const hasExplicitDayCount = typeof canonicalDays === 'number' && canonicalDays >= 2 && canonicalDays <= 7
+  // A missing day count stays flexible. It is not rewritten to four static days.
+  const scheduleMode: ScheduleMode = hasExplicitDayCount && !isFlexibleUser ? 'static' : 'flexible'
+  const trainingDaysPerWeek: TrainingDays | 'flexible' = scheduleMode === 'flexible'
+    ? 'flexible'
+    : canonicalDays as TrainingDays
   
   // TASK 7: Track whether fallbacks were used for debugging seed/default dominance
   const fallbacksUsed = {

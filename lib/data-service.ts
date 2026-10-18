@@ -50,8 +50,8 @@ export interface AthleteProfile {
   bodyFatPercent?: number | null
   bodyFatSource?: string | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
-  trainingDaysPerWeek: number
-  sessionLengthMinutes: SessionLengthMinutes
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: SessionLengthMinutes | null
   primaryGoal: string | null
   equipmentAvailable: Equipment[]
   jointCautions?: ('shoulders' | 'elbows' | 'wrists' | 'lower_back' | 'knees')[]
@@ -59,9 +59,9 @@ export interface AthleteProfile {
   pullUpMax?: number | null
   dipMax?: number | null
   trainingStyle?: 'skill_focused' | 'strength_focused' | 'power_focused' | 'endurance_focused' | 'hypertrophy_supported' | 'balanced_hybrid'
-  scheduleMode?: 'static' | 'flexible'
+  scheduleMode?: 'static' | 'flexible' | null
   // TASK A FIX: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on day/recovery
-  sessionDurationMode?: 'static' | 'adaptive'
+  sessionDurationMode?: 'static' | 'adaptive' | null
   onboardingComplete: boolean
   createdAt: string
 }
@@ -175,16 +175,15 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
     bodyFatPercent: null,
     bodyFatSource: null,
     experienceLevel: 'beginner',
-    trainingDaysPerWeek: 3,
-    sessionLengthMinutes: 60,
+    trainingDaysPerWeek: null,
+    sessionLengthMinutes: null,
     primaryGoal: null,
     equipmentAvailable: [],
     jointCautions: [],
     weakestArea: null,
     trainingStyle: 'balanced_hybrid',
-    scheduleMode: 'static',
-    // TASK A FIX: Default to static duration for backward compatibility
-    sessionDurationMode: 'static',
+    scheduleMode: null,
+    sessionDurationMode: null,
     onboardingComplete: false,
     createdAt: new Date().toISOString(),
   }

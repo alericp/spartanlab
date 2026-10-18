@@ -7,6 +7,7 @@
  */
 
 import type { MilitaryProfile } from './military-test-config'
+import { classifySessionDuration, classifyTrainingDays } from './profile/input-reliability'
 
 // Re-export for convenience
 export type { MilitaryProfile } from './military-test-config'
@@ -2074,7 +2075,7 @@ export function mapOnboardingGoalToProgram(goal: OnboardingGoal | PrimaryGoalTyp
 }
 
 // Legacy compatibility functions
-export function mapTrainingTimeToMinutes(time: TrainingTimeRange): number {
+export function mapTrainingTimeToMinutes(time: TrainingTimeRange): number | null {
   const timeMap: Record<TrainingTimeRange, number> = {
     '10_20': 20,
     '20_30': 30,
@@ -2082,17 +2083,17 @@ export function mapTrainingTimeToMinutes(time: TrainingTimeRange): number {
     '45_60': 60,
     '60_plus': 75,
   }
-  return timeMap[time] || 45
+  return timeMap[time] ?? null
 }
 
-export function mapWeeklyTrainingToDays(weekly: WeeklyTrainingDays): number {
+export function mapWeeklyTrainingToDays(weekly: WeeklyTrainingDays): number | null {
   const daysMap: Record<WeeklyTrainingDays, number> = {
     '2': 2,
     '3': 3,
     '4': 4,
     '5_plus': 5,
   }
-  return daysMap[weekly] || 3
+  return daysMap[weekly] ?? null
 }
 
 // =============================================================================
@@ -2232,15 +2233,21 @@ export function getEffectiveStrengthValue(
 
 export function suggestProgramInputsFromOnboarding(profile: OnboardingProfile) {
   const strengthTier = estimateStrengthTier(profile)
+  const days = classifyTrainingDays({
+    days: profile.trainingDaysPerWeek,
+    scheduleMode: profile.scheduleMode,
+  })
+  const duration = classifySessionDuration({
+    minutes: profile.sessionLengthMinutes,
+    durationMode: profile.sessionDurationMode,
+  })
   
   return {
     experienceLevel: profile.trainingExperience 
       ? mapTrainingExperienceToLevel(profile.trainingExperience)
       : mapStrengthTierToExperience(strengthTier),
-  // Handle 'flexible' as default to 45 minutes for calculations
-  sessionLength: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 45,
-  // Handle 'flexible' as default to 4 days for calculations
-  trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
+    sessionLength: duration.minutes,
+    trainingDaysPerWeek: days.kind === 'flexible' ? 'flexible' as const : days.days,
     primaryGoal: profile.primaryGoal || 'general_strength',
     estimatedStrengthTier: strengthTier,
     hasEstimatedValues: hasEstimatedValues(profile),

@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { settingsDurationWrite, settingsScheduleWrite } from '@/lib/profile/input-reliability'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -372,14 +373,20 @@ export default function SettingsPage() {
   const [bodyweight, setBodyweight] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [scheduleMode, setScheduleMode] = useState<'static' | 'flexible'>('static')
-  const [trainingDays, setTrainingDays] = useState('3')
+    const [trainingDays, setTrainingDays] = useState('')
   // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
   // A user can have scheduleMode='static' + adaptiveWorkloadEnabled=true
   // This means: "I train 6 days/week baseline, but let engine adapt my workload"
   const [adaptiveWorkloadEnabled, setAdaptiveWorkloadEnabled] = useState(true)
   // TASK 3: Add sessionDurationMode state - 'static' = fixed duration, 'adaptive' = engine adapts
   const [sessionDurationMode, setSessionDurationMode] = useState<'static' | 'adaptive'>('static')
-  const [sessionLength, setSessionLength] = useState('60')
+  const [sessionLength, setSessionLength] = useState('')
+  const [loadedScheduleMode, setLoadedScheduleMode] = useState<unknown>(null)
+  const [loadedTrainingDays, setLoadedTrainingDays] = useState<unknown>(null)
+  const [loadedDurationMode, setLoadedDurationMode] = useState<unknown>(null)
+  const [loadedSessionMinutes, setLoadedSessionMinutes] = useState<unknown>(null)
+  const [scheduleEdited, setScheduleEdited] = useState(false)
+  const [durationEdited, setDurationEdited] = useState(false)
   const [primaryGoal, setPrimaryGoal] = useState('none')
   const [equipment, setEquipment] = useState<EquipmentType[]>([])
   const [jointCautions, setJointCautions] = useState<JointCaution[]>([])
@@ -442,7 +449,7 @@ export default function SettingsPage() {
   
   // Helper to apply profile data to React state
   // ISSUE E FIX: Real round-trip validation - this function hydrates UI from canonical truth
-  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
+  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string | null; sessionDurationMode?: 'static' | 'adaptive' | null; trainingStyle?: TrainingStyleMode }) => {
     // [adjustment-sync] TASK 9: Log canonical truth being applied to UI
     console.log('[adjustment-sync] === APPLYING CANONICAL TRUTH TO UI ===')
     console.log('[adjustment-sync] scheduleMode:', data.scheduleMode)
@@ -522,24 +529,33 @@ export default function SettingsPage() {
     setBodyweight(resolvedBodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     
-    // TASK 3: Handle flexible schedule mode correctly - do NOT show "4 days" for flexible users
+    // A null mode is unanswered. Do not paint it as a fixed 3-day or 60-minute choice.
     const profileScheduleMode = data.scheduleMode
+    const profileDays = data.trainingDaysPerWeek
+    setLoadedScheduleMode(profileScheduleMode ?? null)
+    setLoadedTrainingDays(profileDays ?? null)
+    setScheduleEdited(false)
     if (profileScheduleMode === 'flexible') {
       setScheduleMode('flexible')
-      // TASK 3 FIX: Do NOT set trainingDays to a fake placeholder
-      // The UI will hide the day selector and show flexible mode explanation instead
-      setTrainingDays('') // Empty - UI handles flexible mode separately
+      setTrainingDays('')
+    } else if (profileScheduleMode === 'static' || typeof profileDays === 'number') {
+      setScheduleMode('static')
+      setTrainingDays(typeof profileDays === 'number' ? profileDays.toString() : '')
     } else {
       setScheduleMode('static')
-      const profileDays = data.trainingDaysPerWeek
-      setTrainingDays(typeof profileDays === 'number' ? profileDays.toString() : '3')
+      setTrainingDays('')
     }
     
-    // TASK 3D: Handle adaptive session duration mode - do NOT flatten to fixed 60
     const profileDurationMode = data.sessionDurationMode
-    setSessionDurationMode(profileDurationMode === 'adaptive' ? 'adaptive' : 'static')
-    
-    setSessionLength(data.sessionLengthMinutes?.toString() || '60')
+    setLoadedDurationMode(profileDurationMode ?? null)
+    setLoadedSessionMinutes(data.sessionLengthMinutes ?? null)
+    setDurationEdited(false)
+    if (profileDurationMode === 'adaptive') {
+      setSessionDurationMode('adaptive')
+    } else if (profileDurationMode === 'static' || typeof data.sessionLengthMinutes === 'number') {
+      setSessionDurationMode('static')
+    }
+    setSessionLength(typeof data.sessionLengthMinutes === 'number' ? data.sessionLengthMinutes.toString() : '')
     setPrimaryGoal(data.primaryGoal || 'none')
     
     // [PHASE 16A TASK 2] Equipment normalization - bench → bench_box
@@ -679,10 +695,22 @@ export default function SettingsPage() {
       // [PHASE 28K] SETTINGS SAVE SOURCE OF TRUTH - FORENSIC LOG
       // Proves exactly what schedule values are being sent to API at save time
       // ==========================================================================
-      const payloadScheduleMode = scheduleMode
-      const payloadTrainingDays = scheduleMode === 'flexible' 
-        ? null 
-        : parseInt(trainingDays || '3')
+      const scheduleWrite = settingsScheduleWrite({
+        loadedMode: loadedScheduleMode,
+        loadedDays: loadedTrainingDays,
+        edited: scheduleEdited,
+        formMode: scheduleMode,
+        formDays: trainingDays,
+      })
+      const durationWrite = settingsDurationWrite({
+        loadedMode: loadedDurationMode,
+        loadedMinutes: loadedSessionMinutes,
+        edited: durationEdited,
+        formMode: sessionDurationMode,
+        formMinutes: sessionLength,
+      })
+      const payloadScheduleMode = scheduleWrite.scheduleMode ?? null
+      const payloadTrainingDays = scheduleWrite.trainingDaysPerWeek ?? null
       
       // ==========================================================================
       // [PHASE 30D] SETTINGS SAVE FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
@@ -838,13 +866,11 @@ export default function SettingsPage() {
         bodyweight: parsedBodyweight,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
         // [PHASE 29A] BASELINE SCHEDULE IDENTITY - these define the training structure
-        trainingDaysPerWeek: payloadTrainingDays,
-        scheduleMode: payloadScheduleMode,
+        ...scheduleWrite,
         // [PHASE 29A] ADAPTIVE WORKLOAD BEHAVIOR - separate from schedule identity
         adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
-        // TASK 3D: Preserve sessionDurationMode - 'adaptive' means engine adapts session length
-        sessionDurationMode: sessionDurationMode,
-        sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
+        // Unanswered duration is omitted. An explicit or edited choice is written.
+        ...durationWrite,
         primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
         equipmentAvailable: equipment,
         jointCautions: jointCautions,
@@ -887,8 +913,8 @@ export default function SettingsPage() {
               // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
               adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
               // TASK 3D: Preserve sessionDurationMode for canonical profile
-              sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
-              sessionLengthMinutes: result.profile.sessionLengthMinutes,
+              sessionDurationMode: result.profile.sessionDurationMode ?? null,
+              sessionLengthMinutes: result.profile.sessionLengthMinutes ?? null,
               
               // [PHASE 17C] Physical stats - bodyweight must be synced to canonical
               bodyweight: result.profile.bodyweight,
@@ -1660,6 +1686,7 @@ export default function SettingsPage() {
                       ? 'SETTINGS_UI_NOW_FLEXIBLE'
                       : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
                 })
+                setScheduleEdited(true)
                 setScheduleMode(nextScheduleMode)
               }}
             >
@@ -1682,6 +1709,11 @@ export default function SettingsPage() {
                 ? 'AI adapts your weekly frequency based on recovery and goals'
                 : 'Train on a fixed number of days each week'}
             </p>
+            {loadedScheduleMode !== 'static' && loadedScheduleMode !== 'flexible' && typeof loadedTrainingDays !== 'number' && !scheduleEdited && (
+              <p className="text-xs text-[#A5A5A5]">
+                No weekly schedule is saved yet. Choose fixed days or flexible availability to store one.
+              </p>
+            )}
           </div>
 
           {/* Training Days - Only show for static mode */}
@@ -1727,6 +1759,7 @@ export default function SettingsPage() {
                       ? 'SETTINGS_UI_NOW_STATIC_6'
                       : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
                 })
+                setScheduleEdited(true)
                 setTrainingDays(v)
               }}>
                 <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
@@ -1784,9 +1817,18 @@ export default function SettingsPage() {
             <Select 
               value={sessionDurationMode} 
               onValueChange={(v) => {
-                setSessionDurationMode(v as 'static' | 'adaptive')
+                const nextMode = v as 'static' | 'adaptive'
+                setDurationEdited(true)
+                setSessionDurationMode(nextMode)
+                if (nextMode === 'adaptive') {
+                  setSessionLength('')
+                } else if (typeof loadedSessionMinutes === 'number') {
+                  setSessionLength(String(loadedSessionMinutes))
+                }
                 logDurationTruth('Settings duration mode changed', {
-                  canonicalPreference: parseInt(sessionLength),
+                  ...(nextMode !== 'adaptive' && typeof loadedSessionMinutes === 'number'
+                    ? { canonicalPreference: loadedSessionMinutes }
+                    : {}),
                   source: 'settings-duration-mode-dropdown',
                 })
               }}
@@ -1810,6 +1852,11 @@ export default function SettingsPage() {
                 ? 'Session length varies based on recovery, day focus, and training priority'
                 : 'Train with a consistent target session length'}
             </p>
+            {loadedDurationMode !== 'static' && loadedDurationMode !== 'adaptive' && typeof loadedSessionMinutes !== 'number' && !durationEdited && (
+              <p className="text-xs text-[#A5A5A5]">
+                No session duration is saved yet. Choose a fixed length or flexible duration to store one.
+              </p>
+            )}
           </div>
           
           {/* Adaptive Mode Info - Show clear adaptive semantics */}
@@ -1833,6 +1880,7 @@ export default function SettingsPage() {
             </Label>
             {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={sessionLength} onValueChange={(v) => {
+              setDurationEdited(true)
               setSessionLength(v)
               logDurationTruth('Settings duration changed', {
                 canonicalPreference: parseInt(v),

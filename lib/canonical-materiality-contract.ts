@@ -24,6 +24,7 @@
  */
 
 import type { CanonicalProgrammingProfile, TrainingMethodPreference } from './canonical-profile-service'
+import { classifyEquipment, classifySessionDuration } from './profile/input-reliability'
 import type { TrainingFeedbackSummary } from './training-feedback-loop'
 import type { DetectedWeakPoints, LimiterDrivenProgramMods } from './weak-point-engine'
 
@@ -52,7 +53,7 @@ export interface IdentityTruth {
   // Schedule identity
   scheduleMode: 'static' | 'flexible'
   targetSessionsPerWeek: number | null
-  sessionDurationMinutes: number
+  sessionDurationMinutes: number | null
   sessionDurationMode: 'static' | 'adaptive'
   
   // Equipment and loading
@@ -303,6 +304,12 @@ export function buildCanonicalMaterialityContract(
     profile.secondaryGoal
   )
   
+  const durationSelection = classifySessionDuration({
+    minutes: profile.sessionLengthMinutes,
+    durationMode: profile.sessionDurationMode,
+  })
+  const equipmentSelection = classifyEquipment(profile.equipmentAvailable)
+
   const identity: IdentityTruth = {
     primaryGoal: profile.primaryGoal || 'general_fitness',
     secondaryGoal: profile.secondaryGoal,
@@ -313,10 +320,10 @@ export function buildCanonicalMaterialityContract(
     trainingPathType: profile.trainingPathType,
     scheduleMode: profile.scheduleMode || 'flexible',
     targetSessionsPerWeek: profile.trainingDaysPerWeek,
-    sessionDurationMinutes: profile.sessionLengthMinutes || 60,
-    sessionDurationMode: profile.sessionDurationMode || 'static',
-    equipmentAvailable: profile.equipmentAvailable || ['floor'],
-    hasLoadableEquipment: checkHasLoadableEquipment(profile.equipmentAvailable || []),
+    sessionDurationMinutes: durationSelection.minutes,
+    sessionDurationMode: durationSelection.durationMode ?? profile.sessionDurationMode ?? 'static',
+    equipmentAvailable: equipmentSelection.equipment,
+    hasLoadableEquipment: checkHasLoadableEquipment(equipmentSelection.equipment),
     weightedPullUpBenchmark: profile.weightedPullUp 
       ? { load: profile.weightedPullUp.addedWeight, reps: profile.weightedPullUp.reps, unit: profile.weightedPullUp.unit || 'lbs' }
       : null,
@@ -617,7 +624,7 @@ function buildPersonalizationLevers(
   }
   
   const tertiarySkillAllowance: PersonalizationLevers['tertiarySkillAllowance'] = {
-    value: identity.skillPriorities.tertiary.length > 0 && identity.sessionDurationMinutes >= 60 ? 0.15 : 0.05,
+    value: identity.skillPriorities.tertiary.length > 0 && identity.sessionDurationMinutes !== null && identity.sessionDurationMinutes >= 60 ? 0.15 : 0.05,
     confidence: identity.skillPriorities.tertiary.length > 0 ? 'medium' : 'low',
   }
   
@@ -641,7 +648,7 @@ function buildPersonalizationLevers(
     supportAllocationBias = { value: 'heavy', confidence: 'medium', source: 'bottleneckCount' }
   } else if (identity.experienceLevel === 'beginner') {
     supportAllocationBias = { value: 'heavy', confidence: 'medium', source: 'experienceLevel' }
-  } else if (identity.sessionDurationMinutes < 45) {
+  } else if (identity.sessionDurationMinutes !== null && identity.sessionDurationMinutes < 45) {
     supportAllocationBias = { value: 'minimal', confidence: 'high', source: 'sessionDuration' }
   } else {
     supportAllocationBias = { value: 'moderate', confidence: 'low', source: 'default' }
@@ -730,7 +737,7 @@ function buildPersonalizationLevers(
   }
   
   const densityAllowance: PersonalizationLevers['densityAllowance'] = {
-    value: identity.sessionDurationMinutes < 45 ? 0.4
+    value: identity.sessionDurationMinutes !== null && identity.sessionDurationMinutes < 45 ? 0.4
       : identity.methodPreferences.includes('density_blocks') ? 0.6
       : 0.3,
     confidence: identity.methodPreferences.length > 0 ? 'high' : 'medium',
@@ -792,7 +799,9 @@ function buildPersonalizationLevers(
   
   let timeBudgetCompressionPressure: PersonalizationLevers['timeBudgetCompressionPressure']
   
-  if (identity.sessionDurationMinutes <= 30) {
+  if (identity.sessionDurationMinutes === null) {
+    timeBudgetCompressionPressure = { value: 0.1, confidence: 'low' }
+  } else if (identity.sessionDurationMinutes <= 30) {
     timeBudgetCompressionPressure = { value: 0.9, confidence: 'high' }
   } else if (identity.sessionDurationMinutes <= 45) {
     timeBudgetCompressionPressure = { value: 0.6, confidence: 'high' }
@@ -961,15 +970,26 @@ export function validateMateriality(
   
   // Check 3: Time budget materiality
   const durationTarget = contract.identity.sessionDurationMinutes
-  const durationVariance = Math.abs(programSummary.averageDurationMinutes - durationTarget) / durationTarget
-  checks.push({
-    lever: 'timeBudget',
-    expected: `${durationTarget}min ±20%`,
-    actual: `${programSummary.averageDurationMinutes.toFixed(0)}min`,
-    honored: durationVariance <= 0.2,
-    severity: 'important',
-    evidence: `variance: ${(durationVariance * 100).toFixed(1)}%`,
-  })
+  if (durationTarget === null) {
+    checks.push({
+      lever: 'timeBudget',
+      expected: 'no explicit duration',
+      actual: `${programSummary.averageDurationMinutes.toFixed(0)}min`,
+      honored: true,
+      severity: 'important',
+      evidence: 'athlete did not select a session duration',
+    })
+  } else {
+    const durationVariance = Math.abs(programSummary.averageDurationMinutes - durationTarget) / durationTarget
+    checks.push({
+      lever: 'timeBudget',
+      expected: `${durationTarget}min ±20%`,
+      actual: `${programSummary.averageDurationMinutes.toFixed(0)}min`,
+      honored: durationVariance <= 0.2,
+      severity: 'important',
+      evidence: `variance: ${(durationVariance * 100).toFixed(1)}%`,
+    })
+  }
   
   // Check 4: Session count materiality
   const targetSessions = contract.identity.targetSessionsPerWeek

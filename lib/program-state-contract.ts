@@ -68,7 +68,7 @@ export interface ProfileSnapshot {
   secondaryGoal: string | null
   experienceLevel: string
   trainingDaysPerWeek: number | null
-  sessionLengthMinutes: number
+  sessionLengthMinutes: number | null
   scheduleMode: string
   equipmentAvailable: string[]
   jointCautions: string[]

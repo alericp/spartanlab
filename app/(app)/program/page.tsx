@@ -952,6 +952,7 @@ import {
   type ProgramDisplayProjection,
   type CanonicalProgramTruthPresence,
 } from '@/lib/program/program-display-contract'
+import { resolveSavedProgramGuidance } from '@/lib/program/training-experience-guidance'
 // [PHASE Y3 OF 3] Coach-facing narrative derived from the Y2
 // `trainingDifferentiationCalibration` already attached to the program.
 // Replaces the flat "Intensity: Conservative" chip with a session-derived
@@ -18249,6 +18250,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             </Button>
           )}
         </div>
+
+        {program && !showBuilder && (
+          <div className="mb-4 rounded-lg border border-[#3A3A3A] bg-[#1A1A1A] p-4">
+            {(() => {
+              const guidance = resolveSavedProgramGuidance(program)
+              return (
+                <>
+                  <p className="text-sm font-medium">{guidance.headline}</p>
+                  <p className="text-sm text-[#A5A5A5] mt-1">{guidance.explanation}</p>
+                  <p className="text-xs text-[#6A6A6A] mt-2">{guidance.savedScheduleLabel}</p>
+                </>
+              )
+            })()}
+          </div>
+        )}
         
         {/* [P2F-3] Schedule Status card removed from inline display - now in Coach Intelligence Hub */}
         

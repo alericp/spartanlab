@@ -11,6 +11,7 @@ import { type MovementBalance } from '@/lib/volume-analyzer'
 import { Activity, ArrowRight } from 'lucide-react'
 import { InsightExplanation, generateRecoveryExplanation } from '@/components/shared/InsightExplanation'
 import { AdaptiveEngineBadge, ENGINE_MESSAGES } from '@/components/shared/AdaptiveEngineBadge'
+import { PERSONAL_READINESS_BOUNDARY } from '@/lib/program/training-experience-guidance'
 
 interface RecoveryStatusCardProps {
   recovery: RecoverySignal
@@ -82,6 +83,8 @@ export function RecoveryStatusCard({ recovery, balance }: RecoveryStatusCardProp
           <div className="text-xs text-[#A4ACB8] mt-1">{balanceNote || 'Push:Pull'}</div>
         </div>
       </div>
+
+      <p className="text-xs text-[#6B7280] mt-3 leading-relaxed">{PERSONAL_READINESS_BOUNDARY}</p>
 
       {/* Explanation Layer */}
       <InsightExplanation

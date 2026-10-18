@@ -1,0 +1,16 @@
+---
+description: Follow SpartanLab ledger, priorities, and acceptance criteria when provided
+alwaysApply: true
+---
+
+# Follow the master ledger and acceptance criteria
+
+When the user or the task provides any of the following, follow them for that work:
+
+- SpartanLab's master ledger
+- Development priorities
+- Task acceptance criteria
+
+Do not invent a priority order. Do not mark a ledger item complete. Do not widen the task past the acceptance criteria.
+
+If those sources conflict with the requested code change, stop and ask which source to follow before editing.

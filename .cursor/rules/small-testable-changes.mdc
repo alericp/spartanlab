@@ -1,0 +1,11 @@
+---
+description: Keep SpartanLab work small, testable, and limited in diff
+alwaysApply: true
+---
+
+# Work in small, testable changes
+
+- Split work into the smallest task that can be verified on its own.
+- Change only the files that task requires.
+- Do not bundle unrelated refactors, dependency updates, formatting sweeps, or drive-by cleanup.
+- Define how the task will be tested before editing, then run that check before starting the next task.

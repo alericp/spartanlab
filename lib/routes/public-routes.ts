@@ -105,6 +105,9 @@ export const CLERK_PUBLIC_ROUTE_PATTERNS = [
   // Public API routes
   '/api/public(.*)',
   '/api/webhooks(.*)',
+  // Stripe must reach signature verification without a Clerk session.
+  // Checkout and portal stay authenticated; do not widen this to /api/stripe(.*).
+  '/api/stripe/webhook',
 ]
 
 

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:ownership": "node --experimental-strip-types --test lib/server/athlete-ownership.test.ts lib/server/athlete-route-wiring.test.ts"
+    "test:ownership": "node --experimental-strip-types --test lib/server/athlete-ownership.test.ts lib/server/athlete-route-wiring.test.ts",
+    "test:stripe": "node --experimental-strip-types --test lib/stripe/webhook-reliability.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.4",

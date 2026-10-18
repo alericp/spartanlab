@@ -87,6 +87,25 @@ export async function queryOne<T>(
 }
 
 /**
+ * Parameterized query that throws when the database is unavailable or the query fails.
+ * Webhook subscription writes use this so a failed update is not mistaken for "no row".
+ * Other callers keep the fail-soft query() behavior.
+ */
+export async function queryStrict<T>(sql: string, params: any[] = []): Promise<T[]> {
+  if (isPreviewMode()) {
+    throw new Error('Database unavailable')
+  }
+
+  const client = await getSqlClient()
+  if (!client || typeof sql !== 'string') {
+    throw new Error('Database unavailable')
+  }
+
+  const result = await client.query(sql, params)
+  return (result?.rows ?? result) as T[]
+}
+
+/**
  * Check if database connection is working
  */
 export async function isDatabaseConnected(): Promise<boolean> {

@@ -95,6 +95,71 @@ export function classifyEquipment(value: unknown): EquipmentSelection {
   return { kind: 'explicit', equipment }
 }
 
+function finiteDayCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 2 && value <= 7) {
+    return value
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10)
+    if (parsed >= 2 && parsed <= 7) return parsed
+  }
+  return null
+}
+
+function positiveMinutes(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10)
+    if (parsed > 0) return parsed
+  }
+  return null
+}
+
+/**
+ * Settings save for schedule.
+ * An unanswered schedule is omitted so the form's initial fixed option
+ * is not written as the athlete's choice. An explicit loaded choice, or a
+ * control the athlete changed, is written.
+ */
+export function settingsScheduleWrite(input: {
+  loadedMode: unknown
+  loadedDays: unknown
+  edited: boolean
+  formMode: 'static' | 'flexible'
+  formDays: string
+}): { scheduleMode?: 'static' | 'flexible'; trainingDaysPerWeek?: number | null } {
+  const loadedExplicit = input.loadedMode === 'flexible'
+    || input.loadedMode === 'static'
+    || finiteDayCount(input.loadedDays) !== null
+  if (!input.edited && !loadedExplicit) return {}
+  if (input.formMode === 'flexible') {
+    return { scheduleMode: 'flexible', trainingDaysPerWeek: null }
+  }
+  return { scheduleMode: 'static', trainingDaysPerWeek: finiteDayCount(input.formDays) }
+}
+
+/**
+ * Settings save for duration.
+ * Unanswered duration is omitted. Adaptive and fixed choices the athlete
+ * already has, or newly edits, are written. A blank minute field stays null.
+ */
+export function settingsDurationWrite(input: {
+  loadedMode: unknown
+  loadedMinutes: unknown
+  edited: boolean
+  formMode: 'static' | 'adaptive'
+  formMinutes: string
+}): { sessionDurationMode?: 'static' | 'adaptive'; sessionLengthMinutes?: number | null } {
+  const loadedExplicit = input.loadedMode === 'adaptive'
+    || input.loadedMode === 'static'
+    || positiveMinutes(input.loadedMinutes) !== null
+  if (!input.edited && !loadedExplicit) return {}
+  return {
+    sessionDurationMode: input.formMode,
+    sessionLengthMinutes: positiveMinutes(input.formMinutes),
+  }
+}
+
 /** Snap an explicit minute count onto the existing duration buckets. */
 export function bucketExplicitMinutes(minutes: number): 30 | 45 | 60 | 90 {
   if (minutes <= 30) return 30

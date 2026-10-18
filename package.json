@@ -10,7 +10,7 @@
     "test:ownership": "node --experimental-strip-types --test lib/server/athlete-ownership.test.ts lib/server/athlete-route-wiring.test.ts",
     "test:stripe": "node --experimental-strip-types --test lib/stripe/webhook-reliability.test.ts",
     "test:workout": "node --experimental-strip-types --test lib/workout/save-reliability.test.ts",
-    "test:profile": "node --experimental-strip-types --test lib/profile/input-reliability.test.ts"
+    "test:profile": "node --experimental-strip-types --import ./lib/profile/ts-resolve-register.mjs --test lib/profile/input-reliability.test.ts lib/profile/generation-compatibility.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.4",

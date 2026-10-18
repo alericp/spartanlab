@@ -20,7 +20,7 @@
  * - primaryGoal must exist (throws error if missing)
  * - onboardingComplete must be true (throws error if false)
  * - At least one of: selectedSkills, selectedFlexibility, or selectedStrength must exist
- * - equipmentAvailable must not be empty
+ * - empty equipment is allowed; floor and wall stay available and the saved list is not filled in
  * 
  * These checks ensure we never generate garbage programs from incomplete data.
  * 
@@ -6275,8 +6275,9 @@ async function generateAdaptiveProgramImpl(
   // reads of `sessionLength` are now `number`. The original raw form is
   // still available as `sessionLengthRaw` for sinks that intentionally
   // accept the wider union.
-  // Adaptive duration has no chosen minute count. The assembler still needs a
-  // numeric budget; 60 here is that internal budget, not a saved athlete choice.
+  // Adaptive or unspecified duration has no chosen minute count. The assembler
+  // still needs a numeric budget; 60 here is that internal budget, not a saved
+  // athlete choice and not a reason to label the profile adaptive or static.
   const sessionLength: number = sessionLengthRaw != null
     ? normalizeSessionLengthMinutes(sessionLengthRaw)
     : 60
@@ -6292,10 +6293,10 @@ async function generateAdaptiveProgramImpl(
   if (!primaryGoal) entryValidationErrors.push('primaryGoal is required')
   if (!experienceLevel) entryValidationErrors.push('experienceLevel is required')
   if (!Array.isArray(equipment)) entryValidationWarnings.push('equipment is not an array, defaulting to []')
-  if ((sessionLengthRaw === undefined || sessionLengthRaw === null) && readSessionDurationMode(inputs) !== 'adaptive') {
+  if ((sessionLengthRaw === undefined || sessionLengthRaw === null) && readSessionDurationMode(inputs) === 'static') {
     entryValidationErrors.push('sessionLength is required')
   } else if (sessionLengthRaw === undefined || sessionLengthRaw === null) {
-    entryValidationWarnings.push('sessionLength missing, adaptive budget only')
+    entryValidationWarnings.push('sessionLength missing, assembler budget only')
   }
   
   // Log entry validation
@@ -6343,7 +6344,7 @@ async function generateAdaptiveProgramImpl(
     // [PHASE 29A] Preserve baseline schedule mode - do NOT default to 'flexible'
     scheduleMode: inputs.scheduleMode || (typeof trainingDaysPerWeek === 'number' ? 'static' : 'flexible'),
     adaptiveWorkloadEnabled: inputAdaptiveWorkload,
-    sessionDurationMode: readSessionDurationMode(inputs) || 'adaptive',
+    sessionDurationMode: readSessionDurationMode(inputs),
     selectedSkills: inputs.selectedSkills || [],
     trainingPathType: inputs.trainingPathType || 'balanced',
   }

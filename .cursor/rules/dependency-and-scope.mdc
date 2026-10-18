@@ -13,3 +13,4 @@ Work one authorized task.
 - If the change needs files outside the authorized scope, stop and report the blocker.
 - Do not delete dormant modules. Gate unused behavior only when the task asks, and keep the route, API, and job from running while the flag is off.
 - A ledger phase blocks the next phase until recorded evidence exists. A described feature is not an implemented dependency.
+- If two historical roadmaps name different next tasks, report both and wait for approval. Do not pick a roadmap silently. Founder schedule notes that disagree do not by themselves start or stop a scoped code task.

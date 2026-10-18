@@ -13,4 +13,4 @@ Name the work device before editing: Phone, Computer, or Either. Ledger classifi
 
 For a user-facing change, state whether acceptance is phone, desktop, or both. A phone preview does not prove desktop. A desktop check does not prove the phone layout. Workout, program, and onboarding changes need both viewports when they change those screens.
 
-Phone work still follows `no-unapproved-main-or-deploy.mdc`.
+The V9 device workflow lists preview, approval, merge, and production verification in that order. A listed merge or production step is not approval. Phone and computer work still follow `no-unapproved-main-or-deploy.mdc`.

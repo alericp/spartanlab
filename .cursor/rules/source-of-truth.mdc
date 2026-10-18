@@ -17,6 +17,8 @@ Do not add a second store, a localStorage fork, or a display copy that can disag
 
 Trace the path from UI to API to persistence to the training engine to history before creating a new writer.
 
-Master Ledger V9, ZIP snapshots, and old reports are planning references. The current repository is the implementation truth. Label a claim Confirmed, Historical, Proposal, or Unverified. Do not turn a report into runtime proof.
+Master Ledger V9 is the planning reference. The current source code is authoritative for what is implemented. ZIP snapshots and old reports are not runtime proof. Label a claim Confirmed, Historical, Proposal, or Unverified.
+
+When historical instructions disagree, including an older checklist and V9, name both sources and ask which one to follow before changing that behavior. Do not treat the newer document as the winner.
 
 Leave public SEO URLs in place unless the task explicitly changes them.

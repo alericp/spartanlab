@@ -150,10 +150,10 @@ export async function POST(request: Request) {
       ON CONFLICT (user_id) DO UPDATE SET
         sex = COALESCE($2::text, athlete_profiles.sex),
         experience_level = COALESCE($3::text, athlete_profiles.experience_level),
-        training_days_per_week = $4::int,
-        schedule_mode = COALESCE($5::text, athlete_profiles.schedule_mode),
-        session_duration_mode = COALESCE($6::varchar, athlete_profiles.session_duration_mode),
-        session_length_minutes = COALESCE($7::int, athlete_profiles.session_length_minutes),
+        training_days_per_week = CASE WHEN $18::boolean THEN $4::int ELSE athlete_profiles.training_days_per_week END,
+        schedule_mode = CASE WHEN $18::boolean THEN $5::text ELSE athlete_profiles.schedule_mode END,
+        session_duration_mode = CASE WHEN $19::boolean THEN $6::varchar ELSE athlete_profiles.session_duration_mode END,
+        session_length_minutes = CASE WHEN $19::boolean THEN $7::int ELSE athlete_profiles.session_length_minutes END,
         primary_goal = COALESCE($8::text, athlete_profiles.primary_goal),
         secondary_goal = $9::text,
         selected_skills = COALESCE($10::jsonb, athlete_profiles.selected_skills),
@@ -215,6 +215,10 @@ export async function POST(request: Request) {
       profileData.jointCautions ? JSON.stringify(profileData.jointCautions) : JSON.stringify([]),
       profileData.weakestArea || null,
       profileData.trainingStyle || 'balanced_hybrid',
+      Object.prototype.hasOwnProperty.call(profileData, 'scheduleMode')
+        || Object.prototype.hasOwnProperty.call(profileData, 'trainingDaysPerWeek'),
+      Object.prototype.hasOwnProperty.call(profileData, 'sessionDurationMode')
+        || Object.prototype.hasOwnProperty.call(profileData, 'sessionLengthMinutes'),
     ])
     
     // [PHASE 16D] Audit: Column/value parity verified

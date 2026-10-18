@@ -160,6 +160,71 @@ export function settingsDurationWrite(input: {
   }
 }
 
+export interface ScheduleDurationState {
+  scheduleMode: 'static' | 'flexible' | null
+  trainingDaysPerWeek: number | null
+  sessionDurationMode: 'static' | 'adaptive' | null
+  sessionLengthMinutes: number | null
+}
+
+/**
+ * Merge a profile update into the stored schedule and duration.
+ * A missing key keeps the stored value. A present null or a new choice
+ * replaces the stored value. Flexible availability clears the day count.
+ * An explicit unspecified duration clears the minute count.
+ */
+export function mergeScheduleDurationUpdate(
+  current: ScheduleDurationState,
+  update: {
+    scheduleMode?: 'static' | 'flexible' | null
+    trainingDaysPerWeek?: number | null
+    sessionDurationMode?: 'static' | 'adaptive' | null
+    sessionLengthMinutes?: number | null
+  },
+): ScheduleDurationState {
+  const scheduleProvided = update.scheduleMode !== undefined || update.trainingDaysPerWeek !== undefined
+  const durationProvided = update.sessionDurationMode !== undefined || update.sessionLengthMinutes !== undefined
+  let scheduleMode = current.scheduleMode
+  let trainingDaysPerWeek = current.trainingDaysPerWeek
+  if (scheduleProvided) {
+    if (update.scheduleMode === 'flexible') {
+      scheduleMode = 'flexible'
+      trainingDaysPerWeek = null
+    } else if (update.scheduleMode === 'static' || typeof update.trainingDaysPerWeek === 'number') {
+      scheduleMode = 'static'
+      if (typeof update.trainingDaysPerWeek === 'number') trainingDaysPerWeek = update.trainingDaysPerWeek
+      else if (update.trainingDaysPerWeek === null) trainingDaysPerWeek = null
+    } else {
+      if (update.scheduleMode === null) scheduleMode = null
+      if (update.trainingDaysPerWeek === null) trainingDaysPerWeek = null
+    }
+  }
+
+  let sessionDurationMode = current.sessionDurationMode
+  let sessionLengthMinutes = current.sessionLengthMinutes
+  if (durationProvided) {
+    if (update.sessionDurationMode === 'adaptive' || update.sessionDurationMode === 'static') {
+      sessionDurationMode = update.sessionDurationMode
+      if (typeof update.sessionLengthMinutes === 'number') sessionLengthMinutes = update.sessionLengthMinutes
+      else if (update.sessionLengthMinutes === null) sessionLengthMinutes = null
+    } else if (update.sessionDurationMode === null) {
+      if (typeof update.sessionLengthMinutes === 'number') {
+        sessionDurationMode = 'static'
+        sessionLengthMinutes = update.sessionLengthMinutes
+      } else {
+        sessionDurationMode = null
+        sessionLengthMinutes = null
+      }
+    } else if (typeof update.sessionLengthMinutes === 'number') {
+      sessionLengthMinutes = update.sessionLengthMinutes
+    } else if (update.sessionLengthMinutes === null) {
+      sessionLengthMinutes = null
+    }
+  }
+
+  return { scheduleMode, trainingDaysPerWeek, sessionDurationMode, sessionLengthMinutes }
+}
+
 /** Snap an explicit minute count onto the existing duration buckets. */
 export function bucketExplicitMinutes(minutes: number): 30 | 45 | 60 | 90 {
   if (minutes <= 30) return 30

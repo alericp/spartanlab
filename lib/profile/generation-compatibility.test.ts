@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { before, beforeEach, describe, it } from 'node:test'
-import { settingsDurationWrite, settingsScheduleWrite } from './input-reliability.ts'
+import { mergeScheduleDurationUpdate, settingsDurationWrite, settingsScheduleWrite } from './input-reliability.ts'
 
 const store = new Map<string, string>()
 const memoryStorage = {
@@ -27,6 +27,7 @@ type CanonicalModule = typeof import('../canonical-profile-service.ts')
 let buildCanonicalGenerationEntry: CanonicalModule['buildCanonicalGenerationEntry']
 let validateProfileForGeneration: CanonicalModule['validateProfileForGeneration']
 let getCanonicalProfile: CanonicalModule['getCanonicalProfile']
+let saveCanonicalProfile: CanonicalModule['saveCanonicalProfile']
 
 function seed(onboarding: Record<string, unknown> | null, athlete: Record<string, unknown> | null) {
   store.clear()
@@ -65,6 +66,7 @@ describe('generation compatibility', () => {
     buildCanonicalGenerationEntry = canonical.buildCanonicalGenerationEntry
     validateProfileForGeneration = canonical.validateProfileForGeneration
     getCanonicalProfile = canonical.getCanonicalProfile
+    saveCanonicalProfile = canonical.saveCanonicalProfile
   })
 
   beforeEach(() => {
@@ -232,6 +234,184 @@ describe('generation compatibility', () => {
   })
 })
 
+const fixedFourBySixty = {
+  scheduleMode: 'static' as const,
+  trainingDaysPerWeek: 4,
+  sessionDurationMode: 'static' as const,
+  sessionLengthMinutes: 60,
+}
+
+function seedFixedProfile() {
+  seed(completedOnboarding(fixedFourBySixty), savedAthlete(fixedFourBySixty))
+}
+
+function storedOnboarding() {
+  return JSON.parse(store.get('spartanlab_onboarding_profile') || '{}') as Record<string, unknown>
+}
+
+function storedAthlete() {
+  return JSON.parse(store.get('spartanlab_profile') || '{}') as Record<string, unknown>
+}
+
+describe('profile update transitions', () => {
+  before(async () => {
+    const canonical = await import('../canonical-profile-service.ts')
+    buildCanonicalGenerationEntry = canonical.buildCanonicalGenerationEntry
+    validateProfileForGeneration = canonical.validateProfileForGeneration
+    getCanonicalProfile = canonical.getCanonicalProfile
+    saveCanonicalProfile = canonical.saveCanonicalProfile
+  })
+
+  beforeEach(() => {
+    store.clear()
+  })
+
+  it('replaces a fixed 4-day 60-minute profile with flexible availability and an unspecified duration', () => {
+    seedFixedProfile()
+    saveCanonicalProfile({
+      scheduleMode: 'flexible',
+      trainingDaysPerWeek: null,
+      sessionDurationMode: null,
+      sessionLengthMinutes: null,
+    })
+
+    const onboarding = storedOnboarding()
+    const athlete = storedAthlete()
+    assert.equal(onboarding.scheduleMode, 'flexible')
+    assert.equal(onboarding.trainingDaysPerWeek, null)
+    assert.equal(onboarding.sessionLengthMinutes, null)
+    assert.equal(onboarding.sessionDurationMode, undefined)
+    assert.equal(athlete.scheduleMode, 'flexible')
+    assert.equal(athlete.trainingDaysPerWeek, null)
+    assert.equal(athlete.sessionLengthMinutes, null)
+    assert.equal(athlete.sessionDurationMode, null)
+
+    const profile = getCanonicalProfile()
+    const generated = buildCanonicalGenerationEntry('after-flexible-clear')
+    assert.equal(profile.scheduleMode, 'flexible')
+    assert.equal(profile.trainingDaysPerWeek, null)
+    assert.equal(profile.sessionDurationMode, null)
+    assert.equal(profile.sessionLengthMinutes, null)
+    assert.equal(generated.success, true)
+    assert.equal(generated.entry?.trainingDaysPerWeek, 'flexible')
+    assert.equal(generated.entry?.sessionLength, null)
+    assert.equal(generated.entry?.sessionDurationMode, null)
+  })
+
+  it('keeps the saved duration when only the schedule is changed', () => {
+    seedFixedProfile()
+    saveCanonicalProfile({
+      scheduleMode: 'flexible',
+      trainingDaysPerWeek: null,
+    })
+
+    const onboarding = storedOnboarding()
+    assert.equal(onboarding.scheduleMode, 'flexible')
+    assert.equal(onboarding.trainingDaysPerWeek, null)
+    assert.equal(onboarding.sessionDurationMode, 'static')
+    assert.equal(onboarding.sessionLengthMinutes, 60)
+    const generated = buildCanonicalGenerationEntry('schedule-only')
+    assert.equal(generated.success, true)
+    assert.equal(generated.entry?.trainingDaysPerWeek, 'flexible')
+    assert.equal(generated.entry?.sessionLength, 60)
+    assert.equal(generated.entry?.sessionDurationMode, 'static')
+  })
+
+  it('keeps the saved schedule when a later save omits it', () => {
+    seedFixedProfile()
+    saveCanonicalProfile({ primaryGoal: 'muscle_up' })
+    const onboarding = storedOnboarding()
+    const athlete = storedAthlete()
+    assert.equal(onboarding.trainingDaysPerWeek, 4)
+    assert.equal(onboarding.sessionLengthMinutes, 60)
+    assert.equal(athlete.trainingDaysPerWeek, 4)
+    assert.equal(athlete.sessionLengthMinutes, 60)
+    const generated = buildCanonicalGenerationEntry('unrelated-save')
+    assert.equal(generated.entry?.trainingDaysPerWeek, 4)
+    assert.equal(generated.entry?.sessionLength, 60)
+  })
+
+  it('restores explicit fixed days and duration after a flexible profile', () => {
+    seed(completedOnboarding({
+      trainingDaysPerWeek: null,
+      scheduleMode: 'flexible',
+      sessionLengthMinutes: null,
+      sessionDurationMode: 'adaptive',
+    }), savedAthlete({
+      trainingDaysPerWeek: null,
+      scheduleMode: 'flexible',
+      sessionLengthMinutes: null,
+      sessionDurationMode: 'adaptive',
+    }))
+    saveCanonicalProfile({
+      scheduleMode: 'static',
+      trainingDaysPerWeek: 4,
+      sessionDurationMode: 'static',
+      sessionLengthMinutes: 60,
+    })
+
+    const onboarding = storedOnboarding()
+    const athlete = storedAthlete()
+    assert.equal(onboarding.scheduleMode, 'static')
+    assert.equal(onboarding.trainingDaysPerWeek, 4)
+    assert.equal(onboarding.sessionDurationMode, 'static')
+    assert.equal(onboarding.sessionLengthMinutes, 60)
+    assert.equal(athlete.scheduleMode, 'static')
+    assert.equal(athlete.trainingDaysPerWeek, 4)
+    assert.equal(athlete.sessionLengthMinutes, 60)
+    const generated = buildCanonicalGenerationEntry('back-to-fixed')
+    assert.equal(generated.success, true)
+    assert.equal(generated.entry?.scheduleMode, 'static')
+    assert.equal(generated.entry?.trainingDaysPerWeek, 4)
+    assert.equal(generated.entry?.sessionDurationMode, 'static')
+    assert.equal(generated.entry?.sessionLength, 60)
+  })
+})
+
+describe('stored schedule merge', () => {
+  it('clears a stored 4-day 60-minute choice only when the new choice is present', () => {
+    const cleared = mergeScheduleDurationUpdate(fixedFourBySixty, {
+      scheduleMode: 'flexible',
+      trainingDaysPerWeek: null,
+      sessionDurationMode: null,
+      sessionLengthMinutes: null,
+    })
+    assert.deepEqual(cleared, {
+      scheduleMode: 'flexible',
+      trainingDaysPerWeek: null,
+      sessionDurationMode: null,
+      sessionLengthMinutes: null,
+    })
+
+    const scheduleOnly = mergeScheduleDurationUpdate(fixedFourBySixty, {
+      scheduleMode: 'flexible',
+      trainingDaysPerWeek: null,
+    })
+    assert.equal(scheduleOnly.trainingDaysPerWeek, null)
+    assert.equal(scheduleOnly.sessionLengthMinutes, 60)
+    assert.equal(scheduleOnly.sessionDurationMode, 'static')
+
+    const restored = mergeScheduleDurationUpdate(cleared, {
+      scheduleMode: 'static',
+      trainingDaysPerWeek: 4,
+      sessionDurationMode: 'static',
+      sessionLengthMinutes: 60,
+    })
+    assert.deepEqual(restored, fixedFourBySixty)
+  })
+
+  it('clears a fixed minute count when flexible duration is saved without a minute count', () => {
+    const adaptive = mergeScheduleDurationUpdate(fixedFourBySixty, {
+      sessionDurationMode: 'adaptive',
+      sessionLengthMinutes: null,
+    })
+    assert.equal(adaptive.scheduleMode, 'static')
+    assert.equal(adaptive.trainingDaysPerWeek, 4)
+    assert.equal(adaptive.sessionDurationMode, 'adaptive')
+    assert.equal(adaptive.sessionLengthMinutes, null)
+  })
+})
+
 describe('database mode reads', () => {
   it('does not turn a null schedule or duration mode into static', () => {
     const onboardingRoute = readFileSync('app/api/onboarding/profile/route.ts', 'utf8')
@@ -240,6 +420,13 @@ describe('database mode reads', () => {
       assert.equal(source.includes("COALESCE(schedule_mode, 'static')"), false)
       assert.equal(source.includes("COALESCE(session_duration_mode, 'static')"), false)
     }
+    assert.match(onboardingRoute, /training_days_per_week = CASE WHEN \$18::boolean THEN \$4::int ELSE athlete_profiles.training_days_per_week END/)
+    assert.match(onboardingRoute, /schedule_mode = CASE WHEN \$18::boolean THEN \$5::text ELSE athlete_profiles.schedule_mode END/)
+    assert.match(onboardingRoute, /session_duration_mode = CASE WHEN \$19::boolean THEN \$6::varchar ELSE athlete_profiles.session_duration_mode END/)
+    assert.match(onboardingRoute, /session_length_minutes = CASE WHEN \$19::boolean THEN \$7::int ELSE athlete_profiles.session_length_minutes END/)
+    assert.equal(onboardingRoute.includes('schedule_mode = COALESCE'), false)
+    assert.equal(onboardingRoute.includes('session_length_minutes = COALESCE'), false)
+    assert.match(settingsRoute, /if \(updates\[key\] !== undefined\)/)
     const builder = readFileSync('lib/adaptive-program-builder.ts', 'utf8')
     assert.match(builder, /readSessionDurationMode\(inputs\) === 'static'/)
     assert.doesNotMatch(builder, /readSessionDurationMode\(inputs\) !== 'adaptive'/)

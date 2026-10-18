@@ -77,7 +77,7 @@
  */
 
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'
-import { classifyEquipment, classifySessionDuration } from './profile/input-reliability'
+import { classifyEquipment, classifySessionDuration, mergeScheduleDurationUpdate } from './profile/input-reliability'
 import {
   getOnboardingProfile,
   saveOnboardingProfile,
@@ -1450,20 +1450,34 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     }
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
-    // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
-    if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
-    // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
-    // Previously this was MISSING, causing canonical resolution to fallback to flexible
-    // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
-    if (updates.trainingDaysPerWeek !== undefined && typeof updates.trainingDaysPerWeek === 'number') {
-      onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek as TrainingDaysPerWeek
-    }
-    // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
-    if (updates.sessionDurationMode === 'static' || updates.sessionDurationMode === 'adaptive') {
-      onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
-    }
-    if (updates.sessionLengthMinutes !== undefined && typeof updates.sessionLengthMinutes === 'number') {
-      onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as SessionLengthPreference
+    // An omitted schedule or duration key keeps the stored value.
+    // An explicit flexible week, a new day count, or a cleared duration replaces it.
+    const scheduleProvided = updates.scheduleMode !== undefined || updates.trainingDaysPerWeek !== undefined
+    const durationProvided = updates.sessionDurationMode !== undefined || updates.sessionLengthMinutes !== undefined
+    if (scheduleProvided || durationProvided) {
+      const mergedSchedule = mergeScheduleDurationUpdate({
+        scheduleMode: currentOnboarding.scheduleMode ?? null,
+        trainingDaysPerWeek: typeof currentOnboarding.trainingDaysPerWeek === 'number'
+          ? currentOnboarding.trainingDaysPerWeek
+          : null,
+        sessionDurationMode: currentOnboarding.sessionDurationMode ?? null,
+        sessionLengthMinutes: typeof currentOnboarding.sessionLengthMinutes === 'number'
+          ? currentOnboarding.sessionLengthMinutes
+          : null,
+      }, {
+        scheduleMode: updates.scheduleMode,
+        trainingDaysPerWeek: updates.trainingDaysPerWeek,
+        sessionDurationMode: updates.sessionDurationMode,
+        sessionLengthMinutes: updates.sessionLengthMinutes,
+      })
+      if (scheduleProvided) {
+        onboardingUpdates.scheduleMode = mergedSchedule.scheduleMode ?? undefined
+        onboardingUpdates.trainingDaysPerWeek = mergedSchedule.trainingDaysPerWeek as TrainingDaysPerWeek | null
+      }
+      if (durationProvided) {
+        onboardingUpdates.sessionDurationMode = mergedSchedule.sessionDurationMode ?? undefined
+        onboardingUpdates.sessionLengthMinutes = mergedSchedule.sessionLengthMinutes as SessionLengthPreference | null
+      }
     }
     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']

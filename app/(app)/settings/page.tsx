@@ -913,8 +913,8 @@ export default function SettingsPage() {
               // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
               adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
               // TASK 3D: Preserve sessionDurationMode for canonical profile
-              sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
-              sessionLengthMinutes: result.profile.sessionLengthMinutes,
+              sessionDurationMode: result.profile.sessionDurationMode ?? null,
+              sessionLengthMinutes: result.profile.sessionLengthMinutes ?? null,
               
               // [PHASE 17C] Physical stats - bodyweight must be synced to canonical
               bodyweight: result.profile.bodyweight,
@@ -1817,10 +1817,18 @@ export default function SettingsPage() {
             <Select 
               value={sessionDurationMode} 
               onValueChange={(v) => {
+                const nextMode = v as 'static' | 'adaptive'
                 setDurationEdited(true)
-                setSessionDurationMode(v as 'static' | 'adaptive')
+                setSessionDurationMode(nextMode)
+                if (nextMode === 'adaptive') {
+                  setSessionLength('')
+                } else if (typeof loadedSessionMinutes === 'number') {
+                  setSessionLength(String(loadedSessionMinutes))
+                }
                 logDurationTruth('Settings duration mode changed', {
-                  canonicalPreference: parseInt(sessionLength),
+                  ...(nextMode !== 'adaptive' && typeof loadedSessionMinutes === 'number'
+                    ? { canonicalPreference: loadedSessionMinutes }
+                    : {}),
                   source: 'settings-duration-mode-dropdown',
                 })
               }}

@@ -653,24 +653,20 @@ function buildRecoveryTruthBlock(
   let fatigueState: string | null = null
   
   if (trainingFeedback?.averageRecentRPE !== null && trainingFeedback?.averageRecentRPE !== undefined) {
-    // Derive readiness from RPE
+    // RPE can describe effort. It is not a soreness report.
     if (trainingFeedback.averageRecentRPE > 8.5) {
       recoveryRisk = 'high'
       readinessState = 'recovery_focused'
-      sorenessRisk = 'high'
       evidence.push('High average RPE indicates elevated recovery risk')
     } else if (trainingFeedback.averageRecentRPE > 7) {
       recoveryRisk = 'moderate'
       readinessState = 'keep_controlled'
-      sorenessRisk = 'moderate'
     } else if (trainingFeedback.averageRecentRPE > 5) {
       recoveryRisk = 'low'
       readinessState = 'train_normally'
-      sorenessRisk = 'low'
     } else {
       recoveryRisk = 'low'
       readinessState = 'ready_to_push'
-      sorenessRisk = 'low'
     }
     
     // Adjust for completion rate
@@ -692,7 +688,10 @@ function buildRecoveryTruthBlock(
   }
   
   if (usableSignals === 0) {
-    evidence.push('No recovery signals available - using unknown/conservative defaults')
+    evidence.push('No recovery signals were available, so no recovery adjustment is applied.')
+  }
+  if (sorenessRisk === 'unknown') {
+    evidence.push('Soreness was not reported, so it was not inferred.')
   }
   
   return {

@@ -24,6 +24,33 @@ export type ServerSessionFatigueDecision =
   | 'PRESERVE_QUALITY'
   | 'LIGHTEN_SESSION'
 
+/** Week-load label that matches the session decision. It never means a deload week. */
+export type ReportedRecoveryRisk = 'low' | 'moderate' | 'high' | 'unknown'
+
+export function reportedRecoveryRiskFromDecision(
+  decision: ServerSessionFatigueDecision | null | undefined,
+): ReportedRecoveryRisk {
+  if (decision === 'LIGHTEN_SESSION') return 'high'
+  if (decision === 'PRESERVE_QUALITY') return 'moderate'
+  if (decision === 'TRAIN_AS_PLANNED') return 'low'
+  return 'unknown'
+}
+
+export function recoveryDecisionExplanation(
+  decision: ServerSessionFatigueDecision | null | undefined,
+): string | null {
+  if (decision === 'LIGHTEN_SESSION') {
+    return 'Recent workouts were hard or incomplete, so this week\'s sessions are lighter. No deload week was scheduled. Your saved weekly schedule is unchanged.'
+  }
+  if (decision === 'PRESERVE_QUALITY') {
+    return 'Recent effort is elevated. This is temporary fatigue, so quality is protected and extra stress is trimmed. No deload week was scheduled. Your saved weekly schedule is unchanged.'
+  }
+  if (decision === 'TRAIN_AS_PLANNED') {
+    return 'Recent workouts look manageable. This is normal training difficulty, so the current plan stays in place. Your saved weekly schedule is unchanged.'
+  }
+  return null
+}
+
 export interface ServerFatigueTrainingFeedback {
   totalSessionsLast7Days: number
   totalSessionsLast14Days: number
@@ -41,6 +68,8 @@ export interface ServerFatigueDerivation {
   trainingFeedback: ServerFatigueTrainingFeedback | null
   /** The athlete's saved weekly frequency, kept separate from any session adjustment. */
   savedWeeklyAvailability: number | null
+  /** Same decision, expressed as the week-load label. Null when the logs were not reliable. */
+  recoveryRiskForWeek: ReportedRecoveryRisk | null
   limitation: string | null
 }
 
@@ -97,6 +126,7 @@ function unavailable(limitation: string): ServerFatigueDerivation {
     needsAttention: false,
     trainingFeedback: null,
     savedWeeklyAvailability: null,
+    recoveryRiskForWeek: null,
     limitation,
   }
 }
@@ -163,13 +193,7 @@ export function deriveServerFatigueFromWorkoutLogs(
     typeof options?.expectedSessionsPerWeek === 'number' && options.expectedSessionsPerWeek > 0
       ? options.expectedSessionsPerWeek
       : null
-  const scheduleClause = ' Your saved weekly schedule is unchanged.'
-  const shortGuidance =
-    decision === 'LIGHTEN_SESSION'
-      ? `Recent workouts were hard or incomplete, so the next sessions stay a notch easier. No deload week was scheduled.${scheduleClause}`
-      : decision === 'PRESERVE_QUALITY'
-        ? `Recent effort is elevated, so quality is protected and extra stress is trimmed. No deload week was scheduled.${scheduleClause}`
-        : `Recent workouts look manageable, so training continues as planned.${scheduleClause}`
+  const shortGuidance = recoveryDecisionExplanation(decision) ?? ''
 
   return {
     reliable: true,
@@ -188,6 +212,7 @@ export function deriveServerFatigueFromWorkoutLogs(
       trustedWorkoutCount: signaled.length,
     },
     savedWeeklyAvailability,
+    recoveryRiskForWeek: reportedRecoveryRiskFromDecision(decision),
     limitation: null,
   }
 }

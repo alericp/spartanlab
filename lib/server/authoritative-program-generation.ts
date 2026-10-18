@@ -68,7 +68,11 @@ import {
 // `recentWorkoutLogs`, AND merges Neon evidence with route-payload evidence
 // when both are present (deduped by workout log id).
 import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence-reader'
-import { deriveServerFatigueFromWorkoutLogs } from './server-fatigue-from-logs'
+import {
+  deriveServerFatigueFromWorkoutLogs,
+  recoveryDecisionExplanation,
+  reportedRecoveryRiskFromDecision,
+} from './server-fatigue-from-logs'
 // [PHASE-P] Program quality / doctrine sharpness audit. Pure deterministic
 // resolver that runs AFTER Phase M (Phase L+M+N+O have already produced the
 // final adapted program object). Performs five audit passes — skill carryover
@@ -760,6 +764,53 @@ export async function executeAuthoritativeGeneration(
   // This is the SINGLE authoritative source for week-level adaptation.
   // The generator MUST obey this contract.
   // ==========================================================================
+  // The week decision and the athlete-facing recovery note use the same
+  // fatigue decision. A missing signal stays unknown. It is not filled in
+  // as moderate, and it does not change the saved day count.
+  const recoveryOverclaim = 'High recovery risk detected - week adaptation should reduce load'
+  if (applyServerFatigue && derivedServerFatigue.decision) {
+    const alignedNote = recoveryDecisionExplanation(derivedServerFatigue.decision)
+    truthIngestion = {
+      ...truthIngestion,
+      recoveryTruth: {
+        ...truthIngestion.recoveryTruth,
+        recoveryRisk: reportedRecoveryRiskFromDecision(derivedServerFatigue.decision),
+        sorenessRisk: 'unknown',
+        evidence: [
+          ...truthIngestion.recoveryTruth.evidence,
+          'Week load follows this fatigue decision. The saved weekly schedule is unchanged. Soreness was not inferred.',
+        ],
+      },
+      safeGenerationNotes: [
+        ...truthIngestion.safeGenerationNotes.filter((note) => note !== recoveryOverclaim),
+        ...(alignedNote ? [alignedNote] : []),
+      ],
+    }
+  } else {
+    const hadRecoveryLabel = truthIngestion.recoveryTruth.recoveryRisk !== 'unknown'
+    truthIngestion = {
+      ...truthIngestion,
+      recoveryTruth: {
+        ...truthIngestion.recoveryTruth,
+        recoveryRisk: 'unknown',
+        sorenessRisk: 'unknown',
+        evidence: [
+          ...truthIngestion.recoveryTruth.evidence,
+          hadRecoveryLabel
+            ? 'A recovery label was not used because this generation has no reliable recent-workout fatigue signal.'
+            : 'No recovery signal was available, so the planned week is unchanged.',
+        ],
+      },
+      safeGenerationNotes: truthIngestion.safeGenerationNotes
+        .filter((note) => note !== recoveryOverclaim)
+        .concat(
+          hadRecoveryLabel
+            ? ['Recovery was not measured reliably, so the planned week is unchanged.']
+            : [],
+        ),
+    }
+  }
+
   markStage('week_adaptation_decision_start')
   
   let weekAdaptationDecision: WeekAdaptationDecision
@@ -3802,8 +3853,8 @@ function createFallbackWeekAdaptationDecision(
     recoveryContext: {
       readinessState: 'unknown',
       fatigueState: 'unknown',
-      sorenessRisk: 'moderate',
-      recoveryRisk: 'moderate',
+      sorenessRisk: 'low',
+      recoveryRisk: 'unknown',
     },
     complexityContext: {
       onboardingComplexity: 'moderate',

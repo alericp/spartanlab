@@ -674,6 +674,7 @@ import {
   type SkillBreadthAuditLayer 
 } from './ai-truth-selected-skills-audit'
 import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { reportedRecoveryRiskFromDecision } from './server/server-fatigue-from-logs'
 import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
   selectMethodProfiles, 
@@ -7500,20 +7501,27 @@ async function generateAdaptiveProgramImpl(
     straightArmPatterns.some(p => s.toLowerCase().includes(p))
   )
   
-  // Build readiness assessment if available
+  // Build readiness assessment if available. Server generation does not
+  // call this helper: outside the browser it fills a moderate score even
+  // when no recovery was measured. The server uses the fatigue decision.
   let readinessForContract: ReadinessAssessment | null = null
-  try {
-    // [BUILDER-READINESS-ZERO-ARGS] `getReadinessAssessment()` is the
-    // canonical recovery-fatigue-engine accessor and takes ZERO
-    // arguments — it sources `recoverySignal`, fatigue, and trend
-    // signals internally. Passing an options object produced TS2554
-    // ("Expected 0 arguments, got 1"). The fields we used to pass
-    // (averageRecentRPE, expectedSessionsPerWeek) never existed on
-    // TrainingFeedbackSummary anyway. Same downstream behavior.
-    readinessForContract = await getReadinessAssessment()
-  } catch {
-    // Readiness assessment failed - continue with null
-    console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
+  const serverReportedRecovery = typeof window === 'undefined'
+    ? reportedRecoveryRiskFromDecision(serverOptions?.serverFatigueDecision?.decision)
+    : undefined
+  if (typeof window !== 'undefined') {
+    try {
+      // [BUILDER-READINESS-ZERO-ARGS] `getReadinessAssessment()` is the
+      // canonical recovery-fatigue-engine accessor and takes ZERO
+      // arguments — it sources `recoverySignal`, fatigue, and trend
+      // signals internally. Passing an options object produced TS2554
+      // ("Expected 0 arguments, got 1"). The fields we used to pass
+      // (averageRecentRPE, expectedSessionsPerWeek) never existed on
+      // TrainingFeedbackSummary anyway. Same downstream behavior.
+      readinessForContract = await getReadinessAssessment()
+    } catch {
+      // Readiness assessment failed - continue with null
+      console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
+    }
   }
   
   // Build consistency status if available  
@@ -7572,7 +7580,9 @@ async function generateAdaptiveProgramImpl(
     ),
     
     // Recovery/Readiness
-    readinessAssessment: readinessForContract,
+    readinessAssessment: typeof window === 'undefined' ? null : readinessForContract,
+    reportedRecoveryRisk: serverReportedRecovery,
+    lockSavedDayCount: typeof window === 'undefined' ? true : undefined,
     consistencyStatus: consistencyForContract,
     
     // Adherence signals
@@ -12848,15 +12858,13 @@ async function generateAdaptiveProgramImpl(
       ? sessionLength 
       : parseInt(String(sessionLength).split('-')[0]) || 60
     
-    // Determine fatigue state from fatigueDecision
+    // Determine fatigue state from fatigueDecision.
+    // Lighter sessions are the stronger existing tier. Preserving quality
+    // is the milder one. Neither tier schedules a deload week.
     const fatigueStateForComposition: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload' = 
-      // [BUILDER-TRAINING-DECISION-RENAME] Map legacy labels to current
-      // TrainingDecision union: SKIP_TODAY/DELOAD_RECOMMENDED→needs_deload,
-      // REDUCE_INTENSITY→PRESERVE_QUALITY (accumulated),
-      // REDUCE_VOLUME→LIGHTEN_SESSION (moderate). Same downstream tiers.
       fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'needs_deload' :
-      fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'accumulated' :
-      fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 'moderate' :
+      fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 'accumulated' :
+      fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' :
       fatigueDecision?.decision === 'COMPRESS_WEEKLY_LOAD' ? 'moderate' : 'fresh'
     
     // ==========================================================================
@@ -13359,7 +13367,7 @@ async function generateAdaptiveProgramImpl(
       // Add fatigue-based adaptation notes if needed
       postSessionStep = 'fatigue_notes_applying'
       if (fatigueDecision && fatigueDecision.decision !== 'TRAIN_AS_PLANNED') {
-        const fatigueNote = getFatigueAdaptationNote(fatigueDecision.decision)
+        const fatigueNote = fatigueDecision.shortGuidance || getFatigueAdaptationNote(fatigueDecision.decision)
         if (fatigueNote) {
           session.adaptationNotes = session.adaptationNotes || []
           session.adaptationNotes.push(fatigueNote)
@@ -13403,8 +13411,8 @@ async function generateAdaptiveProgramImpl(
       // REDUCE_INTENSITY mapped to PRESERVE_QUALITY (its current equivalent).
       const fatigueNeedsDeload = fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
       const fatigueScoreForDetection = fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 90 :
-                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 70 :
-                                       fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 60 : 40
+                                       fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 70 :
+                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 55 : 40
       
       // STEP D: Wrap weak point detection in optional try/catch
       let detectedWeakPoints = { primary: [] as string[], secondary: [] as string[] }
@@ -25851,9 +25859,9 @@ function calculateVarietyScore(intents: SessionIntent[]): number {
 function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
   switch (decision) {
     case 'PRESERVE_QUALITY':
-      return 'Fatigue signals suggest maintaining core work while reducing lower-priority volume.'
+      return 'Recent effort is elevated. This is temporary fatigue, so quality is protected and extra stress is trimmed. No deload week was scheduled. Your saved weekly schedule is unchanged.'
     case 'LIGHTEN_SESSION':
-      return 'Elevated fatigue detected. Session adjusted to preserve strength quality.'
+      return 'Recent workouts were hard or incomplete, so this week\'s sessions are lighter. No deload week was scheduled. Your saved weekly schedule is unchanged.'
     case 'COMPRESS_WEEKLY_LOAD':
       return 'Weekly load compressed due to accumulated fatigue. Focus on goal-relevant work.'
     case 'DELOAD_RECOMMENDED':

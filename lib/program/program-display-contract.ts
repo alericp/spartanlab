@@ -2920,7 +2920,9 @@ export function getSourceTruthDisplay(program: AdaptiveProgram): SourceTruthDisp
       influenceSummary.push('Doctrine rules active')
     }
     if (audit.recoveryRisk === 'high') {
-      influenceSummary.push('High recovery risk detected')
+      influenceSummary.push('Sessions are lighter because recent workouts were hard. Saved week unchanged.')
+    } else if (audit.recoveryRisk === 'moderate') {
+      influenceSummary.push('Extra stress is trimmed because recent effort is elevated. Saved week unchanged.')
     }
     if (audit.consistencyStatus === 'disrupted') {
       influenceSummary.push('Disrupted adherence pattern')

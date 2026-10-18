@@ -10,8 +10,9 @@ import {
   recordSessionPersonalRecords,
   getPersonalRecordsByExercise,
   getActiveProgramHistory,
-  isSessionAlreadyPersisted,
+  lookupPersistedSession,
 } from './history-service'
+import { historyWritePlan } from './workout/save-reliability'
 import type {
   CreateWorkoutSessionInput,
   SessionMetricsSnapshot,
@@ -46,10 +47,13 @@ export interface WorkoutSessionData {
   perceivedDifficulty?: 'easy' | 'normal' | 'hard'
   notes?: string
   activeProgramId?: string
+  workoutDate?: string
+  clientSessionId?: string
 }
 
 export interface PersistenceResult {
   success: boolean
+  persisted?: 'saved' | 'duplicate' | 'failed'
   sessionHistoryId?: string
   prsDetected: PRHitSnapshot[]
   summaryMessage: string
@@ -404,18 +408,33 @@ export async function persistWorkoutSession(
   data: WorkoutSessionData
 ): Promise<PersistenceResult> {
   try {
-    const workoutDate = new Date().toISOString().split('T')[0]
-    
-    // Idempotency check - prevent duplicate saves
-    const alreadyPersisted = await isSessionAlreadyPersisted(
+    const workoutDate = data.workoutDate || new Date().toISOString().split('T')[0]
+    const lookup = await lookupPersistedSession(
       data.userId,
       data.workoutName,
-      workoutDate
+      workoutDate,
+      data.clientSessionId,
     )
-    
-    if (alreadyPersisted) {
+    const writePlan = historyWritePlan({
+      databaseAvailable: lookup.status !== 'unknown',
+      lookup: lookup.status,
+    })
+
+    if (writePlan === 'retry') {
+      return {
+        success: false,
+        persisted: 'failed',
+        prsDetected: [],
+        summaryMessage: 'Session completed.',
+        error: 'Workout history was not saved. Retry the save.',
+      }
+    }
+
+    if (writePlan === 'already_saved' && lookup.status === 'found') {
       return {
         success: true,
+        persisted: 'duplicate',
+        sessionHistoryId: lookup.id,
         prsDetected: [],
         summaryMessage: 'Session already saved.',
         error: 'Duplicate save prevented - session already persisted',
@@ -447,6 +466,7 @@ export async function persistWorkoutSession(
       completionRate: data.exercises.length > 0
         ? new Set(data.completedSets.map(s => s.exerciseId)).size / data.exercises.length
         : 1,
+      clientSessionId: data.clientSessionId,
     }
 
     // Build exercise results snapshot
@@ -541,12 +561,12 @@ export async function persistWorkoutSession(
     const sessionHistory = await createWorkoutSessionHistoryEntry(sessionInput)
 
     if (!sessionHistory) {
-      // Database might not be available - return success with local-only result
       return {
-        success: true,
+        success: false,
+        persisted: 'failed',
         prsDetected: detectedPRs,
         summaryMessage,
-        error: 'Session logged locally only - database unavailable',
+        error: 'Workout history was not saved. Retry the save.',
       }
     }
 
@@ -569,6 +589,7 @@ export async function persistWorkoutSession(
 
     return {
       success: true,
+      persisted: 'saved',
       sessionHistoryId: sessionHistory.id,
       prsDetected: detectedPRs,
       summaryMessage,
@@ -577,6 +598,7 @@ export async function persistWorkoutSession(
     console.error('[WorkoutHistoryPersistence] Error persisting session:', error)
     return {
       success: false,
+      persisted: 'failed',
       prsDetected: [],
       summaryMessage: 'Session completed.',
       error: error instanceof Error ? error.message : 'Unknown error',

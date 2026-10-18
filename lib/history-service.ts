@@ -721,6 +721,52 @@ export async function getAllTimeBestPRs(
   }
 }
 
+export type PersistedSessionLookup =
+  | { status: 'found'; id: string }
+  | { status: 'absent' }
+  | { status: 'unknown' }
+
+/**
+ * Find an existing history row for this attempt.
+ * A client session id matches that attempt only. Without one, the previous
+ * name-and-date check remains. A database error is `unknown`, not "missing".
+ */
+export async function lookupPersistedSession(
+  userId: string,
+  workoutName: string,
+  workoutDate: string,
+  clientSessionId?: string,
+): Promise<PersistedSessionLookup> {
+  if (!(await isDatabaseAvailable())) return { status: 'unknown' }
+
+  const sql = await getSqlClient()
+  if (!sql) return { status: 'unknown' }
+
+  try {
+    const result = clientSessionId
+      ? await sql`
+          SELECT id FROM workout_session_history
+          WHERE user_id = ${userId}
+            AND session_metrics_snapshot->>'clientSessionId' = ${clientSessionId}
+          LIMIT 1
+        `
+      : await sql`
+          SELECT id FROM workout_session_history
+          WHERE user_id = ${userId}
+            AND workout_name = ${workoutName}
+            AND workout_date = ${workoutDate}
+          LIMIT 1
+        `
+    const id = result[0]?.id
+    return typeof id === 'string' && id.length > 0
+      ? { status: 'found', id }
+      : { status: 'absent' }
+  } catch (error) {
+    console.error('[HistoryService] Error checking session existence:', error)
+    return { status: 'unknown' }
+  }
+}
+
 /**
  * Check if a session was already persisted (for idempotency)
  * Prevents duplicate history entries for the same workout
@@ -730,24 +776,8 @@ export async function isSessionAlreadyPersisted(
   workoutName: string,
   workoutDate: string
 ): Promise<boolean> {
-  if (!(await isDatabaseAvailable())) return false
-
-  const sql = await getSqlClient()
-  if (!sql) return false
-
-  try {
-    const result = await sql`
-      SELECT id FROM workout_session_history
-      WHERE user_id = ${userId}
-        AND workout_name = ${workoutName}
-        AND workout_date = ${workoutDate}
-      LIMIT 1
-    `
-    return result.length > 0
-  } catch (error) {
-    console.error('[HistoryService] Error checking session existence:', error)
-    return false
-  }
+  const lookup = await lookupPersistedSession(userId, workoutName, workoutDate)
+  return lookup.status === 'found'
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,7 @@ import {
   DIFFICULTY_LABELS,
   saveWorkoutLog,
 } from '@/lib/workout-log-service'
+import { createOccurrenceId } from '@/lib/workout/save-reliability'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
@@ -46,6 +47,9 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
   const [notes, setNotes] = useState('')
   const [exercises, setExercises] = useState<WorkoutExercise[]>([])
   const [saving, setSaving] = useState(false)
+  const saveLockRef = useRef(false)
+  const submittedRef = useRef(false)
+  const occurrenceIdRef = useRef<string | null>(null)
 
   const addExercise = () => {
     const newExercise: WorkoutExercise = {
@@ -71,6 +75,9 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
   const handleSubmit = async () => {
     if (!sessionName.trim()) return
     if (exercises.length === 0) return
+    if (saveLockRef.current || submittedRef.current) return
+    saveLockRef.current = true
+    if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
 
     setSaving(true)
 
@@ -84,24 +91,23 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
         perceivedDifficulty,
         notes: notes.trim() || undefined,
         exercises: exercises.filter(e => e.name.trim()),
+        occurrenceId: occurrenceIdRef.current,
       })
       
-      // Check for newly unlocked achievements
-      // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] see QuickLogModal.tsx note.
+      if (log.saveDisposition === 'inserted') {
       const newAchievements = onTrainingEvent('workout_complete')
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
       }
       
-      // Check for completed challenges
       const completedChallenges = onTrainingEventForChallenges()
       if (completedChallenges.length > 0) {
         showChallengeNotifications(completedChallenges)
       }
-      
+
       onSave(log)
-      
-      // Reset form
+      submittedRef.current = true
+      occurrenceIdRef.current = null
       setSessionName('')
       setSessionType('mixed')
       setSessionDate(new Date().toISOString().split('T')[0])
@@ -110,8 +116,10 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
       setPerceivedDifficulty('normal')
       setNotes('')
       setExercises([])
+      }
     } finally {
       setSaving(false)
+      saveLockRef.current = false
     }
   }
 
@@ -128,7 +136,11 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
             <Label className="text-sm text-[#A5A5A5]">Session Name</Label>
             <Input
               value={sessionName}
-              onChange={(e) => setSessionName(e.target.value)}
+              onChange={(e) => {
+                submittedRef.current = false
+                occurrenceIdRef.current = null
+                setSessionName(e.target.value)
+              }}
               placeholder="e.g. Planche Push Day"
               className="bg-[#1A1A1A] border-[#3A3A3A] mt-1"
             />

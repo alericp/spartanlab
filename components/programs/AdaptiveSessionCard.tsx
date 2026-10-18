@@ -7762,6 +7762,7 @@ function ExerciseRow({
     restSeconds: exercise.restSeconds,
     prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
     coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
+    equipmentBlocked: exercise.equipmentBlocked,
   }, sessionContext ? {
     sessionFocus: sessionContext.sessionFocus,
     isPrimarySession: sessionContext.isPrimarySession,
@@ -7787,6 +7788,7 @@ function ExerciseRow({
       coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseRowSurface>[0]['coachingMeta'],
       constraintApplied: (exercise as unknown as { constraintApplied?: string }).constraintApplied,
       groupId: (exercise as unknown as { groupId?: string }).groupId,
+      equipmentBlocked: exercise.equipmentBlocked,
     },
     sessionContext
   ) : null
@@ -7798,7 +7800,8 @@ function ExerciseRow({
 
   // [STEP 25.6A/B] Derive exercise-level coaching guidance from card contract truth
   // Step 25.6B: Now prescription-aware with sets, rest, and session context
-  const coachingGuidance = !isWarmupCooldown
+  const equipmentLimitation = exercise.equipmentBlocked
+  const coachingGuidance = !isWarmupCooldown && !equipmentLimitation
     ? buildCoachingGuidanceFromCardContract(
         exercise.name || '',
         exercise.category || 'accessory',
@@ -8522,7 +8525,7 @@ function ExerciseRow({
           rows with no trustworthy progression intent (the resolver returns
           `shouldRender:false`). Tagged with `data-ab7-*` attributes for
           screenshot / DOM proof without any visible debug clutter. */}
-      {!isWarmupCooldown && (() => {
+      {!isWarmupCooldown && !equipmentLimitation && (() => {
         const ab7 = resolveExerciseProgressionPrescription({
           exercise,
           exerciseName: exercise.name || '',

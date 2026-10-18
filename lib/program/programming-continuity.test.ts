@@ -128,6 +128,22 @@ describe('programming continuity', () => {
     assert.equal(rescaled.scaledSets, 6)
   })
 
+  it('does not scale a row that is blocked for missing equipment', () => {
+    const blocked = {
+      id: 'pull-1',
+      name: 'Weighted Pull-Ups',
+      sets: 4,
+      repsOrTime: '5',
+      targetRPE: 8,
+      restSeconds: 90,
+      equipmentBlocked: 'Weighted Pull-Ups is not prescribed.',
+    }
+    const scaled = scaleExerciseForWeek(blocked, 3)
+    assert.equal(scaled.sets, 4)
+    assert.equal(scaled.weekScalingApplied, false)
+    assert.equal(scaled.scaledSets, undefined)
+  })
+
   it('keeps the disabled deload writers disabled', () => {
     const phase13 = readFileSync('lib/active-week-mutation-service.ts', 'utf8')
     const master = readFileSync('lib/program/future-session-adaptive-mutation-proposal.ts', 'utf8')

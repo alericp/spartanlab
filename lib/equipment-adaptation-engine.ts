@@ -277,11 +277,13 @@ export function adaptExerciseForEquipment(
 
   const chosen = eligible[0]
   if (!chosen) {
-    const limitation = `${source.name} needs equipment that is not available, and the exercise pool has no appropriate substitute. It was left unchanged.`
+    const limitation = `${source.name} needs equipment you do not have, and there is no appropriate substitute. It is not prescribed.`
     return {
       adapted: {
         ...exercise,
-        note: exercise.note ? `${exercise.note} ${limitation}` : limitation,
+        note: limitation,
+        selectionReason: limitation,
+        equipmentBlocked: limitation,
       },
       wasAdapted: false,
       adaptationNote: limitation,

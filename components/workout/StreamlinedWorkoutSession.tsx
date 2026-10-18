@@ -649,6 +649,7 @@ interface EffectiveExerciseValues {
   targetRPE: number
   restPeriod: number
   weekScalingApplied: boolean
+  equipmentBlocked?: string
 }
 
 /**
@@ -675,6 +676,7 @@ type EffectiveExerciseInput = {
   scaledTargetRPE?: number
   scaledRestPeriod?: number
   weekScalingApplied?: boolean
+  equipmentBlocked?: string
 }
 
 function getEffectiveExerciseValues(
@@ -682,6 +684,17 @@ function getEffectiveExerciseValues(
 ): EffectiveExerciseValues {
   if (!exercise) {
     return { sets: 3, repsOrTime: '8-12 reps', targetRPE: 8, restPeriod: 90, weekScalingApplied: false }
+  }
+
+  if (typeof exercise.equipmentBlocked === 'string' && exercise.equipmentBlocked.length > 0) {
+    return {
+      sets: 0,
+      repsOrTime: 'Not prescribed',
+      targetRPE: 0,
+      restPeriod: 0,
+      weekScalingApplied: false,
+      equipmentBlocked: exercise.equipmentBlocked,
+    }
   }
 
   return {
@@ -8464,7 +8477,7 @@ if (shouldShowLocalFallback) {
                         <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
                       </div>
                       <span className="text-[11px] text-[#6B7280] tabular-nums">
-                        {effective.sets}×{effective.repsOrTime}
+                        {effective.equipmentBlocked ?? `${effective.sets}×${effective.repsOrTime}`}
                         {fullEx?.prescribedLoad && typeof fullEx.prescribedLoad.load === 'number' && fullEx.prescribedLoad.load > 0 && (
                           <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                         )}
@@ -8493,7 +8506,7 @@ if (shouldShowLocalFallback) {
                 <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
-                {effective.sets}×{effective.repsOrTime}
+                {effective.equipmentBlocked ?? `${effective.sets}×${effective.repsOrTime}`}
                 {fullEx.prescribedLoad && typeof fullEx.prescribedLoad.load === 'number' && fullEx.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                 )}
@@ -8543,7 +8556,7 @@ if (shouldShowLocalFallback) {
                       <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                     </div>
                     <span className="text-[11px] text-[#6B7280] tabular-nums">
-                      {effective.sets}×{effective.repsOrTime}
+                      {effective.equipmentBlocked ?? `${effective.sets}×${effective.repsOrTime}`}
                       {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
                         <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                       )}
@@ -8568,7 +8581,7 @@ if (shouldShowLocalFallback) {
                 <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
-                {effective.sets}×{effective.repsOrTime}
+                {effective.equipmentBlocked ?? `${effective.sets}×${effective.repsOrTime}`}
                 {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                 )}
@@ -8590,7 +8603,7 @@ if (shouldShowLocalFallback) {
           <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
         </div>
         <span className="text-[11px] text-[#6B7280] tabular-nums">
-          {effective.sets}×{effective.repsOrTime}
+          {effective.equipmentBlocked ?? `${effective.sets}×${effective.repsOrTime}`}
           {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
             <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
           )}

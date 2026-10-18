@@ -1942,6 +1942,10 @@ export interface AdaptiveExercise {
   isOverrideable: boolean
   selectionReason: string
   wasAdapted?: boolean
+  /** Athlete-facing limitation when required equipment is missing and no
+   *  substitute was selected. Display and live workout must not present the
+   *  stored sets as a normal prescription. */
+  equipmentBlocked?: string
   // Database enforcement: marks exercise as DB-backed
   source?: 'database'
   // Training method information
@@ -31585,6 +31589,7 @@ function mapToAdaptiveExercises(
       repsOrTime: s.repsOrTime,
       note: s.note,
       isOverrideable: s.isOverrideable,
+      equipmentBlocked: s.equipmentBlocked,
     selectionReason: s.selectionReason,
     source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
     method,

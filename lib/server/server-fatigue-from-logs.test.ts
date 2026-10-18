@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { deriveServerFatigueFromWorkoutLogs } from './server-fatigue-from-logs.ts'
+import { buildWeekAdaptationDecision } from '../program-generation/week-adaptation-decision-contract.ts'
 
 const NOW = new Date('2026-10-18T12:00:00.000Z')
 
@@ -39,7 +40,15 @@ describe('server fatigue from existing workout logs', () => {
     assert.equal(derived.needsAttention, true)
     assert.match(derived.shortGuidance, /No deload week/)
     assert.equal(derived.trainingFeedback?.totalSessionsLast7Days, 2)
-    assert.equal(derived.trainingFeedback?.expectedSessionsPerWeek, 4)
+    assert.equal(derived.trainingFeedback?.expectedSessionsPerWeek, null)
+    assert.equal(derived.savedWeeklyAvailability, 4)
+    assert.match(derived.shortGuidance, /saved weekly schedule is unchanged/)
+    const expected = derived.trainingFeedback?.expectedSessionsPerWeek
+    const knownExpected = typeof expected === 'number' && expected > 0
+    const missed = knownExpected
+      ? Math.max(0, (expected as number) - (derived.trainingFeedback?.totalSessionsLast7Days ?? 0))
+      : 0
+    assert.equal(missed, 0)
     assert.ok((derived.trainingFeedback?.averageRecentRPE ?? 0) > 8.5)
     assert.equal(JSON.stringify(derived).includes('DELOAD'), false)
   })
@@ -82,6 +91,22 @@ describe('server fatigue from existing workout logs', () => {
       { now: NOW },
     )
     assert.equal(demo.reliable, false)
+  })
+
+  it('does not shrink the saved week when missed sessions were not inferred', () => {
+    const decision = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 1,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      recentMissedSessions: 0,
+      totalSessionsLast7Days: 2,
+    })
+    assert.equal(decision.targetDays, 4)
+    assert.notEqual(decision.adherenceContext.consistencyStatus, 'disrupted')
+    assert.match(decision.dayCountReason, /Base: 4 days/)
   })
 
   it('wires the decision into server generation and refuses a deload decision', () => {

@@ -39,6 +39,8 @@ export interface ServerFatigueDerivation {
   shortGuidance: string
   needsAttention: boolean
   trainingFeedback: ServerFatigueTrainingFeedback | null
+  /** The athlete's saved weekly frequency, kept separate from any session adjustment. */
+  savedWeeklyAvailability: number | null
   limitation: string | null
 }
 
@@ -94,6 +96,7 @@ function unavailable(limitation: string): ServerFatigueDerivation {
     shortGuidance: '',
     needsAttention: false,
     trainingFeedback: null,
+    savedWeeklyAvailability: null,
     limitation,
   }
 }
@@ -156,13 +159,17 @@ export function deriveServerFatigueFromWorkoutLogs(
   }
 
   const last7 = recent.filter((log) => nowMs - (logTime(log) as number) <= 7 * DAY_MS).length
-  const expected = options?.expectedSessionsPerWeek
+  const savedWeeklyAvailability =
+    typeof options?.expectedSessionsPerWeek === 'number' && options.expectedSessionsPerWeek > 0
+      ? options.expectedSessionsPerWeek
+      : null
+  const scheduleClause = ' Your saved weekly schedule is unchanged.'
   const shortGuidance =
     decision === 'LIGHTEN_SESSION'
-      ? 'Recent workouts were hard or incomplete, so the next sessions stay a notch easier. No deload week was scheduled.'
+      ? `Recent workouts were hard or incomplete, so the next sessions stay a notch easier. No deload week was scheduled.${scheduleClause}`
       : decision === 'PRESERVE_QUALITY'
-        ? 'Recent effort is elevated, so quality is protected and extra stress is trimmed. No deload week was scheduled.'
-        : 'Recent workouts look manageable, so training continues as planned.'
+        ? `Recent effort is elevated, so quality is protected and extra stress is trimmed. No deload week was scheduled.${scheduleClause}`
+        : `Recent workouts look manageable, so training continues as planned.${scheduleClause}`
 
   return {
     reliable: true,
@@ -172,11 +179,15 @@ export function deriveServerFatigueFromWorkoutLogs(
     trainingFeedback: {
       totalSessionsLast7Days: last7,
       totalSessionsLast14Days: recent.length,
-      expectedSessionsPerWeek: typeof expected === 'number' && expected > 0 ? expected : null,
+      // A known weekly frequency is recorded separately. It is not sent as
+      // an expected count, because that would infer missed sessions and
+      // could shrink the saved week.
+      expectedSessionsPerWeek: null,
       averageRecentRPE,
       recentCompletionRate,
       trustedWorkoutCount: signaled.length,
     },
+    savedWeeklyAvailability,
     limitation: null,
   }
 }

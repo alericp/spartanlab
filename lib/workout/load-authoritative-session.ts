@@ -180,6 +180,7 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         methodLabel: typeof e.methodLabel === 'string' ? e.methodLabel : undefined,
         blockId: typeof e.blockId === 'string' ? e.blockId : undefined,
         wasAdapted: typeof e.wasAdapted === 'boolean' ? e.wasAdapted : undefined,
+        equipmentBlocked: typeof e.equipmentBlocked === 'string' ? e.equipmentBlocked : undefined,
         source: e.source as unknown as AdaptiveExercise['source'],
         progressionDecision: e.progressionDecision as unknown as AdaptiveExercise['progressionDecision'],
         coachingMeta: e.coachingMeta as unknown as AdaptiveExercise['coachingMeta'],

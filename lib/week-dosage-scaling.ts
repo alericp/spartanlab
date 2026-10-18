@@ -347,6 +347,12 @@ export function scaleExerciseForWeek(
   // fallback caps automatically.
   roleCaps: RoleScalingCaps = FALLBACK_SCALING_CAPS,
 ): ScaledExercise {
+  if (typeof exercise.equipmentBlocked === 'string' && exercise.equipmentBlocked.length > 0) {
+    return {
+      ...exercise,
+      weekScalingApplied: false,
+    }
+  }
   const phaseScaling = getWeekDosageScaling(weekNumber)
   // [BASE-WEEK-AUTHORITY-LOCK] Subordinate phase scaling to the role contract.
   // Each phase multiplier is min'd against the role's ceiling so a recovery

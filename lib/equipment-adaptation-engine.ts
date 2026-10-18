@@ -1,7 +1,15 @@
 // Equipment Adaptation Engine
 // Adapts exercise selection based on available equipment
 
-import type { EquipmentType, Exercise } from './adaptive-exercise-pool'
+import {
+  getExerciseById,
+  getExercisesByMovement,
+  hasRequiredEquipment,
+  type DifficultyLevel,
+  type EquipmentType,
+  type Exercise,
+} from './adaptive-exercise-pool'
+import { getExerciseLadder, getProgressionDown, getSubstitutes } from './progression-ladders'
 import type { SelectedExercise } from './program-exercise-selector'
 
 // =============================================================================
@@ -57,7 +65,8 @@ const EQUIPMENT_ALTERNATIVES: Record<string, { alternative: string; note: string
   // Pull bar alternatives (limited options)
   'weighted_pull_up': { alternative: 'bodyweight_row', note: 'Rows cannot fully replace vertical pulling — consider getting a pull-up bar', impact: 'significant' },
   'pull_up': { alternative: 'bodyweight_row', note: 'Horizontal pulling is not equivalent to vertical — pull-up bar highly recommended', impact: 'significant' },
-  'scap_pull_up': { alternative: 'scap_pushup', note: 'Scap push-ups train different patterns — pull-up bar recommended for pull goals', impact: 'moderate' },
+  // Scap pull-ups are not replaced with scap push-ups. That swaps a pull
+  // for a push and does not preserve the exercise purpose.
   
   // Parallette alternatives
   'l_sit': { alternative: 'l_sit_floor', note: 'Floor L-sit is harder on wrists but effective', impact: 'minimal' },
@@ -66,36 +75,93 @@ const EQUIPMENT_ALTERNATIVES: Record<string, { alternative: string; note: string
   'band_pull_apart': { alternative: 'arm_circles', note: 'Without bands, dynamic mobility work substitutes for shoulder prep', impact: 'minimal' },
 }
 
-// Floor-based alternatives for common exercises
-const FLOOR_ALTERNATIVES: Record<string, Exercise> = {
-  deep_pushup: {
-    id: 'deep_pushup',
-    name: 'Deep Push-Ups (Elevated)',
-    category: 'strength',
-    movementPattern: 'vertical_push',
-    primaryMuscles: ['chest', 'triceps', 'anterior_deltoid'],
-    equipment: ['floor'],
-    neuralDemand: 2,
-    fatigueCost: 2,
-    transferTo: ['planche'],
-    defaultSets: 4,
-    defaultRepsOrTime: '8-10',
-    notes: 'Hands on books/blocks for depth',
-  },
-  l_sit_floor: {
-    id: 'l_sit_floor',
-    name: 'L-Sit Hold (Floor)',
-    category: 'core',
-    movementPattern: 'core',
-    primaryMuscles: ['hip_flexors', 'rectus_abdominis', 'triceps'],
-    equipment: ['floor'],
-    neuralDemand: 3,
-    fatigueCost: 2,
-    transferTo: ['planche'],
-    defaultSets: 3,
-    defaultRepsOrTime: '8-12s',
-    notes: 'Palms flat, focus on elevation',
-  },
+const DIFFICULTY_RANK: Record<DifficultyLevel, number> = {
+  beginner: 1,
+  intermediate: 2,
+  advanced: 3,
+  elite: 4,
+}
+
+type MovementFamily = 'push' | 'pull' | 'core' | 'other'
+
+function movementFamily(exercise: Exercise): MovementFamily {
+  if (exercise.movementCategory === 'push' || exercise.movementCategory === 'pull') {
+    return exercise.movementCategory
+  }
+  if (exercise.movementPattern === 'horizontal_push' || exercise.movementPattern === 'vertical_push') return 'push'
+  if (exercise.movementPattern === 'horizontal_pull' || exercise.movementPattern === 'vertical_pull') return 'pull'
+  if (exercise.movementPattern === 'core' || exercise.movementPattern === 'compression') return 'core'
+  return 'other'
+}
+
+function isNotHarder(source: Exercise, candidate: Exercise): boolean {
+  if (source.difficultyLevel && candidate.difficultyLevel) {
+    if (DIFFICULTY_RANK[candidate.difficultyLevel] > DIFFICULTY_RANK[source.difficultyLevel]) return false
+  }
+  if (candidate.neuralDemand > source.neuralDemand) return false
+  if (candidate.fatigueCost > source.fatigueCost) return false
+  const sourceLadder = getExerciseLadder(source.id)
+  const candidateLadder = getExerciseLadder(candidate.id)
+  if (
+    sourceLadder &&
+    candidateLadder &&
+    sourceLadder.ladderId === candidateLadder.ladderId &&
+    candidateLadder.currentStep.level > sourceLadder.currentStep.level
+  ) {
+    return false
+  }
+  return true
+}
+
+function samePurpose(source: Exercise, candidate: Exercise): boolean {
+  return movementFamily(source) === movementFamily(candidate) && movementFamily(source) !== 'other'
+}
+
+interface SubstituteCandidate {
+  exercise: Exercise
+  explicit: boolean
+  note?: string
+  impact?: 'minimal' | 'moderate' | 'significant'
+}
+
+function collectSubstituteCandidates(source: Exercise): SubstituteCandidate[] {
+  const seen = new Set<string>()
+  const candidates: SubstituteCandidate[] = []
+  const add = (id: string | null | undefined, explicit: boolean, note?: string, impact?: SubstituteCandidate['impact']) => {
+    if (!id || id === source.id || seen.has(id)) return
+    const exercise = getExerciseById(id)
+    if (!exercise) return
+    seen.add(id)
+    candidates.push({ exercise, explicit, note, impact })
+  }
+
+  add(source.progressionDown, true)
+  add(getProgressionDown(source.id), true)
+  for (const id of source.alternatives ?? []) add(id, true)
+  for (const id of source.substitutionOptions ?? []) add(id, true)
+  for (const substitute of getSubstitutes(source.id)) {
+    if (substitute.fatigueAdjustment === 'harder') continue
+    add(substitute.exerciseId, true, substitute.reason)
+  }
+  const mapped = EQUIPMENT_ALTERNATIVES[source.id]
+  if (mapped) add(mapped.alternative, true, mapped.note, mapped.impact)
+
+  for (const exercise of getExercisesByMovement(source.movementPattern)) {
+    add(exercise.id, false)
+  }
+  return candidates
+}
+
+function substitutionNote(source: Exercise, candidate: Exercise, goal: string | undefined, mappedNote?: string): string {
+  if (mappedNote) return mappedNote
+  const samePattern = candidate.movementPattern === source.movementPattern
+  const patternText = samePattern
+    ? `It keeps the ${candidate.movementPattern.replace(/_/g, ' ')} pattern`
+    : `It stays in the ${movementFamily(candidate)} family`
+  const goalText = goal && candidate.transferTo.includes(goal)
+    ? ` and still supports ${goal.replace(/_/g, ' ')}.`
+    : '.'
+  return `${source.name} needs equipment that is not available. ${candidate.name} is used instead. ${patternText}${goalText}`
 }
 
 // =============================================================================
@@ -170,54 +236,81 @@ export function analyzeEquipmentProfile(available: EquipmentType[]): EquipmentPr
 
 export function adaptExerciseForEquipment(
   exercise: SelectedExercise,
-  available: EquipmentType[]
+  available: EquipmentType[],
+  context?: { primaryGoal?: string },
 ): AdaptationResult {
-  // [TASK 2] Check if exercise can be performed with available equipment using alias-aware check
-  const canPerform = exercise.exercise.equipment.some(eq => 
-    eq === 'floor' || eq === 'wall' || hasEquipment(available, eq)
-  )
-  
-  if (canPerform) {
+  const source = exercise.exercise
+  if (hasRequiredEquipment(source, available)) {
     return {
       adapted: exercise,
       wasAdapted: false,
       qualityImpact: 'none',
     }
   }
-  
-  // Need adaptation
-  const altInfo = EQUIPMENT_ALTERNATIVES[exercise.exercise.id]
-  
-  if (altInfo && FLOOR_ALTERNATIVES[altInfo.alternative]) {
-    const altExercise = FLOOR_ALTERNATIVES[altInfo.alternative]
+
+  const goal = context?.primaryGoal
+  const eligible = collectSubstituteCandidates(source).filter((candidate) => {
+    if (!hasRequiredEquipment(candidate.exercise, available)) return false
+    if (!isNotHarder(source, candidate.exercise)) return false
+    if (!samePurpose(source, candidate.exercise)) return false
+    if (!candidate.explicit && candidate.exercise.movementPattern !== source.movementPattern) return false
+    return true
+  })
+
+  eligible.sort((left, right) => {
+    const goalScore = (candidate: SubstituteCandidate) =>
+      goal && source.transferTo.includes(goal) && candidate.exercise.transferTo.includes(goal) ? 1 : 0
+    const patternScore = (candidate: SubstituteCandidate) =>
+      candidate.exercise.movementPattern === source.movementPattern ? 1 : 0
+    const difficultyScore = (candidate: SubstituteCandidate) =>
+      candidate.exercise.difficultyLevel ? DIFFICULTY_RANK[candidate.exercise.difficultyLevel] : 9
+    return (
+      goalScore(right) - goalScore(left) ||
+      patternScore(right) - patternScore(left) ||
+      (right.explicit ? 1 : 0) - (left.explicit ? 1 : 0) ||
+      difficultyScore(left) - difficultyScore(right) ||
+      left.exercise.neuralDemand - right.exercise.neuralDemand ||
+      left.exercise.fatigueCost - right.exercise.fatigueCost ||
+      left.exercise.name.localeCompare(right.exercise.name)
+    )
+  })
+
+  const chosen = eligible[0]
+  if (!chosen) {
+    const limitation = `${source.name} needs equipment that is not available, and the exercise pool has no appropriate substitute. It was left unchanged.`
     return {
       adapted: {
         ...exercise,
-        exercise: altExercise,
-        note: altInfo.note,
-        selectionReason: `Adapted: ${exercise.exercise.name} → ${altExercise.name}`,
+        note: exercise.note ? `${exercise.note} ${limitation}` : limitation,
       },
-      wasAdapted: true,
-      adaptationNote: altInfo.note,
-      qualityImpact: altInfo.impact,
+      wasAdapted: false,
+      adaptationNote: limitation,
+      qualityImpact: 'significant',
     }
   }
-  
-  // Generic floor fallback
+
+  const note = substitutionNote(source, chosen.exercise, goal, chosen.note)
+  const samePattern = chosen.exercise.movementPattern === source.movementPattern
+  const qualityImpact = chosen.impact ?? (samePattern ? 'minimal' : 'moderate')
   return {
     adapted: {
       ...exercise,
-      note: `Equipment limited — this is the best available alternative`,
+      exercise: chosen.exercise,
+      note,
+      selectionReason: `Adapted: ${source.name} → ${chosen.exercise.name}`,
+      wasSubstituted: true,
+      originalExerciseId: source.id,
     },
     wasAdapted: true,
-    adaptationNote: 'Limited equipment reduces exercise specificity',
-    qualityImpact: 'moderate',
+    adaptationNote: note,
+    qualityImpact,
   }
 }
 
 export function adaptSessionForEquipment(
   exercises: SelectedExercise[],
-  available: EquipmentType[]
+  available: EquipmentType[],
+  context?: { primaryGoal?: string },
 ): {
   adapted: SelectedExercise[]
   adaptationCount: number
@@ -228,14 +321,14 @@ export function adaptSessionForEquipment(
   const significantLimitations: string[] = []
   
   for (const exercise of exercises) {
-    const result = adaptExerciseForEquipment(exercise, available)
+    const result = adaptExerciseForEquipment(exercise, available, context)
     adapted.push(result.adapted)
     
     if (result.wasAdapted) {
       adaptationCount++
-      if (result.qualityImpact === 'significant') {
-        significantLimitations.push(result.adaptationNote || exercise.exercise.name)
-      }
+    }
+    if (result.qualityImpact === 'significant' && result.adaptationNote) {
+      significantLimitations.push(result.adaptationNote)
     }
   }
   

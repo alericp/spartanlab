@@ -68,6 +68,7 @@ import {
 // `recentWorkoutLogs`, AND merges Neon evidence with route-payload evidence
 // when both are present (deduped by workout log id).
 import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence-reader'
+import { deriveServerFatigueFromWorkoutLogs } from './server-fatigue-from-logs'
 // [PHASE-P] Program quality / doctrine sharpness audit. Pure deterministic
 // resolver that runs AFTER Phase M (Phase L+M+N+O have already produced the
 // final adapted program object). Performs five audit passes — skill carryover
@@ -512,6 +513,17 @@ function buildCanonicalProfileOverride(
   return override
 }
 
+function readExplicitWeeklyFrequency(request: AuthoritativeGenerationRequest): number | null {
+  const candidates = [
+    request.builderInputs?.trainingDaysPerWeek,
+    request.canonicalProfile?.trainingDaysPerWeek,
+  ]
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  }
+  return null
+}
+
 // ==========================================================================
 // CORE: Authoritative Generation Function
 // ==========================================================================
@@ -557,6 +569,22 @@ export async function executeAuthoritativeGeneration(
   // Caller overrides are explicitly tracked and labeled.
   // ==========================================================================
   markStage('truth_ingestion_start')
+
+  const derivedServerFatigue = deriveServerFatigueFromWorkoutLogs(request.recentWorkoutLogs, {
+    expectedSessionsPerWeek: readExplicitWeeklyFrequency(request),
+  })
+  const applyServerFatigue = request.isFreshBaselineBuild !== true && derivedServerFatigue.reliable
+  console.log('[server-fatigue-generation]', {
+    applied: applyServerFatigue,
+    reliable: derivedServerFatigue.reliable,
+    decision: applyServerFatigue ? derivedServerFatigue.decision : null,
+    freshBaseline: request.isFreshBaselineBuild === true,
+    limitation: applyServerFatigue
+      ? null
+      : request.isFreshBaselineBuild === true
+        ? 'Fresh baseline generation keeps the existing unpenalized start.'
+        : derivedServerFatigue.limitation,
+  })
   
   let truthIngestion: AuthoritativeGenerationTruthIngestion
   try {
@@ -567,8 +595,7 @@ export async function executeAuthoritativeGeneration(
       callerBuilderInputs: request.builderInputs,
       existingProgramId: request.existingProgramId,
       isFreshBaselineBuild: request.isFreshBaselineBuild,
-      // Training feedback will be populated from builder context when available
-      trainingFeedback: undefined,
+      trainingFeedback: applyServerFatigue ? derivedServerFatigue.trainingFeedback ?? undefined : undefined,
     }
     
     truthIngestion = await buildAuthoritativeGenerationTruthIngestion(ingestionInput)
@@ -952,6 +979,13 @@ export async function executeAuthoritativeGeneration(
           isFreshBaselineBuild: request.isFreshBaselineBuild,
           // [AUTHORITATIVE-INGRESS-UNIFICATION] Pass the ONE bundle - builder will reuse, not rebuild
           preBuiltProgrammingTruthBundle: authoritativeProgrammingTruthBundle,
+          serverFatigueDecision: applyServerFatigue && derivedServerFatigue.decision
+            ? {
+                decision: derivedServerFatigue.decision,
+                shortGuidance: derivedServerFatigue.shortGuidance,
+                needsAttention: derivedServerFatigue.needsAttention,
+              }
+            : null,
         }
       )
     } catch (builderError) {

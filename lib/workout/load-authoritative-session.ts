@@ -670,6 +670,7 @@ export async function loadAuthoritativeSession(
         scaledTargetRPE: scaledEx.scaledTargetRPE,
         scaledRestPeriod: scaledEx.scaledRestPeriod,
         weekScalingApplied: scaledEx.weekScalingApplied,
+        originalSets: scaledEx.originalSets,
       })),
     }
     

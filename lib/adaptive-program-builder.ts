@@ -5612,6 +5612,17 @@ export interface ServerGenerationOptions {
    * If provided:       unified path — builder reuses the authoritative bundle.
    */
   preBuiltProgrammingTruthBundle?: ProgrammingTruthBundle | null
+
+  /**
+   * Reliable recent-workout fatigue for server generation. Only the three
+   * session-level decisions are accepted. A deload week is never scheduled
+   * from this field.
+   */
+  serverFatigueDecision?: {
+    decision: 'TRAIN_AS_PLANNED' | 'PRESERVE_QUALITY' | 'LIGHTEN_SESSION'
+    shortGuidance: string
+    needsAttention: boolean
+  } | null
 }
 
 // ==========================================================================
@@ -11699,7 +11710,9 @@ async function generateAdaptiveProgramImpl(
   skillCalibration: null,
   }
   
-  // Get fatigue-based training decision (runs client-side only)
+  // Client sessions read the local fatigue check. Server generation uses a
+  // conservative decision derived from recent logs when that signal exists.
+  // The server path does not fill deloadRecommendation.
   let fatigueDecision: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean } | null = null
   let deloadRecommendation: {
     shouldDeload: boolean
@@ -11738,6 +11751,19 @@ async function generateAdaptiveProgramImpl(
         coachingMessage: rec.coachingMessage,
         volumeReductionPercent: rec.adjustments.volumeReductionPercent,
         recommendedProtocols: rec.jointProtocols,
+      }
+    }
+  } else if (serverOptions?.serverFatigueDecision) {
+    const serverFatigue = serverOptions.serverFatigueDecision
+    if (
+      serverFatigue.decision === 'TRAIN_AS_PLANNED' ||
+      serverFatigue.decision === 'PRESERVE_QUALITY' ||
+      serverFatigue.decision === 'LIGHTEN_SESSION'
+    ) {
+      fatigueDecision = {
+        decision: serverFatigue.decision,
+        shortGuidance: serverFatigue.shortGuidance,
+        needsAttention: serverFatigue.needsAttention,
       }
     }
   }
@@ -27720,9 +27746,9 @@ function generateAdaptiveSession(
   // Equipment adaptation with collapse detection
   // ==========================================================================
   sessionStep = 'equipment_adapting'
-  const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment)
-  const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
-  const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
+  const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment, { primaryGoal })
+  const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment, { primaryGoal })
+  const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment, { primaryGoal })
   
   sessionTrace.postEquipmentMainCount = adaptedMain.adapted.length
   

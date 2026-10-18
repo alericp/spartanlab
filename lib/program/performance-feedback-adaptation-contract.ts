@@ -46,6 +46,7 @@ import {
   type ExerciseTrendStamp,
   type PerformanceTrendIntelligence,
 } from './performance-trend-intelligence-contract'
+import { resolveUnscaledBaseSets } from './unscaled-prescription-base'
 
 // =============================================================================
 // PUBLIC TYPES
@@ -232,6 +233,12 @@ export interface PhaseLExerciseShape {
   method?: string
   setExecutionMethod?: string
   performanceAdaptation?: ExercisePerformanceAdaptationStamp
+  /** Display-only week scaling. Ignored once a future-session adjustment
+   *  rewrites the week-1 base, and recovered when a scaled dose was saved
+   *  back into `sets`. */
+  scaledSets?: number
+  originalSets?: number
+  weekScalingApplied?: boolean
 }
 
 export interface PhaseLSessionShape {
@@ -898,7 +905,7 @@ export function deriveFuturePrescriptionMutations(
     if (claimed.has(claimKey)) continue
 
     const before = {
-      sets: match.exercise.sets,
+      sets: resolveUnscaledBaseSets(match.exercise),
       repsOrTime: match.exercise.repsOrTime,
       targetRPE: match.exercise.targetRPE,
       restSeconds: match.exercise.restSeconds,
@@ -1163,6 +1170,14 @@ export function deriveFuturePrescriptionMutations(
   return mutations
 }
 
+function withoutStaleWeekScaleDisplay<T extends PhaseLExerciseShape>(exercise: T): T {
+  const next: T = { ...exercise }
+  delete next.scaledSets
+  delete next.originalSets
+  delete next.weekScalingApplied
+  return next
+}
+
 // =============================================================================
 // APPLY MUTATIONS — preserves entire program shape; stamps performanceAdaptation
 // =============================================================================
@@ -1269,14 +1284,16 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
       }
 
       // Spread original first so we never drop unknown fields, then assign
-      // the bounded numeric overrides + stamp explicitly.
+      // the bounded numeric overrides + stamp explicitly. Stale week-scale
+      // display fields are removed so the adjusted sets are the new base.
+      const nextExercise = withoutStaleWeekScaleDisplay(ex)
       return {
-        ...ex,
-        sets: typeof m.after.sets === 'number' ? m.after.sets : ex.sets,
-        repsOrTime: typeof m.after.repsOrTime === 'string' ? m.after.repsOrTime : ex.repsOrTime,
-        targetRPE: typeof m.after.targetRPE === 'number' ? m.after.targetRPE : ex.targetRPE,
+        ...nextExercise,
+        sets: typeof m.after.sets === 'number' ? m.after.sets : nextExercise.sets,
+        repsOrTime: typeof m.after.repsOrTime === 'string' ? m.after.repsOrTime : nextExercise.repsOrTime,
+        targetRPE: typeof m.after.targetRPE === 'number' ? m.after.targetRPE : nextExercise.targetRPE,
         restSeconds:
-          typeof m.after.restSeconds === 'number' ? m.after.restSeconds : ex.restSeconds,
+          typeof m.after.restSeconds === 'number' ? m.after.restSeconds : nextExercise.restSeconds,
         performanceAdaptation: stamp,
       }
     })
@@ -1682,12 +1699,13 @@ export function revertPerformanceAdaptation<T extends PhaseLProgramShape>(
       const explanation = stamp.userVisibleExplanation.startsWith('You kept the original prescription.')
         ? stamp.userVisibleExplanation
         : `You kept the original prescription. ${stamp.userVisibleExplanation}`
+      const restored = withoutStaleWeekScaleDisplay(ex)
       return {
-        ...ex,
-        sets: typeof stamp.before.sets === 'number' ? stamp.before.sets : ex.sets,
-        repsOrTime: typeof stamp.before.repsOrTime === 'string' ? stamp.before.repsOrTime : ex.repsOrTime,
-        targetRPE: typeof stamp.before.targetRPE === 'number' ? stamp.before.targetRPE : ex.targetRPE,
-        restSeconds: typeof stamp.before.restSeconds === 'number' ? stamp.before.restSeconds : ex.restSeconds,
+        ...restored,
+        sets: typeof stamp.before.sets === 'number' ? stamp.before.sets : restored.sets,
+        repsOrTime: typeof stamp.before.repsOrTime === 'string' ? stamp.before.repsOrTime : restored.repsOrTime,
+        targetRPE: typeof stamp.before.targetRPE === 'number' ? stamp.before.targetRPE : restored.targetRPE,
+        restSeconds: typeof stamp.before.restSeconds === 'number' ? stamp.before.restSeconds : restored.restSeconds,
         performanceAdaptation: {
           ...stamp,
           applied: false,

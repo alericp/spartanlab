@@ -4,6 +4,7 @@ import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { getCanonicalProfile } from '@/lib/canonical-profile-service'
 import { executeAuthoritativeGeneration, logGenerationParityTable, type AuthoritativeGenerationRequest } from '@/lib/server/authoritative-program-generation'
 import type { PrimaryGoal } from '@/lib/program-service'
+import { resolveGenerationTruth } from '@/lib/profile/generation-truth'
 import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 
 export const dynamic = 'force-dynamic'
@@ -155,50 +156,26 @@ export async function POST(request: Request) {
       return trimmed.length > 0 ? trimmed : undefined
     }
     const canonicalPrimaryGoal = toOptionalNonEmptyString(canonicalBase.primaryGoal)
+    const generationTruth = resolveGenerationTruth({
+      primaryGoal: canonicalBase.primaryGoal,
+      secondaryGoal: canonicalBase.secondaryGoal,
+      experienceLevel: canonicalBase.experienceLevel,
+      scheduleMode: canonicalBase.scheduleMode,
+      trainingDaysPerWeek: canonicalBase.trainingDaysPerWeek,
+      sessionDurationMode: canonicalBase.sessionDurationMode,
+      sessionLengthMinutes: canonicalBase.sessionLengthMinutes,
+    })
+    const explicitDayAdjustment = requestType === 'training_days' && newTrainingDays !== undefined
+      ? resolveGenerationTruth({
+          scheduleMode: 'static',
+          trainingDaysPerWeek: newTrainingDays,
+        })
+      : null
 
-    // [PRE-AB6 BUILD GREEN GATE / PRIMARY-GOAL UNION CONTRACT]
-    // canonicalProfile.primaryGoal is typed as `string | undefined`
-    // because AuthoritativeGenerationRequest.canonicalProfile keeps it
-    // permissive. But AdaptiveProgramInputs (lib/adaptive-program-builder.ts:1088)
-    // imports its own `PrimaryGoal` from `lib/program-service`
-    // (NOT the narrower types/domain export), and types both
-    // `primaryGoal: PrimaryGoal` and `secondaryGoal?: PrimaryGoal`
-    // against that union. To avoid silently dropping valid canonical
-    // truth (e.g. 'general', 'skill', 'flexibility'), VALID_PRIMARY_GOALS
-    // mirrors the FULL program-service union exactly, validated by
-    // `satisfies readonly PrimaryGoal[]`. The cast inside toPrimaryGoal
-    // is the only acceptable cast — it runs after membership has been
-    // proven by the readonly allowed list, so it cannot widen the
-    // union or admit arbitrary strings.
-    const VALID_PRIMARY_GOALS = [
-      'planche',
-      'front_lever',
-      'back_lever',
-      'muscle_up',
-      'handstand_pushup',
-      'iron_cross',
-      'weighted_strength',
-      'general',
-      'skill',
-      'strength',
-      'endurance',
-      'abs',
-      'pancake',
-      'toe_touch',
-      'front_splits',
-      'side_splits',
-      'flexibility',
-    ] as const satisfies readonly PrimaryGoal[]
-
-    const toPrimaryGoal = (value: unknown): PrimaryGoal | undefined => {
-      if (typeof value !== 'string') return undefined
-      const trimmed = value.trim()
-      return (VALID_PRIMARY_GOALS as readonly string[]).includes(trimmed)
-        ? (trimmed as PrimaryGoal)
-        : undefined
-    }
-    const builderPrimaryGoal = toPrimaryGoal(canonicalBase.primaryGoal)
-    const builderSecondaryGoal = toPrimaryGoal(canonicalBase.secondaryGoal)
+    // A saved goal string is kept, including goals outside the older
+    // program-service union. The builder receives that same string.
+    const builderPrimaryGoal = canonicalPrimaryGoal as PrimaryGoal | undefined
+    const builderSecondaryGoal = toOptionalNonEmptyString(canonicalBase.secondaryGoal) as PrimaryGoal | undefined
 
     // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
     // Removed stale fields that do not exist on the canonical contract:
@@ -223,16 +200,17 @@ export async function POST(request: Request) {
       trainingPathType: canonicalBase.trainingPathType || 'hybrid',
       // Equipment - only override if request type is equipment
       equipmentAvailable: resolvedEquipment,
-      scheduleMode: canonicalBase.scheduleMode || 'flexible',
-      sessionDurationMode: canonicalBase.sessionDurationMode || 'adaptive',
-      // Schedule - only override if request type matches
-      trainingDaysPerWeek: requestType === 'training_days' && newTrainingDays !== undefined
-        ? newTrainingDays
-        : canonicalBase.trainingDaysPerWeek ?? 4,
+      scheduleMode: explicitDayAdjustment?.schedule.scheduleMode ?? generationTruth.schedule.scheduleMode ?? undefined,
+      sessionDurationMode: generationTruth.duration.durationMode,
+      trainingDaysPerWeek: explicitDayAdjustment
+        ? explicitDayAdjustment.schedule.days
+        : generationTruth.schedule.kind === 'flexible'
+          ? null
+          : generationTruth.schedule.days,
       sessionLengthMinutes: requestType === 'session_time' && newSessionMinutes !== undefined
         ? newSessionMinutes
-        : canonicalBase.sessionLengthMinutes ?? 45,
-      experienceLevel: canonicalBase.experienceLevel || 'intermediate',
+        : generationTruth.duration.minutes,
+      experienceLevel: generationTruth.experienceLevel ?? undefined,
       bodyweight: canonicalBase.bodyweight,
       sex: canonicalBase.sex,
       trainingStyle: canonicalBase.trainingStyle,

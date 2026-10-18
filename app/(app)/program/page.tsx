@@ -7074,7 +7074,7 @@ export default function ProgramPage() {
           scheduleMode: defaultInputs.scheduleMode,
           // [STEP-5A-ZETA] sessionDurationMode is intentionally omitted —
           // `validateBuilderDisplayTruth` does not declare that parameter.
-          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
+          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek ?? undefined,
           sessionLength: defaultInputsSessionLengthNumeric,
           equipment: defaultInputs.equipment,
         })
@@ -8742,7 +8742,9 @@ export default function ProgramPage() {
             ? { secondaryGoal: effectiveInputs.secondaryGoal }
             : {}),
           experienceLevel: effectiveInputs.experienceLevel,
-          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+          ...(effectiveInputs.trainingDaysPerWeek != null
+            ? { trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek }
+            : {}),
           sessionLength: normalizeProgramPageSessionLengthOverride(effectiveInputs.sessionLength),
           ...(effectiveInputs.scheduleMode !== undefined
             ? { scheduleMode: effectiveInputs.scheduleMode }

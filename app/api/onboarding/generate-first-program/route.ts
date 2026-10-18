@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { executeAuthoritativeGeneration, logGenerationParityTable, type AuthoritativeGenerationRequest } from '@/lib/server/authoritative-program-generation'
+import { resolveGenerationTruth } from '@/lib/profile/generation-truth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -92,10 +93,30 @@ export async function POST(request: Request) {
     // The onboarding route receives both programInputs and onboardingProfile
     // We merge them to create the canonical profile for generation
     // ==========================================================================
+    const generationTruth = resolveGenerationTruth(
+      {
+        primaryGoal: programInputs.primaryGoal,
+        secondaryGoal: programInputs.secondaryGoal,
+        experienceLevel: programInputs.experienceLevel,
+        scheduleMode: programInputs.scheduleMode,
+        trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+        sessionDurationMode: programInputs.sessionDurationMode,
+        sessionLengthMinutes: programInputs.sessionLength,
+      },
+      {
+        primaryGoal: onboardingProfile.primaryGoal,
+        secondaryGoal: onboardingProfile.secondaryGoal,
+        experienceLevel: onboardingProfile.experienceLevel,
+        scheduleMode: onboardingProfile.scheduleMode,
+        trainingDaysPerWeek: onboardingProfile.trainingDaysPerWeek,
+        sessionDurationMode: onboardingProfile.sessionDurationMode,
+        sessionLengthMinutes: onboardingProfile.sessionLengthMinutes,
+      },
+    )
     const canonicalProfile = {
       onboardingComplete: onboardingProfile.onboardingComplete ?? true,
-      primaryGoal: programInputs.primaryGoal,
-      secondaryGoal: programInputs.secondaryGoal || null,
+      primaryGoal: generationTruth.primaryGoal ?? undefined,
+      secondaryGoal: generationTruth.secondaryGoal,
       goalCategory: onboardingProfile.goalCategory || programInputs.primaryGoal,
       selectedSkills: programInputs.selectedSkills || onboardingProfile.selectedSkills || [],
       selectedFlexibility: programInputs.selectedFlexibility || onboardingProfile.selectedFlexibility || [],
@@ -104,11 +125,11 @@ export async function POST(request: Request) {
       trainingPathType: programInputs.trainingPathType || onboardingProfile.trainingPathType || 'hybrid',
       equipment: programInputs.equipment || onboardingProfile.equipmentAvailable || [],
       equipmentAvailable: programInputs.equipment || onboardingProfile.equipmentAvailable || [],
-      scheduleMode: programInputs.scheduleMode || onboardingProfile.scheduleMode || 'flexible',
-      sessionDurationMode: programInputs.sessionDurationMode || onboardingProfile.sessionDurationMode || 'adaptive',
-      trainingDaysPerWeek: programInputs.trainingDaysPerWeek || onboardingProfile.trainingDaysPerWeek || 4,
-      sessionLengthMinutes: programInputs.sessionLength || onboardingProfile.sessionLengthMinutes || 45,
-      experienceLevel: programInputs.experienceLevel || onboardingProfile.experienceLevel || 'intermediate',
+      scheduleMode: generationTruth.schedule.scheduleMode ?? undefined,
+      sessionDurationMode: generationTruth.duration.durationMode,
+      trainingDaysPerWeek: generationTruth.schedule.kind === 'flexible' ? null : generationTruth.schedule.days,
+      sessionLengthMinutes: generationTruth.duration.minutes,
+      experienceLevel: generationTruth.experienceLevel ?? undefined,
       bodyweight: programInputs.bodyweight || onboardingProfile.bodyweight,
       sex: onboardingProfile.sex,
       trainingStyle: onboardingProfile.trainingStyle,

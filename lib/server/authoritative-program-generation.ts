@@ -23,6 +23,7 @@
  */
 
 import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
+import { resolveGenerationTruth } from '@/lib/profile/generation-truth'
 import {
   buildDoctrineIntegrationProof,
   mapRuntimeContractToBuilderContext,
@@ -391,6 +392,27 @@ function buildCanonicalProfileOverride(
    * This ensures the builder uses conservative/reacquisition-safe progressions.
    */
   
+  const generationTruth = resolveGenerationTruth(
+    {
+      primaryGoal: builderInputs.primaryGoal,
+      secondaryGoal: builderInputs.secondaryGoal,
+      experienceLevel: builderInputs.experienceLevel,
+      scheduleMode: builderInputs.scheduleMode,
+      trainingDaysPerWeek: builderInputs.trainingDaysPerWeek,
+      sessionDurationMode: builderInputs.sessionDurationMode,
+      sessionLengthMinutes: builderInputs.sessionLength,
+    },
+    {
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      experienceLevel: canonicalProfile.experienceLevel,
+      scheduleMode: canonicalProfile.scheduleMode,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+    },
+  )
+
   const override: Record<string, unknown> = {
     // ==========================================================================
     // [CANONICAL_OVERRIDE_IDENTITY] Identity fields - ALWAYS from canonical profile
@@ -399,9 +421,9 @@ function buildCanonicalProfileOverride(
     userId: canonicalProfile.userId, // CRITICAL: Must preserve repaired identity from funnel
     onboardingComplete: canonicalProfile.onboardingComplete ?? true,
     
-    // Goals - builder inputs can override
-    primaryGoal: builderInputs.primaryGoal || canonicalProfile.primaryGoal,
-    secondaryGoal: builderInputs.secondaryGoal ?? canonicalProfile.secondaryGoal,
+    // Goals - a saved goal is kept. A missing goal stays missing.
+    primaryGoal: generationTruth.primaryGoal,
+    secondaryGoal: generationTruth.secondaryGoal,
     goalCategories: builderInputs.goalCategories || canonicalProfile.goalCategories || [],
     trainingPathType: builderInputs.trainingPathType || canonicalProfile.trainingPathType || 'hybrid',
     
@@ -416,14 +438,14 @@ function buildCanonicalProfileOverride(
     equipment: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     equipmentAvailable: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     
-    // Schedule - builder inputs can override
-    scheduleMode: builderInputs.scheduleMode || canonicalProfile.scheduleMode || 'flexible',
-    sessionDurationMode: builderInputs.sessionDurationMode || canonicalProfile.sessionDurationMode || 'adaptive',
-    trainingDaysPerWeek: builderInputs.trainingDaysPerWeek ?? canonicalProfile.trainingDaysPerWeek ?? 4,
-    sessionLengthMinutes: builderInputs.sessionLength ?? canonicalProfile.sessionLengthMinutes ?? 45,
+    // Schedule and duration - unknown stays unknown. Flexible stays flexible.
+    scheduleMode: generationTruth.schedule.scheduleMode,
+    sessionDurationMode: generationTruth.duration.durationMode,
+    trainingDaysPerWeek: generationTruth.schedule.kind === 'flexible' ? null : generationTruth.schedule.days,
+    sessionLengthMinutes: generationTruth.duration.minutes,
     
-    // Profile data - builder inputs can override some
-    experienceLevel: builderInputs.experienceLevel || canonicalProfile.experienceLevel || 'intermediate',
+    // Profile data - a saved level is kept. A missing level stays missing.
+    experienceLevel: generationTruth.experienceLevel,
     sex: canonicalProfile.sex,
     
     // Optional fields from canonical
@@ -1454,7 +1476,7 @@ export async function executeAuthoritativeGeneration(
       pullUpCapacity: capacityBucketToNumber(canonicalProfileTyped.pullUpMax),
       dipCapacity: capacityBucketToNumber(canonicalProfileTyped.dipMax),
       wallHspuCapacity: capacityBucketToNumber(canonicalProfileTyped.wallHSPUReps),
-      experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+      experienceLevel: canonicalProfileTyped.experienceLevel || null,
     }
     
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract

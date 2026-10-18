@@ -54,7 +54,7 @@ export interface NormalizedProfile {
   
   // Schedule
   schedule: 'static' | 'flexible'
-  sessionLength: number
+  sessionLength: number | null
   trainingDays: number | null  // null = flexible
   
   // Recovery & constraints

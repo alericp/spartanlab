@@ -442,7 +442,7 @@ export default function SettingsPage() {
   
   // Helper to apply profile data to React state
   // ISSUE E FIX: Real round-trip validation - this function hydrates UI from canonical truth
-  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
+  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string | null; sessionDurationMode?: 'static' | 'adaptive' | null; trainingStyle?: TrainingStyleMode }) => {
     // [adjustment-sync] TASK 9: Log canonical truth being applied to UI
     console.log('[adjustment-sync] === APPLYING CANONICAL TRUTH TO UI ===')
     console.log('[adjustment-sync] scheduleMode:', data.scheduleMode)

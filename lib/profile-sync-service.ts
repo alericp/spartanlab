@@ -4,6 +4,12 @@
 
 import { getOnboardingProfile, isOnboardingComplete, type OnboardingProfile } from './athlete-profile'
 import { saveAthleteProfile, getAthleteProfile, type AthleteProfile } from './data-service'
+import {
+  bucketExplicitMinutes,
+  classifyEquipment,
+  classifySessionDuration,
+  classifyTrainingDays,
+} from './profile/input-reliability'
 import type { AthleteProfile as DomainAthleteProfile } from '@/types/domain'
 
 // =============================================================================
@@ -87,24 +93,36 @@ export function mapOnboardingToAthleteProfile(onboarding: OnboardingProfile): Pa
     'unknown': null,
   }
   
+  const daySelection = classifyTrainingDays({
+    days: onboarding.trainingDaysPerWeek,
+    scheduleMode: onboarding.scheduleMode,
+  })
+  const durationSelection = classifySessionDuration({
+    minutes: onboarding.sessionLengthMinutes,
+    durationMode: onboarding.sessionDurationMode,
+  })
+  const equipmentSelection = classifyEquipment(onboarding.equipment)
+
   return {
     // Physical attributes
     sex: onboarding.sex ?? undefined,
     experienceLevel,
-    trainingDaysPerWeek: typeof onboarding.trainingDaysPerWeek === 'number' 
-      ? onboarding.trainingDaysPerWeek 
-      : 4,
-    sessionLengthMinutes: typeof onboarding.sessionLengthMinutes === 'number'
-      ? onboarding.sessionLengthMinutes as 30 | 45 | 60 | 90
-      : 60,
+    ...(daySelection.kind === 'explicit' && daySelection.days !== null
+      ? { trainingDaysPerWeek: daySelection.days }
+      : {}),
+    ...(daySelection.scheduleMode ? { scheduleMode: daySelection.scheduleMode } : {}),
+    ...(durationSelection.kind === 'explicit' && durationSelection.minutes !== null
+      ? { sessionLengthMinutes: bucketExplicitMinutes(durationSelection.minutes) }
+      : {}),
+    ...(durationSelection.durationMode ? { sessionDurationMode: durationSelection.durationMode } : {}),
     
     // Goals
     primaryGoal: onboarding.selectedSkills?.[0] ?? onboarding.primaryGoal ?? null,
     
     // Equipment
-    equipmentAvailable: onboarding.equipment?.filter((e): e is any => 
+    equipmentAvailable: equipmentSelection.equipment.filter((e): e is any => 
       ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
-    ) ?? [],
+    ),
     
     // Strength benchmarks (mapped to numeric values)
     pullUpMax: onboarding.pullUpMax ? pullUpMaxMap[onboarding.pullUpMax] ?? null : null,

@@ -1648,9 +1648,8 @@ export async function executeAuthoritativeGeneration(
       || program.sessions.length === gateTrainingDaysExpected
     
     // Check: session length match (tolerance of ±15 min due to adaptive engines)
-    const sessionLengthMatch = gateSessionLengthExpected === undefined
+    const sessionLengthMatch = gateSessionLengthExpected == null
       || Math.abs((program.sessionLength as unknown as number) - gateSessionLengthExpected) <= 15
-      || !gateSessionLengthExpected
     
     // Check: equipment respected (program equipment profile should not require equipment
     // that the user didn't declare — only a loose sanity check since adaptive engines may

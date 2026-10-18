@@ -36,7 +36,7 @@ export function AthleteOverviewCard({ user, profile }: AthleteOverviewCardProps)
             {profile.scheduleMode === 'flexible' ? (
               <span className="text-[#6A6A6A]"> • Flexible schedule</span>
             ) : (
-              profile.trainingDaysPerWeek > 0 && (
+              profile.trainingDaysPerWeek !== null && profile.trainingDaysPerWeek > 0 && (
                 <span className="text-[#6A6A6A]"> • {profile.trainingDaysPerWeek} days/week</span>
               )
             )}

@@ -31,6 +31,11 @@ import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import { saveAthleteProfile, type Equipment as LegacyEquipment } from '@/lib/data-service'
 import {
+  bucketExplicitMinutes,
+  classifySessionDuration,
+  classifyTrainingDays,
+} from '@/lib/profile/input-reliability'
+import {
   type OnboardingProfile,
   type Sex,
   type TrainingExperience,
@@ -4554,10 +4559,19 @@ export function AthleteOnboarding() {
       
       // CANONICAL FIX: Save ALL onboarding data to canonical profile service
       // This ensures settings, metrics, builder, and generation all see the same truth
-      const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
-                                  (profile as any).scheduleMode === 'flexible'
-      // TASK 1A: Detect adaptive time preference from onboarding selection
-      const isAdaptiveTime = profile.sessionLengthMinutes === 'flexible'
+      const daySelection = classifyTrainingDays({
+        days: profile.trainingDaysPerWeek,
+        scheduleMode: (profile as { scheduleMode?: unknown }).scheduleMode,
+      })
+      const durationSelection = classifySessionDuration({
+        minutes: profile.sessionLengthMinutes,
+        durationMode: (profile as { sessionDurationMode?: unknown }).sessionDurationMode,
+      })
+      const explicitSessionMinutes = durationSelection.kind === 'explicit' && durationSelection.minutes !== null
+        ? bucketExplicitMinutes(durationSelection.minutes)
+        : null
+      const isFlexibleSchedule = daySelection.kind === 'flexible'
+      const isAdaptiveTime = durationSelection.kind === 'flexible'
       
       // ==========================================================================
       // TASK A FIX: Save COMPLETE canonical profile with ALL onboarding fields
@@ -4614,18 +4628,11 @@ export function AthleteOnboarding() {
         trainingPathType: profile.trainingPathType,
         primaryTrainingOutcome: profile.primaryTrainingOutcome,
         
-        // Schedule - preserve flexible mode correctly
-        trainingDaysPerWeek: isFlexibleSchedule 
-          ? null  // null = truly flexible, engine derives at runtime
-          : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
-        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
-        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
-          ? (profile.sessionLengthMinutes <= 30 ? 30 
-             : profile.sessionLengthMinutes <= 45 ? 45 
-             : profile.sessionLengthMinutes <= 60 ? 60 
-             : 90)
-          : 60,
+        // Schedule - flexible, explicit, and unknown stay different.
+        trainingDaysPerWeek: daySelection.days,
+        ...(daySelection.scheduleMode ? { scheduleMode: daySelection.scheduleMode } : {}),
+        ...(durationSelection.durationMode ? { sessionDurationMode: durationSelection.durationMode } : {}),
+        sessionLengthMinutes: explicitSessionMinutes,
         sessionStylePreference: profile.sessionStyle,
         // [PRE-AB6 BUILD GREEN GATE / trainingStyle PAYLOAD COMPATIBILITY — PATH B]
         // Canonical OnboardingProfile (lib/athlete-profile.ts:1075-1089) tracks
@@ -4721,10 +4728,10 @@ export function AthleteOnboarding() {
       
       // TASK 2: Log onboarding saved schedule/duration
       console.log('[onboarding] TASK 2: Saved schedule/duration identity:', {
-        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-        trainingDaysPerWeek: isFlexibleSchedule ? null : profile.trainingDaysPerWeek,
-        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
-        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+        scheduleMode: daySelection.scheduleMode,
+        trainingDaysPerWeek: daySelection.days,
+        sessionDurationMode: durationSelection.durationMode,
+        sessionLengthMinutes: explicitSessionMinutes,
       })
       
       // [PHASE 5] [schedule-duration-source-truth-audit] - Task 4
@@ -4734,10 +4741,10 @@ export function AthleteOnboarding() {
           sessionLengthMinutes: profile.sessionLengthMinutes,
         },
         canonicalSavedValues: {
-          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-          trainingDaysPerWeek: isFlexibleSchedule ? null : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
-          sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
-          sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+          scheduleMode: daySelection.scheduleMode,
+          trainingDaysPerWeek: daySelection.days,
+          sessionDurationMode: durationSelection.durationMode,
+          sessionLengthMinutes: explicitSessionMinutes,
         },
         flexiblePreserved: isFlexibleSchedule ? 'yes_saved_as_flexible' : 'static_preserved',
         adaptiveTimePreserved: isAdaptiveTime ? 'yes_saved_as_adaptive' : 'static_preserved',
@@ -4747,10 +4754,10 @@ export function AthleteOnboarding() {
       const derivedRecoveryForVerdict = deriveRecoveryQualityFromOnboarding(profile.recovery)
       console.log('[phase5-source-truth-final-verdict]', {
         selectedSkillsCount: profile.selectedSkills?.length || 0,
-        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-        trainingDaysPerWeek: isFlexibleSchedule ? null : profile.trainingDaysPerWeek,
-        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
-        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+        scheduleMode: daySelection.scheduleMode,
+        trainingDaysPerWeek: daySelection.days,
+        sessionDurationMode: durationSelection.durationMode,
+        sessionLengthMinutes: explicitSessionMinutes,
         rawRecovery: profile.recovery,
         derivedRecoveryQuality: derivedRecoveryForVerdict,
         normalizedRecovery: 'will_be_filled_by_normalizer',
@@ -4795,16 +4802,12 @@ export function AthleteOnboarding() {
           : profile.trainingExperience === 'intermediate' 
             ? 'intermediate' 
             : 'advanced',
-        trainingDaysPerWeek: isFlexibleSchedule 
-          ? 4  // Internal default for engine calculations
-          : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
-        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
-          ? (profile.sessionLengthMinutes <= 30 ? 30 
-             : profile.sessionLengthMinutes <= 45 ? 45 
-             : profile.sessionLengthMinutes <= 60 ? 60 
-             : 90)
-          : 60,
+        ...(daySelection.kind === 'explicit' && daySelection.days !== null
+          ? { trainingDaysPerWeek: daySelection.days }
+          : {}),
+        ...(daySelection.scheduleMode ? { scheduleMode: daySelection.scheduleMode } : {}),
+        ...(durationSelection.durationMode ? { sessionDurationMode: durationSelection.durationMode } : {}),
+        ...(explicitSessionMinutes !== null ? { sessionLengthMinutes: explicitSessionMinutes } : {}),
         primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
         // Map full canonical EquipmentType[] truth into the narrow legacy
         // Equipment[] union the data-service contract accepts. Values not
@@ -4831,8 +4834,6 @@ export function AthleteOnboarding() {
       // ==========================================================================
       try {
         // Re-compute isAdaptiveTime for DB payload (matches canonical save)
-        const isAdaptiveTimeForDB = profile.sessionLengthMinutes === 'flexible'
-        
         const dbProfilePayload = {
           sex: profile.sex,
           experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -4840,17 +4841,10 @@ export function AthleteOnboarding() {
             : profile.trainingExperience === 'intermediate' 
               ? 'intermediate' 
               : 'advanced',
-          trainingDaysPerWeek: isFlexibleSchedule 
-            ? null 
-            : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
-          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-          sessionDurationMode: isAdaptiveTimeForDB ? 'adaptive' : 'static',
-          sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
-            ? (profile.sessionLengthMinutes <= 30 ? 30 
-               : profile.sessionLengthMinutes <= 45 ? 45 
-               : profile.sessionLengthMinutes <= 60 ? 60 
-               : 90)
-            : 60,
+          trainingDaysPerWeek: daySelection.days,
+          scheduleMode: daySelection.scheduleMode,
+          sessionDurationMode: durationSelection.durationMode,
+          sessionLengthMinutes: explicitSessionMinutes,
           // TASK A FIX: primaryGoal should be the actual primary goal, not first selected skill
           primaryGoal: profile.primaryGoal || null,
           // TASK A FIX: Previously missing fields

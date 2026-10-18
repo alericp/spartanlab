@@ -42,6 +42,8 @@ describe('server fatigue from existing workout logs', () => {
     assert.equal(derived.trainingFeedback?.totalSessionsLast7Days, 2)
     assert.equal(derived.trainingFeedback?.expectedSessionsPerWeek, null)
     assert.equal(derived.savedWeeklyAvailability, 4)
+    assert.equal(derived.recoveryRiskForWeek, 'high')
+    assert.match(derived.shortGuidance, /sessions are lighter/)
     assert.match(derived.shortGuidance, /saved weekly schedule is unchanged/)
     const expected = derived.trainingFeedback?.expectedSessionsPerWeek
     const knownExpected = typeof expected === 'number' && expected > 0
@@ -62,6 +64,8 @@ describe('server fatigue from existing workout logs', () => {
       { now: NOW },
     )
     assert.equal(derived.decision, 'TRAIN_AS_PLANNED')
+    assert.equal(derived.recoveryRiskForWeek, 'low')
+    assert.match(derived.shortGuidance, /normal training difficulty/)
     assert.equal(derived.trainingFeedback?.expectedSessionsPerWeek, null)
     assert.equal(derived.needsAttention, false)
   })
@@ -71,6 +75,7 @@ describe('server fatigue from existing workout logs', () => {
     assert.equal(one.reliable, false)
     assert.equal(one.decision, null)
     assert.equal(one.trainingFeedback, null)
+    assert.equal(one.recoveryRiskForWeek, null)
     assert.match(one.limitation ?? '', /fresh-session/)
 
     const undated = deriveServerFatigueFromWorkoutLogs(
@@ -91,6 +96,90 @@ describe('server fatigue from existing workout logs', () => {
       { now: NOW },
     )
     assert.equal(demo.reliable, false)
+  })
+
+  it('keeps a manageable week on the current plan', () => {
+    const decision = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 1,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      reportedRecoveryRisk: 'low',
+      lockSavedDayCount: true,
+    })
+    assert.equal(decision.targetDays, 4)
+    assert.equal(decision.recoveryContext.recoveryRisk, 'low')
+    assert.equal(decision.loadStrategy.volumeBias, 'normal')
+  })
+
+  it('lightens sessions for high fatigue without changing the saved week', () => {
+    const locked = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 1,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      reportedRecoveryRisk: 'high',
+      lockSavedDayCount: true,
+    })
+    assert.equal(locked.targetDays, 4)
+    assert.equal(locked.loadStrategy.volumeBias, 'reduced')
+    assert.equal(locked.loadStrategy.intensityBias, 'reduced')
+    assert.match(locked.dayCountReason, /Saved weekly schedule kept/)
+
+    const unlocked = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 2,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      isFirstGeneratedWeek: false,
+      reportedRecoveryRisk: 'high',
+      lockSavedDayCount: false,
+    })
+    assert.equal(unlocked.targetDays, 3)
+  })
+
+  it('does not invent a moderate recovery penalty when no signal exists', () => {
+    const decision = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 2,
+      isFirstGeneratedWeek: false,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      reportedRecoveryRisk: 'unknown',
+      lockSavedDayCount: true,
+    })
+    assert.equal(decision.recoveryContext.recoveryRisk, 'unknown')
+    assert.equal(decision.recoveryContext.readinessState, 'unknown')
+    assert.equal(decision.loadStrategy.volumeBias, 'normal')
+    assert.equal(decision.loadStrategy.densityBias, 'normal')
+    assert.equal(decision.loadStrategy.finisherBias, 'normal')
+    assert.equal(decision.targetDays, 4)
+  })
+
+  it('trims extra stress for temporary fatigue and keeps the saved week', () => {
+    const decision = buildWeekAdaptationDecision({
+      generationIntent: 'regenerate',
+      isFreshBaselineBuild: false,
+      weekNumber: 2,
+      isFirstGeneratedWeek: false,
+      trainingDaysPerWeek: 4,
+      scheduleMode: 'static',
+      experienceLevel: 'intermediate',
+      reportedRecoveryRisk: 'moderate',
+      lockSavedDayCount: true,
+    })
+    assert.equal(decision.targetDays, 4)
+    assert.equal(decision.loadStrategy.volumeBias, 'normal')
+    assert.equal(decision.loadStrategy.densityBias, 'reduced')
+    assert.equal(decision.loadStrategy.finisherBias, 'limited')
   })
 
   it('does not shrink the saved week when missed sessions were not inferred', () => {
@@ -117,6 +206,10 @@ describe('server fatigue from existing workout logs', () => {
     assert.match(generation, /serverFatigueDecision:/)
     assert.match(generation, /isFreshBaselineBuild !== true && derivedServerFatigue\.reliable/)
     assert.match(builder, /serverOptions\?\.serverFatigueDecision/)
+    assert.match(builder, /LIGHTEN_SESSION' \? 'accumulated'/)
+    assert.match(builder, /PRESERVE_QUALITY' \? 'moderate'/)
+    assert.match(builder, /fatigueDecision\.shortGuidance/)
+    assert.match(generation, /reportedRecoveryRiskFromDecision/)
     assert.equal(fatigue.includes('DELOAD_RECOMMENDED'), false)
     assert.equal(fatigue.includes("'DELOAD"), false)
   })

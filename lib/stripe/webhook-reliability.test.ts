@@ -4,11 +4,18 @@ import { describe, it } from 'node:test'
 import { CLERK_PUBLIC_ROUTE_PATTERNS } from '../routes/public-routes.ts'
 import {
   checkoutCustomerFields,
+  classifyEmailResult,
+  createBillingEmailLedger,
   createStripeEventClaimStore,
+  finishWebhookAttempt,
   gateStripeWebhookRequest,
   gateStripeWebhookSignature,
+  lookupBlocksProcessing,
+  mutationOutcome,
   planSubscriptionWrite,
+  responseForClaimBegin,
   selectCheckoutAccount,
+  shouldSendBillingEmail,
 } from './webhook-reliability.ts'
 
 const clerkAccount = {
@@ -58,39 +65,121 @@ describe('Stripe webhook can be verified without a Clerk session', () => {
   })
 })
 
-describe('duplicate Stripe events do not repeat billing writes', () => {
-  it('claims an event id once and reports a later delivery as a duplicate', () => {
+describe('webhook processing outcomes', () => {
+  it('acknowledges a successful event and treats a later delivery as a duplicate', () => {
     const claims = createStripeEventClaimStore()
-    assert.equal(claims.claim('evt_synthetic_1'), 'new')
-    assert.equal(claims.claim('evt_synthetic_1'), 'duplicate')
-    assert.equal(claims.claim('evt_synthetic_2'), 'new')
-    assert.equal(claims.claim(''), 'missing')
+    assert.equal(claims.begin('evt_success'), 'new')
+    const finished = finishWebhookAttempt(claims, 'evt_success', 'success')
+    assert.equal(finished.status, 200)
+    assert.deepEqual(finished.body, { received: true })
+    assert.equal(claims.begin('evt_success'), 'duplicate')
+    assert.deepEqual(responseForClaimBegin('duplicate'), {
+      stop: true,
+      status: 200,
+      body: { received: true, duplicate: true },
+    })
+    assert.equal(claims.begin(''), 'missing')
   })
 
-  it('drops the oldest event id after the in-process cap', () => {
-    const claims = createStripeEventClaimStore(2)
-    assert.equal(claims.claim('evt_a'), 'new')
-    assert.equal(claims.claim('evt_b'), 'new')
-    assert.equal(claims.claim('evt_c'), 'new')
-    assert.equal(claims.claim('evt_b'), 'duplicate')
-    assert.equal(claims.claim('evt_a'), 'new')
-  })
-
-  it('claims a verified event before handlers and acknowledges a duplicate', () => {
+  it('rejects an invalid signature before an event id is reserved', () => {
     const source = readFileSync('app/api/stripe/webhook/route.ts', 'utf8')
-    const claimAt = source.indexOf('stripeEventClaims.claim(event.id)')
-    const duplicateAt = source.indexOf('duplicate: true')
-    const switchAt = source.indexOf('switch (event.type)')
-    assert.ok(claimAt > 0)
-    assert.ok(duplicateAt > claimAt)
-    assert.ok(switchAt > duplicateAt)
-    assert.match(source, /gateStripeWebhookSignature\(false\)/)
-    assert.match(source, /findUserByClerkId/)
-    assert.match(source, /selectCheckoutAccount/)
-    assert.match(source, /planSubscriptionWrite/)
-    assert.match(source, /downgradeUserSubscription/)
-    assert.match(source, /sendSubscriptionCancelledEmail/)
+    const signatureAt = source.indexOf('gateStripeWebhookSignature(false)')
+    const beginAt = source.indexOf('stripeEventClaims.begin(event.id)')
+    assert.ok(signatureAt > 0)
+    assert.ok(beginAt > signatureAt)
+    assert.deepEqual(gateStripeWebhookSignature(false), {
+      ok: false,
+      status: 400,
+      error: 'Invalid signature',
+    })
+  })
+
+  it('returns a retryable response for a database failure and allows the same event to succeed later', () => {
+    const claims = createStripeEventClaimStore()
+    assert.equal(claims.begin('evt_db_failure'), 'new')
+    assert.equal(mutationOutcome('failed'), 'failure')
+    assert.equal(mutationOutcome('not_found'), 'failure')
+    assert.equal(lookupBlocksProcessing('failed'), true)
+    assert.equal(lookupBlocksProcessing('not_found'), false)
+    assert.equal(lookupBlocksProcessing('found'), false)
+    const failed = finishWebhookAttempt(claims, 'evt_db_failure', 'failure')
+    assert.equal(failed.status, 500)
+    assert.deepEqual(failed.body, { error: 'Webhook processing failed' })
+    assert.equal(claims.begin('evt_db_failure'), 'new')
+
+    assert.equal(mutationOutcome('updated'), 'success')
+    const retried = finishWebhookAttempt(claims, 'evt_db_failure', 'success')
+    assert.equal(retried.status, 200)
+    assert.equal(claims.begin('evt_db_failure'), 'duplicate')
+  })
+
+  it('does not acknowledge a second delivery that overlaps an unfinished attempt', () => {
+    const claims = createStripeEventClaimStore()
+    assert.equal(claims.begin('evt_open'), 'new')
+    assert.equal(claims.begin('evt_open'), 'in_flight')
+    assert.deepEqual(responseForClaimBegin('in_flight'), {
+      stop: true,
+      status: 500,
+      body: { error: 'Webhook processing failed' },
+    })
+    const finished = finishWebhookAttempt(claims, 'evt_open', 'success')
+    assert.equal(finished.status, 200)
+    assert.equal(claims.begin('evt_open'), 'duplicate')
+  })
+
+  it('drops the oldest settled event id after the in-process cap', () => {
+    const claims = createStripeEventClaimStore(2)
+    assert.equal(claims.begin('evt_a'), 'new')
+    claims.settle('evt_a')
+    assert.equal(claims.begin('evt_b'), 'new')
+    claims.settle('evt_b')
+    assert.equal(claims.begin('evt_c'), 'new')
+    claims.settle('evt_c')
+    assert.equal(claims.begin('evt_b'), 'duplicate')
+    assert.equal(claims.begin('evt_a'), 'new')
+  })
+
+  it('sends a billing email once and retries a failed send without marking it', () => {
+    const ledger = createBillingEmailLedger()
+    const key = 'pro_upgrade:sub_synthetic'
+    assert.equal(shouldSendBillingEmail(ledger.wasSent(key), true), true)
+    const failed = classifyEmailResult('failed')
+    assert.equal(failed.markSent, false)
+    assert.equal(failed.outcome, 'failure')
+    assert.equal(ledger.wasSent(key), false)
+
+    const sent = classifyEmailResult('sent')
+    if (sent.markSent) ledger.markSent(key)
+    assert.equal(shouldSendBillingEmail(ledger.wasSent(key), true), false)
+    assert.equal(classifyEmailResult('not_configured').outcome, 'success')
+    assert.equal(classifyEmailResult('not_configured').markSent, false)
+    assert.equal(shouldSendBillingEmail(false, false), false)
+  })
+
+  it('writes the subscription before the email and settles only after the handler returns', () => {
+    const source = readFileSync('app/api/stripe/webhook/route.ts', 'utf8')
+    const beginAt = source.indexOf('stripeEventClaims.begin(event.id)')
+    const dispatchAt = source.indexOf('dispatchStripeEvent(event, stripe)')
+    const finishAt = source.indexOf('finishWebhookAttempt(stripeEventClaims, event.id, outcome)')
+    assert.ok(beginAt > 0)
+    assert.ok(dispatchAt > beginAt)
+    assert.ok(finishAt > dispatchAt)
+
+    const checkout = source.slice(
+      source.indexOf('async function handleCheckoutSessionCompleted'),
+      source.indexOf('async function handleSubscriptionUpdated'),
+    )
+    assert.ok(checkout.indexOf('syncStripeSubscriptionToUser') < checkout.indexOf('sendProUpgradeEmail'))
+    assert.match(checkout, /mutationOutcome\(written\.status\) === 'failure'/)
+    assert.match(checkout, /return 'failure'/)
+
+    const removed = source.slice(
+      source.indexOf('async function handleSubscriptionDeleted'),
+      source.indexOf('async function handleInvoicePaymentSucceeded'),
+    )
+    assert.ok(removed.indexOf('downgradeUserSubscription') < removed.indexOf('sendSubscriptionCancelledEmail'))
     assert.match(source, /sendPaymentFailedEmail/)
+    assert.match(source, /lookupBlocksProcessing/)
   })
 })
 
@@ -178,6 +267,10 @@ describe('subscription updates stay on the authenticated account', () => {
     assert.doesNotMatch(setClause, /stripe_customer_id/)
     assert.match(source, /export async function findUserByClerkId/)
     assert.match(source, /WHERE clerk_id = \$1/)
+    assert.match(source, /queryStrict/)
+    assert.match(source, /status: 'failed'/)
+    assert.match(source, /status: 'updated'/)
+    assert.match(source, /status: 'not_found'/)
   })
 
   it('checkout keeps the configured price and the authenticated account metadata', () => {

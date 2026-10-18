@@ -9,8 +9,10 @@
  *     processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
  *   );
  *
- * That table is not created here. The in-process claim store stops the same
- * event id from repeating billing writes inside one server process.
+ * That table is not created here. The in-process store settles an event id only
+ * after processing succeeds. A failed attempt releases the id so Stripe can
+ * retry. Another instance, a restart, or an id evicted after the cap can still
+ * repeat a write or an email. Those cases need the deferred table.
  */
 
 export type WebhookGate =
@@ -37,28 +39,114 @@ export function gateStripeWebhookSignature(signatureValid: boolean): WebhookGate
   return { ok: true }
 }
 
+export type ClaimBegin = 'new' | 'duplicate' | 'missing' | 'in_flight'
+export type ProcessingOutcome = 'success' | 'failure'
+
 export interface EventClaimStore {
-  claim(eventId: string): 'new' | 'duplicate' | 'missing'
+  begin(eventId: string): ClaimBegin
+  settle(eventId: string): void
+  release(eventId: string): void
 }
 
 export function createStripeEventClaimStore(maxEntries = 2000): EventClaimStore {
-  const seen = new Set<string>()
-  const order: string[] = []
+  const states = new Map<string, 'in_flight' | 'settled'>()
+  const settledOrder: string[] = []
 
   return {
-    claim(eventId: string) {
+    begin(eventId: string) {
       if (!eventId) return 'missing'
-      if (seen.has(eventId)) return 'duplicate'
-      seen.add(eventId)
-      order.push(eventId)
-      while (order.length > maxEntries) {
-        const oldest = order.shift()
-        if (oldest) seen.delete(oldest)
-      }
+      const current = states.get(eventId)
+      if (current === 'settled') return 'duplicate'
+      if (current === 'in_flight') return 'in_flight'
+      states.set(eventId, 'in_flight')
       return 'new'
+    },
+    settle(eventId: string) {
+      if (!eventId || states.get(eventId) === 'settled') return
+      states.set(eventId, 'settled')
+      settledOrder.push(eventId)
+      while (settledOrder.length > maxEntries) {
+        const oldest = settledOrder.shift()
+        if (oldest) states.delete(oldest)
+      }
+    },
+    release(eventId: string) {
+      if (states.get(eventId) === 'in_flight') states.delete(eventId)
     },
   }
 }
+
+export function responseForClaimBegin(begin: ClaimBegin):
+  | { stop: true; status: 200 | 500; body: { received: true; duplicate: true } | { error: string } }
+  | { stop: false } {
+  if (begin === 'duplicate') {
+    return { stop: true, status: 200, body: { received: true, duplicate: true } }
+  }
+  if (begin === 'in_flight') {
+    return { stop: true, status: 500, body: { error: 'Webhook processing failed' } }
+  }
+  return { stop: false }
+}
+
+/** Settle a successful attempt. Release a failed attempt so the same event id can be retried. */
+export function finishWebhookAttempt(
+  store: EventClaimStore,
+  eventId: string,
+  outcome: ProcessingOutcome,
+): { status: 200 | 500; body: { received: true } | { error: string } } {
+  if (outcome === 'failure') {
+    store.release(eventId)
+    return { status: 500, body: { error: 'Webhook processing failed' } }
+  }
+  store.settle(eventId)
+  return { status: 200, body: { received: true } }
+}
+
+/** A lookup error must be retried. A missing row is a completed lookup. */
+export function lookupBlocksProcessing(status: 'found' | 'not_found' | 'failed'): boolean {
+  return status === 'failed'
+}
+
+/** An intended subscription write succeeds only when a row is updated. */
+export function mutationOutcome(status: 'updated' | 'not_found' | 'failed'): ProcessingOutcome {
+  return status === 'updated' ? 'success' : 'failure'
+}
+
+export function shouldSendBillingEmail(alreadySent: boolean, recipientPresent: boolean): boolean {
+  return recipientPresent && !alreadySent
+}
+
+/** Mark an email only after the provider accepts it. A real send failure stays retryable. */
+export function classifyEmailResult(result: 'sent' | 'failed' | 'not_configured'): {
+  markSent: boolean
+  outcome: ProcessingOutcome
+} {
+  if (result === 'sent') return { markSent: true, outcome: 'success' }
+  if (result === 'not_configured') return { markSent: false, outcome: 'success' }
+  return { markSent: false, outcome: 'failure' }
+}
+
+export interface BillingEmailLedger {
+  wasSent(key: string): boolean
+  markSent(key: string): void
+}
+
+export function createBillingEmailLedger(ttlMs = 60 * 60 * 1000): BillingEmailLedger {
+  const sent = new Set<string>()
+  return {
+    wasSent(key: string) {
+      return sent.has(key)
+    },
+    markSent(key: string) {
+      if (!key || sent.has(key)) return
+      sent.add(key)
+      const timer = setTimeout(() => sent.delete(key), ttlMs)
+      timer.unref?.()
+    },
+  }
+}
+
+export const billingEmailLedger = createBillingEmailLedger()
 
 export const stripeEventClaims = createStripeEventClaimStore()
 

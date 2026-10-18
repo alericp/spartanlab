@@ -237,6 +237,7 @@ import {
   WORKOUT_OCCURRENCE_STORAGE_KEY,
   createOccurrenceId,
   resolveOccurrenceId,
+  shouldKeepOccurrenceAfterLocalSave,
   type StoredOccurrence,
 } from '@/lib/workout/save-reliability'
 // [LIVE-WORKOUT-CORRIDOR-FIX] Challenge/achievement engines loaded dynamically
@@ -2084,11 +2085,13 @@ function rememberOccurrence(occurrence: StoredOccurrence) {
   } catch {}
 }
 
-export function clearSessionStorage() {
+export function clearSessionStorage(options?: { keepOccurrence?: boolean }) {
   if (typeof window === 'undefined') return
   try {
     localStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    if (!options?.keepOccurrence) {
+      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    }
   } catch {}
 }
 
@@ -7869,8 +7872,11 @@ failureStage: null,
       }
       }
       
-      // Clear session data
-      clearSessionStorage()
+      // Keep the occurrence while the evidence post can still fail, so a
+      // repeated save of this session retries the same log.
+      clearSessionStorage({
+        keepOccurrence: shouldKeepOccurrenceAfterLocalSave(savedLog.serverEvidence),
+      })
       clearRestTimerState()
       clearSessionOverrides()
       setIsSaved(true)

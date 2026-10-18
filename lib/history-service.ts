@@ -523,8 +523,9 @@ export async function recordSessionPersonalRecords(
     bodyweightAtTime?: number
     notes?: string
   }>
-): Promise<PersonalRecordHistory[]> {
-  const results: PersonalRecordHistory[] = []
+): Promise<{ records: PersonalRecordHistory[]; failedCount: number }> {
+  const records: PersonalRecordHistory[] = []
+  let failedCount = 0
 
   for (const pr of prs) {
     const record = await recordPersonalRecordEntry({
@@ -543,11 +544,48 @@ export async function recordSessionPersonalRecords(
     })
 
     if (record) {
-      results.push(record)
+      records.push(record)
+    } else {
+      failedCount += 1
     }
   }
 
-  return results
+  return { records, failedCount }
+}
+
+/**
+ * Personal records already linked to one workout.
+ * A database failure is unknown so the caller does not insert duplicates.
+ */
+export async function lookupSessionPersonalRecords(
+  userId: string,
+  workoutSessionId: string,
+): Promise<
+  | { status: 'known'; records: Array<{ exerciseKey: string; prType: string }> }
+  | { status: 'unknown' }
+> {
+  if (!(await isDatabaseAvailable())) return { status: 'unknown' }
+
+  const sql = await getSqlClient()
+  if (!sql) return { status: 'unknown' }
+
+  try {
+    const result = await sql`
+      SELECT exercise_key, pr_type
+      FROM personal_record_history
+      WHERE user_id = ${userId}
+        AND workout_session_id = ${workoutSessionId}
+    `
+    const records = result.flatMap((row) => {
+      const entry = row as { exercise_key?: unknown; pr_type?: unknown }
+      if (typeof entry.exercise_key !== 'string' || typeof entry.pr_type !== 'string') return []
+      return [{ exerciseKey: entry.exercise_key, prType: entry.pr_type }]
+    })
+    return { status: 'known', records }
+  } catch (error) {
+    console.error('[HistoryService] Error reading session personal records:', error)
+    return { status: 'unknown' }
+  }
 }
 
 /**

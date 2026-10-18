@@ -14,6 +14,7 @@ import { saveSessionFeedback } from './session-feedback'
 import {
   planLocalWorkoutSave,
   workoutLogIdForOccurrence,
+  WORKOUT_OCCURRENCE_STORAGE_KEY,
 } from './workout/save-reliability'
 // [PHASE-L / AB10-CONTRACT-CLEANUP] CompletedSetEvidence is the canonical
 // per-set ledger shape — type-only import keeps the runtime acyclic while
@@ -146,6 +147,18 @@ function patchStoredLog(id: string, patch: Partial<WorkoutLog>) {
   writeStoredLogs(logs)
 }
 
+function releaseOccurrenceAfterEvidenceSave(occurrenceId?: string) {
+  if (!isBrowser() || !occurrenceId) return
+  try {
+    const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { occurrenceId?: unknown }
+    if (parsed?.occurrenceId === occurrenceId) {
+      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    }
+  } catch {}
+}
+
 function scheduleEvidenceRetry(log: WorkoutLog, attempt: number) {
   const timer = setTimeout(() => queueEvidenceSync(log, attempt), 1000) as { unref?: () => void }
   timer.unref?.()
@@ -168,6 +181,7 @@ function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
         evidenceSyncInFlight.delete(log.id)
         if (response.ok) {
           patchStoredLog(log.id, { serverEvidence: 'saved' })
+          releaseOccurrenceAfterEvidenceSave(log.occurrenceId)
           return
         }
         if (attempt < 1) {

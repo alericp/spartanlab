@@ -4,8 +4,12 @@ import { describe, it } from 'node:test'
 import {
   createOccurrenceId,
   historyWritePlan,
+  missingSessionPersonalRecords,
+  personalRecordPersistencePlan,
   planLocalWorkoutSave,
+  readPersonalRecordSnapshot,
   resolveOccurrenceId,
+  shouldKeepOccurrenceAfterLocalSave,
   workoutLogIdForOccurrence,
 } from './save-reliability.ts'
 
@@ -88,6 +92,97 @@ describe('failed saves and retries', () => {
   })
 })
 
+describe('partial personal-record saves', () => {
+  const intended = [
+    {
+      exerciseKey: 'pull_up',
+      prType: 'best_reps',
+      exerciseName: 'Pull-Up',
+      newValue: 8,
+      unit: 'reps',
+    },
+    {
+      exerciseKey: 'pull_up',
+      prType: 'best_hold',
+      exerciseName: 'Pull-Up',
+      newValue: 12,
+      unit: 'seconds',
+    },
+  ]
+
+  it('returns only the personal records missing from the saved workout', () => {
+    const missing = missingSessionPersonalRecords(intended, [
+      { exerciseKey: 'pull_up', prType: 'best_reps' },
+    ])
+    assert.equal(missing.length, 1)
+    assert.equal(missing[0].prType, 'best_hold')
+    assert.equal(missing[0].newValue, 12)
+  })
+
+  it('does not insert or replace a personal record that is already stored', () => {
+    const missing = missingSessionPersonalRecords(
+      [{ ...intended[0], newValue: 99 }],
+      [{ exerciseKey: 'pull_up', prType: 'best_reps' }],
+    )
+    assert.deepEqual(missing, [])
+  })
+
+  it('inserts each exercise and type once when the snapshot repeats it', () => {
+    const missing = missingSessionPersonalRecords(
+      [intended[0], { ...intended[0], newValue: 99 }, intended[1]],
+      [],
+    )
+    assert.equal(missing.length, 2)
+    assert.equal(missing[0].newValue, 8)
+    assert.equal(missing[1].prType, 'best_hold')
+  })
+
+  it('retries when the existing personal records cannot be read or a write fails', () => {
+    assert.equal(personalRecordPersistencePlan({
+      lookup: 'unknown',
+      missingCount: 1,
+      failedCount: 0,
+    }), 'retry')
+    assert.equal(personalRecordPersistencePlan({
+      lookup: 'known',
+      missingCount: 2,
+      failedCount: 1,
+    }), 'retry')
+    assert.equal(personalRecordPersistencePlan({
+      lookup: 'known',
+      missingCount: 1,
+      failedCount: 0,
+    }), 'completed')
+    assert.equal(personalRecordPersistencePlan({
+      lookup: 'known',
+      missingCount: 0,
+      failedCount: 0,
+    }), 'unchanged')
+  })
+
+  it('reads the stored snapshot and drops entries that are not personal records', () => {
+    const records = readPersonalRecordSnapshot([
+      intended[0],
+      { exerciseKey: '', prType: 'best_reps', newValue: 4 },
+      { exerciseKey: 'dip', prType: 'max_weight' },
+      'not-a-record',
+    ])
+    assert.equal(records.length, 1)
+    assert.equal(records[0].exerciseKey, 'pull_up')
+    const encoded = readPersonalRecordSnapshot(JSON.stringify([intended[1]]))
+    assert.equal(encoded[0].newValue, 12)
+  })
+})
+
+describe('occurrence retention after a local save', () => {
+  it('keeps the occurrence while server evidence is still pending', () => {
+    assert.equal(shouldKeepOccurrenceAfterLocalSave('pending'), true)
+    assert.equal(shouldKeepOccurrenceAfterLocalSave('saved'), false)
+    assert.equal(shouldKeepOccurrenceAfterLocalSave('skipped'), false)
+    assert.equal(shouldKeepOccurrenceAfterLocalSave(undefined), false)
+  })
+})
+
 describe('workout save wiring', () => {
   it('keeps completed history on the client session id and does not treat a database miss as saved', () => {
     const persistence = readFileSync('lib/workout-history-persistence.ts', 'utf8')
@@ -95,12 +190,20 @@ describe('workout save wiring', () => {
     assert.match(persistence, /clientSessionId/)
     assert.match(persistence, /persisted: 'failed'/)
     assert.match(persistence, /persisted: 'duplicate'/)
+    assert.match(persistence, /completeMissingPersonalRecords/)
+    assert.match(persistence, /missingSessionPersonalRecords/)
+    assert.match(persistence, /Personal records were not fully saved/)
     const history = readFileSync('lib/history-service.ts', 'utf8')
     assert.match(history, /session_metrics_snapshot->>'clientSessionId'/)
+    assert.match(history, /lookupSessionPersonalRecords/)
+    assert.match(history, /failedCount/)
+    const live = readFileSync('components/workout/StreamlinedWorkoutSession.tsx', 'utf8')
+    assert.match(live, /shouldKeepOccurrenceAfterLocalSave/)
+    const logs = readFileSync('lib/workout-log-service.ts', 'utf8')
+    assert.match(logs, /releaseOccurrenceAfterEvidenceSave/)
     const hook = readFileSync('hooks/useWorkoutSession.ts', 'utf8')
     assert.match(hook, /occurrenceId/)
     assert.doesNotMatch(hook, /session-\$\{Date\.now\(\)\}/)
-    const live = readFileSync('components/workout/StreamlinedWorkoutSession.tsx', 'utf8')
     assert.match(live, /saveLockRef/)
     assert.match(live, /occurrenceId/)
     assert.match(live, /retryPendingWorkoutEvidence/)

@@ -1,36 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth-service-server'
 import { getPersonalRecordHistoryForUser, getPersonalRecordsByExercise } from '@/lib/history-service'
+import type { PRType } from '@/types/history'
+import { readOwnedAthleteResource } from '@/lib/server/athlete-ownership'
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
-  const userId = searchParams.get('userId')
+  const requestedUserId = searchParams.get('userId')
   const exerciseKey = searchParams.get('exerciseKey')
   const limit = searchParams.get('limit')
   const prType = searchParams.get('prType')
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'userId is required' },
-      { status: 400 }
-    )
-  }
+  const { userId } = await getSession()
 
   try {
-    // If exerciseKey is provided, get PRs for that specific exercise
-    if (exerciseKey) {
-      const prs = await getPersonalRecordsByExercise(userId, exerciseKey, {
-        limit: limit ? parseInt(limit) : undefined,
-      })
-      return NextResponse.json({ prs })
-    }
+    const result = await readOwnedAthleteResource({
+      authenticatedUserId: userId,
+      requestedAthleteId: requestedUserId,
+      missingIdError: 'userId is required',
+      load: async (athleteId) => {
+        if (exerciseKey) {
+          const prs = await getPersonalRecordsByExercise(athleteId, exerciseKey, {
+            limit: limit ? parseInt(limit) : undefined,
+          })
+          return { prs }
+        }
 
-    // Otherwise, get all PRs for the user
-    const prs = await getPersonalRecordHistoryForUser(userId, {
-      limit: limit ? parseInt(limit) : 500,
-      prType: prType as any || undefined,
+        const prs = await getPersonalRecordHistoryForUser(athleteId, {
+          limit: limit ? parseInt(limit) : 500,
+          prType: prType ? (prType as PRType) : undefined,
+        })
+        return { prs }
+      },
     })
 
-    return NextResponse.json({ prs })
+    return NextResponse.json(result.body, { status: result.status })
   } catch (error) {
     console.error('[API/history/prs] Error fetching PRs:', error)
     return NextResponse.json(

@@ -16,12 +16,9 @@
 
 import { getWorkoutLogs, type WorkoutLog } from '../workout-log-service'
 import {
-  applyFuturePrescriptionMutations,
-  extractCompletedSetEvidence,
-  resolvePerformanceFeedbackAdaptation,
+  applyLoggedPerformanceFeedback,
   type PerformanceFeedbackAdaptationResult,
   type PhaseLProgramShape,
-  type PhaseLSessionShape,
 } from './performance-feedback-adaptation-contract'
 // [PHASE-P] Quality / doctrine sharpness audit. Pure deterministic resolver
 // run AFTER the Phase L/M/N/O overlay finishes its bounded mutations so
@@ -45,31 +42,6 @@ import { runDoctrineUtilizationContract } from './doctrine-utilization-contract'
 // real. See lib/program/session-length-truth-contract.ts.
 import { runSessionLengthTruthContract } from './session-length-truth-contract'
 import type { AdaptiveProgram } from '../adaptive-program-builder'
-
-// =============================================================================
-// [PHASE-M] EVIDENCE HASH — same algorithm as the server adapter so
-// server-applied and client-applied stamps can be compared for idempotency.
-// FNV-1a, JSON-safe, no crypto dependency. NOT a security primitive.
-// =============================================================================
-
-function fnv1aHex(input: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < input.length; i += 1) {
-    h ^= input.charCodeAt(i)
-    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0
-  }
-  return h.toString(16).padStart(8, '0')
-}
-
-function buildEvidenceHashFromLogs(logs: ReadonlyArray<{ id?: string; createdAt?: string; sessionDate?: string }>): string {
-  if (!Array.isArray(logs) || logs.length === 0) return ''
-  const ids = logs
-    .map((l) => (typeof l.id === 'string' && l.id.length > 0 ? l.id : l.createdAt ?? l.sessionDate ?? ''))
-    .filter((s): s is string => typeof s === 'string' && s.length > 0)
-    .sort()
-  if (ids.length === 0) return ''
-  return fnv1aHex(`${ids.length}::${ids.join('|')}`)
-}
 
 // =============================================================================
 // [PHASE-M] SERVER-STAMP DETECTORS — used by Program page boot effect to avoid
@@ -145,6 +117,7 @@ export interface OverlayApplicationResult<T extends PhaseLProgramShape> {
     | 'no_logs'
     | 'server_already_applied_same_evidence'
     | 'server_already_applied_other_evidence'
+    | 'already_applied_same_evidence'
     | 'no_mutations'
 }
 
@@ -170,7 +143,7 @@ function buildSignature(programId: string | undefined, logIds: string[]): string
  */
 export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
   program: T | null | undefined,
-  options?: { nowIso?: string },
+  options?: { nowIso?: string; logs?: readonly WorkoutLog[] },
 ): OverlayApplicationResult<T> | null {
   if (!program || typeof program !== 'object') return null
   const sessions = Array.isArray(program.sessions) ? program.sessions : []
@@ -201,7 +174,8 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
   }
 
   // Read canonical workout logs (browser-only). Server prerender returns [].
-  const logs = getWorkoutLogs()
+  // Tests pass logs directly so the same path can run without browser storage.
+  const logs = options?.logs ?? getWorkoutLogs()
   // Sort newest first so `logs[0]` is the most recent.
   const sortedLogs = [...logs].sort((a, b) => {
     const ta = new Date(a.createdAt ?? a.sessionDate ?? 0).getTime()
@@ -221,86 +195,8 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     return null
   }
 
-  // [PHASE-M] Compute the same evidence hash the server would have computed
-  // and short-circuit if the server has already applied adaptation. We do NOT
-  // re-mutate on top of server-applied stamps because (a) the contract is
-  // stateful w.r.t. the program input it reads, so re-running on already
-  // mutated `sets`/`targetRPE`/etc. could compound bounds, and (b) the
-  // authoritative ownership rule is server-first.
-  const evidenceHash = buildEvidenceHashFromLogs(recent)
-  if (programHasServerAdaptationForHash(program, evidenceHash)) {
-    return {
-      program,
-      adaptation: {
-        status: 'healthy',
-        signals: [],
-        mutations: [],
-        summary: 'Server already applied adaptation for this exact evidence set.',
-        blockedReasons: [],
-        proof: {
-          completedSetsRead: 0,
-          sessionsRead: 0,
-          highRpeCount: 0,
-          underTargetCount: 0,
-          noteWarningsCount: 0,
-          mutationsApplied: 0,
-          mutationsBlocked: 0,
-          currentProgramPreserved: true,
-        },
-      },
-      signature,
-      changed: false,
-      skipReason: 'server_already_applied_same_evidence',
-    }
-  }
-  if (programHasAnyServerAdaptation(program)) {
-    // Server applied for a different evidence corridor (e.g. older logs were
-    // present at generation time, then the user logged a new workout). Keep
-    // the server stamps as authoritative; do not stack a second corridor on
-    // top. Next regenerate will pick up the newer logs.
-    return {
-      program,
-      adaptation: {
-        status: 'partial',
-        signals: [],
-        mutations: [],
-        summary: 'Server-applied adaptation present; client overlay yielding to server authority.',
-        blockedReasons: [],
-        proof: {
-          completedSetsRead: 0,
-          sessionsRead: 0,
-          highRpeCount: 0,
-          underTargetCount: 0,
-          noteWarningsCount: 0,
-          mutationsApplied: 0,
-          mutationsBlocked: 0,
-          currentProgramPreserved: true,
-        },
-      },
-      signature,
-      changed: false,
-      skipReason: 'server_already_applied_other_evidence',
-    }
-  }
-
-  // Build a session-by-day lookup so the extractor can compare actuals to
-  // prescribed reps/hold from the matching program day.
-  const sessionByDay: Record<number, PhaseLSessionShape> = {}
-  for (const sess of sessions) {
-    const dn = typeof sess.dayNumber === 'number' ? sess.dayNumber : -1
-    if (dn >= 0) sessionByDay[dn] = sess
-  }
-
-  // Concatenate evidence across all recent logs.
-  const evidence = recent.flatMap((log) =>
-    extractCompletedSetEvidence(log, sessionByDay),
-  )
-
-  // Determine which day numbers in the program have been completed by mapping
-  // each log's generatedWorkoutId back to a session.dayNumber. Logs without
-  // a parseable mapping are simply ignored for the purposes of the
-  // completed-day filter (the contract still skips earlier-than-current days
-  // via signal application order).
+  // Closed workouts stay closed, including after an athlete revert.
+  // A newer log can still adjust the next future session.
   const completedDayNumbers: number[] = []
   for (const log of recent) {
     const gid = log.generatedWorkoutId
@@ -315,35 +211,22 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     }
   }
 
-  const adaptation = resolvePerformanceFeedbackAdaptation({
-    currentProgram: program,
-    completedSetEvidence: evidence,
-    completedDayNumbers,
+  const idempotent = applyLoggedPerformanceFeedback(program, recent, {
     nowIso: options?.nowIso,
   })
+  const adaptation = idempotent.adaptation
 
-  if (adaptation.proof.mutationsApplied === 0) {
+  if (!idempotent.changed || adaptation.proof.mutationsApplied === 0) {
     return {
-      program,
+      program: idempotent.program,
       adaptation,
       signature,
-      changed: false,
-      skipReason: 'no_mutations',
+      changed: idempotent.changed,
+      skipReason: idempotent.changed ? undefined : (idempotent.skipReason ?? 'no_mutations'),
     }
   }
 
-  // [PHASE-M] Stamp client provenance + the same evidence hash so a later
-  // server overlay (or another mount) can recognize what evidence corridor
-  // produced the existing adaptation.
-  const adapted = applyFuturePrescriptionMutations(
-    program,
-    adaptation.mutations,
-    options?.nowIso,
-    {
-      appliedBy: 'client',
-      evidenceHash,
-    },
-  )
+  const adapted = idempotent.program
 
   // [PHASE-P] Run the quality / doctrine sharpness audit on the adapted
   // program. The resolver is pure / non-blocking; if it throws we keep the
@@ -392,7 +275,10 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
   }
 
   return {
-    program: postPhaseQ,
+    program: {
+      ...postPhaseQ,
+      performanceFeedbackAppliedLogIds: idempotent.program.performanceFeedbackAppliedLogIds,
+    },
     adaptation,
     signature,
     changed: true,

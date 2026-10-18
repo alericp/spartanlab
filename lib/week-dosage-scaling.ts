@@ -24,6 +24,7 @@
  */
 
 import type { AdaptiveSession, AdaptiveExercise } from './adaptive-program-builder'
+import { resolveUnscaledBaseSets } from './program/unscaled-prescription-base'
 
 // =============================================================================
 // TYPES
@@ -346,6 +347,12 @@ export function scaleExerciseForWeek(
   // fallback caps automatically.
   roleCaps: RoleScalingCaps = FALLBACK_SCALING_CAPS,
 ): ScaledExercise {
+  if (typeof exercise.equipmentBlocked === 'string' && exercise.equipmentBlocked.length > 0) {
+    return {
+      ...exercise,
+      weekScalingApplied: false,
+    }
+  }
   const phaseScaling = getWeekDosageScaling(weekNumber)
   // [BASE-WEEK-AUTHORITY-LOCK] Subordinate phase scaling to the role contract.
   // Each phase multiplier is min'd against the role's ceiling so a recovery
@@ -365,7 +372,10 @@ export function scaleExerciseForWeek(
   const rawRepsOrTime = exercise.repsOrTime || (exercise as { reps?: string }).reps || '8-12'
   
   if (!scaling.scalingApplied || weekNumber === 1) {
-    const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
+    const resolvedBase = resolveUnscaledBaseSets(exercise)
+    const originalSets = typeof resolvedBase === 'number'
+      ? resolvedBase
+      : (typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3)
     const originalTargetRPE = exercise.targetRPE || 8
     // [PRESCRIPTION-TYPE-FIX] Preserve hold format for week 1 display
     // [STEP-5-ADAPTIVE-DOSAGE] When the upstream prescription is already a
@@ -394,8 +404,11 @@ export function scaleExerciseForWeek(
     }
   }
   
-  // Parse original values
-  const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
+  // Parse original values. A saved display dose is not scaled a second time.
+  const resolvedBase = resolveUnscaledBaseSets(exercise)
+  const originalSets = typeof resolvedBase === 'number'
+    ? resolvedBase
+    : (typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3)
   const originalTargetRPE = exercise.targetRPE || 8
   // [REST-FIELD-CONTRACT] AdaptiveExercise canonical rest field is `restSeconds`.
   // The downstream `scaledRestPeriod` output name is preserved.

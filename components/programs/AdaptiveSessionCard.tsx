@@ -7762,6 +7762,7 @@ function ExerciseRow({
     restSeconds: exercise.restSeconds,
     prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
     coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
+    equipmentBlocked: exercise.equipmentBlocked,
   }, sessionContext ? {
     sessionFocus: sessionContext.sessionFocus,
     isPrimarySession: sessionContext.isPrimarySession,
@@ -7787,6 +7788,7 @@ function ExerciseRow({
       coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseRowSurface>[0]['coachingMeta'],
       constraintApplied: (exercise as unknown as { constraintApplied?: string }).constraintApplied,
       groupId: (exercise as unknown as { groupId?: string }).groupId,
+      equipmentBlocked: exercise.equipmentBlocked,
     },
     sessionContext
   ) : null
@@ -7798,7 +7800,8 @@ function ExerciseRow({
 
   // [STEP 25.6A/B] Derive exercise-level coaching guidance from card contract truth
   // Step 25.6B: Now prescription-aware with sets, rest, and session context
-  const coachingGuidance = !isWarmupCooldown
+  const equipmentLimitation = exercise.equipmentBlocked
+  const coachingGuidance = !isWarmupCooldown && !equipmentLimitation
     ? buildCoachingGuidanceFromCardContract(
         exercise.name || '',
         exercise.category || 'accessory',
@@ -8129,6 +8132,7 @@ function ExerciseRow({
               mutationType?: string
               userVisibleExplanation?: string
               shortLabel?: string
+              targetDayNumber?: number
               reasonCodes?: string[]
               // [PHASE-O] Optional trend / coach slices, present when the
               // resolver detected multi-session trend evidence on this row.
@@ -8152,24 +8156,62 @@ function ExerciseRow({
           const explanation = adaptation.userVisibleExplanation
           const shortLabel = adaptation.shortLabel
           if (!shortLabel || !explanation) return null
-          const isApplied = adaptation.applied === true
+          const isReverted = adaptation.status === 'reverted_by_athlete'
+          const isApplied = adaptation.applied === true && !isReverted
           const chipClass = isApplied
             ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30'
             : 'bg-[#3A3A3A]/40 text-[#9A9A9A] border border-[#4A4A4A]/40'
-          const titleText = isApplied
-            ? `Adjusted from last workout: ${explanation}`
-            : `Performance signal blocked by safety bound: ${explanation}`
+          const titleText = isReverted
+            ? explanation
+            : isApplied
+              ? `Adjusted from last workout: ${explanation}`
+              : `Performance signal blocked by safety bound: ${explanation}`
+          const targetDayNumber = (adaptation as { targetDayNumber?: number }).targetDayNumber
           return (
-            <span
-              className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
-              title={titleText}
-              aria-label={titleText}
-              data-phase-l-proof="true"
-              data-phase-o-trend-codes={adaptation.trendIntelligence?.trendCodes?.join(',') || undefined}
-              data-phase-o-coach-action={adaptation.coachDecision?.action || undefined}
-            >
-              {shortLabel}
-            </span>
+            <>
+              <span
+                className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
+                title={titleText}
+                aria-label={titleText}
+                data-phase-l-proof="true"
+                data-phase-o-trend-codes={adaptation.trendIntelligence?.trendCodes?.join(',') || undefined}
+                data-phase-o-coach-action={adaptation.coachDecision?.action || undefined}
+              >
+                {shortLabel}
+              </span>
+              <span
+                className="text-[10px] normal-case tracking-normal font-medium text-[#C8C8C8] truncate max-w-[220px]"
+                title={explanation}
+              >
+                {explanation}
+              </span>
+              {isApplied && typeof targetDayNumber === 'number' && (
+                <button
+                  type="button"
+                  className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 bg-[#3A3A3A]/40 text-[#C8C8C8] border border-[#4A4A4A]/40"
+                  aria-label={`Keep the original prescription. ${explanation}`}
+                  title={explanation}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void import('@/lib/program/performance-feedback-persistence').then(({ revertPersistedPerformanceAdaptation }) => {
+                      const saved = revertPersistedPerformanceAdaptation({
+                        dayNumber: targetDayNumber,
+                        exerciseId: exercise.id,
+                        exerciseName: exercise.name,
+                      })
+                      if (saved && typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('spartanlab:performance-adaptation-reverted', {
+                          detail: { program: saved },
+                        }))
+                      }
+                    })
+                  }}
+                >
+                  Keep original
+                </button>
+              )}
+            </>
           )
         })()}
         {/* [AB13-7] EVIDENCE CALIBRATION ROW-LEVEL RPE CAP PROOF CHIP.
@@ -8483,7 +8525,7 @@ function ExerciseRow({
           rows with no trustworthy progression intent (the resolver returns
           `shouldRender:false`). Tagged with `data-ab7-*` attributes for
           screenshot / DOM proof without any visible debug clutter. */}
-      {!isWarmupCooldown && (() => {
+      {!isWarmupCooldown && !equipmentLimitation && (() => {
         const ab7 = resolveExerciseProgressionPrescription({
           exercise,
           exerciseName: exercise.name || '',

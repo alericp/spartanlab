@@ -312,7 +312,7 @@ export interface IngestionInput {
   trainingFeedback?: {
     totalSessionsLast7Days: number
     totalSessionsLast14Days: number
-    expectedSessionsPerWeek: number
+    expectedSessionsPerWeek?: number | null
     averageRecentRPE: number | null
     recentCompletionRate: number | null
     trustedWorkoutCount: number
@@ -727,9 +727,21 @@ function buildAdherenceTruthBlock(
   // Calculate adherence metrics
   const totalSessionsLast7Days = trainingFeedback?.totalSessionsLast7Days ?? 0
   const totalSessionsLast14Days = trainingFeedback?.totalSessionsLast14Days ?? 0
-  const expectedSessionsPerWeek = trainingFeedback?.expectedSessionsPerWeek ?? 4
+  const knownExpected =
+    typeof trainingFeedback?.expectedSessionsPerWeek === 'number' &&
+    trainingFeedback.expectedSessionsPerWeek > 0
+  // Once real session counts are present, a missing weekly frequency must
+  // not be filled with 4. That would invent missed sessions. The historical
+  // fallback stays only when no training feedback was supplied at all.
+  const expectedSessionsPerWeek = knownExpected
+    ? (trainingFeedback?.expectedSessionsPerWeek as number)
+    : trainingFeedback
+      ? 0
+      : 4
   
-  const recentMissedSessions = Math.max(0, expectedSessionsPerWeek - totalSessionsLast7Days)
+  const recentMissedSessions = knownExpected || !trainingFeedback
+    ? Math.max(0, expectedSessionsPerWeek - totalSessionsLast7Days)
+    : 0
   const recentCompletedSessions = totalSessionsLast7Days
   const recentPartialSessions = 0 // Not tracked yet - will be wired when partial session tracking is added
   
@@ -737,7 +749,7 @@ function buildAdherenceTruthBlock(
   let consistencyStatus: 'stable' | 'mixed' | 'disrupted' | 'unknown' = 'unknown'
   
   // Server-side: derive from training feedback since rawConsistencyStatus is unavailable
-  if (totalSessionsLast7Days > 0) {
+  if (knownExpected && totalSessionsLast7Days > 0) {
     // Infer from session data
     const completionRate = totalSessionsLast7Days / expectedSessionsPerWeek
     if (completionRate >= 0.8) {
@@ -748,6 +760,8 @@ function buildAdherenceTruthBlock(
       consistencyStatus = 'disrupted'
     }
     evidence.push(`Consistency inferred from completion rate: ${(completionRate * 100).toFixed(0)}%`)
+  } else if (trainingFeedback && !knownExpected) {
+    evidence.push('Expected weekly frequency was not available, so missed sessions were not inferred.')
   }
   
   // Determine quality

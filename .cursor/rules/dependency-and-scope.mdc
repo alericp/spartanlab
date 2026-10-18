@@ -1,0 +1,15 @@
+---
+description: Follow one ledger task, its dependency, and its authorized file scope
+alwaysApply: true
+---
+
+# Dependencies and scope
+
+Work one authorized task.
+
+- Name its ledger ID when one was given, its hard dependency, and whether that dependency is verified in the current code.
+- Do not start a task whose dependency is still unverified.
+- Do not invent a task ID or mix AB labels, MASTER labels, and prompt numbers.
+- If the change needs files outside the authorized scope, stop and report the blocker.
+- Do not delete dormant modules. Gate unused behavior only when the task asks, and keep the route, API, and job from running while the flag is off.
+- A ledger phase blocks the next phase until recorded evidence exists. A described feature is not an implemented dependency.

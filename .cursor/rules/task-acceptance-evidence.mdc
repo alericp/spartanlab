@@ -1,0 +1,21 @@
+---
+description: Close each task with ledger-ready acceptance evidence
+alwaysApply: true
+---
+
+# Task acceptance evidence
+
+Close every task with:
+
+- the ledger task ID, or "no ledger ID"
+- the files changed
+- the criteria met and the criteria still blocked
+- the commands or UI path actually run, and the observed result
+- the rollback path
+- the next dependency
+
+Use ledger status words only for recorded facts. Written code is not Verified. An open pull request is not Released.
+
+When a browser check was done, name the route and what was visible. When it was not done, say so.
+
+`explain-every-change.mdc` and `record-work-for-ledger.mdc` still apply.

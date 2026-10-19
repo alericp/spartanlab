@@ -18,6 +18,18 @@ import {
 
 export type HistorySyncState = 'updated' | 'failed' | 'skipped'
 
+/**
+ * Effort counts only when the athlete recorded a positive RPE.
+ * A missing value and a placeholder zero are both unmeasured.
+ */
+export function measuredSessionRpe(values: Array<number | null | undefined>): number | null {
+  const measured = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0,
+  )
+  if (measured.length === 0) return null
+  return measured.reduce((sum, value) => sum + value, 0) / measured.length
+}
+
 export function classifyHistoryPersistence(
   result: { persisted?: 'saved' | 'duplicate' | 'failed' } | null | undefined,
 ): HistorySyncState {
@@ -92,7 +104,7 @@ export function classifyHistoryHttp(status: number, threw = false): HistoryHttpC
 
 export function historyLoadCopy(
   kind: 'error' | 'empty' | 'missing',
-  surface: 'archive' | 'workouts' | 'session',
+  surface: 'archive' | 'workouts' | 'session' | 'prs' | 'programs' | 'program',
 ): { title: string; detail: string } {
   if (kind === 'error' && surface === 'archive') {
     return {
@@ -106,10 +118,34 @@ export function historyLoadCopy(
       detail: 'This is a loading problem. It does not mean you have no workout history.',
     }
   }
+  if (kind === 'error' && surface === 'prs') {
+    return {
+      title: 'PR history could not be loaded',
+      detail: 'This is a loading problem. It does not mean you have no personal records.',
+    }
+  }
+  if (kind === 'error' && surface === 'programs') {
+    return {
+      title: 'Program history could not be loaded',
+      detail: 'This is a loading problem. It does not mean you have no saved programs.',
+    }
+  }
+  if (kind === 'error' && surface === 'program') {
+    return {
+      title: 'Program history could not be loaded',
+      detail: 'This program could not be loaded. That does not mean it was removed.',
+    }
+  }
   if (kind === 'error') {
     return {
       title: 'History could not be loaded',
       detail: 'This workout could not be loaded. That does not mean it was removed.',
+    }
+  }
+  if (kind === 'missing' && surface === 'program') {
+    return {
+      title: 'Program Not Found',
+      detail: 'This program could not be found or may have been removed.',
     }
   }
   if (kind === 'missing') {
@@ -396,4 +432,326 @@ export function buildLiveWorkoutHistoryInput(input: LiveWorkoutHistoryInput): {
     workoutDate: input.workoutDate,
     clientSessionId: input.occurrenceId,
   }
+}
+
+/**
+ * Manual and quick logs do not record whether a load was pounds or kilograms.
+ * The history writer labels a max-weight record as kg. The dashboard estimated
+ * 1RM chart labels device strength records as pounds. Leave the entered load
+ * on the device log. Do not copy it and do not convert it.
+ */
+export const LOGGED_LOAD_HISTORY_DECISION = {
+  writtenToHistory: false,
+  reason:
+    'Manual and quick logs store load as a number without a unit. History max-weight records are labeled kg, and device estimated 1RM charts are labeled pounds. The load stays on the device log.',
+} as const
+
+/** Estimated 1RM stays on the device strength log and its existing calculation. */
+export const DEVICE_STRENGTH_PROGRESS = {
+  source: 'device-strength-records',
+  unitLabel: 'lbs',
+  reason:
+    'Estimated 1RM stays on strength logs saved on this device. It is not combined with history loads.',
+} as const
+
+export interface LoggedWorkoutHistoryExercise {
+  id: string
+  name: string
+  category?: string
+  sets?: number
+  reps?: number
+  holdSeconds?: number
+  note?: string
+}
+
+export interface LoggedWorkoutHistoryInput {
+  userId: string
+  occurrenceId: string
+  workoutName: string
+  sessionDate: string
+  durationMinutes: number
+  focusArea?: string
+  perceivedDifficulty?: 'easy' | 'normal' | 'hard'
+  notes?: string
+  exercises?: LoggedWorkoutHistoryExercise[]
+  keyPerformance?: {
+    pullUps?: number
+    dips?: number
+    pushUps?: number
+    skillHoldSeconds?: number
+    skillName?: string
+  }
+}
+
+function loggedPositive(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+/**
+ * Shape a manual or quick log for the existing history writer.
+ * Reps and holds pass through. Load is omitted on purpose.
+ */
+export function buildLoggedWorkoutHistoryInput(input: LoggedWorkoutHistoryInput): {
+  userId: string
+  workoutName: string
+  focusArea?: string
+  durationMinutes: number
+  completedSets: CompletedSetData[]
+  exercises: Array<{
+    id: string
+    name: string
+    category: string
+    sets: number
+    targetReps?: number
+    targetHold?: number
+    note?: string
+  }>
+  perceivedDifficulty?: 'easy' | 'normal' | 'hard'
+  notes?: string
+  workoutDate: string
+  clientSessionId: string
+} {
+  const exercises: Array<{
+    id: string
+    name: string
+    category: string
+    sets: number
+    targetReps?: number
+    targetHold?: number
+    note?: string
+  }> = []
+  const completedSets: CompletedSetData[] = []
+  const pushExercise = (exercise: {
+    id: string
+    name: string
+    category: string
+    reps: number | null
+    hold: number | null
+    sets: number
+    note?: string
+  }) => {
+    exercises.push({
+      id: exercise.id,
+      name: exercise.name,
+      category: exercise.category,
+      sets: exercise.sets,
+      targetReps: exercise.reps ?? undefined,
+      targetHold: exercise.hold ?? undefined,
+      note: exercise.note,
+    })
+    for (let setNumber = 1; setNumber <= exercise.sets; setNumber += 1) {
+      completedSets.push({
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        exerciseCategory: exercise.category,
+        setNumber,
+        targetReps: exercise.reps ?? 0,
+        actualReps: exercise.reps ?? 0,
+        restSeconds: 0,
+        actualHoldSeconds: exercise.hold ?? undefined,
+      })
+    }
+  }
+
+  for (const exercise of input.exercises ?? []) {
+    const name = exercise.name.trim()
+    if (!name) continue
+    const reps = loggedPositive(exercise.reps)
+    const hold = loggedPositive(exercise.holdSeconds)
+    const setCount = loggedPositive(exercise.sets) ?? (reps || hold ? 1 : 0)
+    if (!setCount) continue
+    pushExercise({
+      id: exercise.id,
+      name,
+      category: exercise.category || 'bodyweight',
+      reps,
+      hold,
+      sets: setCount,
+      note: exercise.note,
+    })
+  }
+
+  const knownNames = new Set(exercises.map(exercise => exercise.name.toLowerCase()))
+  const extras: Array<{ id: string; name: string; reps?: number; hold?: number }> = []
+  const performance = input.keyPerformance
+  if (performance?.pullUps) extras.push({ id: 'quick-pull-up', name: 'Pull-Up', reps: performance.pullUps })
+  if (performance?.dips) extras.push({ id: 'quick-dip', name: 'Dip', reps: performance.dips })
+  if (performance?.pushUps) extras.push({ id: 'quick-push-up', name: 'Push-Up', reps: performance.pushUps })
+  if (performance?.skillHoldSeconds) {
+    extras.push({
+      id: 'quick-skill-hold',
+      name: performance.skillName?.trim() || 'Skill Hold',
+      hold: performance.skillHoldSeconds,
+    })
+  }
+  for (const extra of extras) {
+    if (knownNames.has(extra.name.toLowerCase())) continue
+    const reps = loggedPositive(extra.reps)
+    const hold = loggedPositive(extra.hold)
+    if (!reps && !hold) continue
+    pushExercise({
+      id: extra.id,
+      name: extra.name,
+      category: hold ? 'skill' : 'bodyweight',
+      reps,
+      hold,
+      sets: 1,
+    })
+  }
+
+  return {
+    userId: input.userId,
+    workoutName: input.workoutName,
+    focusArea: input.focusArea,
+    durationMinutes: input.durationMinutes,
+    completedSets,
+    exercises,
+    perceivedDifficulty: input.perceivedDifficulty,
+    notes: input.notes,
+    workoutDate: input.sessionDate,
+    clientSessionId: input.occurrenceId,
+  }
+}
+
+/** Lines for reps, holds, and loads already stored on a history snapshot. */
+export function historyPerformanceLines(
+  exercises: ExerciseResultSnapshot[] | null | undefined,
+): string[] {
+  if (!exercises) return []
+  const lines: string[] = []
+  for (const exercise of exercises) {
+    const name = exercise.exerciseName?.trim()
+    if (!name) continue
+    const reps = bestPositive(exercise.actual?.repsPerSet)
+    const hold = bestPositive(exercise.actual?.holdPerSet)
+    const load = positiveNumber(exercise.actual?.weightUsed)
+    if (reps !== null) lines.push(`${name} ${reps} reps`)
+    if (hold !== null) lines.push(`${name} ${hold}s hold`)
+    if (load !== null) lines.push(`${name} load ${load}`)
+  }
+  return lines
+}
+
+export interface HistoryTrainingSessionView {
+  id: string
+  name: string
+  date: string
+  lines: string[]
+}
+
+export interface DeviceTrainingSummary {
+  totalWorkouts: number
+  workoutsThisWeek: number
+  lastWorkoutName: string | null
+  lastWorkoutDate: string | null
+}
+
+export type RecentTrainingModel =
+  | {
+      mode: 'history'
+      href: '/history/workouts'
+      workoutsThisWeek: number
+      sessions: HistoryTrainingSessionView[]
+    }
+  | ({ mode: 'device'; href: '/workouts' } & DeviceTrainingSummary)
+  | {
+      mode: 'error'
+      title: string
+      detail: string
+      device: ({ href: '/workouts' } & DeviceTrainingSummary) | null
+    }
+  | { mode: 'empty'; href: '/workouts' }
+
+function startOfMonday(now: Date): Date {
+  const day = now.getDay()
+  const daysToMonday = day === 0 ? 6 : day - 1
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - daysToMonday)
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
+/**
+ * Recent training follows saved history when that read succeeds.
+ * A failed read stays an error. Device logs stay a separate list.
+ */
+export function recentTrainingModel(input: {
+  historyStatus: 'ready' | 'error' | 'signed_out'
+  sessions?: Array<{
+    id: string
+    workoutName: string
+    workoutDate: string
+    exerciseResultsSnapshot?: ExerciseResultSnapshot[]
+  }>
+  device?: DeviceTrainingSummary | null
+  now?: Date
+}): RecentTrainingModel {
+  const device = input.device && input.device.totalWorkouts > 0
+    ? { href: '/workouts' as const, ...input.device }
+    : null
+  if (input.historyStatus === 'error') {
+    const copy = historyLoadCopy('error', 'workouts')
+    return { mode: 'error', title: copy.title, detail: copy.detail, device }
+  }
+  if (input.historyStatus === 'signed_out') {
+    if (!device) return { mode: 'empty', href: '/workouts' }
+    return { mode: 'device', ...device }
+  }
+  const now = input.now ?? new Date()
+  const weekStart = startOfMonday(now)
+  const source = input.sessions ?? []
+  const sessions = source.map(session => ({
+    id: session.id,
+    name: session.workoutName,
+    date: session.workoutDate,
+    lines: historyPerformanceLines(session.exerciseResultsSnapshot).slice(0, 4),
+  }))
+  if (sessions.length > 0) {
+    const workoutsThisWeek = source.filter(session => {
+      const date = new Date(session.workoutDate)
+      return date >= weekStart && date <= now
+    }).length
+    return {
+      mode: 'history',
+      href: '/history/workouts',
+      workoutsThisWeek,
+      sessions: sessions.slice(0, 3),
+    }
+  }
+  if (device) return { mode: 'device', ...device }
+  return { mode: 'empty', href: '/workouts' }
+}
+
+export interface OwnedHistoryRetryLog {
+  id: string
+  occurrenceId?: string
+  ownerUserId?: string
+  historySync?: 'pending' | 'updated' | 'skipped'
+  createdAt: string
+  isQuickLog?: boolean
+  sessionName?: string
+  generatedWorkoutId?: string
+}
+
+/**
+ * A failed history sync can be retried only by the athlete who saved it.
+ * Another account, a finished sync, and a log with no owner are ignored.
+ */
+export function selectOwnedHistoryRetry<T extends OwnedHistoryRetryLog>(
+  logs: T[],
+  userId: string | null | undefined,
+  source: 'manual' | 'quick',
+  match?: { sessionName?: string; generatedWorkoutId?: string },
+): T | null {
+  if (!userId) return null
+  const pending = logs
+    .filter(log => {
+      if (log.historySync !== 'pending' || log.ownerUserId !== userId || !log.occurrenceId) return false
+      if (source === 'quick' ? log.isQuickLog !== true : log.isQuickLog === true) return false
+      if (match?.sessionName && log.sessionName !== match.sessionName) return false
+      if (match?.generatedWorkoutId && log.generatedWorkoutId !== match.generatedWorkoutId) return false
+      return true
+    })
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+  return pending[0] ?? null
 }

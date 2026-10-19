@@ -11,6 +11,7 @@
  */
 
 import { saveSessionFeedback } from './session-feedback'
+import { selectOwnedHistoryRetry } from './workout/history-progress'
 import {
   occurrenceAfterEvidenceSave,
   planLocalWorkoutSave,
@@ -104,6 +105,10 @@ export interface WorkoutLog {
   completedSetEvidence?: CompletedSetEvidence[]
   occurrenceId?: string
   serverEvidence?: 'pending' | 'saved' | 'skipped'
+  /** Signed-in athlete who owns a history retry. Another account must not read it. */
+  ownerUserId?: string
+  /** Pending means History still needs the original occurrence id. */
+  historySync?: 'pending' | 'updated' | 'skipped'
 }
 
 export type SavedWorkoutLog = WorkoutLog & { saveDisposition: 'inserted' | 'kept' }
@@ -140,6 +145,30 @@ function evidenceSyncNeeded(log: WorkoutLog): boolean {
 
 function writeStoredLogs(logs: WorkoutLog[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
+}
+
+export function markLoggedHistorySync(
+  occurrenceId: string,
+  userId: string,
+  state: 'pending' | 'updated' | 'skipped',
+): void {
+  if (!isBrowser() || !occurrenceId || !userId) return
+  const logs = getWorkoutLogs()
+  const index = logs.findIndex(log => log.occurrenceId === occurrenceId)
+  if (index < 0) return
+  const current = logs[index]
+  if (current.ownerUserId && current.ownerUserId !== userId) return
+  logs[index] = { ...current, ownerUserId: userId, historySync: state }
+  writeStoredLogs(logs)
+}
+
+export function readLoggedHistoryRetry(
+  userId: string | null | undefined,
+  source: 'manual' | 'quick',
+  match?: { sessionName?: string; generatedWorkoutId?: string },
+): WorkoutLog | null {
+  if (!isBrowser()) return null
+  return selectOwnedHistoryRetry(getWorkoutLogs(), userId, source, match)
 }
 
 function patchStoredLog(id: string, patch: Partial<WorkoutLog>) {

@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         if (exerciseKey) {
           const prs = await getPersonalRecordsByExercise(athleteId, exerciseKey, {
             limit: limit ? parseInt(limit) : undefined,
+            reportErrors: true,
           })
           return { prs }
         }
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
         const prs = await getPersonalRecordHistoryForUser(athleteId, {
           limit: limit ? parseInt(limit) : 500,
           prType: prType ? (prType as PRType) : undefined,
+          reportErrors: true,
         })
         return { prs }
       },

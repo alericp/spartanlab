@@ -21,7 +21,7 @@ import {
   readPersonalRecordSnapshot,
   type SessionPersonalRecord,
 } from './workout/save-reliability'
-import { historyNoteForStorage } from './workout/history-progress'
+import { historyNoteForStorage, measuredSessionRpe } from './workout/history-progress'
 import type {
   CreateWorkoutSessionInput,
   SessionMetricsSnapshot,
@@ -483,16 +483,14 @@ export async function persistWorkoutSession(
     // Build session metrics snapshot
     const totalSets = data.completedSets.length
     const totalReps = data.completedSets.reduce((sum, s) => sum + s.actualReps, 0)
-    const averageRPE = totalSets > 0
-      ? data.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / totalSets
-      : null
+    const averageRPE = measuredSessionRpe(data.completedSets.map(set => set.actualRPE))
 
     const sessionMetrics: SessionMetricsSnapshot = {
       totalSets,
       totalReps,
       totalVolume: performances.reduce((sum, p) => sum + (p.totalVolume ?? 0), 0),
       actualDurationMinutes: data.durationMinutes,
-      averageRPE: averageRPE ? Math.round(averageRPE * 10) / 10 : undefined,
+      averageRPE: averageRPE === null ? undefined : Math.round(averageRPE * 10) / 10,
       completionRate: data.exercises.length > 0
         ? new Set(data.completedSets.map(s => s.exerciseId)).size / data.exercises.length
         : 1,

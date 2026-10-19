@@ -22,7 +22,7 @@ export async function GET(
     const result = await readOwnedRecord({
       authenticatedUserId: userId,
       notFoundError: 'Program not found',
-      load: () => getProgramHistoryById(id),
+      load: () => getProgramHistoryById(id, { reportErrors: true }),
     })
 
     return NextResponse.json(result.body, { status: result.status })

@@ -28,12 +28,14 @@ import {
   type SessionPerformanceResult,
 } from '@/lib/session-performance'
 import { getDailyReadiness } from '@/lib/daily-readiness'
+import type { WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { measuredSessionRpe } from '@/lib/workout/history-progress'
 
 interface WorkoutSessionSummaryProps {
   stats: SessionStats
   completedSets: CompletedSetData[]
   sessionName: string
-  onSave: (notes?: string) => Promise<boolean>
+  onSave: (notes?: string) => Promise<WorkoutSaveAthleteStatus>
   onReturnToDashboard: () => void
   onReturnToProgram: () => void
 }
@@ -49,6 +51,7 @@ export function WorkoutSessionSummary({
   const [notes, setNotes] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
 
   // Group sets by exercise for display
   const exerciseSummaries = completedSets.reduce((acc, set) => {
@@ -58,17 +61,16 @@ export function WorkoutSessionSummary({
         category: set.exerciseCategory,
         sets: [],
         totalReps: 0,
-        avgRPE: 0,
+        avgRPE: null as number | null,
       }
     }
     acc[set.exerciseName].sets.push(set)
     acc[set.exerciseName].totalReps += set.actualReps
     return acc
-  }, {} as Record<string, { name: string; category: string; sets: CompletedSetData[]; totalReps: number; avgRPE: number }>)
+  }, {} as Record<string, { name: string; category: string; sets: CompletedSetData[]; totalReps: number; avgRPE: number | null }>)
 
-  // Calculate average RPE per exercise
   Object.values(exerciseSummaries).forEach(ex => {
-    ex.avgRPE = ex.sets.reduce((sum, s) => sum + s.actualRPE, 0) / ex.sets.length
+    ex.avgRPE = measuredSessionRpe(ex.sets.map(set => set.actualRPE))
   })
 
   // Format duration
@@ -88,12 +90,15 @@ export function WorkoutSessionSummary({
 
   const handleSave = async () => {
     setIsSaving(true)
-    const success = await onSave(notes || undefined)
+    const result = await onSave(notes || undefined)
     setIsSaving(false)
-    if (success) {
+    setSaveStatus(result)
+    if (result.state === 'saved') {
       setIsSaved(true)
     }
   }
+
+  const historyFailed = saveStatus?.historySync === 'failed'
 
   // Determine performance rating based on average RPE
   const getPerformanceRating = () => {
@@ -120,7 +125,17 @@ export function WorkoutSessionSummary({
       elapsedSeconds: stats.elapsedSeconds,
       averageRPE: stats.averageRPE ?? undefined,
     },
-    completedSets,
+    completedSets.flatMap(set => {
+      const actualRPE = measuredSessionRpe([set.actualRPE])
+      const targetRPE = measuredSessionRpe([set.targetRPE]) ?? actualRPE
+      if (actualRPE === null || targetRPE === null) return []
+      return [{
+        targetReps: set.targetReps,
+        actualReps: set.actualReps,
+        targetRPE,
+        actualRPE,
+      }]
+    }),
     'mixed', // Default session type
     sessionName,
     readiness
@@ -218,6 +233,7 @@ export function WorkoutSessionSummary({
                     {ex.sets.length} sets • {ex.totalReps} total reps
                   </p>
                 </div>
+                {ex.avgRPE !== null && (
                 <Badge
                   variant="outline"
                   className={`
@@ -229,6 +245,7 @@ export function WorkoutSessionSummary({
                 >
                   RPE {Math.round(ex.avgRPE)}
                 </Badge>
+                )}
               </div>
             ))}
           </div>
@@ -250,20 +267,25 @@ export function WorkoutSessionSummary({
           </div>
         )}
 
+        {saveStatus?.state === 'failed' && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="font-medium text-red-300">{saveStatus.title}</p>
+            <p className="text-sm text-[#A4ACB8] mt-1">{saveStatus.detail}</p>
+          </div>
+        )}
+
         {/* Save Status */}
-        {isSaved && (
-          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-green-400" />
+        {isSaved && saveStatus && (
+          <div className={`rounded-lg p-4 flex items-center gap-3 border ${
+            historyFailed
+              ? 'bg-amber-500/10 border-amber-500/30'
+              : 'bg-green-500/10 border-green-500/20'
+          }`}>
+            <CheckCircle2 className={`w-5 h-5 ${historyFailed ? 'text-amber-300' : 'text-green-400'}`} />
             <div>
-              <p className="font-medium text-green-400">Session Saved to Your History</p>
-              {/* [SESSION-STATS-BOUNDARY] PR detection lives on the
-                  workout history result (`historyResult.prsDetected` in
-                  `useWorkoutSession`), NOT on `SessionStats`. Display
-                  the always-true tracking line and omit a fake PR count
-                  here; PR celebration is owned by the dedicated PR
-                  surface elsewhere in the app. */}
+              <p className={`font-medium ${historyFailed ? 'text-amber-200' : 'text-green-400'}`}>{saveStatus.title}</p>
               <p className="text-sm text-[#A4ACB8]">
-                Recorded for progress tracking and fatigue analysis.
+                {saveStatus.detail}
               </p>
             </div>
           </div>
@@ -271,6 +293,15 @@ export function WorkoutSessionSummary({
 
         {/* Action Buttons */}
         <div className="space-y-3">
+          {isSaved && historyFailed && (
+            <Button
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white py-6"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Retry History Sync'}
+            </Button>
+          )}
           {!isSaved ? (
             <Button
               className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white py-6"

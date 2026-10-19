@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
       missingIdError: 'User ID required',
       load: async (athleteId) => {
         const [workoutHistory, programHistory, recentPRs, totalPRs] = await Promise.all([
-          getWorkoutHistoryForUser(athleteId, { limit: 20, sortOrder: 'desc' }),
-          getProgramHistoryForUser(athleteId, { limit: 10, sortOrder: 'desc' }),
-          getPersonalRecordHistoryForUser(athleteId, { limit: 5, sortOrder: 'desc' }),
-          getTotalPRCount(athleteId),
+          getWorkoutHistoryForUser(athleteId, { limit: 20, sortOrder: 'desc', reportErrors: true }),
+          getProgramHistoryForUser(athleteId, { limit: 10, sortOrder: 'desc', reportErrors: true }),
+          getPersonalRecordHistoryForUser(athleteId, { limit: 5, sortOrder: 'desc', reportErrors: true }),
+          getTotalPRCount(athleteId, { reportErrors: true }),
         ])
         return { workoutHistory, programHistory, recentPRs, totalPRs }
       },

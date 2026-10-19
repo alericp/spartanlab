@@ -237,6 +237,7 @@ import {
   WORKOUT_OCCURRENCE_STORAGE_KEY,
   createOccurrenceId,
   describeWorkoutSaveResult,
+  occurrenceAfterHistoryResult,
   resolveOccurrenceId,
   type StoredOccurrence,
   type WorkoutSaveAthleteStatus,
@@ -245,7 +246,6 @@ import { persistWorkoutSession } from '@/lib/workout-history-persistence'
 import {
   buildLiveWorkoutHistoryInput,
   classifyHistoryPersistence,
-  shouldRetainOccurrenceForHistoryRetry,
 } from '@/lib/workout/history-progress'
 import {
   WORKOUT_SESSION_SCHEMA_VERSION as STORAGE_SCHEMA_VERSION,
@@ -1996,6 +1996,35 @@ function rememberOccurrence(occurrence: StoredOccurrence) {
   try {
     localStorage.setItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(occurrence))
   } catch {}
+}
+
+function settleOccurrenceAfterHistory(
+  fallback: StoredOccurrence,
+  historySync: 'updated' | 'failed' | 'skipped',
+  serverEvidence?: 'pending' | 'saved' | 'skipped',
+) {
+  const stored = readStoredOccurrence()
+  const matches = stored && stored.occurrenceId === fallback.occurrenceId ? stored : null
+  if (!matches) {
+    if (historySync === 'failed') {
+      rememberOccurrence({ ...fallback, historyPending: true })
+      clearSessionStorage({ keepOccurrence: true })
+      return
+    }
+    clearSessionStorage({ keepOccurrence: false })
+    return
+  }
+  const decision = occurrenceAfterHistoryResult({
+    occurrence: matches,
+    historyConfirmed: historySync !== 'failed',
+    serverEvidence,
+  })
+  if (decision.action === 'keep') {
+    rememberOccurrence(decision.occurrence)
+    clearSessionStorage({ keepOccurrence: true })
+    return
+  }
+  clearSessionStorage({ keepOccurrence: false })
 }
 
 export function clearSessionStorage(options?: { keepOccurrence?: boolean }) {
@@ -7762,7 +7791,12 @@ failureStage: null,
       stored: readStoredOccurrence(),
       createId: () => createOccurrenceId(),
     })
-    rememberOccurrence(occurrence.occurrence)
+    rememberOccurrence({
+      sessionId: occurrence.occurrence.sessionId,
+      occurrenceId: occurrence.occurrence.occurrenceId,
+      historyPending: Boolean(userId),
+      evidenceSaved: occurrence.occurrence.evidenceSaved === true,
+    })
     const savedLog = quickLogWorkout({
       occurrenceId: occurrence.occurrence.occurrenceId,
       sessionName: safeSession.dayLabel,
@@ -7857,13 +7891,9 @@ failureStage: null,
         historyRetryRef.current = null
       }
 
-      // Keep the occurrence while evidence or history can still be retried.
-      clearSessionStorage({
-        keepOccurrence: shouldRetainOccurrenceForHistoryRetry({
-          serverEvidence: savedLog.serverEvidence,
-          historySync,
-        }),
-      })
+      // Keep the original occurrence while history is unconfirmed, including
+      // when the server committed and this browser only saw a timeout.
+      settleOccurrenceAfterHistory(occurrence.occurrence, historySync, savedLog.serverEvidence)
       clearRestTimerState()
       clearSessionOverrides()
       setSaveAthleteStatus(describeWorkoutSaveResult({
@@ -7891,12 +7921,15 @@ failureStage: null,
     try {
       const historyResult = await persistWorkoutSession(pending.payload)
       const historySync = classifyHistoryPersistence(historyResult)
-      clearSessionStorage({
-        keepOccurrence: shouldRetainOccurrenceForHistoryRetry({
-          serverEvidence: pending.serverEvidence,
-          historySync,
-        }),
-      })
+      settleOccurrenceAfterHistory(
+        {
+          sessionId: readStoredOccurrence()?.sessionId ?? pending.payload.clientSessionId,
+          occurrenceId: pending.payload.clientSessionId,
+          historyPending: true,
+        },
+        historySync,
+        pending.serverEvidence,
+      )
       setSaveAthleteStatus(describeWorkoutSaveResult({
         outcome: 'saved',
         saveDisposition: 'kept',

@@ -12,6 +12,14 @@ export const WORKOUT_OCCURRENCE_STORAGE_KEY = 'spartanlab_workout_occurrence'
 export interface StoredOccurrence {
   sessionId: string
   occurrenceId: string
+  /**
+   * The history write has not been confirmed. A successful evidence post must
+   * not drop this id, or a later retry would mint a new one and duplicate
+   * the session, personal records, and set evidence.
+   */
+  historyPending?: boolean
+  /** The evidence post for this occurrence already reached the server. */
+  evidenceSaved?: boolean
 }
 
 export interface SaveIdentity {
@@ -167,6 +175,53 @@ export function shouldKeepOccurrenceAfterLocalSave(
   serverEvidence: 'pending' | 'saved' | 'skipped' | undefined,
 ): boolean {
   return serverEvidence === 'pending'
+}
+
+/**
+ * Evidence success while history is still unconfirmed marks the occurrence
+ * instead of deleting it. The occurrence id stays the retry identity.
+ */
+export function occurrenceAfterEvidenceSave(
+  stored: StoredOccurrence | null,
+  occurrenceId: string,
+): { action: 'ignore' } | { action: 'release' } | { action: 'keep'; occurrence: StoredOccurrence } {
+  if (!stored || stored.occurrenceId !== occurrenceId) return { action: 'ignore' }
+  if (stored.historyPending) {
+    return {
+      action: 'keep',
+      occurrence: {
+        sessionId: stored.sessionId,
+        occurrenceId: stored.occurrenceId,
+        historyPending: true,
+        evidenceSaved: true,
+      },
+    }
+  }
+  return { action: 'release' }
+}
+
+/**
+ * Drop the occurrence only after history is confirmed and evidence is settled.
+ * A failed or timed-out history write keeps the original occurrence id.
+ */
+export function occurrenceAfterHistoryResult(input: {
+  occurrence: StoredOccurrence
+  historyConfirmed: boolean
+  serverEvidence?: 'pending' | 'saved' | 'skipped'
+}): { action: 'release' } | { action: 'keep'; occurrence: StoredOccurrence } {
+  const evidenceSettled = input.occurrence.evidenceSaved === true
+    || input.serverEvidence === 'saved'
+    || input.serverEvidence === 'skipped'
+  if (input.historyConfirmed && evidenceSettled) return { action: 'release' }
+  return {
+    action: 'keep',
+    occurrence: {
+      sessionId: input.occurrence.sessionId,
+      occurrenceId: input.occurrence.occurrenceId,
+      historyPending: !input.historyConfirmed,
+      evidenceSaved: input.occurrence.evidenceSaved === true || input.serverEvidence === 'saved',
+    },
+  }
 }
 
 export function workoutLogIdForOccurrence(occurrenceId: string): string {

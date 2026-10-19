@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
           limit,
           offset,
           sortOrder: 'desc',
+          reportErrors: true,
         })
         return { workouts }
       },

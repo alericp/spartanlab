@@ -320,6 +320,24 @@ describe('private workout notes stay out of history summaries', () => {
   })
 })
 
+describe('history reads report a failure instead of an empty archive', () => {
+  it('throws when the archive asks for errors and stays empty for other callers', async () => {
+    const { isDatabaseAvailable } = await import('../db.ts')
+    if (await isDatabaseAvailable()) return
+    const { HistoryReadError, getWorkoutHistoryForUser, getWorkoutSessionHistoryById } = await import('../history-service.ts')
+    await assert.rejects(
+      () => getWorkoutHistoryForUser(OWNER, { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.deepEqual(await getWorkoutHistoryForUser(OWNER), [])
+    await assert.rejects(
+      () => getWorkoutSessionHistoryById('session-missing', { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.equal(await getWorkoutSessionHistoryById('session-missing'), null)
+  })
+})
+
 describe('signed-in history ownership', () => {
   it('allows the signed-in athlete and refuses another athlete or a missing session owner', () => {
     assert.equal(decideRequestedAthleteAccess(OWNER, OWNER).allowed, true)
@@ -340,7 +358,9 @@ describe('history progress wiring', () => {
     assert.match(live, /persistWorkoutSession\(historyInput\)/)
     assert.match(live, /occurrenceId: occurrence\.occurrence\.occurrenceId/)
     assert.match(live, /userId,\s*\n\s*occurrenceId:/)
-    assert.match(live, /shouldRetainOccurrenceForHistoryRetry/)
+    assert.match(live, /historyPending: Boolean\(userId\)/)
+    assert.match(live, /occurrenceAfterHistoryResult/)
+    assert.match(readFileSync('lib/workout-log-service.ts', 'utf8'), /occurrenceAfterEvidenceSave/)
     assert.match(live, /saveDisposition: 'kept'/)
     const retry = live.match(/const retryHistorySync = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[\]\)/)
     assert.ok(retry)
@@ -359,6 +379,14 @@ describe('history progress wiring', () => {
     assert.doesNotMatch(workoutsPage, /w-fit/)
     assert.match(sessionPage, /historyLoadCopy\(loadKind === 'error' \? 'error' : 'missing', 'session'\)/)
     assert.match(sessionPage, /previousExerciseSnapshots/)
+    assert.match(readFileSync('app/api/history/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/api/history/workouts/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/api/history/sessions/[id]/route.ts', 'utf8'), /reportErrors: true/)
+    const hook = readFileSync('hooks/useWorkoutSession.ts', 'utf8')
+    const localSave = hook.indexOf('saveWorkoutLog(')
+    const historySave = hook.indexOf('persistWorkoutSession(')
+    assert.ok(localSave > 0 && historySave > localSave)
+    assert.match(hook, /clientSessionId: occurrenceId/)
     const detail = readFileSync('components/history/SessionDetail.tsx', 'utf8')
     assert.match(detail, /session\.summaryMessage/)
     assert.match(detail, /legitimatePrHits/)

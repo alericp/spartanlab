@@ -7,6 +7,7 @@ import {
   dedupeWorkoutNoteReadings,
   interpretWorkoutNote,
   noteTextMayInfluenceTraining,
+  workoutNoteSummaryLine,
 } from './notes-interpretation.ts'
 
 describe('workout note readings', () => {
@@ -66,6 +67,17 @@ describe('workout note readings', () => {
   it('says nothing when the note and tags are missing', () => {
     assert.equal(interpretWorkoutNote({ text: '   ', selectedTags: [] }), null)
     assert.equal(noteTextMayInfluenceTraining(null), false)
+  })
+
+  it('summarizes a set note without repeating private details', () => {
+    const privateNote = 'Email athlete@example.com. Phone 415-555-0199. Diagnosed last year.'
+    const line = workoutNoteSummaryLine(privateNote)
+    assert.equal(line, 'Private details stay with this set and are not shown here.')
+    assert.doesNotMatch(line ?? '', /athlete@example.com/)
+    assert.doesNotMatch(line ?? '', /415-555-0199/)
+    assert.doesNotMatch(line ?? '', /diagnosed/i)
+    assert.equal(workoutNoteSummaryLine('Grip gave out on the last rep'), 'You wrote that grip limited the set.')
+    assert.equal(workoutNoteSummaryLine('   '), null)
   })
 
   it('does not repeat private details or use them as a measurement', () => {

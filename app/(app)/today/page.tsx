@@ -58,6 +58,11 @@ import {
   type ResolvedGroupedExecutionPrescription,
 } from '@/components/programs/lib/grouped-execution-prescription'
 import { getGroupedMethodSemantics, type GroupType } from '@/components/programs/lib/session-group-display'
+import {
+  buildResumeWorkoutUrl,
+  getResumableSessionSummary,
+  type ResumableSessionSummary,
+} from '@/lib/workout/resume-session'
 
 export default function TodaySessionPage() {
   const [currentSession, setCurrentSession] = useState<AdaptiveSession | null>(null)
@@ -78,6 +83,7 @@ export default function TodaySessionPage() {
   const [selectedVariant, setSelectedVariant] = useState<number>(0) // 0 = Full by default
   
   const [mounted, setMounted] = useState(false)
+  const [resumeSummary, setResumeSummary] = useState<ResumableSessionSummary | null>(null)
 
   const loadData = useCallback(() => {
     // Use safe unified program state
@@ -156,6 +162,7 @@ export default function TodaySessionPage() {
 
   useEffect(() => {
     setMounted(true)
+    setResumeSummary(getResumableSessionSummary())
     const inferredWellness = inferWellnessFromRecovery()
     setWellnessState(inferredWellness)
   }, [])
@@ -323,6 +330,24 @@ export default function TodaySessionPage() {
             </p>
           </div>
         </div>
+
+        {resumeSummary && (
+          <Card className="bg-[#2A2A2A] border-emerald-500/30 p-4 mb-4">
+            <p className="text-xs uppercase tracking-wider text-emerald-300 mb-1">Workout in progress</p>
+            <p className="text-base font-semibold">{resumeSummary.dayLabel}</p>
+            <p className="text-sm text-[#A5A5A5] mt-1">
+              {resumeSummary.completedSetsCount} sets logged
+              {resumeSummary.status === 'resting' ? ' · resting' : ''}
+              . This session is not in history until you save it.
+            </p>
+            <Link href={buildResumeWorkoutUrl(resumeSummary)} className="block mt-3">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                <Play className="w-4 h-4 mr-2" />
+                Resume workout
+              </Button>
+            </Link>
+          </Card>
+        )}
 
         {/* No Program State */}
         {!currentSession && (

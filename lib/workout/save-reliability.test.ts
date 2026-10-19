@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import {
   createOccurrenceId,
+  describeWorkoutSaveResult,
   historyWritePlan,
   missingSessionPersonalRecords,
   personalRecordPersistencePlan,
@@ -171,6 +172,25 @@ describe('partial personal-record saves', () => {
     assert.equal(records[0].exerciseKey, 'pull_up')
     const encoded = readPersonalRecordSnapshot(JSON.stringify([intended[1]]))
     assert.equal(encoded[0].newValue, 12)
+  })
+})
+
+describe('athlete save status', () => {
+  it('names in progress, a failed save, a pending sync, and a duplicate keep', () => {
+    assert.equal(describeWorkoutSaveResult({ outcome: 'in_progress' }).title, 'In progress')
+    assert.match(describeWorkoutSaveResult({ outcome: 'failed' }).detail, /not saved/)
+    assert.match(
+      describeWorkoutSaveResult({ outcome: 'saved', saveDisposition: 'inserted', serverEvidence: 'pending' }).detail,
+      /this device/,
+    )
+    assert.match(
+      describeWorkoutSaveResult({ outcome: 'saved', saveDisposition: 'kept', serverEvidence: 'saved' }).detail,
+      /second history entry/,
+    )
+    assert.match(
+      describeWorkoutSaveResult({ outcome: 'saved', saveDisposition: 'inserted', serverEvidence: 'skipped' }).detail,
+      /in your history/,
+    )
   })
 })
 

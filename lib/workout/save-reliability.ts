@@ -172,3 +172,60 @@ export function shouldKeepOccurrenceAfterLocalSave(
 export function workoutLogIdForOccurrence(occurrenceId: string): string {
   return `workout-${occurrenceId}`
 }
+
+export interface WorkoutSaveAthleteStatus {
+  state: 'in_progress' | 'saving' | 'saved' | 'failed'
+  title: string
+  detail: string
+}
+
+/**
+ * Athlete-facing save status. This reads the existing save result and does
+ * not write a second log.
+ */
+export function describeWorkoutSaveResult(input: {
+  outcome: 'in_progress' | 'saving' | 'failed' | 'saved'
+  saveDisposition?: 'inserted' | 'kept'
+  serverEvidence?: 'pending' | 'saved' | 'skipped'
+}): WorkoutSaveAthleteStatus {
+  if (input.outcome === 'in_progress') {
+    return {
+      state: 'in_progress',
+      title: 'In progress',
+      detail: 'Logged sets stay on this device until you save the workout.',
+    }
+  }
+  if (input.outcome === 'saving') {
+    return {
+      state: 'saving',
+      title: 'Saving',
+      detail: 'Saving this workout to your history.',
+    }
+  }
+  if (input.outcome === 'failed') {
+    return {
+      state: 'failed',
+      title: 'Save error',
+      detail: 'This workout was not saved. Your logged sets are still here. Try again.',
+    }
+  }
+  if (input.saveDisposition === 'kept') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Already saved. This did not add a second history entry.',
+    }
+  }
+  if (input.serverEvidence === 'pending') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Saved on this device. History sync is still finishing.',
+    }
+  }
+  return {
+    state: 'saved',
+    title: 'Saved',
+    detail: 'This workout is in your history.',
+  }
+}

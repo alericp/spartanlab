@@ -177,6 +177,7 @@ export interface WorkoutSaveAthleteStatus {
   state: 'in_progress' | 'saving' | 'saved' | 'failed'
   title: string
   detail: string
+  historySync?: 'updated' | 'failed' | 'skipped'
 }
 
 /**
@@ -187,6 +188,7 @@ export function describeWorkoutSaveResult(input: {
   outcome: 'in_progress' | 'saving' | 'failed' | 'saved'
   saveDisposition?: 'inserted' | 'kept'
   serverEvidence?: 'pending' | 'saved' | 'skipped'
+  historySync?: 'updated' | 'failed' | 'skipped'
 }): WorkoutSaveAthleteStatus {
   if (input.outcome === 'in_progress') {
     return {
@@ -207,6 +209,54 @@ export function describeWorkoutSaveResult(input: {
       state: 'failed',
       title: 'Save error',
       detail: 'This workout was not saved. Your logged sets are still here. Try again.',
+    }
+  }
+  if (input.historySync === 'failed') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally. History sync failed. Your workout is still on this device.',
+      historySync: 'failed',
+    }
+  }
+  if (input.historySync === 'updated' && input.saveDisposition === 'kept') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Already saved. History is up to date. This did not add a second history entry.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'updated' && input.serverEvidence === 'pending') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally and History updated. Set evidence sync is still finishing.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'updated') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally and History updated.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'skipped' && input.saveDisposition === 'kept') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Already saved on this device. This did not add a second history entry, and History was not updated.',
+      historySync: 'skipped',
+    }
+  }
+  if (input.historySync === 'skipped') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Saved on this device. History was not updated.',
+      historySync: 'skipped',
     }
   }
   if (input.saveDisposition === 'kept') {

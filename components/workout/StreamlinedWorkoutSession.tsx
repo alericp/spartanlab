@@ -238,10 +238,15 @@ import {
   createOccurrenceId,
   describeWorkoutSaveResult,
   resolveOccurrenceId,
-  shouldKeepOccurrenceAfterLocalSave,
   type StoredOccurrence,
   type WorkoutSaveAthleteStatus,
 } from '@/lib/workout/save-reliability'
+import { persistWorkoutSession } from '@/lib/workout-history-persistence'
+import {
+  buildLiveWorkoutHistoryInput,
+  classifyHistoryPersistence,
+  shouldRetainOccurrenceForHistoryRetry,
+} from '@/lib/workout/history-progress'
 import {
   WORKOUT_SESSION_SCHEMA_VERSION as STORAGE_SCHEMA_VERSION,
   WORKOUT_SESSION_STORAGE_KEY as STORAGE_KEY,
@@ -4554,6 +4559,11 @@ export function StreamlinedWorkoutSession({
   const [isSaving, setIsSaving] = useState(false)
   const [saveAthleteStatus, setSaveAthleteStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
   const saveLockRef = useRef(false)
+  const historyRetryLockRef = useRef(false)
+  const historyRetryRef = useRef<{
+    payload: ReturnType<typeof buildLiveWorkoutHistoryInput>
+    serverEvidence?: 'pending' | 'saved' | 'skipped'
+  } | null>(null)
 
   useEffect(() => {
     retryPendingWorkoutEvidence()
@@ -7798,10 +7808,61 @@ failureStage: null,
       }
       }
       
-      // Keep the occurrence while the evidence post can still fail, so a
-      // repeated save of this session retries the same log.
+      // History uses the same occurrence id and the signed-in Clerk user.
+      // A failed history write does not undo the local log.
+      let historySync: 'updated' | 'failed' | 'skipped' = userId ? 'failed' : 'skipped'
+      if (userId) {
+        try {
+          const historyInput = buildLiveWorkoutHistoryInput({
+            userId,
+            occurrenceId: occurrence.occurrence.occurrenceId,
+            workoutName: safeSession.dayLabel,
+            dayLabel: safeSession.dayLabel,
+            focusArea,
+            durationMinutes,
+            perceivedDifficulty: finalDifficulty,
+            sessionNote: safeWorkoutNotes || undefined,
+            workoutDate: new Date().toISOString().split('T')[0],
+            exercises: exercises.map((exercise) => ({
+              id: exercise.id,
+              name: exercise.name,
+              category: exercise.category,
+              sets: getEffectiveExerciseValues(exercise).sets,
+              repsOrTime: (exercise as { repsOrTime?: string }).repsOrTime,
+              weight: (exercise as { prescribedLoad?: { load?: number } }).prescribedLoad?.load,
+              note: undefined,
+            })),
+            completedSets: normalizedCompletedSets.map((set) => ({
+              exerciseIndex: set.exerciseIndex,
+              setNumber: set.setNumber,
+              actualReps: set.actualReps,
+              actualRPE: set.actualRPE,
+              holdSeconds: set.holdSeconds,
+              actualLoad: set.actualLoadUsed,
+              note: set.note,
+              restSeconds: undefined,
+            })),
+          })
+          historyRetryRef.current = {
+            payload: historyInput,
+            serverEvidence: savedLog.serverEvidence,
+          }
+          const historyResult = await persistWorkoutSession(historyInput)
+          historySync = classifyHistoryPersistence(historyResult)
+        } catch (historyError) {
+          console.error('[LIVE-WORKOUT] History sync failed', historyError)
+          historySync = 'failed'
+        }
+      } else {
+        historyRetryRef.current = null
+      }
+
+      // Keep the occurrence while evidence or history can still be retried.
       clearSessionStorage({
-        keepOccurrence: shouldKeepOccurrenceAfterLocalSave(savedLog.serverEvidence),
+        keepOccurrence: shouldRetainOccurrenceForHistoryRetry({
+          serverEvidence: savedLog.serverEvidence,
+          historySync,
+        }),
       })
       clearRestTimerState()
       clearSessionOverrides()
@@ -7809,6 +7870,7 @@ failureStage: null,
         outcome: 'saved',
         saveDisposition: savedLog.saveDisposition,
         serverEvidence: savedLog.serverEvidence,
+        historySync,
       }))
       setIsSaved(true)
       setShowQuickLog(false)
@@ -7819,7 +7881,41 @@ failureStage: null,
     } finally {
       setIsSaving(false)
     }
-  }, [session, liveSession, sessionId, perceivedDifficulty, isSaved])
+  }, [session, liveSession, sessionId, perceivedDifficulty, isSaved, userId])
+
+  const retryHistorySync = useCallback(async () => {
+    const pending = historyRetryRef.current
+    if (!pending || historyRetryLockRef.current) return
+    historyRetryLockRef.current = true
+    setIsSaving(true)
+    try {
+      const historyResult = await persistWorkoutSession(pending.payload)
+      const historySync = classifyHistoryPersistence(historyResult)
+      clearSessionStorage({
+        keepOccurrence: shouldRetainOccurrenceForHistoryRetry({
+          serverEvidence: pending.serverEvidence,
+          historySync,
+        }),
+      })
+      setSaveAthleteStatus(describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: 'kept',
+        serverEvidence: pending.serverEvidence,
+        historySync,
+      }))
+    } catch (historyError) {
+      console.error('[LIVE-WORKOUT] History retry failed', historyError)
+      setSaveAthleteStatus(describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: 'kept',
+        serverEvidence: pending.serverEvidence,
+        historySync: 'failed',
+      }))
+    } finally {
+      historyRetryLockRef.current = false
+      setIsSaving(false)
+    }
+  }, [])
   
   // [LIVE-WORKOUT-CORRIDOR] Rest recommendation - uses safeCurrentExercise for crash safety
   // [LIVE-WORKOUT-MACHINE] Use normalized values from machine
@@ -10457,7 +10553,10 @@ if (shouldShowLocalFallback) {
             <p className="text-sm text-[#A4ACB8]">
               {safeSession.dayLabel}
             </p>
-            <p role="status" className="text-sm text-green-300 mt-2">
+            <p
+              role="status"
+              className={`text-sm mt-2 ${savedStatus.historySync === 'failed' ? 'text-amber-300' : 'text-green-300'}`}
+            >
               <span className="font-medium">{savedStatus.title}.</span> {savedStatus.detail}
             </p>
           </div>
@@ -10559,6 +10658,16 @@ if (shouldShowLocalFallback) {
               6. NAVIGATION ACTIONS
               ================================================================ */}
           <div className="space-y-2 pt-2">
+            {savedStatus.historySync === 'failed' && (
+              <Button
+                onClick={() => { void retryHistorySync() }}
+                disabled={isSaving}
+                variant="outline"
+                className="w-full h-12 border-amber-500/40 text-amber-200 hover:bg-amber-500/10"
+              >
+                {isSaving ? 'Retrying History...' : 'Retry History Sync'}
+              </Button>
+            )}
             <Button
               onClick={onComplete}
               className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-semibold"

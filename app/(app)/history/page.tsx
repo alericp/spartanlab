@@ -6,6 +6,8 @@ import { PageContainer, SectionHeader, DashboardSkeleton } from '@/components/la
 import { HistoryHub } from '@/components/history'
 import { History, Archive } from 'lucide-react'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { Card } from '@/components/ui/card'
+import { classifyHistoryHttp, historyLoadCopy } from '@/lib/workout/history-progress'
 import type { 
   WorkoutSessionHistory, 
   ProgramHistory, 
@@ -16,21 +18,32 @@ import type {
 // DATA FETCHING
 // =============================================================================
 
-async function fetchHistoryData(userId: string) {
+async function fetchHistoryData(userId: string): Promise<
+  | {
+      status: 'ready'
+      workoutHistory: WorkoutSessionHistory[]
+      programHistory: ProgramHistory[]
+      recentPRs: PersonalRecordHistory[]
+      totalPRs: number
+    }
+  | { status: 'error' }
+> {
   try {
     const response = await fetch(`/api/history?userId=${userId}`)
-    if (!response.ok) {
-      throw new Error('Failed to fetch history')
+    if (classifyHistoryHttp(response.status) !== 'ready') {
+      return { status: 'error' }
     }
-    return await response.json()
+    const data = await response.json()
+    return {
+      status: 'ready',
+      workoutHistory: data.workoutHistory || [],
+      programHistory: data.programHistory || [],
+      recentPRs: data.recentPRs || [],
+      totalPRs: data.totalPRs || 0,
+    }
   } catch (error) {
     console.error('[HistoryPage] Error fetching data:', error)
-    return {
-      workoutHistory: [],
-      programHistory: [],
-      recentPRs: [],
-      totalPRs: 0,
-    }
+    return { status: 'error' }
   }
 }
 
@@ -45,6 +58,7 @@ function HistoryPageContent() {
   const [programHistory, setProgramHistory] = useState<ProgramHistory[]>([])
   const [recentPRs, setRecentPRs] = useState<PersonalRecordHistory[]>([])
   const [totalPRs, setTotalPRs] = useState(0)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -52,10 +66,19 @@ function HistoryPageContent() {
       
       setLoading(true)
       const data = await fetchHistoryData(userId)
-      setWorkoutHistory(data.workoutHistory || [])
-      setProgramHistory(data.programHistory || [])
-      setRecentPRs(data.recentPRs || [])
-      setTotalPRs(data.totalPRs || 0)
+      if (data.status === 'error') {
+        setLoadError(true)
+        setWorkoutHistory([])
+        setProgramHistory([])
+        setRecentPRs([])
+        setTotalPRs(0)
+      } else {
+        setLoadError(false)
+        setWorkoutHistory(data.workoutHistory)
+        setProgramHistory(data.programHistory)
+        setRecentPRs(data.recentPRs)
+        setTotalPRs(data.totalPRs)
+      }
       setLoading(false)
     }
 
@@ -90,13 +113,24 @@ function HistoryPageContent() {
           </div>
         </div>
 
-        {/* History Hub Content */}
-        <HistoryHub
-          workoutHistory={workoutHistory}
-          programHistory={programHistory}
-          recentPRs={recentPRs}
-          totalPRs={totalPRs}
-        />
+        {loadError ? (
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-8 text-center">
+            <History className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
+              {historyLoadCopy('error', 'archive').title}
+            </h2>
+            <p className="text-sm text-[#A4ACB8]">
+              {historyLoadCopy('error', 'archive').detail}
+            </p>
+          </Card>
+        ) : (
+          <HistoryHub
+            workoutHistory={workoutHistory}
+            programHistory={programHistory}
+            recentPRs={recentPRs}
+            totalPRs={totalPRs}
+          />
+        )}
       </div>
     </PageContainer>
   )

@@ -25,7 +25,7 @@ export async function GET(
     const result = await readOwnedRecord({
       authenticatedUserId: userId,
       notFoundError: 'Session not found',
-      load: () => getWorkoutSessionHistoryById(id),
+      load: () => getWorkoutSessionHistoryById(id, { reportErrors: true }),
     })
 
     if (result.status !== 200 || !('id' in result.body)) {

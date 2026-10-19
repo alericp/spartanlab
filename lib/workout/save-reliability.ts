@@ -12,6 +12,14 @@ export const WORKOUT_OCCURRENCE_STORAGE_KEY = 'spartanlab_workout_occurrence'
 export interface StoredOccurrence {
   sessionId: string
   occurrenceId: string
+  /**
+   * The history write has not been confirmed. A successful evidence post must
+   * not drop this id, or a later retry would mint a new one and duplicate
+   * the session, personal records, and set evidence.
+   */
+  historyPending?: boolean
+  /** The evidence post for this occurrence already reached the server. */
+  evidenceSaved?: boolean
 }
 
 export interface SaveIdentity {
@@ -169,6 +177,53 @@ export function shouldKeepOccurrenceAfterLocalSave(
   return serverEvidence === 'pending'
 }
 
+/**
+ * Evidence success while history is still unconfirmed marks the occurrence
+ * instead of deleting it. The occurrence id stays the retry identity.
+ */
+export function occurrenceAfterEvidenceSave(
+  stored: StoredOccurrence | null,
+  occurrenceId: string,
+): { action: 'ignore' } | { action: 'release' } | { action: 'keep'; occurrence: StoredOccurrence } {
+  if (!stored || stored.occurrenceId !== occurrenceId) return { action: 'ignore' }
+  if (stored.historyPending) {
+    return {
+      action: 'keep',
+      occurrence: {
+        sessionId: stored.sessionId,
+        occurrenceId: stored.occurrenceId,
+        historyPending: true,
+        evidenceSaved: true,
+      },
+    }
+  }
+  return { action: 'release' }
+}
+
+/**
+ * Drop the occurrence only after history is confirmed and evidence is settled.
+ * A failed or timed-out history write keeps the original occurrence id.
+ */
+export function occurrenceAfterHistoryResult(input: {
+  occurrence: StoredOccurrence
+  historyConfirmed: boolean
+  serverEvidence?: 'pending' | 'saved' | 'skipped'
+}): { action: 'release' } | { action: 'keep'; occurrence: StoredOccurrence } {
+  const evidenceSettled = input.occurrence.evidenceSaved === true
+    || input.serverEvidence === 'saved'
+    || input.serverEvidence === 'skipped'
+  if (input.historyConfirmed && evidenceSettled) return { action: 'release' }
+  return {
+    action: 'keep',
+    occurrence: {
+      sessionId: input.occurrence.sessionId,
+      occurrenceId: input.occurrence.occurrenceId,
+      historyPending: !input.historyConfirmed,
+      evidenceSaved: input.occurrence.evidenceSaved === true || input.serverEvidence === 'saved',
+    },
+  }
+}
+
 export function workoutLogIdForOccurrence(occurrenceId: string): string {
   return `workout-${occurrenceId}`
 }
@@ -177,6 +232,7 @@ export interface WorkoutSaveAthleteStatus {
   state: 'in_progress' | 'saving' | 'saved' | 'failed'
   title: string
   detail: string
+  historySync?: 'updated' | 'failed' | 'skipped'
 }
 
 /**
@@ -187,6 +243,7 @@ export function describeWorkoutSaveResult(input: {
   outcome: 'in_progress' | 'saving' | 'failed' | 'saved'
   saveDisposition?: 'inserted' | 'kept'
   serverEvidence?: 'pending' | 'saved' | 'skipped'
+  historySync?: 'updated' | 'failed' | 'skipped'
 }): WorkoutSaveAthleteStatus {
   if (input.outcome === 'in_progress') {
     return {
@@ -207,6 +264,54 @@ export function describeWorkoutSaveResult(input: {
       state: 'failed',
       title: 'Save error',
       detail: 'This workout was not saved. Your logged sets are still here. Try again.',
+    }
+  }
+  if (input.historySync === 'failed') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally. History sync failed. Your workout is still on this device.',
+      historySync: 'failed',
+    }
+  }
+  if (input.historySync === 'updated' && input.saveDisposition === 'kept') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Already saved. History is up to date. This did not add a second history entry.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'updated' && input.serverEvidence === 'pending') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally and History updated. Set evidence sync is still finishing.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'updated') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Workout saved locally and History updated.',
+      historySync: 'updated',
+    }
+  }
+  if (input.historySync === 'skipped' && input.saveDisposition === 'kept') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Already saved on this device. This did not add a second history entry, and History was not updated.',
+      historySync: 'skipped',
+    }
+  }
+  if (input.historySync === 'skipped') {
+    return {
+      state: 'saved',
+      title: 'Saved',
+      detail: 'Saved on this device. History was not updated.',
+      historySync: 'skipped',
     }
   }
   if (input.saveDisposition === 'kept') {

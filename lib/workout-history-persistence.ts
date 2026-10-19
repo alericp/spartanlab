@@ -21,6 +21,7 @@ import {
   readPersonalRecordSnapshot,
   type SessionPersonalRecord,
 } from './workout/save-reliability'
+import { historyNoteForStorage } from './workout/history-progress'
 import type {
   CreateWorkoutSessionInput,
   SessionMetricsSnapshot,
@@ -51,6 +52,7 @@ export interface WorkoutSessionData {
     targetReps?: number
     targetHold?: number
     weight?: number
+    note?: string
   }>
   perceivedDifficulty?: 'easy' | 'normal' | 'hard'
   notes?: string
@@ -524,10 +526,19 @@ export async function persistWorkoutSession(
       }
     }
 
-    const exerciseResults: ExerciseResultSnapshot[] = data.exercises.map(exercise => {
+    const exerciseResults: ExerciseResultSnapshot[] = data.exercises.map((exercise, exerciseIndex) => {
       const sets = data.completedSets.filter(s => s.exerciseId === exercise.id)
       const wasCompleted = sets.length > 0
-      const perf = performances.find(p => p.exerciseId === exercise.id)
+      const holds = sets
+        .map(set => set.actualHoldSeconds)
+        .filter((hold): hold is number => typeof hold === 'number' && Number.isFinite(hold) && hold > 0)
+      const loads = sets
+        .map(set => set.actualLoad)
+        .filter((load): load is number => typeof load === 'number' && Number.isFinite(load) && load > 0)
+      const note = joinStoredNotes(
+        exerciseIndex === 0 ? historyNoteForStorage(data.notes) : undefined,
+        historyNoteForStorage(exercise.note),
+      )
       
       return {
         exerciseId: exercise.id,
@@ -542,10 +553,12 @@ export async function persistWorkoutSession(
         actual: {
           setsCompleted: sets.length,
           repsPerSet: sets.map(s => s.actualReps),
-          weightUsed: exercise.weight,
+          holdPerSet: holds.length > 0 ? holds : undefined,
+          weightUsed: loads.length > 0 ? Math.max(...loads) : exercise.weight,
         },
         wasCompleted,
         wasSkipped: !wasCompleted,
+        notes: note,
         isPR: detectedPRs.some(pr => pr.exerciseKey === exercise.id),
         prType: detectedPRs.find(pr => pr.exerciseKey === exercise.id)?.prType,
       }
@@ -697,6 +710,12 @@ function toPrHits(records: SessionPersonalRecord[]): PRHitSnapshot[] {
     newValue: record.newValue,
     unit: record.unit,
   }))
+}
+
+function joinStoredNotes(...notes: Array<string | undefined>): string | undefined {
+  const unique = notes.filter((note): note is string => typeof note === 'string' && note.length > 0)
+    .filter((note, index, all) => all.indexOf(note) === index)
+  return unique.length > 0 ? unique.join(' ') : undefined
 }
 
 function mapToExerciseCategory(category: string): ExerciseCategory {

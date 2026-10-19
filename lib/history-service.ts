@@ -269,16 +269,33 @@ export async function getNextProgramVersionNumber(userId: string): Promise<numbe
 }
 
 /**
+ * A history read failed. Callers that display an archive pass `reportErrors`
+ * so this is not turned into an empty list.
+ */
+export class HistoryReadError extends Error {
+  constructor() {
+    super('Workout history could not be loaded')
+    this.name = 'HistoryReadError'
+  }
+}
+
+function emptyHistoryRead<T>(reportErrors: boolean | undefined, empty: T, error?: unknown): T {
+  if (error) console.error('[HistoryService] Error reading history:', error)
+  if (reportErrors) throw error instanceof HistoryReadError ? error : new HistoryReadError()
+  return empty
+}
+
+/**
  * Get program history for a user
  */
 export async function getProgramHistoryForUser(
   userId: string,
-  options: HistoryQueryOptions = {}
+  options: HistoryQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<ProgramHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, offset = 0, status, sortOrder = 'desc' } = options
 
@@ -303,8 +320,7 @@ export async function getProgramHistoryForUser(
 
     return result.map(toProgramHistory)
   } catch (error) {
-    console.error('[HistoryService] Error fetching program history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -414,12 +430,12 @@ export async function createWorkoutSessionHistoryEntry(
  */
 export async function getWorkoutHistoryForUser(
   userId: string,
-  options: HistoryQueryOptions = {}
+  options: HistoryQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<WorkoutSessionHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, offset = 0, startDate, endDate, sortOrder = 'desc' } = options
 
@@ -446,8 +462,7 @@ export async function getWorkoutHistoryForUser(
 
     return result.map(toWorkoutSession)
   } catch (error) {
-    console.error('[HistoryService] Error fetching workout history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -594,12 +609,12 @@ export async function lookupSessionPersonalRecords(
  */
 export async function getPersonalRecordHistoryForUser(
   userId: string,
-  options: PRQueryOptions = {}
+  options: PRQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<PersonalRecordHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 100, offset = 0, prType, exerciseCategory, sortOrder = 'desc' } = options
 
@@ -640,8 +655,7 @@ export async function getPersonalRecordHistoryForUser(
 
     return result.map(toPersonalRecord)
   } catch (error) {
-    console.error('[HistoryService] Error fetching PR history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -708,11 +722,14 @@ export async function getCurrentBestPR(
 /**
  * Get total PR count for a user (optimized)
  */
-export async function getTotalPRCount(userId: string): Promise<number> {
-  if (!(await isDatabaseAvailable())) return 0
+export async function getTotalPRCount(
+  userId: string,
+  options: { reportErrors?: boolean } = {},
+): Promise<number> {
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, 0)
 
   const sql = await getSqlClient()
-  if (!sql) return 0
+  if (!sql) return emptyHistoryRead(options.reportErrors, 0)
 
   try {
     const result = await sql`
@@ -721,8 +738,7 @@ export async function getTotalPRCount(userId: string): Promise<number> {
     `
     return parseInt(result[0]?.count || '0', 10)
   } catch (error) {
-    console.error('[HistoryService] Error counting PRs:', error)
-    return 0
+    return emptyHistoryRead(options.reportErrors, 0, error)
   }
 }
 
@@ -823,12 +839,13 @@ export async function isSessionAlreadyPersisted(
  * Get a workout session by ID
  */
 export async function getWorkoutSessionHistoryById(
-  sessionId: string
+  sessionId: string,
+  options: { reportErrors?: boolean } = {},
 ): Promise<WorkoutSessionHistory | null> {
-  if (!(await isDatabaseAvailable())) return null
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, null)
 
   const sql = await getSqlClient()
-  if (!sql) return null
+  if (!sql) return emptyHistoryRead(options.reportErrors, null)
 
   try {
     const result = await sql`
@@ -839,8 +856,7 @@ export async function getWorkoutSessionHistoryById(
 
     return result[0] ? toWorkoutSession(result[0] as WorkoutSessionRow) : null
   } catch (error) {
-    console.error('[HistoryService] Error fetching session by ID:', error)
-    return null
+    return emptyHistoryRead(options.reportErrors, null, error)
   }
 }
 

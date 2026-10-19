@@ -423,4 +423,8 @@ export interface CompletedSetData {
   targetRPE: number
   actualRPE: number
   restSeconds: number
+  /** Logged hold, when the live set recorded one. Personal records still use the existing writer. */
+  actualHoldSeconds?: number
+  /** Logged added load, when the live set recorded one. */
+  actualLoad?: number
 }

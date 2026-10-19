@@ -18,6 +18,12 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  compareExerciseSnapshots,
+  displayHistoryNote,
+  formatExerciseComparison,
+  legitimatePrHits,
+} from '@/lib/workout/history-progress'
 import type { 
   WorkoutSessionHistory, 
   ExerciseResultSnapshot,
@@ -31,6 +37,8 @@ import type {
 
 interface SessionDetailProps {
   session: WorkoutSessionHistory
+  previousExercises?: ExerciseResultSnapshot[] | null
+  comparisonUnavailable?: boolean
 }
 
 // =============================================================================
@@ -100,7 +108,8 @@ function PRBadge({ pr }: { pr: PRHitSnapshot }) {
 // EXERCISE RESULT ROW
 // =============================================================================
 
-function ExerciseResultRow({ exercise }: { exercise: ExerciseResultSnapshot }) {
+function ExerciseResultRow({ exercise, showPr }: { exercise: ExerciseResultSnapshot; showPr: boolean }) {
+  const noteLine = displayHistoryNote(exercise.notes)
   return (
     <div className={cn(
       "flex items-center justify-between p-3 rounded-lg border",
@@ -126,13 +135,18 @@ function ExerciseResultRow({ exercise }: { exercise: ExerciseResultSnapshot }) {
             <p className="text-sm font-medium text-[#E6E9EF] truncate">
               {exercise.exerciseName}
             </p>
-            {exercise.isPR && (
+            {showPr && (
               <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
             )}
           </div>
           <p className="text-xs text-[#6B7280]">
             {exercise.category}
           </p>
+          {noteLine && (
+            <p className="text-xs text-[#A4ACB8] mt-1">
+              {noteLine}
+            </p>
+          )}
         </div>
       </div>
       
@@ -172,10 +186,16 @@ function ExerciseResultRow({ exercise }: { exercise: ExerciseResultSnapshot }) {
 // MAIN SESSION DETAIL
 // =============================================================================
 
-export function SessionDetail({ session }: SessionDetailProps) {
-  const prsHit = session.prsHitSnapshot || []
+export function SessionDetail({
+  session,
+  previousExercises = null,
+  comparisonUnavailable = false,
+}: SessionDetailProps) {
+  const prsHit = legitimatePrHits(session.prsHitSnapshot)
+  const prExerciseIds = new Set(prsHit.map(pr => pr.exerciseKey))
   const exercises = session.exerciseResultsSnapshot || []
   const metrics = session.sessionMetricsSnapshot || {}
+  const comparisons = previousExercises ? compareExerciseSnapshots(previousExercises, exercises) : []
   
   const completedCount = exercises.filter(e => e.wasCompleted).length
   const skippedCount = exercises.filter(e => e.wasSkipped).length
@@ -221,6 +241,30 @@ export function SessionDetail({ session }: SessionDetailProps) {
             {session.summaryMessage}
           </p>
         </Card>
+      )}
+
+      {(comparisons.length > 0 || comparisonUnavailable) && (
+        <section>
+          <h3 className="text-sm font-semibold text-[#E6E9EF] mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-[#C1121F]" />
+            Compared with the previous session
+          </h3>
+          {comparisonUnavailable ? (
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <p className="text-sm text-[#A4ACB8]">
+                Earlier sessions could not be loaded, so this comparison is unavailable.
+              </p>
+            </Card>
+          ) : (
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4 space-y-2">
+              {comparisons.map((comparison) => (
+                <p key={`${comparison.exerciseId}-${comparison.metric}`} className="text-sm text-[#E6E9EF]">
+                  {formatExerciseComparison(comparison)}
+                </p>
+              ))}
+            </Card>
+          )}
+        </section>
       )}
 
       {/* Stats Overview */}
@@ -282,7 +326,11 @@ export function SessionDetail({ session }: SessionDetailProps) {
         <div className="space-y-2">
           {exercises.length > 0 ? (
             exercises.map((exercise, idx) => (
-              <ExerciseResultRow key={idx} exercise={exercise} />
+              <ExerciseResultRow
+                key={idx}
+                exercise={exercise}
+                showPr={prExerciseIds.has(exercise.exerciseId)}
+              />
             ))
           ) : (
             <Card className="bg-[#1A1F26] border-[#2B313A] p-6 text-center">

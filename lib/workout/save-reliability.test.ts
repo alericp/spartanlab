@@ -6,6 +6,8 @@ import {
   describeWorkoutSaveResult,
   historyWritePlan,
   missingSessionPersonalRecords,
+  occurrenceAfterEvidenceSave,
+  occurrenceAfterHistoryResult,
   personalRecordPersistencePlan,
   planLocalWorkoutSave,
   readPersonalRecordSnapshot,
@@ -209,6 +211,52 @@ describe('occurrence retention after a local save', () => {
     assert.equal(shouldKeepOccurrenceAfterLocalSave('skipped'), false)
     assert.equal(shouldKeepOccurrenceAfterLocalSave(undefined), false)
   })
+
+  it('keeps the original occurrence when evidence succeeds before history is confirmed', () => {
+    const stored = {
+      sessionId: 'session-pull-1',
+      occurrenceId: 'occ-timeout',
+      historyPending: true,
+    }
+    const afterEvidence = occurrenceAfterEvidenceSave(stored, 'occ-timeout')
+    assert.equal(afterEvidence.action, 'keep')
+    if (afterEvidence.action !== 'keep') return
+    assert.equal(afterEvidence.occurrence.occurrenceId, 'occ-timeout')
+    assert.equal(afterEvidence.occurrence.evidenceSaved, true)
+
+    const timedOut = occurrenceAfterHistoryResult({
+      occurrence: afterEvidence.occurrence,
+      historyConfirmed: false,
+      serverEvidence: 'saved',
+    })
+    assert.equal(timedOut.action, 'keep')
+    if (timedOut.action !== 'keep') return
+    assert.equal(timedOut.occurrence.occurrenceId, 'occ-timeout')
+    assert.equal(timedOut.occurrence.historyPending, true)
+
+    const replayId = workoutLogIdForOccurrence(timedOut.occurrence.occurrenceId)
+    const replay = planLocalWorkoutSave(
+      [{ id: replayId, occurrenceId: 'occ-timeout', serverEvidence: 'saved' as const }],
+      { id: replayId, occurrenceId: 'occ-timeout', serverEvidence: 'saved' as const },
+    )
+    assert.equal(replay.action, 'keep')
+    assert.equal(historyWritePlan({ databaseAvailable: true, lookup: 'found' }), 'already_saved')
+    assert.equal(missingSessionPersonalRecords(
+      [{ exerciseKey: 'pull_up', prType: 'best_reps' }],
+      [{ exerciseKey: 'pull_up', prType: 'best_reps' }],
+    ).length, 0)
+
+    const recovered = occurrenceAfterHistoryResult({
+      occurrence: afterEvidence.occurrence,
+      historyConfirmed: true,
+      serverEvidence: 'saved',
+    })
+    assert.equal(recovered.action, 'release')
+    assert.equal(occurrenceAfterEvidenceSave(
+      { sessionId: 'session-pull-1', occurrenceId: 'occ-timeout' },
+      'occ-timeout',
+    ).action, 'release')
+  })
 })
 
 describe('workout save wiring', () => {
@@ -226,7 +274,9 @@ describe('workout save wiring', () => {
     assert.match(history, /lookupSessionPersonalRecords/)
     assert.match(history, /failedCount/)
     const live = readFileSync('components/workout/StreamlinedWorkoutSession.tsx', 'utf8')
-    assert.match(live, /shouldKeepOccurrenceAfterLocalSave/)
+    assert.match(live, /historyPending: Boolean\(userId\)/)
+    assert.match(live, /occurrenceAfterHistoryResult/)
+    assert.match(readFileSync('lib/workout/history-progress.ts', 'utf8'), /shouldKeepOccurrenceAfterLocalSave/)
     const logs = readFileSync('lib/workout-log-service.ts', 'utf8')
     assert.match(logs, /releaseOccurrenceAfterEvidenceSave/)
     const hook = readFileSync('hooks/useWorkoutSession.ts', 'utf8')

@@ -12,9 +12,11 @@
 
 import { saveSessionFeedback } from './session-feedback'
 import {
+  occurrenceAfterEvidenceSave,
   planLocalWorkoutSave,
   workoutLogIdForOccurrence,
   WORKOUT_OCCURRENCE_STORAGE_KEY,
+  type StoredOccurrence,
 } from './workout/save-reliability'
 // [PHASE-L / AB10-CONTRACT-CLEANUP] CompletedSetEvidence is the canonical
 // per-set ledger shape — type-only import keeps the runtime acyclic while
@@ -153,9 +155,13 @@ function releaseOccurrenceAfterEvidenceSave(occurrenceId?: string) {
   try {
     const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
     if (!raw) return
-    const parsed = JSON.parse(raw) as { occurrenceId?: unknown }
-    if (parsed?.occurrenceId === occurrenceId) {
+    const parsed = JSON.parse(raw) as StoredOccurrence
+    if (!parsed || typeof parsed.sessionId !== 'string' || typeof parsed.occurrenceId !== 'string') return
+    const decision = occurrenceAfterEvidenceSave(parsed, occurrenceId)
+    if (decision.action === 'release') {
       localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    } else if (decision.action === 'keep') {
+      localStorage.setItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(decision.occurrence))
     }
   } catch {}
 }

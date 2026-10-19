@@ -231,6 +231,7 @@ import {
   buildGroupedFlowHintText,
 } from '@/lib/workout/live-grouped-runtime-hints'
 import { NoteCoachingInsight } from '@/components/workout/NoteCoachingInsight'
+import { workoutNoteSummaryLine } from '@/lib/workout/notes-interpretation'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
@@ -1983,7 +1984,10 @@ export function ActiveWorkoutStartCorridor({
     <div className="min-h-[100dvh] bg-[#0F1115] flex flex-col overflow-x-hidden">
       {/* ========== STICKY HEADER ========== */}
       {/* [UI-DENSITY-R3] Header vertical padding 2.5 -> 2 */}
-      <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+      <div
+        className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]"
+        aria-label={mode === 'active' ? 'Workout in progress' : 'Workout in progress, resting'}
+      >
         <div className="px-4 py-2">
           <div className="max-w-lg mx-auto">
             <div className="flex items-center justify-between mb-2">
@@ -1991,7 +1995,7 @@ export function ActiveWorkoutStartCorridor({
                 <button 
                   onClick={() => setShowExitConfirm(true)}
                   className="p-1 -ml-1 text-[#6B7280] hover:text-[#E6E9EF] transition-colors"
-                  aria-label="Back"
+                  aria-label="Leave workout"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -2018,6 +2022,11 @@ export function ActiveWorkoutStartCorridor({
                 style={{ width: `${progressPercent}%` }} 
               />
             </div>
+            <p className="mt-1.5 text-[10px] uppercase tracking-wide text-[#6B7280]">
+              {mode === 'active'
+                ? 'In progress · not saved to history yet'
+                : 'Resting · workout still in progress'}
+            </p>
           </div>
         </div>
       </div>
@@ -2488,14 +2497,18 @@ export function ActiveWorkoutStartCorridor({
                         </div>
                       )
                     })()}
-                    {hasLatestNote && (
-                      <p
-                        className="text-xs text-[#6B7280] truncate mt-2 pt-2 border-t border-[#2B313A]/50"
-                        title={trimmedLatestNote}
-                      >
-                        {trimmedLatestNote}
-                      </p>
-                    )}
+                    {hasLatestNote && (() => {
+                      const noteLine = workoutNoteSummaryLine(trimmedLatestNote)
+                      if (!noteLine) return null
+                      return (
+                        <p
+                          className="text-xs text-[#6B7280] truncate mt-2 pt-2 border-t border-[#2B313A]/50"
+                          title={noteLine}
+                        >
+                          {noteLine}
+                        </p>
+                      )
+                    })()}
                   </Card>
                 )
               })()}
@@ -2544,11 +2557,15 @@ export function ActiveWorkoutStartCorridor({
                               ))}
                             </div>
                           )}
-                          {hasNote && (
-                            <p className="text-xs text-[#6B7280] truncate mt-0.5" title={trimmedNote}>
-                              {trimmedNote}
-                            </p>
-                          )}
+                          {hasNote && (() => {
+                            const noteLine = workoutNoteSummaryLine(trimmedNote)
+                            if (!noteLine) return null
+                            return (
+                              <p className="text-xs text-[#6B7280] truncate mt-0.5" title={noteLine}>
+                                {noteLine}
+                              </p>
+                            )
+                          })()}
                         </div>
                       )
                     })}
@@ -3648,11 +3665,15 @@ export function ActiveWorkoutStartCorridor({
                         </div>
                       )}
                       {/* One-line muted note preview */}
-                      {hasNote && (
-                        <p className="text-[10px] text-[#6B7280] truncate mt-0.5 pl-14" title={trimmedNote}>
-                          {trimmedNote}
-                        </p>
-                      )}
+                      {hasNote && (() => {
+                        const noteLine = workoutNoteSummaryLine(trimmedNote)
+                        if (!noteLine) return null
+                        return (
+                          <p className="text-[10px] text-[#6B7280] truncate mt-0.5 pl-14" title={noteLine}>
+                            {noteLine}
+                          </p>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -3710,6 +3731,11 @@ export function ActiveWorkoutStartCorridor({
                 (no RPE selected). No local in-flight gate. Brief green flash
                 on `justLoggedPulse` is derived from authoritative parent
                 commit revision - pure visual feedback, not a commit owner. */}
+            {selectedRPE === null && (
+              <p className="text-xs text-[#A4ACB8] text-center pb-1">
+                Choose an RPE to log this set. Reps, load, and holds stay as entered.
+              </p>
+            )}
             <Button 
               onClick={handleLogSet} 
               disabled={selectedRPE === null}

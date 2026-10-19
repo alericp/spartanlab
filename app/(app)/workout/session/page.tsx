@@ -71,6 +71,11 @@ if (typeof window !== 'undefined') {
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
+import {
+  getResumableSessionSummary,
+  resumeMatchesLoadedSession,
+} from '@/lib/workout/resume-session'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
 // [PHASE-X+1] Program state is loaded internally by loadAuthoritativeSession
@@ -708,7 +713,9 @@ const DEMO_SESSION: AdaptiveSession = {
 function WorkoutSessionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   const dayParam = searchParams.get('day')
+  const resumeRequested = searchParams.get('resume') === '1'
   const demoMode = searchParams.get('demo') === 'true'
   const isFirstSession = searchParams.get('first') === 'true'
   // [PEX-5A] Read execution mode from URL - now supports 10/15/20/30/45/full
@@ -1725,15 +1732,42 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
     }
   }
   
-  if (loading) {
+  if (loading || (resumeRequested && !isAuthLoaded)) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
         <div className="text-center">
           <Spinner className="w-8 h-8 text-[#C1121F] mx-auto mb-4" />
-          <p className="text-[#A4ACB8]">Loading workout...</p>
+          <p className="text-[#A4ACB8]">{resumeRequested ? 'Checking this workout...' : 'Loading workout...'}</p>
         </div>
       </div>
     )
+  }
+
+  if (resumeRequested && session) {
+    const ownedResume = getResumableSessionSummary(userId ?? null)
+    const resumeMatches = ownedResume
+      ? resumeMatchesLoadedSession(ownedResume, {
+          dayLabel: session.dayLabel,
+          dayNumber: session.dayNumber,
+        })
+      : false
+    if (!resumeMatches) {
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Cannot resume this workout</h2>
+            <p className="text-[#A4ACB8] mb-6">
+              This resume does not match an unfinished workout for the signed-in account. No sets were opened or replaced.
+            </p>
+            <Link href="/today" className="block">
+              <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white">
+                Back to Today
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )
+    }
   }
   
   // [PHASE-X+1] With authoritative loader, session should ALWAYS exist

@@ -134,6 +134,24 @@ export function noteTextMayInfluenceTraining(text: string | null | undefined): b
   return classified.influences
 }
 
+/**
+ * One line for a set summary. Private wording stays in the saved note and
+ * is not copied into the summary or its tooltip.
+ */
+export function workoutNoteSummaryLine(text: string | null | undefined): string | null {
+  const trimmed = typeof text === 'string' ? text.trim() : ''
+  if (!trimmed) return null
+  const classified = classifyText(trimmed)
+  if (classified.kind === 'private') {
+    return 'Private details stay with this set and are not shown here.'
+  }
+  if (classified.kind === 'explicit') return classified.statement
+  if (classified.kind === 'uncertain') {
+    return 'Note saved. The wording is unclear, so it does not change a future workout.'
+  }
+  return 'Note saved with this set.'
+}
+
 export function interpretWorkoutNote(input: WorkoutNoteInput): WorkoutNoteReading | null {
   const text = typeof input.text === 'string' ? input.text.trim() : ''
   const tags = Array.isArray(input.selectedTags) ? input.selectedTags.filter((tag) => typeof tag === 'string' && tag.length > 0) : []

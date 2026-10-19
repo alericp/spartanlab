@@ -236,10 +236,25 @@ import {
 import {
   WORKOUT_OCCURRENCE_STORAGE_KEY,
   createOccurrenceId,
+  describeWorkoutSaveResult,
   resolveOccurrenceId,
   shouldKeepOccurrenceAfterLocalSave,
   type StoredOccurrence,
+  type WorkoutSaveAthleteStatus,
 } from '@/lib/workout/save-reliability'
+import {
+  WORKOUT_SESSION_SCHEMA_VERSION as STORAGE_SCHEMA_VERSION,
+  WORKOUT_SESSION_STORAGE_KEY as STORAGE_KEY,
+  canReplaceStoredSession,
+  shouldClearStoredSessionOnRestoreRejection,
+} from '@/lib/workout/resume-session'
+import { useAuth } from '@clerk/nextjs'
+
+export {
+  buildResumeWorkoutUrl,
+  getResumableSessionSummary,
+} from '@/lib/workout/resume-session'
+export type { ResumableSessionSummary } from '@/lib/workout/resume-session'
 // [LIVE-WORKOUT-CORRIDOR-FIX] Challenge/achievement engines loaded dynamically
 // These are POST-COMPLETION-ONLY and have heavy cascading imports that can crash module evaluation
 // Moving to dynamic import prevents route death if these modules have any initialization issues
@@ -1359,17 +1374,8 @@ export interface SavedSessionInfo {
 }
 
 // Storage key for auto-save
-const STORAGE_KEY = 'spartanlab_workout_session'
-
-// [LIVE-SESSION-FIX] Storage schema version - increment when state shape changes
-// Old saved state with different version will be discarded to prevent restore poisoning
-// [PHASE-NEXT] v3 = grouped-method runtime with execution blocks, per-set notes, reason tags
-// [PHASE-J / RESUME-IDENTITY] v3 still backward-compatible; resume identity fields
-// (dayLabel, dayNumber, executionMode, variantIndex, weekOverride) are written
-// alongside the existing payload so the dashboard Resume button can reconstruct
-// the EXACT same launch URL the Program card stamped, instead of stripping the
-// selection and forcing the live route to guess defaults.
-const STORAGE_SCHEMA_VERSION = 'workout_session_v3_grouped_runtime'
+// Storage key and schema live in lib/workout/resume-session.ts so Today can
+// read the same snapshot without importing this session component.
 
 // =============================================================================
 // [PHASE-J] CANONICAL RESUME IDENTITY
@@ -1612,6 +1618,7 @@ interface SaveSessionIdentity {
   executionMode: WorkoutExecutionMode
   variantIndex: number
   weekOverride: number | null
+  ownerUserId: string
 }
 
 function saveSessionToStorage(
@@ -1640,6 +1647,7 @@ function saveSessionToStorage(
         executionMode: identity.executionMode,
         variantIndex: identity.variantIndex,
         weekOverride: identity.weekOverride,
+        ownerUserId: identity.ownerUserId,
       } : {}),
     }))
   } catch {}
@@ -1648,14 +1656,17 @@ function saveSessionToStorage(
 function loadSessionFromStorage(
   sessionId: string, 
   exerciseCount?: number,
-  currentStructureSignature?: string
+  currentStructureSignature?: string,
+  expectedOwnerUserId?: string | null,
 ): WorkoutSessionState | null {
   if (typeof window === 'undefined') return null
   
   // [PHASE-NEXT] Helper to clear storage and log rejection
   const rejectRestore = (reason: string, details?: Record<string, unknown>) => {
     console.log('[workout-restore] REJECTED:', reason, details || {})
-    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    if (shouldClearStoredSessionOnRestoreRejection(reason)) {
+      try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    }
     return null
   }
   
@@ -1674,6 +1685,14 @@ function loadSessionFromStorage(
     // [PHASE-NEXT] Reject if data is not an object
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return rejectRestore('invalid_data_shape', { type: typeof data })
+    }
+
+    const storedOwner = typeof data.ownerUserId === 'string' ? data.ownerUserId : ''
+    if (!expectedOwnerUserId || storedOwner !== expectedOwnerUserId) {
+      return rejectRestore(storedOwner && expectedOwnerUserId ? 'owner_mismatch' : 'owner_missing', {
+        expectedOwnerPresent: Boolean(expectedOwnerUserId),
+        storedOwnerPresent: Boolean(storedOwner),
+      })
     }
     
     // [LIVE-SESSION-FIX] CRITICAL: Validate schema version FIRST
@@ -1950,134 +1969,9 @@ export function getExistingSessionInfo(): SavedSessionInfo | null {
   }
 }
 
-// =============================================================================
-// [PHASE-J] RESUME IDENTITY READER - DASHBOARD CONSUMER
-// =============================================================================
-// Reads the persisted live workout snapshot and surfaces ONLY the identity
-// bundle the dashboard needs to:
-//   1. Decide whether a resumable session exists (not just any localStorage
-//      blob - it must be schema-current AND status-in-progress AND recent).
-//   2. Reconstruct the canonical /workout/session?day=&mode=&variant=&week=
-//      launch URL the Program card originally stamped, plus a ?resume=1 flag
-//      so the route knows this is an explicit resume vs a fresh start.
-//
-// IMPORTANT: This does NOT return the full runtime state. The runtime state
-// is still hydrated by loadSessionFromStorage() inside the live workout
-// component itself - that gate is the single owner of completedSets / RPE /
-// notes / exerciseOverrides / phase. This getter is identity-only so the
-// dashboard cannot accidentally become a second hydration owner.
-// =============================================================================
-export interface ResumableSessionSummary {
-  sessionId: string
-  dayLabel: string
-  dayNumber: number
-  executionMode: WorkoutExecutionMode
-  variantIndex: number
-  weekOverride: number | null
-  status: 'active' | 'resting' | 'completed' | string
-  savedAt: number
-  completedSetsCount: number
-  currentExerciseIndex: number
-  currentSetNumber: number
-  elapsedSeconds: number
-}
+// Resume identity reader lives in lib/workout/resume-session.ts.
+// Re-exported above so existing callers keep the same import path.
 
-export function getResumableSessionSummary(): ResumableSessionSummary | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return null
-    const data = JSON.parse(saved)
-    if (!data || typeof data !== 'object') return null
-
-    // [PHASE-J] Schema version gate - never surface stale schema as resumable
-    if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) return null
-
-    // Must be recent (4 hour cutoff matches loadSessionFromStorage)
-    if (typeof data.savedAt !== 'number') return null
-    if (Date.now() - data.savedAt > 4 * 60 * 60 * 1000) return null
-
-    // Must be a real in-progress session - 'completed' is NOT resumable, and
-    // 'ready' means the user never logged anything so there is nothing to
-    // restore. Both 'active' and 'resting' count as in-progress.
-    const status = typeof data.status === 'string' ? data.status : ''
-    if (status !== 'active' && status !== 'resting') return null
-
-    // Must have at least one completed set OR have advanced past exercise 0,
-    // otherwise the user has no progress worth resuming.
-    const completedSetsCount = Array.isArray(data.completedSets)
-      ? data.completedSets.length
-      : 0
-    const currentExerciseIndex = typeof data.currentExerciseIndex === 'number'
-      ? data.currentExerciseIndex
-      : 0
-    if (completedSetsCount === 0 && currentExerciseIndex === 0) return null
-
-    // Must carry the resume identity bundle. Legacy snapshots without this
-    // are NOT exposed as resumable - the dashboard Resume button cannot
-    // rebuild the launch URL without these fields, and surfacing them would
-    // re-create the silent-restart bug we are fixing.
-    const dayLabel = typeof data.dayLabel === 'string' ? data.dayLabel : ''
-    const dayNumber = typeof data.dayNumber === 'number' ? data.dayNumber : NaN
-    const executionMode = data.executionMode === '30_min'
-      || data.executionMode === '45_min'
-      || data.executionMode === 'full'
-        ? data.executionMode as WorkoutExecutionMode
-        : null
-    const variantIndex = typeof data.variantIndex === 'number'
-      ? data.variantIndex
-      : null
-    const weekOverride = typeof data.weekOverride === 'number'
-      ? data.weekOverride
-      : data.weekOverride === null
-        ? null
-        : null
-    if (!dayLabel || !Number.isFinite(dayNumber) || executionMode === null || variantIndex === null) {
-      return null
-    }
-
-    return {
-      sessionId: typeof data.sessionId === 'string' ? data.sessionId : `session-${dayLabel}-${dayNumber}`,
-      dayLabel,
-      dayNumber,
-      executionMode,
-      variantIndex,
-      weekOverride,
-      status,
-      savedAt: data.savedAt,
-      completedSetsCount,
-      currentExerciseIndex,
-      currentSetNumber: typeof data.currentSetNumber === 'number' ? data.currentSetNumber : 1,
-      elapsedSeconds: typeof data.elapsedSeconds === 'number' ? data.elapsedSeconds : 0,
-    }
-  } catch {
-    return null
-  }
-}
-
-// =============================================================================
-// [PHASE-J] RESUME URL BUILDER - DASHBOARD CONSUMER
-// =============================================================================
-// Builds the canonical /workout/session?day=&mode=&variant=&week=&resume=1 URL
-// from a ResumableSessionSummary. Single source of truth so all "Resume
-// Workout" entry points produce bit-identical URLs and the live route boots
-// the SAME session shape that was saved.
-// =============================================================================
-export function buildResumeWorkoutUrl(summary: ResumableSessionSummary): string {
-  const params = new URLSearchParams()
-  params.set('day', String(summary.dayNumber))
-  params.set('mode', summary.executionMode)
-  params.set('variant', String(summary.variantIndex))
-  if (summary.weekOverride !== null && Number.isFinite(summary.weekOverride)) {
-    params.set('week', String(summary.weekOverride))
-  }
-  // [PHASE-J] Explicit resume flag so the route can distinguish a Resume
-  // intent from a Start intent. The route already hydrates from storage
-  // when sessionId + structureSignature match, but the flag is forwarded
-  // for diagnostics and as a hook for future restart-confirmation UX.
-  params.set('resume', '1')
-  return `/workout/session?${params.toString()}`
-}
 
 function readStoredOccurrence(): StoredOccurrence | null {
   if (typeof window === 'undefined') return null
@@ -2943,6 +2837,7 @@ export function StreamlinedWorkoutSession({
   // without claiming matched parity.
   ab10RuntimeParityProof = null,
 }: StreamlinedWorkoutSessionProps) {
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order
   // Boot ledger calls are moved to AFTER all hooks are declared via useEffect
@@ -4657,6 +4552,7 @@ export function StreamlinedWorkoutSession({
   // Save state for completed workout
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveAthleteStatus, setSaveAthleteStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -4854,8 +4750,9 @@ export function StreamlinedWorkoutSession({
   // All boot ledger writes happen here - never during render.
   // ==========================================================================
   useEffect(() => {
+    if (!isDemoSession && !isAuthLoaded) return
     // Generate hydration key to prevent double-apply in StrictMode
-    const hydrationKey = `${sessionId}::${sessionStructureSignature}`
+    const hydrationKey = `${sessionId}::${sessionStructureSignature}::${userId ?? ''}`
     
     // Skip if already applied for this exact session
     if (hydrationAppliedRef.current === hydrationKey) {
@@ -4903,7 +4800,7 @@ export function StreamlinedWorkoutSession({
     })
     
     const exerciseCount = safeWorkoutSessionContract.exercises?.length ?? 0
-    const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
+    const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature, userId)
     
     // [PPX-R7.8K] Accept completed sessions if they have valid liveFlowPhase (completedMain/cooldown/done)
     // This allows exact refresh/resume from any workout phase, not just active/resting
@@ -5023,7 +4920,7 @@ export function StreamlinedWorkoutSession({
     hydrationAppliedRef.current = hydrationKey
     setBootHydrationReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, sessionStructureSignature, isDemoSession])
+  }, [sessionId, sessionStructureSignature, isDemoSession, isAuthLoaded, userId])
   
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] TIMING VALUES FROM MACHINE STATE
@@ -6332,6 +6229,7 @@ failureStage: null,
   useEffect(() => {
     // Demo sessions don't persist to storage
     if (isDemoSession) return
+    if (!isAuthLoaded || !userId) return
 
     // [DISCARD-INTENT-LOCK] If the user explicitly discarded this workout,
     // suppress autosave entirely until the component unmounts. Without this,
@@ -6346,6 +6244,16 @@ failureStage: null,
 
     // [PPX-R2C] Also persist if in warmup phase (before main workout starts)
     if (liveSession.status !== 'ready' || sessionPhase !== 'warmup' || warmupIndex > 0) {
+      const loggedProgress =
+        (liveSession.completedSets?.length ?? 0) > 0 ||
+        liveSession.currentExerciseIndex > 0
+      let storedRaw: string | null = null
+      try {
+        storedRaw = localStorage.getItem(STORAGE_KEY)
+      } catch {
+        return
+      }
+      if (!canReplaceStoredSession(storedRaw, userId, sessionId, loggedProgress)) return
       // Save the core workout state from the unified liveSession
       // [PHASE-J / RESUME-IDENTITY] Persist resume identity alongside runtime
       // state so the dashboard Resume button can rebuild the EXACT launch URL
@@ -6378,12 +6286,15 @@ failureStage: null,
         executionMode,
         variantIndex,
         weekOverride: weekOverride ?? null,
+        ownerUserId: userId,
       })
     }
   }, [
     liveSession,
     sessionId,
     isDemoSession,
+    isAuthLoaded,
+    userId,
     sessionStructureSignature,
     safeWorkoutSessionContract.dayLabel,
     safeWorkoutSessionContract.dayNumber,
@@ -7696,6 +7607,7 @@ failureStage: null,
     if (saveLockRef.current || isSaved) return
     saveLockRef.current = true
     setIsSaving(true)
+    setSaveAthleteStatus(describeWorkoutSaveResult({ outcome: 'saving' }))
     try {
       // Use provided difficulty or the state value
       const finalDifficulty = difficulty || perceivedDifficulty || 'normal'
@@ -7893,10 +7805,16 @@ failureStage: null,
       })
       clearRestTimerState()
       clearSessionOverrides()
+      setSaveAthleteStatus(describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: savedLog.saveDisposition,
+        serverEvidence: savedLog.serverEvidence,
+      }))
       setIsSaved(true)
       setShowQuickLog(false)
     } catch (error) {
       console.error('Failed to save workout:', error)
+      setSaveAthleteStatus(describeWorkoutSaveResult({ outcome: 'failed' }))
       saveLockRef.current = false
     } finally {
       setIsSaving(false)
@@ -10480,13 +10398,26 @@ if (shouldShowLocalFallback) {
               </Card>
             )}
             
+            {(() => {
+              const pendingStatus = saveAthleteStatus?.state === 'saving' || saveAthleteStatus?.state === 'failed'
+                ? saveAthleteStatus
+                : describeWorkoutSaveResult({ outcome: 'in_progress' })
+              return (
+                <p
+                  role="status"
+                  className={`text-sm ${pendingStatus.state === 'failed' ? 'text-red-300' : 'text-[#A4ACB8]'}`}
+                >
+                  <span className="font-medium text-[#E6E9EF]">{pendingStatus.title}.</span> {pendingStatus.detail}
+                </p>
+              )
+            })()}
             {/* Complete Workout Button - Primary CTA */}
             <Button
               onClick={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
               disabled={isSaving}
               className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
             >
-              {isSaving ? 'Saving...' : 'Save & Complete'}
+              {isSaving ? 'Saving...' : saveAthleteStatus?.state === 'failed' ? 'Try Save Again' : 'Save & Complete'}
             </Button>
           </div>
         </div>
@@ -10500,6 +10431,9 @@ if (shouldShowLocalFallback) {
     // This is the ONLY completion screen - workout is saved, show the recap
     // ========================================================================
     const isPartialSession = stats.completedSets < stats.totalSets * 0.5
+    const savedStatus = saveAthleteStatus?.state === 'saved'
+      ? saveAthleteStatus
+      : describeWorkoutSaveResult({ outcome: 'saved' })
     
     // Validate duration - only show if plausible (< 4 hours)
     const durationMinutes = Math.round(safeElapsedSeconds / 60)
@@ -10522,6 +10456,9 @@ if (shouldShowLocalFallback) {
             </h1>
             <p className="text-sm text-[#A4ACB8]">
               {safeSession.dayLabel}
+            </p>
+            <p role="status" className="text-sm text-green-300 mt-2">
+              <span className="font-medium">{savedStatus.title}.</span> {savedStatus.detail}
             </p>
           </div>
           
@@ -10627,7 +10564,7 @@ if (shouldShowLocalFallback) {
               className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-semibold"
             >
               <LayoutDashboard className="w-4 h-4 mr-2" />
-              Save & Return to Dashboard
+              Return to Dashboard
             </Button>
             <Link href="/program" className="block">
               <Button

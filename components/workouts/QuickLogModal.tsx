@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,8 @@ import {
   type FocusArea,
   quickLogWorkout,
   DIFFICULTY_LABELS,
+  markLoggedHistorySync,
+  readLoggedHistoryRetry,
 } from '@/lib/workout-log-service'
 import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
 import { syncLoggedWorkoutHistory } from '@/lib/workout/logged-history-sync'
@@ -59,7 +61,36 @@ export function QuickLogModal({
   const [saveStatus, setSaveStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
   const saveLockRef = useRef(false)
   const occurrenceIdRef = useRef<string | null>(null)
+  const restoredKeyRef = useRef<string | null>(null)
   const historyFailed = saveStatus?.historySync === 'failed'
+
+  useEffect(() => {
+    if (!open) {
+      restoredKeyRef.current = null
+      return
+    }
+    if (!userId) return
+    const key = `${userId}:${workoutName}:${workoutId ?? ''}`
+    if (restoredKeyRef.current === key) return
+    restoredKeyRef.current = key
+    const pending = readLoggedHistoryRetry(userId, 'quick', {
+      sessionName: workoutName,
+      generatedWorkoutId: workoutId,
+    })
+    if (!pending?.occurrenceId) return
+    occurrenceIdRef.current = pending.occurrenceId
+    setDuration(pending.durationMinutes)
+    setDifficulty(pending.perceivedDifficulty || 'normal')
+    setPullUps(pending.keyPerformance?.pullUps ? String(pending.keyPerformance.pullUps) : '')
+    setDips(pending.keyPerformance?.dips ? String(pending.keyPerformance.dips) : '')
+    setPushUps(pending.keyPerformance?.pushUps ? String(pending.keyPerformance.pushUps) : '')
+    setSaveStatus(describeWorkoutSaveResult({
+      outcome: 'saved',
+      saveDisposition: 'kept',
+      serverEvidence: pending.serverEvidence,
+      historySync: 'failed',
+    }))
+  }, [open, userId, workoutName, workoutId])
 
   const handleSubmit = async () => {
     if (saveLockRef.current) return
@@ -120,6 +151,14 @@ export function QuickLogModal({
         historySync,
       })
       setSaveStatus(status)
+      const occurrenceId = occurrenceIdRef.current
+      if (userId && occurrenceId) {
+        markLoggedHistorySync(
+          occurrenceId,
+          userId,
+          historySync === 'failed' ? 'pending' : 'updated',
+        )
+      }
 
       if (savedLog.saveDisposition === 'inserted') {
         const newAchievements = onTrainingEvent('workout_complete')

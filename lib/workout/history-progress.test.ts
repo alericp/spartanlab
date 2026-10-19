@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { decideRecordAccess, decideRequestedAthleteAccess } from '../server/athlete-ownership.ts'
-import { describeWorkoutSaveResult } from './save-reliability.ts'
+import { describeWorkoutSaveResult, planLocalWorkoutSave } from './save-reliability.ts'
 import {
   buildLiveWorkoutHistoryInput,
   buildLoggedWorkoutHistoryInput,
+  measuredSessionRpe,
+  selectOwnedHistoryRetry,
   classifyHistoryHttp,
   classifyHistoryPersistence,
   compareExerciseSnapshots,
@@ -414,6 +416,9 @@ describe('manual and quick logs use the existing history writer', () => {
     assert.equal(first.exercises.find(item => item.id === 'dip')?.targetHold, 12)
     assert.equal(first.completedSets.filter(set => set.exerciseId === 'dip').length, 3)
     assert.equal(first.completedSets[0].actualHoldSeconds, 12)
+    assert.equal(first.completedSets.every(set => set.actualRPE === undefined && set.targetRPE === undefined), true)
+    assert.equal(measuredSessionRpe([undefined, 0, 8, 6]), 7)
+    assert.equal(measuredSessionRpe([0, undefined]), null)
     assert.equal(first.exercises.some(item => 'weight' in item), false)
     assert.equal(first.completedSets.some(set => set.actualLoad !== undefined), false)
     assert.equal(first.exercises.find(item => item.id === 'quick-pull-up')?.targetReps, 10)
@@ -511,6 +516,36 @@ describe('manual and quick logs use the existing history writer', () => {
   })
 })
 
+describe('logged history retry stays with the athlete who saved it', () => {
+  it('restores the same occurrence for that athlete and hides it from everyone else', () => {
+    const pending = {
+      id: 'workout-occ-1',
+      occurrenceId: 'occ-1',
+      ownerUserId: OWNER,
+      historySync: 'pending' as const,
+      createdAt: '2026-10-19T01:00:00.000Z',
+      isQuickLog: false,
+      sessionName: 'Push Day',
+    }
+    const older = { ...pending, id: 'workout-occ-0', occurrenceId: 'occ-0', createdAt: '2026-10-18T01:00:00.000Z' }
+    const quick = { ...pending, id: 'workout-quick', occurrenceId: 'occ-quick', isQuickLog: true, sessionName: 'Skill Day', generatedWorkoutId: 'gen-1' }
+    const finished = { ...pending, id: 'workout-done', occurrenceId: 'occ-done', historySync: 'updated' as const }
+    const logs = [older, pending, quick, finished]
+    assert.equal(selectOwnedHistoryRetry(logs, OWNER, 'manual')?.occurrenceId, 'occ-1')
+    assert.equal(selectOwnedHistoryRetry(logs, OTHER, 'manual'), null)
+    assert.equal(selectOwnedHistoryRetry(logs, null, 'manual'), null)
+    assert.equal(selectOwnedHistoryRetry([{ ...pending, ownerUserId: undefined }], OWNER, 'manual'), null)
+    assert.equal(selectOwnedHistoryRetry(logs, OWNER, 'quick', { sessionName: 'Skill Day', generatedWorkoutId: 'gen-1' })?.occurrenceId, 'occ-quick')
+    assert.equal(selectOwnedHistoryRetry(logs, OWNER, 'quick', { sessionName: 'Other Day' }), null)
+    const retry = planLocalWorkoutSave(
+      [{ id: 'workout-occ-1', occurrenceId: 'occ-1', serverEvidence: 'saved' as const }],
+      { id: 'workout-occ-1', occurrenceId: 'occ-1' },
+    )
+    assert.equal(retry.action, 'keep')
+    assert.equal(retry.log.occurrenceId, 'occ-1')
+  })
+})
+
 describe('signed-in history ownership', () => {
   it('allows the signed-in athlete and refuses another athlete or a missing session owner', () => {
     assert.equal(decideRequestedAthleteAccess(OWNER, OWNER).allowed, true)
@@ -570,10 +605,14 @@ describe('history progress wiring', () => {
     assert.doesNotMatch(hook, /persisted === 'failed'\) return false/)
     const manual = readFileSync('components/workouts/WorkoutLogForm.tsx', 'utf8')
     const quick = readFileSync('components/workouts/QuickLogModal.tsx', 'utf8')
+    assert.match(manual, /readLoggedHistoryRetry/)
+    assert.match(manual, /markLoggedHistorySync/)
     assert.match(manual, /syncLoggedWorkoutHistory/)
     assert.match(manual, /useAuth\(\)/)
     assert.match(manual, /holdSeconds: exercise\.holdSeconds/)
     assert.doesNotMatch(manual, /load: exercise\.load/)
+    assert.match(quick, /readLoggedHistoryRetry/)
+    assert.match(quick, /markLoggedHistorySync/)
     assert.match(quick, /syncLoggedWorkoutHistory/)
     assert.match(quick, /useAuth\(\)/)
     assert.match(quick, /keyPerformance: recordedPerformance/)
@@ -582,6 +621,7 @@ describe('history progress wiring', () => {
     assert.match(readFileSync('components/dashboard/ProgressDashboard.tsx', 'utf8'), /DEVICE_STRENGTH_PROGRESS/)
     assert.match(readFileSync('components/dashboard/ProgressDashboard.tsx', 'utf8'), /recentTrainingModel/)
     const sync = readFileSync('lib/workout/logged-history-sync.ts', 'utf8')
+    assert.match(readFileSync('lib/workout-history-persistence.ts', 'utf8'), /measuredSessionRpe/)
     assert.match(sync, /persistWorkoutSession\(buildLoggedWorkoutHistoryInput/)
     assert.match(sync, /if \(!input\.userId\) return 'skipped'/)
     assert.doesNotMatch(sync, /2\.204|lbs/)

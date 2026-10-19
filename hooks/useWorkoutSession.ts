@@ -10,7 +10,7 @@ import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
 import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 import { persistWorkoutSession, type PersistenceResult } from '@/lib/workout-history-persistence'
 import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
-import { classifyHistoryPersistence, type HistorySyncState } from '@/lib/workout/history-progress'
+import { classifyHistoryPersistence, measuredSessionRpe, type HistorySyncState } from '@/lib/workout/history-progress'
 import { retryPendingWorkoutEvidence } from '@/lib/workout-log-service'
 import { useAuth } from '@clerk/nextjs'
 import type { CompletedSetData } from '@/types/history'
@@ -171,10 +171,15 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
     completedSets: state.completedSets.length,
     totalExercises,
     completedExercises: new Set(state.completedSets.map(s => s.exerciseId)).size,
-    averageRPE: state.completedSets.length > 0
-      ? Math.round((state.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / state.completedSets.length) * 10) / 10
-      : null,
-    estimatedVolume: state.completedSets.reduce((sum, s) => sum + (s.actualReps * (s.actualRPE / 10)), 0),
+    averageRPE: (() => {
+      const average = measuredSessionRpe(state.completedSets.map(set => set.actualRPE))
+      return average === null ? null : Math.round(average * 10) / 10
+    })(),
+    estimatedVolume: state.completedSets.reduce((sum, set) => {
+      const effort = measuredSessionRpe([set.actualRPE])
+      if (effort === null) return sum
+      return sum + (set.actualReps * (effort / 10))
+    }, 0),
     elapsedSeconds: state.elapsedSeconds,
   }
 
@@ -427,16 +432,19 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
           if (!map.has(set.exerciseName)) {
             map.set(set.exerciseName, { exerciseName: set.exerciseName, sets: [] })
           }
+          const effort = measuredSessionRpe([set.actualRPE])
+          if (effort === null) return map
           map.get(set.exerciseName)!.sets.push({
             setNumber: set.setNumber,
-            targetRPE: set.targetRPE,
-            actualRPE: set.actualRPE,
+            targetRPE: measuredSessionRpe([set.targetRPE]) ?? effort,
+            actualRPE: effort,
             targetReps: set.targetReps,
             actualReps: set.actualReps,
           })
           return map
         }, new Map<string, { exerciseName: string; sets: { setNumber: number; targetRPE: number; actualRPE: number; targetReps: number; actualReps: number }[] }>())
       ).map(([_, data]) => data)
+        .filter(data => data.sets.length > 0)
 
       if (rpeExercises.length > 0) {
         recordRPESession({

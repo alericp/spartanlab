@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -26,6 +26,8 @@ import {
   FOCUS_AREA_LABELS,
   DIFFICULTY_LABELS,
   saveWorkoutLog,
+  markLoggedHistorySync,
+  readLoggedHistoryRetry,
 } from '@/lib/workout-log-service'
 import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
 import { syncLoggedWorkoutHistory } from '@/lib/workout/logged-history-sync'
@@ -54,6 +56,29 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
   const saveLockRef = useRef(false)
   const submittedRef = useRef(false)
   const occurrenceIdRef = useRef<string | null>(null)
+  const restoredRef = useRef(false)
+
+  useEffect(() => {
+    if (!userId || restoredRef.current) return
+    restoredRef.current = true
+    const pending = readLoggedHistoryRetry(userId, 'manual')
+    if (!pending?.occurrenceId) return
+    occurrenceIdRef.current = pending.occurrenceId
+    setSessionName(pending.sessionName)
+    setSessionType(pending.sessionType)
+    setSessionDate(pending.sessionDate)
+    setDurationMinutes(pending.durationMinutes)
+    setFocusArea(pending.focusArea)
+    setPerceivedDifficulty(pending.perceivedDifficulty || 'normal')
+    setNotes(pending.notes || '')
+    setExercises(pending.exercises)
+    setSaveStatus(describeWorkoutSaveResult({
+      outcome: 'saved',
+      saveDisposition: 'kept',
+      serverEvidence: pending.serverEvidence,
+      historySync: 'failed',
+    }))
+  }, [userId])
 
   const addExercise = () => {
     const newExercise: WorkoutExercise = {
@@ -132,6 +157,9 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
         historySync,
       })
       setSaveStatus(status)
+      if (userId) {
+        markLoggedHistorySync(occurrenceId, userId, historySync === 'failed' ? 'pending' : 'updated')
+      }
 
       if (log.saveDisposition === 'inserted') {
         const newAchievements = onTrainingEvent('workout_complete')

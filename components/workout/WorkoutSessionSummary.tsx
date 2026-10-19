@@ -29,6 +29,7 @@ import {
 } from '@/lib/session-performance'
 import { getDailyReadiness } from '@/lib/daily-readiness'
 import type { WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { measuredSessionRpe } from '@/lib/workout/history-progress'
 
 interface WorkoutSessionSummaryProps {
   stats: SessionStats
@@ -60,17 +61,16 @@ export function WorkoutSessionSummary({
         category: set.exerciseCategory,
         sets: [],
         totalReps: 0,
-        avgRPE: 0,
+        avgRPE: null as number | null,
       }
     }
     acc[set.exerciseName].sets.push(set)
     acc[set.exerciseName].totalReps += set.actualReps
     return acc
-  }, {} as Record<string, { name: string; category: string; sets: CompletedSetData[]; totalReps: number; avgRPE: number }>)
+  }, {} as Record<string, { name: string; category: string; sets: CompletedSetData[]; totalReps: number; avgRPE: number | null }>)
 
-  // Calculate average RPE per exercise
   Object.values(exerciseSummaries).forEach(ex => {
-    ex.avgRPE = ex.sets.reduce((sum, s) => sum + s.actualRPE, 0) / ex.sets.length
+    ex.avgRPE = measuredSessionRpe(ex.sets.map(set => set.actualRPE))
   })
 
   // Format duration
@@ -125,7 +125,17 @@ export function WorkoutSessionSummary({
       elapsedSeconds: stats.elapsedSeconds,
       averageRPE: stats.averageRPE ?? undefined,
     },
-    completedSets,
+    completedSets.flatMap(set => {
+      const actualRPE = measuredSessionRpe([set.actualRPE])
+      const targetRPE = measuredSessionRpe([set.targetRPE]) ?? actualRPE
+      if (actualRPE === null || targetRPE === null) return []
+      return [{
+        targetReps: set.targetReps,
+        actualReps: set.actualReps,
+        targetRPE,
+        actualRPE,
+      }]
+    }),
     'mixed', // Default session type
     sessionName,
     readiness
@@ -223,6 +233,7 @@ export function WorkoutSessionSummary({
                     {ex.sets.length} sets • {ex.totalReps} total reps
                   </p>
                 </div>
+                {ex.avgRPE !== null && (
                 <Badge
                   variant="outline"
                   className={`
@@ -234,6 +245,7 @@ export function WorkoutSessionSummary({
                 >
                   RPE {Math.round(ex.avgRPE)}
                 </Badge>
+                )}
               </div>
             ))}
           </div>

@@ -18,6 +18,18 @@ import {
 
 export type HistorySyncState = 'updated' | 'failed' | 'skipped'
 
+/**
+ * Effort counts only when the athlete recorded a positive RPE.
+ * A missing value and a placeholder zero are both unmeasured.
+ */
+export function measuredSessionRpe(values: Array<number | null | undefined>): number | null {
+  const measured = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0,
+  )
+  if (measured.length === 0) return null
+  return measured.reduce((sum, value) => sum + value, 0) / measured.length
+}
+
 export function classifyHistoryPersistence(
   result: { persisted?: 'saved' | 'duplicate' | 'failed' } | null | undefined,
 ): HistorySyncState {
@@ -535,8 +547,6 @@ export function buildLoggedWorkoutHistoryInput(input: LoggedWorkoutHistoryInput)
         setNumber,
         targetReps: exercise.reps ?? 0,
         actualReps: exercise.reps ?? 0,
-        targetRPE: 0,
-        actualRPE: 0,
         restSeconds: 0,
         actualHoldSeconds: exercise.hold ?? undefined,
       })
@@ -710,4 +720,38 @@ export function recentTrainingModel(input: {
   }
   if (device) return { mode: 'device', ...device }
   return { mode: 'empty', href: '/workouts' }
+}
+
+export interface OwnedHistoryRetryLog {
+  id: string
+  occurrenceId?: string
+  ownerUserId?: string
+  historySync?: 'pending' | 'updated' | 'skipped'
+  createdAt: string
+  isQuickLog?: boolean
+  sessionName?: string
+  generatedWorkoutId?: string
+}
+
+/**
+ * A failed history sync can be retried only by the athlete who saved it.
+ * Another account, a finished sync, and a log with no owner are ignored.
+ */
+export function selectOwnedHistoryRetry<T extends OwnedHistoryRetryLog>(
+  logs: T[],
+  userId: string | null | undefined,
+  source: 'manual' | 'quick',
+  match?: { sessionName?: string; generatedWorkoutId?: string },
+): T | null {
+  if (!userId) return null
+  const pending = logs
+    .filter(log => {
+      if (log.historySync !== 'pending' || log.ownerUserId !== userId || !log.occurrenceId) return false
+      if (source === 'quick' ? log.isQuickLog !== true : log.isQuickLog === true) return false
+      if (match?.sessionName && log.sessionName !== match.sessionName) return false
+      if (match?.generatedWorkoutId && log.generatedWorkoutId !== match.generatedWorkoutId) return false
+      return true
+    })
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+  return pending[0] ?? null
 }

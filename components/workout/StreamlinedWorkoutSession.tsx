@@ -264,6 +264,7 @@ import {
   type ExerciseContextFlag,
   AVAILABLE_CONTEXT_FLAGS,
 } from '@/lib/workout-execution-truth'
+import { NoteCoachingInsight } from '@/components/workout/NoteCoachingInsight'
 // [LIVE-WORKOUT-MACHINE] Hydration validation and types
 import {
   validateHydrationPayload,
@@ -10212,6 +10213,13 @@ if (shouldShowLocalFallback) {
                 placeholder="Felt strong, wrists sore, short on time..."
                 className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] placeholder:text-[#6B7280] min-h-[50px] resize-none text-sm"
               />
+              <div className="mt-2">
+                <NoteCoachingInsight
+                  text={safeWorkoutNotes}
+                  perceivedDifficulty={perceivedDifficulty}
+                  sessionLabel={safeSession.dayLabel}
+                />
+              </div>
             </Card>
 
             {/* [STEP 22.4 / T.T12 + STEP 22.5 / T.T13] Post-workout substitution proposal review */}
@@ -12535,6 +12543,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   value={contractSetNote}
                   onChange={(e) => handleSetNote(e.target.value)}
                   className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
+                />
+                <NoteCoachingInsight
+                  text={contractSetNote}
+                  selectedTags={contractReasonTags}
+                  exerciseName={safeCurrentExercise?.name}
+                  setNumber={machineState.currentSetNumber}
                 />
               </div>
             )}

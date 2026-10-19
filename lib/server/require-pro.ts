@@ -19,7 +19,11 @@ import 'server-only'
 
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getUserSubscription } from '@/lib/subscription-service'
-import { checkOwnerByEmail, getOwnerEmail } from '@/lib/owner-access'
+import {
+  clerkEmailsEligibleForOwnerMatch,
+  getOwnerEmail,
+  resolveOwnerEntitlement,
+} from '@/lib/owner-access'
 
 export interface ProAccessResult {
   hasAccess: boolean
@@ -55,36 +59,23 @@ export async function checkProAccess(): Promise<ProAccessResult> {
 
     // 2. Get user email for owner check
     const clerkUser = await currentUser()
-    const email = clerkUser?.emailAddresses?.[0]?.emailAddress || null
-
-    // 3. Check owner bypass FIRST (owner always has access)
-    if (email && checkOwnerByEmail(email)) {
-      return {
-        hasAccess: true,
-        reason: 'owner',
-        userId,
-        email,
-      }
-    }
-
-    // 4. Check database subscription status
+    const verifiedEmails = clerkEmailsEligibleForOwnerMatch(
+      clerkUser?.primaryEmailAddressId,
+      clerkUser?.emailAddresses,
+    )
+    const email = verifiedEmails[0] ?? null
     const subscription = await getUserSubscription(userId)
+    const decision = resolveOwnerEntitlement({
+      authenticatedUserId: userId,
+      configuredOwnerEmail: getOwnerEmail(),
+      verifiedEmails,
+      subscriptionPlan: subscription.plan,
+      subscriptionStatus: subscription.status,
+    })
 
-    // Pro plan with active or trialing status
-    if (subscription.plan === 'pro' && 
-        (subscription.status === 'active' || subscription.status === 'trialing')) {
-      return {
-        hasAccess: true,
-        reason: subscription.status === 'trialing' ? 'trial' : 'pro',
-        userId,
-        email,
-      }
-    }
-
-    // Free user or canceled subscription - no access
     return {
-      hasAccess: false,
-      reason: 'free',
+      hasAccess: decision.hasProAccess,
+      reason: decision.reason === 'unauthenticated' ? 'free' : decision.reason,
       userId,
       email,
     }

@@ -14,7 +14,11 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getUserSubscription } from '@/lib/subscription-service'
-import { checkOwnerByEmail } from '@/lib/owner-access'
+import {
+  clerkEmailsEligibleForOwnerMatch,
+  getOwnerEmail,
+  resolveOwnerEntitlement,
+} from '@/lib/owner-access'
 
 export interface EntitlementResponse {
   isSignedIn: boolean
@@ -51,17 +55,22 @@ export async function GET() {
 
     // Get user email for owner check
     const clerkUser = await currentUser()
-    const email = clerkUser?.emailAddresses?.[0]?.emailAddress || null
-    const isOwner = email ? checkOwnerByEmail(email) : false
-
-    // Get subscription from database (canonical source)
+    const verifiedEmails = clerkEmailsEligibleForOwnerMatch(
+      clerkUser?.primaryEmailAddressId,
+      clerkUser?.emailAddresses,
+    )
     const subscription = await getUserSubscription(userId)
-    
-    // Determine if user has Pro access
-    // Pro access = (plan === 'pro') OR (isOwner)
+    const decision = resolveOwnerEntitlement({
+      authenticatedUserId: userId,
+      configuredOwnerEmail: getOwnerEmail(),
+      verifiedEmails,
+      subscriptionPlan: subscription.plan,
+      subscriptionStatus: subscription.status,
+    })
+    const isOwner = decision.isOwner
     const isPro = subscription.plan === 'pro'
     const isTrialing = subscription.status === 'trialing'
-    const hasProAccess = isPro || isOwner
+    const hasProAccess = decision.hasProAccess
 
     return NextResponse.json<EntitlementResponse>({
       isSignedIn: true,

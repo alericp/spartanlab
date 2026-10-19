@@ -245,9 +245,10 @@ import {
 import {
   WORKOUT_SESSION_SCHEMA_VERSION as STORAGE_SCHEMA_VERSION,
   WORKOUT_SESSION_STORAGE_KEY as STORAGE_KEY,
-  getResumableSessionSummary,
+  canReplaceStoredSession,
   shouldClearStoredSessionOnRestoreRejection,
 } from '@/lib/workout/resume-session'
+import { useAuth } from '@clerk/nextjs'
 
 export {
   buildResumeWorkoutUrl,
@@ -1617,6 +1618,7 @@ interface SaveSessionIdentity {
   executionMode: WorkoutExecutionMode
   variantIndex: number
   weekOverride: number | null
+  ownerUserId: string
 }
 
 function saveSessionToStorage(
@@ -1645,6 +1647,7 @@ function saveSessionToStorage(
         executionMode: identity.executionMode,
         variantIndex: identity.variantIndex,
         weekOverride: identity.weekOverride,
+        ownerUserId: identity.ownerUserId,
       } : {}),
     }))
   } catch {}
@@ -1653,7 +1656,8 @@ function saveSessionToStorage(
 function loadSessionFromStorage(
   sessionId: string, 
   exerciseCount?: number,
-  currentStructureSignature?: string
+  currentStructureSignature?: string,
+  expectedOwnerUserId?: string | null,
 ): WorkoutSessionState | null {
   if (typeof window === 'undefined') return null
   
@@ -1681,6 +1685,14 @@ function loadSessionFromStorage(
     // [PHASE-NEXT] Reject if data is not an object
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return rejectRestore('invalid_data_shape', { type: typeof data })
+    }
+
+    const storedOwner = typeof data.ownerUserId === 'string' ? data.ownerUserId : ''
+    if (!expectedOwnerUserId || storedOwner !== expectedOwnerUserId) {
+      return rejectRestore(storedOwner && expectedOwnerUserId ? 'owner_mismatch' : 'owner_missing', {
+        expectedOwnerPresent: Boolean(expectedOwnerUserId),
+        storedOwnerPresent: Boolean(storedOwner),
+      })
     }
     
     // [LIVE-SESSION-FIX] CRITICAL: Validate schema version FIRST
@@ -2825,6 +2837,7 @@ export function StreamlinedWorkoutSession({
   // without claiming matched parity.
   ab10RuntimeParityProof = null,
 }: StreamlinedWorkoutSessionProps) {
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order
   // Boot ledger calls are moved to AFTER all hooks are declared via useEffect
@@ -4737,8 +4750,9 @@ export function StreamlinedWorkoutSession({
   // All boot ledger writes happen here - never during render.
   // ==========================================================================
   useEffect(() => {
+    if (!isDemoSession && !isAuthLoaded) return
     // Generate hydration key to prevent double-apply in StrictMode
-    const hydrationKey = `${sessionId}::${sessionStructureSignature}`
+    const hydrationKey = `${sessionId}::${sessionStructureSignature}::${userId ?? ''}`
     
     // Skip if already applied for this exact session
     if (hydrationAppliedRef.current === hydrationKey) {
@@ -4786,7 +4800,7 @@ export function StreamlinedWorkoutSession({
     })
     
     const exerciseCount = safeWorkoutSessionContract.exercises?.length ?? 0
-    const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
+    const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature, userId)
     
     // [PPX-R7.8K] Accept completed sessions if they have valid liveFlowPhase (completedMain/cooldown/done)
     // This allows exact refresh/resume from any workout phase, not just active/resting
@@ -4906,7 +4920,7 @@ export function StreamlinedWorkoutSession({
     hydrationAppliedRef.current = hydrationKey
     setBootHydrationReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, sessionStructureSignature, isDemoSession])
+  }, [sessionId, sessionStructureSignature, isDemoSession, isAuthLoaded, userId])
   
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] TIMING VALUES FROM MACHINE STATE
@@ -6215,6 +6229,7 @@ failureStage: null,
   useEffect(() => {
     // Demo sessions don't persist to storage
     if (isDemoSession) return
+    if (!isAuthLoaded || !userId) return
 
     // [DISCARD-INTENT-LOCK] If the user explicitly discarded this workout,
     // suppress autosave entirely until the component unmounts. Without this,
@@ -6232,10 +6247,13 @@ failureStage: null,
       const loggedProgress =
         (liveSession.completedSets?.length ?? 0) > 0 ||
         liveSession.currentExerciseIndex > 0
-      if (!loggedProgress) {
-        const other = getResumableSessionSummary()
-        if (other && other.sessionId !== sessionId) return
+      let storedRaw: string | null = null
+      try {
+        storedRaw = localStorage.getItem(STORAGE_KEY)
+      } catch {
+        return
       }
+      if (!canReplaceStoredSession(storedRaw, userId, sessionId, loggedProgress)) return
       // Save the core workout state from the unified liveSession
       // [PHASE-J / RESUME-IDENTITY] Persist resume identity alongside runtime
       // state so the dashboard Resume button can rebuild the EXACT launch URL
@@ -6268,12 +6286,15 @@ failureStage: null,
         executionMode,
         variantIndex,
         weekOverride: weekOverride ?? null,
+        ownerUserId: userId,
       })
     }
   }, [
     liveSession,
     sessionId,
     isDemoSession,
+    isAuthLoaded,
+    userId,
     sessionStructureSignature,
     safeWorkoutSessionContract.dayLabel,
     safeWorkoutSessionContract.dayNumber,

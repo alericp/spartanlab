@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { Navigation } from '@/components/shared/Navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ import {
 } from '@/lib/workout/resume-session'
 
 export default function TodaySessionPage() {
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   const [currentSession, setCurrentSession] = useState<AdaptiveSession | null>(null)
   const [adjustment, setAdjustment] = useState<SessionAdjustment | null>(null)
   const [deloadAssessment, setDeloadAssessment] = useState<DeloadAssessment | null>(null)
@@ -162,10 +164,14 @@ export default function TodaySessionPage() {
 
   useEffect(() => {
     setMounted(true)
-    setResumeSummary(getResumableSessionSummary())
     const inferredWellness = inferWellnessFromRecovery()
     setWellnessState(inferredWellness)
   }, [])
+
+  useEffect(() => {
+    if (!isAuthLoaded) return
+    setResumeSummary(getResumableSessionSummary(userId ?? null))
+  }, [isAuthLoaded, userId])
 
   useEffect(() => {
     if (mounted) {
@@ -338,7 +344,7 @@ export default function TodaySessionPage() {
             <p className="text-sm text-[#A5A5A5] mt-1">
               {resumeSummary.completedSetsCount} sets logged
               {resumeSummary.status === 'resting' ? ' · resting' : ''}
-              . This session is not in history until you save it.
+              . This device keeps one unfinished workout for this account. It is not in history until you save it.
             </p>
             <Link href={buildResumeWorkoutUrl(resumeSummary)} className="block mt-3">
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700">

@@ -77,6 +77,8 @@ describe('workout note readings', () => {
     assert.doesNotMatch(line ?? '', /415-555-0199/)
     assert.doesNotMatch(line ?? '', /diagnosed/i)
     assert.equal(workoutNoteSummaryLine('Grip gave out on the last rep'), 'You wrote that grip limited the set.')
+    const marked = workoutNoteSummaryLine('Grip gave out SECRETTOKEN')
+    assert.doesNotMatch(marked ?? '', /SECRETTOKEN/)
     assert.equal(workoutNoteSummaryLine('   '), null)
   })
 

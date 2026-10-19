@@ -177,6 +177,14 @@ describe('partial personal-record saves', () => {
 
 describe('athlete save status', () => {
   it('names in progress, a failed save, a pending sync, and a duplicate keep', () => {
+    const failed = describeWorkoutSaveResult({
+      outcome: 'failed',
+      saveDisposition: 'inserted',
+      serverEvidence: 'saved',
+    })
+    assert.equal(failed.state, 'failed')
+    assert.equal(failed.title, 'Save error')
+    assert.doesNotMatch(failed.detail, /in your history/)
     assert.equal(describeWorkoutSaveResult({ outcome: 'in_progress' }).title, 'In progress')
     assert.match(describeWorkoutSaveResult({ outcome: 'failed' }).detail, /not saved/)
     assert.match(

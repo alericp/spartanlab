@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,7 +21,8 @@ import {
   quickLogWorkout,
   DIFFICULTY_LABELS,
 } from '@/lib/workout-log-service'
-import { createOccurrenceId } from '@/lib/workout/save-reliability'
+import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { syncLoggedWorkoutHistory } from '@/lib/workout/logged-history-sync'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
@@ -52,13 +54,16 @@ export function QuickLogModal({
   const [pullUps, setPullUps] = useState<string>('')
   const [dips, setDips] = useState<string>('')
   const [pushUps, setPushUps] = useState<string>('')
+  const { userId } = useAuth()
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
   const saveLockRef = useRef(false)
   const occurrenceIdRef = useRef<string | null>(null)
+  const historyFailed = saveStatus?.historySync === 'failed'
 
   const handleSubmit = async () => {
-    if (saveLockRef.current || saved) return
+    if (saveLockRef.current) return
+    if (saveStatus?.state === 'saved' && !historyFailed) return
     saveLockRef.current = true
     if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
     setSaving(true)
@@ -69,6 +74,7 @@ export function QuickLogModal({
       if (pullUps && parseInt(pullUps) > 0) keyPerformance.pullUps = parseInt(pullUps)
       if (dips && parseInt(dips) > 0) keyPerformance.dips = parseInt(dips)
       if (pushUps && parseInt(pushUps) > 0) keyPerformance.pushUps = parseInt(pushUps)
+      const recordedPerformance = Object.keys(keyPerformance).length > 0 ? keyPerformance : undefined
 
       const savedLog = quickLogWorkout({
         sessionName: workoutName,
@@ -77,55 +83,97 @@ export function QuickLogModal({
         durationMinutes: duration,
         perceivedDifficulty: difficulty,
         generatedWorkoutId: workoutId,
-        keyPerformance: Object.keys(keyPerformance).length > 0 ? keyPerformance : undefined,
+        keyPerformance: recordedPerformance,
         occurrenceId: occurrenceIdRef.current,
       })
 
-      if (savedLog.saveDisposition !== 'inserted') {
-        setSaved(true)
-        return
+      let historySync: WorkoutSaveAthleteStatus['historySync'] = 'skipped'
+      try {
+        historySync = await syncLoggedWorkoutHistory({
+          userId,
+          occurrenceId: occurrenceIdRef.current,
+          workoutName: savedLog.sessionName,
+          sessionDate: savedLog.sessionDate,
+          durationMinutes: savedLog.durationMinutes,
+          focusArea: savedLog.focusArea,
+          perceivedDifficulty: savedLog.perceivedDifficulty,
+          notes: savedLog.notes,
+          exercises: savedLog.exercises.map(exercise => ({
+            id: exercise.id,
+            name: exercise.name,
+            category: exercise.category,
+            sets: exercise.sets,
+            reps: exercise.reps,
+            holdSeconds: exercise.holdSeconds,
+          })),
+          keyPerformance: recordedPerformance,
+        })
+      } catch (error) {
+        console.error('[QuickLogModal] History sync failed:', error)
+        historySync = 'failed'
       }
 
-      const newAchievements = onTrainingEvent('workout_complete')
-      if (newAchievements.length > 0) {
-        showAchievementNotifications(newAchievements)
+      const status = describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: savedLog.saveDisposition,
+        serverEvidence: savedLog.serverEvidence,
+        historySync,
+      })
+      setSaveStatus(status)
+
+      if (savedLog.saveDisposition === 'inserted') {
+        const newAchievements = onTrainingEvent('workout_complete')
+        if (newAchievements.length > 0) {
+          showAchievementNotifications(newAchievements)
+        }
+
+        const completedChallenges = onTrainingEventForChallenges()
+        if (completedChallenges.length > 0) {
+          showChallengeNotifications(completedChallenges)
+        }
       }
 
-      // Check for completed challenges
-      const completedChallenges = onTrainingEventForChallenges()
-      if (completedChallenges.length > 0) {
-        showChallengeNotifications(completedChallenges)
+      if (historySync !== 'failed') {
+        occurrenceIdRef.current = null
+        setTimeout(() => {
+          onComplete?.()
+          onClose()
+          setSaveStatus(null)
+          setDifficulty('normal')
+          setPullUps('')
+          setDips('')
+          setPushUps('')
+        }, 1500)
       }
-
-      setSaved(true)
-      setTimeout(() => {
-        onComplete?.()
-        onClose()
-        // Reset state for next time
-        setSaved(false)
-        setDifficulty('normal')
-        setPullUps('')
-        setDips('')
-        setPushUps('')
-      }, 1500)
     } finally {
       setSaving(false)
       saveLockRef.current = false
     }
   }
 
-  if (saved) {
+  if (saveStatus?.state === 'saved') {
     return (
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="bg-[#1A1A1A] border-[#2A2A2A] sm:max-w-md">
           <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
-              <CheckCircle className="w-8 h-8 text-emerald-400" />
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+              historyFailed ? 'bg-amber-500/20' : 'bg-emerald-500/20'
+            }`}>
+              <CheckCircle className={`w-8 h-8 ${historyFailed ? 'text-amber-300' : 'text-emerald-400'}`} />
             </div>
-            <h3 className="text-xl font-semibold text-[#E6E9EF] mb-2">Workout Logged!</h3>
+            <h3 className="text-xl font-semibold text-[#E6E9EF] mb-2">{saveStatus.title}</h3>
             <p className="text-[#A5A5A5] text-center">
-              Great work! Your training has been recorded.
+              {saveStatus.detail}
             </p>
+            {historyFailed && (
+              <Button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="mt-4 bg-[#E63946] hover:bg-[#D62828]"
+              >
+                {saving ? 'Saving...' : 'Retry History Sync'}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

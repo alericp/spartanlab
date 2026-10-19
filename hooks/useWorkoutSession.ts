@@ -9,7 +9,8 @@ import { showAchievementNotifications } from '@/components/achievements/achievem
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
 import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 import { persistWorkoutSession, type PersistenceResult } from '@/lib/workout-history-persistence'
-import { createOccurrenceId } from '@/lib/workout/save-reliability'
+import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { classifyHistoryPersistence, type HistorySyncState } from '@/lib/workout/history-progress'
 import { retryPendingWorkoutEvidence } from '@/lib/workout-log-service'
 import { useAuth } from '@clerk/nextjs'
 import type { CompletedSetData } from '@/types/history'
@@ -62,7 +63,7 @@ export interface UseWorkoutSessionReturn extends WorkoutSessionState, WorkoutSes
   isCompleted: boolean
   formattedDuration: string
   canSave: boolean
-  save: (notes?: string) => Promise<boolean>
+  save: (notes?: string) => Promise<WorkoutSaveAthleteStatus>
   lastSaveResult: PersistenceResult | null
 }
 
@@ -291,11 +292,11 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
   }, [nextExercise])
 
   // Save session to workout log
-  const save = useCallback(async (notes?: string): Promise<boolean> => {
+  const save = useCallback(async (notes?: string): Promise<WorkoutSaveAthleteStatus> => {
     if (state.status !== 'completed' || state.completedSets.length === 0) {
-      return false
+      return describeWorkoutSaveResult({ outcome: 'failed' })
     }
-    if (saveLockRef.current) return false
+    if (saveLockRef.current) return describeWorkoutSaveResult({ outcome: 'saving' })
     saveLockRef.current = true
     if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
     const occurrenceId = occurrenceIdRef.current
@@ -349,8 +350,11 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         }
       }
 
-      // Persist to workout history system (database)
+      // Persist to workout history system (database). A history failure
+      // keeps the local log and the same occurrence id for the retry.
+      let historySync: HistorySyncState = 'skipped'
       if (userId) {
+        try {
         const historyResult = await persistWorkoutSession({
           userId,
           workoutName: session.dayLabel,
@@ -400,7 +404,21 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         if (historyResult.prsDetected.length > 0) {
           console.log('[WorkoutSession] PRs detected:', historyResult.prsDetected)
         }
-        if (historyResult.persisted === 'failed') return false
+        historySync = classifyHistoryPersistence(historyResult)
+        } catch (error) {
+          console.error('[WorkoutSession] History sync failed:', error)
+          historySync = 'failed'
+        }
+      }
+
+      // Record RPE once, including when History did not sync.
+      if (savedLog.saveDisposition !== 'inserted') {
+        return describeWorkoutSaveResult({
+          outcome: 'saved',
+          saveDisposition: savedLog.saveDisposition,
+          serverEvidence: savedLog.serverEvidence,
+          historySync,
+        })
       }
 
       // Record RPE session for fatigue engine
@@ -428,10 +446,15 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         })
       }
 
-      return true
+      return describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: savedLog.saveDisposition,
+        serverEvidence: savedLog.serverEvidence,
+        historySync,
+      })
     } catch (error) {
       console.error('Failed to save workout session:', error)
-      return false
+      return describeWorkoutSaveResult({ outcome: 'failed' })
     } finally {
       saveLockRef.current = false
     }

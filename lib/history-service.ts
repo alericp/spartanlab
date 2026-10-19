@@ -665,12 +665,12 @@ export async function getPersonalRecordHistoryForUser(
 export async function getPersonalRecordsByExercise(
   userId: string,
   exerciseKey: string,
-  options: PRQueryOptions = {}
+  options: PRQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<PersonalRecordHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, sortOrder = 'desc' } = options
 
@@ -684,8 +684,7 @@ export async function getPersonalRecordsByExercise(
 
     return result.map(toPersonalRecord)
   } catch (error) {
-    console.error('[HistoryService] Error fetching exercise PRs:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -864,12 +863,13 @@ export async function getWorkoutSessionHistoryById(
  * Get a program history entry by ID
  */
 export async function getProgramHistoryById(
-  programId: string
+  programId: string,
+  options: { reportErrors?: boolean } = {},
 ): Promise<ProgramHistory | null> {
-  if (!(await isDatabaseAvailable())) return null
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, null)
 
   const sql = await getSqlClient()
-  if (!sql) return null
+  if (!sql) return emptyHistoryRead(options.reportErrors, null)
 
   try {
     const result = await sql`
@@ -880,8 +880,7 @@ export async function getProgramHistoryById(
 
     return result[0] ? toProgramHistory(result[0] as ProgramHistoryRow) : null
   } catch (error) {
-    console.error('[HistoryService] Error fetching program by ID:', error)
-    return null
+    return emptyHistoryRead(options.reportErrors, null, error)
   }
 }
 

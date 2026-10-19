@@ -5,17 +5,22 @@ import { decideRecordAccess, decideRequestedAthleteAccess } from '../server/athl
 import { describeWorkoutSaveResult } from './save-reliability.ts'
 import {
   buildLiveWorkoutHistoryInput,
+  buildLoggedWorkoutHistoryInput,
   classifyHistoryHttp,
   classifyHistoryPersistence,
   compareExerciseSnapshots,
+  DEVICE_STRENGTH_PROGRESS,
   displayHistoryNote,
   formatExerciseComparison,
   historyLoadCopy,
   historyNoteForStorage,
   historyNoteLines,
+  historyPerformanceLines,
   legitimatePrHits,
+  LOGGED_LOAD_HISTORY_DECISION,
   planHistorySyncRetry,
   previousExerciseSnapshots,
+  recentTrainingModel,
   shouldRetainOccurrenceForHistoryRetry,
 } from './history-progress.ts'
 import type { ExerciseResultSnapshot, PRHitSnapshot } from '../../types/history.ts'
@@ -324,7 +329,15 @@ describe('history reads report a failure instead of an empty archive', () => {
   it('throws when the archive asks for errors and stays empty for other callers', async () => {
     const { isDatabaseAvailable } = await import('../db.ts')
     if (await isDatabaseAvailable()) return
-    const { HistoryReadError, getWorkoutHistoryForUser, getWorkoutSessionHistoryById } = await import('../history-service.ts')
+    const {
+      HistoryReadError,
+      getWorkoutHistoryForUser,
+      getWorkoutSessionHistoryById,
+      getPersonalRecordHistoryForUser,
+      getPersonalRecordsByExercise,
+      getProgramHistoryForUser,
+      getProgramHistoryById,
+    } = await import('../history-service.ts')
     await assert.rejects(
       () => getWorkoutHistoryForUser(OWNER, { reportErrors: true }),
       HistoryReadError,
@@ -335,6 +348,166 @@ describe('history reads report a failure instead of an empty archive', () => {
       HistoryReadError,
     )
     assert.equal(await getWorkoutSessionHistoryById('session-missing'), null)
+    await assert.rejects(
+      () => getPersonalRecordHistoryForUser(OWNER, { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.deepEqual(await getPersonalRecordHistoryForUser(OWNER), [])
+    await assert.rejects(
+      () => getPersonalRecordsByExercise(OWNER, 'pull-up', { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.deepEqual(await getPersonalRecordsByExercise(OWNER, 'pull-up'), [])
+    await assert.rejects(
+      () => getProgramHistoryForUser(OWNER, { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.deepEqual(await getProgramHistoryForUser(OWNER), [])
+    await assert.rejects(
+      () => getProgramHistoryById('program-missing', { reportErrors: true }),
+      HistoryReadError,
+    )
+    assert.equal(await getProgramHistoryById('program-missing'), null)
+  })
+})
+
+describe('manual and quick logs use the existing history writer', () => {
+  it('keeps the occurrence id and writes reps and holds without converting load', () => {
+    assert.equal(LOGGED_LOAD_HISTORY_DECISION.writtenToHistory, false)
+    const first = buildLoggedWorkoutHistoryInput({
+      userId: OWNER,
+      occurrenceId: 'occ-manual-1',
+      workoutName: 'Push Day',
+      sessionDate: '2026-10-18',
+      durationMinutes: 40,
+      perceivedDifficulty: 'normal',
+      exercises: [{
+        id: 'dip',
+        name: 'Dip',
+        category: 'push',
+        sets: 3,
+        reps: 8,
+        holdSeconds: 12,
+      }],
+      keyPerformance: { pullUps: 10, skillHoldSeconds: 20, skillName: 'Tuck Planche' },
+    })
+    const retry = buildLoggedWorkoutHistoryInput({
+      userId: OWNER,
+      occurrenceId: 'occ-manual-1',
+      workoutName: 'Push Day',
+      sessionDate: '2026-10-18',
+      durationMinutes: 40,
+      exercises: [{
+        id: 'dip',
+        name: 'Dip',
+        category: 'push',
+        sets: 3,
+        reps: 8,
+        holdSeconds: 12,
+      }],
+      keyPerformance: { pullUps: 10, skillHoldSeconds: 20, skillName: 'Tuck Planche' },
+    })
+    assert.equal(first.clientSessionId, 'occ-manual-1')
+    assert.equal(retry.clientSessionId, first.clientSessionId)
+    assert.equal(first.userId, OWNER)
+    assert.equal(first.exercises.find(item => item.id === 'dip')?.targetReps, 8)
+    assert.equal(first.exercises.find(item => item.id === 'dip')?.targetHold, 12)
+    assert.equal(first.completedSets.filter(set => set.exerciseId === 'dip').length, 3)
+    assert.equal(first.completedSets[0].actualHoldSeconds, 12)
+    assert.equal(first.exercises.some(item => 'weight' in item), false)
+    assert.equal(first.completedSets.some(set => set.actualLoad !== undefined), false)
+    assert.equal(first.exercises.find(item => item.id === 'quick-pull-up')?.targetReps, 10)
+    assert.equal(first.exercises.find(item => item.id === 'quick-skill-hold')?.targetHold, 20)
+    assert.deepEqual(
+      first.exercises.map(item => item.id),
+      retry.exercises.map(item => item.id),
+    )
+  })
+
+  it('shows stored history reps, holds, and loads without relabeling the unit', () => {
+    const lines = historyPerformanceLines([
+      exercise({
+        exerciseId: 'pull-up',
+        exerciseName: 'Pull-Up',
+        actual: { setsCompleted: 3, repsPerSet: [6, 8], holdPerSet: [15] },
+      }),
+      exercise({
+        exerciseId: 'old-dip',
+        exerciseName: 'Dip',
+        actual: { setsCompleted: 2, repsPerSet: [5] },
+      }),
+      exercise({
+        exerciseId: 'weighted',
+        exerciseName: 'Weighted Pull-Up',
+        actual: { setsCompleted: 1, repsPerSet: [3], weightUsed: 20 },
+      }),
+    ])
+    assert.deepEqual(lines, [
+      'Pull-Up 8 reps',
+      'Pull-Up 15s hold',
+      'Dip 5 reps',
+      'Weighted Pull-Up 3 reps',
+      'Weighted Pull-Up load 20',
+    ])
+    assert.equal(lines.some(line => /lbs|kg/i.test(line)), false)
+    assert.equal(DEVICE_STRENGTH_PROGRESS.unitLabel, 'lbs')
+    assert.match(DEVICE_STRENGTH_PROGRESS.reason, /not combined with history loads/i)
+  })
+
+  it('keeps a history load error distinct from an empty archive and from device logs', () => {
+    const now = new Date('2026-10-19T12:00:00')
+    const history = recentTrainingModel({
+      historyStatus: 'ready',
+      now,
+      sessions: [{
+        id: 'session-1',
+        workoutName: 'Skill Day',
+        workoutDate: '2026-10-19',
+        exerciseResultsSnapshot: [
+          exercise({
+            exerciseId: 'hold',
+            exerciseName: 'Front Lever',
+            actual: { setsCompleted: 1, holdPerSet: [18], weightUsed: 0 },
+          }),
+        ],
+      }],
+      device: {
+        totalWorkouts: 2,
+        workoutsThisWeek: 2,
+        lastWorkoutName: 'Device only',
+        lastWorkoutDate: '2026-10-18',
+      },
+    })
+    assert.equal(history.mode, 'history')
+    if (history.mode === 'history') {
+      assert.equal(history.href, '/history/workouts')
+      assert.equal(history.sessions[0].lines[0], 'Front Lever 18s hold')
+      assert.equal(history.sessions[0].lines.some(line => line.includes('load')), false)
+    }
+    const failed = recentTrainingModel({
+      historyStatus: 'error',
+      sessions: [],
+      device: {
+        totalWorkouts: 1,
+        workoutsThisWeek: 1,
+        lastWorkoutName: 'Local session',
+        lastWorkoutDate: '2026-10-18',
+      },
+    })
+    assert.equal(failed.mode, 'error')
+    if (failed.mode === 'error') {
+      assert.match(failed.title, /could not be loaded/i)
+      assert.match(failed.detail, /loading problem/i)
+      assert.equal(failed.device?.href, '/workouts')
+    }
+    const empty = recentTrainingModel({ historyStatus: 'ready', sessions: [] })
+    assert.equal(empty.mode, 'empty')
+    if (empty.mode === 'empty') assert.equal(empty.href, '/workouts')
+    assert.equal(historyLoadCopy('error', 'prs').title, 'PR history could not be loaded')
+    assert.match(historyLoadCopy('error', 'prs').detail, /does not mean you have no personal records/)
+    assert.equal(historyLoadCopy('error', 'programs').title, 'Program history could not be loaded')
+    assert.equal(historyLoadCopy('missing', 'program').title, 'Program Not Found')
+    assert.match(historyLoadCopy('error', 'program').detail, /does not mean it was removed/)
   })
 })
 
@@ -382,11 +555,36 @@ describe('history progress wiring', () => {
     assert.match(readFileSync('app/api/history/route.ts', 'utf8'), /reportErrors: true/)
     assert.match(readFileSync('app/api/history/workouts/route.ts', 'utf8'), /reportErrors: true/)
     assert.match(readFileSync('app/api/history/sessions/[id]/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/api/history/prs/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/api/history/programs/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/api/history/program/[id]/route.ts', 'utf8'), /reportErrors: true/)
+    assert.match(readFileSync('app/(app)/history/prs/page.tsx', 'utf8'), /historyLoadCopy\('error', 'prs'\)/)
+    assert.match(readFileSync('app/(app)/history/programs/page.tsx', 'utf8'), /historyLoadCopy\('error', 'programs'\)/)
+    assert.match(readFileSync('app/(app)/history/program/[id]/page.tsx', 'utf8'), /historyLoadCopy\(loadKind === 'error' \? 'error' : 'missing', 'program'\)/)
     const hook = readFileSync('hooks/useWorkoutSession.ts', 'utf8')
     const localSave = hook.indexOf('saveWorkoutLog(')
     const historySave = hook.indexOf('persistWorkoutSession(')
     assert.ok(localSave > 0 && historySave > localSave)
     assert.match(hook, /clientSessionId: occurrenceId/)
+    assert.match(hook, /describeWorkoutSaveResult/)
+    assert.doesNotMatch(hook, /persisted === 'failed'\) return false/)
+    const manual = readFileSync('components/workouts/WorkoutLogForm.tsx', 'utf8')
+    const quick = readFileSync('components/workouts/QuickLogModal.tsx', 'utf8')
+    assert.match(manual, /syncLoggedWorkoutHistory/)
+    assert.match(manual, /useAuth\(\)/)
+    assert.match(manual, /holdSeconds: exercise\.holdSeconds/)
+    assert.doesNotMatch(manual, /load: exercise\.load/)
+    assert.match(quick, /syncLoggedWorkoutHistory/)
+    assert.match(quick, /useAuth\(\)/)
+    assert.match(quick, /keyPerformance: recordedPerformance/)
+    assert.match(readFileSync('components/workout/WorkoutSessionSummary.tsx', 'utf8'), /Retry History Sync/)
+    assert.match(readFileSync('components/dashboard/RecentTrainingCard.tsx', 'utf8'), /model\.href/)
+    assert.match(readFileSync('components/dashboard/ProgressDashboard.tsx', 'utf8'), /DEVICE_STRENGTH_PROGRESS/)
+    assert.match(readFileSync('components/dashboard/ProgressDashboard.tsx', 'utf8'), /recentTrainingModel/)
+    const sync = readFileSync('lib/workout/logged-history-sync.ts', 'utf8')
+    assert.match(sync, /persistWorkoutSession\(buildLoggedWorkoutHistoryInput/)
+    assert.match(sync, /if \(!input\.userId\) return 'skipped'/)
+    assert.doesNotMatch(sync, /2\.204|lbs/)
     const detail = readFileSync('components/history/SessionDetail.tsx', 'utf8')
     assert.match(detail, /session\.summaryMessage/)
     assert.match(detail, /legitimatePrHits/)
@@ -396,6 +594,9 @@ describe('history progress wiring', () => {
       'app/api/history/route.ts',
       'app/api/history/workouts/route.ts',
       'app/api/history/sessions/[id]/route.ts',
+      'app/api/history/prs/route.ts',
+      'app/api/history/programs/route.ts',
+      'app/api/history/program/[id]/route.ts',
     ]) {
       const source = readFileSync(route, 'utf8')
       assert.match(source, /readOwnedAthleteResource|readOwnedRecord/)

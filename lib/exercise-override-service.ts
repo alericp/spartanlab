@@ -36,6 +36,7 @@ import {
   safeContains,
   safeArrayContains,
 } from './utils/safe-string'
+import { getBoundAthleteId, legacyLocalStorageOpen, readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 
 // =============================================================================
 // TYPES
@@ -123,15 +124,19 @@ const CATEGORY_REPLACEMENTS: Record<string, string[]> = {
 
 const STORAGE_KEY = 'spartanlab_session_overrides'
 
+function overridesStorageOpen(): boolean {
+  return typeof getBoundAthleteId() === 'string' || legacyLocalStorageOpen()
+}
+
 function getStoredOverrides(): SessionOverrides | null {
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined' || !overridesStorageOpen()) return null
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = readAthleteItem(STORAGE_KEY)
     if (!stored) return null
-    const data = JSON.parse(stored)
+    const data = JSON.parse(stored) as SessionOverrides
     // Only use if less than 4 hours old (session scope)
     if (Date.now() - data.createdAt > 4 * 60 * 60 * 1000) {
-      localStorage.removeItem(STORAGE_KEY)
+      removeAthleteItem(STORAGE_KEY)
       return null
     }
     return data
@@ -141,16 +146,18 @@ function getStoredOverrides(): SessionOverrides | null {
 }
 
 function saveOverrides(overrides: SessionOverrides): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' || !overridesStorageOpen()) return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides))
+    const owner = getBoundAthleteId()
+    const stamped = typeof owner === 'string' ? { ...overrides, ownerUserId: owner } : overrides
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(stamped))
   } catch {}
 }
 
 export function clearSessionOverrides(): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' || !overridesStorageOpen()) return
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    removeAthleteItem(STORAGE_KEY)
   } catch {}
 }
 

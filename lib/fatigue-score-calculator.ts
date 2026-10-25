@@ -1,6 +1,7 @@
 // Fatigue Score Calculator
 // Calculates individual fatigue signal components from training data
 
+import { readBoundAthleteList, writeBoundAthleteList } from './athlete-local-scope'
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { calculateWeeklyVolume, getWeekOverWeekComparison, getWorkoutsLastNDays } from './volume-analyzer'
 
@@ -72,15 +73,7 @@ function isBrowser(): boolean {
 
 export function getStoredRPESessions(): StoredRPESession[] {
   if (!isBrowser()) return []
-  const stored = localStorage.getItem(RPE_SESSION_STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readBoundAthleteList<StoredRPESession>(RPE_SESSION_STORAGE_KEY)
 }
 
 export function saveRPESession(session: StoredRPESession): void {
@@ -100,7 +93,7 @@ export function saveRPESession(session: StoredRPESession): void {
     .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
     .slice(0, 30)
   
-  localStorage.setItem(RPE_SESSION_STORAGE_KEY, JSON.stringify(trimmed))
+  writeBoundAthleteList(RPE_SESSION_STORAGE_KEY, trimmed)
 }
 
 // =============================================================================

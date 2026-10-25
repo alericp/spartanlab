@@ -18,13 +18,13 @@ import { createContext, useContext, useEffect, useState, ReactNode, Component, F
 import { useUser } from '@clerk/nextjs'
 import { bindActiveAthlete, sealLegacyLocalStorage } from '@/lib/athlete-local-scope'
 import { LegacyLocalDataRecovery } from '@/components/athlete/LegacyLocalDataRecovery'
-
-sealLegacyLocalStorage()
 import {
   setCurrentUserEmail,
   clearCurrentUserEmail,
   setServerVerifiedOwner,
 } from '@/lib/owner-access'
+
+sealLegacyLocalStorage()
 
 // =============================================================================
 // TYPES
@@ -75,10 +75,10 @@ function getSimulationMode(): 'off' | 'free' | 'pro' {
 // =============================================================================
 
 class OwnerBootstrapErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; appChildren: ReactNode; athleteId: string | null },
   { hasError: boolean }
 > {
-  constructor(props: { children: ReactNode }) {
+  constructor(props: { children: ReactNode; appChildren: ReactNode; athleteId: string | null }) {
     super(props)
     this.state = { hasError: false }
   }
@@ -88,16 +88,36 @@ class OwnerBootstrapErrorBoundary extends Component<
   }
   
   componentDidCatch(error: Error) {
+    // The crashed inner tree stops binding. Restore the Clerk id captured
+    // by the outer binder, or signed-out storage while Clerk is unresolved.
+    bindActiveAthlete(this.props.athleteId)
     console.error('[v0] OwnerBootstrapProvider crashed (caught safely):', error.message)
   }
   
   render() {
     if (this.state.hasError) {
-      // On error, still render children but without owner context
-      return this.props.children
+      // Render the app, not the inner provider that just threw.
+      return this.props.appChildren
     }
     return this.props.children
   }
+}
+
+function AthleteScopeBinder({ children }: { children: ReactNode }) {
+  const { user, isLoaded } = useUser()
+  const athleteId = isLoaded ? (user?.id ?? null) : null
+  bindActiveAthlete(athleteId)
+  const athleteKey = !isLoaded ? 'clerk-loading' : (user?.id ?? 'signed-out')
+  return (
+    <Fragment key={athleteKey}>
+      <LegacyLocalDataRecovery />
+      <OwnerBootstrapErrorBoundary athleteId={athleteId} appChildren={children}>
+        <OwnerBootstrapProviderInner>
+          {children}
+        </OwnerBootstrapProviderInner>
+      </OwnerBootstrapErrorBoundary>
+    </Fragment>
+  )
 }
 
 // =============================================================================
@@ -190,13 +210,9 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
     }
   }, [state.isOwner])
   
-  const athleteKey = !isLoaded ? 'clerk-loading' : (user?.id ?? 'signed-out')
   return (
     <OwnerBootstrapContext.Provider value={state}>
-      <Fragment key={athleteKey}>
-        <LegacyLocalDataRecovery />
-        {children}
-      </Fragment>
+      {children}
     </OwnerBootstrapContext.Provider>
   )
 }
@@ -209,11 +225,9 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
  */
 export function OwnerBootstrapProvider({ children }: { children: ReactNode }) {
   return (
-    <OwnerBootstrapErrorBoundary>
-      <OwnerBootstrapProviderInner>
-        {children}
-      </OwnerBootstrapProviderInner>
-    </OwnerBootstrapErrorBoundary>
+    <AthleteScopeBinder>
+      {children}
+    </AthleteScopeBinder>
   )
 }
 

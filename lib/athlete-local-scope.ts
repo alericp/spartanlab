@@ -463,6 +463,14 @@ const LEGACY_RECOVERY_KEYS = {
   ],
 } as const
 
+const DERIVED_RECOVERY_KEYS = [
+  'spartanlab_rpe_sessions',
+  'spartanlab_fatigue_history',
+  'spartanlab_fatigue_patterns',
+  'spartanlab_consistency_data',
+  'spartanlab_l2_recovery_checkin',
+] as const
+
 export interface LegacyRecoveryCounts {
   workouts: number
   profiles: number
@@ -498,7 +506,10 @@ export function describeLegacyRecovery(): LegacyRecoveryCounts {
   const counts = { ...empty }
   const quarantine = readQuarantine(store)
   for (const group of ['workouts', 'profiles', 'programs'] as const) {
-    for (const key of LEGACY_RECOVERY_KEYS[group]) {
+    const keys = group === 'workouts'
+      ? [...LEGACY_RECOVERY_KEYS.workouts, ...DERIVED_RECOVERY_KEYS]
+      : LEGACY_RECOVERY_KEYS[group]
+    for (const key of keys) {
       const raw = store.getItem(key)
       if (raw !== null) {
         counts[group] += countOwnerlessValue(parseStoredRaw(raw))
@@ -572,6 +583,7 @@ export function claimLegacyLocalData(): boolean {
   if (pending.workouts + pending.profiles + pending.programs === 0) return false
   const keys = [
     ...LEGACY_RECOVERY_KEYS.workouts,
+    ...DERIVED_RECOVERY_KEYS,
     ...LEGACY_RECOVERY_KEYS.profiles,
     ...LEGACY_RECOVERY_KEYS.programs,
   ]
@@ -645,6 +657,71 @@ export function readPendingHistoryRetry<T extends { userId: string; clientSessio
 export function clearPendingHistoryRetry(userId: string): void {
   if (getBoundAthleteId() !== userId) return
   removeAthleteItem(HISTORY_RETRY_KEY)
+}
+
+export const RECOVERY_ADJUSTMENT_STORAGE_KEY = 'spartanlab_recovery_adjustment_applied'
+
+/**
+ * Current-session set, RPE, and rest changes. Stored only for the bound
+ * Clerk user. An ownerless legacy value stays unread and is not applied.
+ */
+export function writeRecoveryAdjustmentHandoff(handoff: object): void {
+  const owner = getBoundAthleteId()
+  if (typeof owner !== 'string') return
+  writeAthleteItem(
+    RECOVERY_ADJUSTMENT_STORAGE_KEY,
+    JSON.stringify({ ...handoff, ownerUserId: owner }),
+  )
+}
+
+export function readRecoveryAdjustmentHandoff<T extends object>(): (T & { ownerUserId: string }) | null {
+  const owner = getBoundAthleteId()
+  if (typeof owner !== 'string') return null
+  const raw = readAthleteItem(RECOVERY_ADJUSTMENT_STORAGE_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as T & { ownerUserId?: unknown }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    if (parsed.ownerUserId !== owner) return null
+    return parsed as T & { ownerUserId: string }
+  } catch {
+    return null
+  }
+}
+
+export function clearRecoveryAdjustmentHandoff(options?: { previewId?: string }): void {
+  if (typeof getBoundAthleteId() !== 'string') return
+  if (options?.previewId) {
+    const current = readRecoveryAdjustmentHandoff<{ previewId?: string }>()
+    if (!current || current.previewId !== options.previewId) return
+  }
+  removeAthleteItem(RECOVERY_ADJUSTMENT_STORAGE_KEY)
+}
+
+function boundAthleteStorageOpen(): boolean {
+  return typeof getBoundAthleteId() === 'string' || legacyLocalStorageOpen()
+}
+
+/** List storage for the bound athlete. Signed-out and Clerk-loading reads stay empty. */
+export function readBoundAthleteList<T>(baseKey: string): T[] {
+  if (!boundAthleteStorageOpen()) return []
+  return readAthleteCollection<OwnedRecord>(baseKey) as T[]
+}
+
+/** Writes nothing until Clerk has bound a user id, so a loading account cannot touch a shared key. */
+export function writeBoundAthleteList(baseKey: string, records: unknown[]): void {
+  if (!boundAthleteStorageOpen()) return
+  writeAthleteCollection(baseKey, records)
+}
+
+export function readBoundAthleteBlob(baseKey: string): string | null {
+  if (!boundAthleteStorageOpen()) return null
+  return readAthleteItem(baseKey)
+}
+
+export function writeBoundAthleteBlob(baseKey: string, value: string): void {
+  if (!boundAthleteStorageOpen()) return
+  writeAthleteItem(baseKey, value)
 }
 
 if (typeof window !== 'undefined') {

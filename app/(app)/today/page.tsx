@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/nextjs'
+import { clearRecoveryAdjustmentHandoff, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
 import { Navigation } from '@/components/shared/Navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -195,12 +196,7 @@ export default function TodaySessionPage() {
 
   const clearTodayHandoff = () => {
     try {
-      const raw = localStorage.getItem('spartanlab_recovery_adjustment_applied')
-      if (!raw) return
-      const parsed = JSON.parse(raw) as { previewId?: string }
-      if (parsed.previewId === 'today-session-preview') {
-        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
-      }
+      clearRecoveryAdjustmentHandoff({ previewId: 'today-session-preview' })
     } catch {
       // A failed read leaves any existing handoff untouched.
     }
@@ -228,7 +224,7 @@ export default function TodaySessionPage() {
     const handoff = buildCurrentSessionHandoff(transfer, new Date().toISOString())
     try {
       if (handoff) {
-        localStorage.setItem('spartanlab_recovery_adjustment_applied', JSON.stringify(handoff))
+        writeRecoveryAdjustmentHandoff(handoff)
       } else {
         clearTodayHandoff()
       }

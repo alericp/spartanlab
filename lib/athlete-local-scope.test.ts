@@ -12,12 +12,15 @@ import {
   hasQuarantinedBlob,
   lookupOccurrenceOwner,
   quarantinedRecordCount,
+  clearRecoveryAdjustmentHandoff,
   readAthleteItem,
   readPendingHistoryRetry,
+  readRecoveryAdjustmentHandoff,
   recoverQuarantinedBlob,
   recoverQuarantinedRecords,
   writeAthleteItem,
   writePendingHistoryRetry,
+  writeRecoveryAdjustmentHandoff,
 } from './athlete-local-scope.ts'
 import { getAthleteProfile, saveAthleteProfile } from './data-service.ts'
 import { getOnboardingProfile, saveOnboardingProfile } from './athlete-profile.ts'
@@ -364,6 +367,71 @@ describe('auth gate and legacy recovery', () => {
     assert.match(readFileSync('components/workout/StreamlinedWorkoutSession.tsx', 'utf8'), /historyRetryRef\.current = null/)
     assert.match(readFileSync('lib/onboarding-service.ts', 'utf8'), /readAthleteItem\('spartanlab_onboarding_complete'\)/)
     assert.match(readFileSync('lib/plan-source.ts', 'utf8'), /readAthleteItem\(STORAGE_KEY\)/)
+  })
+
+  it('keeps a recovery adjustment on the athlete who saved it', () => {
+    sealLegacyLocalStorage()
+    bindActiveAthlete(ATHLETE_A)
+    writeRecoveryAdjustmentHandoff({
+      previewId: 'today-session-preview',
+      appliedAt: new Date().toISOString(),
+      scope: 'current-session-only',
+      totalExercisesAffected: 1,
+      exerciseAdjustments: [{ exerciseId: 'squat', changes: [{ path: 'sets', after: 2 }] }],
+    })
+    const scopedKey = athleteStorageKey('spartanlab_recovery_adjustment_applied', ATHLETE_A)
+    assert.equal(store.has(scopedKey), true)
+    assert.equal(store.has('spartanlab_recovery_adjustment_applied'), false)
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(readRecoveryAdjustmentHandoff(), null)
+    clearRecoveryAdjustmentHandoff()
+    assert.equal(store.has(scopedKey), true)
+
+    bindActiveAthlete(ATHLETE_A)
+    const owned = readRecoveryAdjustmentHandoff<{ previewId?: string }>()
+    assert.equal(owned?.previewId, 'today-session-preview')
+    assert.equal(owned?.ownerUserId, ATHLETE_A)
+    clearRecoveryAdjustmentHandoff({ previewId: 'program-other' })
+    assert.equal(store.has(scopedKey), true)
+    clearRecoveryAdjustmentHandoff({ previewId: 'today-session-preview' })
+    assert.equal(store.has(scopedKey), false)
+
+    const today = readFileSync('app/(app)/today/page.tsx', 'utf8')
+    const program = readFileSync('app/(app)/program/page.tsx', 'utf8')
+    const session = readFileSync('app/(app)/workout/session/page.tsx', 'utf8')
+    const bootstrap = readFileSync('components/providers/OwnerBootstrapProvider.tsx', 'utf8')
+    for (const source of [today, program, session]) {
+      assert.equal(source.includes("localStorage.getItem('spartanlab_recovery_adjustment_applied')"), false)
+      assert.equal(source.includes("localStorage.setItem('spartanlab_recovery_adjustment_applied'"), false)
+      assert.equal(source.includes("localStorage.removeItem('spartanlab_recovery_adjustment_applied')"), false)
+    }
+    assert.match(today, /clearRecoveryAdjustmentHandoff\(\{ previewId: 'today-session-preview' \}\)/)
+    assert.match(program, /writeRecoveryAdjustmentHandoff\(/)
+    assert.match(session, /readRecoveryAdjustmentHandoff/)
+    assert.match(session, /const athleteAtStart = getBoundAthleteId\(\)/)
+    assert.match(bootstrap, /function AthleteScopeBinder/)
+    assert.match(bootstrap, /bindActiveAthlete\(this\.props\.athleteId\)/)
+    assert.match(bootstrap, /return this\.props\.appChildren/)
+    assert.ok(bootstrap.indexOf('<OwnerBootstrapErrorBoundary') > bootstrap.indexOf('function AthleteScopeBinder'))
+  })
+
+  it('does not apply an ownerless recovery handoff to the next signed-in athlete', () => {
+    store.set('spartanlab_recovery_adjustment_applied', JSON.stringify({
+      previewId: 'legacy-session',
+      scope: 'current-session-only',
+      exerciseAdjustments: [{ exerciseName: 'Squat', changes: [{ path: 'sets', after: 1 }] }],
+    }))
+    sealLegacyLocalStorage()
+    writeRecoveryAdjustmentHandoff({ previewId: 'before-auth' })
+    assert.equal(store.has('spartanlab_recovery_adjustment_applied'), true)
+    assert.equal(readRecoveryAdjustmentHandoff(), null)
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(readRecoveryAdjustmentHandoff(), null)
+    clearRecoveryAdjustmentHandoff()
+    assert.equal(store.get('spartanlab_recovery_adjustment_applied')?.includes('legacy-session'), true)
+    assert.equal(store.has(athleteStorageKey('spartanlab_recovery_adjustment_applied', ATHLETE_B)), false)
   })
 })
 

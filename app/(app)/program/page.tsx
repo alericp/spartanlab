@@ -75,7 +75,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
-import { readAthleteItem, storageEventMatchesAthlete } from '@/lib/athlete-local-scope'
+import { clearRecoveryAdjustmentHandoff, readAthleteItem, storageEventMatchesAthlete, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
 import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
@@ -2216,13 +2216,13 @@ function ProgramDisplayWrapper({
     
     // Stamp the adjustment in localStorage for Start Workout to consume
     try {
-      localStorage.setItem('spartanlab_recovery_adjustment_applied', JSON.stringify({
+      writeRecoveryAdjustmentHandoff({
         previewId: recoveryAdjustmentPreview.id,
         appliedAt: new Date().toISOString(),
         scope: 'current-session-only',
         totalExercisesAffected: recoveryAdjustmentPreview.overallSummary.totalExercisesAffected,
         exerciseAdjustments: recoveryAdjustmentPreview.exerciseAdjustments,
-      }))
+      })
       
       console.log('[step-21.6-adjustment-applied]', {
         previewId: recoveryAdjustmentPreview.id,
@@ -2246,7 +2246,7 @@ function ProgramDisplayWrapper({
     
     // Clear any applied adjustment in localStorage
     try {
-      localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+      clearRecoveryAdjustmentHandoff()
     } catch (error) {
       // Silent fail
     }

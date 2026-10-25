@@ -58,7 +58,7 @@ if (typeof window !== 'undefined') {
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { athleteStorageKey, getBoundAthleteId } from '@/lib/athlete-local-scope'
+import { athleteStorageKey, clearRecoveryAdjustmentHandoff, getBoundAthleteId, readRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
 import {
   WORKOUT_SESSION_STORAGE_KEY,
   applyOwnedCrashRecoveryWipe,
@@ -795,6 +795,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
   
   useEffect(() => {
     let mounted = true
+    const athleteAtStart = getBoundAthleteId()
     
     async function initializeSession() {
       // =======================================================================
@@ -833,6 +834,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
       })
       
       if (!mounted) return
+      if (getBoundAthleteId() !== athleteAtStart) return
       
       // [PHASE LW2] Mark session load success
       markRouteStage('session_load_success', {
@@ -1382,16 +1384,14 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
   } | null = null
   
   try {
-    const adjustmentRaw = localStorage.getItem('spartanlab_recovery_adjustment_applied')
-    if (adjustmentRaw) {
-      const adjustment = JSON.parse(adjustmentRaw) as {
-        previewId?: string
-        appliedAt?: string
-        scope?: string
-        totalExercisesAffected?: number
-        exerciseAdjustments?: ExerciseAdjustmentDetail[]
-      }
-      
+    const adjustment = readRecoveryAdjustmentHandoff<{
+      previewId?: string
+      appliedAt?: string
+      scope?: string
+      totalExercisesAffected?: number
+      exerciseAdjustments?: ExerciseAdjustmentDetail[]
+    }>()
+    if (adjustment) {
       // Validate the adjustment is current-session-only and recent (within 1 hour)
       const appliedAt = adjustment.appliedAt ? new Date(adjustment.appliedAt).getTime() : 0
       const ageMs = Date.now() - appliedAt
@@ -1453,7 +1453,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
         
         // Clear the adjustment after consumption to prevent re-application
         // on subsequent sessions (current-session-only boundary)
-        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+        clearRecoveryAdjustmentHandoff()
       } else {
         console.log('[step-21.6-workout-handoff-skipped]', {
           reason: !isRecent ? 'stale_adjustment' : !isCurrentSessionOnly ? 'wrong_scope' : 'no_adjustments',
@@ -1461,8 +1461,8 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
           scope: adjustment.scope,
           hasAdjustments,
         })
-        // Clear stale/invalid adjustment
-        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+        // Clear this account's stale handoff. Another account's key stays.
+        clearRecoveryAdjustmentHandoff()
       }
     }
   } catch (error) {

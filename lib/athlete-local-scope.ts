@@ -647,6 +647,45 @@ export function clearPendingHistoryRetry(userId: string): void {
   removeAthleteItem(HISTORY_RETRY_KEY)
 }
 
+export const RECOVERY_ADJUSTMENT_STORAGE_KEY = 'spartanlab_recovery_adjustment_applied'
+
+/**
+ * Current-session set, RPE, and rest changes. Stored only for the bound
+ * Clerk user. An ownerless legacy value stays unread and is not applied.
+ */
+export function writeRecoveryAdjustmentHandoff(handoff: object): void {
+  const owner = getBoundAthleteId()
+  if (typeof owner !== 'string') return
+  writeAthleteItem(
+    RECOVERY_ADJUSTMENT_STORAGE_KEY,
+    JSON.stringify({ ...handoff, ownerUserId: owner }),
+  )
+}
+
+export function readRecoveryAdjustmentHandoff<T extends object>(): (T & { ownerUserId: string }) | null {
+  const owner = getBoundAthleteId()
+  if (typeof owner !== 'string') return null
+  const raw = readAthleteItem(RECOVERY_ADJUSTMENT_STORAGE_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as T & { ownerUserId?: unknown }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    if (parsed.ownerUserId !== owner) return null
+    return parsed as T & { ownerUserId: string }
+  } catch {
+    return null
+  }
+}
+
+export function clearRecoveryAdjustmentHandoff(options?: { previewId?: string }): void {
+  if (typeof getBoundAthleteId() !== 'string') return
+  if (options?.previewId) {
+    const current = readRecoveryAdjustmentHandoff<{ previewId?: string }>()
+    if (!current || current.previewId !== options.previewId) return
+  }
+  removeAthleteItem(RECOVERY_ADJUSTMENT_STORAGE_KEY)
+}
+
 if (typeof window !== 'undefined') {
   sealLegacyLocalStorage()
 }

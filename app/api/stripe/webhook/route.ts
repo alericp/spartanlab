@@ -16,6 +16,7 @@ import {
   gateStripeWebhookRequest,
   gateStripeWebhookSignature,
   missingRecordDisposition,
+  decideSubscriptionMutation,
   mutationOutcome,
   objectIdForStripeEvent,
   planSubscriptionWrite,
@@ -108,33 +109,47 @@ async function deliverBillingEmail(
 }
 
 /**
- * Claim the subscription version, then write. An older event skips the write.
- * A failed write releases the version so the same event can retry.
+ * Claim the customer version and the subscription version, then write.
+ * The write itself rechecks both rows so a newer event cannot be overwritten
+ * after this claim returns. A failed write releases only this event's rows.
  */
 async function applyCurrentSubscriptionWrite(
   store: StripeDurabilityStore,
-  objectId: string,
+  customerId: string,
+  subscriptionId: string,
   stripeCreated: number,
   eventId: string,
-  write: () => Promise<ProcessingOutcome>,
+  write: () => Promise<'applied' | 'skip' | 'failure'>,
 ): Promise<'applied' | 'skip_stale' | 'failure'> {
-  const turn = await store.claimSubscriptionVersion(objectId, stripeCreated, eventId)
-  if (turn === 'skip_stale') {
-    console.log(`[Stripe Webhook] Skipping stale ${eventId} for ${objectId}`)
+  const customerTurn = await store.claimSubscriptionVersion(customerId, stripeCreated, eventId)
+  if (customerTurn === 'skip_stale') {
+    console.log(`[Stripe Webhook] Skipping stale ${eventId} for customer ${customerId}`)
+    return 'skip_stale'
+  }
+  const subscriptionTurn = await store.claimSubscriptionVersion(subscriptionId, stripeCreated, eventId)
+  if (subscriptionTurn === 'skip_stale') {
+    console.log(`[Stripe Webhook] Skipping stale ${eventId} for ${subscriptionId}`)
     return 'skip_stale'
   }
 
   try {
     const outcome = await write()
     if (outcome === 'failure') {
-      await store.releaseSubscriptionVersion(objectId, eventId)
+      await store.releaseSubscriptionVersion(customerId, eventId)
+      await store.releaseSubscriptionVersion(subscriptionId, eventId)
       return 'failure'
     }
+    if (outcome === 'skip') return 'skip_stale'
     return 'applied'
   } catch (error) {
-    await store.releaseSubscriptionVersion(objectId, eventId)
+    await store.releaseSubscriptionVersion(customerId, eventId)
+    await store.releaseSubscriptionVersion(subscriptionId, eventId)
     throw error
   }
+}
+
+function subscriptionGrantsEntitlement(status: string): boolean {
+  return status === 'active' || status === 'trialing'
 }
 
 /**
@@ -234,17 +249,24 @@ async function handleCheckoutSessionCompleted(
 
     const turn = await applyCurrentSubscriptionWrite(
       store,
+      customerId,
       subscriptionId,
       eventCreated(event),
       event.id,
       async () => {
-        const written = await syncStripeSubscriptionToUser(user.id, planned.write!)
+        const written = await syncStripeSubscriptionToUser(user.id, planned.write!, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: subscriptionGrantsEntitlement(subscriptionStatus),
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
         if (mutationOutcome(written.status) === 'failure') {
           console.error(`[Stripe Webhook] Subscription update failed for user ${user.id}`)
           return 'failure'
         }
         console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
-        return 'success'
+        return 'applied'
       },
     )
     if (turn !== 'applied') return turn === 'failure' ? 'failure' : 'success'
@@ -304,19 +326,36 @@ async function handleSubscriptionUpdated(
       return 'success'
     }
 
+    const decision = decideSubscriptionMutation({
+      storedSubscriptionId: user.stripeSubscriptionId,
+      incomingSubscriptionId: subscriptionId,
+      grantsEntitlement: subscriptionGrantsEntitlement(status),
+    })
+    if (decision === 'skip_other_subscription') {
+      console.log(`[Stripe Webhook] Leaving stored subscription in place for ${subscriptionId}`)
+      return 'success'
+    }
+
     const turn = await applyCurrentSubscriptionWrite(
       store,
+      customerId,
       subscriptionId,
       eventCreated(event),
       event.id,
       async () => {
-        const written = await syncStripeSubscriptionToUser(user.id, planned.write!)
+        const written = await syncStripeSubscriptionToUser(user.id, planned.write!, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: subscriptionGrantsEntitlement(status),
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
         if (mutationOutcome(written.status) === 'failure') {
           console.error(`[Stripe Webhook] Subscription update failed for user ${user.id}`)
           return 'failure'
         }
         console.log(`[Stripe Webhook] Successfully synced subscription update for user ${user.id}`)
-        return 'success'
+        return 'applied'
       },
     )
     return turn === 'failure' ? 'failure' : 'success'
@@ -350,6 +389,16 @@ async function handleSubscriptionDeleted(
       return missingRecordDisposition(false) === 'continue' ? 'success' : 'failure'
     }
 
+    const decision = decideSubscriptionMutation({
+      storedSubscriptionId: lookup.account.stripeSubscriptionId,
+      incomingSubscriptionId: subscriptionId,
+      grantsEntitlement: false,
+    })
+    if (decision === 'skip_other_subscription') {
+      console.log(`[Stripe Webhook] Not downgrading a different subscription for ${subscriptionId}`)
+      return 'success'
+    }
+
     let customerEmail: string | null = null
     let customerName: string | undefined
     try {
@@ -364,17 +413,24 @@ async function handleSubscriptionDeleted(
 
     const turn = await applyCurrentSubscriptionWrite(
       store,
+      customerId,
       subscriptionId,
       eventCreated(event),
       event.id,
       async () => {
-        const written = await downgradeUserSubscription(lookup.account.id)
+        const written = await downgradeUserSubscription(lookup.account.id, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: false,
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
         if (mutationOutcome(written.status) === 'failure') {
           console.error(`[Stripe Webhook] Subscription downgrade failed for user ${lookup.account.id}`)
           return 'failure'
         }
         console.log(`[Stripe Webhook] Successfully downgraded user ${lookup.account.id} to free plan`)
-        return 'success'
+        return 'applied'
       },
     )
     if (turn !== 'applied') return turn === 'failure' ? 'failure' : 'success'

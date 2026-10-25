@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS stripe_billing_emails (
   sent_at TIMESTAMPTZ
 );
 
--- Atomic ordering gate. A newer stripe_created wins; an older delivery does not replace it.
+-- Atomic ordering gate. object_id is either a Stripe subscription id or a Stripe customer id.
+-- A newer stripe_created wins. The user update runs only while this event still owns the row.
 CREATE TABLE IF NOT EXISTS stripe_subscription_versions (
   object_id TEXT PRIMARY KEY,
   stripe_created BIGINT NOT NULL,

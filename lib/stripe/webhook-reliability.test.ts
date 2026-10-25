@@ -9,7 +9,9 @@ import {
   createBillingEmailLedger,
   createMemoryStripeDurabilityStore,
   createStripeEventClaimStore,
+  decideSubscriptionMutation,
   durableAdmissionResponse,
+  guardedMutationDisposition,
   finishWebhookAttempt,
   gateStripeWebhookRequest,
   gateStripeWebhookSignature,
@@ -201,6 +203,7 @@ describe('webhook processing outcomes', () => {
       source.indexOf('async function handleSubscriptionUpdated'),
       source.indexOf('async function handleSubscriptionDeleted'),
     )
+    assert.ok(updated.indexOf('decideSubscriptionMutation') < updated.indexOf('applyCurrentSubscriptionWrite'))
     assert.ok(updated.indexOf('missingRecordDisposition') < updated.indexOf('applyCurrentSubscriptionWrite'))
     assert.ok(updated.indexOf('applyCurrentSubscriptionWrite') < updated.indexOf('syncStripeSubscriptionToUser'))
 
@@ -208,6 +211,7 @@ describe('webhook processing outcomes', () => {
       source.indexOf('async function handleSubscriptionDeleted'),
       source.indexOf('async function handleInvoicePaymentSucceeded'),
     )
+    assert.ok(removed.indexOf('decideSubscriptionMutation') < removed.indexOf('downgradeUserSubscription'))
     assert.ok(removed.indexOf('missingRecordDisposition') < removed.indexOf('downgradeUserSubscription'))
     assert.ok(removed.indexOf('applyCurrentSubscriptionWrite') < removed.indexOf('downgradeUserSubscription'))
     assert.ok(removed.indexOf('downgradeUserSubscription') < removed.indexOf('sendSubscriptionCancelledEmail'))
@@ -283,6 +287,40 @@ describe('durable webhook claims survive replay and reordering', () => {
     assert.equal(shouldApplySubscriptionEvent({ incomingCreated: 400, newestProcessedCreated: null }), true)
   })
 
+  it('does not let another subscription cancel the one stored on the account', async () => {
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_new',
+      incomingSubscriptionId: 'sub_old',
+      grantsEntitlement: false,
+    }), 'skip_other_subscription')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_new',
+      incomingSubscriptionId: 'sub_new',
+      grantsEntitlement: false,
+    }), 'apply')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: null,
+      incomingSubscriptionId: 'sub_old',
+      grantsEntitlement: false,
+    }), 'apply')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_old',
+      incomingSubscriptionId: 'sub_new',
+      grantsEntitlement: true,
+    }), 'apply')
+    assert.equal(guardedMutationDisposition('updated'), 'applied')
+    assert.equal(guardedMutationDisposition('stale'), 'skip')
+    assert.equal(guardedMutationDisposition('skipped'), 'skip')
+    assert.equal(guardedMutationDisposition('failed'), 'failure')
+    assert.equal(guardedMutationDisposition('not_found'), 'failure')
+
+    const store = createMemoryStripeDurabilityStore()
+    assert.equal(await store.claimSubscriptionVersion('cus_owner', 200, 'evt_new'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('sub_new', 200, 'evt_new'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('cus_owner', 100, 'evt_old_delete'), 'skip_stale')
+    assert.equal(await store.claimSubscriptionVersion('sub_old', 300, 'evt_old_delete'), 'apply')
+  })
+
   it('records a billing email once and releases it when the send fails', async () => {
     let clock = 1_000
     const store = createMemoryStripeDurabilityStore({ now: () => clock, leaseMs: 50 })
@@ -295,6 +333,12 @@ describe('durable webhook claims survive replay and reordering', () => {
     assert.equal(await store.claimEmail(key), 'already_sent')
     clock += 50
     assert.equal(await store.claimEmail(key), 'already_sent')
+
+    const crashed = createMemoryStripeDurabilityStore()
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'claimed')
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'in_flight')
+    await crashed.releaseEmail('payment_failed:in_synthetic')
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'claimed')
   })
 
   it('retries a missing account and reads the checkout email from customer details', () => {
@@ -423,6 +467,9 @@ describe('subscription updates stay on the authenticated account', () => {
     assert.match(setClause, /subscription_plan = 'free'/)
     assert.match(setClause, /stripe_subscription_id = NULL/)
     assert.doesNotMatch(setClause, /stripe_customer_id/)
+    assert.match(downgrade, /stripe_subscription_id IS NULL OR stripe_subscription_id = \$3/)
+    assert.match(downgrade, /stripe_subscription_versions/)
+    assert.match(source, /stripeSubscriptionId/)
     assert.match(source, /export async function findUserByClerkId/)
     assert.match(source, /WHERE clerk_id = \$1/)
     assert.match(source, /queryStrict/)

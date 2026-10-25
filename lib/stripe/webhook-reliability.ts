@@ -196,6 +196,31 @@ export function planSubscriptionWrite(input: {
   return { write: input.incoming, preservedExistingCustomer: false }
 }
 
+/**
+ * A cancel or a non-Pro update for a different subscription must not touch the
+ * subscription currently stored on the account. A Pro-granting event may replace
+ * it, and the customer version row then rejects an older replacement.
+ */
+export function decideSubscriptionMutation(input: {
+  storedSubscriptionId: string | null
+  incomingSubscriptionId: string
+  grantsEntitlement: boolean
+}): 'apply' | 'skip_other_subscription' {
+  if (!input.storedSubscriptionId) return 'apply'
+  if (input.storedSubscriptionId === input.incomingSubscriptionId) return 'apply'
+  if (input.grantsEntitlement) return 'apply'
+  return 'skip_other_subscription'
+}
+
+/** A guarded write either landed, lost the version race, or must be retried. */
+export function guardedMutationDisposition(
+  status: 'updated' | 'not_found' | 'failed' | 'stale' | 'skipped',
+): 'applied' | 'skip' | 'failure' {
+  if (status === 'updated') return 'applied'
+  if (status === 'stale' || status === 'skipped') return 'skip'
+  return 'failure'
+}
+
 /** Reuse a stored Stripe customer. A missing record starts checkout without one. */
 export function checkoutCustomerFields(
   existingCustomerId: string | null | undefined,

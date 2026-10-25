@@ -4,17 +4,25 @@ import { describe, it } from 'node:test'
 import { CLERK_PUBLIC_ROUTE_PATTERNS } from '../routes/public-routes.ts'
 import {
   checkoutCustomerFields,
+  checkoutRecipientEmail,
   classifyEmailResult,
   createBillingEmailLedger,
+  createMemoryStripeDurabilityStore,
   createStripeEventClaimStore,
+  decideSubscriptionMutation,
+  durableAdmissionResponse,
+  guardedMutationDisposition,
   finishWebhookAttempt,
   gateStripeWebhookRequest,
   gateStripeWebhookSignature,
   lookupBlocksProcessing,
+  missingRecordDisposition,
   mutationOutcome,
+  objectIdForStripeEvent,
   planSubscriptionWrite,
   responseForClaimBegin,
   selectCheckoutAccount,
+  shouldApplySubscriptionEvent,
   shouldSendBillingEmail,
 } from './webhook-reliability.ts'
 
@@ -84,7 +92,7 @@ describe('webhook processing outcomes', () => {
   it('rejects an invalid signature before an event id is reserved', () => {
     const source = readFileSync('app/api/stripe/webhook/route.ts', 'utf8')
     const signatureAt = source.indexOf('gateStripeWebhookSignature(false)')
-    const beginAt = source.indexOf('stripeEventClaims.begin(event.id)')
+    const beginAt = source.indexOf('durability.claim(')
     assert.ok(signatureAt > 0)
     assert.ok(beginAt > signatureAt)
     assert.deepEqual(gateStripeWebhookSignature(false), {
@@ -158,28 +166,222 @@ describe('webhook processing outcomes', () => {
 
   it('writes the subscription before the email and settles only after the handler returns', () => {
     const source = readFileSync('app/api/stripe/webhook/route.ts', 'utf8')
-    const beginAt = source.indexOf('stripeEventClaims.begin(event.id)')
-    const dispatchAt = source.indexOf('dispatchStripeEvent(event, stripe)')
-    const finishAt = source.indexOf('finishWebhookAttempt(stripeEventClaims, event.id, outcome)')
-    assert.ok(beginAt > 0)
-    assert.ok(dispatchAt > beginAt)
-    assert.ok(finishAt > dispatchAt)
+    const claimAt = source.indexOf('durability.claim(')
+    const dispatchAt = source.indexOf('dispatchStripeEvent(event, stripe, durability)')
+    const processedAt = source.indexOf('durability.markProcessed(event.id)')
+    const failedAt = source.indexOf('durability.markFailed(event.id)')
+    assert.ok(claimAt > 0)
+    assert.ok(dispatchAt > claimAt)
+    assert.ok(processedAt > dispatchAt)
+    assert.ok(failedAt > processedAt)
+    assert.match(source, /createPostgresStripeDurabilityStore/)
+    assert.doesNotMatch(source, /stripeEventClaims/)
+    assert.doesNotMatch(source, /billingEmailLedger/)
+    assert.doesNotMatch(source, /createMemoryStripeDurabilityStore/)
+    assert.match(source, /Durable webhook record failed/)
 
     const checkout = source.slice(
       source.indexOf('async function handleCheckoutSessionCompleted'),
       source.indexOf('async function handleSubscriptionUpdated'),
     )
+    assert.ok(checkout.indexOf('checkoutRecipientEmail') < checkout.indexOf('Missing customerId or email'))
+    assert.ok(checkout.indexOf('Missing customerId or email') < checkout.indexOf("return 'failure'"))
+    assert.ok(checkout.indexOf('missingRecordDisposition') < checkout.indexOf('syncStripeSubscriptionToUser'))
+    assert.ok(checkout.indexOf('applyCurrentSubscriptionWrite') < checkout.indexOf('syncStripeSubscriptionToUser'))
     assert.ok(checkout.indexOf('syncStripeSubscriptionToUser') < checkout.indexOf('sendProUpgradeEmail'))
     assert.match(checkout, /mutationOutcome\(written\.status\) === 'failure'/)
     assert.match(checkout, /return 'failure'/)
+
+    const apply = source.slice(
+      source.indexOf('async function applyCurrentSubscriptionWrite'),
+      source.indexOf('async function handleCheckoutSessionCompleted'),
+    )
+    assert.ok(apply.indexOf('claimSubscriptionVersion') < apply.indexOf('await write()'))
+    assert.match(apply, /releaseSubscriptionVersion/)
+
+    const updated = source.slice(
+      source.indexOf('async function handleSubscriptionUpdated'),
+      source.indexOf('async function handleSubscriptionDeleted'),
+    )
+    assert.ok(updated.indexOf('decideSubscriptionMutation') < updated.indexOf('applyCurrentSubscriptionWrite'))
+    assert.ok(updated.indexOf('missingRecordDisposition') < updated.indexOf('applyCurrentSubscriptionWrite'))
+    assert.ok(updated.indexOf('applyCurrentSubscriptionWrite') < updated.indexOf('syncStripeSubscriptionToUser'))
 
     const removed = source.slice(
       source.indexOf('async function handleSubscriptionDeleted'),
       source.indexOf('async function handleInvoicePaymentSucceeded'),
     )
+    assert.ok(removed.indexOf('decideSubscriptionMutation') < removed.indexOf('downgradeUserSubscription'))
+    assert.ok(removed.indexOf('missingRecordDisposition') < removed.indexOf('downgradeUserSubscription'))
+    assert.ok(removed.indexOf('applyCurrentSubscriptionWrite') < removed.indexOf('downgradeUserSubscription'))
     assert.ok(removed.indexOf('downgradeUserSubscription') < removed.indexOf('sendSubscriptionCancelledEmail'))
     assert.match(source, /sendPaymentFailedEmail/)
-    assert.match(source, /lookupBlocksProcessing/)
+    assert.match(source, /releaseEmail/)
+  })
+})
+
+describe('durable webhook claims survive replay and reordering', () => {
+  const event = {
+    eventId: 'evt_synthetic',
+    eventType: 'customer.subscription.updated',
+    stripeCreated: 1_700_000_000,
+    objectId: 'sub_synthetic',
+  }
+
+  it('acks a processed event and retries one that is still in flight', async () => {
+    const store = createMemoryStripeDurabilityStore()
+    assert.deepEqual(durableAdmissionResponse(await store.claim(event)), { stop: false })
+    assert.deepEqual(durableAdmissionResponse(await store.claim(event)), {
+      stop: true,
+      status: 500,
+      body: { error: 'Webhook processing failed' },
+    })
+    await store.markProcessed(event.eventId)
+    const duplicate = durableAdmissionResponse(await store.claim(event))
+    assert.equal(duplicate.stop, true)
+    if (duplicate.stop) assert.equal(duplicate.status, 200)
+  })
+
+  it('reclaims a failed attempt and an abandoned processing lease', async () => {
+    let clock = 10_000
+    const store = createMemoryStripeDurabilityStore({ now: () => clock, leaseMs: 50 })
+    assert.equal((await store.claim(event)).result, 'claimed')
+    await store.markFailed(event.eventId)
+    assert.equal((await store.claim(event)).result, 'claimed')
+
+    clock += 10
+    assert.equal((await store.claim(event)).result, 'in_flight')
+    clock += 50
+    assert.equal((await store.claim(event)).result, 'claimed')
+  })
+
+  it('keeps every processed event id', async () => {
+    const store = createMemoryStripeDurabilityStore()
+    for (let index = 0; index < 5; index += 1) {
+      const eventId = `evt_${index}`
+      assert.equal((await store.claim({ ...event, eventId })).result, 'claimed')
+      await store.markProcessed(eventId)
+    }
+    for (let index = 0; index < 5; index += 1) {
+      assert.equal((await store.claim({ ...event, eventId: `evt_${index}` })).result, 'duplicate')
+    }
+  })
+
+  it('skips an older subscription write after a newer one is claimed', async () => {
+    const store = createMemoryStripeDurabilityStore()
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 200, 'evt_new'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 100, 'evt_old'), 'skip_stale')
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 200, 'evt_same_second'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 300, 'evt_newer'), 'apply')
+    await store.releaseSubscriptionVersion('sub_synthetic', 'evt_same_second')
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 250, 'evt_between'), 'skip_stale')
+    await store.releaseSubscriptionVersion('sub_synthetic', 'evt_newer')
+    assert.equal(await store.claimSubscriptionVersion('sub_synthetic', 100, 'evt_old'), 'apply')
+
+    await store.claim({ ...event, eventId: 'evt_recorded', stripeCreated: 300 })
+    await store.setObjectId('evt_recorded', 'sub_synthetic')
+    await store.markProcessed('evt_recorded')
+    const newest = await store.newestProcessedCreated('sub_synthetic', 'evt_old')
+    assert.equal(shouldApplySubscriptionEvent({ incomingCreated: 200, newestProcessedCreated: newest }), false)
+    assert.equal(shouldApplySubscriptionEvent({ incomingCreated: 300, newestProcessedCreated: newest }), true)
+    assert.equal(shouldApplySubscriptionEvent({ incomingCreated: 400, newestProcessedCreated: null }), true)
+  })
+
+  it('does not let another subscription cancel the one stored on the account', async () => {
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_new',
+      incomingSubscriptionId: 'sub_old',
+      grantsEntitlement: false,
+    }), 'skip_other_subscription')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_new',
+      incomingSubscriptionId: 'sub_new',
+      grantsEntitlement: false,
+    }), 'apply')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: null,
+      incomingSubscriptionId: 'sub_old',
+      grantsEntitlement: false,
+    }), 'apply')
+    assert.equal(decideSubscriptionMutation({
+      storedSubscriptionId: 'sub_old',
+      incomingSubscriptionId: 'sub_new',
+      grantsEntitlement: true,
+    }), 'apply')
+    assert.equal(guardedMutationDisposition('updated'), 'applied')
+    assert.equal(guardedMutationDisposition('stale'), 'skip')
+    assert.equal(guardedMutationDisposition('skipped'), 'skip')
+    assert.equal(guardedMutationDisposition('failed'), 'failure')
+    assert.equal(guardedMutationDisposition('not_found'), 'failure')
+
+    const store = createMemoryStripeDurabilityStore()
+    assert.equal(await store.claimSubscriptionVersion('cus_owner', 200, 'evt_new'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('sub_new', 200, 'evt_new'), 'apply')
+    assert.equal(await store.claimSubscriptionVersion('cus_owner', 100, 'evt_old_delete'), 'skip_stale')
+    assert.equal(await store.claimSubscriptionVersion('sub_old', 300, 'evt_old_delete'), 'apply')
+  })
+
+  it('records a billing email once and releases it when the send fails', async () => {
+    let clock = 1_000
+    const store = createMemoryStripeDurabilityStore({ now: () => clock, leaseMs: 50 })
+    const key = 'pro_upgrade:sub_synthetic'
+    assert.equal(await store.claimEmail(key), 'claimed')
+    assert.equal(await store.claimEmail(key), 'in_flight')
+    await store.releaseEmail(key)
+    assert.equal(await store.claimEmail(key), 'claimed')
+    await store.markEmailSent(key)
+    assert.equal(await store.claimEmail(key), 'already_sent')
+    clock += 50
+    assert.equal(await store.claimEmail(key), 'already_sent')
+
+    const crashed = createMemoryStripeDurabilityStore()
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'claimed')
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'in_flight')
+    await crashed.releaseEmail('payment_failed:in_synthetic')
+    assert.equal(await crashed.claimEmail('payment_failed:in_synthetic'), 'claimed')
+  })
+
+  it('retries a missing account and reads the checkout email from customer details', () => {
+    assert.equal(missingRecordDisposition(false), 'failure')
+    assert.equal(missingRecordDisposition(true), 'continue')
+    assert.equal(checkoutRecipientEmail({
+      customer_email: null,
+      email: null,
+      customer_details: { email: 'owner@example.test' },
+    }), 'owner@example.test')
+    assert.equal(checkoutRecipientEmail({
+      customer_email: 'session@example.test',
+      customer_details: { email: 'other@example.test' },
+    }), 'session@example.test')
+    assert.equal(objectIdForStripeEvent({
+      type: 'checkout.session.completed',
+      data: { object: { id: 'cs_synthetic', subscription: 'sub_synthetic' } },
+    }), 'sub_synthetic')
+    assert.equal(objectIdForStripeEvent({
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_synthetic' } },
+    }), 'sub_synthetic')
+  })
+
+  it('prepares the additive tables and queries them strictly', () => {
+    const migration = readFileSync('scripts/036-stripe-webhook-events.sql', 'utf8')
+    assert.match(migration, /CREATE TABLE IF NOT EXISTS stripe_webhook_events/)
+    assert.match(migration, /CREATE TABLE IF NOT EXISTS stripe_billing_emails/)
+    assert.match(migration, /CREATE TABLE IF NOT EXISTS stripe_subscription_versions/)
+    assert.match(migration, /does not execute it/)
+    assert.doesNotMatch(migration, /DROP TABLE/)
+    assert.doesNotMatch(migration, /ALTER TABLE users/)
+    assert.doesNotMatch(migration, /subscription_plan/)
+
+    const database = readFileSync('lib/stripe/webhook-durability-db.ts', 'utf8')
+    assert.match(database, /queryStrict/)
+    assert.match(database, /ON CONFLICT \(event_id\) DO NOTHING/)
+    assert.match(database, /ON CONFLICT \(dedupe_key\) DO NOTHING/)
+    assert.match(database, /stripe_subscription_versions.stripe_created <= EXCLUDED.stripe_created/)
+    assert.match(database, /no in-memory fallback/i)
+    assert.doesNotMatch(database, /queryOne\(/)
+    assert.doesNotMatch(database, /createMemoryStripeDurabilityStore/)
+    assert.doesNotMatch(database, /createStripeEventClaimStore/)
   })
 })
 
@@ -265,6 +467,9 @@ describe('subscription updates stay on the authenticated account', () => {
     assert.match(setClause, /subscription_plan = 'free'/)
     assert.match(setClause, /stripe_subscription_id = NULL/)
     assert.doesNotMatch(setClause, /stripe_customer_id/)
+    assert.match(downgrade, /stripe_subscription_id IS NULL OR stripe_subscription_id = \$3/)
+    assert.match(downgrade, /stripe_subscription_versions/)
+    assert.match(source, /stripeSubscriptionId/)
     assert.match(source, /export async function findUserByClerkId/)
     assert.match(source, /WHERE clerk_id = \$1/)
     assert.match(source, /queryStrict/)
@@ -279,7 +484,14 @@ describe('subscription updates stay on the authenticated account', () => {
     assert.match(source, /process\.env\.STRIPE_PRO_PRICE_ID/)
     assert.match(source, /trial_period_days: PRICING\.pro\.trialDays/)
     assert.match(source, /WHERE clerk_id = \$1/)
+    assert.match(source, /queryStrict/)
+    assert.doesNotMatch(source, /queryOne\(/)
+    assert.ok(source.indexOf('queryStrict') < source.indexOf('checkout.sessions.create'))
+    assert.match(source, /Could not read the existing Stripe customer/)
     assert.doesNotMatch(source, /customer_email/)
     assert.equal(source.includes('userId'), true)
+
+    const sync = readFileSync('lib/subscription-sync.ts', 'utf8')
+    assert.match(sync, /subscriptionData\.status === 'active' \|\| subscriptionData\.status === 'trialing'/)
   })
 })

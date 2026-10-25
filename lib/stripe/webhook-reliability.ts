@@ -1,18 +1,11 @@
 /**
- * Stripe webhook admission, event idempotency, and account selection.
+ * Stripe webhook admission, account selection, and durable delivery decisions.
  *
- * Durable idempotency is deferred. A schema change would add:
- *
- *   CREATE TABLE stripe_webhook_events (
- *     event_id TEXT PRIMARY KEY,
- *     event_type TEXT NOT NULL,
- *     processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
- *   );
- *
- * That table is not created here. The in-process store settles an event id only
- * after processing succeeds. A failed attempt releases the id so Stripe can
- * retry. Another instance, a restart, or an id evicted after the cap can still
- * repeat a write or an email. Those cases need the deferred table.
+ * Production claims live in Postgres (`scripts/036-stripe-webhook-events.sql`).
+ * The application does not run that migration. Until the tables exist, the
+ * webhook route fails the delivery so Stripe retries. The in-process stores
+ * below cover the previous single-instance behavior in tests. A restart, a
+ * second instance, or the settled-id cap cannot be the production claim path.
  */
 
 export type WebhookGate =
@@ -102,9 +95,17 @@ export function finishWebhookAttempt(
   return { status: 200, body: { received: true } }
 }
 
-/** A lookup error must be retried. A missing row is a completed lookup. */
+/** A lookup error must be retried. A missing row is a completed lookup for callers that still treat it that way. */
 export function lookupBlocksProcessing(status: 'found' | 'not_found' | 'failed'): boolean {
   return status === 'failed'
+}
+
+/**
+ * Entitlement writes retry when the account row is missing or the lookup failed.
+ * A found row continues.
+ */
+export function missingRecordDisposition(found: boolean): 'continue' | 'failure' {
+  return found ? 'continue' : 'failure'
 }
 
 /** An intended subscription write succeeds only when a row is updated. */
@@ -195,10 +196,207 @@ export function planSubscriptionWrite(input: {
   return { write: input.incoming, preservedExistingCustomer: false }
 }
 
+/**
+ * A cancel or a non-Pro update for a different subscription must not touch the
+ * subscription currently stored on the account. A Pro-granting event may replace
+ * it, and the customer version row then rejects an older replacement.
+ */
+export function decideSubscriptionMutation(input: {
+  storedSubscriptionId: string | null
+  incomingSubscriptionId: string
+  grantsEntitlement: boolean
+}): 'apply' | 'skip_other_subscription' {
+  if (!input.storedSubscriptionId) return 'apply'
+  if (input.storedSubscriptionId === input.incomingSubscriptionId) return 'apply'
+  if (input.grantsEntitlement) return 'apply'
+  return 'skip_other_subscription'
+}
+
+/** A guarded write either landed, lost the version race, or must be retried. */
+export function guardedMutationDisposition(
+  status: 'updated' | 'not_found' | 'failed' | 'stale' | 'skipped',
+): 'applied' | 'skip' | 'failure' {
+  if (status === 'updated') return 'applied'
+  if (status === 'stale' || status === 'skipped') return 'skip'
+  return 'failure'
+}
+
 /** Reuse a stored Stripe customer. A missing record starts checkout without one. */
 export function checkoutCustomerFields(
   existingCustomerId: string | null | undefined,
 ): { customer?: string } {
   if (!existingCustomerId) return {}
   return { customer: existingCustomerId }
+}
+
+/** Five minutes. A live Vercel invocation finishes inside this window; a crashed one can be reclaimed. */
+export const STRIPE_EVENT_LEASE_MS = 5 * 60 * 1000
+
+export type DurableClaimResult =
+  | { result: 'claimed' }
+  | { result: 'duplicate' }
+  | { result: 'in_flight' }
+
+export type EmailClaimResult = 'claimed' | 'already_sent' | 'in_flight'
+export type SubscriptionTurn = 'apply' | 'skip_stale'
+
+export interface DurableStripeEvent {
+  eventId: string
+  eventType: string
+  stripeCreated: number
+  objectId: string | null
+}
+
+export interface StripeDurabilityStore {
+  claim(event: DurableStripeEvent): Promise<DurableClaimResult>
+  markProcessed(eventId: string): Promise<void>
+  markFailed(eventId: string): Promise<void>
+  setObjectId(eventId: string, objectId: string): Promise<void>
+  newestProcessedCreated(objectId: string, exceptEventId: string): Promise<number | null>
+  claimSubscriptionVersion(objectId: string, stripeCreated: number, eventId: string): Promise<SubscriptionTurn>
+  releaseSubscriptionVersion(objectId: string, eventId: string): Promise<void>
+  claimEmail(dedupeKey: string): Promise<EmailClaimResult>
+  markEmailSent(dedupeKey: string): Promise<void>
+  releaseEmail(dedupeKey: string): Promise<void>
+}
+
+export function durableAdmissionResponse(result: DurableClaimResult):
+  | { stop: true; status: 200 | 500; body: { received: true; duplicate: true } | { error: string } }
+  | { stop: false } {
+  if (result.result === 'duplicate') {
+    return { stop: true, status: 200, body: { received: true, duplicate: true } }
+  }
+  if (result.result === 'in_flight') {
+    return { stop: true, status: 500, body: { error: 'Webhook processing failed' } }
+  }
+  return { stop: false }
+}
+
+/** Apply when no newer processed timestamp exists. The same second still applies. */
+export function shouldApplySubscriptionEvent(input: {
+  incomingCreated: number
+  newestProcessedCreated: number | null
+}): boolean {
+  if (input.newestProcessedCreated == null) return true
+  return input.incomingCreated >= input.newestProcessedCreated
+}
+
+export function checkoutRecipientEmail(session: {
+  customer_email?: string | null
+  email?: string | null
+  customer_details?: { email?: string | null } | null
+}): string {
+  return session.customer_email || session.email || session.customer_details?.email || ''
+}
+
+export function objectIdForStripeEvent(event: {
+  type: string
+  data: { object: { id?: string; subscription?: unknown } }
+}): string | null {
+  const object = event.data.object
+  if (event.type === 'checkout.session.completed') {
+    return typeof object.subscription === 'string' && object.subscription
+      ? object.subscription
+      : object.id || null
+  }
+  return object.id || null
+}
+
+interface MemoryEventRow {
+  eventType: string
+  stripeCreated: number
+  objectId: string | null
+  status: 'processing' | 'processed' | 'failed'
+  claimedAt: number
+}
+
+/**
+ * In-memory stand-in for the Postgres durability tables.
+ * Tests use it to exercise claim, lease, ordering, and email semantics.
+ * The webhook route uses the Postgres store instead.
+ */
+export function createMemoryStripeDurabilityStore(options?: {
+  now?: () => number
+  leaseMs?: number
+}): StripeDurabilityStore {
+  const now = options?.now ?? (() => Date.now())
+  const leaseMs = options?.leaseMs ?? STRIPE_EVENT_LEASE_MS
+  const events = new Map<string, MemoryEventRow>()
+  const emails = new Map<string, { status: 'sending' | 'sent'; claimedAt: number }>()
+  const versions = new Map<string, { stripeCreated: number; eventId: string }>()
+
+  return {
+    async claim(event) {
+      const current = events.get(event.eventId)
+      if (!current) {
+        events.set(event.eventId, {
+          eventType: event.eventType,
+          stripeCreated: event.stripeCreated,
+          objectId: event.objectId,
+          status: 'processing',
+          claimedAt: now(),
+        })
+        return { result: 'claimed' }
+      }
+      if (current.status === 'processed') return { result: 'duplicate' }
+      const abandoned = current.status === 'failed' || now() - current.claimedAt >= leaseMs
+      if (!abandoned) return { result: 'in_flight' }
+      current.status = 'processing'
+      current.claimedAt = now()
+      current.eventType = event.eventType
+      current.stripeCreated = event.stripeCreated
+      if (event.objectId) current.objectId = event.objectId
+      return { result: 'claimed' }
+    },
+    async markProcessed(eventId) {
+      const row = events.get(eventId)
+      if (row) row.status = 'processed'
+    },
+    async markFailed(eventId) {
+      const row = events.get(eventId)
+      if (row?.status === 'processing') row.status = 'failed'
+    },
+    async setObjectId(eventId, objectId) {
+      const row = events.get(eventId)
+      if (row) row.objectId = objectId
+    },
+    async newestProcessedCreated(objectId, exceptEventId) {
+      let newest: number | null = null
+      for (const [id, row] of events) {
+        if (id === exceptEventId || row.objectId !== objectId || row.status !== 'processed') continue
+        if (newest == null || row.stripeCreated > newest) newest = row.stripeCreated
+      }
+      return newest
+    },
+    async claimSubscriptionVersion(objectId, stripeCreated, eventId) {
+      const current = versions.get(objectId)
+      if (current && current.stripeCreated > stripeCreated) return 'skip_stale'
+      versions.set(objectId, { stripeCreated, eventId })
+      return 'apply'
+    },
+    async releaseSubscriptionVersion(objectId, eventId) {
+      const current = versions.get(objectId)
+      if (current?.eventId === eventId) versions.delete(objectId)
+    },
+    async claimEmail(dedupeKey) {
+      const current = emails.get(dedupeKey)
+      if (!current) {
+        emails.set(dedupeKey, { status: 'sending', claimedAt: now() })
+        return 'claimed'
+      }
+      if (current.status === 'sent') return 'already_sent'
+      if (now() - current.claimedAt < leaseMs) return 'in_flight'
+      current.status = 'sending'
+      current.claimedAt = now()
+      return 'claimed'
+    },
+    async markEmailSent(dedupeKey) {
+      const row = emails.get(dedupeKey)
+      if (row) row.status = 'sent'
+    },
+    async releaseEmail(dedupeKey) {
+      const row = emails.get(dedupeKey)
+      if (row?.status === 'sending') emails.delete(dedupeKey)
+    },
+  }
 }

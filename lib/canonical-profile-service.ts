@@ -76,6 +76,7 @@
  * USE THIS SERVICE FOR ALL PROGRAMMING-RELATED READS AND WRITES.
  */
 
+import { removeAthleteItem } from './athlete-local-scope'
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'
 import { classifyEquipment, classifySessionDuration, mergeScheduleDurationUpdate } from './profile/input-reliability'
 import {
@@ -1831,7 +1832,7 @@ export function clearCanonicalProfileData(): void {
   
   // Clear onboarding profile
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('spartanlab_onboarding_profile')
+    removeAthleteItem('spartanlab_onboarding_profile')
   }
   
   // Clear athlete profile (data-service)

@@ -1,3 +1,5 @@
+import { getBoundAthleteId, readAthleteCollection, removeAthleteItem, writeAthleteCollection } from './athlete-local-scope'
+
 /**
  * Session Feedback Service
  * 
@@ -29,6 +31,8 @@ export interface SessionFeedback {
   averageRPE?: number
   /** Timestamp when feedback was recorded */
   timestamp: number
+  /** Clerk user who recorded this feedback. Absent on legacy entries. */
+  ownerUserId?: string
   /** Optional notes */
   notes?: string
   /** FEEDBACK LOOP: Whether this feedback is from a trusted (non-demo) session */
@@ -71,21 +75,15 @@ export function saveSessionFeedback(sessionId: string, feedback: Omit<SessionFee
   if (!isBrowser()) return false
   
   try {
-    const stored = localStorage.getItem(SESSION_FEEDBACK_KEY)
-    let entries: SessionFeedback[] = []
-    
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (Array.isArray(parsed)) {
-        entries = parsed
-      }
-    }
+    const bound = getBoundAthleteId()
+    let entries = readAthleteCollection<SessionFeedback>(SESSION_FEEDBACK_KEY)
     
     // Create new entry
     const newEntry: SessionFeedback = {
       ...feedback,
       sessionId,
       timestamp: Date.now(),
+      ownerUserId: typeof bound === 'string' ? bound : undefined,
     }
     
     // Check if entry for this session already exists and update it
@@ -103,7 +101,7 @@ export function saveSessionFeedback(sessionId: string, feedback: Omit<SessionFee
         .slice(0, MAX_FEEDBACK_ENTRIES)
     }
     
-    localStorage.setItem(SESSION_FEEDBACK_KEY, JSON.stringify(entries))
+    writeAthleteCollection(SESSION_FEEDBACK_KEY, entries)
     return true
   } catch (err) {
     console.warn('[SessionFeedback] Failed to save feedback:', err)
@@ -119,10 +117,7 @@ export function getRecentSessionFeedback(limit: number = 10): SessionFeedback[] 
   if (!isBrowser()) return []
   
   try {
-    const stored = localStorage.getItem(SESSION_FEEDBACK_KEY)
-    if (!stored) return []
-    
-    const parsed = JSON.parse(stored)
+    const parsed = readAthleteCollection<SessionFeedback>(SESSION_FEEDBACK_KEY)
     if (!Array.isArray(parsed)) return []
     
     // Validate and filter entries
@@ -166,7 +161,7 @@ export function clearSessionFeedback(): void {
   if (!isBrowser()) return
   
   try {
-    localStorage.removeItem(SESSION_FEEDBACK_KEY)
+    removeAthleteItem(SESSION_FEEDBACK_KEY)
   } catch {
     // Ignore
   }

@@ -10,6 +10,7 @@
  */
 
 import { useState, useCallback } from 'react'
+import { readAthleteItem } from './athlete-local-scope'
 import type { AdaptiveProgram } from './adaptive-program-builder'
 import type { GenerationReason } from './program-history-versioning'
 import type { ProgramHistory } from '@/types/history'
@@ -198,7 +199,7 @@ export async function shouldSyncProgramToHistory(): Promise<boolean> {
     // Check if we have a program in localStorage
     if (typeof window === 'undefined') return false
     
-    const storedProgram = localStorage.getItem('spartanlab_first_program')
+    const storedProgram = readAthleteItem('spartanlab_first_program')
     if (!storedProgram) return false
     
     // Check if we already have an active program in history
@@ -223,7 +224,7 @@ export async function syncProgramToHistory(): Promise<SaveProgramResult | null> 
   try {
     if (typeof window === 'undefined') return null
     
-    const storedProgram = localStorage.getItem('spartanlab_first_program')
+    const storedProgram = readAthleteItem('spartanlab_first_program')
     if (!storedProgram) return null
     
     // Check if sync is needed

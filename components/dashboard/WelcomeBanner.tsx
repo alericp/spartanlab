@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 // =============================================================================
 
 // Type-only imports are safe at module scope
+import { readAthleteCollection } from '@/lib/athlete-local-scope'
 import type { OnboardingProfile } from '@/lib/athlete-profile'
 
 const WELCOME_DISMISSED_KEY = 'spartanlab_welcome_dismissed'
@@ -249,10 +250,8 @@ export function FirstWorkoutCTA() {
     setMounted(true)
     // Check if user has any workout history
     if (typeof window !== 'undefined') {
-      const workoutLogs = localStorage.getItem('spartanlab_workout_logs')
       try {
-        const logs = workoutLogs ? JSON.parse(workoutLogs) : []
-        setHasWorkouts(logs.length > 0)
+        setHasWorkouts(readAthleteCollection('spartanlab_workout_logs').length > 0)
       } catch {
         setHasWorkouts(false)
       }

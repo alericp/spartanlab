@@ -13,6 +13,8 @@
  * All critical boundaries should use these assertions.
  */
 
+import { readAthleteItem } from './athlete-local-scope'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -297,7 +299,7 @@ export function hasCanonicalProfile(): boolean {
   if (typeof window === 'undefined') return false
   
   try {
-    const stored = localStorage.getItem('spartanlab_onboarding_profile')
+    const stored = readAthleteItem('spartanlab_onboarding_profile')
     if (!stored) return false
     
     const profile = JSON.parse(stored)

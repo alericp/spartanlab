@@ -75,6 +75,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { readAthleteItem, storageEventMatchesAthlete } from '@/lib/athlete-local-scope'
 import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
@@ -2308,7 +2309,7 @@ function ProgramDisplayWrapper({
       // Read profile jointCautions from localStorage canonical profile
       let profileJointCautions: string[] = []
       try {
-        const profileRaw = localStorage.getItem('spartanlab_canonical_profile')
+        const profileRaw = readAthleteItem('spartanlab_canonical_profile')
         if (profileRaw) {
           const profile = JSON.parse(profileRaw)
           profileJointCautions = Array.isArray(profile?.jointCautions) ? profile.jointCautions : []
@@ -5348,7 +5349,7 @@ export default function ProgramPage() {
     let currentLocalStorageSessions: number | null = null
     let currentLocalStorageId: string | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         currentLocalStorageSessions = parsed?.sessions?.length ?? null
@@ -5462,7 +5463,7 @@ export default function ProgramPage() {
     let currentLocalStorageSessions: number | null = null
     let currentLocalStorageId: string | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         currentLocalStorageSessions = parsed?.sessions?.length ?? null
@@ -5720,7 +5721,7 @@ export default function ProgramPage() {
     let localStorageProgramId: string | null = null
     let localStorageSessionCount: number | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         localStorageProgramId = parsed?.id ?? null
@@ -7550,7 +7551,7 @@ export default function ProgramPage() {
           failedOperation: currentInitStage,
           errorName,
           errorMessage: errorMessage.slice(0, 200), // Truncate for compactness
-          hasStoredProgram: typeof window !== 'undefined' && !!localStorage.getItem('spartanlab_adaptive_program'),
+          hasStoredProgram: typeof window !== 'undefined' && !!readAthleteItem('spartanlab_adaptive_program'),
           hasUsableWorkoutProgram: false, // Failed before we could determine this
           programId: null,
           doctrineDbWasConsultedDuringInit: false, // Program page init doesn't call doctrine-db directly
@@ -7719,7 +7720,7 @@ export default function ProgramPage() {
       let rawHistoryCount = 0
       
       try {
-        const rawCanonical = localStorage.getItem('spartanlab_active_program')
+        const rawCanonical = readAthleteItem('spartanlab_active_program')
         if (rawCanonical) {
           const parsed = JSON.parse(rawCanonical)
           rawCanonicalId = parsed?.id || null
@@ -7731,7 +7732,7 @@ export default function ProgramPage() {
       }
       
       try {
-        const rawHistory = localStorage.getItem('spartanlab_adaptive_programs')
+        const rawHistory = readAthleteItem('spartanlab_adaptive_programs')
         if (rawHistory) {
           const parsed = JSON.parse(rawHistory)
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -8123,7 +8124,7 @@ export default function ProgramPage() {
       'spartanlab_adaptive_programs',
     ])
     const handleStorage = (event: StorageEvent) => {
-      if (!event.key || !PHASE_4X_RECONCILE_STORAGE_KEYS.has(event.key)) {
+      if (!storageEventMatchesAthlete(event.key, [...PHASE_4X_RECONCILE_STORAGE_KEYS])) {
         return
       }
       console.log('[phase17k-storage-event-detected]', {
@@ -9845,7 +9846,7 @@ export default function ProgramPage() {
             let localStorageId: string | null = null
             let localStorageSessions: number | null = null
             try {
-              const rawStored = localStorage.getItem('spartanlab_active_program')
+              const rawStored = readAthleteItem('spartanlab_active_program')
               if (rawStored) {
                 const parsed = JSON.parse(rawStored)
                 localStorageId = parsed?.id ?? null
@@ -13643,7 +13644,7 @@ export default function ProgramPage() {
         let localStorageProgramId: string | null = null
         if (typeof window !== 'undefined') {
           try {
-            const rawStored = localStorage.getItem('spartanlab_active_program')
+            const rawStored = readAthleteItem('spartanlab_active_program')
             if (rawStored) {
               const parsed = JSON.parse(rawStored)
               localStorageSessionCount = parsed?.sessions?.length ?? null

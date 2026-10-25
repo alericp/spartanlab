@@ -10,9 +10,19 @@
  * Demo workouts (isDemo=true) are NEVER trusted and never affect adaptive logic.
  */
 
+import {
+  getBoundAthleteId,
+  lookupOccurrenceOwner,
+  readAthleteCollection,
+  readAthleteItem,
+  removeAthleteItem,
+  writeAthleteCollection,
+  writeAthleteItem,
+} from './athlete-local-scope'
 import { saveSessionFeedback } from './session-feedback'
 import { selectOwnedHistoryRetry } from './workout/history-progress'
 import {
+  createOccurrenceId,
   occurrenceAfterEvidenceSave,
   planLocalWorkoutSave,
   workoutLogIdForOccurrence,
@@ -120,18 +130,17 @@ function isBrowser(): boolean {
 }
 
 // Get all workout logs
+export function selectOwnedPendingEvidence<T extends { ownerUserId?: string; serverEvidence?: string }>(
+  logs: T[],
+  userId: string | null | undefined,
+): T[] {
+  if (!userId) return []
+  return logs.filter((log) => log.serverEvidence === 'pending' && log.ownerUserId === userId)
+}
+
 export function getWorkoutLogs(): WorkoutLog[] {
   if (!isBrowser()) return []
-  
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readAthleteCollection<WorkoutLog>(STORAGE_KEY)
 }
 
 const evidenceSyncInFlight = new Set<string>()
@@ -144,7 +153,7 @@ function evidenceSyncNeeded(log: WorkoutLog): boolean {
 }
 
 function writeStoredLogs(logs: WorkoutLog[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
+  writeAthleteCollection(STORAGE_KEY, logs)
 }
 
 export function markLoggedHistorySync(
@@ -157,7 +166,7 @@ export function markLoggedHistorySync(
   const index = logs.findIndex(log => log.occurrenceId === occurrenceId)
   if (index < 0) return
   const current = logs[index]
-  if (current.ownerUserId && current.ownerUserId !== userId) return
+  if (current.ownerUserId !== userId) return
   logs[index] = { ...current, ownerUserId: userId, historySync: state }
   writeStoredLogs(logs)
 }
@@ -182,15 +191,15 @@ function patchStoredLog(id: string, patch: Partial<WorkoutLog>) {
 function releaseOccurrenceAfterEvidenceSave(occurrenceId?: string) {
   if (!isBrowser() || !occurrenceId) return
   try {
-    const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    const raw = readAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw) as StoredOccurrence
     if (!parsed || typeof parsed.sessionId !== 'string' || typeof parsed.occurrenceId !== 'string') return
     const decision = occurrenceAfterEvidenceSave(parsed, occurrenceId)
     if (decision.action === 'release') {
-      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+      removeAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
     } else if (decision.action === 'keep') {
-      localStorage.setItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(decision.occurrence))
+      writeAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(decision.occurrence))
     }
   } catch {}
 }
@@ -202,6 +211,8 @@ function scheduleEvidenceRetry(log: WorkoutLog, attempt: number) {
 
 function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
   if (!isBrowser() || !evidenceSyncNeeded(log) || evidenceSyncInFlight.has(log.id)) return
+  const bound = getBoundAthleteId()
+  if (bound !== undefined && (!bound || log.ownerUserId !== bound)) return
   evidenceSyncInFlight.add(log.id)
   try {
     const programId = log.generatedWorkoutId?.split('_session_')[0] || null
@@ -242,14 +253,23 @@ function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
 
 export function retryPendingWorkoutEvidence(): void {
   if (!isBrowser()) return
-  for (const log of getWorkoutLogs()) {
+  const bound = getBoundAthleteId()
+  const logs = bound === undefined ? getWorkoutLogs() : selectOwnedPendingEvidence(getWorkoutLogs(), bound)
+  for (const log of logs) {
     if (log.serverEvidence === 'pending') queueEvidenceSync(log)
   }
 }
 
 // Save a workout log
 export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): SavedWorkoutLog {
-  const occurrenceId = log.occurrenceId
+  const boundAthlete = getBoundAthleteId()
+  let occurrenceId = log.occurrenceId
+  if (occurrenceId && typeof boundAthlete === 'string') {
+    const occurrenceOwner = lookupOccurrenceOwner(occurrenceId)
+    if (occurrenceOwner === 'ownerless' || (occurrenceOwner && occurrenceOwner !== boundAthlete)) {
+      occurrenceId = createOccurrenceId()
+    }
+  }
   const id = occurrenceId
     ? workoutLogIdForOccurrence(occurrenceId)
     : `workout-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
@@ -257,11 +277,16 @@ export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): Saved
     ...log,
     id,
     occurrenceId,
+    ownerUserId: typeof boundAthlete === 'string' ? boundAthlete : log.ownerUserId,
     createdAt: new Date().toISOString(),
     serverEvidence: evidenceSyncNeeded({ ...log, id, createdAt: '' }) ? 'pending' : 'skipped',
   }
 
   if (!isBrowser()) {
+    return { ...candidate, saveDisposition: 'inserted' }
+  }
+  if (boundAthlete === null) {
+    writeStoredLogs([candidate])
     return { ...candidate, saveDisposition: 'inserted' }
   }
 
@@ -309,7 +334,7 @@ export function deleteWorkoutLog(id: string): boolean {
   
   if (filtered.length === logs.length) return false
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  writeStoredLogs(filtered)
   
   // [PPX-R7.5] Fire non-blocking server evidence delete
   // This ensures deleted workout evidence doesn't feed future adaptation

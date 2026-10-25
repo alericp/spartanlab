@@ -6,6 +6,7 @@
  * All settings, generation, and dashboard code MUST read from this.
  */
 
+import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import type { MilitaryProfile } from './military-test-config'
 import { classifySessionDuration, classifyTrainingDays } from './profile/input-reliability'
 
@@ -1475,7 +1476,7 @@ const ONBOARDING_STORAGE_KEY = 'spartanlab_onboarding_profile'
 export function saveOnboardingProfile(profile: OnboardingProfile): void {
   if (typeof window !== 'undefined') {
     // Get previous stored payload for comparison
-    const previousRaw = localStorage.getItem(ONBOARDING_STORAGE_KEY)
+    const previousRaw = readAthleteItem(ONBOARDING_STORAGE_KEY)
     const previousPayload = previousRaw ? JSON.parse(previousRaw) : null
     
     // [onboarding-save-payload-truth-audit] TASK 2: Log exact payload being saved
@@ -1558,7 +1559,7 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
       ...profile,
       updatedAt: new Date().toISOString(),
     }
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profileWithTimestamp))
+    writeAthleteItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profileWithTimestamp))
   }
 }
 
@@ -1770,7 +1771,7 @@ function normalizeOnboardingProfile(raw: unknown): OnboardingProfile | null {
 export function getOnboardingProfile(): OnboardingProfile | null {
   if (typeof window === 'undefined') return null
   
-  const stored = localStorage.getItem(ONBOARDING_STORAGE_KEY)
+  const stored = readAthleteItem(ONBOARDING_STORAGE_KEY)
   
   // [PHASE 16F] Log raw storage state
   console.log('[phase16f-onboarding-profile-read-audit]', {

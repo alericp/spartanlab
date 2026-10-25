@@ -12,6 +12,8 @@ export const WORKOUT_OCCURRENCE_STORAGE_KEY = 'spartanlab_workout_occurrence'
 export interface StoredOccurrence {
   sessionId: string
   occurrenceId: string
+  /** Clerk user id that may reuse this occurrence. Absent means unowned. */
+  ownerUserId?: string
   /**
    * The history write has not been confirmed. A successful evidence post must
    * not drop this id, or a later retry would mint a new one and duplicate
@@ -38,23 +40,43 @@ export function createOccurrenceId(now = Date.now(), entropy = ''): string {
   return `occ-${now}-${suffix}`
 }
 
+function mintOccurrence(input: {
+  sessionId: string
+  ownerUserId?: string | null
+  createId?: () => string
+}): StoredOccurrence {
+  const occurrenceId = input.createId ? input.createId() : createOccurrenceId()
+  return {
+    sessionId: input.sessionId,
+    occurrenceId,
+    ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
+  }
+}
+
+/**
+ * Reuse an occurrence only for the same session and the same athlete.
+ * A different account, or an ownerless draft once an athlete is signed in,
+ * gets a new id. Callers that have no athlete keep the previous reuse rule.
+ */
 export function resolveOccurrenceId(input: {
   sessionId: string
   stored: StoredOccurrence | null
+  ownerUserId?: string | null
   createId?: () => string
-}): { occurrence: StoredOccurrence; reused: boolean } {
-  if (
-    input.stored &&
-    input.stored.sessionId === input.sessionId &&
-    input.stored.occurrenceId
-  ) {
-    return { occurrence: input.stored, reused: true }
+}): { occurrence: StoredOccurrence; reused: boolean; rejected?: 'foreign_owner' | 'ownerless' } {
+  const stored = input.stored
+  const sessionMatches = Boolean(stored && stored.sessionId === input.sessionId && stored.occurrenceId)
+  if (!sessionMatches || !stored) {
+    return { occurrence: mintOccurrence(input), reused: false }
   }
-  const occurrenceId = input.createId ? input.createId() : createOccurrenceId()
-  return {
-    occurrence: { sessionId: input.sessionId, occurrenceId },
-    reused: false,
+  const athlete = input.ownerUserId || null
+  if (stored.ownerUserId && stored.ownerUserId !== athlete) {
+    return { occurrence: mintOccurrence(input), reused: false, rejected: 'foreign_owner' }
   }
+  if (athlete && !stored.ownerUserId) {
+    return { occurrence: mintOccurrence(input), reused: false, rejected: 'ownerless' }
+  }
+  return { occurrence: stored, reused: true }
 }
 
 /**
@@ -192,6 +214,7 @@ export function occurrenceAfterEvidenceSave(
       occurrence: {
         sessionId: stored.sessionId,
         occurrenceId: stored.occurrenceId,
+        ownerUserId: stored.ownerUserId,
         historyPending: true,
         evidenceSaved: true,
       },
@@ -218,6 +241,7 @@ export function occurrenceAfterHistoryResult(input: {
     occurrence: {
       sessionId: input.occurrence.sessionId,
       occurrenceId: input.occurrence.occurrenceId,
+      ownerUserId: input.occurrence.ownerUserId,
       historyPending: !input.historyConfirmed,
       evidenceSaved: input.occurrence.evidenceSaved === true || input.serverEvidence === 'saved',
     },

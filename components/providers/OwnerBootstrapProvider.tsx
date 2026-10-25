@@ -16,6 +16,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, Component } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { bindActiveAthlete } from '@/lib/athlete-local-scope'
 import {
   setCurrentUserEmail,
   clearCurrentUserEmail,
@@ -106,6 +107,7 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
   // Call useUser unconditionally per React rules
   // In preview mode, Clerk will log errors but the hook still returns safely
   const { user, isLoaded } = useUser()
+  bindActiveAthlete(isLoaded ? (user?.id ?? null) : null)
   
   useEffect(() => {
     let cancelled = false

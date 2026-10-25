@@ -253,6 +253,15 @@ import {
   canReplaceStoredSession,
   shouldClearStoredSessionOnRestoreRejection,
 } from '@/lib/workout/resume-session'
+import {
+  clearPendingHistoryRetry,
+  getBoundAthleteId,
+  readAthleteItem,
+  readPendingHistoryRetry,
+  removeAthleteItem,
+  writeAthleteItem,
+  writePendingHistoryRetry,
+} from '@/lib/athlete-local-scope'
 import { useAuth } from '@clerk/nextjs'
 
 export {
@@ -1634,7 +1643,7 @@ function saveSessionToStorage(
 ) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+    writeAthleteItem(STORAGE_KEY, JSON.stringify({ 
       ...state, 
       sessionId,
       structureSignature, // [LIVE-SESSION-LOCK] Include structure signature
@@ -1670,13 +1679,13 @@ function loadSessionFromStorage(
   const rejectRestore = (reason: string, details?: Record<string, unknown>) => {
     console.log('[workout-restore] REJECTED:', reason, details || {})
     if (shouldClearStoredSessionOnRestoreRejection(reason)) {
-      try { localStorage.removeItem(STORAGE_KEY) } catch {}
+      try { removeAthleteItem(STORAGE_KEY) } catch {}
     }
     return null
   }
   
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = readAthleteItem(STORAGE_KEY)
     if (!saved) return null
     
     // [PHASE-NEXT] Parse with explicit error handling
@@ -1936,7 +1945,7 @@ function loadSessionFromStorage(
     // If parsing fails, clear corrupted data
     console.log('[workout-restore] Clearing corrupted saved session data')
     try {
-      localStorage.removeItem(STORAGE_KEY)
+      removeAthleteItem(STORAGE_KEY)
     } catch {}
     return null
   }
@@ -1946,7 +1955,7 @@ function loadSessionFromStorage(
 export function getExistingSessionInfo(): SavedSessionInfo | null {
   if (typeof window === 'undefined') return null
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = readAthleteItem(STORAGE_KEY)
     if (!saved) return null
     const data = JSON.parse(saved)
     
@@ -1981,10 +1990,12 @@ export function getExistingSessionInfo(): SavedSessionInfo | null {
 function readStoredOccurrence(): StoredOccurrence | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+    const raw = readAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as StoredOccurrence
     if (!parsed || typeof parsed.sessionId !== 'string' || typeof parsed.occurrenceId !== 'string') return null
+    const bound = getBoundAthleteId()
+    if (typeof bound === 'string' && parsed.ownerUserId !== bound) return null
     return parsed
   } catch {
     return null
@@ -1994,7 +2005,7 @@ function readStoredOccurrence(): StoredOccurrence | null {
 function rememberOccurrence(occurrence: StoredOccurrence) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(occurrence))
+    writeAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY, JSON.stringify(occurrence))
   } catch {}
 }
 
@@ -2030,9 +2041,9 @@ function settleOccurrenceAfterHistory(
 export function clearSessionStorage(options?: { keepOccurrence?: boolean }) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    removeAthleteItem(STORAGE_KEY)
     if (!options?.keepOccurrence) {
-      localStorage.removeItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
+      removeAthleteItem(WORKOUT_OCCURRENCE_STORAGE_KEY)
     }
   } catch {}
 }
@@ -4595,8 +4606,21 @@ export function StreamlinedWorkoutSession({
   } | null>(null)
 
   useEffect(() => {
+    if (!userId) return
     retryPendingWorkoutEvidence()
-  }, [])
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+    const pending = readPendingHistoryRetry<ReturnType<typeof buildLiveWorkoutHistoryInput>>(userId)
+    if (!pending || pending.payload.userId !== userId || pending.occurrenceId !== pending.payload.clientSessionId) return
+    if (!historyRetryRef.current) {
+      historyRetryRef.current = {
+        payload: pending.payload,
+        serverEvidence: pending.serverEvidence,
+      }
+    }
+  }, [userId])
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<PerceivedDifficulty | null>(null)
   const [showQuickLog, setShowQuickLog] = useState(false)
   
@@ -4744,7 +4768,7 @@ export function StreamlinedWorkoutSession({
       // Read profile jointCautions from localStorage
       let profileJointCautions: string[] = []
       try {
-        const profileRaw = localStorage.getItem('spartanlab_canonical_profile')
+        const profileRaw = readAthleteItem('spartanlab_canonical_profile')
         if (profileRaw) {
           const profile = JSON.parse(profileRaw)
           profileJointCautions = Array.isArray(profile?.jointCautions) ? profile.jointCautions : []
@@ -6288,7 +6312,7 @@ failureStage: null,
         liveSession.currentExerciseIndex > 0
       let storedRaw: string | null = null
       try {
-        storedRaw = localStorage.getItem(STORAGE_KEY)
+        storedRaw = readAthleteItem(STORAGE_KEY)
       } catch {
         return
       }
@@ -7789,11 +7813,13 @@ failureStage: null,
     const occurrence = resolveOccurrenceId({
       sessionId,
       stored: readStoredOccurrence(),
+      ownerUserId: userId,
       createId: () => createOccurrenceId(),
     })
     rememberOccurrence({
       sessionId: occurrence.occurrence.sessionId,
       occurrenceId: occurrence.occurrence.occurrenceId,
+      ownerUserId: userId ?? undefined,
       historyPending: Boolean(userId),
       evidenceSaved: occurrence.occurrence.evidenceSaved === true,
     })
@@ -7881,6 +7907,12 @@ failureStage: null,
             payload: historyInput,
             serverEvidence: savedLog.serverEvidence,
           }
+          writePendingHistoryRetry({
+            ownerUserId: userId,
+            occurrenceId: historyInput.clientSessionId,
+            serverEvidence: savedLog.serverEvidence,
+            payload: historyInput,
+          })
           const historyResult = await persistWorkoutSession(historyInput)
           historySync = classifyHistoryPersistence(historyResult)
         } catch (historyError) {
@@ -7893,6 +7925,7 @@ failureStage: null,
 
       // Keep the original occurrence while history is unconfirmed, including
       // when the server committed and this browser only saw a timeout.
+      if (userId && historySync !== 'failed') clearPendingHistoryRetry(userId)
       settleOccurrenceAfterHistory(occurrence.occurrence, historySync, savedLog.serverEvidence)
       clearRestTimerState()
       clearSessionOverrides()
@@ -7921,10 +7954,14 @@ failureStage: null,
     try {
       const historyResult = await persistWorkoutSession(pending.payload)
       const historySync = classifyHistoryPersistence(historyResult)
+      if (historySync !== 'failed' && pending.payload.userId) {
+        clearPendingHistoryRetry(pending.payload.userId)
+      }
       settleOccurrenceAfterHistory(
         {
           sessionId: readStoredOccurrence()?.sessionId ?? pending.payload.clientSessionId,
           occurrenceId: pending.payload.clientSessionId,
+          ownerUserId: pending.payload.userId,
           historyPending: true,
         },
         historySync,

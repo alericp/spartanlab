@@ -3,6 +3,7 @@
 // Production mode: Neon/Postgres database
 
 import { isPreviewMode } from '../app-mode'
+import { getBoundAthleteId, readAthleteCollection, writeAthleteCollection } from '../athlete-local-scope'
 import { dbGetSkills, dbGetSkill, dbSaveSkill, dbDeleteSkill } from '../db-queries'
 import type { SkillProgression, SkillRepository } from '@/types/domain'
 
@@ -26,15 +27,7 @@ const previewSkillRepository: SkillRepository = {
   async getSkills(userId: string): Promise<SkillProgression[]> {
     if (!isBrowser()) return []
     
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        return JSON.parse(stored)
-      } catch {
-        return []
-      }
-    }
-    return []
+    return readAthleteCollection<SkillProgression>(STORAGE_KEY)
   },
   
   async getSkill(userId: string, skillName: string): Promise<SkillProgression | null> {
@@ -54,10 +47,11 @@ const previewSkillRepository: SkillRepository = {
     
     const skills = await this.getSkills(userId)
     const existingIndex = skills.findIndex(s => s.skillName === data.skillName)
+    const boundAthlete = getBoundAthleteId()
     
     const skill: SkillProgression = {
       id: existingIndex >= 0 ? skills[existingIndex].id : `skill-${Date.now()}`,
-      userId,
+      userId: typeof boundAthlete === 'string' ? boundAthlete : userId,
       ...data,
       progressScore: calculateProgressScore(data.currentLevel, data.targetLevel),
       createdAt: existingIndex >= 0 ? skills[existingIndex].createdAt : new Date().toISOString(),
@@ -69,7 +63,7 @@ const previewSkillRepository: SkillRepository = {
       skills.push(skill)
     }
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(skills))
+    writeAthleteCollection(STORAGE_KEY, skills)
     return skill
   },
   
@@ -81,7 +75,7 @@ const previewSkillRepository: SkillRepository = {
     
     if (filtered.length === skills.length) return false
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+    writeAthleteCollection(STORAGE_KEY, filtered)
     return true
   },
 }
@@ -177,15 +171,7 @@ export const skillRepository: SkillRepository = {
 export function getSkillProgressions(): SkillProgression[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readAthleteCollection<SkillProgression>(STORAGE_KEY)
 }
 
 export function getSkillProgression(skillName: string): SkillProgression | null {
@@ -214,9 +200,10 @@ export function saveSkillProgression(
   const progressions = getSkillProgressions()
   const existingIndex = progressions.findIndex(p => p.skillName === skillName)
   
+  const boundAthlete = getBoundAthleteId()
   const progression: SkillProgression = {
     id: existingIndex >= 0 ? progressions[existingIndex].id : `prog-${Date.now()}`,
-    userId: 'preview-user',
+    userId: typeof boundAthlete === 'string' ? boundAthlete : 'preview-user',
     skillName,
     currentLevel,
     targetLevel,
@@ -231,6 +218,6 @@ export function saveSkillProgression(
     progressions.push(progression)
   }
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(progressions))
+  writeAthleteCollection(STORAGE_KEY, progressions)
   return progression
 }

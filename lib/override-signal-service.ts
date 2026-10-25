@@ -3,6 +3,7 @@
 // Signals help the AI understand athlete preferences and needs over time
 // Now integrated with Enhanced Exercise Intelligence for smarter warnings
 
+import { readAthleteCollection, removeAthleteItem, writeAthleteCollection } from './athlete-local-scope'
 import {
   generateOverrideWarning,
   generateWhyThisExercise,
@@ -86,9 +87,7 @@ function isBrowser(): boolean {
 function getStoredSignals(): OverrideSignal[] {
   if (!isBrowser()) return []
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-    return JSON.parse(stored)
+    return readAthleteCollection<OverrideSignal>(STORAGE_KEY)
   } catch {
     return []
   }
@@ -99,7 +98,7 @@ function saveSignals(signals: OverrideSignal[]): void {
   try {
     // Keep only most recent signals
     const trimmed = signals.slice(-MAX_SIGNALS)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+    writeAthleteCollection(STORAGE_KEY, trimmed)
   } catch {}
 }
 
@@ -437,7 +436,7 @@ export function getOverrideSummaryBrief(): {
 export function clearOverrideSignals(): void {
   if (!isBrowser()) return
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    removeAthleteItem(STORAGE_KEY)
   } catch {}
 }
 

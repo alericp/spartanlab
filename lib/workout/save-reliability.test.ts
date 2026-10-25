@@ -93,6 +93,28 @@ describe('failed saves and retries', () => {
     assert.equal(next.occurrence.occurrenceId, 'occ-next')
     assert.equal(createOccurrenceId(10, 'abc'), 'occ-10-abc')
   })
+
+  it('rejects an occurrence owned by someone else or by nobody once an athlete is signed in', () => {
+    const foreign = resolveOccurrenceId({
+      sessionId: 'session-Day 1-1',
+      stored: { sessionId: 'session-Day 1-1', occurrenceId: 'occ-stable', ownerUserId: 'user_a' },
+      ownerUserId: 'user_b',
+      createId: () => 'occ-new',
+    })
+    assert.equal(foreign.reused, false)
+    assert.equal(foreign.rejected, 'foreign_owner')
+    assert.equal(foreign.occurrence.occurrenceId, 'occ-new')
+    assert.equal(foreign.occurrence.ownerUserId, 'user_b')
+    const ownerless = resolveOccurrenceId({
+      sessionId: 'session-Day 1-1',
+      stored: { sessionId: 'session-Day 1-1', occurrenceId: 'occ-stable' },
+      ownerUserId: 'user_b',
+      createId: () => 'occ-owned',
+    })
+    assert.equal(ownerless.reused, false)
+    assert.equal(ownerless.rejected, 'ownerless')
+    assert.equal(ownerless.occurrence.occurrenceId, 'occ-owned')
+  })
 })
 
 describe('partial personal-record saves', () => {

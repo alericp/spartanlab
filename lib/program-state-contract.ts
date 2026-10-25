@@ -25,6 +25,7 @@
  * If you need to detect staleness, use checkProgramStaleness() from canonical-profile-service.ts
  */
 
+import { readAthleteItem, removeAthleteItem } from './athlete-local-scope'
 import { getCanonicalProfile, validateProfileForGeneration, type CanonicalProgrammingProfile } from './canonical-profile-service'
 import { getProgramState } from './program-state'
 import type { AdaptiveProgram } from './adaptive-program-builder'
@@ -167,7 +168,7 @@ export function getSystemStateFlags(): SystemStateFlags {
 function getWorkoutHistoryCount(): number {
   if (typeof window === 'undefined') return 0
   try {
-    const history = localStorage.getItem('spartanlab_workout_history')
+    const history = readAthleteItem('spartanlab_workout_history')
     if (!history) return 0
     const parsed = JSON.parse(history)
     return Array.isArray(parsed) ? parsed.length : 0
@@ -302,7 +303,7 @@ function getHistoryContext(): GenerationInput['historyContext'] {
   if (typeof window === 'undefined') return undefined
   
   try {
-    const history = localStorage.getItem('spartanlab_workout_history')
+    const history = readAthleteItem('spartanlab_workout_history')
     if (!history) return undefined
     
     const parsed = JSON.parse(history)
@@ -360,10 +361,10 @@ export function resetProgramState(): void {
   console.log('[StateContract] Resetting program state (safe reset)')
   
   // Clear active program
-  localStorage.removeItem('spartanlab_adaptive_programs')
-  localStorage.removeItem('spartanlab_adaptive_program')
-  localStorage.removeItem('spartanlab_first_program')
-  localStorage.removeItem('spartanlab_program_cache')
+  removeAthleteItem('spartanlab_adaptive_programs')
+  removeAthleteItem('spartanlab_adaptive_program')
+  removeAthleteItem('spartanlab_first_program')
+  removeAthleteItem('spartanlab_program_cache')
   
   // Set recalculation flag
   localStorage.setItem('spartanlab_program_recalc_pending', 'true')
@@ -398,7 +399,7 @@ export function fullSystemReset(): void {
   ]
   
   for (const key of keysToRemove) {
-    localStorage.removeItem(key)
+    removeAthleteItem(key)
   }
   
   // Dispatch event

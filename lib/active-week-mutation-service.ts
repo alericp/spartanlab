@@ -45,6 +45,7 @@
 export const LEGACY_PHASE13_AUTO_MUTATION_ENABLED = false
 
 import { buildTrainingFeedbackSummary, hasEnoughDataForAdaptation, type TrainingFeedbackSummary } from './training-feedback-loop'
+import { readAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import { getWorkoutLogs } from './workout-log-service'
 import type { AdaptiveProgram, AdaptiveSession } from './adaptive-program-builder'
 
@@ -614,7 +615,7 @@ function persistActiveWeekMutation(
   
   try {
     // Get current stored programs
-    const stored = localStorage.getItem('spartanlab_adaptive_programs')
+    const stored = readAthleteItem('spartanlab_adaptive_programs')
     if (!stored) {
       return { success: false, error: 'No programs in storage' }
     }
@@ -643,7 +644,7 @@ function persistActiveWeekMutation(
     }
     
     programs[programIndex] = updatedProgram
-    localStorage.setItem('spartanlab_adaptive_programs', JSON.stringify(programs))
+    writeAthleteItem('spartanlab_adaptive_programs', JSON.stringify(programs))
     
     return { success: true }
   } catch (err) {

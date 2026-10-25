@@ -1,6 +1,7 @@
 // Onboarding Service
 // Handles first-run program generation and profile initialization
 
+import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import {
   type OnboardingProfile,
   type SkillInterest,
@@ -732,7 +733,7 @@ export async function generateFirstProgram(
       
       markStage('mirror_save_start')
       // Secondary: backward-compatible mirror for legacy code paths
-      localStorage.setItem('spartanlab_first_program', JSON.stringify(program))
+      writeAthleteItem('spartanlab_first_program', JSON.stringify(program))
       localStorage.setItem('spartanlab_onboarding_complete', 'true')
       markStage('mirror_save_done')
     }
@@ -1007,7 +1008,7 @@ export async function generateFirstProgramViaServer(
         saveAdaptiveProgram(result.program)
         
         // Backward-compatible mirror
-        localStorage.setItem('spartanlab_first_program', JSON.stringify(result.program))
+        writeAthleteItem('spartanlab_first_program', JSON.stringify(result.program))
         localStorage.setItem('spartanlab_onboarding_complete', 'true')
         
         console.log('[phase16g-server-generation-client-persisted]', {
@@ -1076,7 +1077,7 @@ export function isFirstRun(): boolean {
 export function hasFirstProgram(): boolean {
   if (typeof window === 'undefined') return false
   
-  const program = localStorage.getItem('spartanlab_first_program')
+  const program = readAthleteItem('spartanlab_first_program')
   return program !== null
 }
 
@@ -1086,7 +1087,7 @@ export function hasFirstProgram(): boolean {
 export function getFirstProgram(): AdaptiveProgram | null {
   if (typeof window === 'undefined') return null
   
-  const stored = localStorage.getItem('spartanlab_first_program')
+  const stored = readAthleteItem('spartanlab_first_program')
   if (!stored) return null
   
   try {
@@ -1102,9 +1103,9 @@ export function getFirstProgram(): AdaptiveProgram | null {
 export function clearFirstRunState(): void {
   if (typeof window === 'undefined') return
   
-  localStorage.removeItem('spartanlab_first_program')
+  removeAthleteItem('spartanlab_first_program')
   localStorage.removeItem('spartanlab_onboarding_complete')
-  localStorage.removeItem('spartanlab_onboarding_profile')
+  removeAthleteItem('spartanlab_onboarding_profile')
 }
 
 /**

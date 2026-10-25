@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Calendar, ArrowRight, Clock, Target } from 'lucide-react'
 import { getProgramSummary, getDashboardOverview, type ProgramSummary } from '@/lib/dashboard-service'
+import { storageEventMatchesAthlete } from '@/lib/athlete-local-scope'
 
 interface ProgramSnapshotCardProps {
   className?: string
@@ -58,7 +59,7 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       // Refresh if adaptive programs storage changed
-      if (e.key === 'spartanlab_adaptive_programs' || e.key === 'spartanlab_first_program') {
+      if (storageEventMatchesAthlete(e.key, ['spartanlab_adaptive_programs', 'spartanlab_first_program'])) {
         console.log('[ProgramSnapshotCard] TASK F: Storage changed - refreshing program data')
         loadProgramSummary()
       }

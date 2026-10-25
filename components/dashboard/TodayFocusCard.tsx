@@ -15,6 +15,7 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react'
+import { readAthleteItem } from '@/lib/athlete-local-scope'
 import { getCoachDecision, getQuickCoachInsights, type CoachDecision } from '@/lib/training-coach'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { getWorkoutLogs } from '@/lib/workout-log-service'
@@ -35,7 +36,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
   useEffect(() => {
     // Check for active workout session
     try {
-      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      const savedSession = readAthleteItem(WORKOUT_STORAGE_KEY)
       if (savedSession) {
         const session = JSON.parse(savedSession)
         // Check if session is valid and not too old (24 hours)
@@ -245,7 +246,7 @@ export function TodayFocusCompact({ className }: TodayFocusCardProps) {
 
   useEffect(() => {
     try {
-      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      const savedSession = readAthleteItem(WORKOUT_STORAGE_KEY)
       if (savedSession) {
         const session = JSON.parse(savedSession)
         const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000

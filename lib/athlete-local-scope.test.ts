@@ -14,11 +14,15 @@ import {
   quarantinedRecordCount,
   clearRecoveryAdjustmentHandoff,
   readAthleteItem,
+  readBoundAthleteBlob,
+  readBoundAthleteList,
   readPendingHistoryRetry,
   readRecoveryAdjustmentHandoff,
   recoverQuarantinedBlob,
   recoverQuarantinedRecords,
   writeAthleteItem,
+  writeBoundAthleteBlob,
+  writeBoundAthleteList,
   writePendingHistoryRetry,
   writeRecoveryAdjustmentHandoff,
 } from './athlete-local-scope.ts'
@@ -432,6 +436,89 @@ describe('auth gate and legacy recovery', () => {
     clearRecoveryAdjustmentHandoff()
     assert.equal(store.get('spartanlab_recovery_adjustment_applied')?.includes('legacy-session'), true)
     assert.equal(store.has(athleteStorageKey('spartanlab_recovery_adjustment_applied', ATHLETE_B)), false)
+  })
+
+  it('keeps readiness caches and session overrides on the athlete who saved them', () => {
+    sealLegacyLocalStorage()
+    writeBoundAthleteList('spartanlab_rpe_sessions', [{ sessionId: 'early', exerciseName: 'Dip' }])
+    assert.equal(store.has('spartanlab_rpe_sessions'), false)
+
+    bindActiveAthlete(ATHLETE_A)
+    writeBoundAthleteList('spartanlab_rpe_sessions', [{ sessionId: 'a-session', exerciseName: 'Pull-Up', actualRPE: 9 }])
+    writeBoundAthleteList('spartanlab_fatigue_history', [{ date: '2026-10-24', score: 80, trend: 'critical' }])
+    writeBoundAthleteList('spartanlab_fatigue_patterns', [{ date: '2026-10-24', fatigueLevel: 'HIGH', deloadTriggered: true }])
+    writeBoundAthleteBlob('spartanlab_consistency_data', JSON.stringify({
+      missedSessions: [{ date: '2026-10-24', reason: 'fatigue' }],
+    }))
+    writeBoundAthleteBlob('spartanlab_session_overrides', JSON.stringify({
+      sessionId: 'day-1',
+      createdAt: Date.now(),
+      overrides: [{ originalExerciseName: 'Dip' }],
+      ownerUserId: ATHLETE_A,
+    }))
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(readBoundAthleteList('spartanlab_rpe_sessions').length, 0)
+    assert.equal(readBoundAthleteList('spartanlab_fatigue_history').length, 0)
+    assert.equal(readBoundAthleteList('spartanlab_fatigue_patterns').length, 0)
+    assert.equal(readBoundAthleteBlob('spartanlab_consistency_data'), null)
+    assert.equal(readBoundAthleteBlob('spartanlab_session_overrides'), null)
+    writeBoundAthleteList('spartanlab_fatigue_history', [{ date: '2026-10-24', score: 10, trend: 'stable' }])
+    assert.match(store.get(athleteStorageKey('spartanlab_fatigue_history', ATHLETE_A)) ?? '', /80/)
+    assert.equal(store.has('spartanlab_rpe_sessions'), false)
+    assert.equal(store.has('spartanlab_consistency_data'), false)
+
+    store.set('spartanlab_l2_recovery_checkin', JSON.stringify({
+      sleepQuality: 'poor',
+      jointPainAreas: ['knee'],
+      notes: 'private soreness',
+    }))
+    assert.equal(readBoundAthleteBlob('spartanlab_l2_recovery_checkin'), null)
+    assert.match(store.get('spartanlab_l2_recovery_checkin') ?? '', /private soreness/)
+
+    const fatigue = readFileSync('lib/fatigue-engine.ts', 'utf8')
+    const rpe = readFileSync('lib/fatigue-score-calculator.ts', 'utf8')
+    const patterns = readFileSync('lib/fatigue/deload-system.ts', 'utf8')
+    const consistency = readFileSync('lib/consistency-momentum-engine.ts', 'utf8')
+    const overrides = readFileSync('lib/exercise-override-service.ts', 'utf8')
+    const program = readFileSync('app/(app)/program/page.tsx', 'utf8')
+    const recovery = readFileSync('app/(app)/recovery/page.tsx', 'utf8')
+    assert.match(fatigue, /readBoundAthleteList<FatigueHistoryEntry>\(FATIGUE_HISTORY_KEY\)/)
+    assert.match(rpe, /readBoundAthleteList<StoredRPESession>\(RPE_SESSION_STORAGE_KEY\)/)
+    assert.match(patterns, /readBoundAthleteList<FatiguePatternEntry>\(FATIGUE_PATTERN_STORAGE_KEY\)/)
+    assert.match(consistency, /readBoundAthleteBlob\(CONSISTENCY_STORAGE_KEY\)/)
+    assert.match(overrides, /readAthleteItem\(STORAGE_KEY\)/)
+    assert.match(program, /readAthleteItem\('spartanlab_l2_recovery_checkin'\)/)
+    assert.match(recovery, /readAthleteItem\('spartanlab_l2_recovery_checkin'\)/)
+    for (const source of [fatigue, rpe, patterns, consistency, overrides, program, recovery]) {
+      assert.equal(source.includes("localStorage.getItem('spartanlab_rpe_sessions')"), false)
+      assert.equal(source.includes("localStorage.getItem('spartanlab_fatigue_history')"), false)
+      assert.equal(source.includes("localStorage.getItem('spartanlab_l2_recovery_checkin')"), false)
+      assert.equal(source.includes("localStorage.getItem(STORAGE_KEY)"), false)
+      assert.equal(source.includes("localStorage.getItem(CONSISTENCY_STORAGE_KEY)"), false)
+    }
+  })
+
+  it('restores ownerless readiness caches only after the bound athlete confirms', () => {
+    store.set('spartanlab_rpe_sessions', JSON.stringify([
+      { sessionId: 'legacy', exercises: [{ exerciseName: 'Squat' }] },
+      { sessionId: 'foreign', ownerUserId: ATHLETE_B, exercises: [{ exerciseName: 'Secret Lift' }] },
+    ]))
+    sealLegacyLocalStorage()
+    bindActiveAthlete(ATHLETE_A)
+    assert.equal(readBoundAthleteList<{ sessionId?: string }>('spartanlab_rpe_sessions').length, 0)
+    assert.equal(describeLegacyRecovery().workouts, 1)
+    assert.equal(claimLegacyLocalData(), true)
+    const claimed = readBoundAthleteList<{ sessionId?: string; ownerUserId?: string }>('spartanlab_rpe_sessions')
+    assert.equal(claimed.some((session) => session.sessionId === 'legacy' && session.ownerUserId === ATHLETE_A), true)
+    assert.equal(claimed.some((session) => session.sessionId === 'foreign'), false)
+    assert.match(store.get('spartanlab_rpe_sessions') ?? '', /Secret Lift/)
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(claimLegacyLocalData(), false)
+    const visibleToB = readBoundAthleteList<{ sessionId?: string }>('spartanlab_rpe_sessions')
+    assert.equal(visibleToB.some((session) => session.sessionId === 'legacy'), false)
+    assert.equal(visibleToB.some((session) => session.sessionId === 'foreign'), true)
   })
 })
 

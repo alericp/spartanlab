@@ -18,6 +18,7 @@ import {
 import { calculateRecoverySignal, type RecoverySignal } from '@/lib/recovery-engine'
 import { generateTrainingInsights, type TrainingInsight } from '@/lib/training-insights'
 import { Activity } from 'lucide-react'
+import { readAthleteItem } from '@/lib/athlete-local-scope'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { RecoveryEmptyState } from '@/components/shared/EmptyStates'
 // [PHASE L4.2] Deload recommendation card
@@ -50,7 +51,7 @@ export default function RecoveryPage() {
     
     // [PHASE L4.2] Load saved check-in if available and derive snapshot
     try {
-      const savedCheckIn = localStorage.getItem('spartanlab_l2_recovery_checkin')
+      const savedCheckIn = readAthleteItem('spartanlab_l2_recovery_checkin')
       if (savedCheckIn) {
         const checkIn = JSON.parse(savedCheckIn) as RecoveryReadinessCheckIn
         setL4CheckIn(checkIn)

@@ -11,6 +11,7 @@ import { calculateTrainingMomentum, type TrainingMomentum, type MomentumLevel } 
 import { calculateTrainingStreak, type TrainingStreak } from './progress-streak-engine'
 import { getReadinessAssessment, type ReadinessAssessment } from './recovery-fatigue-engine'
 import { getAthleteProfile } from './data-service'
+import { readBoundAthleteBlob, writeBoundAthleteBlob } from './athlete-local-scope'
 
 // =============================================================================
 // TYPES
@@ -143,7 +144,7 @@ function getStoredConsistencyData(): StoredConsistencyData {
     }
   }
   
-  const stored = localStorage.getItem(CONSISTENCY_STORAGE_KEY)
+  const stored = readBoundAthleteBlob(CONSISTENCY_STORAGE_KEY)
   if (stored) {
     try {
       return JSON.parse(stored)
@@ -177,7 +178,7 @@ function getStoredConsistencyData(): StoredConsistencyData {
 
 function saveConsistencyData(data: StoredConsistencyData): void {
   if (!isBrowser()) return
-  localStorage.setItem(CONSISTENCY_STORAGE_KEY, JSON.stringify(data))
+  writeBoundAthleteBlob(CONSISTENCY_STORAGE_KEY, JSON.stringify(data))
 }
 
 function getDefaultScheduledDays(frequency: number): number[] {

@@ -2134,7 +2134,7 @@ function ProgramDisplayWrapper({
     
     try {
       // Read L2 check-in from localStorage
-      const checkInRaw = localStorage.getItem('spartanlab_l2_recovery_checkin')
+      const checkInRaw = readAthleteItem('spartanlab_l2_recovery_checkin')
       if (!checkInRaw) {
         setRecoveryAwarenessBridge(null)
         return

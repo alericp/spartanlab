@@ -73,7 +73,8 @@ describe('resumable workout identity', () => {
     assert.equal(canReplaceStoredSession(snapshot(), 'user_other', 'session-Legs-1', false, now), false)
     assert.equal(canReplaceStoredSession(snapshot(), 'user_owner', 'session-Legs-1', false, now), false)
     assert.equal(canReplaceStoredSession(snapshot(), 'user_owner', 'session-Pull-2', false, now), true)
-    assert.equal(canReplaceStoredSession(snapshot(), 'user_other', 'session-Legs-1', true, now), true)
+    assert.equal(canReplaceStoredSession(snapshot(), 'user_other', 'session-Legs-1', true, now), false)
+    assert.equal(canReplaceStoredSession(snapshot({ ownerUserId: undefined }), 'user_owner', 'session-Pull-2', true, now), false)
   })
 
   it('keeps a different session snapshot when restore is rejected for an id or owner mismatch', () => {

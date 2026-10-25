@@ -15,6 +15,7 @@ import {
   DashboardSkeleton 
 } from '@/components/layout'
 import { useAuth } from '@clerk/nextjs'
+import { getBoundAthleteId, readAthleteCollection } from '@/lib/athlete-local-scope'
 import { runClientDataHygiene } from '@/lib/client-data-hygiene'
 
 // =============================================================================
@@ -85,20 +86,11 @@ export function DashboardFullContent() {
         return
       }
       
-      // Check canonical key first
-      let workouts: unknown[] = []
-      const storedLogs = localStorage.getItem('spartanlab_workout_logs')
-      if (storedLogs) {
-        try {
-          const parsed = JSON.parse(storedLogs)
-          workouts = Array.isArray(parsed) ? parsed : []
-        } catch {
-          workouts = []
-        }
-      }
+      // Check the signed-in athlete's logs first.
+      let workouts: unknown[] = readAthleteCollection('spartanlab_workout_logs')
       
-      // Also check legacy key for backward compatibility
-      if (workouts.length === 0) {
+      // Also check legacy key for backward compatibility when no athlete is bound.
+      if (workouts.length === 0 && getBoundAthleteId() === undefined) {
         const storedLegacy = localStorage.getItem('spartanlab_workouts')
         if (storedLegacy) {
           try {

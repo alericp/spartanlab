@@ -50,6 +50,7 @@
  * - For true server-side observability, generation would need to move to an API route
  */
 
+import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import { resolveGenerationTruth } from './profile/generation-truth'
 import type { EquipmentType } from './adaptive-exercise-pool'
@@ -32106,7 +32107,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   
   // Step 3: Save canonical active program FIRST (core - must succeed)
   try {
-    localStorage.setItem(CANONICAL_ACTIVE_KEY, serializedProgram)
+    writeAthleteItem(CANONICAL_ACTIVE_KEY, serializedProgram)
     console.log('[storage-quota-fix] Canonical active program saved successfully')
   } catch (activeErr) {
     // Detect quota exceeded
@@ -32135,7 +32136,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     const bounded = [program, ...deduped].slice(0, MAX_HISTORY_PROGRAMS)
     
     // Attempt history save
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bounded))
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(bounded))
     console.log('[storage-quota-fix] History saved successfully', {
       historyCount: bounded.length,
       capped: deduped.length >= MAX_HISTORY_PROGRAMS,
@@ -32147,7 +32148,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     
     // Try to at least keep minimal history (just the active program)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([program]))
+      writeAthleteItem(STORAGE_KEY, JSON.stringify([program]))
       console.log('[storage-quota-fix] Minimal history saved (active only)')
     } catch {
       // Even minimal history failed - just log, active program is already saved
@@ -32183,7 +32184,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
 export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = readAthleteItem(STORAGE_KEY)
   if (stored) {
     try {
       const parsed = JSON.parse(stored)
@@ -32220,7 +32221,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
   let selectionSource = 'none'
   
   try {
-    const canonical = localStorage.getItem(CANONICAL_ACTIVE_KEY)
+    const canonical = readAthleteItem(CANONICAL_ACTIVE_KEY)
     if (canonical) {
       const parsed = JSON.parse(canonical)
       if (parsed && parsed.id && parsed.sessions) {
@@ -32338,7 +32339,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
       
       // Update the canonical key to the correct program
       try {
-        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
+        writeAthleteItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
         console.log('[phase17o-canonical-selection-override] Canonical key updated to latest program')
       } catch (err) {
         console.warn('[phase17o-canonical-selection-override] Failed to update canonical key:', err)
@@ -32365,7 +32366,7 @@ export function deleteAdaptiveProgram(id: string): boolean {
   
   if (filtered.length === programs.length) return false
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  writeAthleteItem(STORAGE_KEY, JSON.stringify(filtered))
   return true
 }
 
@@ -32402,12 +32403,12 @@ export function migrateAndCleanupProgramStorage(): {
     )
     
     // Check if canonical active key exists
-    const hasCanonical = !!localStorage.getItem(CANONICAL_ACTIVE_KEY)
+    const hasCanonical = !!readAthleteItem(CANONICAL_ACTIVE_KEY)
     
     // If no canonical key, restore from latest in history
     if (!hasCanonical && sorted.length > 0) {
       try {
-        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(sorted[0]))
+        writeAthleteItem(CANONICAL_ACTIVE_KEY, JSON.stringify(sorted[0]))
         canonicalRestored = true
         console.log('[storage-quota-fix] Migration: Restored canonical active program from history')
       } catch (err) {
@@ -32421,7 +32422,7 @@ export function migrateAndCleanupProgramStorage(): {
       const trimmed = sorted.slice(0, MAX_HISTORY_PROGRAMS)
       
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+        writeAthleteItem(STORAGE_KEY, JSON.stringify(trimmed))
         migrated = true
         console.log('[storage-quota-fix] Migration: Trimmed history', {
           before: sorted.length,
@@ -32432,13 +32433,13 @@ export function migrateAndCleanupProgramStorage(): {
         // If even trimmed history fails, try just keeping the latest
         console.warn('[storage-quota-fix] Migration: Trimmed save failed, keeping only latest')
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify([sorted[0]]))
+          writeAthleteItem(STORAGE_KEY, JSON.stringify([sorted[0]]))
           migrated = true
           trimmedCount = sorted.length - 1
         } catch {
           // Complete failure - just clear history, canonical should still work
           console.error('[storage-quota-fix] Migration: Complete history save failure, clearing')
-          localStorage.removeItem(STORAGE_KEY)
+          removeAthleteItem(STORAGE_KEY)
           migrated = true
           trimmedCount = sorted.length
         }

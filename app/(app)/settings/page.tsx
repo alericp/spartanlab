@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { readAthleteItem } from '@/lib/athlete-local-scope'
 import { settingsDurationWrite, settingsScheduleWrite } from '@/lib/profile/input-reliability'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -984,7 +985,7 @@ export default function SettingsPage() {
             
             // Also read raw localStorage to verify what was actually written
             // [PHASE 30A FIX] Correct key is 'spartanlab_profile', NOT 'spartanlab_athlete_profile'
-            const rawAthleteStorage = localStorage.getItem('spartanlab_profile')
+            const rawAthleteStorage = readAthleteItem('spartanlab_profile')
             let rawAthleteScheduleMode = null
             let rawAthleteTrainingDays = null
             try {

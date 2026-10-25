@@ -5,6 +5,7 @@
 // NOTE: This module uses localStorage for preview mode (client-side)
 // Database operations are async and server-compatible
 
+import { getBoundAthleteId, readAthleteItem, writeAthleteItem } from '../athlete-local-scope'
 import { isPreviewMode } from '../app-mode'
 import { dbGetProfile, dbSaveProfile } from '../db-queries'
 import type { AthleteProfile, ProfileRepository } from '@/types/domain'
@@ -96,8 +97,10 @@ function createDefaultAthleteProfile(
 const previewProfileRepository: ProfileRepository = {
   async getProfile(userId: string): Promise<AthleteProfile | null> {
     if (!isBrowser()) return null
+    const bound = getBoundAthleteId()
+    if (typeof bound === 'string' && bound !== userId && `user_${bound}` !== userId) return null
 
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = readAthleteItem(STORAGE_KEY)
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
@@ -135,7 +138,7 @@ const previewProfileRepository: ProfileRepository = {
       ...baseProfile,
       ...data,
       id: baseProfile.id,
-      userId: baseProfile.userId,
+      userId: typeof getBoundAthleteId() === 'string' ? getBoundAthleteId() as string : baseProfile.userId,
       createdAt: baseProfile.createdAt,
       updatedAt: new Date().toISOString(),
     }
@@ -206,7 +209,7 @@ const previewProfileRepository: ProfileRepository = {
           : `ATHLETE_PROFILE_SAVED_${(updated as { scheduleMode?: string }).scheduleMode}_${updated.trainingDaysPerWeek}`,
     })
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(updated))
     return updated
   },
 }
@@ -268,7 +271,7 @@ export const profileRepository: ProfileRepository = {
 export function getAthleteProfile(): AthleteProfile | null {
   if (!isBrowser()) return null
 
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = readAthleteItem(STORAGE_KEY)
   if (stored) {
     try {
       const parsed = JSON.parse(stored)
@@ -306,12 +309,12 @@ export function saveAthleteProfile(
     ...baseProfile,
     ...profile,
     id: baseProfile.id,
-    userId: baseProfile.userId,
+    userId: typeof getBoundAthleteId() === 'string' ? getBoundAthleteId() as string : baseProfile.userId,
     createdAt: baseProfile.createdAt,
     updatedAt: new Date().toISOString(),
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  writeAthleteItem(STORAGE_KEY, JSON.stringify(updated))
   
   // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
   // This ensures metrics and generation use the same truth

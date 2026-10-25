@@ -27,6 +27,7 @@ import {
   Check,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { removeAthleteItem } from '@/lib/athlete-local-scope'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import { saveAthleteProfile, type Equipment as LegacyEquipment } from '@/lib/data-service'
@@ -4391,7 +4392,7 @@ export function AthleteOnboarding() {
     
     // Also clear the local onboarding profile key
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('spartanlab_onboarding_profile')
+      removeAthleteItem('spartanlab_onboarding_profile')
     }
     
     setShowClearConfirm(false)

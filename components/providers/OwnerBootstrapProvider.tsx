@@ -14,8 +14,12 @@
  * AFTER ClerkProvider but BEFORE components that check owner/entitlement state.
  */
 
-import { createContext, useContext, useEffect, useState, ReactNode, Component } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, Component, Fragment } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { bindActiveAthlete, sealLegacyLocalStorage } from '@/lib/athlete-local-scope'
+import { LegacyLocalDataRecovery } from '@/components/athlete/LegacyLocalDataRecovery'
+
+sealLegacyLocalStorage()
 import {
   setCurrentUserEmail,
   clearCurrentUserEmail,
@@ -106,6 +110,7 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
   // Call useUser unconditionally per React rules
   // In preview mode, Clerk will log errors but the hook still returns safely
   const { user, isLoaded } = useUser()
+  bindActiveAthlete(isLoaded ? (user?.id ?? null) : null)
   
   useEffect(() => {
     let cancelled = false
@@ -185,9 +190,13 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
     }
   }, [state.isOwner])
   
+  const athleteKey = !isLoaded ? 'clerk-loading' : (user?.id ?? 'signed-out')
   return (
     <OwnerBootstrapContext.Provider value={state}>
-      {children}
+      <Fragment key={athleteKey}>
+        <LegacyLocalDataRecovery />
+        {children}
+      </Fragment>
     </OwnerBootstrapContext.Provider>
   )
 }

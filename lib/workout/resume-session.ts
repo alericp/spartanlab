@@ -11,6 +11,7 @@
  * `session-${dayLabel}-${dayNumber}`.
  */
 
+import { athleteStorageKey, getBoundAthleteId, legacyLocalStorageOpen, readAthleteItem } from '../athlete-local-scope'
 import type { WorkoutExecutionMode } from '@/lib/workout/live-workout-authority-contract'
 
 export const WORKOUT_SESSION_STORAGE_KEY = 'spartanlab_workout_session'
@@ -111,8 +112,13 @@ export function getResumableSessionSummary(
   now = Date.now(),
 ): ResumableSessionSummary | null {
   if (typeof window === 'undefined' || !ownerUserId) return null
+  const bound = getBoundAthleteId()
+  if (!legacyLocalStorageOpen() && bound !== ownerUserId) return null
   try {
-    return readResumableSessionSummary(localStorage.getItem(WORKOUT_SESSION_STORAGE_KEY), now, ownerUserId)
+    const raw = legacyLocalStorageOpen()
+      ? localStorage.getItem(WORKOUT_SESSION_STORAGE_KEY)
+      : readAthleteItem(WORKOUT_SESSION_STORAGE_KEY)
+    return readResumableSessionSummary(raw, now, ownerUserId)
   } catch {
     return null
   }
@@ -128,9 +134,8 @@ export function resumeMatchesLoadedSession(
 }
 
 /**
- * The single local snapshot may be replaced only by its owner, or after the
- * signed-in athlete has logged progress in the workout now on screen.
- * An empty open must not erase another account's unfinished workout.
+ * The single local snapshot may be replaced only by its owner.
+ * Logged progress in a different account does not erase the stored session.
  */
 export function canReplaceStoredSession(
   raw: string | null,
@@ -149,7 +154,7 @@ export function canReplaceStoredSession(
   }
   if (!data || typeof data !== 'object') return hasLoggedProgress
   const owner = (data as { ownerUserId?: unknown }).ownerUserId
-  if (typeof owner !== 'string' || owner !== ownerUserId) return hasLoggedProgress
+  if (typeof owner !== 'string' || owner !== ownerUserId) return false
   const summary = readResumableSessionSummary(raw, now, ownerUserId)
   if (summary && summary.sessionId !== currentSessionId && !hasLoggedProgress) return false
   return true
@@ -176,4 +181,70 @@ export function shouldClearStoredSessionOnRestoreRejection(reason: string): bool
   return reason !== 'session_id_mismatch'
     && reason !== 'owner_mismatch'
     && reason !== 'owner_missing'
+}
+
+const BOOT_FAILED_KEY = 'spartanlab_workout_boot_failed'
+const CRASH_RECOVERY_WINDOW_MS = 5 * 60 * 1000
+
+/**
+ * Remember which athlete's unfinished snapshot a crash may clear.
+ * A marker without an owner clears nothing.
+ */
+export function recordCrashRecoveryMarker(ownerUserId: string | null, now = Date.now()): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(BOOT_FAILED_KEY, JSON.stringify({
+      at: now,
+      ownerUserId: ownerUserId ?? null,
+    }))
+  } catch {
+    // The unfinished snapshot stays if the marker cannot be written.
+  }
+}
+
+/**
+ * Clear only the named athlete's unfinished snapshot.
+ * Legacy numeric markers and another account's snapshot are left in place.
+ */
+export function applyOwnedCrashRecoveryWipe(now = Date.now()): boolean {
+  if (typeof localStorage === 'undefined') return false
+  let raw: string | null
+  try {
+    raw = localStorage.getItem(BOOT_FAILED_KEY)
+  } catch {
+    return false
+  }
+  if (!raw) return false
+
+  let at = Number.NaN
+  let owner: string | null = null
+  let legacyMarker = false
+  try {
+    const parsed = JSON.parse(raw) as { at?: unknown; ownerUserId?: unknown }
+    if (parsed && typeof parsed === 'object' && typeof parsed.at === 'number') {
+      at = parsed.at
+      owner = typeof parsed.ownerUserId === 'string' && parsed.ownerUserId ? parsed.ownerUserId : null
+    } else {
+      legacyMarker = true
+    }
+  } catch {
+    legacyMarker = true
+  }
+
+  if (legacyMarker) {
+    try { localStorage.removeItem(BOOT_FAILED_KEY) } catch { /* keep the sessions */ }
+    return false
+  }
+  const age = now - at
+  if (!Number.isFinite(at) || age < 0 || age >= CRASH_RECOVERY_WINDOW_MS || !owner) {
+    try { localStorage.removeItem(BOOT_FAILED_KEY) } catch { /* marker only */ }
+    return false
+  }
+  try {
+    localStorage.removeItem(athleteStorageKey(WORKOUT_SESSION_STORAGE_KEY, owner))
+    localStorage.removeItem(BOOT_FAILED_KEY)
+  } catch {
+    return false
+  }
+  return true
 }

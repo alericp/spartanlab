@@ -28,6 +28,7 @@
  * - spartanlab_adaptive_programs (canonical key) → preferred source of truth
  */
 
+import { readAthleteItem } from './athlete-local-scope'
 import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode, type AdaptiveSession, type AdaptiveExercise } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
 // [TRAINING-METHOD-PREFERENCE-IMPORT] styleMetadata.appliedMethods is
@@ -1253,7 +1254,7 @@ function migrateFirstProgramIfNeeded(): AdaptiveProgram | null {
   if (typeof window === 'undefined') return null
   
   try {
-    const stored = localStorage.getItem('spartanlab_first_program')
+    const stored = readAthleteItem('spartanlab_first_program')
     if (!stored) return null
     
     const parsed = JSON.parse(stored)

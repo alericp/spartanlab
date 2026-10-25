@@ -1,6 +1,8 @@
 // Strength tracking service layer for preview mode
 // Uses localStorage for persistence, easy to swap to Prisma later
 
+import { getBoundAthleteId, readAthleteCollection, writeAthleteCollection } from './athlete-local-scope'
+
 // Core weighted calisthenics
 export type WeightedCalisthenicsType = 'weighted_pull_up' | 'weighted_dip' | 'weighted_muscle_up'
 
@@ -37,6 +39,8 @@ export interface StrengthRecord {
   relativeStrength?: number  // Ratio to bodyweight (e.g., 1.5 = 1.5x BW)
   dateLogged: string
   notes?: string
+  /** Clerk user who logged this record. Absent on legacy entries. */
+  ownerUserId?: string
 }
 
 export interface ExerciseDefinition {
@@ -188,16 +192,7 @@ export function calculateOneRM(weight: number, reps: number): number {
 // Get all strength records
 export function getStrengthRecords(): StrengthRecord[] {
   if (!isBrowser()) return []
-  
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readAthleteCollection<StrengthRecord>(STORAGE_KEY)
 }
 
 // Get records for a specific exercise
@@ -254,6 +249,7 @@ export function saveStrengthRecord(
     relativeStrength = Math.round((estimatedOneRM / options.bodyweight) * 100) / 100
   }
   
+  const bound = getBoundAthleteId()
   const record: StrengthRecord = {
     id: `str-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     exercise,
@@ -265,13 +261,14 @@ export function saveStrengthRecord(
     relativeStrength,
     dateLogged: options?.dateLogged || new Date().toISOString().split('T')[0],
     notes: options?.notes,
+    ownerUserId: typeof bound === 'string' ? bound : undefined,
   }
   
   if (!isBrowser()) return record
   
   const records = getStrengthRecords()
   records.push(record)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+  writeAthleteCollection(STORAGE_KEY, records)
   
   return record
 }
@@ -285,7 +282,7 @@ export function deleteStrengthRecord(id: string): boolean {
   
   if (filtered.length === records.length) return false
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  writeAthleteCollection(STORAGE_KEY, filtered)
   return true
 }
 

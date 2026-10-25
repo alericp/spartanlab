@@ -10,6 +10,7 @@ import {
 } from './athlete-profile'
 import { type AdaptiveProgram, type AdaptiveSession } from './adaptive-program-builder'
 import { type ProgramReasoning } from './onboarding-service'
+import { readAthleteCollection, readAthleteItem } from './athlete-local-scope'
 import { getConstraintInsight } from './constraint-engine'
 
 
@@ -323,11 +324,8 @@ export function hasCompletedFirstSession(): boolean {
   if (typeof window === 'undefined') return false
   
   try {
-    const logs = localStorage.getItem('spartanlab_workout_logs')
-    if (!logs) return false
-    
-    const parsed = JSON.parse(logs)
-    return Array.isArray(parsed) && parsed.length > 0
+    const logs = readAthleteCollection('spartanlab_workout_logs')
+    return logs.length > 0
   } catch {
     return false
   }
@@ -341,7 +339,7 @@ export function isFirstSessionReady(): boolean {
   
   try {
     // Check for active program
-    const program = localStorage.getItem('spartanlab_adaptive_program')
+    const program = readAthleteItem('spartanlab_adaptive_program')
     if (!program) return false
     
     const parsed = JSON.parse(program)

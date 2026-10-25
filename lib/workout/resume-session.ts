@@ -11,7 +11,7 @@
  * `session-${dayLabel}-${dayNumber}`.
  */
 
-import { athleteStorageKey, getBoundAthleteId, readAthleteItem } from '../athlete-local-scope'
+import { athleteStorageKey, getBoundAthleteId, legacyLocalStorageOpen, readAthleteItem } from '../athlete-local-scope'
 import type { WorkoutExecutionMode } from '@/lib/workout/live-workout-authority-contract'
 
 export const WORKOUT_SESSION_STORAGE_KEY = 'spartanlab_workout_session'
@@ -113,9 +113,9 @@ export function getResumableSessionSummary(
 ): ResumableSessionSummary | null {
   if (typeof window === 'undefined' || !ownerUserId) return null
   const bound = getBoundAthleteId()
-  if (bound !== undefined && bound !== ownerUserId) return null
+  if (!legacyLocalStorageOpen() && bound !== ownerUserId) return null
   try {
-    const raw = bound === undefined
+    const raw = legacyLocalStorageOpen()
       ? localStorage.getItem(WORKOUT_SESSION_STORAGE_KEY)
       : readAthleteItem(WORKOUT_SESSION_STORAGE_KEY)
     return readResumableSessionSummary(raw, now, ownerUserId)

@@ -212,7 +212,7 @@ function scheduleEvidenceRetry(log: WorkoutLog, attempt: number) {
 function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
   if (!isBrowser() || !evidenceSyncNeeded(log) || evidenceSyncInFlight.has(log.id)) return
   const bound = getBoundAthleteId()
-  if (bound !== undefined && (!bound || log.ownerUserId !== bound)) return
+  if (typeof bound !== 'string' || log.ownerUserId !== bound) return
   evidenceSyncInFlight.add(log.id)
   try {
     const programId = log.generatedWorkoutId?.split('_session_')[0] || null
@@ -226,6 +226,7 @@ function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
     })
       .then((response) => {
         evidenceSyncInFlight.delete(log.id)
+        if (getBoundAthleteId() !== bound) return
         if (response.ok) {
           patchStoredLog(log.id, { serverEvidence: 'saved' })
           releaseOccurrenceAfterEvidenceSave(log.occurrenceId)
@@ -239,6 +240,7 @@ function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
       })
       .catch(() => {
         evidenceSyncInFlight.delete(log.id)
+        if (getBoundAthleteId() !== bound) return
         if (attempt < 1) {
           scheduleEvidenceRetry(log, attempt + 1)
           return
@@ -254,7 +256,8 @@ function queueEvidenceSync(log: WorkoutLog, attempt = 0) {
 export function retryPendingWorkoutEvidence(): void {
   if (!isBrowser()) return
   const bound = getBoundAthleteId()
-  const logs = bound === undefined ? getWorkoutLogs() : selectOwnedPendingEvidence(getWorkoutLogs(), bound)
+  if (typeof bound !== 'string') return
+  const logs = selectOwnedPendingEvidence(getWorkoutLogs(), bound)
   for (const log of logs) {
     if (log.serverEvidence === 'pending') queueEvidenceSync(log)
   }

@@ -734,7 +734,7 @@ export async function generateFirstProgram(
       markStage('mirror_save_start')
       // Secondary: backward-compatible mirror for legacy code paths
       writeAthleteItem('spartanlab_first_program', JSON.stringify(program))
-      localStorage.setItem('spartanlab_onboarding_complete', 'true')
+      writeAthleteItem('spartanlab_onboarding_complete', 'true')
       markStage('mirror_save_done')
     }
     
@@ -1009,7 +1009,7 @@ export async function generateFirstProgramViaServer(
         
         // Backward-compatible mirror
         writeAthleteItem('spartanlab_first_program', JSON.stringify(result.program))
-        localStorage.setItem('spartanlab_onboarding_complete', 'true')
+        writeAthleteItem('spartanlab_onboarding_complete', 'true')
         
         console.log('[phase16g-server-generation-client-persisted]', {
           sessionCount: result.program.sessions?.length || 0,
@@ -1067,7 +1067,7 @@ export async function generateFirstProgramViaServer(
 export function isFirstRun(): boolean {
   if (typeof window === 'undefined') return false
   
-  const complete = localStorage.getItem('spartanlab_onboarding_complete')
+  const complete = readAthleteItem('spartanlab_onboarding_complete')
   return complete !== 'true'
 }
 
@@ -1104,7 +1104,7 @@ export function clearFirstRunState(): void {
   if (typeof window === 'undefined') return
   
   removeAthleteItem('spartanlab_first_program')
-  localStorage.removeItem('spartanlab_onboarding_complete')
+  removeAthleteItem('spartanlab_onboarding_complete')
   removeAthleteItem('spartanlab_onboarding_profile')
 }
 

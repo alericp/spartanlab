@@ -62,6 +62,8 @@ function savedAthlete(extra: Record<string, unknown>) {
 
 describe('generation compatibility', () => {
   before(async () => {
+    const scope = await import('../athlete-local-scope.ts')
+    scope.allowUnboundLegacyLocalStorage()
     const canonical = await import('../canonical-profile-service.ts')
     buildCanonicalGenerationEntry = canonical.buildCanonicalGenerationEntry
     validateProfileForGeneration = canonical.validateProfileForGeneration
@@ -255,6 +257,8 @@ function storedAthlete() {
 
 describe('profile update transitions', () => {
   before(async () => {
+    const scope = await import('../athlete-local-scope.ts')
+    scope.allowUnboundLegacyLocalStorage()
     const canonical = await import('../canonical-profile-service.ts')
     buildCanonicalGenerationEntry = canonical.buildCanonicalGenerationEntry
     validateProfileForGeneration = canonical.validateProfileForGeneration

@@ -14,6 +14,7 @@
  * applied twice and stale logs cannot win against a fresher in-memory program.
  */
 
+import { getBoundAthleteId } from '../athlete-local-scope'
 import { getWorkoutLogs, type WorkoutLog } from '../workout-log-service'
 import {
   applyLoggedPerformanceFeedback,
@@ -305,6 +306,7 @@ export type { ProgramQualityAuditResult }
 // =============================================================================
 export function getRecentWorkoutLogsForGenerationRequest(): WorkoutLog[] {
   if (typeof window === 'undefined') return []
+  if (typeof getBoundAthleteId() !== 'string') return []
   const logs = getWorkoutLogs()
   if (!Array.isArray(logs) || logs.length === 0) return []
   const sortedLogs = [...logs].sort((a, b) => {

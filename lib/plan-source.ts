@@ -7,6 +7,7 @@
 'use client'
 
 import { isPreviewMode } from './app-mode'
+import { getBoundAthleteId, legacyLocalStorageOpen, readAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import type { SubscriptionPlan, PlanState, FeatureAccess } from '@/types/domain'
 
 const STORAGE_KEY = 'spartanlab_user_plan'
@@ -69,22 +70,26 @@ function isBrowser(): boolean {
 /**
  * Get the current user's plan state from localStorage
  */
+function writePlanState(planState: PlanState): void {
+  if (typeof getBoundAthleteId() !== 'string' && !legacyLocalStorageOpen()) return
+  writeAthleteItem(STORAGE_KEY, JSON.stringify(planState))
+}
+
 export function getPreviewPlanFromStorage(): PlanState {
   if (!isBrowser()) {
     return DEFAULT_PLAN_STATE
   }
 
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = readAthleteItem(STORAGE_KEY)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      return JSON.parse(stored) as PlanState
     } catch {
       return DEFAULT_PLAN_STATE
     }
   }
 
-  // Initialize with default
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_PLAN_STATE))
+  // Do not copy an ownerless shared cache onto this account.
   return DEFAULT_PLAN_STATE
 }
 
@@ -101,7 +106,7 @@ export function setPreviewPlanInStorage(plan: SubscriptionPlan): PlanState {
     source: 'preview',
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(planState))
+  writePlanState(planState)
   return planState
 }
 
@@ -149,7 +154,7 @@ export function setPreviewPlan(plan: SubscriptionPlan): PlanState {
  */
 export function updateLocalPlanCache(planState: PlanState): void {
   if (!isBrowser()) return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(planState))
+  writePlanState(planState)
 }
 
 // =============================================================================

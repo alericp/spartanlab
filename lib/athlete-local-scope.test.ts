@@ -3,8 +3,12 @@ import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import {
   athleteStorageKey,
+  allowUnboundLegacyLocalStorage,
   bindActiveAthlete,
+  claimLegacyLocalData,
+  describeLegacyRecovery,
   getBoundAthleteId,
+  sealLegacyLocalStorage,
   hasQuarantinedBlob,
   lookupOccurrenceOwner,
   quarantinedRecordCount,
@@ -12,13 +16,13 @@ import {
   readPendingHistoryRetry,
   recoverQuarantinedBlob,
   recoverQuarantinedRecords,
-  unbindActiveAthlete,
   writeAthleteItem,
   writePendingHistoryRetry,
 } from './athlete-local-scope.ts'
 import { getAthleteProfile, saveAthleteProfile } from './data-service.ts'
 import { getOnboardingProfile, saveOnboardingProfile } from './athlete-profile.ts'
 import { decideRequestedAthleteAccess } from './server/athlete-ownership.ts'
+import { getPreviewPlanFromStorage } from './plan-source.ts'
 import { getRecentSessionFeedback, saveSessionFeedback } from './session-feedback.ts'
 import { getStrengthRecords, saveStrengthRecord } from './strength-service.ts'
 import {
@@ -77,11 +81,11 @@ function logInput(notes: string, occurrenceId: string) {
 
 beforeEach(() => {
   store.clear()
-  unbindActiveAthlete()
+  allowUnboundLegacyLocalStorage()
 })
 
 afterEach(() => {
-  unbindActiveAthlete()
+  allowUnboundLegacyLocalStorage()
 })
 
 describe('two accounts on one browser', () => {
@@ -284,6 +288,82 @@ describe('programming evidence and crash recovery', () => {
       completedSets: [{ setNumber: 1 }],
     })
     assert.equal(canReplaceStoredSession(foreignSnapshot, ATHLETE_B, 'session-Legs-1', true, now), false)
+  })
+})
+
+describe('auth gate and legacy recovery', () => {
+  it('hides shared legacy data until the signed-in athlete is bound', () => {
+    store.set('spartanlab_workout_logs', JSON.stringify([
+      { id: 'legacy-note', notes: 'private jane@example.com', sessionName: 'Old' },
+    ]))
+    store.set('spartanlab_onboarding_complete', 'true')
+    store.set('spartanlab_user_plan', JSON.stringify({ plan: 'pro', source: 'database' }))
+    sealLegacyLocalStorage()
+    assert.equal(getBoundAthleteId(), null)
+    assert.equal(getWorkoutLogs().length, 0)
+    assert.equal(getRecentWorkoutLogsForGenerationRequest().length, 0)
+    assert.equal(readAthleteItem('spartanlab_onboarding_complete'), null)
+    assert.equal(getPreviewPlanFromStorage().plan, 'pro')
+    assert.equal(store.get('spartanlab_user_plan'), JSON.stringify({ plan: 'pro', source: 'database' }))
+    assert.equal(describeLegacyRecovery().workouts, 0)
+    writeAthleteItem('spartanlab_profile', JSON.stringify({ primaryGoal: 'front_lever', notes: 'written before auth' }))
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(getWorkoutLogs().length, 0)
+    assert.equal(getRecentWorkoutLogsForGenerationRequest().length, 0)
+    assert.equal(readAthleteItem('spartanlab_onboarding_complete'), null)
+    assert.notEqual(getPreviewPlanFromStorage().source, 'database')
+    assert.equal(store.get('spartanlab_workout_logs')?.includes('jane@example.com'), true)
+    assert.equal(store.has('spartanlab_profile'), false)
+    assert.equal(getAthleteProfile(), null)
+    assert.equal(describeLegacyRecovery().workouts, 1)
+    assert.equal(describeLegacyRecovery().profiles, 2)
+  })
+
+  it('adopts a legacy record that already names the signed-in athlete and leaves a foreign record', () => {
+    store.set('spartanlab_workout_logs', JSON.stringify([
+      { id: 'mine', userId: ATHLETE_A, notes: 'my note' },
+      { id: 'theirs', ownerUserId: ATHLETE_B, notes: 'their note' },
+    ]))
+    sealLegacyLocalStorage()
+    bindActiveAthlete(ATHLETE_A)
+    const logs = getWorkoutLogs()
+    assert.deepEqual(logs.map((log) => log.id), ['mine'])
+    assert.equal(logs[0]?.notes, 'my note')
+    assert.equal(store.get('spartanlab_workout_logs')?.includes('their note'), true)
+  })
+
+  it('copies ownerless data only after the bound athlete confirms, and only once', () => {
+    const legacyLogs = JSON.stringify([
+      { id: 'legacy-1', notes: 'legacy private note', sessionName: 'Old' },
+      { id: 'foreign-1', ownerUserId: ATHLETE_B, notes: 'do not copy' },
+    ])
+    store.set('spartanlab_workout_logs', legacyLogs)
+    store.set('spartanlab_onboarding_profile', JSON.stringify({ primaryGoal: 'planche', onboardingComplete: true }))
+    store.set('spartanlab_active_program', JSON.stringify({ id: 'program-legacy', sessions: [] }))
+    sealLegacyLocalStorage()
+    bindActiveAthlete(ATHLETE_A)
+    assert.equal(getWorkoutLogs().length, 0)
+    assert.equal(claimLegacyLocalData(), true)
+    assert.equal(getWorkoutLogs().length, 1)
+    assert.equal(getWorkoutLogs()[0]?.notes, 'legacy private note')
+    assert.equal(getWorkoutLogs()[0]?.ownerUserId, ATHLETE_A)
+    assert.equal(getOnboardingProfile()?.primaryGoal, 'planche')
+    assert.match(readAthleteItem('spartanlab_active_program') ?? '', /program-legacy/)
+    assert.equal(store.get('spartanlab_workout_logs'), legacyLogs)
+    assert.equal(describeLegacyRecovery().workouts, 0)
+    assert.equal(claimLegacyLocalData(), false)
+
+    bindActiveAthlete(ATHLETE_B)
+    assert.equal(getWorkoutLogs().some((log) => log.notes === 'legacy private note'), false)
+    assert.equal(getWorkoutLogs().some((log) => log.notes === 'do not copy'), true)
+    assert.equal(claimLegacyLocalData(), false)
+    assert.equal(store.get('spartanlab_workout_logs'), legacyLogs)
+    assert.match(readFileSync('components/providers/OwnerBootstrapProvider.tsx', 'utf8'), /LegacyLocalDataRecovery/)
+    assert.match(readFileSync('components/providers/OwnerBootstrapProvider.tsx', 'utf8'), /Fragment key=\{athleteKey\}/)
+    assert.match(readFileSync('components/workout/StreamlinedWorkoutSession.tsx', 'utf8'), /historyRetryRef\.current = null/)
+    assert.match(readFileSync('lib/onboarding-service.ts', 'utf8'), /readAthleteItem\('spartanlab_onboarding_complete'\)/)
+    assert.match(readFileSync('lib/plan-source.ts', 'utf8'), /readAthleteItem\(STORAGE_KEY\)/)
   })
 })
 

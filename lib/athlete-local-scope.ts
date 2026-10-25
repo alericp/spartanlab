@@ -5,11 +5,19 @@
  * set by the authenticated app shell. Request bodies are not an identity
  * source, and server routes keep resolving the Clerk session themselves.
  *
- * Until an athlete is bound, legacy keys behave as they did before this
- * boundary so existing single-store callers and profile tests keep working.
+ * In the browser this module starts sealed. Reads, writes, retries, and
+ * programming snapshots return nothing until Clerk binds a user id. A sealed
+ * browser never falls back to the shared legacy key.
+ *
+ * Tests that load this module without a window, or that call
+ * allowUnboundLegacyLocalStorage(), still use the legacy key. That path is
+ * not used for a signed-in or transitioning account.
+ *
  * After a bind, reads and writes use a per-athlete key. Records that already
  * name that athlete are copied across. Records with no owner are copied into
  * quarantine and are not shown. The original bytes stay where they were.
+ * Ownerless records move into an account only when that signed-in athlete
+ * confirms claimLegacyLocalData(). One confirmation locks the claim.
  */
 
 export const QUARANTINE_KEY = 'spartanlab_ownerless_quarantine'
@@ -36,7 +44,15 @@ interface QuarantineStore {
 interface ScopeLedger {
   adopted: string[]
   quarantinedBlobs: string[]
+  /** Set when one signed-in athlete confirms recovery. Other accounts cannot claim. */
+  claimedBy?: string
 }
+
+/**
+ * True after the browser module starts, or after sealLegacyLocalStorage().
+ * While sealed, an unbound scope cannot read or write the shared keys.
+ */
+let legacySealed = false
 
 export interface OwnedRecord {
   id?: string
@@ -68,7 +84,33 @@ export function bindActiveAthlete(userId: string | null): void {
 }
 
 export function unbindActiveAthlete(): void {
+  if (legacySealed) {
+    athleteScope = { status: 'bound', userId: null }
+    return
+  }
   athleteScope = { status: 'unbound' }
+}
+
+/** Close the shared-key fallback and block storage until a user id is bound. */
+export function sealLegacyLocalStorage(): void {
+  legacySealed = true
+  if (typeof window === 'undefined') return
+  if (athleteScope.status === 'unbound') {
+    athleteScope = { status: 'bound', userId: null }
+  }
+}
+
+/**
+ * Re-open the pre-auth shared key. Profile tests use this. The signed-in app
+ * does not.
+ */
+export function allowUnboundLegacyLocalStorage(): void {
+  legacySealed = false
+  athleteScope = { status: 'unbound' }
+}
+
+export function legacyLocalStorageOpen(): boolean {
+  return !legacySealed && athleteScope.status === 'unbound'
 }
 
 /** `undefined` means Clerk has not bound this browser yet. `null` means signed out. */
@@ -87,7 +129,7 @@ export function storageEventMatchesAthlete(eventKey: string | null, baseKeys: re
   if (typeof bound === 'string') {
     return baseKeys.some((base) => eventKey === athleteStorageKey(base, bound))
   }
-  if (bound === undefined) return baseKeys.includes(eventKey)
+  if (legacyLocalStorageOpen()) return baseKeys.includes(eventKey)
   return false
 }
 
@@ -113,8 +155,9 @@ export function partitionByOwner<T extends OwnedRecord>(records: T[], userId: st
   const ownerless: T[] = []
   for (const record of records) {
     if (!record || typeof record !== 'object') continue
-    if (!record.ownerUserId) ownerless.push(record)
-    else if (record.ownerUserId === userId) visible.push(record)
+    const owner = readRecordOwner(record)
+    if (!owner) ownerless.push(record)
+    else if (owner === userId) visible.push(record)
     else foreign.push(record)
   }
   return { visible, foreign, ownerless }
@@ -152,6 +195,7 @@ function readLedger(store: Storage): ScopeLedger {
       quarantinedBlobs: Array.isArray(parsed.quarantinedBlobs)
         ? parsed.quarantinedBlobs.filter((item) => typeof item === 'string')
         : [],
+      claimedBy: typeof parsed.claimedBy === 'string' && parsed.claimedBy ? parsed.claimedBy : undefined,
     }
   } catch {
     return { adopted: [], quarantinedBlobs: [] }
@@ -211,7 +255,7 @@ function quarantineOwnerlessRecords(store: Storage, baseKey: string, records: un
 
 function activeWriteKey(baseKey: string): string | null {
   const bound = getBoundAthleteId()
-  if (bound === undefined) return baseKey
+  if (bound === undefined) return legacyLocalStorageOpen() ? baseKey : null
   if (!bound) return null
   return athleteStorageKey(baseKey, bound)
 }
@@ -220,7 +264,7 @@ export function readAthleteItem(baseKey: string): string | null {
   const store = browserStore()
   if (!store) return null
   const bound = getBoundAthleteId()
-  if (bound === undefined) return store.getItem(baseKey)
+  if (bound === undefined) return legacyLocalStorageOpen() ? store.getItem(baseKey) : null
   if (!bound) return null
 
   const scopedKey = athleteStorageKey(baseKey, bound)
@@ -271,7 +315,7 @@ export function removeAthleteItem(baseKey: string): void {
   if (!store) return
   const bound = getBoundAthleteId()
   if (bound === undefined) {
-    store.removeItem(baseKey)
+    if (legacyLocalStorageOpen()) store.removeItem(baseKey)
     return
   }
   if (!bound) return
@@ -282,7 +326,7 @@ export function readAthleteCollection<T extends OwnedRecord>(baseKey: string): T
   const store = browserStore()
   if (!store) return []
   const bound = getBoundAthleteId()
-  if (bound === undefined) return parseArray<T>(store.getItem(baseKey))
+  if (bound === undefined) return legacyLocalStorageOpen() ? parseArray<T>(store.getItem(baseKey)) : []
   if (!bound) return []
 
   const scopedKey = athleteStorageKey(baseKey, bound)
@@ -344,9 +388,17 @@ export function hasQuarantinedBlob(baseKey: string): boolean {
  * Copy quarantined ownerless records into one athlete's store.
  * This is not called on sign-in. The quarantine copy and the legacy key stay.
  */
+function claimAllowed(userId: string): boolean {
+  if (!userId || getBoundAthleteId() !== userId) return false
+  const store = browserStore()
+  if (!store) return false
+  const claimedBy = readLedger(store).claimedBy
+  return !claimedBy || claimedBy === userId
+}
+
 export function recoverQuarantinedRecords(baseKey: string, userId: string): number {
   const store = browserStore()
-  if (!store || !userId) return 0
+  if (!store || !claimAllowed(userId)) return 0
   const records = readQuarantine(store).records[baseKey]
   if (!Array.isArray(records) || records.length === 0) return 0
   const scopedKey = athleteStorageKey(baseKey, userId)
@@ -369,7 +421,7 @@ export function recoverQuarantinedRecords(baseKey: string, userId: string): numb
 /** Copy a quarantined blob into one athlete's key without removing the archive. */
 export function recoverQuarantinedBlob(baseKey: string, userId: string): boolean {
   const store = browserStore()
-  if (!store || !userId) return false
+  if (!store || !claimAllowed(userId)) return false
   const raw = readQuarantine(store).blobs[baseKey]
   if (raw === undefined) return false
   const scopedKey = athleteStorageKey(baseKey, userId)
@@ -384,6 +436,149 @@ export function recoverQuarantinedBlob(baseKey: string, userId: string): boolean
     return false
   }
   store.setItem(scopedKey, raw)
+  return true
+}
+
+const LEGACY_RECOVERY_KEYS = {
+  workouts: [
+    'spartanlab_workout_logs',
+    'spartanlab_skill_sessions',
+    'spartanlab_strength_records',
+    'spartanlab_session_feedback',
+    'spartanlab_progressions',
+    'spartanlab_override_signals',
+  ],
+  profiles: [
+    'spartanlab_profile',
+    'spartanlab_onboarding_profile',
+    'spartanlab_canonical_profile',
+    'spartanlab_onboarding_complete',
+  ],
+  programs: [
+    'spartanlab_active_program',
+    'spartanlab_adaptive_program',
+    'spartanlab_adaptive_programs',
+    'spartanlab_first_program',
+    'spartanlab_programs',
+  ],
+} as const
+
+export interface LegacyRecoveryCounts {
+  workouts: number
+  profiles: number
+  programs: number
+}
+
+function parseStoredRaw(raw: string | null): unknown {
+  if (raw === null) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+function countOwnerlessValue(parsed: unknown): number {
+  if (Array.isArray(parsed)) {
+    return parsed.filter((record) => record && typeof record === 'object' && !readRecordOwner(record)).length
+  }
+  if (parsed && typeof parsed === 'object') return readRecordOwner(parsed) ? 0 : 1
+  if (typeof parsed === 'string' || typeof parsed === 'boolean' || typeof parsed === 'number') return 1
+  return 0
+}
+
+/** Counts of ownerless legacy records. No note text, names, or emails. */
+export function describeLegacyRecovery(): LegacyRecoveryCounts {
+  const empty = { workouts: 0, profiles: 0, programs: 0 }
+  const store = browserStore()
+  const bound = getBoundAthleteId()
+  if (!store || typeof bound !== 'string') return empty
+  const claimedBy = readLedger(store).claimedBy
+  if (claimedBy) return empty
+  const counts = { ...empty }
+  const quarantine = readQuarantine(store)
+  for (const group of ['workouts', 'profiles', 'programs'] as const) {
+    for (const key of LEGACY_RECOVERY_KEYS[group]) {
+      const raw = store.getItem(key)
+      if (raw !== null) {
+        counts[group] += countOwnerlessValue(parseStoredRaw(raw))
+        continue
+      }
+      if (quarantine.blobs[key] !== undefined) {
+        counts[group] += countOwnerlessValue(parseStoredRaw(quarantine.blobs[key]))
+      }
+      const records = quarantine.records[key]
+      if (Array.isArray(records)) {
+        counts[group] += records.filter((record) => record && typeof record === 'object' && !readRecordOwner(record)).length
+      }
+    }
+  }
+  return counts
+}
+
+function claimStoredKey(store: Storage, baseKey: string, userId: string): number {
+  const legacyRaw = store.getItem(baseKey)
+  const quarantine = readQuarantine(store)
+  const raw = legacyRaw !== null ? legacyRaw : (quarantine.blobs[baseKey] ?? null)
+  const extraRecords = Array.isArray(quarantine.records[baseKey]) ? quarantine.records[baseKey] : []
+  if (raw === null && extraRecords.length === 0) return 0
+  const parsed = raw !== null ? parseStoredRaw(raw) : null
+  const scopedKey = athleteStorageKey(baseKey, userId)
+
+  if (Array.isArray(parsed) || extraRecords.length > 0) {
+    const pool = [...(Array.isArray(parsed) ? parsed : []), ...extraRecords]
+    const existing = parseArray<OwnedRecord>(store.getItem(scopedKey))
+    const seen = new Set(existing.map((record) => recordKey(record)))
+    let added = 0
+    for (const record of pool) {
+      if (!record || typeof record !== 'object') continue
+      const owner = readRecordOwner(record)
+      if (owner && owner !== userId) continue
+      const stamped: OwnedRecord = { ...(record as OwnedRecord), ownerUserId: userId }
+      const key = recordKey(stamped)
+      if (seen.has(key)) continue
+      existing.push(stamped)
+      seen.add(key)
+      added += 1
+    }
+    if (added > 0) store.setItem(scopedKey, JSON.stringify(existing))
+    return added
+  }
+
+  if (store.getItem(scopedKey) !== null) return 0
+  if (parsed && typeof parsed === 'object') {
+    const owner = readRecordOwner(parsed)
+    if (owner && owner !== userId) return 0
+    store.setItem(scopedKey, JSON.stringify({ ...(parsed as Record<string, unknown>), ownerUserId: userId }))
+    return 1
+  }
+  if (raw !== null && (typeof parsed === 'boolean' || typeof parsed === 'string' || typeof parsed === 'number')) {
+    store.setItem(scopedKey, raw)
+    return 1
+  }
+  return 0
+}
+
+/**
+ * Copy ownerless legacy workouts, profiles, and programs into the signed-in
+ * athlete's keys. The athlete must already be bound. Originals stay in place.
+ * A second account cannot claim after this succeeds.
+ */
+export function claimLegacyLocalData(): boolean {
+  const store = browserStore()
+  const userId = getBoundAthleteId()
+  if (!store || typeof userId !== 'string' || !claimAllowed(userId)) return false
+  const pending = describeLegacyRecovery()
+  if (pending.workouts + pending.profiles + pending.programs === 0) return false
+  const keys = [
+    ...LEGACY_RECOVERY_KEYS.workouts,
+    ...LEGACY_RECOVERY_KEYS.profiles,
+    ...LEGACY_RECOVERY_KEYS.programs,
+  ]
+  for (const key of keys) claimStoredKey(store, key, userId)
+  const ledger = readLedger(store)
+  ledger.claimedBy = userId
+  writeLedger(store, ledger)
   return true
 }
 
@@ -433,10 +628,7 @@ export function writePendingHistoryRetry<T extends { userId: string; clientSessi
 export function readPendingHistoryRetry<T extends { userId: string; clientSessionId: string }>(
   userId: string | null | undefined,
 ): PendingHistoryRetryRecord<T> | null {
-  if (!userId) return null
-  const bound = getBoundAthleteId()
-  if (typeof bound === 'string' && bound !== userId) return null
-  if (bound === null) return null
+  if (!userId || getBoundAthleteId() !== userId) return null
   const raw = readAthleteItem(HISTORY_RETRY_KEY)
   if (!raw) return null
   try {
@@ -451,8 +643,10 @@ export function readPendingHistoryRetry<T extends { userId: string; clientSessio
 }
 
 export function clearPendingHistoryRetry(userId: string): void {
-  const bound = getBoundAthleteId()
-  if (typeof bound === 'string' && bound !== userId) return
-  if (bound === null) return
+  if (getBoundAthleteId() !== userId) return
   removeAthleteItem(HISTORY_RETRY_KEY)
+}
+
+if (typeof window !== 'undefined') {
+  sealLegacyLocalStorage()
 }

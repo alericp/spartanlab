@@ -4611,14 +4611,18 @@ export function StreamlinedWorkoutSession({
   }, [userId])
 
   useEffect(() => {
-    if (!userId) return
+    if (!userId) {
+      historyRetryRef.current = null
+      return
+    }
     const pending = readPendingHistoryRetry<ReturnType<typeof buildLiveWorkoutHistoryInput>>(userId)
-    if (!pending || pending.payload.userId !== userId || pending.occurrenceId !== pending.payload.clientSessionId) return
-    if (!historyRetryRef.current) {
-      historyRetryRef.current = {
-        payload: pending.payload,
-        serverEvidence: pending.serverEvidence,
-      }
+    if (!pending || pending.payload.userId !== userId || pending.occurrenceId !== pending.payload.clientSessionId) {
+      historyRetryRef.current = null
+      return
+    }
+    historyRetryRef.current = {
+      payload: pending.payload,
+      serverEvidence: pending.serverEvidence,
     }
   }, [userId])
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<PerceivedDifficulty | null>(null)

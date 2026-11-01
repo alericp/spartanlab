@@ -737,7 +737,7 @@ function buildAdherenceTruthBlock(
     : trainingFeedback
       ? 0
       : 4
-  
+
   const recentMissedSessions = knownExpected || !trainingFeedback
     ? Math.max(0, expectedSessionsPerWeek - totalSessionsLast7Days)
     : 0

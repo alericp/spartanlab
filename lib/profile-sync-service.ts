@@ -120,7 +120,7 @@ export function mapOnboardingToAthleteProfile(onboarding: OnboardingProfile): Pa
     primaryGoal: onboarding.selectedSkills?.[0] ?? onboarding.primaryGoal ?? null,
     
     // Equipment
-    equipmentAvailable: equipmentSelection.equipment.filter((e): e is any => 
+    equipmentAvailable: equipmentSelection.equipment.filter((e): e is any =>
       ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
     ),
     

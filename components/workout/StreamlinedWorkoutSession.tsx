@@ -1643,7 +1643,7 @@ function saveSessionToStorage(
 ) {
   if (typeof window === 'undefined') return
   try {
-    writeAthleteItem(STORAGE_KEY, JSON.stringify({ 
+    writeAthleteItem(STORAGE_KEY, JSON.stringify({
       ...state, 
       sessionId,
       structureSignature, // [LIVE-SESSION-LOCK] Include structure signature

@@ -1,10 +1,14 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  dashboardEmptyPresence,
+  type ProgramPresenceCopy,
+} from '@/lib/program/program-presence-copy'
 import {
   Brain,
   Activity,
@@ -116,9 +120,36 @@ export function EmptyState({
 export function DashboardEmptyState() {
   const router = useRouter()
   const isNavigatingRef = useRef(false)
+  const [presence, setPresence] = useState<ProgramPresenceCopy | null>(null)
   
   // Diagnostic: confirm this component rendered
   console.log('[DashboardEmptyState] Rendered as first-load path')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      let hasUsableWorkoutProgram = false
+      let onboardingComplete = false
+      try {
+        const programState = await import('@/lib/program-state')
+        hasUsableWorkoutProgram = programState.getProgramState().hasUsableWorkoutProgram === true
+      } catch {
+        hasUsableWorkoutProgram = false
+      }
+      try {
+        const profileModule = await import('@/lib/athlete-profile')
+        onboardingComplete = profileModule.isOnboardingComplete()
+      } catch {
+        onboardingComplete = false
+      }
+      if (!cancelled) {
+        setPresence(dashboardEmptyPresence(hasUsableWorkoutProgram, onboardingComplete))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   
   // Hardened mobile-safe navigation with double-tap protection and fallback
   const handleStartWorkout = useCallback(() => {
@@ -126,7 +157,7 @@ export function DashboardEmptyState() {
     if (isNavigatingRef.current) return
     isNavigatingRef.current = true
     
-    const targetPath = '/first-session'
+    const targetPath = presence?.primaryHref || '/first-session'
     
     // Attempt client-side navigation
     router.push(targetPath)
@@ -142,7 +173,11 @@ export function DashboardEmptyState() {
     setTimeout(() => {
       isNavigatingRef.current = false
     }, 1000)
-  }, [router])
+  }, [router, presence?.primaryHref])
+
+  if (!presence) {
+    return <div className="h-64 rounded-xl bg-[#1A1A1A] animate-pulse" />
+  }
   
   return (
     <div className="space-y-6">
@@ -158,12 +193,11 @@ export function DashboardEmptyState() {
           </div>
           
           <h2 className="text-2xl sm:text-3xl font-bold text-[#F5F5F5] mb-3">
-            Start Your First Workout
+            {presence.title}
           </h2>
           
           <p className="text-[#A5A5A5] mb-2 leading-relaxed">
-            Your personalized training program is ready. Begin your first session 
-            and SpartanLab will adapt to your performance.
+            {presence.body}
           </p>
           
           <p className="text-sm text-[#6A6A6A] mb-8">
@@ -171,20 +205,34 @@ export function DashboardEmptyState() {
           </p>
 
           {/* Single dominant CTA - hardened mobile navigation with fallback */}
-          <Button 
-            type="button"
-            size="lg" 
-            className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold relative z-20 pointer-events-auto touch-manipulation"
-            onClick={handleStartWorkout}
-          >
-            <Dumbbell className="w-5 h-5" />
-            Start First Workout
-            <ArrowRight className="w-5 h-5" />
-          </Button>
+          {presence.claimsProgramReady ? (
+            <Button 
+              type="button"
+              size="lg" 
+              className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold relative z-20 pointer-events-auto touch-manipulation"
+              onClick={handleStartWorkout}
+            >
+              <Dumbbell className="w-5 h-5" />
+              {presence.primaryLabel}
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          ) : (
+            <Link href={presence.primaryHref}>
+              <Button 
+                type="button"
+                size="lg" 
+                className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold relative z-20 pointer-events-auto touch-manipulation"
+              >
+                <Dumbbell className="w-5 h-5" />
+                {presence.primaryLabel}
+                <ArrowRight className="w-5 h-5" />
+              </Button>
+            </Link>
+          )}
           
           {/* Secondary option - subtle */}
           <p className="mt-4 text-sm text-[#6A6A6A]">
-            Or <Link href="/program" className="text-[#E63946] hover:underline">view your program</Link> first
+            Or <Link href={presence.secondaryHref} className="text-[#E63946] hover:underline">{presence.secondaryLabel}</Link>
           </p>
         </div>
       </Card>

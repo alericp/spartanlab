@@ -18105,6 +18105,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     modifyBuilderEntry.inputs !== null &&
     modifyFlowState === 'builder'
   )
+  // First-program builds have no modify entry. showBuilder is enough only
+  // while no program is loaded. Modify rendering stays on the entry above.
+  const shouldRenderInitialBuilder = showBuilder && program == null
+  const shouldRenderProgramBuilder = shouldRenderModifyBuilder || shouldRenderInitialBuilder
   
   // [FINAL] Removed verbose phase31/30 diagnostic effects - replaced by concise logs in guards
   
@@ -18535,8 +18539,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })()}
 
         {/* Content - TASK 2: Proper handling of malformed programs */}
-        {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}
-        {shouldRenderModifyBuilder ? (
+        {/* First build uses shouldRenderInitialBuilder. Modify stays on shouldRenderModifyBuilder. */}
+        {shouldRenderProgramBuilder ? (
           <div className="space-y-6">
             {/* HARDENED: Generation error banner - recoverable state */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}

@@ -51,6 +51,11 @@
  */
 
 import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
+import {
+  deleteStoredAdaptiveProgram,
+  selectStoredProgram,
+  type StoredProgramRecord,
+} from './program/active-program-record'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import { resolveGenerationTruth } from './profile/generation-truth'
 import type { EquipmentType } from './adaptive-exercise-pool'
@@ -32216,30 +32221,19 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
     })),
   })
   
-  // [storage-quota-fix] Priority 1: Check canonical active key first
-  let selectedProgram: AdaptiveProgram | null = null
-  let selectionSource = 'none'
-  
+  // Priority 1 is the active key. Priority 2 is history, and only for a
+  // different saved program. A deleted id is absent from both.
+  let activeRecord: StoredProgramRecord | null = null
   try {
     const canonical = readAthleteItem(CANONICAL_ACTIVE_KEY)
-    if (canonical) {
-      const parsed = JSON.parse(canonical)
-      if (parsed && parsed.id && parsed.sessions) {
-        selectedProgram = parsed
-        selectionSource = 'canonical_active_key'
-      }
-    }
+    activeRecord = canonical ? JSON.parse(canonical) as StoredProgramRecord : null
   } catch (err) {
     console.warn('[storage-quota-fix] Failed to read canonical active program:', err)
+    activeRecord = null
   }
-  
-  // Priority 2: Fall back to history array if canonical is missing
-  if (!selectedProgram && allPrograms.length > 0) {
-    selectedProgram = allPrograms.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )[0]
-    selectionSource = 'history_array_sorted'
-  }
+  const storedSelection = selectStoredProgram(activeRecord, allPrograms)
+  let selectedProgram = (storedSelection.program as AdaptiveProgram | null) ?? null
+  let selectionSource = storedSelection.source
   
   // [PHASE 17L] TASK 2 - Identify selected program
   if (selectedProgram) {
@@ -32359,15 +32353,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
 }
 
 export function deleteAdaptiveProgram(id: string): boolean {
-  if (!isBrowser()) return false
-  
-  const programs = getSavedAdaptivePrograms()
-  const filtered = programs.filter(p => p.id !== id)
-  
-  if (filtered.length === programs.length) return false
-  
-  writeAthleteItem(STORAGE_KEY, JSON.stringify(filtered))
-  return true
+  return deleteStoredAdaptiveProgram(id)
 }
 
 // =============================================================================

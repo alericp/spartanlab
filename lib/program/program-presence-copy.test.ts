@@ -57,6 +57,6 @@ describe('program presence copy', () => {
   it('routes program deletion through the active-key record', () => {
     const builder = readFileSync(new URL('../adaptive-program-builder.ts', import.meta.url), 'utf8')
     assert.match(builder, /return deleteStoredAdaptiveProgram\(id\)/)
-    assert.match(builder, /selectStoredProgram\(activeRecord, allPrograms\)/)
+    assert.match(builder, /selectStoredProgram\(activeRecord, selectablePrograms\)/)
   })
 })

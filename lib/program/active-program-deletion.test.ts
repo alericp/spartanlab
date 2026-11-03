@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, it } from 'node:test'
 import { allowUnboundLegacyLocalStorage, readAthleteItem, writeAthleteItem } from '../athlete-local-scope.ts'
 import { getOnboardingProfile } from '../athlete-profile.ts'
-import { deleteStoredAdaptiveProgram, readLatestStoredAdaptiveProgram, selectStoredProgram } from './active-program-record.ts'
+import {
+  deleteStoredAdaptiveProgram,
+  isDeletedProgramId,
+  readFirstProgramFallback,
+  readLatestStoredAdaptiveProgram,
+  selectStoredProgram,
+} from './active-program-record.ts'
 
 const store = new Map<string, string>()
 const memoryStorage = {
@@ -115,8 +121,75 @@ describe('active program deletion', () => {
 
     const builder = readFileSync(new URL('../adaptive-program-builder.ts', import.meta.url), 'utf8')
     const page = readFileSync(new URL('../../app/(app)/program/page.tsx', import.meta.url), 'utf8')
+    const programState = readFileSync(new URL('../program-state.ts', import.meta.url), 'utf8')
     assert.match(builder, /selectionSource === 'canonical_active_key'/)
+    assert.match(builder, /isDeletedProgramId\(program\.id\)/)
+    assert.match(builder, /isDeletedProgramId\(activeRecord\.id\)/)
     assert.match(page, /programModules\.deleteAdaptiveProgram\(program\.id\)/)
     assert.match(page, /no_current_program/)
+    const migrationStart = programState.indexOf('function migrateFirstProgramIfNeeded')
+    const fallbackAt = programState.indexOf('readFirstProgramFallback()', migrationStart)
+    const saveAt = programState.indexOf('saveAdaptiveProgram(', migrationStart)
+    assert.ok(fallbackAt > migrationStart)
+    assert.ok(saveAt > fallbackAt)
+  })
+
+  it('removes the same id from the first-program copy and does not restore it on reload', () => {
+    const deleted = program('program-current', '2026-03-01T00:00:00.000Z')
+    savePrograms('program-current', [deleted])
+    writeAthleteItem('spartanlab_first_program', JSON.stringify(deleted))
+    writeAthleteItem('spartanlab_profile', JSON.stringify({ id: 'local-profile', primaryGoal: 'front_lever' }))
+    writeAthleteItem('spartanlab_workout_logs', JSON.stringify([{ id: 'log-1', completed: true }]))
+    writeAthleteItem('spartanlab_onboarding_profile', JSON.stringify({
+      onboardingComplete: true,
+      primaryGoal: 'front_lever',
+      selectedSkills: ['front_lever'],
+      sessionLengthMinutes: 45,
+    }))
+
+    assert.equal(deleteStoredAdaptiveProgram('program-current'), true)
+    assert.equal(readAthleteItem('spartanlab_active_program'), null)
+    assert.equal(readAthleteItem('spartanlab_first_program'), null)
+    assert.equal(readLatestStoredAdaptiveProgram(), null)
+    assert.equal(isDeletedProgramId('program-current'), true)
+    assert.equal(readFirstProgramFallback(), null)
+
+    writeAthleteItem('spartanlab_first_program', JSON.stringify(deleted))
+    writeAthleteItem('spartanlab_active_program', JSON.stringify(deleted))
+    writeAthleteItem('spartanlab_adaptive_programs', JSON.stringify([deleted]))
+    assert.equal(readFirstProgramFallback(), null)
+    assert.equal(readAthleteItem('spartanlab_first_program'), null)
+    assert.equal(readLatestStoredAdaptiveProgram(), null)
+    assert.equal(readAthleteItem('spartanlab_active_program'), null)
+    assert.doesNotMatch(readAthleteItem('spartanlab_adaptive_programs') ?? '', /program-current/)
+
+    const profile = getOnboardingProfile()
+    assert.equal(profile?.onboardingComplete, true)
+    assert.equal(profile?.primaryGoal, 'front_lever')
+    assert.equal(profile?.sessionLengthMinutes, 45)
+    assert.match(readAthleteItem('spartanlab_profile') ?? '', /local-profile/)
+    assert.match(readAthleteItem('spartanlab_workout_logs') ?? '', /log-1/)
+  })
+
+  it('keeps a different saved program when the deleted id also has a first-program copy', () => {
+    const older = program('program-old', '2026-01-01T00:00:00.000Z')
+    const current = program('program-current', '2026-03-01T00:00:00.000Z')
+    savePrograms('program-current', [older, current, { id: 'note-only', createdAt: '2026-01-02T00:00:00.000Z' }])
+    writeAthleteItem('spartanlab_first_program', JSON.stringify(current))
+
+    assert.equal(deleteStoredAdaptiveProgram('program-current'), true)
+
+    const history = readAthleteItem('spartanlab_adaptive_programs') ?? ''
+    assert.doesNotMatch(history, /program-current/)
+    assert.match(history, /program-old/)
+    assert.match(history, /note-only/)
+    assert.equal(readAthleteItem('spartanlab_active_program'), null)
+    assert.equal(readAthleteItem('spartanlab_first_program'), null)
+    assert.equal(readLatestStoredAdaptiveProgram()?.id, 'program-old')
+    assert.equal(readFirstProgramFallback(), null)
+
+    writeAthleteItem('spartanlab_first_program', JSON.stringify(older))
+    assert.equal(readFirstProgramFallback()?.id, 'program-old')
+    assert.equal(readLatestStoredAdaptiveProgram()?.id, 'program-old')
   })
 })

@@ -53,6 +53,7 @@
 import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import {
   deleteStoredAdaptiveProgram,
+  isDeletedProgramId,
   selectStoredProgram,
   type StoredProgramRecord,
 } from './program/active-program-record'
@@ -32009,6 +32010,12 @@ export class StorageSaveError extends Error {
 
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
+  if (program?.id && isDeletedProgramId(program.id)) {
+    throw new StorageSaveError(
+      'active_program_save_failed',
+      `deleted_program_save_blocked: ${program.id}`,
+    )
+  }
   
   // [program-build] SAVE: Pre-save critical validation
   // Reject programs with fundamentally broken session structure
@@ -32231,7 +32238,15 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
     console.warn('[storage-quota-fix] Failed to read canonical active program:', err)
     activeRecord = null
   }
-  const storedSelection = selectStoredProgram(activeRecord, allPrograms)
+  if (activeRecord?.id && isDeletedProgramId(activeRecord.id)) {
+    removeAthleteItem(CANONICAL_ACTIVE_KEY)
+    activeRecord = null
+  }
+  const selectablePrograms = allPrograms.filter((program) => !isDeletedProgramId(program.id))
+  if (selectablePrograms.length !== allPrograms.length) {
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(selectablePrograms))
+  }
+  const storedSelection = selectStoredProgram(activeRecord, selectablePrograms)
   let selectedProgram = (storedSelection.program as AdaptiveProgram | null) ?? null
   let selectionSource = storedSelection.source
   
@@ -32246,7 +32261,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
     
     // [PHASE 17L] TASK 6 - Final verdict log
     // Check if selected is truly the latest by time
-    const allSorted = allPrograms.sort((a, b) =>
+    const allSorted = selectablePrograms.sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     const latestByTime = allSorted[0]

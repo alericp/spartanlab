@@ -77,6 +77,8 @@ import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, Chev
 import Link from 'next/link'
 import { clearRecoveryAdjustmentHandoff, readAthleteItem, storageEventMatchesAthlete, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
 import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
+import { isDeletedProgramId } from '@/lib/program/active-program-record'
+import { firstObservedSessionCount, resolveMainGenDisplayAudit } from '@/lib/program/main-gen-audit-disposition'
 import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
@@ -5465,15 +5467,20 @@ export default function ProgramPage() {
     
     const storedMainGen = JSON.parse(storedMainGenRaw) as MainGenTruthAudit
     
-    // Only run once we have a savedProgramId to compare against
+    // Only run once we have a savedProgramId to compare against.
+    // A missing program is not a failed generation.
     if (!storedMainGen.savedProgramId) return
+    if (!program) return
     
-    const displayedSessions = program?.sessions?.length ?? 0
-    const displayedProgramId = program?.id ?? null
-    const displayedCreatedAt = program?.createdAt ?? null
-    const savedSessions = storedMainGen.savedProgramSessionCount ?? 0
+    const displayedSessions = program.sessions?.length ?? null
+    const displayedProgramId = program.id ?? null
+    const displayedCreatedAt = program.createdAt ?? null
     const savedProgramId = storedMainGen.savedProgramId
-    const expectedTarget = storedMainGen.expectedSessionCount ?? 0
+    const attemptLock = authoritativeSavedProgramRef.current
+    const withinAttemptLock = attemptLock != null
+      && attemptLock.flowSource === 'main_generation'
+      && attemptLock.programId === savedProgramId
+      && attemptLock.lockExpiresAt > Date.now()
     
     // Also read current localStorage to detect rehydration source
     let currentLocalStorageSessions: number | null = null
@@ -5488,70 +5495,61 @@ export default function ProgramPage() {
     } catch (e) {
       // Ignore parse errors
     }
-    
-    let displayVerdict: MainGenTruthVerdict = storedMainGen.finalVerdict
-    let displayFailedStage = storedMainGen.failedStage
-    let overwriteDetected = false
-    let overwriteSource: string | null = null
-    
-    // Check for various failure modes
-    const builtSessions = storedMainGen.builtStructureSessionCount ?? 0
-    const resolvedSessions = storedMainGen.targetSessionCountFromResolution ?? 0
-    
-    if (displayedSessions >= expectedTarget && displayedProgramId === savedProgramId) {
-      // Success - displayed what we expected
-      displayVerdict = expectedTarget === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
-      displayFailedStage = null
-    } else if (displayedProgramId !== savedProgramId) {
-      // Different program is displayed than what we saved!
-      overwriteDetected = true
-      overwriteSource = 'program_id_mismatch'
-      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
-      displayFailedStage = 'rehydration'
-    } else if (displayedSessions !== savedSessions) {
-      // Same program ID but different session count - something mutated it
-      overwriteDetected = true
-      overwriteSource = 'session_count_mismatch_same_id'
-      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
-      displayFailedStage = 'rehydration'
-    } else if (displayedSessions < expectedTarget) {
-      // Sessions match saved but still below expected - determine where loss occurred
-      if (resolvedSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_IN_RESOLUTION'
-        displayFailedStage = 'resolution'
-      } else if (builtSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
-        displayFailedStage = 'structure_build'
-      } else if (savedSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_DURING_SAVE'
-        displayFailedStage = 'save'
-      }
+
+    const decision = resolveMainGenDisplayAudit({
+      programLoaded: true,
+      displayedProgramId,
+      displayedSessionCount: displayedSessions,
+      displayedCreatedAt,
+      savedProgramId,
+      savedSessionCount: storedMainGen.savedProgramSessionCount,
+      auditStartedAt: storedMainGen.startedAt,
+      expectedSessionCount: storedMainGen.expectedSessionCount,
+      submittedTrainingDays: storedMainGen.submittedTrainingDaysPerWeek,
+      resolvedSessionCount: storedMainGen.targetSessionCountFromResolution,
+      builtSessionCount: storedMainGen.builtStructureSessionCount,
+      savedProgramTrainingDays: storedMainGen.savedProgramTrainingDaysPerWeek,
+      savedProgramDeleted: isDeletedProgramId(savedProgramId),
+      withinAttemptLock,
+    })
+    if (decision.action === 'skip') return
+    if (decision.action === 'retire') {
+      sessionStorage.removeItem('mainGenTruthAudit')
+      setMainGenTruthAudit(null)
+      return
     }
     
+    const displayVerdict: MainGenTruthVerdict = decision.finalVerdict ?? storedMainGen.finalVerdict
+    const displayFailedStage = decision.finalVerdict == null
+      ? storedMainGen.failedStage
+      : decision.failedStage
+    
     console.log('[MAIN-GEN-TRUTH step-8-display-result]', {
-      expectedTarget,
+      expectedTarget: decision.expectedSessionCount,
       savedProgramId,
-      savedProgramSessions: savedSessions,
+      savedProgramSessions: storedMainGen.savedProgramSessionCount,
       displayedProgramId,
       displayedProgramSessions: displayedSessions,
       displayedCreatedAt,
       previousCreatedAt: storedMainGen.existingGeneratedDateBeforeClick,
       currentLocalStorageId,
       currentLocalStorageSessions,
-      overwriteDetected,
-      overwriteSource,
+      overwriteDetected: decision.overwriteDetected,
+      overwriteSource: decision.overwriteSource,
       verdict: displayVerdict,
     })
     
     const finalMainGenAudit: MainGenTruthAudit = {
       ...storedMainGen,
+      expectedSessionCount: decision.expectedSessionCount,
+      targetSessionCountFromResolution: decision.resolvedSessionCount,
       displayedProgramIdAfterCommit: displayedProgramId,
       displayedProgramSessionCountAfterCommit: displayedSessions,
       newGeneratedDateAfterCommit: displayedCreatedAt,
       rehydratedProgramId: currentLocalStorageId,
       rehydratedProgramSessionCount: currentLocalStorageSessions,
-      overwriteDetected,
-      overwriteSource,
+      overwriteDetected: decision.overwriteDetected,
+      overwriteSource: decision.overwriteSource,
       finalVerdict: displayVerdict,
       failedStage: displayFailedStage,
     }
@@ -9871,20 +9869,7 @@ export default function ProgramPage() {
               // Ignore
             }
             
-            const expectedSessions = storedMainGen.expectedSessionCount ?? 6
             const actualBuiltSessions = newProgram.sessions?.length ?? 0
-            
-            // Determine early verdict
-            let earlyVerdict: MainGenTruthVerdict = 'MAIN_PENDING'
-            let earlyFailedStage: string | null = null
-            
-            if (actualBuiltSessions >= expectedSessions) {
-              earlyVerdict = expectedSessions === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
-            } else {
-              // Target was lost somewhere - determine where based on saved vs built
-              earlyVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
-              earlyFailedStage = 'structure_build'
-            }
             
             // [STEP-5A-OMEGA-5] Safe typed projection of the built structure's
             //   weekly day count for the audit slot. The previous code read
@@ -9905,9 +9890,28 @@ export default function ProgramPage() {
                 : typeof newProgram.currentWeekFrequency === 'number'
                   ? newProgram.currentWeekFrequency
                   : null
+            const expectedSessions = firstObservedSessionCount([
+              storedMainGen.expectedSessionCount,
+              storedMainGen.submittedTrainingDaysPerWeek,
+            ])
+            const resolvedSessions = firstObservedSessionCount([
+              storedMainGen.targetSessionCountFromResolution,
+              builtStructureTrainingDays,
+            ])
+
+            let earlyVerdict: MainGenTruthVerdict = 'MAIN_REQUEST_CAPTURED'
+            let earlyFailedStage: string | null = null
+            if (expectedSessions != null && actualBuiltSessions >= expectedSessions) {
+              earlyVerdict = expectedSessions === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+            } else if (expectedSessions != null && actualBuiltSessions < expectedSessions) {
+              earlyVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
+              earlyFailedStage = 'structure_build'
+            }
 
             const updatedMainGen: MainGenTruthAudit = {
               ...storedMainGen,
+              expectedSessionCount: expectedSessions,
+              targetSessionCountFromResolution: resolvedSessions,
               // Step 5: Structure result
               builtStructureSessionCount: actualBuiltSessions,
               builtStructureDayCount: builtStructureTrainingDays,
@@ -18698,16 +18702,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
                 // ==========================================================================
                 const mainGenAttemptId = `maingen-${Date.now()}`
-                // [PRE-AB6 BUILD GREEN GATE] `recommendedSessionsPerWeek` is
-                //   not on the typed `scheduleTruthAudit` contract (see
-                //   useState<{...}> at L3413) — the authoritative field
-                //   for recommended weekly session count is
-                //   `baselineRecommendedSessionCount` (already used by
-                //   the visible Schedule Status panel at L16808-L16933
-                //   and by the rehydration baseline read at L4275).
-                //   Routed through the real typed field. Diagnostic-only —
-                //   no generator behavior change.
-                const expectedSessionsForFlexible = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 6
+                const submittedDaysForAudit = hasCurrentSessionInputs
+                  ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null
+                  : inputs?.trainingDaysPerWeek ?? null
+                const expectedSessionCountForAudit = scheduleTruthAudit?.canonicalScheduleMode === 'flexible'
+                  ? firstObservedSessionCount([scheduleTruthAudit?.baselineRecommendedSessionCount])
+                  : firstObservedSessionCount([
+                      scheduleTruthAudit?.canonicalTrainingDaysPerWeek,
+                      submittedDaysForAudit,
+                    ])
                 
                 // [PRE-AB6 BUILD GREEN GATE / STEP-5A-TAU] `selectedGoalCategories`
                 //   is NOT a property of `AdaptiveProgramInputs` (Step 4G banned-key
@@ -18795,7 +18798,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   rehydratedProgramSessionCount: null,
                   overwriteDetected: false,
                   overwriteSource: null,
-                  expectedSessionCount: scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? expectedSessionsForFlexible : (scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null),
+                  expectedSessionCount: expectedSessionCountForAudit,
                   finalVerdict: 'MAIN_REQUEST_CAPTURED',
                   failedStage: null,
                   errorMessage: null,

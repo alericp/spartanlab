@@ -92,3 +92,21 @@ export function trialProgramSentence(hasUsableWorkoutProgram: boolean): string {
   }
   return 'Your program has not been created yet.'
 }
+
+/**
+ * A recent generation token can skip another build only while a usable
+ * program is still stored. The in-memory attempt guard remains separate.
+ */
+export function shouldSkipCompletedGeneration(input: {
+  completed: boolean
+  elapsedMs: number
+  hasUsableWorkoutProgram: boolean
+  windowMs?: number
+}): boolean {
+  const windowMs = input.windowMs ?? 5 * 60 * 1000
+  return input.completed === true
+    && Number.isFinite(input.elapsedMs)
+    && input.elapsedMs >= 0
+    && input.elapsedMs < windowMs
+    && input.hasUsableWorkoutProgram === true
+}

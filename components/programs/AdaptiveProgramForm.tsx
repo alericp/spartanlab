@@ -32,6 +32,7 @@ import {
   // access so we don't pollute the input contract or use `as any`.
   readSessionDurationMode,
 } from '@/lib/duration-contract'
+import { durationFieldDisplay, goalFieldDisplay } from '@/lib/program/builder-field-display'
 
 // ==========================================================================
 // [PHASE 27C] BUILD IDENTITY FOR FORM COMPONENT
@@ -159,6 +160,16 @@ export function AdaptiveProgramForm({
   // branches below, preserving prior display behavior when the field is
   // genuinely missing instead of inventing 'adaptive'.
   const isAdaptiveDurationMode = readSessionDurationMode(inputs) === 'adaptive'
+  const goalDisplay = goalFieldDisplay(inputs.primaryGoal, GOAL_LABELS)
+  const durationDisplay = durationFieldDisplay(inputs.sessionLength)
+  const applyDurationChoice = (value: string) => {
+    const numeric = Number(value)
+    if (numeric === 30 || numeric === 45 || numeric === 60 || numeric === 90) {
+      updateInput('sessionLength', numeric)
+      return
+    }
+    updateInput('sessionLength', value as SessionLength)
+  }
 
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
@@ -188,13 +199,16 @@ export function AdaptiveProgramForm({
           <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Primary Goal</label>
             <Select
-              value={inputs.primaryGoal}
+              value={goalDisplay.mode === 'missing' ? undefined : goalDisplay.value}
               onValueChange={(v) => updateInput('primaryGoal', v as PrimaryGoal)}
             >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                <SelectValue />
+                <SelectValue placeholder="Not saved" />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                {goalDisplay.mode === 'saved' && (
+                  <SelectItem value={goalDisplay.value}>{goalDisplay.label}</SelectItem>
+                )}
                 {Object.entries(GOAL_LABELS).map(([key, label]) => (
                   <SelectItem key={key} value={key}>
                     {label}
@@ -202,6 +216,9 @@ export function AdaptiveProgramForm({
                 ))}
               </SelectContent>
             </Select>
+            {goalDisplay.mode === 'missing' && (
+              <p className="text-xs text-[#6A6A6A]">Not saved</p>
+            )}
           </div>
 
           {/* Training Days/Week - PHASE 26H: Re-added after accidental removal */}
@@ -293,13 +310,16 @@ export function AdaptiveProgramForm({
                   </p>
                 </div>
                 <Select
-                  value={String(inputs.sessionLength)}
-                  onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
+                  value={durationDisplay.mode === 'missing' ? undefined : durationDisplay.value}
+                  onValueChange={applyDurationChoice}
                 >
                   <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                    <SelectValue placeholder="Base target" />
+                    <SelectValue placeholder="Not saved" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                    {durationDisplay.mode === 'saved' && (
+                      <SelectItem value={durationDisplay.value}>{durationDisplay.label}</SelectItem>
+                    )}
                     {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
                       <SelectItem key={minutes} value={String(minutes)}>
                         ~{DURATION_PREFERENCE_LABELS[minutes].label} base
@@ -311,13 +331,16 @@ export function AdaptiveProgramForm({
             ) : (
               // STATIC USER: Show fixed duration selector
               <Select
-                value={String(inputs.sessionLength)}
-                onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
+                value={durationDisplay.mode === 'missing' ? undefined : durationDisplay.value}
+                onValueChange={applyDurationChoice}
               >
                 <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                  <SelectValue />
+                  <SelectValue placeholder="Not saved" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                  {durationDisplay.mode === 'saved' && (
+                    <SelectItem value={durationDisplay.value}>{durationDisplay.label}</SelectItem>
+                  )}
                   {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
                     <SelectItem key={minutes} value={String(minutes)}>
                       {DURATION_PREFERENCE_LABELS[minutes].label}
@@ -327,7 +350,9 @@ export function AdaptiveProgramForm({
               </Select>
             )}
           <p className="text-xs text-[#6A6A6A]">
-            {isAdaptiveDurationMode
+            {durationDisplay.mode === 'missing'
+              ? 'Not saved'
+              : isAdaptiveDurationMode
               ? 'Adaptive mode - sessions expand/contract based on day intensity'
               : 'Pre-filled from your profile. Actual sessions may vary based on day focus.'}
           </p>

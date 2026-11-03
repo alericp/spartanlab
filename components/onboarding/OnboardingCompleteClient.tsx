@@ -52,6 +52,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useOwnerBootstrap, auditOwnerFlow } from '@/components/providers/OwnerBootstrapProvider'
 import { useEntitlement } from '@/hooks/useEntitlement'
 import { getCompactScheduleLabel, getCompactDurationLabel } from '@/lib/adaptive-display-contract'
+import { shouldSkipCompletedGeneration } from '@/lib/program/program-presence-copy'
 
 // =============================================================================
 // IMPORT SAFETY: Heavy runtime helpers are now dynamically imported
@@ -458,12 +459,18 @@ export default function OnboardingCompleteClient() {
         const sessionToken = sessionStorage.getItem(GENERATION_SESSION_KEY)
         if (sessionToken) {
           const tokenData = JSON.parse(sessionToken)
-          // If generation completed successfully in this session, skip and go to ready
+          // Skip only when the earlier generation is still a usable program.
+          // A deleted program must be allowed to generate again.
           if (tokenData.completed && tokenData.timestamp) {
             const elapsed = Date.now() - tokenData.timestamp
-            // Token valid for 5 minutes (prevents stale session data issues)
-            if (elapsed < 5 * 60 * 1000) {
-              console.log('[OnboardingCompleteClient] IDEMPOTENCY: Generation already completed in this session, showing ready state')
+            const { getProgramState } = await import('@/lib/program-state')
+            const usable = getProgramState().hasUsableWorkoutProgram === true
+            if (shouldSkipCompletedGeneration({
+              completed: tokenData.completed === true,
+              elapsedMs: elapsed,
+              hasUsableWorkoutProgram: usable,
+            })) {
+              console.log('[OnboardingCompleteClient] IDEMPOTENCY: Usable program already generated in this session')
               setGenerationSkipped(true)
               setStep('ready')
               return

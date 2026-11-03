@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import {
   dashboardEmptyPresence,
+  shouldSkipCompletedGeneration,
   trialProgramSentence,
   welcomeProgramCopy,
 } from './program-presence-copy.ts'
@@ -52,6 +53,52 @@ describe('program presence copy', () => {
     const dashboard = readFileSync(new URL('../../components/dashboard/DashboardFullContent.tsx', import.meta.url), 'utf8')
     assert.match(dashboard, /isWelcomeFlow \? true : hasData/)
     assert.match(emptyState, /if \(!presence\)/)
+  })
+
+  it('routes a missing program by onboarding completion', () => {
+    const fresh = dashboardEmptyPresence(false, false)
+    const saved = dashboardEmptyPresence(false, true)
+    assert.equal(fresh.primaryLabel, 'Start Setup')
+    assert.equal(fresh.primaryHref, '/onboarding')
+    assert.equal(saved.primaryLabel, 'Generate Program')
+    assert.equal(saved.primaryHref, '/onboarding/complete')
+
+    const next = readFileSync(new URL('../../components/dashboard/NextWorkoutCard.tsx', import.meta.url), 'utf8')
+    const snapshot = readFileSync(new URL('../../components/dashboard/ProgramSnapshotCard.tsx', import.meta.url), 'utf8')
+    const today = readFileSync(new URL('../../components/dashboard/TodayAdjustmentWidget.tsx', import.meta.url), 'utf8')
+    for (const source of [next, snapshot, today]) {
+      assert.match(source, /dashboardEmptyPresence\(false, isOnboardingComplete\(\)\)/)
+    }
+  })
+
+  it('skips a recent generation only while a usable program exists', () => {
+    assert.equal(shouldSkipCompletedGeneration({
+      completed: true,
+      elapsedMs: 1000,
+      hasUsableWorkoutProgram: true,
+    }), true)
+    assert.equal(shouldSkipCompletedGeneration({
+      completed: true,
+      elapsedMs: 1000,
+      hasUsableWorkoutProgram: false,
+    }), false)
+    assert.equal(shouldSkipCompletedGeneration({
+      completed: false,
+      elapsedMs: 1000,
+      hasUsableWorkoutProgram: true,
+    }), false)
+    assert.equal(shouldSkipCompletedGeneration({
+      completed: true,
+      elapsedMs: 5 * 60 * 1000,
+      hasUsableWorkoutProgram: true,
+    }), false)
+
+    const complete = readFileSync(new URL('../../components/onboarding/OnboardingCompleteClient.tsx', import.meta.url), 'utf8')
+    const guard = complete.indexOf('shouldSkipCompletedGeneration({')
+    const ready = complete.indexOf("setStep('ready')", guard)
+    assert.ok(guard > 0)
+    assert.ok(ready > guard)
+    assert.match(complete, /generationAttemptedRef\.current/)
   })
 
   it('routes program deletion through the active-key record', () => {

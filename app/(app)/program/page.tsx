@@ -76,6 +76,7 @@ import {
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { clearRecoveryAdjustmentHandoff, readAthleteItem, storageEventMatchesAthlete, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
+import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
 import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
@@ -4521,8 +4522,23 @@ export default function ProgramPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [constraintLabel, setConstraintLabel] = useState<string>('')
   const [showBuilder, setShowBuilder] = useState(false)
+  const [onboardingAnswersSaved, setOnboardingAnswersSaved] = useState(false)
+  const [onboardingRouteKnown, setOnboardingRouteKnown] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void import('@/lib/athlete-profile').then((mod) => {
+      if (active) {
+        setOnboardingAnswersSaved(mod.isOnboardingComplete())
+        setOnboardingRouteKnown(true)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [program])
 
   // ==========================================================================
   // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK OVERLAY APPLICATION
@@ -7494,16 +7510,15 @@ export default function ProgramPage() {
             }
             } // [STEP-5A-THETA] close `else` of `if (!normalizedProgram)`
           } else {
-            // No usable program - show builder
+            // No usable program stays on the entry card. The builder opens
+            // only from an explicit advanced action or Restart from Scratch.
             currentInitStage = 'no-program'
             setLoadStage('no-program')
-            setShowBuilder(true)
           }
         } catch (err) {
           console.error('[ProgramPage] Stage 7: Error loading current program:', err)
           currentInitStage = 'program-load-error'
           setLoadStage('program-load-error')
-          setShowBuilder(true)
         }
         
         // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
@@ -18177,6 +18192,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   //   touching the visible DiagnosticStrip UI, the materialitySummary /
   //   personalAlignment computations that feed that UI, or any runtime
   //   logic. No behavior change for users.
+
+  const noProgramDecisionReady = !program && !showBuilder && (
+    loadStage === 'no-program' ||
+    loadStage === 'program-load-error' ||
+    loadStage === 'complete' ||
+    loadStage === 'unexpected-error'
+  )
   
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -18226,12 +18248,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </div>
               <div>
                 <h1 className="text-xl font-bold">
-                  {program && !showBuilder ? 'Your Training Program' : 'Program Builder'}
+                  {showBuilder
+                    ? 'Program Builder'
+                    : program
+                      ? 'Your Training Program'
+                      : noProgramDecisionReady
+                        ? 'No Program Yet'
+                        : 'Training Program'}
                 </h1>
                 <p className="text-sm text-[#6A6A6A]">
-                  {program && !showBuilder 
-                    ? 'Your personalized adaptive training plan' 
-                    : 'Constraint-aware, time-adaptive training'}
+                  {showBuilder
+                    ? 'Constraint-aware, time-adaptive training'
+                    : program
+                      ? 'Your personalized adaptive training plan'
+                      : noProgramDecisionReady
+                        ? 'Generate a program from your saved answers, or open the builder.'
+                        : 'Loading your saved program.'}
                 </p>
                 {showBuilder && (
                   <p className="text-sm text-neutral-400 mt-1">
@@ -19261,19 +19293,44 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               Rebuild Program
             </Button>
           </Card>
+        ) : !noProgramDecisionReady ? (
+          <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+            <Dumbbell className="w-12 h-12 text-[#6A6A6A] mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Training Program</h3>
+            <p className="text-sm text-[#6A6A6A]">Loading your saved program.</p>
+          </Card>
         ) : (
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <Dumbbell className="w-12 h-12 text-[#6A6A6A] mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Program Yet</h3>
-            <p className="text-sm text-[#6A6A6A] mb-4">
-              Build your first adaptive program based on your goals and constraints
-            </p>
-            <Button
-              onClick={() => setShowBuilder(true)}
-              className="bg-[#E63946] hover:bg-[#D62828]"
-            >
-              Build Program
-            </Button>
+            {(() => {
+              const entry = onboardingRouteKnown
+                ? dashboardEmptyPresence(false, onboardingAnswersSaved)
+                : null
+              return (
+                <>
+                  <h3 className="text-lg font-medium mb-2">{entry?.title ?? 'No Program Yet'}</h3>
+                  <p className="text-sm text-[#6A6A6A] mb-4">
+                    {entry?.body ?? 'Checking your saved training answers.'}
+                  </p>
+                  <div className="flex flex-col items-center gap-3">
+                    {entry && (
+                      <Link href={entry.primaryHref}>
+                        <Button className="bg-[#E63946] hover:bg-[#D62828]">
+                          {entry.primaryLabel}
+                        </Button>
+                      </Link>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowBuilder(true)}
+                      className="border-[#3A3A3A] text-[#A5A5A5]"
+                    >
+                      Open Program Builder
+                    </Button>
+                  </div>
+                </>
+              )
+            })()}
           </Card>
         )}
 

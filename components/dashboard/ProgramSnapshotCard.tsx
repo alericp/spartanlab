@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Calendar, ArrowRight, Clock, Target } from 'lucide-react'
 import { getProgramSummary, getDashboardOverview, type ProgramSummary } from '@/lib/dashboard-service'
 import { storageEventMatchesAthlete } from '@/lib/athlete-local-scope'
+import { isOnboardingComplete } from '@/lib/athlete-profile'
+import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
 
 interface ProgramSnapshotCardProps {
   className?: string
@@ -92,13 +94,17 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
           <p className="text-xs text-[#6B7280] mb-4">
             Create a program to get structured training
           </p>
-          {/* Route to /onboarding/complete for program generation (consistent with FirstRunGuide) */}
-          <Link href="/onboarding/complete">
-            <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
-              <Calendar className="w-4 h-4" />
-              Create Program
-            </Button>
-          </Link>
+          {(() => {
+            const entry = dashboardEmptyPresence(false, isOnboardingComplete())
+            return (
+              <Link href={entry.primaryHref}>
+                <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
+                  <Calendar className="w-4 h-4" />
+                  {entry.primaryLabel}
+                </Button>
+              </Link>
+            )
+          })()}
         </div>
       </Card>
     )

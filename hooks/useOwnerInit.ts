@@ -18,8 +18,8 @@
  * Initializes the owner detection system by setting the current user's email
  * from Clerk auth. This enables owner detection throughout the app.
  * 
- * PREVIEW MODE: In v0 preview (vusercontent.net), Clerk fails due to domain restrictions.
- * In that case, we check NEXT_PUBLIC_OWNER_EMAIL to enable owner features for testing.
+ * A preview hostname does not make the visitor the owner. Owner status comes
+ * from the authenticated owner-status response.
  * 
  * [PHASE 14D] Audit marker:
  * [phase14d-owner-ui-caller-sweep-audit] - This hook is now LEGACY
@@ -28,15 +28,6 @@
 
 import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
-
-// Detect if we're in a preview environment where Clerk won't work
-function isPreviewEnvironment(): boolean {
-  if (typeof window === 'undefined') return false
-  const hostname = window.location.hostname
-  return hostname.includes('vusercontent.net') || 
-         hostname.includes('localhost') ||
-         hostname.includes('vercel.app')
-}
 
 // Safe imports with fallbacks
 let ownerAccessModule: {
@@ -73,30 +64,15 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hookLoaded, setHookLoaded] = useState(false)
   
-  // Detect preview environment on initial render (client-side only)
-  const [inPreview, setInPreview] = useState(false)
-  
   // Call useUser unconditionally (React rules of hooks)
   // In preview mode, Clerk will log errors but the hook still returns safely
   const { user, isLoaded } = useUser()
   
   useEffect(() => {
     // Check if we're in a preview environment (must be in useEffect for SSR safety)
-    const isPreview = isPreviewEnvironment()
-    setInPreview(isPreview)
-    
     const init = async () => {
       try {
         const ownerAccess = await loadOwnerAccess()
-        
-        // In preview environments, enable owner features for testing
-        // This allows the Free/Pro toggle to appear even when Clerk auth fails
-        if (isPreview) {
-          setOwnerStatus(true)
-          setUserEmail('preview-mode@spartanlab.app')
-          setHookLoaded(true)
-          return
-        }
         
         if (isLoaded) {
           if (user) {
@@ -125,7 +101,7 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   }, [user, isLoaded])
   
   return {
-    isOwner: ownerStatus || inPreview, // In preview mode, always show owner controls
+    isOwner: ownerStatus,
     isLoaded: isLoaded && hookLoaded,
     userEmail,
   }

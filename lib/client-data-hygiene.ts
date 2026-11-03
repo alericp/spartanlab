@@ -8,6 +8,8 @@
  * It does NOT wipe legitimate user data.
  */
 
+import { getBoundAthleteId } from './athlete-local-scope'
+
 // PHASE 5: Bump version to force re-run and clean legacy logs without trusted flag
 const HYGIENE_VERSION = 'v2'
 const HYGIENE_KEY = 'spartanlab_hygiene_pass'
@@ -102,6 +104,12 @@ function filterRealWorkouts(logs: unknown[]): unknown[] {
 export function runClientDataHygiene(): HygieneResult {
   if (typeof window === 'undefined') {
     return { cleanedKeys: [], skippedKeys: [], wasAlreadyRun: true }
+  }
+
+  // A signed-in browser must not rewrite the shared legacy keys. Those bytes
+  // may belong to another athlete or to the ownerless quarantine.
+  if (getBoundAthleteId() !== undefined) {
+    return { cleanedKeys: [], skippedKeys: ['athlete-scoped'], wasAlreadyRun: true }
   }
   
   // Check if this hygiene version was already run

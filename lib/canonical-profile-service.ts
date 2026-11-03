@@ -76,7 +76,9 @@
  * USE THIS SERVICE FOR ALL PROGRAMMING-RELATED READS AND WRITES.
  */
 
+import { removeAthleteItem } from './athlete-local-scope'
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'
+import { classifyEquipment, classifySessionDuration, mergeScheduleDurationUpdate } from './profile/input-reliability'
 import {
   getOnboardingProfile,
   saveOnboardingProfile,
@@ -320,8 +322,8 @@ export interface CanonicalProgrammingProfile {
   // A user can have scheduleMode='static' + trainingDaysPerWeek=6 + adaptiveWorkloadEnabled=true
   // This means: "I train 6 days/week, but let the engine adapt sets/reps/intensity"
   adaptiveWorkloadEnabled: boolean  // Whether engine adapts workload within baseline schedule
-  sessionDurationMode: 'static' | 'adaptive'  // TASK 1A: Distinguishes fixed vs adaptive time preference
-  sessionLengthMinutes: number  // Target duration bucket (30/45/60/90) even for adaptive mode
+  sessionDurationMode: 'static' | 'adaptive' | null  // null = unspecified; never invent static
+  sessionLengthMinutes: number | null  // null = unknown or adaptive; a number is an explicit duration
   sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
   equipmentAvailable: string[]
   trainingStyle: string | null
@@ -744,23 +746,38 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     })(),
     // ISSUE A/B FIX: Read explicit sessionDurationMode field (now in OnboardingProfile type)
     // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery
-    sessionDurationMode: pick(
-      onboardingProfile?.sessionDurationMode,
-      athleteProfile?.sessionDurationMode as 'static' | 'adaptive' | undefined,
-      // ISSUE D FIX: Infer from sessionLengthMinutes if sessionDurationMode not set
-      onboardingProfile?.sessionLengthMinutes === 'flexible' ? 'adaptive' : 'static'
-    ),
-    // [SESSION-LENGTH-FLEXIBLE-COERCION] Onboarding stores
-    // `SessionLengthPreference | null` which is the literal 'flexible'
-    // OR a numeric bucket. CanonicalProgrammingProfile.sessionLengthMinutes
-    // is strictly `number`. Coerce 'flexible' to the default 45 here
-    // (sessionDurationMode: 'adaptive' carries the flexibility semantic
-    // separately).
+    sessionDurationMode: (() => {
+      // Onboarding is the answered form. Its unknown duration must not
+      // inherit a numeric shell stored on the athlete profile, and an
+      // unspecified mode must not be relabeled static.
+      const duration = onboardingProfile
+        ? classifySessionDuration({
+            minutes: onboardingProfile.sessionLengthMinutes,
+            durationMode: onboardingProfile.sessionDurationMode,
+          })
+        : classifySessionDuration({
+            minutes: athleteProfile?.sessionLengthMinutes,
+            durationMode: athleteProfile?.sessionDurationMode,
+          })
+      if (duration.durationMode) return duration.durationMode
+      const rawMode = onboardingProfile
+        ? onboardingProfile.sessionDurationMode
+        : athleteProfile?.sessionDurationMode
+      // A saved static choice with no minute count stays static so generation
+      // can ask for that count. Anything else stays unspecified.
+      return rawMode === 'static' ? 'static' : null
+    })(),
     sessionLengthMinutes: (() => {
-      const onb = onboardingProfile?.sessionLengthMinutes
-      const ath = athleteProfile?.sessionLengthMinutes
-      const raw = onb ?? ath ?? 45
-      return typeof raw === 'number' ? raw : 45
+      const duration = onboardingProfile
+        ? classifySessionDuration({
+            minutes: onboardingProfile.sessionLengthMinutes,
+            durationMode: onboardingProfile.sessionDurationMode,
+          })
+        : classifySessionDuration({
+            minutes: athleteProfile?.sessionLengthMinutes,
+            durationMode: athleteProfile?.sessionDurationMode,
+          })
+      return duration.minutes
     })(),
     sessionStylePreference: onboardingProfile?.sessionStyle ?? null,
     equipmentAvailable: pickArray(
@@ -1139,9 +1156,10 @@ export function validateProfileForGeneration(profile: CanonicalProgrammingProfil
     missingFields.push('selectedSkills/selectedFlexibility/selectedStrength')
   }
   
-  // Required: Equipment available
+  // Empty equipment is not missing profile data. Floor and wall stay
+  // available in the exercise pool, and the saved list is left empty.
   if (!profile.equipmentAvailable?.length) {
-    missingFields.push('equipmentAvailable')
+    warnings.push('No equipment selected. Floor and wall movements stay available.')
   }
   
   // Warnings (not fatal but should be addressed)
@@ -1377,13 +1395,19 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   // AthleteProfile['trainingDaysPerWeek'] is the narrower number-or-undefined
   // literal union. Coerce null -> undefined at the boundary so the
   // partial assignment does not widen AthleteProfile.
-  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? undefined
+  if (updates.trainingDaysPerWeek !== undefined) {
+    athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
+  }
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
   // ISSUE A/B FIX: sessionDurationMode - store in athlete profile for downstream consumption
   if (updates.sessionDurationMode !== undefined) {
     athleteUpdates.sessionDurationMode = updates.sessionDurationMode
   }
-  if (updates.sessionLengthMinutes !== undefined) athleteUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as 30 | 45 | 60 | 90
+  if (updates.sessionLengthMinutes !== undefined) {
+    athleteUpdates.sessionLengthMinutes = typeof updates.sessionLengthMinutes === 'number'
+      ? updates.sessionLengthMinutes as 30 | 45 | 60 | 90
+      : null
+  }
   if (updates.equipmentAvailable !== undefined) athleteUpdates.equipmentAvailable = updates.equipmentAvailable as AthleteProfile['equipmentAvailable']
   if (updates.jointCautions !== undefined) athleteUpdates.jointCautions = updates.jointCautions as AthleteProfile['jointCautions']
   if (updates.weakestArea !== undefined) athleteUpdates.weakestArea = updates.weakestArea as AthleteProfile['weakestArea']
@@ -1427,20 +1451,34 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     }
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
-    // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
-    if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
-    // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
-    // Previously this was MISSING, causing canonical resolution to fallback to flexible
-    // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
-    if (updates.trainingDaysPerWeek !== undefined && typeof updates.trainingDaysPerWeek === 'number') {
-      onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek as TrainingDaysPerWeek
-    }
-    // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
-    if (updates.sessionDurationMode !== undefined) {
-      onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
-    }
-    if (updates.sessionLengthMinutes !== undefined && typeof updates.sessionLengthMinutes === 'number') {
-      onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as SessionLengthPreference
+    // An omitted schedule or duration key keeps the stored value.
+    // An explicit flexible week, a new day count, or a cleared duration replaces it.
+    const scheduleProvided = updates.scheduleMode !== undefined || updates.trainingDaysPerWeek !== undefined
+    const durationProvided = updates.sessionDurationMode !== undefined || updates.sessionLengthMinutes !== undefined
+    if (scheduleProvided || durationProvided) {
+      const mergedSchedule = mergeScheduleDurationUpdate({
+        scheduleMode: currentOnboarding.scheduleMode ?? null,
+        trainingDaysPerWeek: typeof currentOnboarding.trainingDaysPerWeek === 'number'
+          ? currentOnboarding.trainingDaysPerWeek
+          : null,
+        sessionDurationMode: currentOnboarding.sessionDurationMode ?? null,
+        sessionLengthMinutes: typeof currentOnboarding.sessionLengthMinutes === 'number'
+          ? currentOnboarding.sessionLengthMinutes
+          : null,
+      }, {
+        scheduleMode: updates.scheduleMode,
+        trainingDaysPerWeek: updates.trainingDaysPerWeek,
+        sessionDurationMode: updates.sessionDurationMode,
+        sessionLengthMinutes: updates.sessionLengthMinutes,
+      })
+      if (scheduleProvided) {
+        onboardingUpdates.scheduleMode = mergedSchedule.scheduleMode ?? undefined
+        onboardingUpdates.trainingDaysPerWeek = mergedSchedule.trainingDaysPerWeek as TrainingDaysPerWeek | null
+      }
+      if (durationProvided) {
+        onboardingUpdates.sessionDurationMode = mergedSchedule.sessionDurationMode ?? undefined
+        onboardingUpdates.sessionLengthMinutes = mergedSchedule.sessionLengthMinutes as SessionLengthPreference | null
+      }
     }
     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
@@ -1625,8 +1663,8 @@ export interface ProfileSnapshot {
   secondaryGoal: string | null
   experienceLevel: string
   trainingDaysPerWeek: number | null
-  sessionLengthMinutes: number
-  scheduleMode: 'static' | 'flexible'
+  sessionLengthMinutes: number | null
+  scheduleMode: 'static' | 'flexible' | null
   equipmentAvailable: string[]
   jointCautions: string[]
   selectedSkills: string[]
@@ -1794,7 +1832,7 @@ export function clearCanonicalProfileData(): void {
   
   // Clear onboarding profile
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('spartanlab_onboarding_profile')
+    removeAthleteItem('spartanlab_onboarding_profile')
   }
   
   // Clear athlete profile (data-service)
@@ -1802,9 +1840,9 @@ export function clearCanonicalProfileData(): void {
     onboardingComplete: false,
     primaryGoal: null,
     experienceLevel: 'beginner',
-    trainingDaysPerWeek: 4,
-    sessionLengthMinutes: 60,
-    scheduleMode: 'flexible',
+    trainingDaysPerWeek: null,
+    sessionLengthMinutes: null,
+    scheduleMode: null,
     equipmentAvailable: [],
     jointCautions: [],
     weakestArea: null,
@@ -2470,9 +2508,9 @@ export function resolveCanonicalPlannerInput(): {
   secondaryGoal: string | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   scheduleMode: 'static' | 'flexible'
-  sessionDurationMode: 'static' | 'adaptive'
+  sessionDurationMode: 'static' | 'adaptive' | null
   trainingDaysPerWeek: number | null
-  sessionLengthMinutes: number
+  sessionLengthMinutes: number | null
   selectedSkills: string[]
   equipmentAvailable: string[]
   jointCautions: string[]
@@ -2524,11 +2562,11 @@ export interface ComposedPlannerInput {
   // Final resolved values
   primaryGoal: string | null
   secondaryGoal: string | null
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | null
   scheduleMode: 'static' | 'flexible'
-  sessionDurationMode: 'static' | 'adaptive'
+  sessionDurationMode: 'static' | 'adaptive' | null
   trainingDaysPerWeek: number | 'flexible' | null
-  sessionLengthMinutes: number
+  sessionLengthMinutes: number | null
   selectedSkills: string[]
   equipmentAvailable: string[]
   jointCautions: string[]
@@ -2633,7 +2671,7 @@ export function composeCanonicalPlannerInput(
   // [PHASE 24O] trainingDaysPerWeek resolution - only use 'flexible' if scheduleMode is truly flexible AFTER override resolution
   const effectiveTrainingDaysPerWeek = effectiveScheduleMode === 'flexible' && !hasExplicitNumericDayOverride
     ? 'flexible' as const
-    : resolve('trainingDaysPerWeek', profile.trainingDaysPerWeek, builderOverrides?.trainingDaysPerWeek, 4)
+    : resolve('trainingDaysPerWeek', profile.trainingDaysPerWeek, builderOverrides?.trainingDaysPerWeek, null)
   
   console.log('[phase24o-schedule-override-resolution]', {
     profileScheduleMode: profile.scheduleMode,
@@ -2651,11 +2689,11 @@ export function composeCanonicalPlannerInput(
   const result: ComposedPlannerInput = {
     primaryGoal: resolve('primaryGoal', profile.primaryGoal, builderOverrides?.primaryGoal, 'planche'),
     secondaryGoal: resolve('secondaryGoal', profile.secondaryGoal, builderOverrides?.secondaryGoal, null),
-    experienceLevel: resolve('experienceLevel', profile.experienceLevel, builderOverrides?.experienceLevel, 'intermediate'),
+    experienceLevel: resolveSavedExperience(profile.experienceLevel, builderOverrides?.experienceLevel, fallbacksUsed),
     scheduleMode: effectiveScheduleMode,
-    sessionDurationMode: resolve('sessionDurationMode', profile.sessionDurationMode, builderOverrides?.sessionDurationMode, 'static'),
+    sessionDurationMode: resolve('sessionDurationMode', profile.sessionDurationMode, builderOverrides?.sessionDurationMode, null),
     trainingDaysPerWeek: effectiveTrainingDaysPerWeek,
-    sessionLengthMinutes: resolve('sessionLengthMinutes', profile.sessionLengthMinutes, builderOverrides?.sessionLength, 60),
+    sessionLengthMinutes: resolve('sessionLengthMinutes', profile.sessionLengthMinutes, builderOverrides?.sessionLength, null),
     selectedSkills: profile.selectedSkills || [],
     equipmentAvailable: builderOverrides?.equipment || profile.equipmentAvailable || [],
     jointCautions: profile.jointCautions || [],
@@ -3251,10 +3289,10 @@ export interface ValidatedGenerationEntry {
   primaryGoal: string
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number | 'flexible'
-  sessionLength: number
+  sessionLength: number | null
   equipment: string[]
   scheduleMode: 'static' | 'flexible'
-  sessionDurationMode: 'static' | 'adaptive'
+  sessionDurationMode: 'static' | 'adaptive' | null
   selectedSkills: string[]
   
   // Optional fields
@@ -3272,13 +3310,49 @@ export interface ValidatedGenerationEntry {
   __fallbacksUsed: string[]
 }
 
+function generationFieldRequest(field: string): string {
+  if (field === 'sessionLength') {
+    return 'Choose a session duration. A fixed duration needs a minute count. Flexible duration can stay open.'
+  }
+  if (field === 'trainingDaysPerWeek') {
+    return 'Choose weekly training days, or choose flexible availability.'
+  }
+  if (field === 'primaryGoal') {
+    return 'Choose a primary goal before generating a program.'
+  }
+  if (field === 'experienceLevel') {
+    return 'Choose a training experience level before generating a program.'
+  }
+  return `Add ${field} before generating a program.`
+}
+
+function savedExperienceLevel(
+  value: string | null | undefined,
+): 'beginner' | 'intermediate' | 'advanced' | null {
+  if (value === 'beginner' || value === 'intermediate' || value === 'advanced') return value
+  return null
+}
+
+function resolveSavedExperience(
+  canonical: string | null | undefined,
+  override: string | null | undefined,
+  fallbacksUsed: string[],
+): 'beginner' | 'intermediate' | 'advanced' | null {
+  const overrideLevel = savedExperienceLevel(override)
+  if (overrideLevel) return overrideLevel
+  const canonicalLevel = savedExperienceLevel(canonical)
+  if (canonicalLevel) return canonicalLevel
+  fallbacksUsed.push('experienceLevel')
+  return null
+}
+
 /**
  * [PHASE 6 TASK 2] Build Canonical Generation Entry
  * 
  * This is the SINGLE function that all generation paths MUST use to build
  * their entry object. It guarantees:
  * 
- * 1. experienceLevel is ALWAYS present (never undefined)
+ * 1. experienceLevel is present only when the athlete saved one
  * 2. All required fields validated before return
  * 3. Composition from canonical profile truth, not stale UI state
  * 4. Explicit fallbacks with tracking for debugging
@@ -3429,16 +3503,15 @@ export function buildCanonicalGenerationEntry(
   const resolvedPrimaryGoal = overrides?.primaryGoal || profile.primaryGoal || null
   const resolvedSecondaryGoal = overrides?.secondaryGoal || profile.secondaryGoal || undefined
   
-  // CRITICAL: experienceLevel fallback chain - NEVER return undefined
-  let resolvedExperienceLevel: 'beginner' | 'intermediate' | 'advanced' = 'intermediate'
-  if (overrides?.experienceLevel) {
-    resolvedExperienceLevel = overrides.experienceLevel
-  } else if (profile.experienceLevel) {
-    resolvedExperienceLevel = profile.experienceLevel
-  } else {
-    fallbacksUsed.push('experienceLevel')
-    // Default to 'intermediate' as safe middle ground
-    resolvedExperienceLevel = 'intermediate'
+  // A missing experience level blocks generation. It is not replaced
+  // with intermediate.
+  const resolvedExperienceLevel = resolveSavedExperience(
+    profile.experienceLevel,
+    overrides?.experienceLevel,
+    fallbacksUsed,
+  )
+  if (!resolvedExperienceLevel) {
+    missingFields.push('experienceLevel')
   }
   
   // ==========================================================================
@@ -3468,8 +3541,9 @@ export function buildCanonicalGenerationEntry(
     resolvedScheduleMode = 'static'  // [PHASE 24Q] Changed default from 'flexible'
   }
   
-  // Training days resolution - explicit numeric override takes precedence
-  let resolvedTrainingDays: number | 'flexible' = 4  // [PHASE 24Q] Changed default
+  // Training days resolution - explicit numeric override takes precedence.
+  // A missing static day count stays missing. It is not rewritten to 4.
+  let resolvedTrainingDays: number | 'flexible' | null = null
   if (hasExplicitNumericDayOverride) {
     // [PHASE 24Q] Explicit numeric override wins unconditionally
     resolvedTrainingDays = overrides!.trainingDaysPerWeek as number
@@ -3481,27 +3555,30 @@ export function buildCanonicalGenerationEntry(
     resolvedTrainingDays = profile.trainingDaysPerWeek
   } else {
     fallbacksUsed.push('trainingDaysPerWeek')
-    resolvedTrainingDays = 4
+    missingFields.push('trainingDaysPerWeek')
   }
   
-  // Session length resolution
-  let resolvedSessionLength: number = 60
-  if (overrides?.sessionLength !== undefined) {
-    resolvedSessionLength = overrides.sessionLength
-  } else if (profile.sessionLengthMinutes) {
-    resolvedSessionLength = profile.sessionLengthMinutes
-  } else {
-    fallbacksUsed.push('sessionLength')
-  }
-  
-  // Session duration mode resolution
-  let resolvedSessionDurationMode: 'static' | 'adaptive' = 'adaptive'
+  // Unspecified duration stays unspecified. It is not labeled adaptive,
+  // and it is not labeled static. Only an explicit static choice without a
+  // minute count asks for a duration. The assembler still has its own
+  // internal minute budget; that budget is not an athlete preference.
+  let resolvedSessionDurationMode: 'static' | 'adaptive' | null = null
   if (overrides?.sessionDurationMode) {
     resolvedSessionDurationMode = overrides.sessionDurationMode
-  } else if (profile.sessionDurationMode) {
+  } else if (profile.sessionDurationMode === 'static' || profile.sessionDurationMode === 'adaptive') {
     resolvedSessionDurationMode = profile.sessionDurationMode
   } else {
     fallbacksUsed.push('sessionDurationMode')
+  }
+
+  let resolvedSessionLength: number | null = null
+  if (overrides?.sessionLength !== undefined) {
+    resolvedSessionLength = overrides.sessionLength
+  } else if (typeof profile.sessionLengthMinutes === 'number') {
+    resolvedSessionLength = profile.sessionLengthMinutes
+  } else if (resolvedSessionDurationMode === 'static') {
+    fallbacksUsed.push('sessionLength')
+    missingFields.push('sessionLength')
   }
   
   // Equipment resolution - map canonical profile keys to builder keys
@@ -3514,11 +3591,14 @@ export function buildCanonicalGenerationEntry(
     'weights': 'weights',
   }
   
-  let resolvedEquipment: string[] = ['floor', 'wall']
-  if (overrides?.equipment && overrides.equipment.length > 0) {
-    resolvedEquipment = overrides.equipment
-  } else if (profile.equipmentAvailable && profile.equipmentAvailable.length > 0) {
-    for (const eq of profile.equipmentAvailable) {
+  const equipmentSelection = classifyEquipment(
+    overrides?.equipment && overrides.equipment.length > 0
+      ? overrides.equipment
+      : profile.equipmentAvailable,
+  )
+  let resolvedEquipment: string[] = []
+  if (equipmentSelection.kind === 'explicit') {
+    for (const eq of equipmentSelection.equipment) {
       const mapped = equipmentMap[eq] || eq
       if (!resolvedEquipment.includes(mapped)) {
         resolvedEquipment.push(mapped)
@@ -3526,7 +3606,6 @@ export function buildCanonicalGenerationEntry(
     }
   } else {
     fallbacksUsed.push('equipment')
-    resolvedEquipment.push('pull_bar', 'dip_bars')
   }
   
   // [PHASE 17Z] TASK 4 - Selected skills resolution with override support
@@ -3553,14 +3632,14 @@ export function buildCanonicalGenerationEntry(
   // Joint cautions resolution
   const resolvedJointCautions = profile.jointCautions || []
   
-  // STEP 3: Validate required fields
+  // STEP 3: Validate required fields.
+  // A missing goal, a missing static day count, or an explicit static
+  // duration without a minute count blocks generation. Flexible frequency,
+  // adaptive duration, and unspecified duration are valid without a number.
+  // Empty equipment stays empty.
   if (!resolvedPrimaryGoal) {
     missingFields.push('primaryGoal')
   }
-  // experienceLevel is guaranteed by fallback above
-  // trainingDaysPerWeek is guaranteed by fallback above
-  // sessionLength is guaranteed by fallback above
-  // equipment is guaranteed by fallback above
   
   // STEP 4: Log audit
   console.log('[canonical-generation-entry-audit]', {
@@ -3618,8 +3697,34 @@ export function buildCanonicalGenerationEntry(
       entry: null,
       error: {
         code: 'validation_failed',
-        message: `Generation entry validation failed: missing ${missingFields.join(', ')}`,
+        message: missingFields.map(generationFieldRequest).join(' '),
         missingFields,
+      },
+    }
+  }
+
+  if (resolvedTrainingDays === null) {
+    return {
+      success: false,
+      entry: null,
+      error: {
+        code: 'validation_failed',
+        message: generationFieldRequest('trainingDaysPerWeek'),
+        missingFields: [...missingFields, 'trainingDaysPerWeek'],
+      },
+    }
+  }
+
+  if (!resolvedExperienceLevel) {
+    return {
+      success: false,
+      entry: null,
+      error: {
+        code: 'validation_failed',
+        message: generationFieldRequest('experienceLevel'),
+        missingFields: missingFields.includes('experienceLevel')
+          ? missingFields
+          : [...missingFields, 'experienceLevel'],
       },
     }
   }
@@ -3751,10 +3856,10 @@ export function entryToAdaptiveInputs(entry: ValidatedGenerationEntry): {
   secondaryGoal?: string
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number | 'flexible'
-  sessionLength: number
+  sessionLength: number | null
   equipment: string[]
   scheduleMode: 'static' | 'flexible'
-  sessionDurationMode: 'static' | 'adaptive'
+  sessionDurationMode: 'static' | 'adaptive' | null
   selectedSkills: string[]
   trainingPathType?: string
   goalCategories?: string[]
@@ -4279,8 +4384,8 @@ export interface EngineFieldConsumption {
   scheduleInputs: {
     scheduleMode: string
     trainingDaysPerWeek: number | null
-    sessionLengthMinutes: number
-    sessionDurationMode: string
+    sessionLengthMinutes: number | null
+    sessionDurationMode: string | null
   }
   // Weighted strength inputs (new - must be consumed)
   weightedStrengthInputs: {

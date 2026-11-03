@@ -14,6 +14,7 @@ import {
   getACWRRiskLevel,
   type TrainingLoadSummary,
 } from './training-load-analyzer'
+import { readBoundAthleteList, writeBoundAthleteList } from './athlete-local-scope'
 
 // =============================================================================
 // TYPES
@@ -64,15 +65,7 @@ function isBrowser(): boolean {
 
 function getFatigueHistory(): FatigueHistoryEntry[] {
   if (!isBrowser()) return []
-  const stored = localStorage.getItem(FATIGUE_HISTORY_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readBoundAthleteList<FatigueHistoryEntry>(FATIGUE_HISTORY_KEY)
 }
 
 function saveFatigueHistory(entry: FatigueHistoryEntry): void {
@@ -87,7 +80,7 @@ function saveFatigueHistory(entry: FatigueHistoryEntry): void {
   cutoff.setDate(cutoff.getDate() - 30)
   const filtered = history.filter(h => new Date(h.date) >= cutoff)
   
-  localStorage.setItem(FATIGUE_HISTORY_KEY, JSON.stringify(filtered))
+  writeBoundAthleteList(FATIGUE_HISTORY_KEY, filtered)
 }
 
 // =============================================================================

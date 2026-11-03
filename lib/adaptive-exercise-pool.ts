@@ -2524,13 +2524,21 @@ function isEquipmentAvailable(equipmentNeeded: EquipmentType, available: Equipme
   return aliases.some(alias => available.includes(alias as EquipmentType))
 }
 
+const LOAD_EQUIPMENT = new Set<EquipmentType>(['dip_belt', 'weights'])
+
 export function hasRequiredEquipment(exercise: Exercise, available: EquipmentType[]): boolean {
-  // Floor and wall are always available
+  // Floor and wall are always available. Listed stations are alternatives:
+  // any one station is enough. A load item such as a dip belt is additional
+  // and cannot by itself make the exercise performable.
   const alwaysAvailable: EquipmentType[] = ['floor', 'wall']
   const allAvailable = [...alwaysAvailable, ...available]
-  
-  // [TASK 2] Use alias-aware equipment checking
-  return exercise.equipment.some(eq => isEquipmentAvailable(eq, allAvailable))
+  const stations = exercise.equipment.filter(eq => !LOAD_EQUIPMENT.has(eq))
+  const loads = exercise.equipment.filter(eq => LOAD_EQUIPMENT.has(eq))
+  const stationReady = stations.some(eq => isEquipmentAvailable(eq, allAvailable))
+  if (loads.length === 0) return stationReady
+  const loadReady = loads.some(eq => isEquipmentAvailable(eq, allAvailable))
+  if (stations.length === 0) return loadReady
+  return stationReady && loadReady
 }
 
 // =============================================================================

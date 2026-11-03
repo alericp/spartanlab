@@ -14,15 +14,17 @@
  * AFTER ClerkProvider but BEFORE components that check owner/entitlement state.
  */
 
-import { createContext, useContext, useEffect, useState, ReactNode, Component } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, Component, Fragment } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { bindActiveAthlete, sealLegacyLocalStorage } from '@/lib/athlete-local-scope'
+import { LegacyLocalDataRecovery } from '@/components/athlete/LegacyLocalDataRecovery'
 import {
   setCurrentUserEmail,
   clearCurrentUserEmail,
-  isCurrentUserOwner,
-  getOwnerEmail,
-  getCurrentUserEmail,
+  setServerVerifiedOwner,
 } from '@/lib/owner-access'
+
+sealLegacyLocalStorage()
 
 // =============================================================================
 // TYPES
@@ -68,23 +70,15 @@ function getSimulationMode(): 'off' | 'free' | 'pro' {
   }
 }
 
-function isPreviewEnvironment(): boolean {
-  if (typeof window === 'undefined') return false
-  const hostname = window.location.hostname
-  return hostname.includes('vusercontent.net') || 
-         hostname.includes('localhost') ||
-         hostname.includes('vercel.app')
-}
-
 // =============================================================================
 // ERROR BOUNDARY
 // =============================================================================
 
 class OwnerBootstrapErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; appChildren: ReactNode; athleteId: string | null },
   { hasError: boolean }
 > {
-  constructor(props: { children: ReactNode }) {
+  constructor(props: { children: ReactNode; appChildren: ReactNode; athleteId: string | null }) {
     super(props)
     this.state = { hasError: false }
   }
@@ -94,16 +88,36 @@ class OwnerBootstrapErrorBoundary extends Component<
   }
   
   componentDidCatch(error: Error) {
+    // The crashed inner tree stops binding. Restore the Clerk id captured
+    // by the outer binder, or signed-out storage while Clerk is unresolved.
+    bindActiveAthlete(this.props.athleteId)
     console.error('[v0] OwnerBootstrapProvider crashed (caught safely):', error.message)
   }
   
   render() {
     if (this.state.hasError) {
-      // On error, still render children but without owner context
-      return this.props.children
+      // Render the app, not the inner provider that just threw.
+      return this.props.appChildren
     }
     return this.props.children
   }
+}
+
+function AthleteScopeBinder({ children }: { children: ReactNode }) {
+  const { user, isLoaded } = useUser()
+  const athleteId = isLoaded ? (user?.id ?? null) : null
+  bindActiveAthlete(athleteId)
+  const athleteKey = !isLoaded ? 'clerk-loading' : (user?.id ?? 'signed-out')
+  return (
+    <Fragment key={athleteKey}>
+      <LegacyLocalDataRecovery />
+      <OwnerBootstrapErrorBoundary athleteId={athleteId} appChildren={children}>
+        <OwnerBootstrapProviderInner>
+          {children}
+        </OwnerBootstrapProviderInner>
+      </OwnerBootstrapErrorBoundary>
+    </Fragment>
+  )
 }
 
 // =============================================================================
@@ -116,104 +130,59 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
   // Call useUser unconditionally per React rules
   // In preview mode, Clerk will log errors but the hook still returns safely
   const { user, isLoaded } = useUser()
+  bindActiveAthlete(isLoaded ? (user?.id ?? null) : null)
   
   useEffect(() => {
-    const isPreview = isPreviewEnvironment()
-    const ownerEmail = getOwnerEmail()
-    const simMode = getSimulationMode()
-    
-    // [PHASE 14B] Audit: Log bootstrap start
-    console.log('[phase14b-owner-bootstrap-audit]', {
-      authLoaded: isLoaded,
-      isPreview,
-      clerkUserExists: !!user,
-      clerkEmail: user?.emailAddresses?.[0]?.emailAddress ?? null,
-      configuredOwnerEmail: ownerEmail,
-      cachedEmailBefore: getCurrentUserEmail(),
-    })
-    
-    // In preview environments, enable owner features for testing
-    if (isPreview) {
+    let cancelled = false
+
+    const loadOwner = async () => {
+      if (!isLoaded) return
+      const simMode = getSimulationMode()
+
+      if (!user) {
+        clearCurrentUserEmail()
+        setServerVerifiedOwner(false)
+        if (!cancelled) {
+          setState({
+            isLoaded: true,
+            isOwner: false,
+            userEmail: null,
+            ownerEmail: null,
+            simulationMode: 'off',
+          })
+        }
+        return
+      }
+
+      const rawEmail = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress
+      const email = rawEmail ? rawEmail.trim() : null
+      setCurrentUserEmail(email)
+
+      let isOwnerResult = false
+      try {
+        const response = await fetch('/api/auth/owner-status')
+        if (response.ok) {
+          const body = await response.json() as { isOwner?: boolean }
+          isOwnerResult = body.isOwner === true
+        }
+      } catch {
+        isOwnerResult = false
+      }
+
+      if (cancelled) return
+      setServerVerifiedOwner(isOwnerResult)
       setState({
         isLoaded: true,
-        isOwner: true,
-        userEmail: 'preview-mode@spartanlab.app',
-        ownerEmail,
-        simulationMode: simMode,
+        isOwner: isOwnerResult,
+        userEmail: email,
+        ownerEmail: null,
+        simulationMode: isOwnerResult ? simMode : 'off',
       })
-      
-      console.log('[phase14b-owner-bootstrap-final-verdict]', {
-        verdict: 'owner_enabled_preview_mode',
-        isOwner: true,
-        simulationMode: simMode,
-      })
-      return
     }
-    
-    if (isLoaded) {
-      if (user) {
-        // Get email from Clerk
-        const rawEmail = user?.emailAddresses?.[0]?.emailAddress
-        const email = rawEmail ? rawEmail.trim() : null
-        
-        // CRITICAL: Set the cached email for owner-access module
-        setCurrentUserEmail(email)
-        
-        const isOwnerResult = isCurrentUserOwner()
-        
-        setState({
-          isLoaded: true,
-          isOwner: isOwnerResult,
-          userEmail: email,
-          ownerEmail,
-          simulationMode: isOwnerResult ? simMode : 'off',
-        })
-        
-        // [PHASE 14B] Audit: Log final bootstrap result
-        console.log('[phase14b-owner-bootstrap-final-verdict]', {
-          verdict: isOwnerResult ? 'owner_detected' : 'not_owner',
-          isOwner: isOwnerResult,
-          userEmail: email,
-          ownerEmail,
-          cachedEmailAfter: getCurrentUserEmail(),
-          simulationMode: isOwnerResult ? simMode : 'off',
-        })
-        
-        // [PHASE 14C TASK 6] Owner E2E flow audit
-        console.log('[phase14c-owner-e2e-flow-audit]', {
-          step: 'bootstrap_complete',
-          isOwner: isOwnerResult,
-          simulationMode: isOwnerResult ? simMode : 'off',
-          expectedBehavior: isOwnerResult
-            ? (simMode === 'off' ? 'owner_bypass_pro' : `owner_simulation_${simMode}`)
-            : 'regular_user',
-        })
-        
-        console.log('[phase14c-owner-flow-final-verdict]', {
-          ownerDetected: isOwnerResult,
-          simulationMode: isOwnerResult ? simMode : 'off',
-          checkoutPrevented: isOwnerResult && simMode !== 'free',
-          proAccessGranted: isOwnerResult && simMode !== 'free',
-          verdict: isOwnerResult ? 'owner_flow_correct' : 'regular_user_flow',
-        })
-      } else {
-        // No user - clear cache
-        clearCurrentUserEmail()
-        
-        setState({
-          isLoaded: true,
-          isOwner: false,
-          userEmail: null,
-          ownerEmail,
-          simulationMode: 'off',
-        })
-        
-        console.log('[phase14b-owner-bootstrap-final-verdict]', {
-          verdict: 'no_user',
-          isOwner: false,
-          cachedEmailAfter: getCurrentUserEmail(),
-        })
-      }
+
+    loadOwner()
+    return () => {
+      cancelled = true
     }
   }, [user, isLoaded])
   
@@ -256,11 +225,9 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
  */
 export function OwnerBootstrapProvider({ children }: { children: ReactNode }) {
   return (
-    <OwnerBootstrapErrorBoundary>
-      <OwnerBootstrapProviderInner>
-        {children}
-      </OwnerBootstrapProviderInner>
-    </OwnerBootstrapErrorBoundary>
+    <AthleteScopeBinder>
+      {children}
+    </AthleteScopeBinder>
   )
 }
 

@@ -3,6 +3,7 @@
 
 import type { SkillSession, SkillSet, HoldQuality } from '@/types/skill-readiness'
 import { calculateSessionDensity } from './skill-density-engine'
+import { readAthleteCollection, writeAthleteCollection } from './athlete-local-scope'
 
 // =============================================================================
 // STORAGE
@@ -24,15 +25,7 @@ function isBrowser(): boolean {
 export function getSkillSessions(): SkillSession[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readAthleteCollection<SkillSession>(STORAGE_KEY)
 }
 
 /**
@@ -122,7 +115,7 @@ export function saveSkillSession(input: SaveSessionInput): SkillSession {
   
   const sessions = getSkillSessions()
   sessions.push(session)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+  writeAthleteCollection(STORAGE_KEY, sessions)
   
   return session
 }
@@ -178,7 +171,7 @@ export function updateSkillSession(
   }
   
   sessions[index] = updatedSession
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+  writeAthleteCollection(STORAGE_KEY, sessions)
   
   return updatedSession
 }
@@ -198,7 +191,7 @@ export function deleteSkillSession(sessionId: string): boolean {
   
   if (filtered.length === sessions.length) return false
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  writeAthleteCollection(STORAGE_KEY, filtered)
   return true
 }
 

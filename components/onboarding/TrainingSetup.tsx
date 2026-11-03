@@ -287,7 +287,7 @@ export function TrainingSetup() {
       scheduleMode: 'static',
       // TASK B FIX: Reset sessionDurationMode to static on clear
       sessionDurationMode: 'static',
-      sessionLengthMinutes: 60,
+      sessionLengthMinutes: null,
       equipmentAvailable: [],
       jointCautions: [],
       weakestArea: null,
@@ -415,11 +415,9 @@ export function TrainingSetup() {
             ? 'both' as const
             : null
 
-      // TASK B FIX: Determine resolved session length for adaptive mode
-      // Adaptive mode uses 45 as default target if no specific length selected
-      const resolvedSessionLength = formData.sessionDurationMode === 'adaptive' && !formData.sessionLengthMinutes
-        ? 45
-        : formData.sessionLengthMinutes!
+      const explicitSessionLength = typeof formData.sessionLengthMinutes === 'number'
+        ? formData.sessionLengthMinutes
+        : null
 
       // [BUILD GREEN GATE] Canonicalize local UI values to the strict
       // domain AthleteProfile contract at the save boundary:
@@ -447,9 +445,8 @@ export function TrainingSetup() {
         selectedStrength: formData.selectedStrength,
         primaryGoal,
         secondaryGoal, // TASK 3: Now persisted canonically
-        trainingDaysPerWeek: formData.trainingDaysPerWeek!,
-        // TASK B FIX: Save resolved session length (domain-compatible)
-        sessionLengthMinutes: resolvedSessionLength,
+        trainingDaysPerWeek: formData.trainingDaysPerWeek,
+        ...(explicitSessionLength !== null ? { sessionLengthMinutes: explicitSessionLength } : {}),
         equipmentAvailable: formData.equipmentAvailable,
         rangeIntent,
         rangeTrainingMode: formData.rangeApproach,
@@ -468,9 +465,8 @@ export function TrainingSetup() {
         secondaryGoal,
         trainingDaysPerWeek: formData.trainingDaysPerWeek,
         scheduleMode: formData.trainingDaysPerWeek ? 'static' : 'flexible',
-        // TASK B FIX: Save sessionDurationMode canonically
         sessionDurationMode: formData.sessionDurationMode,
-        sessionLengthMinutes: resolvedSessionLength,
+        sessionLengthMinutes: explicitSessionLength,
         equipmentAvailable: formData.equipmentAvailable,
         pullUpMax: formData.pullUpMax || null,
         dipMax: formData.dipMax || null,
@@ -480,7 +476,7 @@ export function TrainingSetup() {
       // TASK 6: Dev-safe logging for duration mode verification
       console.log('[TrainingSetup] TASK 6: Saved duration mode:', {
         sessionDurationMode: formData.sessionDurationMode,
-        sessionLengthMinutes: resolvedSessionLength,
+        sessionLengthMinutes: explicitSessionLength,
         scheduleMode: formData.trainingDaysPerWeek ? 'static' : 'flexible',
         trainingDaysPerWeek: formData.trainingDaysPerWeek,
       })
@@ -741,10 +737,9 @@ export function TrainingSetup() {
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button
                     type="button"
-                    onClick={() => setFormData(prev => ({ 
-                      ...prev, 
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
                       sessionDurationMode: 'static',
-                      sessionLengthMinutes: prev.sessionLengthMinutes || 45
                     }))}
                     className={`py-3 rounded-lg border text-sm font-medium transition-colors ${
                       formData.sessionDurationMode === 'static'

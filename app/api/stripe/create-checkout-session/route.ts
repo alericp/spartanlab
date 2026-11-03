@@ -2,6 +2,8 @@ import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { PRICING } from "@/lib/billing/pricing";
+import { queryStrict } from "@/lib/db";
+import { checkoutCustomerFields } from "@/lib/stripe/webhook-reliability";
 
 /**
  * POST /api/stripe/create-checkout-session
@@ -17,7 +19,7 @@ import { PRICING } from "@/lib/billing/pricing";
  * Returns:
  * - 200: { url: string } - Redirect to Stripe Checkout
  * - 401: Not authenticated
- * - 500: Stripe API error
+ * - 500: Stripe API error, or the existing customer lookup failed
  */
 export async function POST() {
   try {
@@ -40,7 +42,23 @@ export async function POST() {
 
     console.log(`[Checkout] Creating session for user: ${userId}`);
 
+    let existing: { stripe_customer_id: string | null } | null = null
+    try {
+      const rows = await queryStrict<{ stripe_customer_id: string | null }>(
+        "SELECT stripe_customer_id FROM users WHERE clerk_id = $1",
+        [userId]
+      )
+      existing = rows[0] ?? null
+    } catch (error) {
+      console.error("[Checkout] Could not read the existing Stripe customer:", error)
+      return NextResponse.json(
+        { error: "Failed to create checkout session" },
+        { status: 500 }
+      )
+    }
+
     const session = await stripe.checkout.sessions.create({
+      ...checkoutCustomerFields(existing?.stripe_customer_id),
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [

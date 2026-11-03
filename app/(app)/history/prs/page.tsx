@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import type { PersonalRecordHistory, PRType, ExerciseCategory } from '@/types/history'
+import { classifyHistoryHttp, historyLoadCopy } from '@/lib/workout/history-progress'
 
 // =============================================================================
 // PR TYPE DISPLAY HELPERS
@@ -477,6 +478,7 @@ export default function PRArchivePage() {
   const [mounted, setMounted] = useState(false)
   const [prs, setPRs] = useState<PersonalRecordHistory[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<ExercisePRGroup | null>(null)
 
@@ -492,12 +494,18 @@ export default function PRArchivePage() {
 
       try {
         const response = await fetch(`/api/history/prs?userId=${userId}`)
-        if (response.ok) {
+        if (classifyHistoryHttp(response.status) !== 'ready') {
+          setLoadError(true)
+          setPRs([])
+        } else {
           const data = await response.json()
+          setLoadError(false)
           setPRs(data.prs || [])
         }
       } catch (error) {
         console.error('[PRArchive] Error fetching PRs:', error)
+        setLoadError(true)
+        setPRs([])
       } finally {
         setLoading(false)
       }
@@ -617,6 +625,12 @@ export default function PRArchivePage() {
               <div key={i} className="h-28 bg-[#1A1F26] rounded-lg animate-pulse" />
             ))}
           </div>
+        ) : loadError ? (
+          <EmptyState
+            icon={Trophy}
+            title={historyLoadCopy('error', 'prs').title}
+            description={historyLoadCopy('error', 'prs').detail}
+          />
         ) : exerciseGroups.length === 0 ? (
           <EmptyState
             icon={Trophy}

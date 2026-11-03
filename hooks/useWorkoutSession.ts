@@ -9,6 +9,9 @@ import { showAchievementNotifications } from '@/components/achievements/achievem
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
 import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 import { persistWorkoutSession, type PersistenceResult } from '@/lib/workout-history-persistence'
+import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { classifyHistoryPersistence, measuredSessionRpe, type HistorySyncState } from '@/lib/workout/history-progress'
+import { retryPendingWorkoutEvidence } from '@/lib/workout-log-service'
 import { useAuth } from '@clerk/nextjs'
 import type { CompletedSetData } from '@/types/history'
 
@@ -60,7 +63,7 @@ export interface UseWorkoutSessionReturn extends WorkoutSessionState, WorkoutSes
   isCompleted: boolean
   formattedDuration: string
   canSave: boolean
-  save: (notes?: string) => Promise<boolean>
+  save: (notes?: string) => Promise<WorkoutSaveAthleteStatus>
   lastSaveResult: PersistenceResult | null
 }
 
@@ -131,6 +134,12 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
   const [lastSaveResult, setLastSaveResult] = useState<PersistenceResult | null>(null)
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const occurrenceIdRef = useRef<string | null>(null)
+  const saveLockRef = useRef(false)
+
+  useEffect(() => {
+    retryPendingWorkoutEvidence()
+  }, [])
 
   // Calculate total sets in session
   const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets, 0)
@@ -162,10 +171,15 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
     completedSets: state.completedSets.length,
     totalExercises,
     completedExercises: new Set(state.completedSets.map(s => s.exerciseId)).size,
-    averageRPE: state.completedSets.length > 0
-      ? Math.round((state.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / state.completedSets.length) * 10) / 10
-      : null,
-    estimatedVolume: state.completedSets.reduce((sum, s) => sum + (s.actualReps * (s.actualRPE / 10)), 0),
+    averageRPE: (() => {
+      const average = measuredSessionRpe(state.completedSets.map(set => set.actualRPE))
+      return average === null ? null : Math.round(average * 10) / 10
+    })(),
+    estimatedVolume: state.completedSets.reduce((sum, set) => {
+      const effort = measuredSessionRpe([set.actualRPE])
+      if (effort === null) return sum
+      return sum + (set.actualReps * (effort / 10))
+    }, 0),
     elapsedSeconds: state.elapsedSeconds,
   }
 
@@ -209,6 +223,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
   }, [])
 
   const reset = useCallback(() => {
+    occurrenceIdRef.current = null
     setState({
       status: 'inactive',
       startTime: null,
@@ -282,10 +297,15 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
   }, [nextExercise])
 
   // Save session to workout log
-  const save = useCallback(async (notes?: string): Promise<boolean> => {
+  const save = useCallback(async (notes?: string): Promise<WorkoutSaveAthleteStatus> => {
     if (state.status !== 'completed' || state.completedSets.length === 0) {
-      return false
+      return describeWorkoutSaveResult({ outcome: 'failed' })
     }
+    if (saveLockRef.current) return describeWorkoutSaveResult({ outcome: 'saving' })
+    saveLockRef.current = true
+    if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
+    const occurrenceId = occurrenceIdRef.current
+    const sessionDate = new Date().toISOString().split('T')[0]
 
     try {
       // Map completed sets to workout exercises
@@ -313,22 +333,38 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
       // Ensure minimum 1 minute duration to prevent 0-minute sessions
       const durationMinutes = Math.max(1, Math.round(state.elapsedSeconds / 60))
 
-      // Save to workout log (localStorage for quick access)
-      saveWorkoutLog({
+      const savedLog = saveWorkoutLog({
         sessionName: session.dayLabel,
         sessionType: 'mixed' as SessionType,
-        sessionDate: new Date().toISOString().split('T')[0],
+        sessionDate,
         durationMinutes,
         focusArea: mapFocusToFocusArea(session.focusLabel),
         notes,
         exercises,
+        occurrenceId,
       })
 
-      // Persist to workout history system (database)
+      if (savedLog.saveDisposition === 'inserted') {
+        const newAchievements = onTrainingEvent('workout_complete')
+        if (newAchievements.length > 0) {
+          showAchievementNotifications(newAchievements)
+        }
+        const completedChallenges = onTrainingEventForChallenges()
+        if (completedChallenges.length > 0) {
+          showChallengeNotifications(completedChallenges)
+        }
+      }
+
+      // Persist to workout history system (database). A history failure
+      // keeps the local log and the same occurrence id for the retry.
+      let historySync: HistorySyncState = 'skipped'
       if (userId) {
+        try {
         const historyResult = await persistWorkoutSession({
           userId,
           workoutName: session.dayLabel,
+          workoutDate: sessionDate,
+          clientSessionId: occurrenceId,
           dayLabel: session.dayLabel,
           focusArea: session.focusLabel,
           durationMinutes,
@@ -373,6 +409,21 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         if (historyResult.prsDetected.length > 0) {
           console.log('[WorkoutSession] PRs detected:', historyResult.prsDetected)
         }
+        historySync = classifyHistoryPersistence(historyResult)
+        } catch (error) {
+          console.error('[WorkoutSession] History sync failed:', error)
+          historySync = 'failed'
+        }
+      }
+
+      // Record RPE once, including when History did not sync.
+      if (savedLog.saveDisposition !== 'inserted') {
+        return describeWorkoutSaveResult({
+          outcome: 'saved',
+          saveDisposition: savedLog.saveDisposition,
+          serverEvidence: savedLog.serverEvidence,
+          historySync,
+        })
       }
 
       // Record RPE session for fatigue engine
@@ -381,43 +432,39 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
           if (!map.has(set.exerciseName)) {
             map.set(set.exerciseName, { exerciseName: set.exerciseName, sets: [] })
           }
+          const effort = measuredSessionRpe([set.actualRPE])
+          if (effort === null) return map
           map.get(set.exerciseName)!.sets.push({
             setNumber: set.setNumber,
-            targetRPE: set.targetRPE,
-            actualRPE: set.actualRPE,
+            targetRPE: measuredSessionRpe([set.targetRPE]) ?? effort,
+            actualRPE: effort,
             targetReps: set.targetReps,
             actualReps: set.actualReps,
           })
           return map
         }, new Map<string, { exerciseName: string; sets: { setNumber: number; targetRPE: number; actualRPE: number; targetReps: number; actualReps: number }[] }>())
       ).map(([_, data]) => data)
+        .filter(data => data.sets.length > 0)
 
       if (rpeExercises.length > 0) {
         recordRPESession({
-          sessionId: `session-${Date.now()}`,
+          sessionId: occurrenceId,
           sessionDate: new Date().toISOString(),
           exercises: rpeExercises,
         })
       }
 
-      // [ACHIEVEMENT-EVENT-TYPE] `onTrainingEvent` requires a canonical
-      // event type from `TrainingEventType`. Save-after-completion is
-      // semantically the `'workout_complete'` event.
-      const newAchievements = onTrainingEvent('workout_complete')
-      if (newAchievements.length > 0) {
-        showAchievementNotifications(newAchievements)
-      }
-      
-      // Check for completed challenges
-      const completedChallenges = onTrainingEventForChallenges()
-      if (completedChallenges.length > 0) {
-        showChallengeNotifications(completedChallenges)
-      }
-      
-      return true
+      return describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: savedLog.saveDisposition,
+        serverEvidence: savedLog.serverEvidence,
+        historySync,
+      })
     } catch (error) {
       console.error('Failed to save workout session:', error)
-      return false
+      return describeWorkoutSaveResult({ outcome: 'failed' })
+    } finally {
+      saveLockRef.current = false
     }
   }, [state.status, state.completedSets, state.elapsedSeconds, session, userId])
 

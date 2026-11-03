@@ -6,8 +6,27 @@ import {
   downgradeUserSubscription,
   findUserByStripeCustomerId,
   findUserByEmail,
+  findUserByClerkId,
   type StripeSubscriptionData,
 } from '@/lib/subscription-sync'
+import {
+  checkoutRecipientEmail,
+  classifyEmailResult,
+  durableAdmissionResponse,
+  gateStripeWebhookRequest,
+  gateStripeWebhookSignature,
+  missingRecordDisposition,
+  decideSubscriptionMutation,
+  mutationOutcome,
+  objectIdForStripeEvent,
+  planSubscriptionWrite,
+  selectCheckoutAccount,
+  shouldSendBillingEmail,
+  type BillingAccount,
+  type ProcessingOutcome,
+  type StripeDurabilityStore,
+} from '@/lib/stripe/webhook-reliability'
+import { createPostgresStripeDurabilityStore } from '@/lib/stripe/webhook-durability-db'
 import {
   sendProUpgradeEmail,
   sendPaymentFailedEmail,
@@ -16,38 +35,12 @@ import {
 
 // Stripe webhook signature verification
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
-
-// =============================================================================
-// IDEMPOTENCY TRACKING
-// =============================================================================
-
-// In-memory tracking for processed email events (production: use Redis/DB)
-// Key format: `${eventType}:${resourceId}` - prevents duplicate emails for same event
-const processedEmailEvents = new Set<string>()
-
-/**
- * Check if email was already sent for this event (idempotency)
- * Returns true if already processed, false if new
- */
-function wasEmailAlreadySent(eventType: string, resourceId: string): boolean {
-  const key = `${eventType}:${resourceId}`
-  if (processedEmailEvents.has(key)) {
-    console.log(`[Stripe Webhook] Skipping duplicate email for ${key}`)
-    return true
-  }
-  processedEmailEvents.add(key)
-  // Clean up old entries after 1 hour to prevent memory bloat
-  setTimeout(() => processedEmailEvents.delete(key), 60 * 60 * 1000)
-  return false
-}
-
-// =============================================================================
-// STRIPE EVENT TYPES
-// =============================================================================
+const durability = createPostgresStripeDurabilityStore()
 
 interface StripeEvent {
   id: string
   type: string
+  created?: number
   data: {
     object: {
       id: string
@@ -62,69 +55,230 @@ interface StripeEvent {
   }
 }
 
+type EmailSendResult = { success: boolean; error?: string }
+
+function eventCreated(event: StripeEvent): number {
+  return typeof event.created === 'number' ? event.created : 0
+}
+
+/**
+ * Send a billing email after the subscription write.
+ * The durable ledger records a send only when the provider accepts it.
+ * A failed send releases the key so Stripe can retry. An unconfigured provider
+ * releases the key and still completes the attempt.
+ */
+async function deliverBillingEmail(
+  store: StripeDurabilityStore,
+  key: string,
+  recipient: string | null | undefined,
+  send: () => Promise<EmailSendResult>,
+): Promise<ProcessingOutcome> {
+  if (!shouldSendBillingEmail(false, Boolean(recipient))) {
+    return 'success'
+  }
+
+  const claim = await store.claimEmail(key)
+  if (claim === 'already_sent') return 'success'
+  if (claim === 'in_flight') return 'failure'
+
+  try {
+    const result = await send()
+    const classified = classifyEmailResult(
+      result.success
+        ? 'sent'
+        : result.error === 'Email service not configured'
+          ? 'not_configured'
+          : 'failed',
+    )
+    if (classified.outcome === 'failure') {
+      await store.releaseEmail(key)
+      console.error(`[Stripe Webhook] Billing email failed for ${key}`)
+      return 'failure'
+    }
+    if (classified.markSent) {
+      await store.markEmailSent(key)
+    } else {
+      await store.releaseEmail(key)
+    }
+    return 'success'
+  } catch (error) {
+    console.error(`[Stripe Webhook] Billing email failed for ${key}:`, error)
+    await store.releaseEmail(key)
+    return 'failure'
+  }
+}
+
+/**
+ * Claim the customer version and the subscription version, then write.
+ * The write itself rechecks both rows so a newer event cannot be overwritten
+ * after this claim returns. A failed write releases only this event's rows.
+ */
+async function applyCurrentSubscriptionWrite(
+  store: StripeDurabilityStore,
+  customerId: string,
+  subscriptionId: string,
+  stripeCreated: number,
+  eventId: string,
+  write: () => Promise<'applied' | 'skip' | 'failure'>,
+): Promise<'applied' | 'skip_stale' | 'failure'> {
+  const customerTurn = await store.claimSubscriptionVersion(customerId, stripeCreated, eventId)
+  if (customerTurn === 'skip_stale') {
+    console.log(`[Stripe Webhook] Skipping stale ${eventId} for customer ${customerId}`)
+    return 'skip_stale'
+  }
+  const subscriptionTurn = await store.claimSubscriptionVersion(subscriptionId, stripeCreated, eventId)
+  if (subscriptionTurn === 'skip_stale') {
+    console.log(`[Stripe Webhook] Skipping stale ${eventId} for ${subscriptionId}`)
+    return 'skip_stale'
+  }
+
+  try {
+    const outcome = await write()
+    if (outcome === 'failure') {
+      await store.releaseSubscriptionVersion(customerId, eventId)
+      await store.releaseSubscriptionVersion(subscriptionId, eventId)
+      return 'failure'
+    }
+    if (outcome === 'skip') return 'skip_stale'
+    return 'applied'
+  } catch (error) {
+    await store.releaseSubscriptionVersion(customerId, eventId)
+    await store.releaseSubscriptionVersion(subscriptionId, eventId)
+    throw error
+  }
+}
+
+function subscriptionGrantsEntitlement(status: string): boolean {
+  return status === 'active' || status === 'trialing'
+}
+
 /**
  * Handle checkout.session.completed event
  * Called when user completes payment - this is the trustworthy moment to send upgrade email
  */
-async function handleCheckoutSessionCompleted(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
+async function handleCheckoutSessionCompleted(
+  event: StripeEvent,
+  stripe: ReturnType<typeof getStripe>,
+  store: StripeDurabilityStore,
+): Promise<ProcessingOutcome> {
   const session = event.data.object
-  const customerId = session.customer as string
-  const email = session.customer_email as string || session.email as string
+  const customerId = typeof session.customer === 'string' ? session.customer : ''
+  const email = checkoutRecipientEmail({
+    customer_email: session.customer_email as string | null,
+    email: session.email as string | null,
+    customer_details: session.customer_details as { email?: string | null } | null,
+  })
 
   console.log(`[Stripe Webhook] Checkout completed for customer: ${customerId}, email: ${email}`)
 
   if (!customerId || !email) {
     console.warn('[Stripe Webhook] Missing customerId or email in checkout session')
-    return
+    return 'failure'
   }
 
   try {
-    // Get the subscription from the customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      limit: 1,
+    const metadataUserId = typeof session.metadata?.userId === 'string' && session.metadata.userId
+      ? session.metadata.userId
+      : null
+
+    let subscriptionId = typeof session.subscription === 'string' ? session.subscription : ''
+    let subscriptionStatus: StripeSubscriptionData['status'] = 'active'
+    let currentPeriodEnd = Math.floor(Date.now() / 1000)
+
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      subscriptionId = subscription.id
+      subscriptionStatus = (subscription.status as StripeSubscriptionData['status']) || 'active'
+      currentPeriodEnd = subscription.current_period_end
+    } else {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        limit: 1,
+      })
+      if (subscriptions.data.length === 0) {
+        console.warn('[Stripe Webhook] No subscription found for customer', customerId)
+        return 'failure'
+      }
+      const subscription = subscriptions.data[0]
+      subscriptionId = subscription.id
+      subscriptionStatus = (subscription.status as StripeSubscriptionData['status']) || 'active'
+      currentPeriodEnd = subscription.current_period_end
+    }
+
+    await store.setObjectId(event.id, subscriptionId)
+
+    let accountByClerkId: BillingAccount | null = null
+    let accountByEmail: BillingAccount | null = null
+    if (metadataUserId) {
+      const lookup = await findUserByClerkId(metadataUserId)
+      if (lookup.status === 'failed') return 'failure'
+      accountByClerkId = lookup.status === 'found' ? lookup.account : null
+    } else {
+      const lookup = await findUserByEmail(email)
+      if (lookup.status === 'failed') return 'failure'
+      accountByEmail = lookup.status === 'found' ? lookup.account : null
+    }
+
+    const user = selectCheckoutAccount({
+      metadataUserId,
+      accountByClerkId,
+      accountByEmail,
     })
 
-    if (subscriptions.data.length === 0) {
-      console.warn('[Stripe Webhook] No subscription found for customer', customerId)
-      return
-    }
-
-    const subscription = subscriptions.data[0]
-
-    // Find user by email
-    const user = await findUserByEmail(email)
     if (!user) {
-      console.warn(`[Stripe Webhook] User not found for email: ${email}`)
-      // Still send email even if user not in DB yet (they just signed up)
+      console.warn('[Stripe Webhook] Checkout account not found for completed session')
+      return missingRecordDisposition(false) === 'continue' ? 'success' : 'failure'
     }
 
-    // Sync subscription to user if found
-    if (user) {
-      const subscriptionData: StripeSubscriptionData = {
-        customerId,
-        subscriptionId: subscription.id,
-        email,
-        status: (subscription.status as any) || 'active',
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-      }
+    const subscriptionData: StripeSubscriptionData = {
+      customerId,
+      subscriptionId,
+      email,
+      status: subscriptionStatus,
+      currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
+    }
+    const planned = planSubscriptionWrite({
+      existingCustomerId: user.stripeCustomerId,
+      incoming: subscriptionData,
+    })
 
-      await syncStripeSubscriptionToUser(user.id, subscriptionData)
-      console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
+    if (!planned.write) {
+      console.warn(`[Stripe Webhook] Preserved existing Stripe customer for user ${user.id}`)
+      return 'success'
     }
 
-    // Send Pro upgrade confirmation email (idempotent)
-    // Use subscription ID as resource ID to prevent duplicate emails
-    if (!wasEmailAlreadySent('pro_upgrade', subscription.id)) {
-      const customerName = session.customer_details?.name || user?.username
-      await sendProUpgradeEmail({
-        email,
-        name: customerName || undefined,
-      })
-      console.log(`[Stripe Webhook] Pro upgrade email sent to ${email}`)
-    }
+    const turn = await applyCurrentSubscriptionWrite(
+      store,
+      customerId,
+      subscriptionId,
+      eventCreated(event),
+      event.id,
+      async () => {
+        const written = await syncStripeSubscriptionToUser(user.id, planned.write!, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: subscriptionGrantsEntitlement(subscriptionStatus),
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
+        if (mutationOutcome(written.status) === 'failure') {
+          console.error(`[Stripe Webhook] Subscription update failed for user ${user.id}`)
+          return 'failure'
+        }
+        console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
+        return 'applied'
+      },
+    )
+    if (turn !== 'applied') return turn === 'failure' ? 'failure' : 'success'
+
+    const customerName = session.customer_details?.name || user.username
+    return deliverBillingEmail(store, `pro_upgrade:${subscriptionId}`, email, () => sendProUpgradeEmail({
+      email,
+      name: customerName || undefined,
+    }))
   } catch (error) {
     console.error('[Stripe Webhook] Error handling checkout.session.completed:', error)
+    return 'failure'
   }
 }
 
@@ -132,7 +286,11 @@ async function handleCheckoutSessionCompleted(event: StripeEvent, stripe: Return
  * Handle customer.subscription.updated event
  * Called when subscription status changes (trial -> active, payment issues, etc.)
  */
-async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
+async function handleSubscriptionUpdated(
+  event: StripeEvent,
+  _stripe: ReturnType<typeof getStripe>,
+  store: StripeDurabilityStore,
+): Promise<ProcessingOutcome> {
   const subscription = event.data.object
   const customerId = subscription.customer as string
   const subscriptionId = subscription.id as string
@@ -142,15 +300,15 @@ async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<
   console.log(`[Stripe Webhook] Subscription updated: ${subscriptionId}, status: ${status}`)
 
   try {
-    // Find user by Stripe customer ID
-    const user = await findUserByStripeCustomerId(customerId)
-    
-    if (!user) {
-      console.warn(`[Stripe Webhook] No user found for customer: ${customerId}`)
-      return
+    const lookup = await findUserByStripeCustomerId(customerId)
+    if (lookup.status !== 'found') {
+      if (lookup.status === 'not_found') {
+        console.warn(`[Stripe Webhook] No user found for customer: ${customerId}`)
+      }
+      return missingRecordDisposition(false) === 'continue' ? 'success' : 'failure'
     }
 
-    // Sync subscription data
+    const user = lookup.account
     const subscriptionData: StripeSubscriptionData = {
       customerId,
       subscriptionId,
@@ -158,11 +316,52 @@ async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<
       status: status as StripeSubscriptionData['status'],
       currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
     }
+    const planned = planSubscriptionWrite({
+      existingCustomerId: user.stripeCustomerId,
+      incoming: subscriptionData,
+    })
 
-    await syncStripeSubscriptionToUser(user.id, subscriptionData)
-    console.log(`[Stripe Webhook] Successfully synced subscription update for user ${user.id}`)
+    if (!planned.write) {
+      console.warn(`[Stripe Webhook] Preserved existing Stripe customer for user ${user.id}`)
+      return 'success'
+    }
+
+    const decision = decideSubscriptionMutation({
+      storedSubscriptionId: user.stripeSubscriptionId,
+      incomingSubscriptionId: subscriptionId,
+      grantsEntitlement: subscriptionGrantsEntitlement(status),
+    })
+    if (decision === 'skip_other_subscription') {
+      console.log(`[Stripe Webhook] Leaving stored subscription in place for ${subscriptionId}`)
+      return 'success'
+    }
+
+    const turn = await applyCurrentSubscriptionWrite(
+      store,
+      customerId,
+      subscriptionId,
+      eventCreated(event),
+      event.id,
+      async () => {
+        const written = await syncStripeSubscriptionToUser(user.id, planned.write!, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: subscriptionGrantsEntitlement(status),
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
+        if (mutationOutcome(written.status) === 'failure') {
+          console.error(`[Stripe Webhook] Subscription update failed for user ${user.id}`)
+          return 'failure'
+        }
+        console.log(`[Stripe Webhook] Successfully synced subscription update for user ${user.id}`)
+        return 'applied'
+      },
+    )
+    return turn === 'failure' ? 'failure' : 'success'
   } catch (error) {
     console.error('[Stripe Webhook] Error handling subscription.updated:', error)
+    return 'failure'
   }
 }
 
@@ -170,7 +369,11 @@ async function handleSubscriptionUpdated(event: StripeEvent, stripe: ReturnType<
  * Handle customer.subscription.deleted event
  * Called when subscription is canceled - send cancellation email
  */
-async function handleSubscriptionDeleted(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
+async function handleSubscriptionDeleted(
+  event: StripeEvent,
+  stripe: ReturnType<typeof getStripe>,
+  store: StripeDurabilityStore,
+): Promise<ProcessingOutcome> {
   const subscription = event.data.object
   const customerId = subscription.customer as string
   const subscriptionId = subscription.id as string
@@ -178,10 +381,24 @@ async function handleSubscriptionDeleted(event: StripeEvent, stripe: ReturnType<
   console.log(`[Stripe Webhook] Subscription deleted: ${subscriptionId}`)
 
   try {
-    // Find user by Stripe customer ID and downgrade
-    const user = await findUserByStripeCustomerId(customerId)
-    
-    // Also try to get customer email from Stripe for email sending
+    const lookup = await findUserByStripeCustomerId(customerId)
+    if (lookup.status !== 'found') {
+      if (lookup.status === 'not_found') {
+        console.warn(`[Stripe Webhook] No user found for customer: ${customerId}`)
+      }
+      return missingRecordDisposition(false) === 'continue' ? 'success' : 'failure'
+    }
+
+    const decision = decideSubscriptionMutation({
+      storedSubscriptionId: lookup.account.stripeSubscriptionId,
+      incomingSubscriptionId: subscriptionId,
+      grantsEntitlement: false,
+    })
+    if (decision === 'skip_other_subscription') {
+      console.log(`[Stripe Webhook] Not downgrading a different subscription for ${subscriptionId}`)
+      return 'success'
+    }
+
     let customerEmail: string | null = null
     let customerName: string | undefined
     try {
@@ -194,39 +411,59 @@ async function handleSubscriptionDeleted(event: StripeEvent, stripe: ReturnType<
       console.warn(`[Stripe Webhook] Could not retrieve customer ${customerId}:`, e)
     }
 
-    // Downgrade user if found
-    if (user) {
-      await downgradeUserSubscription(user.id)
-      console.log(`[Stripe Webhook] Successfully downgraded user ${user.id} to free plan`)
-      customerEmail = customerEmail || user.email
-      customerName = customerName || user.username
-    }
+    const turn = await applyCurrentSubscriptionWrite(
+      store,
+      customerId,
+      subscriptionId,
+      eventCreated(event),
+      event.id,
+      async () => {
+        const written = await downgradeUserSubscription(lookup.account.id, {
+          customerId,
+          subscriptionId,
+          eventId: event.id,
+          grantsEntitlement: false,
+        })
+        if (written.status === 'stale' || written.status === 'skipped') return 'skip'
+        if (mutationOutcome(written.status) === 'failure') {
+          console.error(`[Stripe Webhook] Subscription downgrade failed for user ${lookup.account.id}`)
+          return 'failure'
+        }
+        console.log(`[Stripe Webhook] Successfully downgraded user ${lookup.account.id} to free plan`)
+        return 'applied'
+      },
+    )
+    if (turn !== 'applied') return turn === 'failure' ? 'failure' : 'success'
 
-    // Send cancellation email (idempotent)
-    if (customerEmail && !wasEmailAlreadySent('subscription_cancelled', subscriptionId)) {
-      await sendSubscriptionCancelledEmail({
-        email: customerEmail,
+    customerEmail = customerEmail || lookup.account.email
+    customerName = customerName || lookup.account.username
+    return deliverBillingEmail(
+      store,
+      `subscription_cancelled:${subscriptionId}`,
+      customerEmail,
+      () => sendSubscriptionCancelledEmail({
+        email: customerEmail || '',
         name: customerName,
-      })
-      console.log(`[Stripe Webhook] Cancellation email sent to ${customerEmail}`)
-    }
+      }),
+    )
   } catch (error) {
     console.error('[Stripe Webhook] Error handling subscription.deleted:', error)
+    return 'failure'
   }
 }
 
 /**
- * Handle invoice.payment_succeeded event
- * Called when invoice payment succeeds
+ * Handle invoice.payment_succeeded event.
+ * This handler does not write subscription state. A retrieve error stays a log
+ * so Stripe is not asked to retry a read that cannot change the account.
  */
-async function handleInvoicePaymentSucceeded(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
+async function handleInvoicePaymentSucceeded(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<ProcessingOutcome> {
   const invoice = event.data.object
   const customerId = invoice.customer as string
   const subscriptionId = invoice.subscription as string
 
   console.log(`[Stripe Webhook] Invoice payment succeeded for customer: ${customerId}`)
 
-  // In production: ensure subscription status is 'active'
   if (subscriptionId) {
     try {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId as string)
@@ -235,13 +472,18 @@ async function handleInvoicePaymentSucceeded(event: StripeEvent, stripe: ReturnT
       console.error('[Stripe Webhook] Error retrieving subscription:', error)
     }
   }
+  return 'success'
 }
 
 /**
  * Handle invoice.payment_failed event
  * Called when invoice payment fails - send payment failed email
  */
-async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType<typeof getStripe>): Promise<void> {
+async function handleInvoicePaymentFailed(
+  event: StripeEvent,
+  stripe: ReturnType<typeof getStripe>,
+  store: StripeDurabilityStore,
+): Promise<ProcessingOutcome> {
   const invoice = event.data.object
   const customerId = invoice.customer as string
   const invoiceId = invoice.id as string
@@ -249,11 +491,9 @@ async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType
   console.log(`[Stripe Webhook] Invoice payment failed for customer: ${customerId}`)
 
   try {
-    // Get customer email from Stripe
-    let customerEmail: string | null = invoice.customer_email as string || null
+    let customerEmail: string | null = (invoice.customer_email as string) || null
     let customerName: string | undefined
 
-    // If no email in invoice, fetch from customer
     if (!customerEmail) {
       try {
         const customer = await stripe.customers.retrieve(customerId) as { email?: string; name?: string; deleted?: boolean }
@@ -263,19 +503,39 @@ async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType
         }
       } catch (e) {
         console.warn(`[Stripe Webhook] Could not retrieve customer ${customerId}:`, e)
+        return 'failure'
       }
     }
 
-    // Send payment failed email (idempotent - use invoice ID to prevent duplicates)
-    if (customerEmail && !wasEmailAlreadySent('payment_failed', invoiceId)) {
-      await sendPaymentFailedEmail({
-        email: customerEmail,
-        name: customerName,
-      })
-      console.log(`[Stripe Webhook] Payment failed email sent to ${customerEmail}`)
-    }
+    return deliverBillingEmail(store, `payment_failed:${invoiceId}`, customerEmail, () => sendPaymentFailedEmail({
+      email: customerEmail || '',
+      name: customerName,
+    }))
   } catch (error) {
     console.error('[Stripe Webhook] Error handling invoice.payment_failed:', error)
+    return 'failure'
+  }
+}
+
+async function dispatchStripeEvent(
+  event: StripeEvent,
+  stripe: ReturnType<typeof getStripe>,
+  store: StripeDurabilityStore,
+): Promise<ProcessingOutcome> {
+  switch (event.type) {
+    case 'checkout.session.completed':
+      return handleCheckoutSessionCompleted(event, stripe, store)
+    case 'customer.subscription.updated':
+      return handleSubscriptionUpdated(event, stripe, store)
+    case 'customer.subscription.deleted':
+      return handleSubscriptionDeleted(event, stripe, store)
+    case 'invoice.payment_succeeded':
+      return handleInvoicePaymentSucceeded(event, stripe)
+    case 'invoice.payment_failed':
+      return handleInvoicePaymentFailed(event, stripe, store)
+    default:
+      console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`)
+      return 'success'
   }
 }
 
@@ -283,75 +543,42 @@ async function handleInvoicePaymentFailed(event: StripeEvent, stripe: ReturnType
  * Main webhook handler
  */
 export async function POST(request: Request) {
-  // Verify webhook secret is configured
-  if (!STRIPE_WEBHOOK_SECRET) {
-    console.error('[Stripe Webhook] STRIPE_WEBHOOK_SECRET not configured')
+  const headerPayload = await headers()
+  const signature = headerPayload.get('stripe-signature')
+  const admission = gateStripeWebhookRequest({
+    secretConfigured: Boolean(STRIPE_WEBHOOK_SECRET),
+    signature,
+  })
+
+  if (!admission.ok) {
+    console.error(`[Stripe Webhook] ${admission.error}`)
     return NextResponse.json(
-      { error: 'Webhook secret not configured' },
-      { status: 500 }
+      { error: admission.error },
+      { status: admission.status }
     )
   }
 
+  let stripe: ReturnType<typeof getStripe>
+  let event: StripeEvent
   try {
-    // Get Stripe client (request-time safe)
-    const stripe = getStripe()
-    
-    // Get raw body for signature verification
+    stripe = getStripe()
     const body = await request.text()
-    const headerPayload = await headers()
-    const signature = headerPayload.get('stripe-signature')
-
-    if (!signature) {
-      console.error('[Stripe Webhook] Missing stripe-signature header')
-      return NextResponse.json(
-        { error: 'Missing signature' },
-        { status: 400 }
-      )
-    }
-
-    // Verify webhook signature
-    let event: StripeEvent
     try {
-      event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET) as StripeEvent
+      event = stripe.webhooks.constructEvent(body, signature as string, STRIPE_WEBHOOK_SECRET as string) as StripeEvent
     } catch (error) {
       console.error('[Stripe Webhook] Signature verification failed:', error)
+      const rejected = gateStripeWebhookSignature(false)
+      if (!rejected.ok) {
+        return NextResponse.json(
+          { error: rejected.error },
+          { status: rejected.status }
+        )
+      }
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 400 }
       )
     }
-
-    console.log(`[Stripe Webhook] Processing event: ${event.type}`)
-
-    // Handle specific events
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event, stripe)
-        break
-
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event, stripe)
-        break
-
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event, stripe)
-        break
-
-      case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event, stripe)
-        break
-
-      case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event, stripe)
-        break
-
-      default:
-        console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`)
-        break
-    }
-
-    // Always return 200 to acknowledge receipt
-    return NextResponse.json({ received: true }, { status: 200 })
   } catch (error) {
     console.error('[Stripe Webhook] Error processing webhook:', error)
     return NextResponse.json(
@@ -359,4 +586,56 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
+
+  if (!event.id) {
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 400 }
+    )
+  }
+
+  let outcome: ProcessingOutcome = 'failure'
+  try {
+    const claim = await durability.claim({
+      eventId: event.id,
+      eventType: event.type,
+      stripeCreated: eventCreated(event),
+      objectId: objectIdForStripeEvent(event),
+    })
+    const early = durableAdmissionResponse(claim)
+    if (early.stop) {
+      if (claim.result === 'duplicate') console.log(`[Stripe Webhook] Duplicate event ${event.id}`)
+      return NextResponse.json(early.body, { status: early.status })
+    }
+
+    console.log(`[Stripe Webhook] Processing event: ${event.type}`)
+    try {
+      outcome = await dispatchStripeEvent(event, stripe, durability)
+    } catch (error) {
+      console.error('[Stripe Webhook] Error processing webhook:', error)
+      outcome = 'failure'
+    }
+
+    if (outcome === 'success') await durability.markProcessed(event.id)
+    else await durability.markFailed(event.id)
+  } catch (error) {
+    console.error('[Stripe Webhook] Durable webhook record failed:', error)
+    try {
+      await durability.markFailed(event.id)
+    } catch {
+      // The claim table may be missing. Stripe still needs a retryable response.
+    }
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    )
+  }
+
+  if (outcome === 'success') {
+    return NextResponse.json({ received: true }, { status: 200 })
+  }
+  return NextResponse.json(
+    { error: 'Webhook processing failed' },
+    { status: 500 }
+  )
 }

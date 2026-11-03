@@ -37,6 +37,7 @@ import {
 import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getLatestRecords } from './strength-service'
 import { getOnboardingProfile, isOnboardingComplete } from './athlete-profile'
+import { readAthleteCollection, readAthleteItem, removeAthleteItem, writeAthleteCollection, writeAthleteItem } from './athlete-local-scope'
 
 export type PrimaryGoal = 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' | 'handstand_pushup' | 'iron_cross' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
@@ -278,15 +279,7 @@ export function generateProgram(inputs: ProgramInputs): GeneratedProgram {
 export function getSavedPrograms(): GeneratedProgram[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  return readAthleteCollection<GeneratedProgram>(STORAGE_KEY)
 }
 
 // Get latest program
@@ -305,7 +298,7 @@ export function saveProgram(program: GeneratedProgram): GeneratedProgram {
   
   const programs = getSavedPrograms()
   programs.push(program)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
+  writeAthleteCollection(STORAGE_KEY, programs)
   
   return program
 }
@@ -319,7 +312,7 @@ export function deleteProgram(id: string): boolean {
   
   if (filtered.length === programs.length) return false
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  writeAthleteCollection(STORAGE_KEY, filtered)
   return true
 }
 
@@ -481,7 +474,7 @@ const ACTIVE_PROGRAM_KEY = 'spartanlab_active_program'
 export function getActiveProgram(): GeneratedProgram | null {
   if (!isBrowser()) return null
   
-  const stored = localStorage.getItem(ACTIVE_PROGRAM_KEY)
+  const stored = readAthleteItem(ACTIVE_PROGRAM_KEY)
   if (stored) {
     try {
       return JSON.parse(stored)
@@ -498,7 +491,7 @@ export function getActiveProgram(): GeneratedProgram | null {
  */
 export function setActiveProgram(program: GeneratedProgram): void {
   if (!isBrowser()) return
-  localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(program))
+  writeAthleteItem(ACTIVE_PROGRAM_KEY, JSON.stringify(program))
 }
 
 /**
@@ -509,7 +502,7 @@ export function setActiveProgram(program: GeneratedProgram): void {
  */
 export function clearActiveProgram(): void {
   if (!isBrowser()) return
-  localStorage.removeItem(ACTIVE_PROGRAM_KEY)
+  removeAthleteItem(ACTIVE_PROGRAM_KEY)
 }
 
 /**

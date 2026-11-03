@@ -20,12 +20,15 @@ import {
   Flame,
   RefreshCw,
 } from 'lucide-react'
+import { readAthleteItem } from '@/lib/athlete-local-scope'
 import { getCoachDecision, type CoachDecision } from '@/lib/training-coach'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { getWorkoutLogs } from '@/lib/workout-log-service'
 import { type GeneratedProgram } from '@/lib/program-service'
 import { type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
+import { isOnboardingComplete } from '@/lib/athlete-profile'
+import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
 import { analyzeDifficultyTrends } from '@/lib/adaptive-progression-engine'
 
 const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
@@ -66,7 +69,7 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
       // Check for active workout session
       let hasActiveSession = false
       try {
-        const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+        const savedSession = readAthleteItem(WORKOUT_STORAGE_KEY)
         if (savedSession) {
           const session = JSON.parse(savedSession)
           const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000
@@ -513,20 +516,20 @@ function renderActionButton(state: WorkoutState) {
           </Button>
         </Link>
       )
-    case 'no_program':
-      // Route to /onboarding/complete if user has onboarding data, else /onboarding
-      // This is consistent with FirstRunGuide routing
+    case 'no_program': {
+      const entry = dashboardEmptyPresence(false, isOnboardingComplete())
       return (
-        <Link href="/onboarding/complete">
+        <Link href={entry.primaryHref}>
           <Button 
             size="lg" 
             className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 font-semibold"
           >
             <Dumbbell className="w-5 h-5" />
-            Build Program
+            {entry.primaryLabel}
           </Button>
         </Link>
       )
+    }
     case 'first_workout':
       return (
         <Link href="/first-session">
@@ -636,7 +639,7 @@ export function NextWorkoutCompact({ className }: NextWorkoutCardProps) {
 
   useEffect(() => {
     try {
-      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      const savedSession = readAthleteItem(WORKOUT_STORAGE_KEY)
       if (savedSession) {
         const session = JSON.parse(savedSession)
         const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000

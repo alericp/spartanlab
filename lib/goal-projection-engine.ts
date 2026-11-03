@@ -159,7 +159,8 @@ function getExperienceModifier(experienceLevel: string): number {
   }
 }
 
-function getFrequencyModifier(trainingDaysPerWeek: number): number {
+function getFrequencyModifier(trainingDaysPerWeek: number | null): number {
+  if (trainingDaysPerWeek === null) return 1
   if (trainingDaysPerWeek >= 5) return 0.85
   if (trainingDaysPerWeek === 4) return 1.0
   if (trainingDaysPerWeek === 3) return 1.15

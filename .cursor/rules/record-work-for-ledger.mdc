@@ -1,0 +1,14 @@
+---
+description: Record completed work, blockers, and remaining tasks for the ledger
+alwaysApply: true
+---
+
+# Record work for ledger updates
+
+When a task finishes or stops, leave a record the user can copy into the master ledger:
+
+- Completed work
+- Blockers
+- Remaining tasks
+
+Keep the record factual and limited to this task. Do not edit the ledger, and do not mark an item complete, unless the user asked for that update and the acceptance criteria are met.

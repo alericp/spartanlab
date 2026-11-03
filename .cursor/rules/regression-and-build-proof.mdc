@@ -1,0 +1,19 @@
+---
+description: Require corridor regression plus typecheck and build for application changes
+alwaysApply: true
+---
+
+# Regression and build proof
+
+For an application code change, run these when the environment can run them:
+
+- `pnpm tsc --noEmit --pretty false`
+- `pnpm run build`
+- the targeted check for the corridor you changed
+- one failure path when the change affects saving, units, authentication, or billing
+
+A previous report, a ledger status, or a successful compile is not proof of the user-visible path.
+
+If a command cannot be run, say which command and why. Do not mark the task verified.
+
+A documentation-only change does not require the application build. `evidence-before-pass.mdc` still requires the actual result of every check you do run.

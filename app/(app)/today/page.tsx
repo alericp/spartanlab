@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@clerk/nextjs'
+import { clearRecoveryAdjustmentHandoff, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
 import { Navigation } from '@/components/shared/Navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,8 +35,13 @@ import {
   type SessionAdjustment,
 } from '@/lib/daily-adjustment-engine'
 import { assessDeloadNeed, type DeloadAssessment } from '@/lib/deload-detection-engine'
-import { getQuickWeekStatus, type QuickWeekStatus } from '@/lib/week-reschedule-engine'
-import { getSessionAdjustmentExplanation, getDeloadExplanation } from '@/lib/adjustment-explanation-engine'
+import { getSessionAdjustmentExplanation } from '@/lib/adjustment-explanation-engine'
+import {
+  PERSONAL_READINESS_BOUNDARY,
+  buildCurrentSessionHandoff,
+  describeTodayAdjustmentTransfer,
+  resolveSavedProgramGuidance,
+} from '@/lib/program/training-experience-guidance'
 // =============================================================================
 // [PHASE AB5] GROUPED EXECUTION PRESCRIPTION + ORPHAN-ROW GUARD (Today parity)
 // =============================================================================
@@ -53,12 +60,17 @@ import {
   type ResolvedGroupedExecutionPrescription,
 } from '@/components/programs/lib/grouped-execution-prescription'
 import { getGroupedMethodSemantics, type GroupType } from '@/components/programs/lib/session-group-display'
+import {
+  buildResumeWorkoutUrl,
+  getResumableSessionSummary,
+  type ResumableSessionSummary,
+} from '@/lib/workout/resume-session'
 
 export default function TodaySessionPage() {
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   const [currentSession, setCurrentSession] = useState<AdaptiveSession | null>(null)
   const [adjustment, setAdjustment] = useState<SessionAdjustment | null>(null)
   const [deloadAssessment, setDeloadAssessment] = useState<DeloadAssessment | null>(null)
-  const [weekStatus, setWeekStatus] = useState<QuickWeekStatus | null>(null)
   const [acclimationNote, setAcclimationNote] = useState<string | null>(null)
   const [omittedSkillNote, setOmittedSkillNote] = useState<string | null>(null)
   const [adaptiveProgram, setAdaptiveProgram] = useState<AdaptiveProgram | null>(null)
@@ -74,6 +86,7 @@ export default function TodaySessionPage() {
   const [selectedVariant, setSelectedVariant] = useState<number>(0) // 0 = Full by default
   
   const [mounted, setMounted] = useState(false)
+  const [resumeSummary, setResumeSummary] = useState<ResumableSessionSummary | null>(null)
 
   const loadData = useCallback(() => {
     // Use safe unified program state
@@ -146,11 +159,8 @@ export default function TodaySessionPage() {
     })
     setAdjustment(adj)
     
-    // Get deload assessment
+    // Personal check only. It does not rewrite the saved program.
     setDeloadAssessment(assessDeloadNeed())
-    
-    // Get week status
-    setWeekStatus(getQuickWeekStatus(program, []))
   }, [wellnessState, availableMinutes])
 
   useEffect(() => {
@@ -158,6 +168,11 @@ export default function TodaySessionPage() {
     const inferredWellness = inferWellnessFromRecovery()
     setWellnessState(inferredWellness)
   }, [])
+
+  useEffect(() => {
+    if (!isAuthLoaded) return
+    setResumeSummary(getResumableSessionSummary(userId ?? null))
+  }, [isAuthLoaded, userId])
 
   useEffect(() => {
     if (mounted) {
@@ -179,14 +194,49 @@ export default function TodaySessionPage() {
     }
   }, [loadData])
 
+  const clearTodayHandoff = () => {
+    try {
+      clearRecoveryAdjustmentHandoff({ previewId: 'today-session-preview' })
+    } catch {
+      // A failed read leaves any existing handoff untouched.
+    }
+  }
+
   const handleWellnessChange = (newWellness: WellnessState) => {
     setWellnessState(newWellness)
     setUseAdjusted(null)
+    clearTodayHandoff()
   }
 
   const handleTimeChange = (minutes: number) => {
     setAvailableMinutes(minutes)
     setUseAdjusted(null)
+    clearTodayHandoff()
+  }
+
+  const acceptAdjustedSession = () => {
+    if (!adjustment) return
+    const transfer = describeTodayAdjustmentTransfer({
+      wasAdjusted: adjustment.wasAdjusted,
+      original: adjustment.original.exercises,
+      adjusted: adjustment.adjusted.exercises,
+    })
+    const handoff = buildCurrentSessionHandoff(transfer, new Date().toISOString())
+    try {
+      if (handoff) {
+        writeRecoveryAdjustmentHandoff(handoff)
+      } else {
+        clearTodayHandoff()
+      }
+    } catch {
+      // The saved program remains the session that starts.
+    }
+    setUseAdjusted(true)
+  }
+
+  const keepOriginalSession = () => {
+    clearTodayHandoff()
+    setUseAdjusted(false)
   }
 
   // [PHASE-VARIANT-TRUTH] Get variant-aware active session
@@ -194,9 +244,15 @@ export default function TodaySessionPage() {
   const getActiveSession = (): AdaptiveSession | null => {
     const baseSession = (() => {
       if (!adjustment) return currentSession
-      if (useAdjusted === true) return adjustment.adjusted
-      if (useAdjusted === false) return adjustment.original
-      return adjustment.wasAdjusted ? adjustment.adjusted : adjustment.original
+      const transfer = describeTodayAdjustmentTransfer({
+        wasAdjusted: adjustment.wasAdjusted,
+        original: adjustment.original.exercises,
+        adjusted: adjustment.adjusted.exercises,
+      })
+      // Show the adjusted list only when those set changes can start with
+      // the existing current-session handoff. Otherwise show the saved session.
+      if (useAdjusted === true && transfer.transferable) return adjustment.adjusted
+      return adjustment.original
     })()
     
     if (!baseSession) return null
@@ -249,6 +305,13 @@ export default function TodaySessionPage() {
   }
 
   const activeSession = getActiveSession()
+  const sessionTransfer = adjustment
+    ? describeTodayAdjustmentTransfer({
+        wasAdjusted: adjustment.wasAdjusted,
+        original: adjustment.original.exercises,
+        adjusted: adjustment.adjusted.exercises,
+      })
+    : null
 
   return (
     <div className="min-h-screen bg-background">
@@ -270,6 +333,24 @@ export default function TodaySessionPage() {
           </div>
         </div>
 
+        {resumeSummary && (
+          <Card className="bg-[#2A2A2A] border-emerald-500/30 p-4 mb-4">
+            <p className="text-xs uppercase tracking-wider text-emerald-300 mb-1">Workout in progress</p>
+            <p className="text-base font-semibold">{resumeSummary.dayLabel}</p>
+            <p className="text-sm text-[#A5A5A5] mt-1">
+              {resumeSummary.completedSetsCount} sets logged
+              {resumeSummary.status === 'resting' ? ' · resting' : ''}
+              . This device keeps one unfinished workout for this account. It is not in history until you save it.
+            </p>
+            <Link href={buildResumeWorkoutUrl(resumeSummary)} className="block mt-3">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                <Play className="w-4 h-4 mr-2" />
+                Resume workout
+              </Button>
+            </Link>
+          </Card>
+        )}
+
         {/* No Program State */}
         {!currentSession && (
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
@@ -289,6 +370,20 @@ export default function TodaySessionPage() {
         {/* Main Content */}
         {currentSession && adjustment && (
           <div className="space-y-4">
+            {adaptiveProgram && (
+              <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-4">
+                {(() => {
+                  const guidance = resolveSavedProgramGuidance(adaptiveProgram)
+                  return (
+                    <>
+                      <p className="text-sm font-medium">{guidance.headline}</p>
+                      <p className="text-sm text-[#A5A5A5] mt-1">{guidance.explanation}</p>
+                      <p className="text-xs text-[#6A6A6A] mt-2">{guidance.savedScheduleLabel}</p>
+                    </>
+                  )
+                })()}
+              </Card>
+            )}
             {/* Wellness & Time Settings */}
             <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
               <button
@@ -373,9 +468,14 @@ export default function TodaySessionPage() {
                 </div>
               </div>
               
-              <p className="text-sm text-[#A5A5A5] mb-4">
+              <p className="text-sm text-[#A5A5A5] mb-2">
                 {adjustment.explanation}
               </p>
+              {sessionTransfer && (
+                <p className="text-xs text-[#6A6A6A] mb-4">
+                  {sessionTransfer.explanation}
+                </p>
+              )}
               
               {/* [PHASE-VARIANT-TRUTH] Session duration variant selector */}
               {hasVariants && (
@@ -458,14 +558,14 @@ export default function TodaySessionPage() {
               {adjustment.wasAdjusted && useAdjusted === null && (
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => setUseAdjusted(true)}
+                    onClick={acceptAdjustedSession}
                     className="flex-1 bg-[#E63946] hover:bg-[#D62828]"
                   >
                     Use Adjusted
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setUseAdjusted(false)}
+                    onClick={keepOriginalSession}
                     className="flex-1 border-[#3A3A3A] hover:bg-[#3A3A3A]"
                   >
                     Keep Original
@@ -480,43 +580,14 @@ export default function TodaySessionPage() {
                 >
                   <Button className="w-full bg-green-600 hover:bg-green-700">
                     <Play className="w-4 h-4 mr-2" />
-                    Start Session{hasVariants && selectedVariant > 0 ? ` (${sessionVariants[selectedVariant]?.label})` : ''}
+                    {useAdjusted === true && sessionTransfer?.transferable ? 'Start adjusted session' : 'Start saved session'}
+                    {hasVariants && selectedVariant > 0 ? ` (${sessionVariants[selectedVariant]?.label})` : ''}
                   </Button>
                 </Link>
               )}
             </Card>
 
-            {/* Week Status (if issues) */}
-            {weekStatus && !weekStatus.isOnTrack && (
-              <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-1">Week Status</p>
-                    <p className="text-sm font-medium text-orange-400">
-                      {weekStatus.missedCount} session{weekStatus.missedCount > 1 ? 's' : ''} missed
-                    </p>
-                  </div>
-                  <div className="flex gap-3 text-center">
-                    <div>
-                      <p className="text-lg font-bold text-green-400">{weekStatus.completedCount}</p>
-                      <p className="text-xs text-[#6A6A6A]">Done</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-[#A5A5A5]">{weekStatus.remainingCount}</p>
-                      <p className="text-xs text-[#6A6A6A]">Left</p>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-[#A5A5A5] mt-2">{weekStatus.recommendation}</p>
-                <Link href="/week" className="block mt-3">
-                  <Button variant="outline" size="sm" className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A]">
-                    View Week Adjustment
-                  </Button>
-                </Link>
-              </Card>
-            )}
-
-            {/* Deload Warning (if needed) */}
+            {/* Personal readiness check. This is not the saved program decision. */}
             {deloadAssessment && deloadAssessment.status !== 'no_deload_needed' && (
               <Card className={`border p-4 ${
                 deloadAssessment.status === 'deload_recommended'
@@ -534,8 +605,9 @@ export default function TodaySessionPage() {
                         : 'text-yellow-400'
                   }`} />
                   <div>
-                    <p className="font-medium">{deloadAssessment.label}</p>
+                    <p className="font-medium">Personal check</p>
                     <p className="text-sm text-[#A5A5A5] mt-1">{deloadAssessment.explanation}</p>
+                    <p className="text-xs text-[#6A6A6A] mt-2">{PERSONAL_READINESS_BOUNDARY}</p>
                   </div>
                 </div>
               </Card>
@@ -990,7 +1062,7 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
               wasRemoved={adjustment.whatToCut.includes(exercise.name)}
               sessionContext={sessionContext}
             />
-            {isPrescriptionMissing && (
+            {isPrescriptionMissing && !exercise.equipmentBlocked && (
               <p className="text-[10px] text-[#F59E0B] px-2">
                 Prescription needs review.
               </p>
@@ -1043,6 +1115,11 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved, sessionContext }: Ex
   // Build reason-first microcopy from authoritative fields + session context
   const microcopy = buildExerciseMicrocopy(exercise, sessionContext)
 
+  const equipmentLimitation =
+    typeof exercise.equipmentBlocked === 'string' && exercise.equipmentBlocked.length > 0
+      ? exercise.equipmentBlocked
+      : null
+
   return (
     <div className={`p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] ${
       wasRemoved ? 'opacity-50 line-through' : ''
@@ -1067,12 +1144,20 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved, sessionContext }: Ex
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm text-[#A5A5A5]">
-            {exercise.sets} x {exercise.repsOrTime}
-          </p>
-          {/* RPE target if available */}
-          {exercise.targetRPE && (
-            <p className="text-[10px] text-[#6A6A6A]">RPE {Math.round(Number(exercise.targetRPE))}</p>
+          {equipmentLimitation ? (
+            <>
+              <p className="text-sm text-amber-400">Not prescribed</p>
+              <p className="text-[10px] text-[#A5A5A5] max-w-[140px]">{equipmentLimitation}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-[#A5A5A5]">
+                {exercise.sets} x {exercise.repsOrTime}
+              </p>
+              {exercise.targetRPE && (
+                <p className="text-[10px] text-[#6A6A6A]">RPE {Math.round(Number(exercise.targetRPE))}</p>
+              )}
+            </>
           )}
         </div>
       </div>

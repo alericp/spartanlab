@@ -269,16 +269,33 @@ export async function getNextProgramVersionNumber(userId: string): Promise<numbe
 }
 
 /**
+ * A history read failed. Callers that display an archive pass `reportErrors`
+ * so this is not turned into an empty list.
+ */
+export class HistoryReadError extends Error {
+  constructor() {
+    super('Workout history could not be loaded')
+    this.name = 'HistoryReadError'
+  }
+}
+
+function emptyHistoryRead<T>(reportErrors: boolean | undefined, empty: T, error?: unknown): T {
+  if (error) console.error('[HistoryService] Error reading history:', error)
+  if (reportErrors) throw error instanceof HistoryReadError ? error : new HistoryReadError()
+  return empty
+}
+
+/**
  * Get program history for a user
  */
 export async function getProgramHistoryForUser(
   userId: string,
-  options: HistoryQueryOptions = {}
+  options: HistoryQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<ProgramHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, offset = 0, status, sortOrder = 'desc' } = options
 
@@ -303,8 +320,7 @@ export async function getProgramHistoryForUser(
 
     return result.map(toProgramHistory)
   } catch (error) {
-    console.error('[HistoryService] Error fetching program history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -414,12 +430,12 @@ export async function createWorkoutSessionHistoryEntry(
  */
 export async function getWorkoutHistoryForUser(
   userId: string,
-  options: HistoryQueryOptions = {}
+  options: HistoryQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<WorkoutSessionHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, offset = 0, startDate, endDate, sortOrder = 'desc' } = options
 
@@ -446,8 +462,7 @@ export async function getWorkoutHistoryForUser(
 
     return result.map(toWorkoutSession)
   } catch (error) {
-    console.error('[HistoryService] Error fetching workout history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -523,8 +538,9 @@ export async function recordSessionPersonalRecords(
     bodyweightAtTime?: number
     notes?: string
   }>
-): Promise<PersonalRecordHistory[]> {
-  const results: PersonalRecordHistory[] = []
+): Promise<{ records: PersonalRecordHistory[]; failedCount: number }> {
+  const records: PersonalRecordHistory[] = []
+  let failedCount = 0
 
   for (const pr of prs) {
     const record = await recordPersonalRecordEntry({
@@ -543,11 +559,49 @@ export async function recordSessionPersonalRecords(
     })
 
     if (record) {
-      results.push(record)
+      records.push(record)
+    } else {
+      failedCount += 1
     }
   }
 
-  return results
+  return { records, failedCount }
+}
+
+/**
+ * Personal records already linked to one workout.
+ * A database failure is unknown so the caller does not insert duplicates.
+ */
+export async function lookupSessionPersonalRecords(
+  userId: string,
+  workoutSessionId: string,
+): Promise<
+  | { status: 'known'; records: Array<{ exerciseKey: string; prType: string }> }
+  | { status: 'unknown' }
+> {
+  if (!(await isDatabaseAvailable())) return { status: 'unknown' }
+
+  const sql = await getSqlClient()
+  if (!sql) return { status: 'unknown' }
+
+  try {
+    const result = await sql`
+      SELECT exercise_key, pr_type
+      FROM personal_record_history
+      WHERE user_id = ${userId}
+        AND workout_session_id = ${workoutSessionId}
+    `
+    const records = result.flatMap((row: Record<string, unknown>) => {
+      const exerciseKey = row.exercise_key
+      const prType = row.pr_type
+      if (typeof exerciseKey !== 'string' || typeof prType !== 'string') return []
+      return [{ exerciseKey, prType }]
+    })
+    return { status: 'known', records }
+  } catch (error) {
+    console.error('[HistoryService] Error reading session personal records:', error)
+    return { status: 'unknown' }
+  }
 }
 
 /**
@@ -555,12 +609,12 @@ export async function recordSessionPersonalRecords(
  */
 export async function getPersonalRecordHistoryForUser(
   userId: string,
-  options: PRQueryOptions = {}
+  options: PRQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<PersonalRecordHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 100, offset = 0, prType, exerciseCategory, sortOrder = 'desc' } = options
 
@@ -601,8 +655,7 @@ export async function getPersonalRecordHistoryForUser(
 
     return result.map(toPersonalRecord)
   } catch (error) {
-    console.error('[HistoryService] Error fetching PR history:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -612,12 +665,12 @@ export async function getPersonalRecordHistoryForUser(
 export async function getPersonalRecordsByExercise(
   userId: string,
   exerciseKey: string,
-  options: PRQueryOptions = {}
+  options: PRQueryOptions & { reportErrors?: boolean } = {}
 ): Promise<PersonalRecordHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, [])
 
   const sql = await getSqlClient()
-  if (!sql) return []
+  if (!sql) return emptyHistoryRead(options.reportErrors, [])
 
   const { limit = 50, sortOrder = 'desc' } = options
 
@@ -631,8 +684,7 @@ export async function getPersonalRecordsByExercise(
 
     return result.map(toPersonalRecord)
   } catch (error) {
-    console.error('[HistoryService] Error fetching exercise PRs:', error)
-    return []
+    return emptyHistoryRead(options.reportErrors, [], error)
   }
 }
 
@@ -669,11 +721,14 @@ export async function getCurrentBestPR(
 /**
  * Get total PR count for a user (optimized)
  */
-export async function getTotalPRCount(userId: string): Promise<number> {
-  if (!(await isDatabaseAvailable())) return 0
+export async function getTotalPRCount(
+  userId: string,
+  options: { reportErrors?: boolean } = {},
+): Promise<number> {
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, 0)
 
   const sql = await getSqlClient()
-  if (!sql) return 0
+  if (!sql) return emptyHistoryRead(options.reportErrors, 0)
 
   try {
     const result = await sql`
@@ -682,8 +737,7 @@ export async function getTotalPRCount(userId: string): Promise<number> {
     `
     return parseInt(result[0]?.count || '0', 10)
   } catch (error) {
-    console.error('[HistoryService] Error counting PRs:', error)
-    return 0
+    return emptyHistoryRead(options.reportErrors, 0, error)
   }
 }
 
@@ -721,6 +775,52 @@ export async function getAllTimeBestPRs(
   }
 }
 
+export type PersistedSessionLookup =
+  | { status: 'found'; id: string }
+  | { status: 'absent' }
+  | { status: 'unknown' }
+
+/**
+ * Find an existing history row for this attempt.
+ * A client session id matches that attempt only. Without one, the previous
+ * name-and-date check remains. A database error is `unknown`, not "missing".
+ */
+export async function lookupPersistedSession(
+  userId: string,
+  workoutName: string,
+  workoutDate: string,
+  clientSessionId?: string,
+): Promise<PersistedSessionLookup> {
+  if (!(await isDatabaseAvailable())) return { status: 'unknown' }
+
+  const sql = await getSqlClient()
+  if (!sql) return { status: 'unknown' }
+
+  try {
+    const result = clientSessionId
+      ? await sql`
+          SELECT id FROM workout_session_history
+          WHERE user_id = ${userId}
+            AND session_metrics_snapshot->>'clientSessionId' = ${clientSessionId}
+          LIMIT 1
+        `
+      : await sql`
+          SELECT id FROM workout_session_history
+          WHERE user_id = ${userId}
+            AND workout_name = ${workoutName}
+            AND workout_date = ${workoutDate}
+          LIMIT 1
+        `
+    const id = result[0]?.id
+    return typeof id === 'string' && id.length > 0
+      ? { status: 'found', id }
+      : { status: 'absent' }
+  } catch (error) {
+    console.error('[HistoryService] Error checking session existence:', error)
+    return { status: 'unknown' }
+  }
+}
+
 /**
  * Check if a session was already persisted (for idempotency)
  * Prevents duplicate history entries for the same workout
@@ -730,36 +830,21 @@ export async function isSessionAlreadyPersisted(
   workoutName: string,
   workoutDate: string
 ): Promise<boolean> {
-  if (!(await isDatabaseAvailable())) return false
-
-  const sql = await getSqlClient()
-  if (!sql) return false
-
-  try {
-    const result = await sql`
-      SELECT id FROM workout_session_history
-      WHERE user_id = ${userId}
-        AND workout_name = ${workoutName}
-        AND workout_date = ${workoutDate}
-      LIMIT 1
-    `
-    return result.length > 0
-  } catch (error) {
-    console.error('[HistoryService] Error checking session existence:', error)
-    return false
-  }
+  const lookup = await lookupPersistedSession(userId, workoutName, workoutDate)
+  return lookup.status === 'found'
 }
 
 /**
  * Get a workout session by ID
  */
 export async function getWorkoutSessionHistoryById(
-  sessionId: string
+  sessionId: string,
+  options: { reportErrors?: boolean } = {},
 ): Promise<WorkoutSessionHistory | null> {
-  if (!(await isDatabaseAvailable())) return null
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, null)
 
   const sql = await getSqlClient()
-  if (!sql) return null
+  if (!sql) return emptyHistoryRead(options.reportErrors, null)
 
   try {
     const result = await sql`
@@ -770,8 +855,7 @@ export async function getWorkoutSessionHistoryById(
 
     return result[0] ? toWorkoutSession(result[0] as WorkoutSessionRow) : null
   } catch (error) {
-    console.error('[HistoryService] Error fetching session by ID:', error)
-    return null
+    return emptyHistoryRead(options.reportErrors, null, error)
   }
 }
 
@@ -779,12 +863,13 @@ export async function getWorkoutSessionHistoryById(
  * Get a program history entry by ID
  */
 export async function getProgramHistoryById(
-  programId: string
+  programId: string,
+  options: { reportErrors?: boolean } = {},
 ): Promise<ProgramHistory | null> {
-  if (!(await isDatabaseAvailable())) return null
+  if (!(await isDatabaseAvailable())) return emptyHistoryRead(options.reportErrors, null)
 
   const sql = await getSqlClient()
-  if (!sql) return null
+  if (!sql) return emptyHistoryRead(options.reportErrors, null)
 
   try {
     const result = await sql`
@@ -795,8 +880,7 @@ export async function getProgramHistoryById(
 
     return result[0] ? toProgramHistory(result[0] as ProgramHistoryRow) : null
   } catch (error) {
-    console.error('[HistoryService] Error fetching program by ID:', error)
-    return null
+    return emptyHistoryRead(options.reportErrors, null, error)
   }
 }
 

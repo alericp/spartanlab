@@ -75,6 +75,10 @@ import {
 } from '@/components/ui/collapsible'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { clearRecoveryAdjustmentHandoff, readAthleteItem, storageEventMatchesAthlete, writeRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
+import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
+import { isDeletedProgramId } from '@/lib/program/active-program-record'
+import { firstObservedSessionCount, resolveMainGenDisplayAudit } from '@/lib/program/main-gen-audit-disposition'
 import { cn } from '@/lib/utils'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
@@ -952,6 +956,7 @@ import {
   type ProgramDisplayProjection,
   type CanonicalProgramTruthPresence,
 } from '@/lib/program/program-display-contract'
+import { resolveSavedProgramGuidance } from '@/lib/program/training-experience-guidance'
 // [PHASE Y3 OF 3] Coach-facing narrative derived from the Y2
 // `trainingDifferentiationCalibration` already attached to the program.
 // Replaces the flat "Intensity: Conservative" chip with a session-derived
@@ -2132,7 +2137,7 @@ function ProgramDisplayWrapper({
     
     try {
       // Read L2 check-in from localStorage
-      const checkInRaw = localStorage.getItem('spartanlab_l2_recovery_checkin')
+      const checkInRaw = readAthleteItem('spartanlab_l2_recovery_checkin')
       if (!checkInRaw) {
         setRecoveryAwarenessBridge(null)
         return
@@ -2214,13 +2219,13 @@ function ProgramDisplayWrapper({
     
     // Stamp the adjustment in localStorage for Start Workout to consume
     try {
-      localStorage.setItem('spartanlab_recovery_adjustment_applied', JSON.stringify({
+      writeRecoveryAdjustmentHandoff({
         previewId: recoveryAdjustmentPreview.id,
         appliedAt: new Date().toISOString(),
         scope: 'current-session-only',
         totalExercisesAffected: recoveryAdjustmentPreview.overallSummary.totalExercisesAffected,
         exerciseAdjustments: recoveryAdjustmentPreview.exerciseAdjustments,
-      }))
+      })
       
       console.log('[step-21.6-adjustment-applied]', {
         previewId: recoveryAdjustmentPreview.id,
@@ -2244,7 +2249,7 @@ function ProgramDisplayWrapper({
     
     // Clear any applied adjustment in localStorage
     try {
-      localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+      clearRecoveryAdjustmentHandoff()
     } catch (error) {
       // Silent fail
     }
@@ -2307,7 +2312,7 @@ function ProgramDisplayWrapper({
       // Read profile jointCautions from localStorage canonical profile
       let profileJointCautions: string[] = []
       try {
-        const profileRaw = localStorage.getItem('spartanlab_canonical_profile')
+        const profileRaw = readAthleteItem('spartanlab_canonical_profile')
         if (profileRaw) {
           const profile = JSON.parse(profileRaw)
           profileJointCautions = Array.isArray(profile?.jointCautions) ? profile.jointCautions : []
@@ -4519,8 +4524,23 @@ export default function ProgramPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [constraintLabel, setConstraintLabel] = useState<string>('')
   const [showBuilder, setShowBuilder] = useState(false)
+  const [onboardingAnswersSaved, setOnboardingAnswersSaved] = useState(false)
+  const [onboardingRouteKnown, setOnboardingRouteKnown] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void import('@/lib/athlete-profile').then((mod) => {
+      if (active) {
+        setOnboardingAnswersSaved(mod.isOnboardingComplete())
+        setOnboardingRouteKnown(true)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [program])
 
   // ==========================================================================
   // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK OVERLAY APPLICATION
@@ -4549,42 +4569,61 @@ export default function ProgramPage() {
     if (!mounted) return
     if (!program || !program.id) return
     if (typeof window === 'undefined') return
-    try {
-      const result = applyPerformanceFeedbackOverlay(program)
-      if (!result) return
-      if (phaseLAppliedSignatureRef.current === result.signature) return
-      phaseLAppliedSignatureRef.current = result.signature
-      console.log('[phase-l-performance-feedback]', {
-        programId: program.id,
-        status: result.adaptation.status,
-        signals: result.adaptation.signals.length,
-        mutations: result.adaptation.mutations.length,
-        mutationsApplied: result.adaptation.proof.mutationsApplied,
-        mutationsBlocked: result.adaptation.proof.mutationsBlocked,
-        completedSetsRead: result.adaptation.proof.completedSetsRead,
-        sessionsRead: result.adaptation.proof.sessionsRead,
-        highRpeCount: result.adaptation.proof.highRpeCount,
-        underTargetCount: result.adaptation.proof.underTargetCount,
-        noteWarningsCount: result.adaptation.proof.noteWarningsCount,
-        changed: result.changed,
-        signature: result.signature,
-        // [PHASE-M] When the server already applied the same evidence
-        // corridor, the overlay returns skipReason='server_already_applied_*'
-        // and `changed=false`. We surface the reason in logs so we can audit
-        // server/client provenance without re-running the resolver.
-        skipReason: result.skipReason,
-      })
-      if (result.changed) {
-        setProgram(result.program as AdaptiveProgram)
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = applyPerformanceFeedbackOverlay(program)
+        if (!result || cancelled) return
+        if (phaseLAppliedSignatureRef.current === result.signature) return
+        console.log('[phase-l-performance-feedback]', {
+          programId: program.id,
+          status: result.adaptation.status,
+          signals: result.adaptation.signals.length,
+          mutations: result.adaptation.mutations.length,
+          mutationsApplied: result.adaptation.proof.mutationsApplied,
+          mutationsBlocked: result.adaptation.proof.mutationsBlocked,
+          completedSetsRead: result.adaptation.proof.completedSetsRead,
+          sessionsRead: result.adaptation.proof.sessionsRead,
+          highRpeCount: result.adaptation.proof.highRpeCount,
+          underTargetCount: result.adaptation.proof.underTargetCount,
+          noteWarningsCount: result.adaptation.proof.noteWarningsCount,
+          changed: result.changed,
+          signature: result.signature,
+          skipReason: result.skipReason,
+        })
+        if (!result.changed) {
+          phaseLAppliedSignatureRef.current = result.signature
+          return
+        }
+        const { saveAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+        if (cancelled) return
+        const saved = saveAdaptiveProgram(result.program as AdaptiveProgram)
+        phaseLAppliedSignatureRef.current = result.signature
+        setProgram(saved)
+      } catch (err) {
+        console.error('[phase-l-performance-feedback] overlay failed', err)
       }
-    } catch (err) {
-      console.error('[phase-l-performance-feedback] overlay failed', err)
+    })()
+    return () => {
+      cancelled = true
     }
     // We deliberately depend on program identity + length so log changes
     // forced by re-mount or regenerate retrigger the overlay. The signature
     // ref guarantees idempotency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, program?.id, program?.sessions?.length])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onRevert = (event: Event) => {
+      const saved = (event as CustomEvent<{ program?: AdaptiveProgram }>).detail?.program
+      if (!saved) return
+      phaseLAppliedSignatureRef.current = null
+      setProgram(saved)
+    }
+    window.addEventListener('spartanlab:performance-adaptation-reverted', onRevert)
+    return () => window.removeEventListener('spartanlab:performance-adaptation-reverted', onRevert)
+  }, [])
   
   // ==========================================================================
   // [DEBUG-PROBE-GATE] Opt-in diagnostic visibility
@@ -5328,7 +5367,7 @@ export default function ProgramPage() {
     let currentLocalStorageSessions: number | null = null
     let currentLocalStorageId: string | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         currentLocalStorageSessions = parsed?.sessions?.length ?? null
@@ -5428,21 +5467,26 @@ export default function ProgramPage() {
     
     const storedMainGen = JSON.parse(storedMainGenRaw) as MainGenTruthAudit
     
-    // Only run once we have a savedProgramId to compare against
+    // Only run once we have a savedProgramId to compare against.
+    // A missing program is not a failed generation.
     if (!storedMainGen.savedProgramId) return
+    if (!program) return
     
-    const displayedSessions = program?.sessions?.length ?? 0
-    const displayedProgramId = program?.id ?? null
-    const displayedCreatedAt = program?.createdAt ?? null
-    const savedSessions = storedMainGen.savedProgramSessionCount ?? 0
+    const displayedSessions = program.sessions?.length ?? null
+    const displayedProgramId = program.id ?? null
+    const displayedCreatedAt = program.createdAt ?? null
     const savedProgramId = storedMainGen.savedProgramId
-    const expectedTarget = storedMainGen.expectedSessionCount ?? 0
+    const attemptLock = authoritativeSavedProgramRef.current
+    const withinAttemptLock = attemptLock != null
+      && attemptLock.flowSource === 'main_generation'
+      && attemptLock.programId === savedProgramId
+      && attemptLock.lockExpiresAt > Date.now()
     
     // Also read current localStorage to detect rehydration source
     let currentLocalStorageSessions: number | null = null
     let currentLocalStorageId: string | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         currentLocalStorageSessions = parsed?.sessions?.length ?? null
@@ -5451,70 +5495,61 @@ export default function ProgramPage() {
     } catch (e) {
       // Ignore parse errors
     }
-    
-    let displayVerdict: MainGenTruthVerdict = storedMainGen.finalVerdict
-    let displayFailedStage = storedMainGen.failedStage
-    let overwriteDetected = false
-    let overwriteSource: string | null = null
-    
-    // Check for various failure modes
-    const builtSessions = storedMainGen.builtStructureSessionCount ?? 0
-    const resolvedSessions = storedMainGen.targetSessionCountFromResolution ?? 0
-    
-    if (displayedSessions >= expectedTarget && displayedProgramId === savedProgramId) {
-      // Success - displayed what we expected
-      displayVerdict = expectedTarget === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
-      displayFailedStage = null
-    } else if (displayedProgramId !== savedProgramId) {
-      // Different program is displayed than what we saved!
-      overwriteDetected = true
-      overwriteSource = 'program_id_mismatch'
-      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
-      displayFailedStage = 'rehydration'
-    } else if (displayedSessions !== savedSessions) {
-      // Same program ID but different session count - something mutated it
-      overwriteDetected = true
-      overwriteSource = 'session_count_mismatch_same_id'
-      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
-      displayFailedStage = 'rehydration'
-    } else if (displayedSessions < expectedTarget) {
-      // Sessions match saved but still below expected - determine where loss occurred
-      if (resolvedSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_IN_RESOLUTION'
-        displayFailedStage = 'resolution'
-      } else if (builtSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
-        displayFailedStage = 'structure_build'
-      } else if (savedSessions < expectedTarget) {
-        displayVerdict = 'MAIN_TARGET_LOST_DURING_SAVE'
-        displayFailedStage = 'save'
-      }
+
+    const decision = resolveMainGenDisplayAudit({
+      programLoaded: true,
+      displayedProgramId,
+      displayedSessionCount: displayedSessions,
+      displayedCreatedAt,
+      savedProgramId,
+      savedSessionCount: storedMainGen.savedProgramSessionCount,
+      auditStartedAt: storedMainGen.startedAt,
+      expectedSessionCount: storedMainGen.expectedSessionCount,
+      submittedTrainingDays: storedMainGen.submittedTrainingDaysPerWeek,
+      resolvedSessionCount: storedMainGen.targetSessionCountFromResolution,
+      builtSessionCount: storedMainGen.builtStructureSessionCount,
+      savedProgramTrainingDays: storedMainGen.savedProgramTrainingDaysPerWeek,
+      savedProgramDeleted: isDeletedProgramId(savedProgramId),
+      withinAttemptLock,
+    })
+    if (decision.action === 'skip') return
+    if (decision.action === 'retire') {
+      sessionStorage.removeItem('mainGenTruthAudit')
+      setMainGenTruthAudit(null)
+      return
     }
     
+    const displayVerdict: MainGenTruthVerdict = decision.finalVerdict ?? storedMainGen.finalVerdict
+    const displayFailedStage = decision.finalVerdict == null
+      ? storedMainGen.failedStage
+      : decision.failedStage
+    
     console.log('[MAIN-GEN-TRUTH step-8-display-result]', {
-      expectedTarget,
+      expectedTarget: decision.expectedSessionCount,
       savedProgramId,
-      savedProgramSessions: savedSessions,
+      savedProgramSessions: storedMainGen.savedProgramSessionCount,
       displayedProgramId,
       displayedProgramSessions: displayedSessions,
       displayedCreatedAt,
       previousCreatedAt: storedMainGen.existingGeneratedDateBeforeClick,
       currentLocalStorageId,
       currentLocalStorageSessions,
-      overwriteDetected,
-      overwriteSource,
+      overwriteDetected: decision.overwriteDetected,
+      overwriteSource: decision.overwriteSource,
       verdict: displayVerdict,
     })
     
     const finalMainGenAudit: MainGenTruthAudit = {
       ...storedMainGen,
+      expectedSessionCount: decision.expectedSessionCount,
+      targetSessionCountFromResolution: decision.resolvedSessionCount,
       displayedProgramIdAfterCommit: displayedProgramId,
       displayedProgramSessionCountAfterCommit: displayedSessions,
       newGeneratedDateAfterCommit: displayedCreatedAt,
       rehydratedProgramId: currentLocalStorageId,
       rehydratedProgramSessionCount: currentLocalStorageSessions,
-      overwriteDetected,
-      overwriteSource,
+      overwriteDetected: decision.overwriteDetected,
+      overwriteSource: decision.overwriteSource,
       finalVerdict: displayVerdict,
       failedStage: displayFailedStage,
     }
@@ -5700,7 +5735,7 @@ export default function ProgramPage() {
     let localStorageProgramId: string | null = null
     let localStorageSessionCount: number | null = null
     try {
-      const rawStored = localStorage.getItem('spartanlab_active_program')
+      const rawStored = readAthleteItem('spartanlab_active_program')
       if (rawStored) {
         const parsed = JSON.parse(rawStored)
         localStorageProgramId = parsed?.id ?? null
@@ -7074,7 +7109,7 @@ export default function ProgramPage() {
           scheduleMode: defaultInputs.scheduleMode,
           // [STEP-5A-ZETA] sessionDurationMode is intentionally omitted —
           // `validateBuilderDisplayTruth` does not declare that parameter.
-          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
+          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek ?? undefined,
           sessionLength: defaultInputsSessionLengthNumeric,
           equipment: defaultInputs.equipment,
         })
@@ -7473,16 +7508,15 @@ export default function ProgramPage() {
             }
             } // [STEP-5A-THETA] close `else` of `if (!normalizedProgram)`
           } else {
-            // No usable program - show builder
+            // No usable program stays on the entry card. The builder opens
+            // only from an explicit advanced action or Restart from Scratch.
             currentInitStage = 'no-program'
             setLoadStage('no-program')
-            setShowBuilder(true)
           }
         } catch (err) {
           console.error('[ProgramPage] Stage 7: Error loading current program:', err)
           currentInitStage = 'program-load-error'
           setLoadStage('program-load-error')
-          setShowBuilder(true)
         }
         
         // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
@@ -7530,7 +7564,7 @@ export default function ProgramPage() {
           failedOperation: currentInitStage,
           errorName,
           errorMessage: errorMessage.slice(0, 200), // Truncate for compactness
-          hasStoredProgram: typeof window !== 'undefined' && !!localStorage.getItem('spartanlab_adaptive_program'),
+          hasStoredProgram: typeof window !== 'undefined' && !!readAthleteItem('spartanlab_adaptive_program'),
           hasUsableWorkoutProgram: false, // Failed before we could determine this
           programId: null,
           doctrineDbWasConsultedDuringInit: false, // Program page init doesn't call doctrine-db directly
@@ -7699,7 +7733,7 @@ export default function ProgramPage() {
       let rawHistoryCount = 0
       
       try {
-        const rawCanonical = localStorage.getItem('spartanlab_active_program')
+        const rawCanonical = readAthleteItem('spartanlab_active_program')
         if (rawCanonical) {
           const parsed = JSON.parse(rawCanonical)
           rawCanonicalId = parsed?.id || null
@@ -7711,7 +7745,7 @@ export default function ProgramPage() {
       }
       
       try {
-        const rawHistory = localStorage.getItem('spartanlab_adaptive_programs')
+        const rawHistory = readAthleteItem('spartanlab_adaptive_programs')
         if (rawHistory) {
           const parsed = JSON.parse(rawHistory)
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -8103,7 +8137,7 @@ export default function ProgramPage() {
       'spartanlab_adaptive_programs',
     ])
     const handleStorage = (event: StorageEvent) => {
-      if (!event.key || !PHASE_4X_RECONCILE_STORAGE_KEYS.has(event.key)) {
+      if (!storageEventMatchesAthlete(event.key, [...PHASE_4X_RECONCILE_STORAGE_KEYS])) {
         return
       }
       console.log('[phase17k-storage-event-detected]', {
@@ -8742,7 +8776,9 @@ export default function ProgramPage() {
             ? { secondaryGoal: effectiveInputs.secondaryGoal }
             : {}),
           experienceLevel: effectiveInputs.experienceLevel,
-          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+          ...(effectiveInputs.trainingDaysPerWeek != null
+            ? { trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek }
+            : {}),
           sessionLength: normalizeProgramPageSessionLengthOverride(effectiveInputs.sessionLength),
           ...(effectiveInputs.scheduleMode !== undefined
             ? { scheduleMode: effectiveInputs.scheduleMode }
@@ -9823,7 +9859,7 @@ export default function ProgramPage() {
             let localStorageId: string | null = null
             let localStorageSessions: number | null = null
             try {
-              const rawStored = localStorage.getItem('spartanlab_active_program')
+              const rawStored = readAthleteItem('spartanlab_active_program')
               if (rawStored) {
                 const parsed = JSON.parse(rawStored)
                 localStorageId = parsed?.id ?? null
@@ -9833,20 +9869,7 @@ export default function ProgramPage() {
               // Ignore
             }
             
-            const expectedSessions = storedMainGen.expectedSessionCount ?? 6
             const actualBuiltSessions = newProgram.sessions?.length ?? 0
-            
-            // Determine early verdict
-            let earlyVerdict: MainGenTruthVerdict = 'MAIN_PENDING'
-            let earlyFailedStage: string | null = null
-            
-            if (actualBuiltSessions >= expectedSessions) {
-              earlyVerdict = expectedSessions === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
-            } else {
-              // Target was lost somewhere - determine where based on saved vs built
-              earlyVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
-              earlyFailedStage = 'structure_build'
-            }
             
             // [STEP-5A-OMEGA-5] Safe typed projection of the built structure's
             //   weekly day count for the audit slot. The previous code read
@@ -9867,9 +9890,28 @@ export default function ProgramPage() {
                 : typeof newProgram.currentWeekFrequency === 'number'
                   ? newProgram.currentWeekFrequency
                   : null
+            const expectedSessions = firstObservedSessionCount([
+              storedMainGen.expectedSessionCount,
+              storedMainGen.submittedTrainingDaysPerWeek,
+            ])
+            const resolvedSessions = firstObservedSessionCount([
+              storedMainGen.targetSessionCountFromResolution,
+              builtStructureTrainingDays,
+            ])
+
+            let earlyVerdict: MainGenTruthVerdict = 'MAIN_REQUEST_CAPTURED'
+            let earlyFailedStage: string | null = null
+            if (expectedSessions != null && actualBuiltSessions >= expectedSessions) {
+              earlyVerdict = expectedSessions === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+            } else if (expectedSessions != null && actualBuiltSessions < expectedSessions) {
+              earlyVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
+              earlyFailedStage = 'structure_build'
+            }
 
             const updatedMainGen: MainGenTruthAudit = {
               ...storedMainGen,
+              expectedSessionCount: expectedSessions,
+              targetSessionCountFromResolution: resolvedSessions,
               // Step 5: Structure result
               builtStructureSessionCount: actualBuiltSessions,
               builtStructureDayCount: builtStructureTrainingDays,
@@ -10893,7 +10935,7 @@ export default function ProgramPage() {
       const modifyCanonicalOverride = {
         primaryGoal: effectiveInputs.primaryGoal || 'skill_acquisition',
         secondaryGoal: effectiveInputs.secondaryGoal || null,
-        experienceLevel: effectiveInputs.experienceLevel || 'intermediate',
+        experienceLevel: effectiveInputs.experienceLevel,
         // [STEP-4B] Removed `|| 4` fake default. Canonical profile expects
         // numeric truth or null — flexible mode owns flexibility, the
         // numeric slot stores absence. No invented day count.
@@ -13621,7 +13663,7 @@ export default function ProgramPage() {
         let localStorageProgramId: string | null = null
         if (typeof window !== 'undefined') {
           try {
-            const rawStored = localStorage.getItem('spartanlab_active_program')
+            const rawStored = readAthleteItem('spartanlab_active_program')
             if (rawStored) {
               const parsed = JSON.parse(rawStored)
               localStorageSessionCount = parsed?.sessions?.length ?? null
@@ -18082,6 +18124,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     modifyBuilderEntry.inputs !== null &&
     modifyFlowState === 'builder'
   )
+  // First-program builds have no modify entry. showBuilder is enough only
+  // while no program is loaded. Modify rendering stays on the entry above.
+  const shouldRenderInitialBuilder = showBuilder && program == null
+  const shouldRenderProgramBuilder = shouldRenderModifyBuilder || shouldRenderInitialBuilder
   
   // [FINAL] Removed verbose phase31/30 diagnostic effects - replaced by concise logs in guards
   
@@ -18150,6 +18196,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   //   touching the visible DiagnosticStrip UI, the materialitySummary /
   //   personalAlignment computations that feed that UI, or any runtime
   //   logic. No behavior change for users.
+
+  const noProgramDecisionReady = !program && !showBuilder && (
+    loadStage === 'no-program' ||
+    loadStage === 'program-load-error' ||
+    loadStage === 'complete' ||
+    loadStage === 'unexpected-error'
+  )
   
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -18199,12 +18252,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </div>
               <div>
                 <h1 className="text-xl font-bold">
-                  {program && !showBuilder ? 'Your Training Program' : 'Program Builder'}
+                  {showBuilder
+                    ? 'Program Builder'
+                    : program
+                      ? 'Your Training Program'
+                      : noProgramDecisionReady
+                        ? 'No Program Yet'
+                        : 'Training Program'}
                 </h1>
                 <p className="text-sm text-[#6A6A6A]">
-                  {program && !showBuilder 
-                    ? 'Your personalized adaptive training plan' 
-                    : 'Constraint-aware, time-adaptive training'}
+                  {showBuilder
+                    ? 'Constraint-aware, time-adaptive training'
+                    : program
+                      ? 'Your personalized adaptive training plan'
+                      : noProgramDecisionReady
+                        ? 'Generate a program from your saved answers, or open the builder.'
+                        : 'Loading your saved program.'}
                 </p>
                 {showBuilder && (
                   <p className="text-sm text-neutral-400 mt-1">
@@ -18228,6 +18291,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             </Button>
           )}
         </div>
+
+        {program && !showBuilder && (
+          <div className="mb-4 rounded-lg border border-[#3A3A3A] bg-[#1A1A1A] p-4">
+            {(() => {
+              const guidance = resolveSavedProgramGuidance(program)
+              return (
+                <>
+                  <p className="text-sm font-medium">{guidance.headline}</p>
+                  <p className="text-sm text-[#A5A5A5] mt-1">{guidance.explanation}</p>
+                  <p className="text-xs text-[#6A6A6A] mt-2">{guidance.savedScheduleLabel}</p>
+                </>
+              )
+            })()}
+          </div>
+        )}
         
         {/* [P2F-3] Schedule Status card removed from inline display - now in Coach Intelligence Hub */}
         
@@ -18497,8 +18575,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })()}
 
         {/* Content - TASK 2: Proper handling of malformed programs */}
-        {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}
-        {shouldRenderModifyBuilder ? (
+        {/* First build uses shouldRenderInitialBuilder. Modify stays on shouldRenderModifyBuilder. */}
+        {shouldRenderProgramBuilder ? (
           <div className="space-y-6">
             {/* HARDENED: Generation error banner - recoverable state */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
@@ -18624,16 +18702,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
                 // ==========================================================================
                 const mainGenAttemptId = `maingen-${Date.now()}`
-                // [PRE-AB6 BUILD GREEN GATE] `recommendedSessionsPerWeek` is
-                //   not on the typed `scheduleTruthAudit` contract (see
-                //   useState<{...}> at L3413) — the authoritative field
-                //   for recommended weekly session count is
-                //   `baselineRecommendedSessionCount` (already used by
-                //   the visible Schedule Status panel at L16808-L16933
-                //   and by the rehydration baseline read at L4275).
-                //   Routed through the real typed field. Diagnostic-only —
-                //   no generator behavior change.
-                const expectedSessionsForFlexible = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 6
+                const submittedDaysForAudit = hasCurrentSessionInputs
+                  ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null
+                  : inputs?.trainingDaysPerWeek ?? null
+                const expectedSessionCountForAudit = scheduleTruthAudit?.canonicalScheduleMode === 'flexible'
+                  ? firstObservedSessionCount([scheduleTruthAudit?.baselineRecommendedSessionCount])
+                  : firstObservedSessionCount([
+                      scheduleTruthAudit?.canonicalTrainingDaysPerWeek,
+                      submittedDaysForAudit,
+                    ])
                 
                 // [PRE-AB6 BUILD GREEN GATE / STEP-5A-TAU] `selectedGoalCategories`
                 //   is NOT a property of `AdaptiveProgramInputs` (Step 4G banned-key
@@ -18721,7 +18798,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   rehydratedProgramSessionCount: null,
                   overwriteDetected: false,
                   overwriteSource: null,
-                  expectedSessionCount: scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? expectedSessionsForFlexible : (scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null),
+                  expectedSessionCount: expectedSessionCountForAudit,
                   finalVerdict: 'MAIN_REQUEST_CAPTURED',
                   failedStage: null,
                   errorMessage: null,
@@ -19219,19 +19296,44 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               Rebuild Program
             </Button>
           </Card>
+        ) : !noProgramDecisionReady ? (
+          <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+            <Dumbbell className="w-12 h-12 text-[#6A6A6A] mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Training Program</h3>
+            <p className="text-sm text-[#6A6A6A]">Loading your saved program.</p>
+          </Card>
         ) : (
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <Dumbbell className="w-12 h-12 text-[#6A6A6A] mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Program Yet</h3>
-            <p className="text-sm text-[#6A6A6A] mb-4">
-              Build your first adaptive program based on your goals and constraints
-            </p>
-            <Button
-              onClick={() => setShowBuilder(true)}
-              className="bg-[#E63946] hover:bg-[#D62828]"
-            >
-              Build Program
-            </Button>
+            {(() => {
+              const entry = onboardingRouteKnown
+                ? dashboardEmptyPresence(false, onboardingAnswersSaved)
+                : null
+              return (
+                <>
+                  <h3 className="text-lg font-medium mb-2">{entry?.title ?? 'No Program Yet'}</h3>
+                  <p className="text-sm text-[#6A6A6A] mb-4">
+                    {entry?.body ?? 'Checking your saved training answers.'}
+                  </p>
+                  <div className="flex flex-col items-center gap-3">
+                    {entry && (
+                      <Link href={entry.primaryHref}>
+                        <Button className="bg-[#E63946] hover:bg-[#D62828]">
+                          {entry.primaryLabel}
+                        </Button>
+                      </Link>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowBuilder(true)}
+                      className="border-[#3A3A3A] text-[#A5A5A5]"
+                    >
+                      Open Program Builder
+                    </Button>
+                  </div>
+                </>
+              )
+            })()}
           </Card>
         )}
 

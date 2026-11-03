@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils'
 // =============================================================================
 
 // Type-only imports are safe at module scope
+import { readAthleteCollection } from '@/lib/athlete-local-scope'
 import type { OnboardingProfile } from '@/lib/athlete-profile'
+import { trialProgramSentence, welcomeProgramCopy } from '@/lib/program/program-presence-copy'
 
 const WELCOME_DISMISSED_KEY = 'spartanlab_welcome_dismissed'
 
@@ -27,6 +29,8 @@ function WelcomeBannerInner() {
   const [isPro, setIsPro] = useState(false)
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
+  const [hasUsableProgram, setHasUsableProgram] = useState(false)
+  const [programChecked, setProgramChecked] = useState(false)
 
   // Safe access to search params with fallbacks
   let isWelcome = false
@@ -89,6 +93,16 @@ function WelcomeBannerInner() {
         setIsTrial(false)
         setTrialDays(0)
       }
+
+      try {
+        const programState = await import('@/lib/program-state')
+        setHasUsableProgram(programState.getProgramState().hasUsableWorkoutProgram === true)
+      } catch (err) {
+        console.error('[WelcomeBanner] Failed to read program state:', err)
+        setHasUsableProgram(false)
+      } finally {
+        setProgramChecked(true)
+      }
     }
     
     loadHelpers()
@@ -116,7 +130,7 @@ function WelcomeBannerInner() {
   }
 
   // Don't render if not welcome or already dismissed
-  if (!mounted || !isWelcome || isDismissed) {
+  if (!mounted || !isWelcome || isDismissed || !programChecked) {
     console.log('[WelcomeBanner] Not rendering:', { mounted, isWelcome, isDismissed })
     return null
   }
@@ -159,12 +173,12 @@ function WelcomeBannerInner() {
             </h3>
             <p className="text-sm text-[#A4ACB8] mb-3">
               You have {trialDays} days to explore adaptive programming, analytics, and all Pro features.
-              Your training program is now fully personalized.
+              {' '}{trialProgramSentence(hasUsableProgram)}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Link href="/program">
+              <Link href={hasUsableProgram ? '/program' : (profile?.onboardingComplete ? '/onboarding/complete' : '/onboarding')}>
                 <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-medium">
-                  View Your Program
+                  {hasUsableProgram ? 'View Your Program' : 'Create Your Program'}
                   <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               </Link>
@@ -174,6 +188,8 @@ function WelcomeBannerInner() {
       </div>
     )
   }
+
+  const welcomeCopy = welcomeProgramCopy(hasUsableProgram, profile?.onboardingComplete === true)
 
   // Standard welcome (free or pro)
   return (
@@ -191,14 +207,16 @@ function WelcomeBannerInner() {
         </div>
         <div className="flex-1 pr-6">
           <h3 className="text-lg text-[#E6E9EF] font-semibold mb-1">
-            Your Adaptive Program is Ready
+            {welcomeCopy.title}
           </h3>
           <p className="text-sm text-[#A4ACB8] mb-3">
-            Your first session is personalized for {getPrimaryGoalDisplay()} training. 
-            Complete it to activate adaptive adjustments.
+            {hasUsableProgram
+              ? `Your first session is personalized for ${getPrimaryGoalDisplay()} training. Complete it to activate adaptive adjustments.`
+              : welcomeCopy.body}
           </p>
           
-          {/* Why this program works - First Win Section */}
+          {/* Why this program works - only after a usable program exists */}
+          {hasUsableProgram && (
           <div className="bg-[#0F1115]/50 rounded-md p-3 mb-4 border border-emerald-500/20">
             <p className="text-xs text-emerald-400 font-medium mb-2">Why This Program Works For You</p>
             <div className="space-y-1.5">
@@ -216,12 +234,13 @@ function WelcomeBannerInner() {
               </div>
             </div>
           </div>
+          )}
           
-          {/* Primary CTA - Start First Session */}
-          <Link href="/first-session">
+          {/* Primary CTA - start the saved program, or create one */}
+          <Link href={welcomeCopy.primaryHref}>
             <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
               <Dumbbell className="w-4 h-4" />
-              Start First Session
+              {welcomeCopy.primaryLabel}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
@@ -249,10 +268,8 @@ export function FirstWorkoutCTA() {
     setMounted(true)
     // Check if user has any workout history
     if (typeof window !== 'undefined') {
-      const workoutLogs = localStorage.getItem('spartanlab_workout_logs')
       try {
-        const logs = workoutLogs ? JSON.parse(workoutLogs) : []
-        setHasWorkouts(logs.length > 0)
+        setHasWorkouts(readAthleteCollection('spartanlab_workout_logs').length > 0)
       } catch {
         setHasWorkouts(false)
       }

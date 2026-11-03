@@ -1,6 +1,7 @@
 // Onboarding Service
 // Handles first-run program generation and profile initialization
 
+import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
 import {
   type OnboardingProfile,
   type SkillInterest,
@@ -31,6 +32,7 @@ import {
   assertFlexibleModeIntact,
 } from './production-safety'
 import { yieldToMainThread, createGenerationContext, assertNotAborted } from './utils/yield-control'
+import { classifyEquipment, classifySessionDuration, classifyTrainingDays } from './profile/input-reliability'
 
 // =============================================================================
 // TYPES
@@ -85,8 +87,8 @@ export interface FirstRunResult {
 interface NormalizedProgramInputs {
   selectedSkills: SkillInterest[]
   primaryGoal: string | null
-  trainingDaysPerWeek: number
-  sessionLengthMinutes: number
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: number | null
   equipment: string[]
   experienceLevel: ExperienceLevel
 }
@@ -104,35 +106,27 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
         ? (profile as any).skillInterests
         : []
 
-  // Training days: prefer new field, fallback to legacy
-  let trainingDaysPerWeek: number
-  if (typeof profile.trainingDaysPerWeek === 'number') {
-    trainingDaysPerWeek = profile.trainingDaysPerWeek
-  } else if (profile.trainingDaysPerWeek === 'flexible') {
-    trainingDaysPerWeek = 4 // Default for flexible
-  } else if ((profile as any).weeklyTraining) {
-    trainingDaysPerWeek = mapWeeklyTrainingToDays((profile as any).weeklyTraining)
-  } else {
-    trainingDaysPerWeek = 4 // Safe default
+  const daySelection = classifyTrainingDays({
+    days: profile.trainingDaysPerWeek,
+    scheduleMode: profile.scheduleMode,
+  })
+  let trainingDaysPerWeek: number | null = daySelection.kind === 'explicit' ? daySelection.days : null
+  if (trainingDaysPerWeek === null && daySelection.kind === 'unknown' && (profile as any).weeklyTraining) {
+    const legacyDays = mapWeeklyTrainingToDays((profile as any).weeklyTraining)
+    trainingDaysPerWeek = legacyDays
   }
 
-  // Session length: prefer new field, fallback to legacy
-  let sessionLengthMinutes: number
-  if (typeof profile.sessionLengthMinutes === 'number') {
-    sessionLengthMinutes = profile.sessionLengthMinutes
-  } else if (profile.sessionLengthMinutes === 'flexible') {
-    sessionLengthMinutes = 45 // Default for flexible
-  } else if ((profile as any).trainingTime) {
+  const durationSelection = classifySessionDuration({
+    minutes: profile.sessionLengthMinutes,
+    durationMode: profile.sessionDurationMode,
+  })
+  let sessionLengthMinutes: number | null = durationSelection.minutes
+  if (sessionLengthMinutes === null && durationSelection.kind === 'unknown' && (profile as any).trainingTime) {
     sessionLengthMinutes = mapTrainingTimeToMinutes((profile as any).trainingTime)
-  } else {
-    sessionLengthMinutes = 45 // Safe default
   }
 
-  // Equipment: ensure array with safe default
-  const equipment: string[] = 
-    Array.isArray(profile.equipment) && profile.equipment.length > 0
-      ? profile.equipment
-      : ['floor']
+  const equipmentSelection = classifyEquipment(profile.equipment)
+  const equipment = equipmentSelection.equipment
 
   // Experience level from strength tier
   const strengthTier = estimateStrengthTier(profile)
@@ -739,8 +733,8 @@ export async function generateFirstProgram(
       
       markStage('mirror_save_start')
       // Secondary: backward-compatible mirror for legacy code paths
-      localStorage.setItem('spartanlab_first_program', JSON.stringify(program))
-      localStorage.setItem('spartanlab_onboarding_complete', 'true')
+      writeAthleteItem('spartanlab_first_program', JSON.stringify(program))
+      writeAthleteItem('spartanlab_onboarding_complete', 'true')
       markStage('mirror_save_done')
     }
     
@@ -1014,8 +1008,8 @@ export async function generateFirstProgramViaServer(
         saveAdaptiveProgram(result.program)
         
         // Backward-compatible mirror
-        localStorage.setItem('spartanlab_first_program', JSON.stringify(result.program))
-        localStorage.setItem('spartanlab_onboarding_complete', 'true')
+        writeAthleteItem('spartanlab_first_program', JSON.stringify(result.program))
+        writeAthleteItem('spartanlab_onboarding_complete', 'true')
         
         console.log('[phase16g-server-generation-client-persisted]', {
           sessionCount: result.program.sessions?.length || 0,
@@ -1073,7 +1067,7 @@ export async function generateFirstProgramViaServer(
 export function isFirstRun(): boolean {
   if (typeof window === 'undefined') return false
   
-  const complete = localStorage.getItem('spartanlab_onboarding_complete')
+  const complete = readAthleteItem('spartanlab_onboarding_complete')
   return complete !== 'true'
 }
 
@@ -1083,7 +1077,7 @@ export function isFirstRun(): boolean {
 export function hasFirstProgram(): boolean {
   if (typeof window === 'undefined') return false
   
-  const program = localStorage.getItem('spartanlab_first_program')
+  const program = readAthleteItem('spartanlab_first_program')
   return program !== null
 }
 
@@ -1093,7 +1087,7 @@ export function hasFirstProgram(): boolean {
 export function getFirstProgram(): AdaptiveProgram | null {
   if (typeof window === 'undefined') return null
   
-  const stored = localStorage.getItem('spartanlab_first_program')
+  const stored = readAthleteItem('spartanlab_first_program')
   if (!stored) return null
   
   try {
@@ -1109,9 +1103,9 @@ export function getFirstProgram(): AdaptiveProgram | null {
 export function clearFirstRunState(): void {
   if (typeof window === 'undefined') return
   
-  localStorage.removeItem('spartanlab_first_program')
-  localStorage.removeItem('spartanlab_onboarding_complete')
-  localStorage.removeItem('spartanlab_onboarding_profile')
+  removeAthleteItem('spartanlab_first_program')
+  removeAthleteItem('spartanlab_onboarding_complete')
+  removeAthleteItem('spartanlab_onboarding_profile')
 }
 
 /**
@@ -1125,8 +1119,8 @@ export function getOnboardingSummary(): {
   strengthTier: string
   primaryGoal: string
   skillInterests: string[]
-  trainingDays: number
-  sessionLength: number
+  trainingDays: number | null
+  sessionLength: number | null
   hasFlexibilityGoals: boolean
   likesEndurance: boolean
 } | null {
@@ -1141,8 +1135,8 @@ export function getOnboardingSummary(): {
       strengthTier: estimateStrengthTier(profile),
       primaryGoal: profile.primaryGoal || 'general',
       skillInterests: Array.isArray(normalized.selectedSkills) ? normalized.selectedSkills : [],
-      trainingDays: typeof normalized.trainingDaysPerWeek === 'number' ? normalized.trainingDaysPerWeek : 4,
-      sessionLength: typeof normalized.sessionLengthMinutes === 'number' ? normalized.sessionLengthMinutes : 45,
+      trainingDays: normalized.trainingDaysPerWeek,
+      sessionLength: normalized.sessionLengthMinutes,
       hasFlexibilityGoals: Array.isArray(profile.selectedFlexibility) && profile.selectedFlexibility.length > 0,
       likesEndurance: (profile as any).enduranceInterest === 'yes' || (profile as any).enduranceInterest === 'occasionally',
     }
@@ -1359,23 +1353,24 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
   }
   
   // Volume level - use new field first, fallback to legacy
-  let trainingDays = 3
+  let volumeLevel = 'Schedule not selected'
   if (profile) {
-    if (typeof profile.trainingDaysPerWeek === 'number') {
-      trainingDays = profile.trainingDaysPerWeek
-    } else if (profile.trainingDaysPerWeek === 'flexible') {
-      trainingDays = 4
-    } else if ((profile as any).weeklyTraining) {
-      trainingDays = mapWeeklyTrainingToDays((profile as any).weeklyTraining)
+    const savedDays = classifyTrainingDays({
+      days: profile.trainingDaysPerWeek,
+      scheduleMode: profile.scheduleMode,
+    })
+    if (savedDays.kind === 'flexible') {
+      volumeLevel = 'Flexible weekly availability'
+    } else if (savedDays.kind === 'explicit' && savedDays.days !== null) {
+      const volumeLabels: Record<number, string> = {
+        2: 'Low volume (2 days/week)',
+        3: 'Moderate volume (3 days/week)',
+        4: 'Standard volume (4 days/week)',
+        5: 'High volume (5+ days/week)',
+      }
+      volumeLevel = volumeLabels[Math.min(savedDays.days, 5)] || 'Moderate volume'
     }
   }
-  const volumeLabels: Record<number, string> = {
-    2: 'Low volume (2 days/week)',
-    3: 'Moderate volume (3 days/week)',
-    4: 'Standard volume (4 days/week)',
-    5: 'High volume (5+ days/week)',
-  }
-  const volumeLevel = volumeLabels[Math.min(trainingDays, 5)] || 'Moderate volume'
   
   // Session style
   const sessionStyle = profile?.sessionStyle === 'efficient' 

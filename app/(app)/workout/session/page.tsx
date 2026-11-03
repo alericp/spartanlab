@@ -35,27 +35,13 @@ function markRouteStage(stage: string, data?: Record<string, unknown>): void {
 // [PHASE-NEXT] BOOT RECOVERY CHECK: If previous boot crashed, clear saved state
 function checkAndApplyBootRecovery(): boolean {
   if (typeof window === 'undefined') return false
-  try {
-    const failedMarker = localStorage.getItem('spartanlab_workout_boot_failed')
-    if (failedMarker) {
-      const failedAt = parseInt(failedMarker, 10)
-      const ageMs = Date.now() - failedAt
-      // If crash was within last 5 minutes, apply recovery wipe
-      if (ageMs > 0 && ageMs < 5 * 60 * 1000) {
-        console.log('[ROUTE-BOOT] boot_recovery_wipe_applied', {
-          failedAt: new Date(failedAt).toISOString(),
-          ageMs,
-          reason: 'previous_boot_crashed',
-        })
-        localStorage.removeItem('spartanlab_workout_session')
-        localStorage.removeItem('spartanlab_workout_boot_failed')
-        return true
-      }
-      // Clear stale marker
-      localStorage.removeItem('spartanlab_workout_boot_failed')
-    }
-  } catch {}
-  return false
+  const wiped = applyOwnedCrashRecoveryWipe()
+  if (wiped) {
+    console.log('[ROUTE-BOOT] boot_recovery_wipe_applied', {
+      reason: 'previous_boot_crashed',
+    })
+  }
+  return wiped
 }
 
 // Mark route init immediately
@@ -71,6 +57,15 @@ if (typeof window !== 'undefined') {
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
+import { athleteStorageKey, clearRecoveryAdjustmentHandoff, getBoundAthleteId, readRecoveryAdjustmentHandoff } from '@/lib/athlete-local-scope'
+import {
+  WORKOUT_SESSION_STORAGE_KEY,
+  applyOwnedCrashRecoveryWipe,
+  getResumableSessionSummary,
+  recordCrashRecoveryMarker,
+  resumeMatchesLoadedSession,
+} from '@/lib/workout/resume-session'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
 // [PHASE-X+1] Program state is loaded internally by loadAuthoritativeSession
@@ -148,9 +143,12 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     // On the NEXT load, if this marker exists and is recent, we clear saved workout state
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('spartanlab_workout_boot_failed', String(Date.now()))
-        // Also clear the potentially poisoned saved session immediately
-        localStorage.removeItem('spartanlab_workout_session')
+        const owner = getBoundAthleteId()
+        const ownerUserId = typeof owner === 'string' ? owner : null
+        recordCrashRecoveryMarker(ownerUserId)
+        if (ownerUserId) {
+          localStorage.removeItem(athleteStorageKey(WORKOUT_SESSION_STORAGE_KEY, ownerUserId))
+        }
         console.log('[workout-route-crash] RECOVERY WIPE: Cleared saved workout state to prevent repeat crash')
       }
     } catch {}
@@ -708,7 +706,9 @@ const DEMO_SESSION: AdaptiveSession = {
 function WorkoutSessionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { userId, isLoaded: isAuthLoaded } = useAuth()
   const dayParam = searchParams.get('day')
+  const resumeRequested = searchParams.get('resume') === '1'
   const demoMode = searchParams.get('demo') === 'true'
   const isFirstSession = searchParams.get('first') === 'true'
   // [PEX-5A] Read execution mode from URL - now supports 10/15/20/30/45/full
@@ -795,6 +795,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
   
   useEffect(() => {
     let mounted = true
+    const athleteAtStart = getBoundAthleteId()
     
     async function initializeSession() {
       // =======================================================================
@@ -833,6 +834,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
       })
       
       if (!mounted) return
+      if (getBoundAthleteId() !== athleteAtStart) return
       
       // [PHASE LW2] Mark session load success
       markRouteStage('session_load_success', {
@@ -1382,16 +1384,14 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
   } | null = null
   
   try {
-    const adjustmentRaw = localStorage.getItem('spartanlab_recovery_adjustment_applied')
-    if (adjustmentRaw) {
-      const adjustment = JSON.parse(adjustmentRaw) as {
-        previewId?: string
-        appliedAt?: string
-        scope?: string
-        totalExercisesAffected?: number
-        exerciseAdjustments?: ExerciseAdjustmentDetail[]
-      }
-      
+    const adjustment = readRecoveryAdjustmentHandoff<{
+      previewId?: string
+      appliedAt?: string
+      scope?: string
+      totalExercisesAffected?: number
+      exerciseAdjustments?: ExerciseAdjustmentDetail[]
+    }>()
+    if (adjustment) {
       // Validate the adjustment is current-session-only and recent (within 1 hour)
       const appliedAt = adjustment.appliedAt ? new Date(adjustment.appliedAt).getTime() : 0
       const ageMs = Date.now() - appliedAt
@@ -1453,7 +1453,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
         
         // Clear the adjustment after consumption to prevent re-application
         // on subsequent sessions (current-session-only boundary)
-        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+        clearRecoveryAdjustmentHandoff()
       } else {
         console.log('[step-21.6-workout-handoff-skipped]', {
           reason: !isRecent ? 'stale_adjustment' : !isCurrentSessionOnly ? 'wrong_scope' : 'no_adjustments',
@@ -1461,8 +1461,8 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
           scope: adjustment.scope,
           hasAdjustments,
         })
-        // Clear stale/invalid adjustment
-        localStorage.removeItem('spartanlab_recovery_adjustment_applied')
+        // Clear this account's stale handoff. Another account's key stays.
+        clearRecoveryAdjustmentHandoff()
       }
     }
   } catch (error) {
@@ -1725,15 +1725,42 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
     }
   }
   
-  if (loading) {
+  if (loading || (resumeRequested && !isAuthLoaded)) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
         <div className="text-center">
           <Spinner className="w-8 h-8 text-[#C1121F] mx-auto mb-4" />
-          <p className="text-[#A4ACB8]">Loading workout...</p>
+          <p className="text-[#A4ACB8]">{resumeRequested ? 'Checking this workout...' : 'Loading workout...'}</p>
         </div>
       </div>
     )
+  }
+
+  if (resumeRequested && session) {
+    const ownedResume = getResumableSessionSummary(userId ?? null)
+    const resumeMatches = ownedResume
+      ? resumeMatchesLoadedSession(ownedResume, {
+          dayLabel: session.dayLabel,
+          dayNumber: session.dayNumber,
+        })
+      : false
+    if (!resumeMatches) {
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Cannot resume this workout</h2>
+            <p className="text-[#A4ACB8] mb-6">
+              This resume does not match an unfinished workout for the signed-in account. No sets were opened or replaced.
+            </p>
+            <Link href="/today" className="block">
+              <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white">
+                Back to Today
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )
+    }
   }
   
   // [PHASE-X+1] With authoritative loader, session should ALWAYS exist
@@ -1963,7 +1990,7 @@ const [ab10RuntimeParityProof, setAB10RuntimeParityProof] =
           data-recovery-adjustment-scope={recoveryAdjustmentApplied.scope}
         >
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          Recovery-adjusted today only
+          Recovery-adjusted today only. Saved week unchanged.
         </div>
       )}
       {/* [PHASE-X+1] Dev badge for session source - only in development */}

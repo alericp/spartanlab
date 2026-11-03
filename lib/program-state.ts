@@ -29,6 +29,7 @@
  */
 
 import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode, type AdaptiveSession, type AdaptiveExercise } from './adaptive-program-builder'
+import { isDeletedProgramId, readFirstProgramFallback } from './program/active-program-record'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
 // [TRAINING-METHOD-PREFERENCE-IMPORT] styleMetadata.appliedMethods is
 // TrainingMethodPreference[]; pull the canonical union from
@@ -1253,10 +1254,9 @@ function migrateFirstProgramIfNeeded(): AdaptiveProgram | null {
   if (typeof window === 'undefined') return null
   
   try {
-    const stored = localStorage.getItem('spartanlab_first_program')
-    if (!stored) return null
-    
-    const parsed = JSON.parse(stored)
+    const fallback = readFirstProgramFallback()
+    if (!fallback?.id || isDeletedProgramId(fallback.id)) return null
+    const parsed = fallback as AdaptiveProgram
     
     // Validate basic structure
     if (!parsed || typeof parsed !== 'object') return null

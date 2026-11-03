@@ -150,10 +150,10 @@ export async function POST(request: Request) {
       ON CONFLICT (user_id) DO UPDATE SET
         sex = COALESCE($2::text, athlete_profiles.sex),
         experience_level = COALESCE($3::text, athlete_profiles.experience_level),
-        training_days_per_week = $4::int,
-        schedule_mode = COALESCE($5::text, athlete_profiles.schedule_mode),
-        session_duration_mode = COALESCE($6::varchar, athlete_profiles.session_duration_mode),
-        session_length_minutes = COALESCE($7::int, athlete_profiles.session_length_minutes),
+        training_days_per_week = CASE WHEN $18::boolean THEN $4::int ELSE athlete_profiles.training_days_per_week END,
+        schedule_mode = CASE WHEN $18::boolean THEN $5::text ELSE athlete_profiles.schedule_mode END,
+        session_duration_mode = CASE WHEN $19::boolean THEN $6::varchar ELSE athlete_profiles.session_duration_mode END,
+        session_length_minutes = CASE WHEN $19::boolean THEN $7::int ELSE athlete_profiles.session_length_minutes END,
         primary_goal = COALESCE($8::text, athlete_profiles.primary_goal),
         secondary_goal = $9::text,
         selected_skills = COALESCE($10::jsonb, athlete_profiles.selected_skills),
@@ -176,8 +176,8 @@ export async function POST(request: Request) {
         body_fat_percent as "bodyFatPercent",
         experience_level as "experienceLevel",
         training_days_per_week as "trainingDaysPerWeek",
-        COALESCE(schedule_mode, 'static') as "scheduleMode",
-        COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
+        schedule_mode as "scheduleMode",
+        session_duration_mode as "sessionDurationMode",
         session_length_minutes as "sessionLengthMinutes",
         primary_goal as "primaryGoal",
         secondary_goal as "secondaryGoal",
@@ -197,8 +197,12 @@ export async function POST(request: Request) {
       // ISSUE A FIX: For flexible users, trainingDaysPerWeek is null
       // For static users, use their actual value - do NOT fallback to 4
       profileData.scheduleMode === 'flexible' ? null : (profileData.trainingDaysPerWeek ?? null),
-      profileData.scheduleMode || 'static',
-      profileData.sessionDurationMode || 'static',
+      profileData.scheduleMode === 'flexible' || profileData.scheduleMode === 'static'
+        ? profileData.scheduleMode
+        : null,
+      profileData.sessionDurationMode === 'adaptive' || profileData.sessionDurationMode === 'static'
+        ? profileData.sessionDurationMode
+        : null,
       // ISSUE A FIX: Do NOT fallback to 60 - preserve actual canonical value
       profileData.sessionLengthMinutes ?? null,
       profileData.primaryGoal || null,
@@ -211,6 +215,10 @@ export async function POST(request: Request) {
       profileData.jointCautions ? JSON.stringify(profileData.jointCautions) : JSON.stringify([]),
       profileData.weakestArea || null,
       profileData.trainingStyle || 'balanced_hybrid',
+      Object.prototype.hasOwnProperty.call(profileData, 'scheduleMode')
+        || Object.prototype.hasOwnProperty.call(profileData, 'trainingDaysPerWeek'),
+      Object.prototype.hasOwnProperty.call(profileData, 'sessionDurationMode')
+        || Object.prototype.hasOwnProperty.call(profileData, 'sessionLengthMinutes'),
     ])
     
     // [PHASE 16D] Audit: Column/value parity verified

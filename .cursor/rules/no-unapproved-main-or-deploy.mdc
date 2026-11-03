@@ -1,0 +1,15 @@
+---
+description: Never deploy, merge, or modify main without explicit approval
+alwaysApply: true
+---
+
+# Do not deploy, merge, or modify main without approval
+
+Never do any of the following unless the user explicitly approves that exact action in the current task:
+
+- Merge a pull request, including enabling auto-merge
+- Push to, commit on, or edit `main`
+- Deploy to production or change the production branch
+- Promote a preview deployment to production
+
+Target `development/cursor-build` for development work unless the user names a different non-production branch. Opening a draft pull request is not approval to merge or deploy.

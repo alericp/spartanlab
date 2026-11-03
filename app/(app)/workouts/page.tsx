@@ -13,6 +13,7 @@ import {
   getRecentWorkoutLogs,
   type WorkoutLog,
 } from '@/lib/workout-log-service'
+import type { WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
 import {
   getWorkoutAnalytics,
   type WorkoutAnalytics,
@@ -34,9 +35,9 @@ export default function WorkoutsPage() {
     loadData()
   }, [])
 
-  const handleSave = (log: WorkoutLog) => {
+  const handleSave = (_log: WorkoutLog, status: WorkoutSaveAthleteStatus) => {
     loadData()
-    setShowForm(false)
+    if (status.historySync !== 'failed') setShowForm(false)
   }
 
   const handleDelete = (id: string) => {

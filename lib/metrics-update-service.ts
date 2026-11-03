@@ -41,6 +41,7 @@ import {
   type SkillBenchmark,
   type FlexibilityBenchmark,
 } from './athlete-profile'
+import { removeAthleteItem } from './athlete-local-scope'
 import { saveCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
 
 // =============================================================================
@@ -469,7 +470,7 @@ export function triggerProgramRecalculation(): void {
   if (typeof window === 'undefined') return
 
   // Clear the cached adaptive program to force regeneration
-  localStorage.removeItem('spartanlab_adaptive_program')
+  removeAthleteItem('spartanlab_adaptive_program')
   localStorage.removeItem('spartanlab_program_cache')
   
   // Set a flag indicating recalculation was triggered

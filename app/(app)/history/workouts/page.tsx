@@ -10,6 +10,7 @@ import { WorkoutSessionCard } from '@/components/history'
 import { ClipboardList, ArrowLeft, Trophy, CheckCircle2 } from 'lucide-react'
 import { AuthGuard } from '@/components/auth/AuthGuard'
 import { cn } from '@/lib/utils'
+import { classifyHistoryHttp, historyLoadCopy } from '@/lib/workout/history-progress'
 import type { WorkoutSessionHistory } from '@/types/history'
 
 type FilterType = 'all' | 'pr_days' | 'completed'
@@ -18,17 +19,20 @@ type FilterType = 'all' | 'pr_days' | 'completed'
 // DATA FETCHING
 // =============================================================================
 
-async function fetchWorkoutHistory(userId: string): Promise<WorkoutSessionHistory[]> {
+async function fetchWorkoutHistory(userId: string): Promise<
+  | { status: 'ready'; workouts: WorkoutSessionHistory[] }
+  | { status: 'error' }
+> {
   try {
     const response = await fetch(`/api/history/workouts?userId=${userId}`)
-    if (!response.ok) {
-      throw new Error('Failed to fetch workouts')
+    if (classifyHistoryHttp(response.status) !== 'ready') {
+      return { status: 'error' }
     }
     const data = await response.json()
-    return data.workouts || []
+    return { status: 'ready', workouts: data.workouts || [] }
   } catch (error) {
     console.error('[WorkoutsPage] Error fetching data:', error)
-    return []
+    return { status: 'error' }
   }
 }
 
@@ -41,6 +45,7 @@ function WorkoutsPageContent() {
   const [loading, setLoading] = useState(true)
   const [workouts, setWorkouts] = useState<WorkoutSessionHistory[]>([])
   const [filter, setFilter] = useState<FilterType>('all')
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -48,7 +53,13 @@ function WorkoutsPageContent() {
       
       setLoading(true)
       const data = await fetchWorkoutHistory(userId)
-      setWorkouts(data)
+      if (data.status === 'error') {
+        setLoadError(true)
+        setWorkouts([])
+      } else {
+        setLoadError(false)
+        setWorkouts(data.workouts)
+      }
       setLoading(false)
     }
 
@@ -109,11 +120,11 @@ function WorkoutsPageContent() {
 
         {/* Quick Filter Tabs */}
         {workouts.length > 0 && (
-          <div className="flex items-center gap-2 p-1 bg-[#1A1F26] rounded-lg border border-[#2B313A] w-fit">
+          <div className="flex flex-wrap items-center gap-2 p-1 bg-[#1A1F26] rounded-lg border border-[#2B313A] max-w-full">
             <button
               onClick={() => setFilter('all')}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                 filter === 'all' 
                   ? "bg-[#0F1115] text-[#E6E9EF] border border-[#2B313A]" 
                   : "text-[#6B7280] hover:text-[#A4ACB8]"
@@ -125,7 +136,7 @@ function WorkoutsPageContent() {
             <button
               onClick={() => setFilter('pr_days')}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                 filter === 'pr_days' 
                   ? "bg-[#0F1115] text-amber-400 border border-[#2B313A]" 
                   : "text-[#6B7280] hover:text-[#A4ACB8]"
@@ -138,7 +149,7 @@ function WorkoutsPageContent() {
             <button
               onClick={() => setFilter('completed')}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                 filter === 'completed' 
                   ? "bg-[#0F1115] text-emerald-400 border border-[#2B313A]" 
                   : "text-[#6B7280] hover:text-[#A4ACB8]"
@@ -151,7 +162,17 @@ function WorkoutsPageContent() {
         )}
 
         {/* Workouts List */}
-        {filteredWorkouts.length > 0 ? (
+        {loadError ? (
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-8 text-center">
+            <ClipboardList className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
+              {historyLoadCopy('error', 'workouts').title}
+            </h2>
+            <p className="text-sm text-[#A4ACB8]">
+              {historyLoadCopy('error', 'workouts').detail}
+            </p>
+          </Card>
+        ) : filteredWorkouts.length > 0 ? (
           <div className="space-y-3">
             {filteredWorkouts.map((session) => (
               <WorkoutSessionCard key={session.id} session={session} />

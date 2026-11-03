@@ -13,6 +13,8 @@ import {
 import Link from 'next/link'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
+import { isOnboardingComplete } from '@/lib/athlete-profile'
+import { dashboardEmptyPresence } from '@/lib/program/program-presence-copy'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -57,12 +59,14 @@ export function TodayAdjustmentWidget() {
   const [adjustment, setAdjustment] = useState<SessionAdjustment | null>(null)
   const [wellnessState, setWellnessState] = useState<WellnessState>('normal')
   const [mounted, setMounted] = useState(false)
+  const [hasUsableProgram, setHasUsableProgram] = useState(false)
 
   useEffect(() => {
     setMounted(true)
     
     // Use safe unified program state
     const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+    setHasUsableProgram(hasUsableWorkoutProgram === true)
     if (!hasUsableWorkoutProgram || !adaptiveProgram) {
       setCurrentSession(null)
       return
@@ -115,12 +119,22 @@ export function TodayAdjustmentWidget() {
             <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">Today&apos;s Session</p>
             <p className="font-semibold text-[#A4ACB8]">No Active Program</p>
           </div>
-          {/* Route to /onboarding/complete for program generation */}
-          <Link href="/onboarding/complete">
-            <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
-              Create
-            </Button>
-          </Link>
+          {hasUsableProgram ? (
+            <Link href="/program">
+              <Button size="sm" variant="outline" className="border-[#3A3A3A] text-[#A4ACB8]">
+                View Program
+              </Button>
+            </Link>
+          ) : (() => {
+            const entry = dashboardEmptyPresence(false, isOnboardingComplete())
+            return (
+              <Link href={entry.primaryHref}>
+                <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
+                  {entry.primaryLabel}
+                </Button>
+              </Link>
+            )
+          })()}
         </div>
       </Card>
     )

@@ -23,6 +23,7 @@
  */
 
 import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
+import { resolveGenerationTruth } from '@/lib/profile/generation-truth'
 import {
   buildDoctrineIntegrationProof,
   mapRuntimeContractToBuilderContext,
@@ -67,6 +68,11 @@ import {
 // `recentWorkoutLogs`, AND merges Neon evidence with route-payload evidence
 // when both are present (deduped by workout log id).
 import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence-reader'
+import {
+  deriveServerFatigueFromWorkoutLogs,
+  recoveryDecisionExplanation,
+  reportedRecoveryRiskFromDecision,
+} from './server-fatigue-from-logs'
 // [PHASE-P] Program quality / doctrine sharpness audit. Pure deterministic
 // resolver that runs AFTER Phase M (Phase L+M+N+O have already produced the
 // final adapted program object). Performs five audit passes — skill carryover
@@ -391,6 +397,27 @@ function buildCanonicalProfileOverride(
    * This ensures the builder uses conservative/reacquisition-safe progressions.
    */
   
+  const generationTruth = resolveGenerationTruth(
+    {
+      primaryGoal: builderInputs.primaryGoal,
+      secondaryGoal: builderInputs.secondaryGoal,
+      experienceLevel: builderInputs.experienceLevel,
+      scheduleMode: builderInputs.scheduleMode,
+      trainingDaysPerWeek: builderInputs.trainingDaysPerWeek,
+      sessionDurationMode: builderInputs.sessionDurationMode,
+      sessionLengthMinutes: builderInputs.sessionLength,
+    },
+    {
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      experienceLevel: canonicalProfile.experienceLevel,
+      scheduleMode: canonicalProfile.scheduleMode,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+    },
+  )
+
   const override: Record<string, unknown> = {
     // ==========================================================================
     // [CANONICAL_OVERRIDE_IDENTITY] Identity fields - ALWAYS from canonical profile
@@ -399,9 +426,9 @@ function buildCanonicalProfileOverride(
     userId: canonicalProfile.userId, // CRITICAL: Must preserve repaired identity from funnel
     onboardingComplete: canonicalProfile.onboardingComplete ?? true,
     
-    // Goals - builder inputs can override
-    primaryGoal: builderInputs.primaryGoal || canonicalProfile.primaryGoal,
-    secondaryGoal: builderInputs.secondaryGoal ?? canonicalProfile.secondaryGoal,
+    // Goals - a saved goal is kept. A missing goal stays missing.
+    primaryGoal: generationTruth.primaryGoal,
+    secondaryGoal: generationTruth.secondaryGoal,
     goalCategories: builderInputs.goalCategories || canonicalProfile.goalCategories || [],
     trainingPathType: builderInputs.trainingPathType || canonicalProfile.trainingPathType || 'hybrid',
     
@@ -416,14 +443,14 @@ function buildCanonicalProfileOverride(
     equipment: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     equipmentAvailable: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     
-    // Schedule - builder inputs can override
-    scheduleMode: builderInputs.scheduleMode || canonicalProfile.scheduleMode || 'flexible',
-    sessionDurationMode: builderInputs.sessionDurationMode || canonicalProfile.sessionDurationMode || 'adaptive',
-    trainingDaysPerWeek: builderInputs.trainingDaysPerWeek ?? canonicalProfile.trainingDaysPerWeek ?? 4,
-    sessionLengthMinutes: builderInputs.sessionLength ?? canonicalProfile.sessionLengthMinutes ?? 45,
+    // Schedule and duration - unknown stays unknown. Flexible stays flexible.
+    scheduleMode: generationTruth.schedule.scheduleMode,
+    sessionDurationMode: generationTruth.duration.durationMode,
+    trainingDaysPerWeek: generationTruth.schedule.kind === 'flexible' ? null : generationTruth.schedule.days,
+    sessionLengthMinutes: generationTruth.duration.minutes,
     
-    // Profile data - builder inputs can override some
-    experienceLevel: builderInputs.experienceLevel || canonicalProfile.experienceLevel || 'intermediate',
+    // Profile data - a saved level is kept. A missing level stays missing.
+    experienceLevel: generationTruth.experienceLevel,
     sex: canonicalProfile.sex,
     
     // Optional fields from canonical
@@ -490,6 +517,17 @@ function buildCanonicalProfileOverride(
   return override
 }
 
+function readExplicitWeeklyFrequency(request: AuthoritativeGenerationRequest): number | null {
+  const candidates = [
+    request.builderInputs?.trainingDaysPerWeek,
+    request.canonicalProfile?.trainingDaysPerWeek,
+  ]
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  }
+  return null
+}
+
 // ==========================================================================
 // CORE: Authoritative Generation Function
 // ==========================================================================
@@ -535,6 +573,22 @@ export async function executeAuthoritativeGeneration(
   // Caller overrides are explicitly tracked and labeled.
   // ==========================================================================
   markStage('truth_ingestion_start')
+
+  const derivedServerFatigue = deriveServerFatigueFromWorkoutLogs(request.recentWorkoutLogs, {
+    expectedSessionsPerWeek: readExplicitWeeklyFrequency(request),
+  })
+  const applyServerFatigue = request.isFreshBaselineBuild !== true && derivedServerFatigue.reliable
+  console.log('[server-fatigue-generation]', {
+    applied: applyServerFatigue,
+    reliable: derivedServerFatigue.reliable,
+    decision: applyServerFatigue ? derivedServerFatigue.decision : null,
+    freshBaseline: request.isFreshBaselineBuild === true,
+    limitation: applyServerFatigue
+      ? null
+      : request.isFreshBaselineBuild === true
+        ? 'Fresh baseline generation keeps the existing unpenalized start.'
+        : derivedServerFatigue.limitation,
+  })
   
   let truthIngestion: AuthoritativeGenerationTruthIngestion
   try {
@@ -545,8 +599,7 @@ export async function executeAuthoritativeGeneration(
       callerBuilderInputs: request.builderInputs,
       existingProgramId: request.existingProgramId,
       isFreshBaselineBuild: request.isFreshBaselineBuild,
-      // Training feedback will be populated from builder context when available
-      trainingFeedback: undefined,
+      trainingFeedback: applyServerFatigue ? derivedServerFatigue.trainingFeedback ?? undefined : undefined,
     }
     
     truthIngestion = await buildAuthoritativeGenerationTruthIngestion(ingestionInput)
@@ -711,6 +764,53 @@ export async function executeAuthoritativeGeneration(
   // This is the SINGLE authoritative source for week-level adaptation.
   // The generator MUST obey this contract.
   // ==========================================================================
+  // The week decision and the athlete-facing recovery note use the same
+  // fatigue decision. A missing signal stays unknown. It is not filled in
+  // as moderate, and it does not change the saved day count.
+  const recoveryOverclaim = 'High recovery risk detected - week adaptation should reduce load'
+  if (applyServerFatigue && derivedServerFatigue.decision) {
+    const alignedNote = recoveryDecisionExplanation(derivedServerFatigue.decision)
+    truthIngestion = {
+      ...truthIngestion,
+      recoveryTruth: {
+        ...truthIngestion.recoveryTruth,
+        recoveryRisk: reportedRecoveryRiskFromDecision(derivedServerFatigue.decision),
+        sorenessRisk: 'unknown',
+        evidence: [
+          ...truthIngestion.recoveryTruth.evidence,
+          'Week load follows this fatigue decision. The saved weekly schedule is unchanged. Soreness was not inferred.',
+        ],
+      },
+      safeGenerationNotes: [
+        ...truthIngestion.safeGenerationNotes.filter((note) => note !== recoveryOverclaim),
+        ...(alignedNote ? [alignedNote] : []),
+      ],
+    }
+  } else {
+    const hadRecoveryLabel = truthIngestion.recoveryTruth.recoveryRisk !== 'unknown'
+    truthIngestion = {
+      ...truthIngestion,
+      recoveryTruth: {
+        ...truthIngestion.recoveryTruth,
+        recoveryRisk: 'unknown',
+        sorenessRisk: 'unknown',
+        evidence: [
+          ...truthIngestion.recoveryTruth.evidence,
+          hadRecoveryLabel
+            ? 'A recovery label was not used because this generation has no reliable recent-workout fatigue signal.'
+            : 'No recovery signal was available, so the planned week is unchanged.',
+        ],
+      },
+      safeGenerationNotes: truthIngestion.safeGenerationNotes
+        .filter((note) => note !== recoveryOverclaim)
+        .concat(
+          hadRecoveryLabel
+            ? ['Recovery was not measured reliably, so the planned week is unchanged.']
+            : [],
+        ),
+    }
+  }
+
   markStage('week_adaptation_decision_start')
   
   let weekAdaptationDecision: WeekAdaptationDecision
@@ -930,6 +1030,13 @@ export async function executeAuthoritativeGeneration(
           isFreshBaselineBuild: request.isFreshBaselineBuild,
           // [AUTHORITATIVE-INGRESS-UNIFICATION] Pass the ONE bundle - builder will reuse, not rebuild
           preBuiltProgrammingTruthBundle: authoritativeProgrammingTruthBundle,
+          serverFatigueDecision: applyServerFatigue && derivedServerFatigue.decision
+            ? {
+                decision: derivedServerFatigue.decision,
+                shortGuidance: derivedServerFatigue.shortGuidance,
+                needsAttention: derivedServerFatigue.needsAttention,
+              }
+            : null,
         }
       )
     } catch (builderError) {
@@ -1454,7 +1561,7 @@ export async function executeAuthoritativeGeneration(
       pullUpCapacity: capacityBucketToNumber(canonicalProfileTyped.pullUpMax),
       dipCapacity: capacityBucketToNumber(canonicalProfileTyped.dipMax),
       wallHspuCapacity: capacityBucketToNumber(canonicalProfileTyped.wallHSPUReps),
-      experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+      experienceLevel: canonicalProfileTyped.experienceLevel || null,
     }
     
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
@@ -1648,9 +1755,8 @@ export async function executeAuthoritativeGeneration(
       || program.sessions.length === gateTrainingDaysExpected
     
     // Check: session length match (tolerance of ±15 min due to adaptive engines)
-    const sessionLengthMatch = gateSessionLengthExpected === undefined
+    const sessionLengthMatch = gateSessionLengthExpected == null
       || Math.abs((program.sessionLength as unknown as number) - gateSessionLengthExpected) <= 15
-      || !gateSessionLengthExpected
     
     // Check: equipment respected (program equipment profile should not require equipment
     // that the user didn't declare — only a loose sanity check since adaptive engines may
@@ -3747,8 +3853,8 @@ function createFallbackWeekAdaptationDecision(
     recoveryContext: {
       readinessState: 'unknown',
       fatigueState: 'unknown',
-      sorenessRisk: 'moderate',
-      recoveryRisk: 'moderate',
+      sorenessRisk: 'low',
+      recoveryRisk: 'unknown',
     },
     complexityContext: {
       onboardingComplexity: 'moderate',

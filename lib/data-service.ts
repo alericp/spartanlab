@@ -27,6 +27,8 @@
  * - Add seed/default data that leaks into real user flows
  */
 
+import { getBoundAthleteId, readAthleteCollection, readAthleteItem, removeAthleteItem, writeAthleteCollection, writeAthleteItem } from './athlete-local-scope'
+
 export interface User {
   id: string
   email: string
@@ -50,8 +52,8 @@ export interface AthleteProfile {
   bodyFatPercent?: number | null
   bodyFatSource?: string | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
-  trainingDaysPerWeek: number
-  sessionLengthMinutes: SessionLengthMinutes
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: SessionLengthMinutes | null
   primaryGoal: string | null
   equipmentAvailable: Equipment[]
   jointCautions?: ('shoulders' | 'elbows' | 'wrists' | 'lower_back' | 'knees')[]
@@ -59,9 +61,9 @@ export interface AthleteProfile {
   pullUpMax?: number | null
   dipMax?: number | null
   trainingStyle?: 'skill_focused' | 'strength_focused' | 'power_focused' | 'endurance_focused' | 'hypertrophy_supported' | 'balanced_hybrid'
-  scheduleMode?: 'static' | 'flexible'
+  scheduleMode?: 'static' | 'flexible' | null
   // TASK A FIX: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on day/recovery
-  sessionDurationMode?: 'static' | 'adaptive'
+  sessionDurationMode?: 'static' | 'adaptive' | null
   onboardingComplete: boolean
   createdAt: string
 }
@@ -130,7 +132,7 @@ export function getCurrentUser(): User {
 export function getAthleteProfile(): AthleteProfile | null {
   if (!isBrowser()) return null
   
-  const stored = localStorage.getItem(STORAGE_KEYS.profile)
+  const stored = readAthleteItem(STORAGE_KEYS.profile)
   if (stored) {
     try {
       const parsed = JSON.parse(stored)
@@ -175,16 +177,15 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
     bodyFatPercent: null,
     bodyFatSource: null,
     experienceLevel: 'beginner',
-    trainingDaysPerWeek: 3,
-    sessionLengthMinutes: 60,
+    trainingDaysPerWeek: null,
+    sessionLengthMinutes: null,
     primaryGoal: null,
     equipmentAvailable: [],
     jointCautions: [],
     weakestArea: null,
     trainingStyle: 'balanced_hybrid',
-    scheduleMode: 'static',
-    // TASK A FIX: Default to static duration for backward compatibility
-    sessionDurationMode: 'static',
+    scheduleMode: null,
+    sessionDurationMode: null,
     onboardingComplete: false,
     createdAt: new Date().toISOString(),
   }
@@ -194,13 +195,13 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
     ...profile,
     // Preserve identity fields from existing profile, or use new safe defaults
     id: baseProfile.id,
-    userId: baseProfile.userId,
+    userId: typeof getBoundAthleteId() === 'string' ? getBoundAthleteId() as string : baseProfile.userId,
     createdAt: baseProfile.createdAt,
     // [PHASE 32A] Add updatedAt for timestamp-based canonical resolution precedence
     updatedAt: new Date().toISOString(),
   }
   
-  localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(updated))
+  writeAthleteItem(STORAGE_KEYS.profile, JSON.stringify(updated))
   return updated
 }
 
@@ -208,15 +209,8 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
 export function getSkillProgressions(): SkillProgression[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEYS.progressions)
-  if (stored) {
-    try {
-      return JSON.parse(stored)
-    } catch {
-      return []
-    }
-  }
-  return []
+  const stored = readAthleteCollection<SkillProgression>(STORAGE_KEYS.progressions)
+  return stored
 }
 
 // Save or update a skill progression
@@ -256,7 +250,7 @@ export function saveSkillProgression(
     progressions.push(progression)
   }
   
-  localStorage.setItem(STORAGE_KEYS.progressions, JSON.stringify(progressions))
+  writeAthleteCollection(STORAGE_KEYS.progressions, progressions)
   return progression
 }
 
@@ -276,6 +270,6 @@ function calculateProgressScore(currentLevel: number, targetLevel: number): numb
 // Clear all data (for testing)
 export function clearAllData(): void {
   if (!isBrowser()) return
-  localStorage.removeItem(STORAGE_KEYS.profile)
-  localStorage.removeItem(STORAGE_KEYS.progressions)
+  removeAthleteItem(STORAGE_KEYS.profile)
+  removeAthleteItem(STORAGE_KEYS.progressions)
 }

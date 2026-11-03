@@ -9,23 +9,27 @@ import { Button } from '@/components/ui/button'
 import { ProgramHistoryCard } from '@/components/history'
 import { Calendar, ArrowLeft, Layers } from 'lucide-react'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { classifyHistoryHttp, historyLoadCopy } from '@/lib/workout/history-progress'
 import type { ProgramHistory } from '@/types/history'
 
 // =============================================================================
 // DATA FETCHING
 // =============================================================================
 
-async function fetchProgramHistory(userId: string): Promise<ProgramHistory[]> {
+async function fetchProgramHistory(userId: string): Promise<
+  | { status: 'ready'; programs: ProgramHistory[] }
+  | { status: 'error' }
+> {
   try {
     const response = await fetch(`/api/history/programs?userId=${userId}`)
-    if (!response.ok) {
-      throw new Error('Failed to fetch programs')
+    if (classifyHistoryHttp(response.status) !== 'ready') {
+      return { status: 'error' }
     }
     const data = await response.json()
-    return data.programs || []
+    return { status: 'ready', programs: data.programs || [] }
   } catch (error) {
     console.error('[ProgramsPage] Error fetching data:', error)
-    return []
+    return { status: 'error' }
   }
 }
 
@@ -37,6 +41,7 @@ function ProgramsPageContent() {
   const { userId, isLoaded } = useAuth()
   const [loading, setLoading] = useState(true)
   const [programs, setPrograms] = useState<ProgramHistory[]>([])
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -44,7 +49,13 @@ function ProgramsPageContent() {
       
       setLoading(true)
       const data = await fetchProgramHistory(userId)
-      setPrograms(data)
+      if (data.status === 'error') {
+        setLoadError(true)
+        setPrograms([])
+      } else {
+        setLoadError(false)
+        setPrograms(data.programs)
+      }
       setLoading(false)
     }
 
@@ -84,7 +95,9 @@ function ProgramsPageContent() {
               All Programs
             </h1>
             <p className="text-sm text-[#A4ACB8]">
-              {programs.length} program{programs.length !== 1 ? 's' : ''} in your history
+              {loadError
+                ? historyLoadCopy('error', 'programs').detail
+                : `${programs.length} program${programs.length !== 1 ? 's' : ''} in your history`}
             </p>
           </div>
         </div>
@@ -115,8 +128,20 @@ function ProgramsPageContent() {
           </section>
         )}
 
+        {loadError && (
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-8 text-center">
+            <Calendar className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
+              {historyLoadCopy('error', 'programs').title}
+            </h2>
+            <p className="text-sm text-[#A4ACB8]">
+              {historyLoadCopy('error', 'programs').detail}
+            </p>
+          </Card>
+        )}
+
         {/* Empty State */}
-        {programs.length === 0 && (
+        {!loadError && programs.length === 0 && (
           <Card className="bg-[#1A1F26] border-[#2B313A] p-8 text-center">
             <Calendar className="w-12 h-12 text-[#6B7280] mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">

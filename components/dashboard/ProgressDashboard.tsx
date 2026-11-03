@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { Card } from '@/components/ui/card'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts'
 import { TrendingUp, TrendingDown, Minus, Target, Dumbbell, Zap, Calendar, Trophy } from 'lucide-react'
@@ -10,6 +11,14 @@ import {
   type StrengthProgressData,
   type SkillProgressData,
 } from '@/lib/progress-data-service'
+import { getWorkoutAnalytics } from '@/lib/workout-analytics'
+import { RecentTrainingCard } from '@/components/dashboard/RecentTrainingCard'
+import {
+  classifyHistoryHttp,
+  DEVICE_STRENGTH_PROGRESS,
+  recentTrainingModel,
+  type RecentTrainingModel,
+} from '@/lib/workout/history-progress'
 
 // =============================================================================
 // CHART COMPONENTS
@@ -325,14 +334,65 @@ interface ProgressDashboardProps {
 }
 
 export function ProgressDashboard({ className }: ProgressDashboardProps) {
+  const { userId, isLoaded } = useAuth()
   const [data, setData] = useState<ProgressDashboardData | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [training, setTraining] = useState<RecentTrainingModel | null>(null)
 
   useEffect(() => {
     setMounted(true)
     const progressData = getProgressDashboardData()
     setData(progressData)
   }, [])
+
+  useEffect(() => {
+    if (!mounted || !isLoaded) return
+    let cancelled = false
+    const device = (() => {
+      try {
+        const analytics = getWorkoutAnalytics()
+        return {
+          totalWorkouts: analytics.totalWorkouts,
+          workoutsThisWeek: analytics.workoutsThisWeek,
+          lastWorkoutName: analytics.lastWorkoutName,
+          lastWorkoutDate: analytics.lastWorkoutDate,
+        }
+      } catch {
+        return null
+      }
+    })()
+
+    async function loadHistory() {
+      if (!userId) {
+        if (!cancelled) {
+          setTraining(recentTrainingModel({ historyStatus: 'signed_out', device }))
+        }
+        return
+      }
+      try {
+        const response = await fetch(`/api/history/workouts?userId=${userId}&limit=8`)
+        if (classifyHistoryHttp(response.status) !== 'ready') {
+          if (!cancelled) setTraining(recentTrainingModel({ historyStatus: 'error', device }))
+          return
+        }
+        const body = await response.json()
+        if (!cancelled) {
+          setTraining(recentTrainingModel({
+            historyStatus: 'ready',
+            sessions: body.workouts || [],
+            device,
+          }))
+        }
+      } catch {
+        if (!cancelled) setTraining(recentTrainingModel({ historyStatus: 'error', device }))
+      }
+    }
+
+    loadHistory()
+    return () => {
+      cancelled = true
+    }
+  }, [mounted, isLoaded, userId])
 
   // Find the best strength exercise to display
   const primaryStrength = useMemo(() => {
@@ -362,8 +422,9 @@ export function ProgressDashboard({ className }: ProgressDashboardProps) {
                      data.spartanScore.hasData || 
                      data.strength.some(s => s.hasData) || 
                      data.skills.some(s => s.hasData)
+  const showTraining = training && training.mode !== 'empty'
 
-  if (!hasAnyData) {
+  if (!hasAnyData && !showTraining) {
     return (
       <Card className={`bg-[#1E1E1E] border-[#2A2A2A] p-8 ${className || ''}`}>
         <div className="text-center space-y-3">
@@ -381,6 +442,9 @@ export function ProgressDashboard({ className }: ProgressDashboardProps) {
 
   return (
     <div className={`space-y-4 ${className || ''}`}>
+      {showTraining && training && <RecentTrainingCard model={training} />}
+      {hasAnyData && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Spartan Score */}
         <MetricCard
@@ -451,6 +515,11 @@ export function ProgressDashboard({ className }: ProgressDashboardProps) {
               </MetricCard>
             ))}
         </div>
+      )}
+      {data.strength.some(item => item.hasData) && (
+        <p className="text-xs text-[#6B6B6B]">{DEVICE_STRENGTH_PROGRESS.reason}</p>
+      )}
+      </>
       )}
     </div>
   )

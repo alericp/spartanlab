@@ -23,6 +23,7 @@ import type {
   WorkoutExecutionMode,
 } from './live-workout-authority-contract'
 import { createMultiBandSelection } from './live-workout-authority-contract'
+import { noteTextMayInfluenceTraining } from './notes-interpretation'
 
 // =============================================================================
 // CANONICAL NORMALIZED LIVE INPUT STRUCTURE
@@ -410,7 +411,7 @@ export function normalizeCoachingSignals(
   let loadMismatch = false
   let recoveryConcern = false
   
-  if (freeText && freeText.length > 0) {
+  if (freeText && freeText.length > 0 && noteTextMayInfluenceTraining(freeText)) {
     for (const { pattern, signal } of FREE_TEXT_SIGNAL_PATTERNS) {
       if (pattern.test(freeText)) {
         switch (signal) {

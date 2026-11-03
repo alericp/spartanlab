@@ -20,7 +20,7 @@
  * - primaryGoal must exist (throws error if missing)
  * - onboardingComplete must be true (throws error if false)
  * - At least one of: selectedSkills, selectedFlexibility, or selectedStrength must exist
- * - equipmentAvailable must not be empty
+ * - empty equipment is allowed; floor and wall stay available and the saved list is not filled in
  * 
  * These checks ensure we never generate garbage programs from incomplete data.
  * 
@@ -50,7 +50,15 @@
  * - For true server-side observability, generation would need to move to an API route
  */
 
+import { readAthleteItem, removeAthleteItem, writeAthleteItem } from './athlete-local-scope'
+import {
+  deleteStoredAdaptiveProgram,
+  isDeletedProgramId,
+  selectStoredProgram,
+  type StoredProgramRecord,
+} from './program/active-program-record'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
+import { resolveGenerationTruth } from './profile/generation-truth'
 import type { EquipmentType } from './adaptive-exercise-pool'
 // [LIVE-EXECUTION-TRUTH] Import band types for execution truth contract
 import type { ResistanceBandColor } from './band-progression-engine'
@@ -673,6 +681,7 @@ import {
   type SkillBreadthAuditLayer 
 } from './ai-truth-selected-skills-audit'
 import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { reportedRecoveryRiskFromDecision } from './server/server-fatigue-from-logs'
 import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
   selectMethodProfiles, 
@@ -946,6 +955,7 @@ import {
   type FlexibleWeekStructure,
   type DayStressLevel,
 } from './flexible-schedule-engine'
+import { classifyEquipment } from './profile/input-reliability'
 import {
   validateSession,
   validateWarmupForSkill,
@@ -1534,8 +1544,8 @@ export interface AdaptiveProgramInputs {
   primaryGoal: PrimaryGoal
   secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   experienceLevel: ExperienceLevel
-  trainingDaysPerWeek: TrainingDays | 'flexible'  // Can be numeric or 'flexible'
-  sessionLength: SessionLength
+  trainingDaysPerWeek: TrainingDays | 'flexible' | null  // Numeric, flexible, or unknown
+  sessionLength: SessionLength | null
   equipment: EquipmentType[]
   todaySessionMinutes?: number // Override for today's available time
   // ==========================================================================
@@ -1940,6 +1950,10 @@ export interface AdaptiveExercise {
   isOverrideable: boolean
   selectionReason: string
   wasAdapted?: boolean
+  /** Athlete-facing limitation when required equipment is missing and no
+   *  substitute was selected. Display and live workout must not present the
+   *  stored sets as a normal prescription. */
+  equipmentBlocked?: string
   // Database enforcement: marks exercise as DB-backed
   source?: 'database'
   // Training method information
@@ -2132,6 +2146,11 @@ export interface AdaptiveProgram {
   // canonical program object. UI consumers (FeedbackLoopProofCard)
   // read it directly to render the "what was actually applied at
   // generation time" strip — no client-side rebuild required.
+  /**
+   * Workout log ids already considered by the future-session performance
+   * adjustment. Optional. Older saved programs omit it.
+   */
+  performanceFeedbackAppliedLogIds?: string[]
   evidenceCalibrationInfluence?: EvidenceCalibrationGenerationInfluence
   // [AB13-4] Optional, non-destructive evidence-calibration program-shaping
   // proof. Stamped immediately AFTER `evidenceCalibrationInfluence` by the
@@ -5605,6 +5624,17 @@ export interface ServerGenerationOptions {
    * If provided:       unified path — builder reuses the authoritative bundle.
    */
   preBuiltProgrammingTruthBundle?: ProgrammingTruthBundle | null
+
+  /**
+   * Reliable recent-workout fatigue for server generation. Only the three
+   * session-level decisions are accepted. A deload week is never scheduled
+   * from this field.
+   */
+  serverFatigueDecision?: {
+    decision: 'TRAIN_AS_PLANNED' | 'PRESERVE_QUALITY' | 'LIGHTEN_SESSION'
+    shortGuidance: string
+    needsAttention: boolean
+  } | null
 }
 
 // ==========================================================================
@@ -6255,13 +6285,28 @@ async function generateAdaptiveProgramImpl(
   })
   
   const {
-    primaryGoal,
-    secondaryGoal, // TASK 3: Now destructured for use
+    primaryGoal: inputPrimaryGoal,
+    secondaryGoal: inputSecondaryGoal,
     experienceLevel,
     trainingDaysPerWeek,
     sessionLength: sessionLengthRaw,
     equipment,
   } = inputs
+  const overrideProfile = serverOptions?.canonicalProfileOverride
+  const generationTruth = resolveGenerationTruth(
+    {
+      primaryGoal: inputPrimaryGoal,
+      secondaryGoal: inputSecondaryGoal,
+    },
+    {
+      primaryGoal: overrideProfile?.primaryGoal,
+      secondaryGoal: overrideProfile?.secondaryGoal,
+    },
+  )
+  const primaryGoal = (generationTruth.primaryGoal ?? '') as PrimaryGoal
+  const secondaryGoal = generationTruth.secondaryGoal
+    ? generationTruth.secondaryGoal as PrimaryGoal
+    : undefined
 
   // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] `inputs.sessionLength` is the
   // wider `SessionLength` union (number | 'flexible' | '10-20' | '20-30' |
@@ -6274,6 +6319,9 @@ async function generateAdaptiveProgramImpl(
   // reads of `sessionLength` are now `number`. The original raw form is
   // still available as `sessionLengthRaw` for sinks that intentionally
   // accept the wider union.
+  // Adaptive or unspecified duration has no chosen minute count. The assembler
+  // still needs a numeric budget; 60 here is that internal budget, not a saved
+  // athlete choice and not a reason to label the profile adaptive or static.
   const sessionLength: number = sessionLengthRaw != null
     ? normalizeSessionLengthMinutes(sessionLengthRaw)
     : 60
@@ -6289,8 +6337,11 @@ async function generateAdaptiveProgramImpl(
   if (!primaryGoal) entryValidationErrors.push('primaryGoal is required')
   if (!experienceLevel) entryValidationErrors.push('experienceLevel is required')
   if (!Array.isArray(equipment)) entryValidationWarnings.push('equipment is not an array, defaulting to []')
-  // [BUILDER-SESSION-LENGTH-NUMERIC-COERCION] check the raw form for missing input.
-  if (sessionLengthRaw === undefined || sessionLengthRaw === null) entryValidationWarnings.push('sessionLength missing, will use default')
+  if ((sessionLengthRaw === undefined || sessionLengthRaw === null) && readSessionDurationMode(inputs) === 'static') {
+    entryValidationErrors.push('sessionLength is required')
+  } else if (sessionLengthRaw === undefined || sessionLengthRaw === null) {
+    entryValidationWarnings.push('sessionLength missing, assembler budget only')
+  }
   
   // Log entry validation
   console.log('[entry-contract-validation-audit]', {
@@ -6330,14 +6381,14 @@ async function generateAdaptiveProgramImpl(
   const canonicalBuilderEntry = {
     primaryGoal: primaryGoal,
     secondaryGoal: secondaryGoal || null,
-    experienceLevel: experienceLevel || 'intermediate',
+    experienceLevel,
     trainingDaysPerWeek: trainingDaysPerWeek,
     sessionLength: sessionLength || 60,
     equipment: Array.isArray(equipment) ? equipment : [],
     // [PHASE 29A] Preserve baseline schedule mode - do NOT default to 'flexible'
     scheduleMode: inputs.scheduleMode || (typeof trainingDaysPerWeek === 'number' ? 'static' : 'flexible'),
     adaptiveWorkloadEnabled: inputAdaptiveWorkload,
-    sessionDurationMode: readSessionDurationMode(inputs) || 'adaptive',
+    sessionDurationMode: readSessionDurationMode(inputs),
     selectedSkills: inputs.selectedSkills || [],
     trainingPathType: inputs.trainingPathType || 'balanced',
   }
@@ -7037,7 +7088,7 @@ async function generateAdaptiveProgramImpl(
         ? 'static' as const  // [PHASE 26C] User explicitly chose static - respect it!
         : inputs.scheduleMode === 'flexible'
           ? 'flexible' as const  // [PHASE 26C] User explicitly chose flexible - respect it!
-          : (canonicalProfile.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))  // Only use canonical as fallback
+          : (canonicalProfile.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek ?? undefined))  // Only use canonical as fallback
   
   console.log('[phase26c-post-ref-fix-forensic-root-cause]', {
     stage: 'INPUT_SCHEDULE_MODE_RESOLUTION',
@@ -7155,7 +7206,7 @@ async function generateAdaptiveProgramImpl(
     
     // CRITICAL FIX: Use canonical sessionLengthMinutes, NOT stale onboarding workoutDurationPreference
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes ?? (typeof inputs.sessionLength === 'number' ? inputs.sessionLength : 60),
-    sessionDurationMode: canonicalProfile.sessionDurationMode || readSessionDurationMode(inputs) || 'standard',
+    sessionDurationMode: canonicalProfile.sessionDurationMode || readSessionDurationMode(inputs) || null,
     
     // [PHASE 25V] CRITICAL FIX: Use computed inputScheduleMode which respects explicit numeric day selection
     // inputs.scheduleMode takes precedence when user explicitly selects days in the builder
@@ -7164,7 +7215,7 @@ async function generateAdaptiveProgramImpl(
     selectedSkills: canonicalProfile.selectedSkills && canonicalProfile.selectedSkills.length > 0 
       ? canonicalProfile.selectedSkills 
       : inputs.selectedSkills || [],
-    experienceLevel: canonicalProfile.experienceLevel || inputs.experienceLevel || 'intermediate',
+    experienceLevel: canonicalProfile.experienceLevel || inputs.experienceLevel || null,
       // [BUILDER-CANONICAL-PROFILE-RENAME] reads canonical owner directly.
       equipment: canonicalProfile.equipmentAvailable || inputs.equipment || [],
     goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
@@ -7335,7 +7386,7 @@ async function generateAdaptiveProgramImpl(
     step: 'builder_entry',
     canonicalProfileScheduleMode: canonicalProfile.scheduleMode,
     inputsScheduleMode: inputs.scheduleMode,
-    fallbackNormalized: normalizeScheduleMode(trainingDaysPerWeek),
+    fallbackNormalized: normalizeScheduleMode(trainingDaysPerWeek ?? undefined),
     finalInputScheduleMode: inputScheduleMode,
     trainingDaysPerWeekRaw: trainingDaysPerWeek,
     collapse: {
@@ -7457,20 +7508,27 @@ async function generateAdaptiveProgramImpl(
     straightArmPatterns.some(p => s.toLowerCase().includes(p))
   )
   
-  // Build readiness assessment if available
+  // Build readiness assessment if available. Server generation does not
+  // call this helper: outside the browser it fills a moderate score even
+  // when no recovery was measured. The server uses the fatigue decision.
   let readinessForContract: ReadinessAssessment | null = null
-  try {
-    // [BUILDER-READINESS-ZERO-ARGS] `getReadinessAssessment()` is the
-    // canonical recovery-fatigue-engine accessor and takes ZERO
-    // arguments — it sources `recoverySignal`, fatigue, and trend
-    // signals internally. Passing an options object produced TS2554
-    // ("Expected 0 arguments, got 1"). The fields we used to pass
-    // (averageRecentRPE, expectedSessionsPerWeek) never existed on
-    // TrainingFeedbackSummary anyway. Same downstream behavior.
-    readinessForContract = await getReadinessAssessment()
-  } catch {
-    // Readiness assessment failed - continue with null
-    console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
+  const serverReportedRecovery = typeof window === 'undefined'
+    ? reportedRecoveryRiskFromDecision(serverOptions?.serverFatigueDecision?.decision)
+    : undefined
+  if (typeof window !== 'undefined') {
+    try {
+      // [BUILDER-READINESS-ZERO-ARGS] `getReadinessAssessment()` is the
+      // canonical recovery-fatigue-engine accessor and takes ZERO
+      // arguments — it sources `recoverySignal`, fatigue, and trend
+      // signals internally. Passing an options object produced TS2554
+      // ("Expected 0 arguments, got 1"). The fields we used to pass
+      // (averageRecentRPE, expectedSessionsPerWeek) never existed on
+      // TrainingFeedbackSummary anyway. Same downstream behavior.
+      readinessForContract = await getReadinessAssessment()
+    } catch {
+      // Readiness assessment failed - continue with null
+      console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
+    }
   }
   
   // Build consistency status if available  
@@ -7489,7 +7547,7 @@ async function generateAdaptiveProgramImpl(
     
     // Profile truth
     experienceLevel: canonicalProfile.experienceLevel || experienceLevel,
-    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek ?? undefined,
     scheduleMode: inputScheduleMode,
     // [BUILDER-TRAINING-PATH-TYPE-NORMALIZER] WeekAdaptationInput.trainingPathType
     // is the strict union TrainingPathType ('skill_progression' | 'strength_endurance'
@@ -7529,7 +7587,9 @@ async function generateAdaptiveProgramImpl(
     ),
     
     // Recovery/Readiness
-    readinessAssessment: readinessForContract,
+    readinessAssessment: typeof window === 'undefined' ? null : readinessForContract,
+    reportedRecoveryRisk: serverReportedRecovery,
+    lockSavedDayCount: typeof window === 'undefined' ? true : undefined,
     consistencyStatus: consistencyForContract,
     
     // Adherence signals
@@ -7974,7 +8034,10 @@ async function generateAdaptiveProgramImpl(
       adjustmentReason: flexibleWeekStructure.adjustmentReason || 'none',
     })
   } else {
-    effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
+    const staticFrequency = getEffectiveFrequency(trainingDaysPerWeek ?? undefined)
+    if (typeof staticFrequency === 'number') {
+      effectiveTrainingDays = staticFrequency as TrainingDays
+    }
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
   
@@ -8365,7 +8428,7 @@ async function generateAdaptiveProgramImpl(
     hspuProgression: canonicalProfile.hspuProgression || null,
     jointCautions: canonicalProfile.jointCautions || [],
     recoveryLevel: recoverySignal.level || null,
-    experienceLevel: canonicalProfile.experienceLevel || 'intermediate',
+    experienceLevel: canonicalProfile.experienceLevel || null,
     // [SESSION-STYLE-MATERIALITY] Add sessionStylePreference to expanded context
     // This enables session construction to materially adapt density/accessories/breadth
     sessionStylePreference: canonicalProfile.sessionStylePreference || null,
@@ -11668,7 +11731,9 @@ async function generateAdaptiveProgramImpl(
   skillCalibration: null,
   }
   
-  // Get fatigue-based training decision (runs client-side only)
+  // Client sessions read the local fatigue check. Server generation uses a
+  // conservative decision derived from recent logs when that signal exists.
+  // The server path does not fill deloadRecommendation.
   let fatigueDecision: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean } | null = null
   let deloadRecommendation: {
     shouldDeload: boolean
@@ -11707,6 +11772,19 @@ async function generateAdaptiveProgramImpl(
         coachingMessage: rec.coachingMessage,
         volumeReductionPercent: rec.adjustments.volumeReductionPercent,
         recommendedProtocols: rec.jointProtocols,
+      }
+    }
+  } else if (serverOptions?.serverFatigueDecision) {
+    const serverFatigue = serverOptions.serverFatigueDecision
+    if (
+      serverFatigue.decision === 'TRAIN_AS_PLANNED' ||
+      serverFatigue.decision === 'PRESERVE_QUALITY' ||
+      serverFatigue.decision === 'LIGHTEN_SESSION'
+    ) {
+      fatigueDecision = {
+        decision: serverFatigue.decision,
+        shortGuidance: serverFatigue.shortGuidance,
+        needsAttention: serverFatigue.needsAttention,
       }
     }
   }
@@ -12787,15 +12865,13 @@ async function generateAdaptiveProgramImpl(
       ? sessionLength 
       : parseInt(String(sessionLength).split('-')[0]) || 60
     
-    // Determine fatigue state from fatigueDecision
+    // Determine fatigue state from fatigueDecision.
+    // Lighter sessions are the stronger existing tier. Preserving quality
+    // is the milder one. Neither tier schedules a deload week.
     const fatigueStateForComposition: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload' = 
-      // [BUILDER-TRAINING-DECISION-RENAME] Map legacy labels to current
-      // TrainingDecision union: SKIP_TODAY/DELOAD_RECOMMENDED→needs_deload,
-      // REDUCE_INTENSITY→PRESERVE_QUALITY (accumulated),
-      // REDUCE_VOLUME→LIGHTEN_SESSION (moderate). Same downstream tiers.
       fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'needs_deload' :
-      fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'accumulated' :
-      fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 'moderate' :
+      fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 'accumulated' :
+      fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' :
       fatigueDecision?.decision === 'COMPRESS_WEEKLY_LOAD' ? 'moderate' : 'fresh'
     
     // ==========================================================================
@@ -13298,7 +13374,7 @@ async function generateAdaptiveProgramImpl(
       // Add fatigue-based adaptation notes if needed
       postSessionStep = 'fatigue_notes_applying'
       if (fatigueDecision && fatigueDecision.decision !== 'TRAIN_AS_PLANNED') {
-        const fatigueNote = getFatigueAdaptationNote(fatigueDecision.decision)
+        const fatigueNote = fatigueDecision.shortGuidance || getFatigueAdaptationNote(fatigueDecision.decision)
         if (fatigueNote) {
           session.adaptationNotes = session.adaptationNotes || []
           session.adaptationNotes.push(fatigueNote)
@@ -13342,8 +13418,8 @@ async function generateAdaptiveProgramImpl(
       // REDUCE_INTENSITY mapped to PRESERVE_QUALITY (its current equivalent).
       const fatigueNeedsDeload = fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
       const fatigueScoreForDetection = fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 90 :
-                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 70 :
-                                       fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 60 : 40
+                                       fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 70 :
+                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 55 : 40
       
       // STEP D: Wrap weak point detection in optional try/catch
       let detectedWeakPoints = { primary: [] as string[], secondary: [] as string[] }
@@ -20861,7 +20937,7 @@ console.log('[program-generate] Generation complete:', {
     createdAt: new Date().toISOString(),
     primaryGoal,
     secondaryGoal, // TASK 3: Store canonical secondary goal
-    goalLabel: GOAL_LABELS[primaryGoal],
+    goalLabel: GOAL_LABELS[primaryGoal] || primaryGoal,
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
     // [SESSION-LENGTH-LITERAL-BUCKET] AdaptiveProgram.sessionLength
@@ -20885,8 +20961,13 @@ console.log('[program-generate] Generation complete:', {
     // [TASK 1 FIX] Also store the represented skills subset for accurate display distinction
     representedSkills: builtAroundSkillsFinal,
     goalCategories: canonicalProfile.goalCategories || [],
-    // TASK 5: Session duration mode - preserve adaptive time identity
-    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    // TASK 5: Session duration mode - preserve adaptive time identity.
+    // Unknown duration stays off the program. It is not labeled static.
+    sessionDurationMode: canonicalProfile.sessionDurationMode === 'static' || canonicalProfile.sessionDurationMode === 'adaptive'
+      ? canonicalProfile.sessionDurationMode
+      : inputs.sessionDurationMode === 'static' || inputs.sessionDurationMode === 'adaptive'
+        ? inputs.sessionDurationMode
+        : undefined,
     // [ADAPTIVE-PROGRAM-NO-TOP-LEVEL-INTENSITY-DISTRIBUTION] Canonical
     // AdaptiveProgram does not own a top-level `intensityDistribution`.
     // Per-week / per-day intensity truth lives on
@@ -20903,8 +20984,16 @@ console.log('[program-generate] Generation complete:', {
     // `flexibilityInsertions` variable/computation is preserved and
     // still feeds session-level mobility/flexibility insertion logic
     // downstream; do not re-emit a duplicate planner mirror here.
-    // FLEXIBLE SCHEDULING: Full schedule mode semantics
-    scheduleMode: finalScheduleMode,
+    // FLEXIBLE SCHEDULING: Full schedule mode semantics.
+    // An assembled week can still use an internal day count. That count
+    // is not stored here unless the athlete chose static, flexible, or a day count.
+    scheduleMode: (
+      inputs.scheduleMode === 'static' ||
+      inputs.scheduleMode === 'flexible' ||
+      canonicalProfile.scheduleMode === 'static' ||
+      canonicalProfile.scheduleMode === 'flexible' ||
+      hasExplicitNumericDays
+    ) ? finalScheduleMode : undefined,
     currentWeekFrequency: effectiveTrainingDays,
     recommendedFrequencyRange: finalFrequencyRange,
     flexibleWeekRationale: flexibleWeekStructure?.rationale,
@@ -25777,9 +25866,9 @@ function calculateVarietyScore(intents: SessionIntent[]): number {
 function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
   switch (decision) {
     case 'PRESERVE_QUALITY':
-      return 'Fatigue signals suggest maintaining core work while reducing lower-priority volume.'
+      return 'Recent effort is elevated. This is temporary fatigue, so quality is protected and extra stress is trimmed. No deload week was scheduled. Your saved weekly schedule is unchanged.'
     case 'LIGHTEN_SESSION':
-      return 'Elevated fatigue detected. Session adjusted to preserve strength quality.'
+      return 'Recent workouts were hard or incomplete, so this week\'s sessions are lighter. No deload week was scheduled. Your saved weekly schedule is unchanged.'
     case 'COMPRESS_WEEKLY_LOAD':
       return 'Weekly load compressed due to accumulated fatigue. Focus on goal-relevant work.'
     case 'DELOAD_RECOMMENDED':
@@ -27676,9 +27765,9 @@ function generateAdaptiveSession(
   // Equipment adaptation with collapse detection
   // ==========================================================================
   sessionStep = 'equipment_adapting'
-  const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment)
-  const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
-  const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
+  const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment, { primaryGoal })
+  const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment, { primaryGoal })
+  const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment, { primaryGoal })
   
   sessionTrace.postEquipmentMainCount = adaptedMain.adapted.length
   
@@ -31515,6 +31604,7 @@ function mapToAdaptiveExercises(
       repsOrTime: s.repsOrTime,
       note: s.note,
       isOverrideable: s.isOverrideable,
+      equipmentBlocked: s.equipmentBlocked,
     selectionReason: s.selectionReason,
     source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
     method,
@@ -31920,6 +32010,12 @@ export class StorageSaveError extends Error {
 
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
+  if (program?.id && isDeletedProgramId(program.id)) {
+    throw new StorageSaveError(
+      'active_program_save_failed',
+      `deleted_program_save_blocked: ${program.id}`,
+    )
+  }
   
   // [program-build] SAVE: Pre-save critical validation
   // Reject programs with fundamentally broken session structure
@@ -32023,7 +32119,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   
   // Step 3: Save canonical active program FIRST (core - must succeed)
   try {
-    localStorage.setItem(CANONICAL_ACTIVE_KEY, serializedProgram)
+    writeAthleteItem(CANONICAL_ACTIVE_KEY, serializedProgram)
     console.log('[storage-quota-fix] Canonical active program saved successfully')
   } catch (activeErr) {
     // Detect quota exceeded
@@ -32052,7 +32148,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     const bounded = [program, ...deduped].slice(0, MAX_HISTORY_PROGRAMS)
     
     // Attempt history save
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bounded))
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(bounded))
     console.log('[storage-quota-fix] History saved successfully', {
       historyCount: bounded.length,
       capped: deduped.length >= MAX_HISTORY_PROGRAMS,
@@ -32064,7 +32160,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     
     // Try to at least keep minimal history (just the active program)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([program]))
+      writeAthleteItem(STORAGE_KEY, JSON.stringify([program]))
       console.log('[storage-quota-fix] Minimal history saved (active only)')
     } catch {
       // Even minimal history failed - just log, active program is already saved
@@ -32100,7 +32196,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
 export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
   if (!isBrowser()) return []
   
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = readAthleteItem(STORAGE_KEY)
   if (stored) {
     try {
       const parsed = JSON.parse(stored)
@@ -32132,30 +32228,27 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
     })),
   })
   
-  // [storage-quota-fix] Priority 1: Check canonical active key first
-  let selectedProgram: AdaptiveProgram | null = null
-  let selectionSource = 'none'
-  
+  // Priority 1 is the active key. Priority 2 is history, and only for a
+  // different saved program. A deleted id is absent from both.
+  let activeRecord: StoredProgramRecord | null = null
   try {
-    const canonical = localStorage.getItem(CANONICAL_ACTIVE_KEY)
-    if (canonical) {
-      const parsed = JSON.parse(canonical)
-      if (parsed && parsed.id && parsed.sessions) {
-        selectedProgram = parsed
-        selectionSource = 'canonical_active_key'
-      }
-    }
+    const canonical = readAthleteItem(CANONICAL_ACTIVE_KEY)
+    activeRecord = canonical ? JSON.parse(canonical) as StoredProgramRecord : null
   } catch (err) {
     console.warn('[storage-quota-fix] Failed to read canonical active program:', err)
+    activeRecord = null
   }
-  
-  // Priority 2: Fall back to history array if canonical is missing
-  if (!selectedProgram && allPrograms.length > 0) {
-    selectedProgram = allPrograms.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )[0]
-    selectionSource = 'history_array_sorted'
+  if (activeRecord?.id && isDeletedProgramId(activeRecord.id)) {
+    removeAthleteItem(CANONICAL_ACTIVE_KEY)
+    activeRecord = null
   }
+  const selectablePrograms = allPrograms.filter((program) => !isDeletedProgramId(program.id))
+  if (selectablePrograms.length !== allPrograms.length) {
+    writeAthleteItem(STORAGE_KEY, JSON.stringify(selectablePrograms))
+  }
+  const storedSelection = selectStoredProgram(activeRecord, selectablePrograms)
+  let selectedProgram = (storedSelection.program as AdaptiveProgram | null) ?? null
+  let selectionSource = storedSelection.source
   
   // [PHASE 17L] TASK 2 - Identify selected program
   if (selectedProgram) {
@@ -32168,7 +32261,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
     
     // [PHASE 17L] TASK 6 - Final verdict log
     // Check if selected is truly the latest by time
-    const allSorted = allPrograms.sort((a, b) =>
+    const allSorted = selectablePrograms.sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     const latestByTime = allSorted[0]
@@ -32255,7 +32348,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
       
       // Update the canonical key to the correct program
       try {
-        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
+        writeAthleteItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
         console.log('[phase17o-canonical-selection-override] Canonical key updated to latest program')
       } catch (err) {
         console.warn('[phase17o-canonical-selection-override] Failed to update canonical key:', err)
@@ -32275,15 +32368,7 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
 }
 
 export function deleteAdaptiveProgram(id: string): boolean {
-  if (!isBrowser()) return false
-  
-  const programs = getSavedAdaptivePrograms()
-  const filtered = programs.filter(p => p.id !== id)
-  
-  if (filtered.length === programs.length) return false
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
-  return true
+  return deleteStoredAdaptiveProgram(id)
 }
 
 // =============================================================================
@@ -32319,12 +32404,12 @@ export function migrateAndCleanupProgramStorage(): {
     )
     
     // Check if canonical active key exists
-    const hasCanonical = !!localStorage.getItem(CANONICAL_ACTIVE_KEY)
+    const hasCanonical = !!readAthleteItem(CANONICAL_ACTIVE_KEY)
     
     // If no canonical key, restore from latest in history
     if (!hasCanonical && sorted.length > 0) {
       try {
-        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(sorted[0]))
+        writeAthleteItem(CANONICAL_ACTIVE_KEY, JSON.stringify(sorted[0]))
         canonicalRestored = true
         console.log('[storage-quota-fix] Migration: Restored canonical active program from history')
       } catch (err) {
@@ -32338,7 +32423,7 @@ export function migrateAndCleanupProgramStorage(): {
       const trimmed = sorted.slice(0, MAX_HISTORY_PROGRAMS)
       
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+        writeAthleteItem(STORAGE_KEY, JSON.stringify(trimmed))
         migrated = true
         console.log('[storage-quota-fix] Migration: Trimmed history', {
           before: sorted.length,
@@ -32349,13 +32434,13 @@ export function migrateAndCleanupProgramStorage(): {
         // If even trimmed history fails, try just keeping the latest
         console.warn('[storage-quota-fix] Migration: Trimmed save failed, keeping only latest')
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify([sorted[0]]))
+          writeAthleteItem(STORAGE_KEY, JSON.stringify([sorted[0]]))
           migrated = true
           trimmedCount = sorted.length - 1
         } catch {
           // Complete failure - just clear history, canonical should still work
           console.error('[storage-quota-fix] Migration: Complete history save failure, clearing')
-          localStorage.removeItem(STORAGE_KEY)
+          removeAthleteItem(STORAGE_KEY)
           migrated = true
           trimmedCount = sorted.length
         }
@@ -32690,18 +32775,21 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     console.log('[planner-input-truth] Fallbacks used in composition:', composedInput.fallbacksUsed)
   }
   
-  // TASK 4: Read canonical goals from saved profile, not stale program state
-  // Determine primary goal from CanonicalProfile
-  let primaryGoal: PrimaryGoal = 'planche'
-  if (canonicalProfile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(canonicalProfile.primaryGoal)) {
-    primaryGoal = canonicalProfile.primaryGoal as PrimaryGoal
-  }
-  
-  // TASK 3: Read secondaryGoal from canonical profile if persisted
-  let secondaryGoal: PrimaryGoal | undefined = undefined
-  if (canonicalProfile.secondaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(canonicalProfile.secondaryGoal)) {
-    secondaryGoal = canonicalProfile.secondaryGoal as PrimaryGoal
-  }
+  // Saved goals pass through. A goal outside the old five-skill list
+  // is still the athlete's goal. A missing goal stays empty.
+  const generationTruth = resolveGenerationTruth({
+    primaryGoal: canonicalProfile.primaryGoal,
+    secondaryGoal: canonicalProfile.secondaryGoal,
+    experienceLevel: canonicalProfile.experienceLevel,
+    scheduleMode: canonicalProfile.scheduleMode,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    sessionDurationMode: canonicalProfile.sessionDurationMode,
+    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  })
+  const primaryGoal = (generationTruth.primaryGoal ?? '') as PrimaryGoal
+  const secondaryGoal = generationTruth.secondaryGoal
+    ? generationTruth.secondaryGoal as PrimaryGoal
+    : undefined
   
   // Map equipment to EquipmentType
   // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights' | 'bench_box' | 'minimal'
@@ -32719,39 +32807,30 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     'minimal': 'floor' as EquipmentType, // Minimal = bodyweight only, floor is always present
   }
   
-  // Start with floor and wall (always available)
-  const mappedEquipment: EquipmentType[] = ['floor', 'wall']
-  
-  // Add equipment from canonical profile
-  if (canonicalProfile.equipmentAvailable && canonicalProfile.equipmentAvailable.length > 0) {
-    for (const eq of canonicalProfile.equipmentAvailable) {
-      const mapped = equipmentMap[eq]
-      if (mapped && !mappedEquipment.includes(mapped)) {
+  const equipmentSelection = classifyEquipment(canonicalProfile.equipmentAvailable)
+  const mappedEquipment: EquipmentType[] = []
+  if (equipmentSelection.kind === 'explicit') {
+    for (const eq of equipmentSelection.equipment) {
+      const mapped = (equipmentMap[eq] || eq) as EquipmentType
+      if (!mappedEquipment.includes(mapped)) {
         mappedEquipment.push(mapped)
       }
     }
-  } else {
-    // Fallback to sensible defaults if no equipment saved
-    mappedEquipment.push('pull_bar', 'dip_bars')
   }
   
   // [equipment-hydration-audit] Log equipment truth when builder inputs are loaded
   console.log('[equipment-hydration-audit] Builder inputs loaded from canonical:', {
     canonicalProfileEquipment: canonicalProfile.equipmentAvailable,
     mappedBuilderEquipment: mappedEquipment,
-    hiddenRuntimeAdded: ['floor', 'wall'],
-    usedFallbackDefaults: !canonicalProfile.equipmentAvailable || canonicalProfile.equipmentAvailable.length === 0,
+    hiddenRuntimeAdded: [],
+    usedFallbackDefaults: equipmentSelection.kind !== 'explicit',
   })
   
   // TASK 6: Unified duration contract - use canonical 30/45/60/90 minutes
   // DO NOT map 90 to 75 - this caused label drift between settings and builder
-  let sessionLength: SessionLength = 60
-  const profileSessionLength = canonicalProfile.sessionLengthMinutes
-  if (profileSessionLength === 30) sessionLength = 30
-  else if (profileSessionLength === 45) sessionLength = 45
-  else if (profileSessionLength === 60) sessionLength = 60
-  else if (profileSessionLength === 75) sessionLength = 75 // Legacy support - normalize to 90 in display
-  else if (profileSessionLength === 90) sessionLength = 90 as SessionLength // Cast to handle type constraint
+  const sessionLength: SessionLength | null = generationTruth.duration.kind === 'explicit' && generationTruth.duration.minutes !== null
+    ? generationTruth.duration.minutes as SessionLength
+    : null
   
   // ==========================================================================
   // [PHASE 32A] SCHEDULE IDENTITY FIX: Use explicit scheduleMode, NOT inferred from null days
@@ -32759,23 +32838,18 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   // A user with scheduleMode='static' but no days yet is NOT flexible.
   // The only truthful flexible signal is scheduleMode === 'flexible'.
   // ==========================================================================
-  const isFlexibleUser = canonicalProfile.scheduleMode === 'flexible'
-  const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
-  
-  // For flexible users: trainingDaysPerWeek = 'flexible' (identity)
-  // For static users: trainingDaysPerWeek = numeric value from canonical profile
-  // ISSUE A FIX: Only fallback to 4 if canonical field is truly null/undefined (new user)
-  // Use explicit null check to avoid treating 0 or other falsy values as missing
-  const canonicalDays = canonicalProfile.trainingDaysPerWeek
-  const trainingDaysPerWeek: TrainingDays | 'flexible' = isFlexibleUser 
-    ? 'flexible' 
-    : canonicalDays !== null && canonicalDays !== undefined 
-      ? (canonicalDays as TrainingDays)
-      : 4  // Only for truly new users with no saved value
+  const scheduleMode: ScheduleMode | undefined = generationTruth.schedule.scheduleMode === 'static' || generationTruth.schedule.scheduleMode === 'flexible'
+    ? generationTruth.schedule.scheduleMode
+    : undefined
+  const trainingDaysPerWeek: TrainingDays | 'flexible' | null = generationTruth.schedule.kind === 'explicit' && generationTruth.schedule.days !== null
+    ? generationTruth.schedule.days as TrainingDays
+    : generationTruth.schedule.kind === 'flexible'
+      ? 'flexible'
+      : null
   
   // TASK 7: Track whether fallbacks were used for debugging seed/default dominance
   const fallbacksUsed = {
-    trainingDaysPerWeek: canonicalDays === null || canonicalDays === undefined,
+    trainingDaysPerWeek: generationTruth.schedule.kind === 'unknown',
     sessionLength: !canonicalProfile.sessionLengthMinutes,
     primaryGoal: !canonicalProfile.primaryGoal,
   }
@@ -33015,8 +33089,7 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   return {
     primaryGoal,
     secondaryGoal, // TASK 3: Now included in generation inputs
-    // [entry-contract-fix] TASK 3: Add fallback to prevent undefined experienceLevel
-    experienceLevel: canonicalProfile.experienceLevel || 'intermediate',
+    experienceLevel: generationTruth.experienceLevel ?? canonicalProfile.experienceLevel,
     trainingDaysPerWeek,
     sessionLength,
     equipment: mappedEquipment,
@@ -33038,7 +33111,7 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     })(),
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 3C: Pass session duration mode for adaptive time awareness
-    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    sessionDurationMode: generationTruth.duration.durationMode,
     // TASK 3C: Pass flexibility targets when selected
     selectedFlexibility: canonicalProfile.selectedFlexibility || [],
   }

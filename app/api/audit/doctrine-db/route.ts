@@ -17,12 +17,31 @@
  */
 
 import { NextResponse } from 'next/server'
+import { currentUser } from '@clerk/nextjs/server'
+import { getSession } from '@/lib/auth-service-server'
 import { checkDoctrineRuntimeReadiness } from '@/lib/doctrine-runtime-readiness'
 import { compareDoctrineSourcesStatus } from '@/lib/doctrine-query-service'
+import { checkOwnerByEmail, getOwnerEmail, matchingOwnerEmail } from '@/lib/owner-access'
+import { decideOwnerAccess } from '@/lib/server/athlete-ownership'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const { userId } = await getSession()
+  const clerkUser = await currentUser()
+  const access = decideOwnerAccess(
+    userId,
+    matchingOwnerEmail(
+      getOwnerEmail(),
+      clerkUser?.primaryEmailAddressId,
+      clerkUser?.emailAddresses,
+    ),
+    checkOwnerByEmail,
+  )
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status })
+  }
+
   try {
     // Get runtime readiness check
     const readiness = await checkDoctrineRuntimeReadiness()

@@ -12,6 +12,7 @@
  */
 
 import type { TrainingDecision, SessionAdjustments, WeeklyAdjustments } from '../fatigue-decision-engine'
+import { readBoundAthleteList, writeBoundAthleteList } from '../athlete-local-scope'
 import type { JointDiscomfortFlag } from '../athlete-profile'
 import type { RecoveryStatus, FatigueTrend } from '../fatigue-engine'
 
@@ -371,17 +372,7 @@ function isBrowser(): boolean {
 export function saveFatiguePattern(entry: FatiguePatternEntry): void {
   if (!isBrowser()) return
   
-  const stored = localStorage.getItem(FATIGUE_PATTERN_STORAGE_KEY)
-  let patterns: FatiguePatternEntry[] = []
-  
-  if (stored) {
-    try {
-      patterns = JSON.parse(stored)
-    } catch {
-      patterns = []
-    }
-  }
-  
+  const patterns = getFatiguePatterns()
   patterns.push(entry)
   
   // Keep last 90 days
@@ -389,20 +380,12 @@ export function saveFatiguePattern(entry: FatiguePatternEntry): void {
   cutoff.setDate(cutoff.getDate() - 90)
   const filtered = patterns.filter(p => new Date(p.date) >= cutoff)
   
-  localStorage.setItem(FATIGUE_PATTERN_STORAGE_KEY, JSON.stringify(filtered))
+  writeBoundAthleteList(FATIGUE_PATTERN_STORAGE_KEY, filtered)
 }
 
 export function getFatiguePatterns(): FatiguePatternEntry[] {
   if (!isBrowser()) return []
-  
-  const stored = localStorage.getItem(FATIGUE_PATTERN_STORAGE_KEY)
-  if (!stored) return []
-  
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return []
-  }
+  return readBoundAthleteList<FatiguePatternEntry>(FATIGUE_PATTERN_STORAGE_KEY)
 }
 
 export function analyzeFatigueHistory(): {

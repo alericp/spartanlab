@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,14 +26,18 @@ import {
   FOCUS_AREA_LABELS,
   DIFFICULTY_LABELS,
   saveWorkoutLog,
+  markLoggedHistorySync,
+  readLoggedHistoryRetry,
 } from '@/lib/workout-log-service'
+import { createOccurrenceId, describeWorkoutSaveResult, type WorkoutSaveAthleteStatus } from '@/lib/workout/save-reliability'
+import { syncLoggedWorkoutHistory } from '@/lib/workout/logged-history-sync'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
 import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 
 interface WorkoutLogFormProps {
-  onSave: (log: WorkoutLog) => void
+  onSave: (log: WorkoutLog, status: WorkoutSaveAthleteStatus) => void
   onCancel?: () => void
 }
 
@@ -46,6 +51,34 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
   const [notes, setNotes] = useState('')
   const [exercises, setExercises] = useState<WorkoutExercise[]>([])
   const [saving, setSaving] = useState(false)
+  const { userId } = useAuth()
+  const [saveStatus, setSaveStatus] = useState<WorkoutSaveAthleteStatus | null>(null)
+  const saveLockRef = useRef(false)
+  const submittedRef = useRef(false)
+  const occurrenceIdRef = useRef<string | null>(null)
+  const restoredRef = useRef(false)
+
+  useEffect(() => {
+    if (!userId || restoredRef.current) return
+    restoredRef.current = true
+    const pending = readLoggedHistoryRetry(userId, 'manual')
+    if (!pending?.occurrenceId) return
+    occurrenceIdRef.current = pending.occurrenceId
+    setSessionName(pending.sessionName)
+    setSessionType(pending.sessionType)
+    setSessionDate(pending.sessionDate)
+    setDurationMinutes(pending.durationMinutes)
+    setFocusArea(pending.focusArea)
+    setPerceivedDifficulty(pending.perceivedDifficulty || 'normal')
+    setNotes(pending.notes || '')
+    setExercises(pending.exercises)
+    setSaveStatus(describeWorkoutSaveResult({
+      outcome: 'saved',
+      saveDisposition: 'kept',
+      serverEvidence: pending.serverEvidence,
+      historySync: 'failed',
+    }))
+  }, [userId])
 
   const addExercise = () => {
     const newExercise: WorkoutExercise = {
@@ -71,10 +104,15 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
   const handleSubmit = async () => {
     if (!sessionName.trim()) return
     if (exercises.length === 0) return
+    if (saveLockRef.current || submittedRef.current) return
+    saveLockRef.current = true
+    if (!occurrenceIdRef.current) occurrenceIdRef.current = createOccurrenceId()
 
     setSaving(true)
 
     try {
+      const occurrenceId = occurrenceIdRef.current
+      const namedExercises = exercises.filter(e => e.name.trim())
       const log = saveWorkoutLog({
         sessionName: sessionName.trim(),
         sessionType,
@@ -83,35 +121,73 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
         focusArea,
         perceivedDifficulty,
         notes: notes.trim() || undefined,
-        exercises: exercises.filter(e => e.name.trim()),
+        exercises: namedExercises,
+        occurrenceId,
       })
-      
-      // Check for newly unlocked achievements
-      // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] see QuickLogModal.tsx note.
-      const newAchievements = onTrainingEvent('workout_complete')
-      if (newAchievements.length > 0) {
-        showAchievementNotifications(newAchievements)
+
+      let historySync: WorkoutSaveAthleteStatus['historySync'] = 'skipped'
+      try {
+        historySync = await syncLoggedWorkoutHistory({
+          userId,
+          occurrenceId,
+          workoutName: log.sessionName,
+          sessionDate: log.sessionDate,
+          durationMinutes: log.durationMinutes,
+          focusArea: log.focusArea,
+          perceivedDifficulty: log.perceivedDifficulty,
+          notes: log.notes,
+          exercises: namedExercises.map(exercise => ({
+            id: exercise.id,
+            name: exercise.name,
+            category: exercise.category,
+            sets: exercise.sets,
+            reps: exercise.reps,
+            holdSeconds: exercise.holdSeconds,
+          })),
+        })
+      } catch (error) {
+        console.error('[WorkoutLogForm] History sync failed:', error)
+        historySync = 'failed'
       }
-      
-      // Check for completed challenges
-      const completedChallenges = onTrainingEventForChallenges()
-      if (completedChallenges.length > 0) {
-        showChallengeNotifications(completedChallenges)
+
+      const status = describeWorkoutSaveResult({
+        outcome: 'saved',
+        saveDisposition: log.saveDisposition,
+        serverEvidence: log.serverEvidence,
+        historySync,
+      })
+      setSaveStatus(status)
+      if (userId) {
+        markLoggedHistorySync(occurrenceId, userId, historySync === 'failed' ? 'pending' : 'updated')
       }
-      
-      onSave(log)
-      
-      // Reset form
-      setSessionName('')
-      setSessionType('mixed')
-      setSessionDate(new Date().toISOString().split('T')[0])
-      setDurationMinutes(45)
-      setFocusArea('general')
-      setPerceivedDifficulty('normal')
-      setNotes('')
-      setExercises([])
+
+      if (log.saveDisposition === 'inserted') {
+        const newAchievements = onTrainingEvent('workout_complete')
+        if (newAchievements.length > 0) {
+          showAchievementNotifications(newAchievements)
+        }
+        const completedChallenges = onTrainingEventForChallenges()
+        if (completedChallenges.length > 0) {
+          showChallengeNotifications(completedChallenges)
+        }
+      }
+
+      onSave(log, status)
+      if (historySync !== 'failed') {
+        submittedRef.current = true
+        occurrenceIdRef.current = null
+        setSessionName('')
+        setSessionType('mixed')
+        setSessionDate(new Date().toISOString().split('T')[0])
+        setDurationMinutes(45)
+        setFocusArea('general')
+        setPerceivedDifficulty('normal')
+        setNotes('')
+        setExercises([])
+      }
     } finally {
       setSaving(false)
+      saveLockRef.current = false
     }
   }
 
@@ -128,7 +204,13 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
             <Label className="text-sm text-[#A5A5A5]">Session Name</Label>
             <Input
               value={sessionName}
-              onChange={(e) => setSessionName(e.target.value)}
+              onChange={(e) => {
+                if (saveStatus?.historySync !== 'failed') {
+                  submittedRef.current = false
+                  occurrenceIdRef.current = null
+                }
+                setSessionName(e.target.value)
+              }}
               placeholder="e.g. Planche Push Day"
               className="bg-[#1A1A1A] border-[#3A3A3A] mt-1"
             />
@@ -270,8 +352,19 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
           />
         </div>
 
+        {saveStatus && (
+          <div className={`rounded-lg border p-3 text-sm ${
+            saveStatus.historySync === 'failed'
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+          }`}>
+            <p className="font-medium">{saveStatus.title}</p>
+            <p className="mt-1 text-[#E6E9EF]">{saveStatus.detail}</p>
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="flex flex-wrap justify-end gap-3 pt-2">
           {onCancel && (
             <Button
               variant="outline"
@@ -287,7 +380,7 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
             className="bg-[#E63946] hover:bg-[#D62828] gap-2"
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save Session'}
+            {saving ? 'Saving...' : saveStatus?.historySync === 'failed' ? 'Retry History Sync' : 'Save Session'}
           </Button>
         </div>
       </div>

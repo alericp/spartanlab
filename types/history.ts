@@ -126,6 +126,9 @@ export interface SessionMetricsSnapshot {
   preFatigue?: number
   postFatigue?: number
   perceivedDifficulty?: number
+
+  // Stable id for one completed attempt. Stored in the existing JSON snapshot.
+  clientSessionId?: string
 }
 
 /**
@@ -417,7 +420,16 @@ export interface CompletedSetData {
   setNumber: number
   targetReps: number
   actualReps: number
-  targetRPE: number
-  actualRPE: number
+  /**
+   * Omitted when the athlete did not record effort. Zero is not a stand-in.
+   * The set-evidence column is nullable, and session metrics store average RPE
+   * only when a measured value exists.
+   */
+  targetRPE?: number
+  actualRPE?: number
   restSeconds: number
+  /** Logged hold, when the live set recorded one. Personal records still use the existing writer. */
+  actualHoldSeconds?: number
+  /** Logged added load, when the live set recorded one. */
+  actualLoad?: number
 }

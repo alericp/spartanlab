@@ -2920,7 +2920,9 @@ export function getSourceTruthDisplay(program: AdaptiveProgram): SourceTruthDisp
       influenceSummary.push('Doctrine rules active')
     }
     if (audit.recoveryRisk === 'high') {
-      influenceSummary.push('High recovery risk detected')
+      influenceSummary.push('Sessions are lighter because recent workouts were hard. Saved week unchanged.')
+    } else if (audit.recoveryRisk === 'moderate') {
+      influenceSummary.push('Extra stress is trimmed because recent effort is elevated. Saved week unchanged.')
     }
     if (audit.consistencyStatus === 'disrupted') {
       influenceSummary.push('Disrupted adherence pattern')
@@ -3824,6 +3826,7 @@ export function buildExerciseCardContract(
     sets: number
     repsOrTime: string
     selectionReason?: string
+    equipmentBlocked?: string
     targetRPE?: number
     restSeconds?: number
     prescribedLoad?: {
@@ -4241,6 +4244,30 @@ export function buildExerciseCardContract(
   // This ensures "Planche Lean Push-Ups" displays as "Pseudo Planche Push-Ups" on both surfaces
   const canonicalDisplayTitle = resolveCanonicalExerciseName(exercise.name, exercise.id)
   
+  const equipmentLimitation = exercise.equipmentBlocked
+  if (equipmentLimitation) {
+    return {
+      displayTitle: canonicalDisplayTitle,
+      displayCategory,
+      roleLabel,
+      prescriptionIntent,
+      intentLabel,
+      prescriptionLine: 'Not prescribed',
+      prescriptionContext: null,
+      intensityBadge: null,
+      loadBadge: null,
+      restGuidance: null,
+      whyLine: equipmentLimitation,
+      detailExplanation: equipmentLimitation,
+      isWeighted: false,
+      isConstrained: true,
+      constraintNote: equipmentLimitation,
+      exerciseType,
+      showLoadConfidence: false,
+      loadConfidenceNote: null,
+    }
+  }
+
   return {
     displayTitle: canonicalDisplayTitle,
     displayCategory,
@@ -5886,6 +5913,7 @@ export function buildExerciseRowSurface(
     targetRPE?: number
     restSeconds?: number
     selectionReason?: string
+    equipmentBlocked?: string
     isProtected?: boolean
     isPrimary?: boolean
     prescribedLoad?: {
@@ -6264,16 +6292,17 @@ export function buildExerciseRowSurface(
     emphasisKind
   )
   
+  const blockedPrescription = exercise.equipmentBlocked
   return {
     exerciseId,
     displayName,
-    prescriptionLine,
+    prescriptionLine: blockedPrescription ? 'Not prescribed' : prescriptionLine,
     intentLabel,
     methodLabel,
     protectionLabel,
     supportReasonLabel,
     progressionEvidenceLabel,
-    purposeLine,
+    purposeLine: blockedPrescription || purposeLine,
     rowChips: rowChips.slice(0, 2),
     emphasisKind,
     source,

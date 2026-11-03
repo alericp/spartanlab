@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth-service-server'
 import { recalculateAthleteReadiness } from '@/lib/readiness-calculation-service'
+import { decideRequestedAthleteAccess } from '@/lib/server/athlete-ownership'
 
 /**
  * POST /api/readiness/recalculate
  *
- * Trigger readiness recalculation for an athlete
- * Called after workout logged, profile update, or strength benchmark change
- *
- * Body:
- * - athleteId: the athlete's ID
+ * Recalculate readiness for the authenticated athlete only.
+ * Body athleteId must match the Clerk user id.
  */
 export async function POST(request: NextRequest) {
   try {
-    const { athleteId } = await request.json()
+    const { userId } = await getSession()
+    const body = await request.json().catch(() => ({}))
+    const athleteId = typeof body?.athleteId === 'string' ? body.athleteId : null
+    const decision = decideRequestedAthleteAccess(
+      userId,
+      athleteId,
+      'athleteId is required',
+    )
 
-    if (!athleteId) {
-      return NextResponse.json(
-        { error: 'athleteId is required' },
-        { status: 400 }
-      )
+    if (!decision.allowed) {
+      return NextResponse.json({ error: decision.error }, { status: decision.status })
     }
 
-    // Trigger recalculation asynchronously
-    // Don't await - this is fire-and-forget to keep response fast
-    recalculateAthleteReadiness(athleteId).catch((error) => {
+    recalculateAthleteReadiness(decision.athleteId).catch((error) => {
       console.error('[API] Readiness recalc error:', error)
     })
 

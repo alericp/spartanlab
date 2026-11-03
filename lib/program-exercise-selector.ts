@@ -864,6 +864,9 @@ export interface SelectedExercise {
   knowledgeBubble?: string
   wasSubstituted?: boolean
   originalExerciseId?: string
+  /** Set when the exercise cannot be performed and no safe substitute exists.
+   *  The text is the athlete-facing limitation. It is not a working dose. */
+  equipmentBlocked?: string
   // Session Load Intelligence fields
   loadMetadata?: ExerciseLoadMetadata
   deliveryStyle?: DeliveryStyle

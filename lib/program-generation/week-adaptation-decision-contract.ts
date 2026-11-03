@@ -151,8 +151,8 @@ export interface RecoveryContext {
   fatigueState: 'low' | 'moderate' | 'high' | 'unknown'
   /** Risk of excessive soreness */
   sorenessRisk: 'low' | 'moderate' | 'high'
-  /** Overall recovery risk */
-  recoveryRisk: 'low' | 'moderate' | 'high'
+  /** Overall recovery risk. Unknown means no recovery reading, not a moderate one. */
+  recoveryRisk: 'low' | 'moderate' | 'high' | 'unknown'
 }
 
 export interface ComplexityContext {
@@ -260,6 +260,14 @@ export interface WeekAdaptationInput {
   isFirstGeneratedWeek?: boolean
   weekNumber?: number
   previousWeekAdaptation?: WeekAdaptationDecision | null
+
+  /**
+   * Recovery label already decided from trusted logs. When set, it is the
+   * recovery context. A missing readiness assessment must not become moderate.
+   */
+  reportedRecoveryRisk?: 'low' | 'moderate' | 'high' | 'unknown'
+  /** When true, recovery may lighten sessions but must not change the saved day count. */
+  lockSavedDayCount?: boolean
 }
 
 // =============================================================================
@@ -326,14 +334,32 @@ function calculateOverallComplexity(
 // =============================================================================
 
 function buildRecoveryContext(input: WeekAdaptationInput): RecoveryContext {
+  if (input.reportedRecoveryRisk) {
+    const risk = input.reportedRecoveryRisk
+    if (risk === 'unknown') {
+      return {
+        readinessState: 'unknown',
+        fatigueState: 'unknown',
+        sorenessRisk: 'low',
+        recoveryRisk: 'unknown',
+      }
+    }
+    return {
+      readinessState: risk === 'high' ? 'recovery_focused' : risk === 'moderate' ? 'keep_controlled' : 'train_normally',
+      fatigueState: risk === 'high' ? 'high' : risk === 'moderate' ? 'moderate' : 'low',
+      sorenessRisk: 'low',
+      recoveryRisk: risk,
+    }
+  }
+
   const readiness = input.readinessAssessment
   
   if (!readiness) {
     return {
       readinessState: 'unknown',
       fatigueState: 'unknown',
-      sorenessRisk: 'moderate', // Default to moderate when unknown
-      recoveryRisk: 'moderate',
+      sorenessRisk: 'low',
+      recoveryRisk: 'unknown',
     }
   }
   
@@ -465,8 +491,9 @@ function buildFirstWeekGovernor(
     governor.suppressFinishers = true
     governor.protectHighStressPatterns = true
     
-    // Only reduce days if also has recovery risk
-    if (recovery.recoveryRisk === 'high' || adherence.consistencyStatus === 'disrupted') {
+    // Only reduce days if also has recovery risk. A locked saved week
+    // can still lighten sessions without dropping a training day.
+    if ((recovery.recoveryRisk === 'high' && !input.lockSavedDayCount) || adherence.consistencyStatus === 'disrupted') {
       governor.reduceDays = true
       reasons.push('Recovery/adherence risk compounds complexity')
     }
@@ -495,9 +522,13 @@ function buildFirstWeekGovernor(
   
   // RECOVERY ALREADY COMPROMISED
   if (recovery.recoveryRisk === 'high') {
-    governor.reduceDays = true
+    if (!input.lockSavedDayCount) governor.reduceDays = true
     governor.reduceRPE = true
-    reasons.push('Recovery risk elevated - reducing exposure')
+    reasons.push(
+      input.lockSavedDayCount
+        ? 'Recovery risk elevated - sessions are lighter and the saved week stays in place'
+        : 'Recovery risk elevated - reducing exposure',
+    )
   }
   
   return governor
@@ -614,10 +645,13 @@ function calculateTargetDays(
     reasons.push(`First-week reduction: -${reduction} day(s)`)
   }
   
-  // Recovery-driven reduction
-  if (recovery.recoveryRisk === 'high' && !governor.reduceDays) {
+  // Recovery-driven reduction. Locked weeks keep the athlete's saved day count.
+  if (recovery.recoveryRisk === 'high' && !governor.reduceDays && !input.lockSavedDayCount) {
     targetDays = Math.max(2, targetDays - 1)
     reasons.push('Recovery risk reduction: -1 day')
+  }
+  if (recovery.recoveryRisk === 'high' && input.lockSavedDayCount) {
+    reasons.push('Saved weekly schedule kept')
   }
   
   // Adherence-driven reduction
@@ -1004,6 +1038,8 @@ export function buildWeekAdaptationInputFromIngestion(
     // Note: We don't have full ReadinessAssessment/ConsistencyStatus objects from server-side
     // Instead we use the normalized signals
     readinessAssessment: ingestion.recoveryTruth.rawAssessment || undefined,
+    reportedRecoveryRisk: ingestion.recoveryTruth.recoveryRisk,
+    lockSavedDayCount: true,
     consistencyStatus: ingestion.adherenceTruth.rawConsistencyStatus || undefined,
     
     // Adherence signals from ingestion

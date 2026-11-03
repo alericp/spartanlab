@@ -120,8 +120,8 @@ export interface AthleteProfile {
   equipmentAvailable: Equipment[]
   
   // Section 8: Training Schedule
-  trainingDaysPerWeek: number
-  sessionLengthMinutes: SessionLengthMinutes
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: SessionLengthMinutes | null
   sessionStyle: SessionStylePreference | null
   
   // Section 9: Recovery / Lifestyle

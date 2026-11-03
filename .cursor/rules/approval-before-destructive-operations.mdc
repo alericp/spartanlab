@@ -1,0 +1,16 @@
+---
+description: Require approval before destructive operations, schema changes, or production access
+alwaysApply: true
+---
+
+# Require approval before destructive or production actions
+
+Stop and get explicit user approval before:
+
+- Deleting, overwriting, or backfilling user data
+- Dropping, truncating, renaming, or migrating schema
+- Running a destructive or irreversible database command
+- Accessing production systems, production credentials, or production data
+- Changing environment variables, secrets, or billing configuration
+
+Local, non-destructive reads do not need extra approval. Approval for one action is not approval for a broader one.

@@ -1,0 +1,12 @@
+---
+description: Require evidence before claiming a SpartanLab test passed
+alwaysApply: true
+---
+
+# Do not claim a test passed without evidence
+
+A test, check, or manual verification counts as passed only after it was run in the current task and the successful result was observed.
+
+- Report the command or scenario and the actual output, status, or observed behavior.
+- Code that looks correct is not a passing test.
+- If a check failed, was skipped, or could not be run, say that explicitly. Do not describe it as passed.

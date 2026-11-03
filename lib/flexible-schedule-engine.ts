@@ -953,25 +953,25 @@ export function normalizeScheduleMode(
 }
 
 /**
- * Gets the numeric frequency from a potentially flexible value.
- * For flexible users, this returns a reasonable default.
- * For static users, returns the actual value.
+ * Returns an explicit 2-7 day count.
+ * Flexible and unknown schedules stay null. This helper does not choose
+ * a weekly frequency for them.
  */
 export function getEffectiveFrequency(
   trainingDaysPerWeek: number | string | 'flexible' | undefined,
-  defaultFlexible: number = 4
-): number {
-  if (isFlexibleMode(trainingDaysPerWeek)) {
-    return defaultFlexible
+  _defaultFlexible?: number,
+): number | null {
+  if (isFlexibleMode(trainingDaysPerWeek) || trainingDaysPerWeek == null) {
+    return null
   }
-  if (typeof trainingDaysPerWeek === 'number') {
+  if (typeof trainingDaysPerWeek === 'number' && Number.isInteger(trainingDaysPerWeek) && trainingDaysPerWeek >= 2 && trainingDaysPerWeek <= 7) {
     return trainingDaysPerWeek
   }
-  if (typeof trainingDaysPerWeek === 'string') {
-    const parsed = parseInt(trainingDaysPerWeek, 10)
-    return isNaN(parsed) ? 4 : parsed
+  if (typeof trainingDaysPerWeek === 'string' && /^\d+$/.test(trainingDaysPerWeek.trim())) {
+    const parsed = Number.parseInt(trainingDaysPerWeek.trim(), 10)
+    if (parsed >= 2 && parsed <= 7) return parsed
   }
-  return 4 // Default
+  return null
 }
 
 // =============================================================================
